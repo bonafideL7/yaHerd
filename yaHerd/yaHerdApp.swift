@@ -10,23 +10,18 @@ import SwiftData
 
 @main
 struct yaHerdApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @StateObject private var nav = NavigationCoordinator()
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainTabView()
+                .environmentObject(nav)
         }
-        .modelContainer(sharedModelContainer)
+        .modelContainer(for: [
+            Animal.self,
+            Pasture.self,
+            HealthRecord.self,
+            PregnancyCheck.self
+        ])
     }
 }
