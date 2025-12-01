@@ -46,9 +46,7 @@ struct MainTabView: View {
                     Text("Herd")
                 } icon: {
                     if let base = UIImage(lucideId: "beef") {
-                        
                         let icon = base.scaled(to: CGSize(width: 28, height: 28))
-                        
                         Image(uiImage: icon)
                             .renderingMode(.template)
                     }
@@ -76,6 +74,7 @@ struct MainTabView: View {
             }
         }
         .task {
+            SampleDataService.seedIfNeeded(context: context)
             refreshCounts()
         }
     }

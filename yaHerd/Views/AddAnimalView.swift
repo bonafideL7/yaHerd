@@ -20,55 +20,63 @@ struct AddAnimalView: View {
     @State private var sire = ""
     @State private var dam = ""
 
+    @State private var errorMessage: String?
+    @State private var showingError = false
+
     var body: some View {
         NavigationStack {
             Form {
                 TextField("Tag Number", text: $tagNumber)
-
                 Picker("Sex", selection: $sex) {
-                    ForEach(Sex.allCases, id: \.self) { value in
-                        Text(value.rawValue.capitalized)
-                    }
+                    ForEach(Sex.allCases, id: \.self) { Text($0.rawValue.capitalized) }
                 }
-
                 DatePicker("Birth Date", selection: $birthDate, displayedComponents: .date)
-
                 Picker("Status", selection: $status) {
-                    ForEach(AnimalStatus.allCases, id: \.self) { value in
-                        Text(value.rawValue.capitalized)
-                    }
+                    ForEach(AnimalStatus.allCases, id: \.self) { Text($0.rawValue.capitalized) }
                 }
-
                 TextField("Sire", text: $sire)
                 TextField("Dam", text: $dam)
             }
             .navigationTitle("Add Animal")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        save()
-                    }
-                    .disabled(tagNumber.isEmpty)
+                    Button("Save") { validateAndSave() }
                 }
-
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: { dismiss() })
                 }
             }
+            .alert("Validation Error", isPresented: $showingError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
     }
 
-    private func save() {
-        let animal = Animal(
-            tagNumber: tagNumber,
-            sex: sex,
-            birthDate: birthDate,
-            status: status,
-            sire: sire.isEmpty ? nil : sire,
-            dam: dam.isEmpty ? nil : dam
-        )
+    private func validateAndSave() {
+        do {
+            try ValidationService.validateAnimal(
+                tagNumber: tagNumber,
+                birthDate: birthDate,
+                context: context
+            )
 
-        context.insert(animal)
-        dismiss()
+            let animal = Animal(
+                tagNumber: tagNumber,
+                sex: sex,
+                birthDate: birthDate,
+                status: status,
+                sire: sire.isEmpty ? nil : sire,
+                dam: dam.isEmpty ? nil : dam
+            )
+
+            context.insert(animal)
+            dismiss()
+
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
 }

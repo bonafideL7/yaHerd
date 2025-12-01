@@ -18,6 +18,8 @@ struct HealthRecordAddView: View {
     @State private var date = Date()
     @State private var treatment = ""
     @State private var notes = ""
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     var body: some View {
         NavigationStack {
@@ -42,18 +44,31 @@ struct HealthRecordAddView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .alert("Validation Error", isPresented: $showingError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
     }
 
     private func save() {
-        let record = HealthRecord(
-            date: date,
-            treatment: treatment,
-            notes: notes.isEmpty ? nil : notes,
-            animal: animal
-        )
+        do {
+            try ValidationService.validateHealthRecord(treatment: treatment)
 
-        context.insert(record)
-        dismiss()
+            let record = HealthRecord(
+                date: date,
+                treatment: treatment,
+                notes: notes.isEmpty ? nil : notes,
+                animal: animal
+            )
+
+            context.insert(record)
+            dismiss()
+
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
 }

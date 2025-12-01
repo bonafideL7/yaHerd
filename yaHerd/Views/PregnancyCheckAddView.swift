@@ -18,6 +18,8 @@ struct PregnancyCheckAddView: View {
     @State private var date = Date()
     @State private var result: PregnancyResult = .unknown
     @State private var technician = ""
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     var body: some View {
         NavigationStack {
@@ -44,18 +46,32 @@ struct PregnancyCheckAddView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .alert("Validation Error", isPresented: $showingError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
     }
 
     private func save() {
-        let check = PregnancyCheck(
-            date: date,
-            result: result,
-            technician: technician.isEmpty ? nil : technician,
-            animal: animal
-        )
+        do {
+            try ValidationService.validatePregCheck()
 
-        context.insert(check)
-        dismiss()
+            let check = PregnancyCheck(
+                date: date,
+                result: result,
+                technician: technician.isEmpty ? nil : technician,
+                animal: animal
+            )
+
+            context.insert(check)
+            dismiss()
+
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
+
 }

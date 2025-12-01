@@ -11,17 +11,17 @@ import SwiftData
 @main
 struct yaHerdApp: App {
     @StateObject private var nav = NavigationCoordinator()
-
+    
     var body: some Scene {
         WindowGroup {
             MainTabView()
                 .environmentObject(nav)
+                .modelContainer(for: [
+                    Animal.self,
+                    Pasture.self,
+                    HealthRecord.self,
+                    PregnancyCheck.self
+                ])
         }
-        .modelContainer(for: [
-            Animal.self,
-            Pasture.self,
-            HealthRecord.self,
-            PregnancyCheck.self
-        ])
     }
 }
