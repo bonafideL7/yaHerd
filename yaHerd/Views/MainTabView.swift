@@ -17,7 +17,11 @@ struct MainTabView: View {
     @State private var herdCount: Int = 0
     @State private var pastureCount: Int = 0
     @State private var alertCount: Int = 0
-    
+    @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
+    @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
+    @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
+    @AppStorage("pastureCapacity") private var pastureCapacity = 30
+
     var body: some View {
         TabView {
             
@@ -83,15 +87,27 @@ struct MainTabView: View {
         do {
             let animals = try context.fetch(FetchDescriptor<Animal>())
             let pastures = try context.fetch(FetchDescriptor<Pasture>())
-            
+
             herdCount = animals.filter { $0.status == .alive }.count
             pastureCount = pastures.count
-            alertCount = 0
-            
+
+            // NEW — compute dashboard alerts
+            let alerts = DashboardService.generateAlerts(
+                animals: animals,
+                pastures: pastures,
+                pregCheckIntervalDays: pregCheckIntervalDays,
+                treatmentIntervalDays: treatmentIntervalDays,
+                enablePastureOverstockWarnings: enablePastureOverstockWarnings,
+                pastureCapacity: pastureCapacity
+            )
+
+            alertCount = alerts.count
+
         } catch {
             herdCount = 0
             pastureCount = 0
             alertCount = 0
         }
     }
+
 }

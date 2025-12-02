@@ -11,7 +11,7 @@ import SwiftData
 struct AnimalDetailView: View {
     @Environment(\.modelContext) private var context
     @AppStorage("allowHardDelete") private var allowHardDelete = false
-    @State var animal: Animal
+    var animal: Animal
     @State private var showingPasturePicker = false
     @State private var showingAddHealth = false
     @State private var showingAddPregCheck = false

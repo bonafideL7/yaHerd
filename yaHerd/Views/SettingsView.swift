@@ -10,6 +10,10 @@ import SwiftUI
 
 struct SettingsView: View {
     @AppStorage("allowHardDelete") private var allowHardDelete = false
+    @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
+    @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
+    @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
+    @AppStorage("pastureCapacity") private var pastureCapacity = 30  // per 30 acres default guideline
 
     var body: some View {
         NavigationStack {
@@ -29,6 +33,14 @@ struct SettingsView: View {
                         }
                         .padding()
                     }
+                }
+                
+                Section("Dashboard Rules") {
+                    Stepper("Preg Check overdue after \(pregCheckIntervalDays) days", value: $pregCheckIntervalDays, in: 30...365)
+                    Stepper("Treatment overdue after \(treatmentIntervalDays) days", value: $treatmentIntervalDays, in: 30...365)
+                    
+                    Toggle("Warn about pasture overcrowding", isOn: $enablePastureOverstockWarnings)
+                    Stepper("Pasture capacity: \(pastureCapacity) animals", value: $pastureCapacity, in: 10...200)
                 }
                 
                 Section("Danger Zone") {

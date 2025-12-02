@@ -15,7 +15,7 @@ final class PregnancyCheck {
     var result: PregnancyResult
     var technician: String?
 
-    @Relationship var animal: Animal
+    @Relationship(inverse: \Animal.pregnancyChecks) var animal: Animal
 
     init(date: Date, result: PregnancyResult, technician: String? = nil, animal: Animal) {
         self.date = date

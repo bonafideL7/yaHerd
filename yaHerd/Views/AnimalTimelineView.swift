@@ -101,18 +101,6 @@ struct AnimalTimelineView: View {
         case .status: return .red
         }
     }
-    
-    private var groupedEvents: [String: [String: [AnimalTimelineEvent]]] {
-        Dictionary(
-            grouping: events,
-            by: { $0.date.formatted(.dateTime.year()) }
-        ).mapValues { yearGroup in
-            Dictionary(
-                grouping: yearGroup,
-                by: { $0.date.formatted(.dateTime.year().month()) }
-            )
-        }
-    }
 }
 
 struct DayGroup: Identifiable {

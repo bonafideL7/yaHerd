@@ -15,7 +15,7 @@ final class StatusRecord {
     var oldStatus: AnimalStatus
     var newStatus: AnimalStatus
 
-    @Relationship var animal: Animal
+    @Relationship(inverse: \Animal.statusRecords) var animal: Animal
 
     init(date: Date, oldStatus: AnimalStatus, newStatus: AnimalStatus, animal: Animal) {
         self.date = date

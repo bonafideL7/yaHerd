@@ -15,7 +15,7 @@ final class MovementRecord {
     var fromPasture: String?
     var toPasture: String?
 
-    @Relationship var animal: Animal
+    @Relationship(inverse: \Animal.movementRecords) var animal: Animal
 
     init(date: Date, fromPasture: String?, toPasture: String?, animal: Animal) {
         self.date = date

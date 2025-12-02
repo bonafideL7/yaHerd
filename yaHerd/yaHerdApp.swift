@@ -16,12 +16,15 @@ struct yaHerdApp: App {
         WindowGroup {
             MainTabView()
                 .environmentObject(nav)
+        }
                 .modelContainer(for: [
                     Animal.self,
                     Pasture.self,
                     HealthRecord.self,
-                    PregnancyCheck.self
+                    PregnancyCheck.self,
+                    MovementRecord.self,
+                    StatusRecord.self
                 ])
-        }
+        
     }
 }

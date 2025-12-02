@@ -1,10 +1,3 @@
-//
-//  SampleDataService.swift
-//  yaHerd
-//
-//  Created by mm on 11/30/25.
-//
-
 import SwiftData
 import Foundation
 
@@ -12,16 +5,17 @@ struct SampleDataService {
 
     static func seedIfNeeded(context: ModelContext) {
 
+        // Avoid reseeding
         let descriptor = FetchDescriptor<Animal>()
-        let existing = try? context.fetch(descriptor)
-        if let existing, !existing.isEmpty { return } // prevent double-seeding
+        if let existing = try? context.fetch(descriptor),
+           !existing.isEmpty { return }
 
 
         // MARK: - Pastures
         let north = Pasture(name: "North Pasture", acreage: 35)
         let south = Pasture(name: "South Pasture", acreage: 28)
-        let east = Pasture(name: "East Meadow",   acreage: 22)
-        let drylot = Pasture(name: "Drylot", acreage: 5)
+        let east  = Pasture(name: "East Meadow",   acreage: 22)
+        let drylot = Pasture(name: "Drylot",       acreage: 5)
 
         context.insert(north)
         context.insert(south)
@@ -30,43 +24,44 @@ struct SampleDataService {
 
 
         // MARK: - Animals
-        let a1 = Animal(tagNumber: "101", sex: .cow, birthDate: daysAgo(900), status: .alive,    sire: "A13", dam: "B07", pasture: north)
-        let a2 = Animal(tagNumber: "102", sex: .cow, birthDate: daysAgo(700), status: .alive,    sire: "A13", dam: "B07", pasture: south)
-        let a3 = Animal(tagNumber: "201", sex: .bull, birthDate: daysAgo(1400), status: .alive,   sire: "X99", dam: "C21", pasture: drylot)
-        let a4 = Animal(tagNumber: "301", sex: .heifer, birthDate: daysAgo(300), status: .alive,  sire: "A55", dam: "C33", pasture: north)
+        let a1 = Animal(tagNumber: "101", sex: .cow,     birthDate: daysAgo(900),  status: .alive,    sire: "A13", dam: "B07", pasture: north)
+        let a2 = Animal(tagNumber: "102", sex: .cow,     birthDate: daysAgo(700),  status: .alive,    sire: "A13", dam: "B07", pasture: south)
+        let a3 = Animal(tagNumber: "201", sex: .bull,    birthDate: daysAgo(1400), status: .alive,    sire: "X99", dam: "C21", pasture: drylot)
+        let a4 = Animal(tagNumber: "301", sex: .heifer,  birthDate: daysAgo(300),  status: .alive,    sire: "A55", dam: "C33", pasture: north)
 
-        let a5 = Animal(tagNumber: "401", sex: .cow, birthDate: daysAgo(1200), status: .sold,     sire: "Z18", dam: "D99", pasture: south)
-        let a6 = Animal(tagNumber: "402", sex: .cow, birthDate: daysAgo(1500), status: .deceased, sire: "Z18", dam: "D99", pasture: east)
+        // archived examples
+        let a5 = Animal(tagNumber: "401", sex: .cow,     birthDate: daysAgo(1200), status: .sold,     sire: "Z18", dam: "D99", pasture: south)
+        let a6 = Animal(tagNumber: "402", sex: .cow,     birthDate: daysAgo(1500), status: .deceased, sire: "Z18", dam: "D99", pasture: east)
 
-        let a7 = Animal(tagNumber: "501", sex: .cow, birthDate: daysAgo(1100), status: .alive, sire: "S9", dam: "R2", pasture: east)
-        let a8 = Animal(tagNumber: "502", sex: .cow, birthDate: daysAgo(1050), status: .alive, sire: "S9", dam: "R2", pasture: north)
+        let a7 = Animal(tagNumber: "501", sex: .cow,     birthDate: daysAgo(1100), status: .alive,    sire: "S9",  dam: "R2", pasture: east)
+        let a8 = Animal(tagNumber: "502", sex: .cow,     birthDate: daysAgo(1050), status: .alive,    sire: "S9",  dam: "R2", pasture: north)
 
-        let a9  = Animal(tagNumber: "503", sex: .heifer, birthDate: daysAgo(200), status: .alive,   sire: "A9", dam: "F1", pasture: south)
-        let a10 = Animal(tagNumber: "504", sex: .heifer, birthDate: daysAgo(150), status: .alive,   sire: "A9", dam: "F1", pasture: north)
-        let a11 = Animal(tagNumber: "601", sex: .bull,    birthDate: daysAgo(1800), status: .alive, sire: "OldBull", dam: "Matriarch", pasture: drylot)
-        let a12 = Animal(tagNumber: "701", sex: .cow,     birthDate: daysAgo(500),  status: .alive, sire: "S21", dam: "H04", pasture: east)
+        let a9  = Animal(tagNumber: "503", sex: .heifer, birthDate: daysAgo(200),  status: .alive,    sire: "A9", dam: "F1", pasture: south)
+        let a10 = Animal(tagNumber: "504", sex: .heifer, birthDate: daysAgo(150),  status: .alive,    sire: "A9", dam: "F1", pasture: north)
+        let a11 = Animal(tagNumber: "601", sex: .bull,   birthDate: daysAgo(1800), status: .alive,    sire: "OldBull", dam: "Matriarch", pasture: drylot)
+        let a12 = Animal(tagNumber: "701", sex: .cow,    birthDate: daysAgo(500),  status: .alive,    sire: "S21", dam: "H04", pasture: east)
 
         let animals = [a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12]
         animals.forEach { context.insert($0) }
 
 
-        // MARK: - Pregnancy Checks
+        // MARK: - Pregnancy Checks (creates dashboard preg-check alerts)
         context.insert(PregnancyCheck(date: daysAgo(30), result: .pregnant, technician: "Dr. Smith", animal: a1))
         context.insert(PregnancyCheck(date: daysAgo(29), result: .open,     technician: "Dr. Smith", animal: a2))
-        context.insert(PregnancyCheck(date: daysAgo(60), result: .pregnant, technician: "Dr. Lee",   animal: a7))
-        context.insert(PregnancyCheck(date: daysAgo(61), result: .unknown,  technician: "Dr. Lee",   animal: a8))
+        context.insert(PregnancyCheck(date: daysAgo(220), result: .pregnant, technician: "Dr. Lee", animal: a7))   // overdue calving
+        context.insert(PregnancyCheck(date: daysAgo(61),  result: .unknown,  technician: "Dr. Lee", animal: a8))
 
 
-        // MARK: - Health Records
-        context.insert(HealthRecord(date: daysAgo(10), treatment: "Vaccination", notes: "Booster", animal: a1))
-        context.insert(HealthRecord(date: daysAgo(90), treatment: "Deworming",   notes: nil,      animal: a3))
-        context.insert(HealthRecord(date: daysAgo(45), treatment: "Foot Trim",   notes: "Mild lesion LF", animal: a4))
-        context.insert(HealthRecord(date: daysAgo(5),  treatment: "Antibiotic",  notes: "Metritis", animal: a7))
-        context.insert(HealthRecord(date: daysAgo(7),  treatment: "Vaccination", notes: nil,       animal: a8))
+        // MARK: - Health Records (creates overdue treatment alerts)
+        context.insert(HealthRecord(date: daysAgo(10),  treatment: "Vaccination", notes: "Booster", animal: a1))
+        context.insert(HealthRecord(date: daysAgo(210), treatment: "Deworming",   notes: nil,       animal: a3))   // overdue treatment
+        context.insert(HealthRecord(date: daysAgo(45),  treatment: "Foot Trim",   notes: "Mild lesion LF", animal: a4))
+        context.insert(HealthRecord(date: daysAgo(5),   treatment: "Antibiotic",  notes: "Metritis", animal: a7))
+        context.insert(HealthRecord(date: daysAgo(7),   treatment: "Vaccination", notes: nil,        animal: a8))
 
 
-        // MARK: - Movement History (example movements)
-        let movements: [(Animal, String?, String, Int)] = [
+        // MARK: - Movement History (timeline)
+        let movementData: [(Animal, String?, String, Int)] = [
             (a1, "South Pasture",   "North Pasture", 120),
             (a1, "North Pasture",   "East Meadow",   20),
             (a2, "North Pasture",   "South Pasture", 45),
@@ -75,38 +70,39 @@ struct SampleDataService {
             (a8, "North Pasture",   "South Pasture", 30),
         ]
 
-        for (animal, from, to, days) in movements {
-            let r = MovementRecord(
+        for (animal, from, to, days) in movementData {
+            let m = MovementRecord(
                 date: daysAgo(days),
                 fromPasture: from,
                 toPasture: to,
                 animal: animal
             )
-            context.insert(r)
+            context.insert(m)
         }
 
 
-        // MARK: - Status History
-        let statusChanges: [(Animal, AnimalStatus, AnimalStatus, Int)] = [
+        // MARK: - Status History (timeline + dashboard)
+        let statusData: [(Animal, AnimalStatus, AnimalStatus, Int)] = [
             (a5, .alive,    .sold,     40),
-            (a6, .alive,    .deceased, 300)
+            (a6, .alive,    .deceased, 300),
         ]
 
-        for (animal, oldStatus, newStatus, days) in statusChanges {
-            let r = StatusRecord(
+        for (animal, oldStatus, newStatus, days) in statusData {
+            let s = StatusRecord(
                 date: daysAgo(days),
                 oldStatus: oldStatus,
                 newStatus: newStatus,
                 animal: animal
             )
-            context.insert(r)
+            context.insert(s)
         }
 
         try? context.save()
     }
 
+
     // MARK: - Helper
     private static func daysAgo(_ days: Int) -> Date {
-        Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+        Calendar.current.date(byAdding: .day, value: -days, to: .now) ?? .now
     }
 }
