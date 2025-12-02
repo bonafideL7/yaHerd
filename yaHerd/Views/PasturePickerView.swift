@@ -37,9 +37,7 @@ struct PasturePickerView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        animal.pasture = selectedPasture
-                        try? context.save()
-                        dismiss()
+                        applyPastureChange()
                     }
                 }
 
@@ -51,5 +49,28 @@ struct PasturePickerView: View {
                 selectedPasture = animal.pasture
             }
         }
+    }
+
+    private func applyPastureChange() {
+        let previousName = animal.pasture?.name
+        let newName = selectedPasture?.name
+
+        // Only log a movement if something actually changed
+        if previousName != newName {
+            // Update the animal
+            animal.pasture = selectedPasture
+
+            // Insert movement history record
+            let movement = MovementRecord(
+                date: Date(),
+                fromPasture: previousName,
+                toPasture: newName,
+                animal: animal
+            )
+            context.insert(movement)
+        }
+
+        try? context.save()
+        dismiss()
     }
 }

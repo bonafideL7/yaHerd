@@ -5,14 +5,13 @@
 //  Created by mm on 11/28/25.
 //
 
-
 import SwiftUI
 import SwiftData
 
 struct AnimalListView: View {
     @Environment(\.modelContext) private var context
     @Query private var animals: [Animal]
-
+    @AppStorage("allowHardDelete") private var allowHardDelete = false
     @State private var searchText = ""
     @State private var sortOrder: AnimalSortOrder = .tagAscending
     @State private var showingAdd = false
@@ -21,17 +20,20 @@ struct AnimalListView: View {
     @State private var showArchived = false
 
     var body: some View {
-        List(filteredAndSortedAnimals) { animal in
-            NavigationLink(value: animal) {
-                VStack(alignment: .leading) {
-                    Text("Tag \(animal.tagNumber)")
-                        .font(.headline)
+        List {
+            ForEach(filteredAndSortedAnimals) { animal in
+                NavigationLink(value: animal) {
+                    VStack(alignment: .leading) {
+                        Text("Tag \(animal.tagNumber)")
+                            .font(.headline)
 
-                    Text(animal.sex.rawValue.capitalized)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        Text(animal.sex.rawValue.capitalized)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
+            .onDelete(perform: deleteAnimals)
         }
         .navigationTitle("Herd")
         .navigationDestination(for: Animal.self) { animal in
@@ -89,7 +91,21 @@ struct AnimalListView: View {
         }
     }
 
-    // MARK: - Combined pipeline
+    private func deleteAnimals(at offsets: IndexSet) {
+        for index in offsets {
+            let animal = filteredAndSortedAnimals[index]
+
+            if allowHardDelete {
+                // Hard delete (permanent)
+                context.delete(animal)
+            } else {
+                // Soft delete (archive)
+                animal.status = .deceased
+            }
+        }
+
+        try? context.save()
+    }
 
     private var filteredAndSortedAnimals: [Animal] {
         var result = animals

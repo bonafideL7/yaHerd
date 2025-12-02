@@ -18,6 +18,8 @@ final class Animal {
 
     @Relationship(deleteRule: .cascade) var healthRecords: [HealthRecord] = []
     @Relationship(deleteRule: .cascade) var pregnancyChecks: [PregnancyCheck] = []
+    @Relationship(deleteRule: .cascade) var movementRecords: [MovementRecord] = []
+    @Relationship(deleteRule: .cascade) var statusRecords: [StatusRecord] = []
 
     @Relationship var pasture: Pasture?
 

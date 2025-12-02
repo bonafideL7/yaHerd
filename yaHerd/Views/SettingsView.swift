@@ -9,6 +9,8 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @AppStorage("allowHardDelete") private var allowHardDelete = false
+
     var body: some View {
         NavigationStack {
             List {
@@ -27,6 +29,15 @@ struct SettingsView: View {
                         }
                         .padding()
                     }
+                }
+                
+                Section("Danger Zone") {
+                    Toggle("Enable Hard Delete", isOn: $allowHardDelete)
+                        .tint(.red)
+
+                    Text("When enabled, animals can be permanently removed. This cannot be undone.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Data") {

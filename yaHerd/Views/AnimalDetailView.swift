@@ -10,8 +10,8 @@ import SwiftData
 
 struct AnimalDetailView: View {
     @Environment(\.modelContext) private var context
+    @AppStorage("allowHardDelete") private var allowHardDelete = false
     @State var animal: Animal
-    
     @State private var showingPasturePicker = false
     @State private var showingAddHealth = false
     @State private var showingAddPregCheck = false
@@ -86,6 +86,22 @@ struct AnimalDetailView: View {
                 }
             }
             
+            Section("Delete Animal") {
+                // Soft delete always available
+                Button("Archive (Soft Delete)") {
+                    updateStatus(.deceased)   // ← Use your existing status-change function
+                }
+                .foregroundStyle(.orange)
+
+                // Hard delete only if user explicitly enabled it
+                if allowHardDelete {
+                    Button("Permanently Delete", role: .destructive) {
+                        context.delete(animal)
+                        try? context.save()
+                    }
+                }
+            }
+            
         }
         .navigationTitle("Animal \(animal.tagNumber)")
         .navigationBarTitleDisplayMode(.inline)
@@ -103,6 +119,14 @@ struct AnimalDetailView: View {
                     showingPasturePicker = true
                 }
             }
+            
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    AnimalTimelineView(animal: animal)
+                } label: {
+                    Image(systemName: "clock.arrow.circlepath")
+                }
+            }
         }
         .sheet(isPresented: $showingPasturePicker) {
             PasturePickerView(animal: animal)
@@ -117,7 +141,18 @@ struct AnimalDetailView: View {
     }
     
     private func updateStatus(_ newStatus: AnimalStatus) {
+        let oldStatus = animal.status
         animal.status = newStatus
+
+        // RECORD STATUS CHANGE
+        let record = StatusRecord(
+            date: Date(),
+            oldStatus: oldStatus,
+            newStatus: newStatus,
+            animal: animal
+        )
+        context.insert(record)
+
         try? context.save()
     }
 }
