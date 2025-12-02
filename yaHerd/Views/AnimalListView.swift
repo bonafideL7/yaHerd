@@ -18,6 +18,7 @@ struct AnimalListView: View {
     @State private var showingAdd = false
     @State private var showingFilters = false
     @State private var filter = AnimalFilter()
+    @State private var showArchived = false
 
     var body: some View {
         List(filteredAndSortedAnimals) { animal in
@@ -70,6 +71,15 @@ struct AnimalListView: View {
                     Image(systemName: "arrow.up.arrow.down")
                 }
             }
+            
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    showArchived.toggle()
+                } label: {
+                    Image(systemName: showArchived ? "eye.slash" : "eye")
+                }
+            }
+
         }
         .sheet(isPresented: $showingAdd) {
             AddAnimalView()
@@ -83,6 +93,11 @@ struct AnimalListView: View {
 
     private var filteredAndSortedAnimals: [Animal] {
         var result = animals
+        
+        // HIDE SOLD + DECEASED unless user wants to see them
+        if !showArchived {
+            result = result.filter { $0.status == .alive }
+        }
 
         // SEARCH
         if !searchText.isEmpty {

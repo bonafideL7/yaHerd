@@ -4,17 +4,18 @@
 //
 //  Created by mm on 11/28/25.
 //
+
 import SwiftUI
 import SwiftData
 
 struct AnimalDetailView: View {
     @Environment(\.modelContext) private var context
     @State var animal: Animal
-
+    
     @State private var showingPasturePicker = false
     @State private var showingAddHealth = false
     @State private var showingAddPregCheck = false
-
+    
     var body: some View {
         List {
             Section("Animal Info") {
@@ -22,8 +23,10 @@ struct AnimalDetailView: View {
                 Text("Sex: \(animal.sex.rawValue.capitalized)")
                 Text("Status: \(animal.status.rawValue.capitalized)")
                 Text("Birth Date: \(animal.birthDate.formatted(date: .long, time: .omitted))")
+                Text("Status: \(animal.status.rawValue.capitalized)")
+                    .foregroundStyle(animal.status == .alive ? .green : (animal.status == .sold ? .yellow : .red))
             }
-
+            
             Section("Pasture") {
                 if let pasture = animal.pasture {
                     Text(pasture.name)
@@ -31,7 +34,7 @@ struct AnimalDetailView: View {
                     Text("None")
                 }
             }
-
+            
             Section("Pregnancy Checks") {
                 if animal.pregnancyChecks.isEmpty {
                     Text("No records")
@@ -46,7 +49,7 @@ struct AnimalDetailView: View {
                     }
                 }
             }
-
+            
             Section("Health Records") {
                 if animal.healthRecords.isEmpty {
                     Text("No records")
@@ -61,6 +64,28 @@ struct AnimalDetailView: View {
                     }
                 }
             }
+            
+            Section("Status Actions") {
+                if animal.status != .sold {
+                    Button("Mark as Sold") {
+                        updateStatus(.sold)
+                    }
+                }
+                
+                if animal.status != .deceased {
+                    Button("Mark as Deceased") {
+                        updateStatus(.deceased)
+                    }
+                }
+                
+                if animal.status != .alive {
+                    Button("Restore to Alive") {
+                        updateStatus(.alive)
+                    }
+                    .foregroundStyle(.blue)
+                }
+            }
+            
         }
         .navigationTitle("Animal \(animal.tagNumber)")
         .navigationBarTitleDisplayMode(.inline)
@@ -69,11 +94,11 @@ struct AnimalDetailView: View {
                 Button("Add Preg Check") {
                     showingAddPregCheck = true
                 }
-
+                
                 Button("Add Health") {
                     showingAddHealth = true
                 }
-
+                
                 Button("Change Pasture") {
                     showingPasturePicker = true
                 }
@@ -88,5 +113,11 @@ struct AnimalDetailView: View {
         .sheet(isPresented: $showingAddPregCheck) {
             PregnancyCheckAddView(animal: animal)
         }
+        
+    }
+    
+    private func updateStatus(_ newStatus: AnimalStatus) {
+        animal.status = newStatus
+        try? context.save()
     }
 }
