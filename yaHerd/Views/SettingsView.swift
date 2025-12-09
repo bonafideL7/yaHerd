@@ -14,6 +14,9 @@ struct SettingsView: View {
     @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
     @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
     @AppStorage("pastureCapacity") private var pastureCapacity = 30  // per 30 acres default guideline
+    @AppStorage("targetHeadPerAcreDefault") private var targetHeadPerAcreDefault = 1.0
+    @AppStorage("usableAcreagePercentDefault") private var usableAcreagePercentDefault = 100
+
 
     var body: some View {
         NavigationStack {
@@ -40,8 +43,17 @@ struct SettingsView: View {
                     Stepper("Treatment overdue after \(treatmentIntervalDays) days", value: $treatmentIntervalDays, in: 30...365)
                     
                     Toggle("Warn about pasture overcrowding", isOn: $enablePastureOverstockWarnings)
-                    Stepper("Pasture capacity: \(pastureCapacity) animals", value: $pastureCapacity, in: 10...200)
+                    Stepper("Pasture capacity: \(pastureCapacity) animals", value: $pastureCapacity, in: 1...200)
                 }
+                
+                Section("Pasture Defaults") {
+                    Stepper("Default target head/acre: \(targetHeadPerAcreDefault, format: .number.precision(.fractionLength(2)))",
+                            value: $targetHeadPerAcreDefault, in: 0.1...3.0, step: 0.1)
+
+                    Stepper("Default usable acreage %: \(usableAcreagePercentDefault)%",
+                            value: $usableAcreagePercentDefault, in: 10...100)
+                }
+
                 
                 Section("Danger Zone") {
                     Toggle("Enable Hard Delete", isOn: $allowHardDelete)

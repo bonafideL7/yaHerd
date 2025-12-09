@@ -12,13 +12,16 @@ import Foundation
 @Model
 final class Pasture {
     @Attribute(.unique) var name: String
-    var acreage: Double?
-
     @Relationship(deleteRule: .nullify, inverse: \Animal.pasture)
     var animals: [Animal] = []
+    var acreage: Double?
+    var usableAcreage: Double?
+    var targetHeadPerAcre: Double?
 
-    init(name: String, acreage: Double? = nil) {
+    init(name: String, acreage: Double? = nil, usableAcreage: Double? = nil, targetHeadPerAcre: Double? = nil) {
         self.name = name
         self.acreage = acreage
+        self.usableAcreage = usableAcreage
+        self.targetHeadPerAcre = targetHeadPerAcre
     }
 }

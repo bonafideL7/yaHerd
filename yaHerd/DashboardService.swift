@@ -99,13 +99,32 @@ struct DashboardService {
         }
 
         // MARK: - 5. Pasture Overstock
+//        if enablePastureOverstockWarnings {
+//            for pasture in pastures {
+//                if pasture.animals.count > pastureCapacity {
+//                    alerts.append(
+//                        DashboardAlert(
+//                            title: "Overstock warning: \(pasture.name)",
+//                            message: "\(pasture.animals.count) animals > capacity \(pastureCapacity)",
+//                            icon: "alert-triangle",
+//                            severity: .warning
+//                        )
+//                    )
+//                }
+//            }
+//        }
+        
         if enablePastureOverstockWarnings {
             for pasture in pastures {
-                if pasture.animals.count > pastureCapacity {
+                let alive = pasture.animals.filter { $0.status == .alive }.count
+                let analytics = PastureAnalytics(pasture: pasture, aliveAnimals: alive)
+                
+                if analytics.isOverstocked,
+                   let cap = analytics.capacityHead {
                     alerts.append(
                         DashboardAlert(
-                            title: "Overstock warning: \(pasture.name)",
-                            message: "\(pasture.animals.count) animals > capacity \(pastureCapacity)",
+                            title: "Overstock warning in \(pasture.name)",
+                            message: "\(alive) animals > capacity \(Int(cap))",
                             icon: "alert-triangle",
                             severity: .warning
                         )
