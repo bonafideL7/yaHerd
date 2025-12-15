@@ -56,13 +56,15 @@ struct DashboardView: View {
                                 .renderingMode(.template)
                         }
                     }
-
-                    Label("\(pastures.count) pastures", systemImage: "leaf")
+                }
+                Section("Pastures"){
+                    
                 }
 
             }
             .navigationTitle("Dashboard")
         }
+        
     }
 
     private func alertRow(_ alert: DashboardAlert) -> some View {

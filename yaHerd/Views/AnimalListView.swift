@@ -18,9 +18,13 @@ struct AnimalListView: View {
     @State private var showingFilters = false
     @State private var filter = AnimalFilter()
     @State private var showArchived = false
+    
+    @State private var batchMode = false
+    @State private var selectedAnimals: Set<Animal> = []
+    @State private var showingBatchMoveSheet = false
 
     var body: some View {
-        List {
+        List(selection: $selectedAnimals) {
             ForEach(filteredAndSortedAnimals) { animal in
                 NavigationLink(value: animal) {
                     VStack(alignment: .leading) {
@@ -35,12 +39,30 @@ struct AnimalListView: View {
             }
             .onDelete(perform: deleteAnimals)
         }
+        .environment(\.editMode, .constant(batchMode ? .active : .inactive))
         .navigationTitle("Herd")
         .navigationDestination(for: Animal.self) { animal in
             AnimalDetailView(animal: animal)
         }
         .searchable(text: $searchText, prompt: "Search tag...")
         .toolbar {
+            
+            // ENTER / EXIT BATCH MODE
+            ToolbarItem(placement: .topBarLeading) {
+                Button(batchMode ? "Done" : "Select") {
+                    batchMode.toggle()
+                    if !batchMode { selectedAnimals.removeAll() }
+                }
+            }
+
+            // MOVE TO PASTURE (only visible in batch mode + some selected)
+            ToolbarItem(placement: .bottomBar) {
+                if batchMode && !selectedAnimals.isEmpty {
+                    Button("Move to Pasture") {
+                        showingBatchMoveSheet = true
+                    }
+                }
+            }
 
             // ADD BUTTON
             ToolbarItem(placement: .topBarTrailing) {
@@ -89,6 +111,16 @@ struct AnimalListView: View {
         .sheet(isPresented: $showingFilters) {
             AnimalFilterView(filter: $filter)
         }
+        .sheet(isPresented: $showingBatchMoveSheet) {
+            BatchMoveSheet(
+                animals: Array(selectedAnimals),
+                onComplete: {
+                    selectedAnimals.removeAll()
+                    batchMode = false
+                }
+            )
+        }
+
     }
 
     private func deleteAnimals(at offsets: IndexSet) {

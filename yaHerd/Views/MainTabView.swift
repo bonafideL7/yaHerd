@@ -56,8 +56,6 @@ struct MainTabView: View {
                     }
                 }
             }
-            .tabBadge(herdCount)
-            
             
             // PASTURES TAB
             NavigationStack {
@@ -66,8 +64,6 @@ struct MainTabView: View {
             .tabItem {
                 Label("Pastures", systemImage: "leaf")
             }
-            .tabBadge(pastureCount)
-            
             
             // SETTINGS TAB
             NavigationStack {
