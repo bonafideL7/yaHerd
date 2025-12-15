@@ -21,7 +21,6 @@ struct AnimalDetailView: View {
             Section("Animal Info") {
                 Text("Tag: \(animal.tagNumber)")
                 Text("Sex: \(animal.sex.rawValue.capitalized)")
-                Text("Status: \(animal.status.rawValue.capitalized)")
                 Text("Birth Date: \(animal.birthDate.formatted(date: .long, time: .omitted))")
                 Text("Status: \(animal.status.rawValue.capitalized)")
                     .foregroundStyle(animal.status == .alive ? .green : (animal.status == .sold ? .yellow : .red))
@@ -116,8 +115,8 @@ struct AnimalDetailView: View {
                 }
                 
                 Button("Change Pasture") {
-                    showingPasturePicker = true
-                }
+                            showingPasturePicker = true
+                        } 
             }
             
             ToolbarItem(placement: .topBarTrailing) {
@@ -129,7 +128,20 @@ struct AnimalDetailView: View {
             }
         }
         .sheet(isPresented: $showingPasturePicker) {
-            PasturePickerView(animal: animal)
+            PastureTilePickerView { pasture in
+                let oldName = animal.pasture?.name
+                animal.pasture = pasture
+
+                let record = MovementRecord(
+                    date: .now,
+                    fromPasture: oldName,
+                    toPasture: pasture.name,
+                    animal: animal
+                )
+                context.insert(record)
+
+                try? context.save()
+            }
         }
         .sheet(isPresented: $showingAddHealth) {
             HealthRecordAddView(animal: animal)

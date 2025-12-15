@@ -17,6 +17,8 @@ final class Pasture {
     var acreage: Double?
     var usableAcreage: Double?
     var targetHeadPerAcre: Double?
+    var lastGrazedDate: Date?
+    var group: PastureGroup?
 
     init(name: String, acreage: Double? = nil, usableAcreage: Double? = nil, targetHeadPerAcre: Double? = nil) {
         self.name = name

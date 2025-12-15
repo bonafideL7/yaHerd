@@ -18,15 +18,14 @@ struct BatchMoveSheet: View {
 
     @Query(sort: \Pasture.name) private var pastures: [Pasture]
     @State private var selectedPasture: Pasture?
+    @State private var showingPasturePicker = false
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Move \(animals.count) animals") {
-                    Picker("Destination Pasture", selection: $selectedPasture) {
-                        ForEach(pastures) { pasture in
-                            Text(pasture.name).tag(Optional(pasture))
-                        }
+                    Button("Choose Destination Pasture") {
+                        showingPasturePicker = true
                     }
                 }
             }
@@ -45,6 +44,12 @@ struct BatchMoveSheet: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .sheet(isPresented: $showingPasturePicker) {
+                PastureTilePickerView { pasture in
+                    moveAnimals(to: pasture)
+                }
+            }
+
         }
     }
 
@@ -52,6 +57,7 @@ struct BatchMoveSheet: View {
         for animal in animals {
             let oldName = animal.pasture?.name
             animal.pasture = pasture
+            //pasture.lastGrazedDate = .now
 
             // Movement record
             let record = MovementRecord(

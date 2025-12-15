@@ -14,6 +14,7 @@ struct PastureDetailView: View {
     @Bindable var pasture: Pasture
     @AppStorage("targetHeadPerAcreDefault") private var targetHeadPerAcreDefault = 1.0
     @AppStorage("usableAcreagePercentDefault") private var usableAcreagePercentDefault = 100
+    @Query(sort: \PastureGroup.name) private var groups: [PastureGroup]
 
     private var analytics: PastureAnalytics {
         PastureAnalytics(
@@ -120,6 +121,16 @@ struct PastureDetailView: View {
                     }
                 }
             }
+            
+            Section("Rotation Group") {
+                Picker("Group", selection: $pasture.group) {
+                    Text("None").tag(Optional<PastureGroup>(nil))
+                    ForEach(groups) { group in
+                        Text(group.name).tag(Optional(group))
+                    }
+                }
+            }
+
         }
         .navigationTitle(pasture.name)
         .navigationDestination(for: Animal.self) { animal in

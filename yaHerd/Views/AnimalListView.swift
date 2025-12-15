@@ -24,20 +24,42 @@ struct AnimalListView: View {
     @State private var showingBatchMoveSheet = false
 
     var body: some View {
-        List(selection: $selectedAnimals) {
-            ForEach(filteredAndSortedAnimals) { animal in
-                NavigationLink(value: animal) {
-                    VStack(alignment: .leading) {
-                        Text("Tag \(animal.tagNumber)")
-                            .font(.headline)
+        Group {
+            if batchMode {
+                // SELECTION MODE — NO NAVIGATION
+                List(selection: $selectedAnimals) {
+                    ForEach(filteredAndSortedAnimals) { animal in
+                        VStack(alignment: .leading) {
+                            Text("Tag \(animal.tagNumber)")
+                                .font(.headline)
 
-                        Text(animal.sex.rawValue.capitalized)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            Text(animal.sex.rawValue.capitalized)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .tag(animal) 
                     }
+                    .onDelete(perform: deleteAnimals)
+                }
+                .environment(\.editMode, .constant(.active))
+            } else {
+                // NORMAL MODE — NAVIGATION ENABLED
+                List {
+                    ForEach(filteredAndSortedAnimals) { animal in
+                        NavigationLink(value: animal) {
+                            VStack(alignment: .leading) {
+                                Text("Tag \(animal.tagNumber)")
+                                    .font(.headline)
+
+                                Text(animal.sex.rawValue.capitalized)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .onDelete(perform: deleteAnimals)
                 }
             }
-            .onDelete(perform: deleteAnimals)
         }
         .environment(\.editMode, .constant(batchMode ? .active : .inactive))
         .navigationTitle("Herd")
