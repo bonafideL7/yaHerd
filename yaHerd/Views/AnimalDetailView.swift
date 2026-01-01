@@ -27,6 +27,29 @@ struct AnimalDetailView: View {
             }
         )
     }
+    private var biologicalSexBinding: Binding<BiologicalSex> {
+        Binding(
+            get: { animal.biologicalSex ?? animal.sex.inferredBiologicalSex },
+            set: { newValue in
+                animal.biologicalSex = newValue
+                animal.syncLegacySexFromData()
+                try? context.save()
+            }
+        )
+    }
+
+    private var isCastratedBinding: Binding<Bool> {
+        Binding(
+            get: { animal.isCastrated },
+            set: { newValue in
+                animal.isCastrated = newValue
+                animal.syncLegacySexFromData()
+                try? context.save()
+            }
+        )
+    }
+
+
 
     private var sireBinding: Binding<String> {
         Binding(
@@ -69,7 +92,16 @@ struct AnimalDetailView: View {
                         .tag(color)
                     }
                 }
-                Text("Sex: \(animal.sex.rawValue.capitalized)")
+                Text("Designation: \(animal.designation.rawValue.capitalized)")
+                Picker("Biological Sex", selection: biologicalSexBinding) {
+                    ForEach(BiologicalSex.allCases, id: \.self) { sex in
+                        Text(sex.label).tag(sex)
+                    }
+                }
+
+                if (animal.biologicalSex ?? animal.sex.inferredBiologicalSex) == .male {
+                    Toggle("Castrated", isOn: isCastratedBinding)
+                }
                 Text("Birth Date: \(animal.birthDate.formatted(date: .long, time: .omitted))")
                 Text("Status: \(animal.status.rawValue.capitalized)")
                     .foregroundStyle(animal.status == .alive ? .green : (animal.status == .sold ? .yellow : .red))

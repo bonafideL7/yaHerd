@@ -33,9 +33,9 @@ struct AnimalParentPickerView: View {
             .filter { animal in
                 guard !showAllSexes else { return true }
                 // If the herd doesn't have any in the suggested sexes, still show everything.
-                let hasSuggested = animals.contains { suggestedSexes.contains($0.sex) }
+                let hasSuggested = animals.contains { suggestedSexes.contains($0.designation) }
                 guard hasSuggested else { return true }
-                return suggestedSexes.contains(animal.sex)
+                return suggestedSexes.contains(animal.designation)
             }
     }
 
@@ -60,7 +60,7 @@ struct AnimalParentPickerView: View {
                                     TagColorDot(tagColor: animal.tagColor ?? .yellow)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(animal.tagNumber)
-                                        Text(animal.sex.rawValue.capitalized)
+                                        Text(animal.designation.rawValue.capitalized)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }

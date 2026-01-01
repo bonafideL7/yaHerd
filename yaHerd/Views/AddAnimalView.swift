@@ -15,7 +15,8 @@ struct AddAnimalView: View {
 
     @State private var tagNumber = ""
 	@State private var tagColor: TagColor = .yellow
-    @State private var sex: Sex = .cow
+    @State private var biologicalSex: BiologicalSex = .female
+    @State private var isCastrated: Bool = false
     @State private var birthDate = Date()
     @State private var status: AnimalStatus = .alive
     @State private var sire = ""
@@ -26,6 +27,16 @@ struct AddAnimalView: View {
 
     @State private var errorMessage: String?
     @State private var showingError = false
+
+    private var computedDesignation: Sex {
+        Animal.computeDesignation(
+            biologicalSex: biologicalSex,
+            isCastrated: isCastrated,
+            birthDate: birthDate,
+            referenceDate: Date()
+        )
+    }
+
 
     var body: some View {
         NavigationStack {
@@ -40,9 +51,21 @@ struct AddAnimalView: View {
 						.tag(color)
 					}
 				}
-                Picker("Sex", selection: $sex) {
-                    ForEach(Sex.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+                Picker("Biological Sex", selection: $biologicalSex) {
+                    ForEach(BiologicalSex.allCases, id: \.self) { sex in
+                        Text(sex.label).tag(sex)
+                    }
                 }
+                .onChange(of: biologicalSex) { newValue in
+                    if newValue != .male { isCastrated = false }
+                }
+
+                if biologicalSex == .male {
+                    Toggle("Castrated", isOn: $isCastrated)
+                }
+
+                Text("Designation: \(computedDesignation.rawValue.capitalized)")
+                    .foregroundStyle(.secondary)
                 DatePicker("Birth Date", selection: $birthDate, displayedComponents: .date)
                 Picker("Status", selection: $status) {
                     ForEach(AnimalStatus.allCases, id: \.self) { Text($0.rawValue.capitalized) }
@@ -118,7 +141,7 @@ struct AddAnimalView: View {
 			let animal = Animal(
 				tagNumber: tagNumber,
 				tagColor: tagColor,
-				sex: sex,
+				sex: computedDesignation,
                 birthDate: birthDate,
                 status: status,
                 sire: sire.isEmpty ? nil : sire,

@@ -36,7 +36,7 @@ struct AnimalListView: View {
                                 Text("Tag \(animal.tagNumber)")
                                     .font(.headline)
 
-                                Text(animal.sex.rawValue.capitalized)
+                                Text(animal.designation.rawValue.capitalized)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -58,7 +58,7 @@ struct AnimalListView: View {
                                     Text("Tag \(animal.tagNumber)")
                                         .font(.headline)
 
-                                    Text(animal.sex.rawValue.capitalized)
+                                    Text(animal.designation.rawValue.capitalized)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -184,7 +184,7 @@ struct AnimalListView: View {
 
         // FILTER: SEX
         if let selectedSex = filter.sex {
-            result = result.filter { $0.sex == selectedSex }
+            result = result.filter { $0.designation == selectedSex }
         }
 
         // FILTER: STATUS
@@ -208,7 +208,7 @@ struct AnimalListView: View {
         case .birthDateOldest:
             result.sort { $0.birthDate < $1.birthDate }
         case .sex:
-            result.sort { $0.sex.rawValue < $1.sex.rawValue }
+            result.sort { $0.designation.rawValue < $1.designation.rawValue }
         case .status:
             result.sort { $0.status.rawValue < $1.status.rawValue }
         }

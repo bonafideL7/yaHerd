@@ -21,8 +21,8 @@ struct AnimalFilterView: View {
         NavigationStack {
             Form {
 
-                Section("Sex") {
-                    Picker("Sex", selection: Binding(
+                Section("Designation") {
+                    Picker("Designation", selection: Binding(
                         get: { filter.sex },
                         set: { filter.sex = $0 }
                     )) {
