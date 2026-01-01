@@ -10,6 +10,8 @@ import Foundation
 @Model
 final class Animal {
     @Attribute(.unique) var tagNumber: String
+    /// Visual tag grouping. Optional for painless SwiftData migration; treat `nil` as `.yellow`.
+    var tagColor: TagColor?
     var sex: Sex
     var birthDate: Date
     var status: AnimalStatus
@@ -25,6 +27,7 @@ final class Animal {
 
     init(
         tagNumber: String,
+        tagColor: TagColor? = nil,
         sex: Sex,
         birthDate: Date,
         status: AnimalStatus = .alive,
@@ -33,6 +36,7 @@ final class Animal {
         pasture: Pasture? = nil
     ) {
         self.tagNumber = tagNumber
+        self.tagColor = tagColor
         self.sex = sex
         self.birthDate = birthDate
         self.status = status

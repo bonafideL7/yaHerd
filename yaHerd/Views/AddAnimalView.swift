@@ -14,6 +14,7 @@ struct AddAnimalView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var tagNumber = ""
+	@State private var tagColor: TagColor = .yellow
     @State private var sex: Sex = .cow
     @State private var birthDate = Date()
     @State private var status: AnimalStatus = .alive
@@ -27,6 +28,15 @@ struct AddAnimalView: View {
         NavigationStack {
             Form {
                 TextField("Tag Number", text: $tagNumber)
+				Picker("Tag Color", selection: $tagColor) {
+					ForEach(TagColor.allCases) { color in
+						HStack(spacing: 10) {
+							TagColorDot(tagColor: color)
+							Text(color.label)
+						}
+						.tag(color)
+					}
+				}
                 Picker("Sex", selection: $sex) {
                     ForEach(Sex.allCases, id: \.self) { Text($0.rawValue.capitalized) }
                 }
@@ -62,9 +72,10 @@ struct AddAnimalView: View {
                 context: context
             )
 
-            let animal = Animal(
-                tagNumber: tagNumber,
-                sex: sex,
+			let animal = Animal(
+				tagNumber: tagNumber,
+				tagColor: tagColor,
+				sex: sex,
                 birthDate: birthDate,
                 status: status,
                 sire: sire.isEmpty ? nil : sire,

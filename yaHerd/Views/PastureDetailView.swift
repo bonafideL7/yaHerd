@@ -117,7 +117,10 @@ struct PastureDetailView: View {
             Section("Animals") {
                 ForEach(pasture.animals.filter { $0.status == .alive }) { animal in
                     NavigationLink(value: animal) {
-                        Text("Tag \(animal.tagNumber)")
+                        HStack(spacing: 12) {
+                            TagColorDot(tagColor: animal.tagColor ?? .yellow)
+                            Text("Tag \(animal.tagNumber)")
+                        }
                     }
                 }
             }

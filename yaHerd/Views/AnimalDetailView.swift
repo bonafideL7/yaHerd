@@ -15,11 +15,38 @@ struct AnimalDetailView: View {
     @State private var showingPasturePicker = false
     @State private var showingAddHealth = false
     @State private var showingAddPregCheck = false
+
+    private var tagColorBinding: Binding<TagColor> {
+        Binding(
+            get: { animal.tagColor ?? .yellow },
+            set: { newValue in
+                animal.tagColor = newValue
+                try? context.save()
+            }
+        )
+    }
     
     var body: some View {
         List {
             Section("Animal Info") {
-                Text("Tag: \(animal.tagNumber)")
+                HStack {
+                    Text("Tag")
+                    Spacer()
+                    HStack(spacing: 8) {
+                        TagColorDot(tagColor: animal.tagColor ?? .yellow)
+                        Text(animal.tagNumber)
+                    }
+                }
+
+                Picker("Tag Color", selection: tagColorBinding) {
+                    ForEach(TagColor.allCases) { color in
+                        HStack(spacing: 10) {
+                            TagColorDot(tagColor: color)
+                            Text(color.label)
+                        }
+                        .tag(color)
+                    }
+                }
                 Text("Sex: \(animal.sex.rawValue.capitalized)")
                 Text("Birth Date: \(animal.birthDate.formatted(date: .long, time: .omitted))")
                 Text("Status: \(animal.status.rawValue.capitalized)")

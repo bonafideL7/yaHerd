@@ -29,13 +29,17 @@ struct AnimalListView: View {
                 // SELECTION MODE — NO NAVIGATION
                 List(selection: $selectedAnimals) {
                     ForEach(filteredAndSortedAnimals) { animal in
-                        VStack(alignment: .leading) {
-                            Text("Tag \(animal.tagNumber)")
-                                .font(.headline)
+                        HStack(spacing: 12) {
+                            TagColorDot(tagColor: animal.tagColor ?? .yellow)
 
-                            Text(animal.sex.rawValue.capitalized)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading) {
+                                Text("Tag \(animal.tagNumber)")
+                                    .font(.headline)
+
+                                Text(animal.sex.rawValue.capitalized)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                         .tag(animal) 
                     }
@@ -47,13 +51,17 @@ struct AnimalListView: View {
                 List {
                     ForEach(filteredAndSortedAnimals) { animal in
                         NavigationLink(value: animal) {
-                            VStack(alignment: .leading) {
-                                Text("Tag \(animal.tagNumber)")
-                                    .font(.headline)
+                            HStack(spacing: 12) {
+                                TagColorDot(tagColor: animal.tagColor ?? .yellow)
 
-                                Text(animal.sex.rawValue.capitalized)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .leading) {
+                                    Text("Tag \(animal.tagNumber)")
+                                        .font(.headline)
+
+                                    Text(animal.sex.rawValue.capitalized)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
