@@ -57,6 +57,8 @@ struct BatchMoveSheet: View {
         for animal in animals {
             let oldName = animal.pasture?.name
             animal.pasture = pasture
+            animal.location = .pasture
+            animal.activeWorkingSession = nil
             //pasture.lastGrazedDate = .now
 
             // Movement record

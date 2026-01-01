@@ -17,7 +17,7 @@ struct DashboardService {
 
         // MARK: - 1. Unassigned animals
         let unassigned = animals.filter { animal in
-            animal.pasture == nil && animal.status == .alive
+            animal.pasture == nil && animal.status == .alive && animal.location == .pasture
         }
         if !unassigned.isEmpty {
             alerts.append(
@@ -63,7 +63,11 @@ struct DashboardService {
                 a.date > b.date
             }).first else { continue }
 
-            let calvingDate = Calendar.current.date(byAdding: .day, value: 283, to: last.date)!
+            let calvingDate: Date = {
+                if let due = last.dueDate { return due }
+                // fallback: 283-day gestation from check date
+                return Calendar.current.date(byAdding: .day, value: 283, to: last.date) ?? last.date
+            }()
 
             if now > calvingDate {
                 alerts.append(

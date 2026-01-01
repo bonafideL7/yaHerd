@@ -138,7 +138,14 @@ struct AnimalDetailView: View {
             }
             
             Section("Pasture") {
-                if let pasture = animal.pasture {
+                if animal.location == .workingPen {
+                    HStack {
+                        Text("Working Pen")
+                        Spacer()
+                        Text(animal.activeWorkingSession?.protocolName ?? "")
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let pasture = animal.pasture {
                     Text(pasture.name)
                 } else {
                     Text("None")
@@ -151,10 +158,22 @@ struct AnimalDetailView: View {
                 } else {
                     ForEach(animal.pregnancyChecks) { check in
                         VStack(alignment: .leading) {
-                            Text(check.result.rawValue.capitalized)
+                            let title: String = {
+                                var t = check.result.rawValue.capitalized
+                                if check.result == .pregnant, let due = check.dueDate {
+                                    t += " (Due \(due.formatted(date: .abbreviated, time: .omitted)))"
+                                }
+                                return t
+                            }()
+                            Text(title)
                             Text(check.date.formatted(date: .abbreviated, time: .omitted))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                            if let sire = check.sireAnimal?.tagNumber {
+                                Text("Sire: \(sire)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
@@ -242,6 +261,10 @@ struct AnimalDetailView: View {
             PastureTilePickerView { pasture in
                 let oldName = animal.pasture?.name
                 animal.pasture = pasture
+                animal.location = .pasture
+                animal.activeWorkingSession = nil
+                animal.location = .pasture
+                animal.activeWorkingSession = nil
 
                 let record = MovementRecord(
                     date: .now,

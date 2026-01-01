@@ -18,6 +18,10 @@ struct PregnancyCheckAddView: View {
     @State private var date = Date()
     @State private var result: PregnancyResult = .unknown
     @State private var technician = ""
+    @State private var estimatedDaysText: String = ""
+    @State private var dueDate: Date = .now
+    @State private var selectedSire: Animal?
+    @State private var showingSirePicker = false
     @State private var errorMessage: String?
     @State private var showingError = false
 
@@ -33,6 +37,30 @@ struct PregnancyCheckAddView: View {
                 }
 
                 TextField("Technician", text: $technician)
+
+                if result == .pregnant {
+                    HStack {
+                        Text("Est. days")
+                        Spacer()
+                        TextField("", text: $estimatedDaysText)
+                            .multilineTextAlignment(.trailing)
+                            .keyboardType(.numberPad)
+                            .frame(width: 120)
+                    }
+
+                    DatePicker("Due Date", selection: $dueDate, displayedComponents: .date)
+
+                    Button {
+                        showingSirePicker = true
+                    } label: {
+                        HStack {
+                            Text("Sire")
+                            Spacer()
+                            Text(selectedSire?.tagNumber ?? "Choose")
+                                .foregroundStyle(selectedSire == nil ? .secondary : .primary)
+                        }
+                    }
+                }
             }
             .navigationTitle("Add Pregnancy Check")
             .toolbar {
@@ -52,6 +80,18 @@ struct PregnancyCheckAddView: View {
                 Text(errorMessage ?? "")
             }
         }
+        .onChange(of: estimatedDaysText) { _, _ in
+            recalcDueDate()
+        }
+        .sheet(isPresented: $showingSirePicker) {
+            AnimalParentPickerView(
+                title: "Select Sire",
+                excludeTagNumber: animal.tagNumber,
+                suggestedSexes: [.bull]
+            ) { picked in
+                selectedSire = picked
+            }
+        }
     }
 
     private func save() {
@@ -62,6 +102,10 @@ struct PregnancyCheckAddView: View {
                 date: date,
                 result: result,
                 technician: technician.isEmpty ? nil : technician,
+                estimatedDaysPregnant: Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)),
+                dueDate: result == .pregnant ? dueDate : nil,
+                sireAnimal: selectedSire,
+                workingSession: nil,
                 animal: animal
             )
 
@@ -71,6 +115,15 @@ struct PregnancyCheckAddView: View {
         } catch {
             errorMessage = error.localizedDescription
             showingError = true
+        }
+    }
+
+    private func recalcDueDate() {
+        guard result == .pregnant else { return }
+        guard let est = Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
+        let remaining = max(0, WorkingConstants.gestationDays - est)
+        if let computed = Calendar.current.date(byAdding: .day, value: remaining, to: date) {
+            dueDate = computed
         }
     }
 

@@ -23,7 +23,11 @@ struct yaHerdApp: App {
                     HealthRecord.self,
                     PregnancyCheck.self,
                     MovementRecord.self,
-                    StatusRecord.self
+                    StatusRecord.self,
+                    WorkingSession.self,
+                    WorkingQueueItem.self,
+                    WorkingTreatmentRecord.self,
+                    WorkingProtocolTemplate.self
                 ])
         
     }

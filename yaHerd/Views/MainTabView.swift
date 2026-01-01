@@ -64,6 +64,14 @@ struct MainTabView: View {
             .tabItem {
                 Label("Pastures", systemImage: "leaf")
             }
+
+            // WORK TAB
+            NavigationStack {
+                WorkingSessionsView()
+            }
+            .tabItem {
+                Label("Work", systemImage: "wrench")
+            }
             
             // SETTINGS TAB
             NavigationStack {

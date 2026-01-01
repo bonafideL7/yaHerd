@@ -12,6 +12,7 @@
 
 /* Begin PBXFileReference section */
 		8D40A28A2EDAA29E00C89DD2 /* yaHerd.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = yaHerd.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8D8DB5CF2F06B13300DA8EBE /* yaHerd.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = yaHerd.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -46,6 +47,13 @@
 			isa = PBXGroup;
 			children = (
 				8D40A28A2EDAA29E00C89DD2 /* yaHerd.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		8D8DB5D02F06B13300DA8EBE /* Products */ = {
+			isa = PBXGroup;
+			children = (
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -106,6 +114,12 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8D40A28B2EDAA29E00C89DD2 /* Products */;
 			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = 8D8DB5D02F06B13300DA8EBE /* Products */;
+					ProjectRef = 8D8DB5CF2F06B13300DA8EBE /* yaHerd.xcodeproj */;
+				},
+			);
 			projectRoot = "";
 			targets = (
 				8D40A2892EDAA29E00C89DD2 /* yaHerd */,

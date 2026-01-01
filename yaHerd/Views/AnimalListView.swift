@@ -39,6 +39,16 @@ struct AnimalListView: View {
                                 Text(animal.designation.rawValue.capitalized)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+
+                                if animal.location == .workingPen {
+                                    Text("Working Pen")
+                                        .font(.caption2)
+                                        .foregroundStyle(.orange)
+                                } else if let pasture = animal.pasture {
+                                    Text(pasture.name)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                         .tag(animal) 
@@ -61,6 +71,16 @@ struct AnimalListView: View {
                                     Text(animal.designation.rawValue.capitalized)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+
+                                    if animal.location == .workingPen {
+                                        Text("Working Pen")
+                                            .font(.caption2)
+                                            .foregroundStyle(.orange)
+                                    } else if let pasture = animal.pasture {
+                                        Text(pasture.name)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
                             }
                         }

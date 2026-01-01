@@ -59,6 +59,8 @@ struct PasturePickerView: View {
         if previousName != newName {
             // Update the animal
             animal.pasture = selectedPasture
+            animal.location = .pasture
+            animal.activeWorkingSession = nil
 
             // Insert movement history record
             let movement = MovementRecord(

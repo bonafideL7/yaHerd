@@ -5,7 +5,10 @@ struct SampleDataService {
 
     static func seedIfNeeded(context: ModelContext) {
 
-        // Avoid reseeding
+        // Seed working protocol templates (safe to do independently of animal seed)
+        seedProtocolTemplatesIfNeeded(context: context)
+
+        // Avoid reseeding sample animals/pastures
         let descriptor = FetchDescriptor<Animal>()
         if let existing = try? context.fetch(descriptor),
            !existing.isEmpty { return }
@@ -97,6 +100,32 @@ struct SampleDataService {
             context.insert(s)
         }
 
+        try? context.save()
+    }
+
+    private static func seedProtocolTemplatesIfNeeded(context: ModelContext) {
+        let desc = FetchDescriptor<WorkingProtocolTemplate>()
+        let existing = (try? context.fetch(desc)) ?? []
+        guard existing.isEmpty else { return }
+
+        let spring = WorkingProtocolTemplate(
+            name: "Spring Working",
+            items: [
+                WorkingProtocolItem(name: "7-way", defaultQuantity: nil),
+                WorkingProtocolItem(name: "Respiratory", defaultQuantity: nil),
+                WorkingProtocolItem(name: "Dewormer", defaultQuantity: nil)
+            ]
+        )
+
+        let fall = WorkingProtocolTemplate(
+            name: "Fall Booster",
+            items: [
+                WorkingProtocolItem(name: "Booster", defaultQuantity: nil)
+            ]
+        )
+
+        context.insert(spring)
+        context.insert(fall)
         try? context.save()
     }
 

@@ -29,7 +29,26 @@ final class Animal {
     @Relationship(deleteRule: .cascade) var movementRecords: [MovementRecord] = []
     @Relationship(deleteRule: .cascade) var statusRecords: [StatusRecord] = []
 
+    /// Current pasture location. Nil when the animal is in the working pen.
     @Relationship var pasture: Pasture?
+
+    /// Current non-pasture location state.
+    ///
+    /// Stored as OPTIONAL to avoid SwiftData crashing on existing stores where this field
+    /// did not exist yet (it will load as `nil`). Treat `nil` as `.pasture`.
+    ///
+    /// NOTE: SwiftData @Model requires fully-qualified enum values for property default values.
+    var locationRaw: AnimalLocation? = AnimalLocation.pasture
+
+    /// Non-optional façade used throughout the app.
+    var location: AnimalLocation {
+        get { locationRaw ?? .pasture }
+        set { locationRaw = newValue }
+    }
+
+    /// Active working session when `location == .workingPen`.
+    @Relationship(deleteRule: .nullify)
+    var activeWorkingSession: WorkingSession?
 
 
     /// Computed classification derived from biological sex, castration, and (for females) age.
@@ -95,6 +114,9 @@ final class Animal {
         self.dam = dam
         self.pasture = pasture
 
+        self.location = AnimalLocation.pasture
+        self.activeWorkingSession = nil
+
 
         // New data-driven fields (optional for migration)
         let inferredBio = biologicalSex ?? sex.inferredBiologicalSex
@@ -144,4 +166,9 @@ enum AnimalStatus: String, Codable, CaseIterable {
     case alive
     case sold
     case deceased
+}
+
+enum AnimalLocation: String, Codable, CaseIterable {
+    case pasture
+    case workingPen
 }
