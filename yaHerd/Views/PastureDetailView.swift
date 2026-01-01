@@ -15,6 +15,15 @@ struct PastureDetailView: View {
     @AppStorage("targetHeadPerAcreDefault") private var targetHeadPerAcreDefault = 1.0
     @AppStorage("usableAcreagePercentDefault") private var usableAcreagePercentDefault = 100
     @Query(sort: \PastureGroup.name) private var groups: [PastureGroup]
+    @Query(sort: \Pasture.name) private var allPastures: [Pasture]
+
+    @State private var isEditing = false
+    @State private var showAlert = false
+    @State private var alertMessage = ""
+
+    @State private var originalName: String = ""
+    @State private var originalAcreage: Double? = nil
+    @State private var originalLastGrazedDate: Date? = nil
 
     private var analytics: PastureAnalytics {
         PastureAnalytics(
@@ -34,7 +43,7 @@ struct PastureDetailView: View {
             },
             set: { newValue in
                 if let parsed = Double(newValue) {
-                    value.wrappedValue = parsed
+                    value.wrappedValue = parsed > 0 ? parsed : nil
                 } else {
                     value.wrappedValue = nil
                 }
@@ -42,18 +51,106 @@ struct PastureDetailView: View {
         )
     }
 
+    private func nonOptionalDateBinding(for value: Binding<Date?>, fallback: Date = Date()) -> Binding<Date> {
+        Binding<Date>(
+            get: { value.wrappedValue ?? fallback },
+            set: { value.wrappedValue = $0 }
+        )
+    }
+
+    private func beginEditing() {
+        originalName = pasture.name
+        originalAcreage = pasture.acreage
+        originalLastGrazedDate = pasture.lastGrazedDate
+        isEditing = true
+    }
+
+    private func cancelEditing() {
+        pasture.name = originalName
+        pasture.acreage = originalAcreage
+        pasture.lastGrazedDate = originalLastGrazedDate
+        isEditing = false
+        try? context.save()
+    }
+
+    private func saveEdits() {
+        let trimmed = pasture.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            pasture.name = originalName
+            alertMessage = "Pasture name can’t be empty."
+            showAlert = true
+            return
+        }
+        pasture.name = trimmed
+
+        let duplicateExists = allPastures.contains { other in
+            other !== pasture && other.name.caseInsensitiveCompare(trimmed) == .orderedSame
+        }
+        if duplicateExists {
+            pasture.name = originalName
+            alertMessage = "A pasture named \(trimmed) already exists. Names must be unique."
+            showAlert = true
+            return
+        }
+
+        do {
+            try context.save()
+            isEditing = false
+        } catch {
+            // Restore the name if the unique constraint triggers in SwiftData.
+            pasture.name = originalName
+            alertMessage = error.localizedDescription
+            showAlert = true
+        }
+    }
+
 
     var body: some View {
         Form {
             Section("Pasture Info") {
-                Text("Name: \(pasture.name)")
+                if isEditing {
+                    TextField("Name", text: $pasture.name)
 
-                if let acres = pasture.acreage {
-                    Text("Acreage: \(acres, format: .number)")
-                }
+                    HStack {
+                        Text("Acreage")
+                        Spacer()
+                        TextField("acres", text: binding(for: $pasture.acreage))
+                            .multilineTextAlignment(.trailing)
+                            .keyboardType(.decimalPad)
+                            .frame(width: 120)
+                    }
 
-                if let usable = pasture.usableAcreage {
-                    Text("Usable Acres: \(usable, format: .number)")
+                    HStack {
+                        Text("Last Grazed")
+                        Spacer()
+                        if pasture.lastGrazedDate == nil {
+                            Button("Set") { pasture.lastGrazedDate = Date() }
+                        } else {
+                            DatePicker(
+                                "",
+                                selection: nonOptionalDateBinding(for: $pasture.lastGrazedDate),
+                                displayedComponents: [.date]
+                            )
+                            .labelsHidden()
+
+                            Button("Clear") { pasture.lastGrazedDate = nil }
+                                .foregroundStyle(.red)
+                        }
+                    }
+                } else {
+                    Text("Name: \(pasture.name)")
+
+                    if let acres = pasture.acreage {
+                        Text("Acreage: \(acres, format: .number)")
+                    }
+
+                    if let usable = pasture.usableAcreage {
+                        Text("Usable Acres: \(usable, format: .number)")
+                    }
+
+                    if let last = pasture.lastGrazedDate {
+                        Text("Last Grazed: \(last.formatted(date: .abbreviated, time: .omitted))")
+                    }
                 }
             }
 
@@ -136,6 +233,25 @@ struct PastureDetailView: View {
 
         }
         .navigationTitle(pasture.name)
+        .toolbar {
+            if isEditing {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { saveEdits() }
+                }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { cancelEditing() }
+                }
+            } else {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Edit") { beginEditing() }
+                }
+            }
+        }
+        .alert("Can’t Save", isPresented: $showAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(alertMessage)
+        }
         .navigationDestination(for: Animal.self) { animal in
             AnimalDetailView(animal: animal)
         }
