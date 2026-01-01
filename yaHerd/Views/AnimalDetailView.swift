@@ -15,12 +15,34 @@ struct AnimalDetailView: View {
     @State private var showingPasturePicker = false
     @State private var showingAddHealth = false
     @State private var showingAddPregCheck = false
+    @State private var showingSirePicker = false
+    @State private var showingDamPicker = false
 
     private var tagColorBinding: Binding<TagColor> {
         Binding(
             get: { animal.tagColor ?? .yellow },
             set: { newValue in
                 animal.tagColor = newValue
+                try? context.save()
+            }
+        )
+    }
+
+    private var sireBinding: Binding<String> {
+        Binding(
+            get: { animal.sire ?? "" },
+            set: { newValue in
+                animal.sire = newValue.isEmpty ? nil : newValue
+                try? context.save()
+            }
+        )
+    }
+
+    private var damBinding: Binding<String> {
+        Binding(
+            get: { animal.dam ?? "" },
+            set: { newValue in
+                animal.dam = newValue.isEmpty ? nil : newValue
                 try? context.save()
             }
         )
@@ -51,6 +73,36 @@ struct AnimalDetailView: View {
                 Text("Birth Date: \(animal.birthDate.formatted(date: .long, time: .omitted))")
                 Text("Status: \(animal.status.rawValue.capitalized)")
                     .foregroundStyle(animal.status == .alive ? .green : (animal.status == .sold ? .yellow : .red))
+            }
+
+            Section("Parents") {
+                HStack {
+                    TextField("Sire", text: sireBinding)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Button("Pick") { showingSirePicker = true }
+                }
+                if !(animal.sire ?? "").isEmpty {
+                    Button("Clear Sire") {
+                        animal.sire = nil
+                        try? context.save()
+                    }
+                    .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    TextField("Dam", text: damBinding)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Button("Pick") { showingDamPicker = true }
+                }
+                if !(animal.dam ?? "").isEmpty {
+                    Button("Clear Dam") {
+                        animal.dam = nil
+                        try? context.save()
+                    }
+                    .foregroundStyle(.secondary)
+                }
             }
             
             Section("Pasture") {
@@ -175,6 +227,27 @@ struct AnimalDetailView: View {
         }
         .sheet(isPresented: $showingAddPregCheck) {
             PregnancyCheckAddView(animal: animal)
+        }
+
+        .sheet(isPresented: $showingSirePicker) {
+            AnimalParentPickerView(
+                title: "Select Sire",
+                excludeTagNumber: animal.tagNumber,
+                suggestedSexes: [.bull]
+            ) { picked in
+                animal.sire = picked.tagNumber
+                try? context.save()
+            }
+        }
+        .sheet(isPresented: $showingDamPicker) {
+            AnimalParentPickerView(
+                title: "Select Dam",
+                excludeTagNumber: animal.tagNumber,
+                suggestedSexes: [.cow, .heifer]
+            ) { picked in
+                animal.dam = picked.tagNumber
+                try? context.save()
+            }
         }
         
     }

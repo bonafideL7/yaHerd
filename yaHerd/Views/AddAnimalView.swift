@@ -21,6 +21,9 @@ struct AddAnimalView: View {
     @State private var sire = ""
     @State private var dam = ""
 
+    @State private var showingSirePicker = false
+    @State private var showingDamPicker = false
+
     @State private var errorMessage: String?
     @State private var showingError = false
 
@@ -44,8 +47,30 @@ struct AddAnimalView: View {
                 Picker("Status", selection: $status) {
                     ForEach(AnimalStatus.allCases, id: \.self) { Text($0.rawValue.capitalized) }
                 }
-                TextField("Sire", text: $sire)
-                TextField("Dam", text: $dam)
+
+                Section("Parents") {
+                    HStack {
+                        TextField("Sire", text: $sire)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Button("Pick") { showingSirePicker = true }
+                    }
+                    if !sire.isEmpty {
+                        Button("Clear Sire") { sire = "" }
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        TextField("Dam", text: $dam)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Button("Pick") { showingDamPicker = true }
+                    }
+                    if !dam.isEmpty {
+                        Button("Clear Dam") { dam = "" }
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .navigationTitle("Add Animal")
             .toolbar {
@@ -60,6 +85,24 @@ struct AddAnimalView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(errorMessage ?? "")
+            }
+        }
+        .sheet(isPresented: $showingSirePicker) {
+            AnimalParentPickerView(
+                title: "Select Sire",
+                excludeTagNumber: tagNumber,
+                suggestedSexes: [.bull]
+            ) { picked in
+                sire = picked.tagNumber
+            }
+        }
+        .sheet(isPresented: $showingDamPicker) {
+            AnimalParentPickerView(
+                title: "Select Dam",
+                excludeTagNumber: tagNumber,
+                suggestedSexes: [.cow, .heifer]
+            ) { picked in
+                dam = picked.tagNumber
             }
         }
     }
