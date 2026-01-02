@@ -13,6 +13,8 @@ struct WorkingSessionsView: View {
     private var sessions: [WorkingSession]
 
     @State private var showingNewSession = false
+    @State private var sessionPendingDelete: WorkingSession?
+    @State private var showingDeleteAlert: Bool = false
 
     private var activeSessions: [WorkingSession] {
         sessions.filter { $0.status == .active }
@@ -35,9 +37,14 @@ struct WorkingSessionsView: View {
             if !activeSessions.isEmpty {
                 Section("Active") {
                     ForEach(activeSessions) { session in
-                        NavigationLink(value: session) {
+                        NavigationLink {
+                            WorkingSessionDetailView(session: session)
+                        } label: {
                             WorkingSessionRow(session: session)
                         }
+                    }
+                    .onDelete { offsets in
+                        requestDelete(from: activeSessions, offsets: offsets)
                     }
                 }
             }
@@ -45,9 +52,14 @@ struct WorkingSessionsView: View {
             if !finishedSessions.isEmpty {
                 Section("History") {
                     ForEach(finishedSessions) { session in
-                        NavigationLink(value: session) {
+                        NavigationLink {
+                            WorkingSessionDetailView(session: session)
+                        } label: {
                             WorkingSessionRow(session: session)
                         }
+                    }
+                    .onDelete { offsets in
+                        requestDelete(from: finishedSessions, offsets: offsets)
                     }
                 }
             }
@@ -71,12 +83,57 @@ struct WorkingSessionsView: View {
                 .accessibilityLabel("Protocols")
             }
         }
-        .navigationDestination(for: WorkingSession.self) { session in
-            WorkingSessionDetailView(session: session)
-        }
         .sheet(isPresented: $showingNewSession) {
             NewWorkingSessionView()
         }
+        .alert("Delete working session?", isPresented: $showingDeleteAlert, presenting: sessionPendingDelete) { s in
+            Button("Delete", role: .destructive) { deleteSession(s) }
+            Button("Cancel", role: .cancel) {}
+        } message: { s in
+            if s.status == .active {
+                Text("Deleting an active session will return any animals currently in the working pen back to the source/collected pasture and remove the session records.")
+            } else {
+                Text("This will delete the session and its recorded work data.")
+            }
+        }
+    }
+
+    private func requestDelete(from list: [WorkingSession], offsets: IndexSet) {
+        // Only handle the first one for now (swipe-to-delete is typically single-row).
+        guard let idx = offsets.first, idx < list.count else { return }
+        sessionPendingDelete = list[idx]
+        showingDeleteAlert = true
+    }
+
+    private func deleteSession(_ session: WorkingSession) {
+        // Return any animals still in the working pen for this session.
+        for item in session.queueItems {
+            guard let animal = item.animal else { continue }
+            if animal.activeWorkingSession?.persistentModelID == session.persistentModelID || animal.location == .workingPen {
+                let dest = item.collectedFromPasture ?? session.sourcePasture
+                animal.pasture = dest
+                animal.location = .pasture
+                animal.activeWorkingSession = nil
+            }
+        }
+
+        // Delete session-linked records (treatments, preg checks, session-tied health records).
+        // NOTE: SwiftData predicate macros are unreliable when comparing relationship values in predicates.
+        // Fetch and filter in-memory instead.
+        let sid = session.persistentModelID
+
+        if let all = try? context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) {
+            for r in all where r.session?.persistentModelID == sid { context.delete(r) }
+        }
+        if let all = try? context.fetch(FetchDescriptor<PregnancyCheck>()) {
+            for c in all where c.workingSession?.persistentModelID == sid { context.delete(c) }
+        }
+        if let all = try? context.fetch(FetchDescriptor<HealthRecord>()) {
+            for h in all where h.workingSession?.persistentModelID == sid { context.delete(h) }
+        }
+
+        context.delete(session)
+        try? context.save()
     }
 }
 

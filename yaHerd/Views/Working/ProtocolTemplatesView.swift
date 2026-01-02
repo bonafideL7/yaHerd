@@ -21,7 +21,9 @@ struct ProtocolTemplatesView: View {
                 )
             } else {
                 ForEach(templates) { template in
-                    NavigationLink(value: template) {
+                    NavigationLink {
+                        ProtocolTemplateDetailView(template: template)
+                    } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(template.name)
                                 .font(.headline)
@@ -43,9 +45,6 @@ struct ProtocolTemplatesView: View {
                     Image(systemName: "plus")
                 }
             }
-        }
-        .navigationDestination(for: WorkingProtocolTemplate.self) { template in
-            ProtocolTemplateDetailView(template: template)
         }
         .sheet(isPresented: $showingAdd) {
             ProtocolTemplateAddView()
@@ -124,14 +123,16 @@ private struct ProtocolTemplateAddView: View {
 
 private struct ProtocolTemplateDetailView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
     @Bindable var template: WorkingProtocolTemplate
 
+    @State private var nameDraft: String = ""
     @State private var items: [WorkingProtocolItem] = []
 
     var body: some View {
         Form {
             Section("Name") {
-                TextField("Protocol name", text: $template.name)
+                TextField("Protocol name", text: $nameDraft)
             }
 
             Section("Items") {
@@ -161,23 +162,33 @@ private struct ProtocolTemplateDetailView: View {
                 }
             }
         }
-        .navigationTitle(template.name)
+        .navigationTitle(nameDraft.isEmpty ? "Protocol" : nameDraft)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { save() }
             }
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
         }
         .onAppear {
+            nameDraft = template.name
             items = template.items
         }
     }
 
     private func save() {
+        let trimmedName = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
         let cleaned = items
             .map { WorkingProtocolItem(id: $0.id, name: $0.name.trimmingCharacters(in: .whitespacesAndNewlines), defaultQuantity: $0.defaultQuantity) }
             .filter { !$0.name.isEmpty }
+        guard !cleaned.isEmpty else { return }
+
+        template.name = trimmedName
         template.items = cleaned
         try? context.save()
+        dismiss()
     }
 }

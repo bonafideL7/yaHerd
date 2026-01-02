@@ -61,6 +61,12 @@ struct WorkingSessionDetailView: View {
                 } label: {
                     Label("Open Queue", systemImage: "list.bullet.rectangle")
                 }
+
+                NavigationLink {
+                    WorkingSessionAnimalsView(session: session)
+                } label: {
+                    Label("Review / Edit Animals", systemImage: "pencil")
+                }
             }
         }
         .navigationTitle("Working Session")
@@ -76,6 +82,16 @@ struct WorkingSessionDetailView: View {
                         .disabled(session.queueItems.isEmpty)
                 }
             }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(role: .destructive) {
+                    sessionPendingDelete = session
+                    showingDeleteAlert = true
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .accessibilityLabel("Delete Session")
+            }
         }
         .sheet(isPresented: $showingCollect) {
             WorkingCollectAnimalsView(session: session)
@@ -83,5 +99,51 @@ struct WorkingSessionDetailView: View {
         .sheet(isPresented: $showingFinish) {
             WorkingFinishSessionView(session: session)
         }
+        .alert("Delete working session?", isPresented: $showingDeleteAlert, presenting: sessionPendingDelete) { s in
+            Button("Delete", role: .destructive) {
+                deleteSession(s)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { s in
+            if s.status == .active {
+                Text("Deleting an active session will return any animals currently in the working pen back to the source/collected pasture and remove the session records.")
+            } else {
+                Text("This will delete the session and its recorded work data.")
+            }
+        }
+    }
+
+    @State private var sessionPendingDelete: WorkingSession?
+    @State private var showingDeleteAlert: Bool = false
+
+    private func deleteSession(_ session: WorkingSession) {
+        // Return any animals still in the working pen for this session.
+        for item in session.queueItems {
+            guard let animal = item.animal else { continue }
+            if animal.activeWorkingSession?.persistentModelID == session.persistentModelID || animal.location == .workingPen {
+                let dest = item.collectedFromPasture ?? session.sourcePasture
+                animal.pasture = dest
+                animal.location = .pasture
+                animal.activeWorkingSession = nil
+            }
+        }
+
+        // Delete session-linked records (treatments, preg checks, session-tied health records).
+        // NOTE: SwiftData predicate macros are unreliable when comparing relationship values in predicates.
+        // Fetch and filter in-memory instead.
+        let sid = session.persistentModelID
+
+        if let all = try? context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) {
+            for r in all where r.session?.persistentModelID == sid { context.delete(r) }
+        }
+        if let all = try? context.fetch(FetchDescriptor<PregnancyCheck>()) {
+            for c in all where c.workingSession?.persistentModelID == sid { context.delete(c) }
+        }
+        if let all = try? context.fetch(FetchDescriptor<HealthRecord>()) {
+            for h in all where h.workingSession?.persistentModelID == sid { context.delete(h) }
+        }
+
+        context.delete(session)
+        try? context.save()
     }
 }

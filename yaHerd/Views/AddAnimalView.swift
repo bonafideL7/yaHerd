@@ -56,7 +56,7 @@ struct AddAnimalView: View {
                         Text(sex.label).tag(sex)
                     }
                 }
-                .onChange(of: biologicalSex) { newValue in
+                .onChange(of: biologicalSex) { _, newValue in
                     if newValue != .male { isCastrated = false }
                 }
 

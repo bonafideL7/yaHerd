@@ -17,7 +17,9 @@ struct WorkingQueueView: View {
         List {
             Section {
                 ForEach(orderedItems) { item in
-                    NavigationLink(value: item) {
+                    NavigationLink {
+                        WorkingChuteView(session: session, queueItem: item)
+                    } label: {
                         WorkingQueueRow(item: item)
                     }
                 }
@@ -25,9 +27,6 @@ struct WorkingQueueView: View {
         }
         .navigationTitle("Queue")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(for: WorkingQueueItem.self) { item in
-            WorkingChuteView(session: session, queueItem: item)
-        }
     }
 }
 

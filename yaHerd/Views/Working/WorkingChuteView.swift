@@ -201,10 +201,20 @@ struct WorkingChuteView: View {
     private func complete() {
         guard let animal else { return }
 
+        let sid = session.persistentModelID
+        let aid = animal.persistentModelID
+
         queueItem.status = .done
         queueItem.completedAt = .now
 
-        // Store treatment completion
+        // Upsert treatment completion for this animal+session (avoid duplicates if re-worked)
+        // NOTE: SwiftData predicate macros are unreliable when comparing relationship values.
+        // Fetch and filter in-memory instead.
+        if let existing = try? context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) {
+            for rec in existing where rec.session?.persistentModelID == sid && rec.animal?.persistentModelID == aid {
+                context.delete(rec)
+            }
+        }
         for entry in treatEntries {
             let qty = Double(entry.quantityText.trimmingCharacters(in: .whitespacesAndNewlines))
             let record = WorkingTreatmentRecord(
@@ -218,8 +228,14 @@ struct WorkingChuteView: View {
             context.insert(record)
         }
 
-        // Preg check capture (only if user set Open/Pregnant)
+        // Preg check capture (only if user set Open/Pregnant). Upsert for this session+animal.
         if showPregSection {
+            if let existingChecks = try? context.fetch(FetchDescriptor<PregnancyCheck>()) {
+                for c in existingChecks where c.workingSession?.persistentModelID == sid && c.animal.persistentModelID == aid {
+                    context.delete(c)
+                }
+            }
+
             if pregResult == .open || pregResult == .pregnant {
                 let estDays = Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines))
                 let computedDue: Date? = (pregResult == .pregnant) ? dueDate : nil
@@ -242,14 +258,30 @@ struct WorkingChuteView: View {
         if markCastrated {
             animal.isCastrated = true
             animal.syncLegacySexFromData()
-            let record = HealthRecord(date: .now, treatment: "Castration", notes: nil, animal: animal)
+            // Upsert a castration record tied to this session.
+            if let existing = try? context.fetch(FetchDescriptor<HealthRecord>()) {
+                for r in existing where r.workingSession?.persistentModelID == sid
+                    && r.animal.persistentModelID == aid
+                    && r.treatment == "Castration" {
+                    context.delete(r)
+                }
+            }
+            let record = HealthRecord(date: .now, treatment: "Castration", notes: nil, workingSession: session, animal: animal)
             context.insert(record)
         }
 
         // Observations
         let trimmedObs = observationNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedObs.isEmpty {
-            let record = HealthRecord(date: .now, treatment: "Observation", notes: trimmedObs, animal: animal)
+            // Upsert a single observation record tied to this session.
+            if let existing = try? context.fetch(FetchDescriptor<HealthRecord>()) {
+                for r in existing where r.workingSession?.persistentModelID == sid
+                    && r.animal.persistentModelID == aid
+                    && r.treatment == "Observation" {
+                    context.delete(r)
+                }
+            }
+            let record = HealthRecord(date: .now, treatment: "Observation", notes: trimmedObs, workingSession: session, animal: animal)
             context.insert(record)
         }
 
