@@ -152,7 +152,6 @@ struct AddAnimalView: View {
 
 			let animal = Animal(
 				tagNumber: tagNumber,
-				tagColor: nil,
 				tagColorID: tagColorIDBinding.wrappedValue,
 				sex: computedDesignation,
                 birthDate: birthDate,

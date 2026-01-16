@@ -106,9 +106,7 @@ final class TagColorLibraryStore: ObservableObject {
     }
 
     func resolvedDefinition(for animal: Animal) -> TagColorDefinition {
-        if let def = definition(for: animal.tagColorID) { return def }
-        if let legacy = animal.tagColor, let def = definition(matchingLegacy: legacy) { return def }
-        return defaultColor
+        return definition(for: animal.tagColorID) ?? defaultColor
     }
 
     func formattedTag(for animal: Animal) -> String {
@@ -185,14 +183,6 @@ final class TagColorLibraryStore: ObservableObject {
             TagColorDefinition(name: "Brown",  rgba: RGBAColor(r: 0.55, g: 0.27, b: 0.07)),
             TagColorDefinition(name: "Gray",   rgba: RGBAColor(r: 0.6, g: 0.6, b: 0.6))
         ]
-    }
-
-    // MARK: - Legacy mapping
-
-    func definition(matchingLegacy legacy: TagColor) -> TagColorDefinition? {
-        let key = legacy.label.lowercased()
-        return colors.first(where: { $0.name.lowercased() == key })
-            ?? colors.first(where: { $0.name.lowercased() == legacy.rawValue.lowercased() })
     }
 }
 

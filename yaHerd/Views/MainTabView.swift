@@ -84,7 +84,6 @@ struct MainTabView: View {
         }
         .task {
             SampleDataService.seedIfNeeded(context: context)
-            TagColorMigrationService.migrateIfNeeded(context: context, library: tagColorLibrary)
             refreshCounts()
         }
     }
