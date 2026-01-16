@@ -25,7 +25,8 @@ struct DashboardService {
                     title: "\(unassigned.count) animals not assigned to a pasture",
                     message: "Assign them to avoid management issues.",
                     icon: "map-pin-off",
-                    severity: .warning
+                    severity: .warning,
+                    destination: .animalList(.unassigned)
                 )
             )
         }
@@ -46,7 +47,8 @@ struct DashboardService {
                     title: "\(overduePreg.count) animals overdue for pregnancy check",
                     message: "Last check exceeds \(pregCheckIntervalDays) days.",
                     icon: "stethoscope",
-                    severity: .warning
+                    severity: .warning,
+                    destination: .animalList(.overduePregChecks)
                 )
             )
         }
@@ -75,7 +77,8 @@ struct DashboardService {
                         title: "Calving possibly overdue for \(animal.tagNumber)",
                         message: "Expected around \(calvingDate.formatted(date: .abbreviated, time: .omitted))",
                         icon: "baby",
-                        severity: .critical
+                        severity: .critical,
+                        destination: .animal(animal)
                     )
                 )
             }
@@ -97,7 +100,8 @@ struct DashboardService {
                     title: "\(overdueTreatments.count) animals overdue for treatments",
                     message: "Treatments older than \(treatmentIntervalDays) days.",
                     icon: "pill",
-                    severity: .warning
+                    severity: .warning,
+                    destination: .animalList(.overdueTreatments)
                 )
             )
         }
@@ -130,7 +134,8 @@ struct DashboardService {
                             title: "Overstock warning in \(pasture.name)",
                             message: "\(alive) animals > capacity \(Int(cap))",
                             icon: "alert-triangle",
-                            severity: .warning
+                            severity: .warning,
+                            destination: .pasture(pasture)
                         )
                     )
                 }
