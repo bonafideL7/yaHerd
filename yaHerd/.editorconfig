@@ -1,0 +1,38 @@
+# .editorconfig
+# Applies to Xcode-supported text editors and many external tools.
+# Xcode itself honors some settings (not all). Use this to keep tools/teammates consistent.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Use spaces, 4-wide indentation
+indent_style = space
+indent_size = 4
+tab_width = 4
+
+# Max line length
+max_line_length = 150
+
+# Common Xcode-related file types
+[*.{swift,m,mm,h,hpp,c,cpp,cc}]
+indent_style = space
+indent_size = 4
+tab_width = 4
+max_line_length = 150
+
+# Keep Markdown trailing whitespace (often used for hard line breaks)
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = off
+
+# YAML often uses 2 spaces by convention; keep 4 if you want strict global consistency
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 4
+tab_width = 4
+max_line_length = 150
