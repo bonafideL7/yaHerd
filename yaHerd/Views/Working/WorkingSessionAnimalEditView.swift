@@ -8,6 +8,7 @@ import SwiftData
 
 struct WorkingSessionAnimalEditView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.modelContext) private var context
 
     let session: WorkingSession
@@ -95,8 +96,9 @@ struct WorkingSessionAnimalEditView: View {
             Section {
                 if let animal {
                     HStack {
-                        TagColorDot(tagColor: animal.tagColor ?? .yellow)
-                        Text("Tag \(animal.tagNumber)")
+                        let def = tagColorLibrary.resolvedDefinition(for: animal)
+                        TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
+                        Text(tagColorLibrary.formattedTag(for: animal))
                             .font(.title3.bold())
                         Spacer()
                         Text(animal.designation.rawValue.capitalized)
@@ -185,7 +187,7 @@ struct WorkingSessionAnimalEditView: View {
                                 HStack {
                                     Text("Sire")
                                     Spacer()
-                                    Text(selectedSire?.tagNumber ?? "Choose")
+                                    Text(selectedSire.map { tagColorLibrary.formattedTag(for: $0) } ?? "Choose")
                                         .foregroundStyle(selectedSire == nil ? .secondary : .primary)
                                 }
                             }

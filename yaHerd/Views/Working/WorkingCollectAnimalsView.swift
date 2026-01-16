@@ -9,6 +9,7 @@ import SwiftData
 struct WorkingCollectAnimalsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @Bindable var session: WorkingSession
 
@@ -25,7 +26,9 @@ struct WorkingCollectAnimalsView: View {
             .filter { $0.location == .pasture }
             .filter { animal in
                 guard !searchText.isEmpty else { return true }
-                return animal.tagNumber.localizedCaseInsensitiveContains(searchText)
+                let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                return animal.tagNumber.localizedCaseInsensitiveContains(q)
+                    || tagColorLibrary.formattedTag(for: animal).localizedCaseInsensitiveContains(q)
             }
     }
 
@@ -34,9 +37,10 @@ struct WorkingCollectAnimalsView: View {
             List(selection: $selected) {
                 ForEach(eligibleAnimals) { animal in
                     HStack(spacing: 12) {
-                        TagColorDot(tagColor: animal.tagColor ?? .yellow)
+                        let def = tagColorLibrary.resolvedDefinition(for: animal)
+                        TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Tag \(animal.tagNumber)")
+                            Text(tagColorLibrary.formattedTag(for: animal))
                                 .font(.headline)
                             Text(animal.designation.rawValue.capitalized)
                                 .font(.caption)

@@ -12,6 +12,7 @@ import LucideIcons
 
 struct MainTabView: View {
     @EnvironmentObject private var nav: NavigationCoordinator
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.modelContext) private var context
     
     @State private var herdCount: Int = 0
@@ -83,6 +84,7 @@ struct MainTabView: View {
         }
         .task {
             SampleDataService.seedIfNeeded(context: context)
+            TagColorMigrationService.migrateIfNeeded(context: context, library: tagColorLibrary)
             refreshCounts()
         }
     }

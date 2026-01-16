@@ -15,6 +15,12 @@ final class Animal {
     var tagNumber: String
     /// Visual tag grouping. Optional for painless SwiftData migration; treat `nil` as `.yellow`.
     var tagColor: TagColor?
+
+    /// NEW: User-defined tag color selected from the settings library.
+    ///
+    /// Stored as a UUID referencing a `TagColorDefinition` persisted in `UserDefaults`.
+    /// Optional for painless SwiftData migration.
+    var tagColorID: UUID?
     /// Legacy stored designation (cow/bull/heifer/steer). Still persisted for migration/back-compat.
     var sex: Sex
 
@@ -99,6 +105,7 @@ final class Animal {
     init(
         tagNumber: String,
         tagColor: TagColor? = nil,
+        tagColorID: UUID? = nil,
         sex: Sex,
         birthDate: Date,
         status: AnimalStatus = .alive,
@@ -110,6 +117,7 @@ final class Animal {
     ) {
         self.tagNumber = tagNumber
         self.tagColor = tagColor
+        self.tagColorID = tagColorID
         self.sex = sex
         self.birthDate = birthDate
         self.status = status

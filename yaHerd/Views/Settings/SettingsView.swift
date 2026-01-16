@@ -70,6 +70,12 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Tags") {
+                    NavigationLink("Tag Colors") {
+                        TagColorLibraryView()
+                    }
+                }
+
                 Section("Debug") {
                     Button("Reset All (dev)") {
                         // developer-only placeholder; implement carefully

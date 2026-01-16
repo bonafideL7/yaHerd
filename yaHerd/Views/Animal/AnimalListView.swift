@@ -10,6 +10,7 @@ import SwiftData
 
 struct AnimalListView: View {
     @Environment(\.modelContext) private var context
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Query private var animals: [Animal]
     @AppStorage("allowHardDelete") private var allowHardDelete = false
     @State private var searchText = ""
@@ -30,10 +31,11 @@ struct AnimalListView: View {
                 List(selection: $selectedAnimals) {
                     ForEach(filteredAndSortedAnimals) { animal in
                         HStack(spacing: 12) {
-                            TagColorDot(tagColor: animal.tagColor ?? .yellow)
+                            let def = tagColorLibrary.resolvedDefinition(for: animal)
+                            TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
 
                             VStack(alignment: .leading) {
-                                Text("Tag \(animal.tagNumber)")
+                                Text(tagColorLibrary.formattedTag(for: animal))
                                     .font(.headline)
 
                                 Text(animal.designation.rawValue.capitalized)
@@ -62,10 +64,11 @@ struct AnimalListView: View {
                     ForEach(filteredAndSortedAnimals) { animal in
                         NavigationLink(value: animal) {
                             HStack(spacing: 12) {
-                                TagColorDot(tagColor: animal.tagColor ?? .yellow)
+                                let def = tagColorLibrary.resolvedDefinition(for: animal)
+                                TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
 
                                 VStack(alignment: .leading) {
-                                    Text("Tag \(animal.tagNumber)")
+                                    Text(tagColorLibrary.formattedTag(for: animal))
                                         .font(.headline)
 
                                     Text(animal.designation.rawValue.capitalized)
@@ -199,7 +202,11 @@ struct AnimalListView: View {
 
         // SEARCH
         if !searchText.isEmpty {
-            result = result.filter { $0.tagNumber.localizedCaseInsensitiveContains(searchText) }
+            let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            result = result.filter {
+                $0.tagNumber.localizedCaseInsensitiveContains(q)
+                || tagColorLibrary.formattedTag(for: $0).localizedCaseInsensitiveContains(q)
+            }
         }
 
         // FILTER: SEX

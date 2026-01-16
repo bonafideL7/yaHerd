@@ -11,6 +11,7 @@ import SwiftData
 
 struct PastureDetailView: View {
     @Environment(\.modelContext) private var context
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Bindable var pasture: Pasture
     @AppStorage("targetHeadPerAcreDefault") private var targetHeadPerAcreDefault = 1.0
     @AppStorage("usableAcreagePercentDefault") private var usableAcreagePercentDefault = 100
@@ -215,8 +216,9 @@ struct PastureDetailView: View {
                 ForEach(pasture.animals.filter { $0.status == .alive }) { animal in
                     NavigationLink(value: animal) {
                         HStack(spacing: 12) {
-                            TagColorDot(tagColor: animal.tagColor ?? .yellow)
-                            Text("Tag \(animal.tagNumber)")
+                            let def = tagColorLibrary.resolvedDefinition(for: animal)
+                            TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
+                            Text(tagColorLibrary.formattedTag(for: animal))
                         }
                     }
                 }

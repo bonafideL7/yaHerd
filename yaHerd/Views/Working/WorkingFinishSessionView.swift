@@ -9,6 +9,7 @@ import SwiftData
 struct WorkingFinishSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @Bindable var session: WorkingSession
 
@@ -31,8 +32,9 @@ struct WorkingFinishSessionView: View {
                     ForEach(orderedItems) { item in
                         if let animal = item.animal {
                             HStack {
-                                TagColorDot(tagColor: animal.tagColor ?? .yellow)
-                                Text(animal.tagNumber)
+                                let def = tagColorLibrary.resolvedDefinition(for: animal)
+                                TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
+                                Text(tagColorLibrary.formattedTag(for: animal))
                                 Spacer()
                                 Picker("", selection: bindingDestination(for: item)) {
                                     Text("None").tag(Optional<Pasture>(nil))

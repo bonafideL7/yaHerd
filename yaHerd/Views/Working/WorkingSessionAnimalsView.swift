@@ -8,6 +8,7 @@ import SwiftData
 
 /// Review and edit per-animal work data captured in a session.
 struct WorkingSessionAnimalsView: View {
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Bindable var session: WorkingSession
 
     private var orderedItems: [WorkingQueueItem] {
@@ -40,9 +41,10 @@ struct WorkingSessionAnimalsView: View {
     private func row(for item: WorkingQueueItem) -> some View {
         if let animal = item.animal {
             HStack(spacing: 12) {
-                TagColorDot(tagColor: animal.tagColor ?? .yellow)
+                let def = tagColorLibrary.resolvedDefinition(for: animal)
+                TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Tag \(animal.tagNumber)")
+                    Text(tagColorLibrary.formattedTag(for: animal))
                         .font(.headline)
                     Text(item.status.rawValue.capitalized)
                         .font(.caption)

@@ -12,9 +12,10 @@ import SwiftData
 struct AddAnimalView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @State private var tagNumber = ""
-	@State private var tagColor: TagColor = .yellow
+	@State private var tagColorID: UUID?
     @State private var biologicalSex: BiologicalSex = .female
     @State private var isCastrated: Bool = false
     @State private var birthDate = Date()
@@ -37,20 +38,31 @@ struct AddAnimalView: View {
         )
     }
 
+    private var tagColorIDBinding: Binding<UUID> {
+        Binding(
+            get: { tagColorID ?? tagColorLibrary.defaultColor.id },
+            set: { tagColorID = $0 }
+        )
+    }
+
 
     var body: some View {
         NavigationStack {
             Form {
                 TextField("Tag Number", text: $tagNumber)
-				Picker("Tag Color", selection: $tagColor) {
-					ForEach(TagColor.allCases) { color in
+				Picker("Tag Color", selection: tagColorIDBinding) {
+					ForEach(tagColorLibrary.colors) { def in
 						HStack(spacing: 10) {
-							TagColorDot(tagColor: color)
-							Text(color.label)
+							TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
+							Text("\(def.name) (\(def.prefix))")
 						}
-						.tag(color)
+						.tag(def.id)
 					}
 				}
+
+                let selectedDef = tagColorLibrary.definition(for: tagColorIDBinding.wrappedValue) ?? tagColorLibrary.defaultColor
+                Text("Tag: \(selectedDef.prefix)\(tagNumber)")
+                    .foregroundStyle(.secondary)
                 Picker("Biological Sex", selection: $biologicalSex) {
                     ForEach(BiologicalSex.allCases, id: \.self) { sex in
                         Text(sex.label).tag(sex)
@@ -140,7 +152,8 @@ struct AddAnimalView: View {
 
 			let animal = Animal(
 				tagNumber: tagNumber,
-				tagColor: tagColor,
+				tagColor: nil,
+				tagColorID: tagColorIDBinding.wrappedValue,
 				sex: computedDesignation,
                 birthDate: birthDate,
                 status: status,

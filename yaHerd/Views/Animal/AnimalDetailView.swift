@@ -10,6 +10,7 @@ import SwiftData
 
 struct AnimalDetailView: View {
     @Environment(\.modelContext) private var context
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @AppStorage("allowHardDelete") private var allowHardDelete = false
     var animal: Animal
     @State private var showingPasturePicker = false
@@ -18,11 +19,11 @@ struct AnimalDetailView: View {
     @State private var showingSirePicker = false
     @State private var showingDamPicker = false
 
-    private var tagColorBinding: Binding<TagColor> {
+    private var tagColorIDBinding: Binding<UUID> {
         Binding(
-            get: { animal.tagColor ?? .yellow },
+            get: { animal.tagColorID ?? tagColorLibrary.defaultColor.id },
             set: { newValue in
-                animal.tagColor = newValue
+                animal.tagColorID = newValue
                 try? context.save()
             }
         )
@@ -78,18 +79,19 @@ struct AnimalDetailView: View {
                     Text("Tag")
                     Spacer()
                     HStack(spacing: 8) {
-                        TagColorDot(tagColor: animal.tagColor ?? .yellow)
-                        Text(animal.tagNumber)
+                        let def = tagColorLibrary.resolvedDefinition(for: animal)
+                        TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
+                        Text(tagColorLibrary.formattedTag(for: animal))
                     }
                 }
 
-                Picker("Tag Color", selection: tagColorBinding) {
-                    ForEach(TagColor.allCases) { color in
+                Picker("Tag Color", selection: tagColorIDBinding) {
+                    ForEach(tagColorLibrary.colors) { def in
                         HStack(spacing: 10) {
-                            TagColorDot(tagColor: color)
-                            Text(color.label)
+                            TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
+                            Text("\(def.name) (\(def.prefix))")
                         }
-                        .tag(color)
+                        .tag(def.id)
                     }
                 }
                 Text("Designation: \(animal.designation.rawValue.capitalized)")
@@ -232,7 +234,7 @@ struct AnimalDetailView: View {
             }
             
         }
-        .navigationTitle("Animal \(animal.tagNumber)")
+        .navigationTitle("Animal \(tagColorLibrary.formattedTag(for: animal))")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {

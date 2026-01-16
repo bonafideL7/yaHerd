@@ -12,6 +12,7 @@ import SwiftData
 /// This populates the parent's *tag number* onto the child record (no relationship required).
 struct AnimalParentPickerView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @Query(sort: \Animal.tagNumber) private var animals: [Animal]
 
@@ -33,7 +34,9 @@ struct AnimalParentPickerView: View {
             }
             .filter { animal in
                 guard !searchText.isEmpty else { return true }
-                return animal.tagNumber.localizedCaseInsensitiveContains(searchText)
+                let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                return animal.tagNumber.localizedCaseInsensitiveContains(q)
+                    || tagColorLibrary.formattedTag(for: animal).localizedCaseInsensitiveContains(q)
             }
             .filter { animal in
                 guard !showAllSexes else { return true }
@@ -62,9 +65,10 @@ struct AnimalParentPickerView: View {
                                 dismiss()
                             } label: {
                                 HStack(spacing: 10) {
-                                    TagColorDot(tagColor: animal.tagColor ?? .yellow)
+                                    let def = tagColorLibrary.resolvedDefinition(for: animal)
+                                    TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(animal.tagNumber)
+                                        Text(tagColorLibrary.formattedTag(for: animal))
                                         Text(animal.designation.rawValue.capitalized)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)

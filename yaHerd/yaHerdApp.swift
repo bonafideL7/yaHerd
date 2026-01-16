@@ -11,11 +11,13 @@ import SwiftData
 @main
 struct yaHerdApp: App {
     @StateObject private var nav = NavigationCoordinator()
+    @StateObject private var tagColorLibrary = TagColorLibraryStore()
     
     var body: some Scene {
         WindowGroup {
             MainTabView()
                 .environmentObject(nav)
+                .environmentObject(tagColorLibrary)
         }
                 .modelContainer(for: [
                     Animal.self,

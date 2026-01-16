@@ -9,6 +9,7 @@ import SwiftData
 struct WorkingChuteView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     let session: WorkingSession
     @Bindable var queueItem: WorkingQueueItem
@@ -52,8 +53,9 @@ struct WorkingChuteView: View {
             Section {
                 if let animal {
                     HStack {
-                        TagColorDot(tagColor: animal.tagColor ?? .yellow)
-                        Text("Tag \(animal.tagNumber)")
+                        let def = tagColorLibrary.resolvedDefinition(for: animal)
+                        TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)", size: 18)
+                        Text(tagColorLibrary.formattedTag(for: animal))
                             .font(.title2.bold())
                         Spacer()
                         Text(animal.designation.rawValue.capitalized)
@@ -114,7 +116,7 @@ struct WorkingChuteView: View {
                             HStack {
                                 Text("Sire")
                                 Spacer()
-                                Text(selectedSire?.tagNumber ?? "Choose")
+                                Text(selectedSire.map { tagColorLibrary.formattedTag(for: $0) } ?? "Choose")
                                     .foregroundStyle(selectedSire == nil ? .secondary : .primary)
                             }
                         }

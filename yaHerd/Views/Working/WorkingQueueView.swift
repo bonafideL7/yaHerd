@@ -31,6 +31,7 @@ struct WorkingQueueView: View {
 }
 
 private struct WorkingQueueRow: View {
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     let item: WorkingQueueItem
 
     private var animal: Animal? { item.animal }
@@ -50,9 +51,10 @@ private struct WorkingQueueRow: View {
                 .foregroundStyle(item.status == .done ? .green : item.status == .skipped ? .orange : .secondary)
 
             if let animal {
-                TagColorDot(tagColor: animal.tagColor ?? .yellow)
+                let def = tagColorLibrary.resolvedDefinition(for: animal)
+                TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Tag \(animal.tagNumber)")
+                    Text(tagColorLibrary.formattedTag(for: animal))
                         .font(.headline)
                     Text(animal.designation.rawValue.capitalized)
                         .font(.caption)
