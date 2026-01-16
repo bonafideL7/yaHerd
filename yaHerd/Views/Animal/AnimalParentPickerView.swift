@@ -16,7 +16,9 @@ struct AnimalParentPickerView: View {
     @Query(sort: \Animal.tagNumber) private var animals: [Animal]
 
     let title: String
-    let excludeTagNumber: String
+    /// Exclude the current animal (self) from the picker.
+    /// This must NOT be based on tag number, since tag numbers are not globally unique.
+    let excludeAnimal: Animal?
     let suggestedSexes: Set<Sex>
     let onSelect: (Animal) -> Void
 
@@ -25,7 +27,10 @@ struct AnimalParentPickerView: View {
 
     private var filtered: [Animal] {
         animals
-            .filter { $0.tagNumber != excludeTagNumber }
+            .filter { animal in
+                guard let excludeAnimal else { return true }
+                return animal.persistentModelID != excludeAnimal.persistentModelID
+            }
             .filter { animal in
                 guard !searchText.isEmpty else { return true }
                 return animal.tagNumber.localizedCaseInsensitiveContains(searchText)

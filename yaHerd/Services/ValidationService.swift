@@ -24,13 +24,8 @@ struct ValidationService {
             throw ValidationError("Tag number is required.")
         }
 
-        // Unique tag number (except for the animal being edited)
-        let descriptor = FetchDescriptor<Animal>()
-        let animals = try context.fetch(descriptor)
-
-        if animals.contains(where: { $0.tagNumber == tagNumber && $0 != existing }) {
-            throw ValidationError("Tag number already exists.")
-        }
+        // Tag numbers are reusable across time (sold/deceased animals may share the same tag).
+        // Do NOT enforce global uniqueness.
 
         // Birthdate cannot be in the future
         if birthDate > Date() {

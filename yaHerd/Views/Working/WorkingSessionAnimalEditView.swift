@@ -255,7 +255,7 @@ struct WorkingSessionAnimalEditView: View {
     private var sirePickerSheet: some View {
         AnimalParentPickerView(
             title: "Select Sire",
-            excludeTagNumber: animal?.tagNumber ?? "",
+            excludeAnimal: animal,
             suggestedSexes: [.bull]
         ) { picked in
             selectedSire = picked

@@ -287,7 +287,7 @@ struct AnimalDetailView: View {
         .sheet(isPresented: $showingSirePicker) {
             AnimalParentPickerView(
                 title: "Select Sire",
-                excludeTagNumber: animal.tagNumber,
+                excludeAnimal: animal,
                 suggestedSexes: [.bull]
             ) { picked in
                 animal.sire = picked.tagNumber
@@ -297,7 +297,7 @@ struct AnimalDetailView: View {
         .sheet(isPresented: $showingDamPicker) {
             AnimalParentPickerView(
                 title: "Select Dam",
-                excludeTagNumber: animal.tagNumber,
+                excludeAnimal: animal,
                 suggestedSexes: [.cow, .heifer]
             ) { picked in
                 animal.dam = picked.tagNumber

@@ -86,7 +86,7 @@ struct PregnancyCheckAddView: View {
         .sheet(isPresented: $showingSirePicker) {
             AnimalParentPickerView(
                 title: "Select Sire",
-                excludeTagNumber: animal.tagNumber,
+                excludeAnimal: animal,
                 suggestedSexes: [.bull]
             ) { picked in
                 selectedSire = picked

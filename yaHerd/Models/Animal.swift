@@ -9,7 +9,10 @@ import Foundation
 
 @Model
 final class Animal {
-    @Attribute(.unique) var tagNumber: String
+    /// User-visible tag number.
+    ///
+    /// IMPORTANT: This is NOT globally unique. Tags can be reused after an animal is sold or deceased.
+    var tagNumber: String
     /// Visual tag grouping. Optional for painless SwiftData migration; treat `nil` as `.yellow`.
     var tagColor: TagColor?
     /// Legacy stored designation (cow/bull/heifer/steer). Still persisted for migration/back-compat.
