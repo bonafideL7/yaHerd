@@ -26,6 +26,7 @@ enum DashboardAlertDestination: Hashable {
     case animal(Animal)
     case pasture(Pasture)
     case animalList(DashboardAnimalListKind)
+    case pastureList
 }
 
 enum DashboardAnimalListKind: String, Hashable {

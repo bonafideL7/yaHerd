@@ -10,6 +10,7 @@ import LucideIcons
 struct DashboardView: View {
 
     @Environment(\.modelContext) private var context
+    @EnvironmentObject private var nav: NavigationCoordinator
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
@@ -77,12 +78,20 @@ struct DashboardView: View {
         case .overstocked:
             return sorted.filter { pasture in
                 let alive = pasture.animals.filter { $0.status == .alive }.count
-                return PastureAnalytics(pasture: pasture, aliveAnimals: alive).isOverstocked
+                return PastureAnalytics(
+                    pasture: pasture,
+                    aliveAnimals: alive,
+                    fallbackCapacityHead: Double(pastureCapacity)
+                ).isOverstocked
             }
         case .underutilized:
             return sorted.filter { pasture in
                 let alive = pasture.animals.filter { $0.status == .alive }.count
-                return PastureAnalytics(pasture: pasture, aliveAnimals: alive).isUnderutilized
+                return PastureAnalytics(
+                    pasture: pasture,
+                    aliveAnimals: alive,
+                    fallbackCapacityHead: Double(pastureCapacity)
+                ).isUnderutilized
             }
         }
     }
@@ -156,9 +165,10 @@ struct DashboardView: View {
                             title: "Pastures",
                             value: pastures.count,
                             iconSystem: "leaf",
-                            destination: nil
+                            destination: .pastureList
                         )
-                    ]
+                    ],
+                    onNavigate: navigate
                 )
                 .listRowInsets(.init(top: 8, leading: 0, bottom: 8, trailing: 0))
             }
@@ -177,6 +187,11 @@ struct DashboardView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+
+                    if filteredPastures.isEmpty {
+                        Text("No matching pastures.")
+                            .foregroundStyle(.secondary)
+                    }
 
                     ForEach(filteredPastures) { pasture in
                         NavigationLink(value: pasture) {
@@ -253,6 +268,12 @@ struct DashboardView: View {
                     } label: {
                         alertRowContent(alert)
                     }
+                case .pastureList:
+                    NavigationLink {
+                        DashboardPastureListView()
+                    } label: {
+                        alertRowContent(alert)
+                    }
                 }
             } else {
                 alertRowContent(alert)
@@ -281,6 +302,21 @@ struct DashboardView: View {
         }
     }
 
+    private func navigate(_ destination: DashboardAlertDestination) {
+        // NOTE: We intentionally drive dashboard navigation via the shared path (value-based)
+        // to avoid SwiftUI List issues when multiple NavigationLinks exist in the same row.
+        switch destination {
+        case .animal(let animal):
+            nav.push(animal)
+        case .pasture(let pasture):
+            nav.push(pasture)
+        case .animalList(let kind):
+            nav.push(DashboardRoute.animalList(kind))
+        case .pastureList:
+            nav.push(DashboardRoute.pastureList)
+        }
+    }
+
     private func animalRow(_ animal: Animal) -> some View {
         HStack(spacing: 12) {
             let def = tagColorLibrary.resolvedDefinition(for: animal)
@@ -306,7 +342,11 @@ struct DashboardView: View {
 
     private func pastureRow(_ pasture: Pasture) -> some View {
         let alive = pasture.animals.filter { $0.status == .alive }.count
-        let analytics = PastureAnalytics(pasture: pasture, aliveAnimals: alive)
+        let analytics = PastureAnalytics(
+            pasture: pasture,
+            aliveAnimals: alive,
+            fallbackCapacityHead: Double(pastureCapacity)
+        )
 
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
@@ -353,7 +393,7 @@ struct DashboardView: View {
     }
 }
 
-private enum PastureDashboardFilter: CaseIterable {
+private enum PastureDashboardFilter: CaseIterable, Hashable {
     case all
     case overstocked
     case underutilized
@@ -368,40 +408,70 @@ private enum PastureDashboardFilter: CaseIterable {
 }
 
 private struct DashboardMetric: Identifiable {
-    let id = UUID()
+    let id: String
     let title: String
     let value: Int
     var iconSystem: String? = nil
     var iconLucide: String? = nil
     var destination: DashboardAlertDestination?
+
+    init(
+        title: String,
+        value: Int,
+        iconSystem: String? = nil,
+        iconLucide: String? = nil,
+        destination: DashboardAlertDestination? = nil
+    ) {
+        self.id = title
+        self.title = title
+        self.value = value
+        self.iconSystem = iconSystem
+        self.iconLucide = iconLucide
+        self.destination = destination
+    }
 }
 
 private struct DashboardMetricsGrid: View {
     let items: [DashboardMetric]
+    let onNavigate: (DashboardAlertDestination) -> Void
 
-    private let columns: [GridItem] = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
+    private var rows: [[DashboardMetric]] {
+        stride(from: 0, to: items.count, by: 2).map { start in
+            let end = min(start + 2, items.count)
+            return Array(items[start..<end])
+        }
+    }
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 12) {
-            ForEach(items) { item in
-                if let destination = item.destination {
-                    switch destination {
-                    case .animal(let animal):
-                        NavigationLink(value: animal) { card(item) }
-                    case .pasture(let pasture):
-                        NavigationLink(value: pasture) { card(item) }
-                    case .animalList(let kind):
-                        NavigationLink { DashboardAnimalListView(kind: kind) } label: { card(item) }
+        VStack(spacing: 12) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: 12) {
+                    ForEach(row) { item in
+                        cell(item)
+                            .frame(maxWidth: .infinity)
                     }
-                } else {
-                    card(item)
+                    if row.count == 1 {
+                        Spacer(minLength: 0)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
             }
         }
         .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private func cell(_ item: DashboardMetric) -> some View {
+        if let destination = item.destination {
+            Button {
+                onNavigate(destination)
+            } label: {
+                card(item)
+            }
+            .buttonStyle(.plain)
+        } else {
+            card(item)
+        }
     }
 
     private func card(_ item: DashboardMetric) -> some View {

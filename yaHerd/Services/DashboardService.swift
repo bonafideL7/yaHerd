@@ -125,7 +125,11 @@ struct DashboardService {
         if enablePastureOverstockWarnings {
             for pasture in pastures {
                 let alive = pasture.animals.filter { $0.status == .alive }.count
-                let analytics = PastureAnalytics(pasture: pasture, aliveAnimals: alive)
+                let analytics = PastureAnalytics(
+                    pasture: pasture,
+                    aliveAnimals: alive,
+                    fallbackCapacityHead: Double(pastureCapacity)
+                )
                 
                 if analytics.isOverstocked,
                    let cap = analytics.capacityHead {

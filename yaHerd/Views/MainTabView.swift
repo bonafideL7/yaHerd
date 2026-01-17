@@ -35,6 +35,14 @@ struct MainTabView: View {
                     .navigationDestination(for: Pasture.self) { pasture in
                         PastureDetailView(pasture: pasture)
                     }
+                    .navigationDestination(for: DashboardRoute.self) { route in
+                        switch route {
+                        case .animalList(let kind):
+                            DashboardAnimalListView(kind: kind)
+                        case .pastureList:
+                            DashboardPastureListView()
+                        }
+                    }
             }
             .tabItem {
                 Label("Dashboard", systemImage: "speedometer")
