@@ -263,15 +263,11 @@ struct DashboardView: View {
                         alertRowContent(alert)
                     }
                 case .animalList(let kind):
-                    NavigationLink {
-                        DashboardAnimalListView(kind: kind)
-                    } label: {
+                    NavigationLink(value: DashboardRoute.animalList(kind)) {
                         alertRowContent(alert)
                     }
                 case .pastureList:
-                    NavigationLink {
-                        DashboardPastureListView()
-                    } label: {
+                    NavigationLink(value: DashboardRoute.pastureList) {
                         alertRowContent(alert)
                     }
                 }
