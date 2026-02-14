@@ -91,7 +91,7 @@ struct MainTabView: View {
             }
         }
         .task {
-            SampleDataService.seedIfNeeded(context: context)
+//            SampleDataService.seedIfNeeded(context: context)
             refreshCounts()
         }
     }

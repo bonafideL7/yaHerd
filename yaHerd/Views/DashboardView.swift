@@ -134,7 +134,7 @@ struct DashboardView: View {
                     Text("No alerts. Herd looks good.")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(alerts) { alert in
+                    ForEach(alerts, id: \.id) { alert in
                         alertRow(alert)
                     }
                 }
