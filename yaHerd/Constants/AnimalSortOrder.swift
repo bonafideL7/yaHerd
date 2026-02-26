@@ -13,7 +13,7 @@ enum AnimalSortOrder: String, CaseIterable {
     case tagDescending
     case birthDateNewest
     case birthDateOldest
-    case sex
+    case biologicalSex
     case status
 
     var label: String {
@@ -22,7 +22,7 @@ enum AnimalSortOrder: String, CaseIterable {
         case .tagDescending: return "Tag (Z → A)"
         case .birthDateNewest: return "Birth Date (Newest)"
         case .birthDateOldest: return "Birth Date (Oldest)"
-        case .sex: return "Designation"
+        case .biologicalSex: return "Biological Sex"
         case .status: return "Status"
         }
     }
@@ -33,7 +33,7 @@ enum AnimalSortOrder: String, CaseIterable {
         case .tagDescending: return "arrow.down"
         case .birthDateNewest: return "clock.arrow.circlepath"
         case .birthDateOldest: return "clock"
-        case .sex: return "person.2"
+        case .biologicalSex: return "person.2"
         case .status: return "tag"
         }
     }

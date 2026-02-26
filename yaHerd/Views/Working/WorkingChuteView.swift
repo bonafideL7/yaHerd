@@ -30,12 +30,12 @@ struct WorkingChuteView: View {
 
     private var isFemale: Bool {
         guard let animal else { return false }
-        return animal.designation == .cow || animal.designation == .heifer
+        return (animal.biologicalSex ?? .female) == .female
     }
 
     private var isMale: Bool {
         guard let animal else { return false }
-        return animal.designation == .bull || animal.designation == .steer
+        return (animal.biologicalSex ?? .female) == .male
     }
 
     private var showPregSection: Bool {
@@ -58,7 +58,7 @@ struct WorkingChuteView: View {
                         Text(tagColorLibrary.formattedTag(for: animal))
                             .font(.title2.bold())
                         Spacer()
-                        Text(animal.designation.rawValue.capitalized)
+                        Text((animal.biologicalSex ?? .female).label)
                             .foregroundStyle(.secondary)
                     }
                 } else {
@@ -161,7 +161,7 @@ struct WorkingChuteView: View {
         AnimalParentPickerView(
             title: "Select Sire",
             excludeAnimal: animal,
-            suggestedSexes: [.bull]
+            suggestedBiologicalSexes: [.male]
         ) { picked in
             selectedSire = picked
         }

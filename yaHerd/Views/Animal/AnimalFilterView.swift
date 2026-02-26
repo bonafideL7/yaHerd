@@ -21,16 +21,16 @@ struct AnimalFilterView: View {
         NavigationStack {
             Form {
 
-                Section("Designation") {
-                    Picker("Designation", selection: Binding(
-                        get: { filter.sex },
-                        set: { filter.sex = $0 }
+                Section("Biological Sex") {
+                    Picker("Biological Sex", selection: Binding(
+                        get: { filter.biologicalSex },
+                        set: { filter.biologicalSex = $0 }
                     )) {
-                        Text("Any").tag(Sex?.none)
+                        Text("Any").tag(BiologicalSex?.none)
 
-                        ForEach(Sex.allCases, id: \.self) { sex in
-                            Text(sex.rawValue.capitalized)
-                                .tag(Sex?.some(sex))
+                        ForEach(BiologicalSex.allCases, id: \.self) { sex in
+                            Text(sex.label)
+                                .tag(BiologicalSex?.some(sex))
                         }
                     }
                 }

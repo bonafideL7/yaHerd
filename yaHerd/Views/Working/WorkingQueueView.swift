@@ -56,7 +56,7 @@ private struct WorkingQueueRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tagColorLibrary.formattedTag(for: animal))
                         .font(.headline)
-                    Text(animal.designation.rawValue.capitalized)
+                    Text((animal.biologicalSex ?? .female).label)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -323,7 +323,7 @@ struct DashboardView: View {
                     .font(.headline)
 
                 HStack(spacing: 6) {
-                    Text(animal.designation.rawValue.capitalized)
+                    Text((animal.biologicalSex ?? .female).label)
                     if animal.location == .workingPen {
                         Text("• Working Pen")
                     } else if let pasture = animal.pasture?.name {

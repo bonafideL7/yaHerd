@@ -30,10 +30,9 @@ struct AnimalDetailView: View {
     }
     private var biologicalSexBinding: Binding<BiologicalSex> {
         Binding(
-            get: { animal.biologicalSex ?? animal.sex.inferredBiologicalSex },
+            get: { animal.biologicalSex ?? .female },
             set: { newValue in
                 animal.biologicalSex = newValue
-                animal.syncLegacySexFromData()
                 try? context.save()
             }
         )
@@ -81,7 +80,6 @@ struct AnimalDetailView: View {
                         .tag(def.id)
                     }
                 }
-                Text("Designation: \(animal.designation.rawValue.capitalized)")
                 Picker("Biological Sex", selection: biologicalSexBinding) {
                     ForEach(BiologicalSex.allCases, id: \.self) { sex in
                         Text(sex.label).tag(sex)
@@ -273,7 +271,7 @@ struct AnimalDetailView: View {
             AnimalParentPickerView(
                 title: "Select Sire",
                 excludeAnimal: animal,
-                suggestedSexes: [.bull]
+                suggestedBiologicalSexes: [.male]
             ) { picked in
                 animal.sire = picked.tagNumber
                 try? context.save()
@@ -283,7 +281,7 @@ struct AnimalDetailView: View {
             AnimalParentPickerView(
                 title: "Select Dam",
                 excludeAnimal: animal,
-                suggestedSexes: [.cow, .heifer]
+                suggestedBiologicalSexes: [.female]
             ) { picked in
                 animal.dam = picked.tagNumber
                 try? context.save()

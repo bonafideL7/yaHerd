@@ -28,14 +28,6 @@ struct AddAnimalView: View {
     @State private var errorMessage: String?
     @State private var showingError = false
 
-    private var computedDesignation: Sex {
-        Animal.computeDesignation(
-            biologicalSex: biologicalSex,
-            birthDate: birthDate,
-            referenceDate: Date()
-        )
-    }
-
     private var tagColorIDBinding: Binding<UUID> {
         Binding(
             get: { tagColorID ?? tagColorLibrary.defaultColor.id },
@@ -66,8 +58,6 @@ struct AddAnimalView: View {
                         Text(sex.label).tag(sex)
                     }
                 }
-
-                Text("Designation: \(computedDesignation.rawValue.capitalized)")
                     .foregroundStyle(.secondary)
                 DatePicker("Birth Date", selection: $birthDate, displayedComponents: .date)
                 Picker("Status", selection: $status) {
@@ -117,7 +107,7 @@ struct AddAnimalView: View {
             AnimalParentPickerView(
                 title: "Select Sire",
                 excludeAnimal: nil,
-                suggestedSexes: [.bull]
+                suggestedBiologicalSexes: [.male]
             ) { picked in
                 sire = picked.tagNumber
             }
@@ -126,7 +116,7 @@ struct AddAnimalView: View {
             AnimalParentPickerView(
                 title: "Select Dam",
                 excludeAnimal: nil,
-                suggestedSexes: [.cow, .heifer]
+                suggestedBiologicalSexes: [.female]
             ) { picked in
                 dam = picked.tagNumber
             }
@@ -144,7 +134,6 @@ struct AddAnimalView: View {
 			let animal = Animal(
 				tagNumber: tagNumber,
 				tagColorID: tagColorIDBinding.wrappedValue,
-				sex: computedDesignation,
                 birthDate: birthDate,
                 status: status,
                 sire: sire.isEmpty ? nil : sire,

@@ -38,7 +38,7 @@ struct AnimalListView: View {
                                 Text(tagColorLibrary.formattedTag(for: animal))
                                     .font(.headline)
 
-                                Text(animal.designation.rawValue.capitalized)
+                                Text((animal.biologicalSex ?? .female).label)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
 
@@ -71,7 +71,7 @@ struct AnimalListView: View {
                                     Text(tagColorLibrary.formattedTag(for: animal))
                                         .font(.headline)
 
-                                    Text(animal.designation.rawValue.capitalized)
+                                    Text((animal.biologicalSex ?? .female).label)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
 
@@ -209,9 +209,9 @@ struct AnimalListView: View {
             }
         }
 
-        // FILTER: SEX
-        if let selectedSex = filter.sex {
-            result = result.filter { $0.designation == selectedSex }
+        // FILTER: BIOLOGICAL SEX
+        if let selectedSex = filter.biologicalSex {
+            result = result.filter { $0.biologicalSex == selectedSex }
         }
 
         // FILTER: STATUS
@@ -234,8 +234,8 @@ struct AnimalListView: View {
             result.sort { $0.birthDate > $1.birthDate }
         case .birthDateOldest:
             result.sort { $0.birthDate < $1.birthDate }
-        case .sex:
-            result.sort { $0.designation.rawValue < $1.designation.rawValue }
+        case .biologicalSex:
+            result.sort { ($0.biologicalSex?.rawValue ?? "") < ($1.biologicalSex?.rawValue ?? "") }
         case .status:
             result.sort { $0.status.rawValue < $1.status.rawValue }
         }

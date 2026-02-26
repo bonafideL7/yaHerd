@@ -14,7 +14,7 @@ struct MainTabView: View {
     @EnvironmentObject private var nav: NavigationCoordinator
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.modelContext) private var context
-
+    
     @State private var herdCount: Int = 0
     @State private var pastureCount: Int = 0
     @State private var alertCount: Int = 0
@@ -25,7 +25,7 @@ struct MainTabView: View {
 
     var body: some View {
         TabView {
-
+            
             // DASHBOARD TAB
             NavigationStack(path: $nav.globalPath) {
                 DashboardView()
@@ -48,8 +48,8 @@ struct MainTabView: View {
                 Label("Dashboard", systemImage: "speedometer")
             }
             .tabBadge(alertCount)
-
-
+            
+            
             // HERD TAB
             NavigationStack {
                 AnimalListView()
@@ -65,7 +65,7 @@ struct MainTabView: View {
                     }
                 }
             }
-
+            
             // PASTURES TAB
             NavigationStack {
                 PastureListView()
@@ -81,7 +81,7 @@ struct MainTabView: View {
             .tabItem {
                 Label("Work", systemImage: "wrench")
             }
-
+            
             // SETTINGS TAB
             NavigationStack {
                 SettingsView()
@@ -91,11 +91,11 @@ struct MainTabView: View {
             }
         }
         .task {
-            SampleDataService.seedIfNeeded(context: context)
+//            SampleDataService.seedIfNeeded(context: context)
             refreshCounts()
         }
     }
-
+    
     private func refreshCounts() {
         do {
             let animals = try context.fetch(FetchDescriptor<Animal>())
