@@ -16,7 +16,7 @@ struct AddAnimalView: View {
 
     @State private var tagNumber = ""
 	@State private var tagColorID: UUID?
-    @State private var biologicalSex: BiologicalSex = .female
+    @State private var sex: Sex = .female
     @State private var birthDate = Date()
     @State private var status: AnimalStatus = .alive
     @State private var sire = ""
@@ -53,8 +53,8 @@ struct AddAnimalView: View {
                 let selectedDef = tagColorLibrary.definition(for: tagColorIDBinding.wrappedValue) ?? tagColorLibrary.defaultColor
                 Text("Tag: \(selectedDef.prefix)\(tagNumber)")
                     .foregroundStyle(.secondary)
-                Picker("Biological Sex", selection: $biologicalSex) {
-                    ForEach(BiologicalSex.allCases, id: \.self) { sex in
+                Picker("Sex", selection: $sex) {
+                    ForEach(Sex.allCases, id: \.self) { sex in
                         Text(sex.label).tag(sex)
                     }
                 }
@@ -107,7 +107,7 @@ struct AddAnimalView: View {
             AnimalParentPickerView(
                 title: "Select Sire",
                 excludeAnimal: nil,
-                suggestedBiologicalSexes: [.male]
+                suggestedSexes: [.male]
             ) { picked in
                 sire = picked.tagNumber
             }
@@ -116,7 +116,7 @@ struct AddAnimalView: View {
             AnimalParentPickerView(
                 title: "Select Dam",
                 excludeAnimal: nil,
-                suggestedBiologicalSexes: [.female]
+                suggestedSexes: [.female]
             ) { picked in
                 dam = picked.tagNumber
             }

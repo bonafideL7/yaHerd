@@ -20,7 +20,7 @@ struct AnimalParentPickerView: View {
     /// Exclude the current animal (self) from the picker.
     /// This must NOT be based on tag number, since tag numbers are not globally unique.
     let excludeAnimal: Animal?
-    let suggestedBiologicalSexes: Set<BiologicalSex>
+    let suggestedSexes: Set<Sex>
     let onSelect: (Animal) -> Void
 
     @State private var searchText = ""
@@ -41,9 +41,9 @@ struct AnimalParentPickerView: View {
             .filter { animal in
                 guard !showAllSexes else { return true }
                 // If the herd doesn't have any in the suggested sexes, still show everything.
-                let hasSuggested = animals.contains { suggestedBiologicalSexes.contains($0.biologicalSex ?? .female) }
+                let hasSuggested = animals.contains { suggestedSexes.contains($0.sex ?? .female) }
                 guard hasSuggested else { return true }
-                return suggestedBiologicalSexes.contains(animal.biologicalSex ?? .female)
+                return suggestedSexes.contains(animal.sex ?? .female)
             }
     }
 
@@ -69,7 +69,7 @@ struct AnimalParentPickerView: View {
                                     TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(tagColorLibrary.formattedTag(for: animal))
-                                        Text((animal.biologicalSex ?? .female).label)
+                                        Text((animal.sex ?? .female).label)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }

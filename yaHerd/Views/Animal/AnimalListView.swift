@@ -19,7 +19,7 @@ struct AnimalListView: View {
     @State private var showingFilters = false
     @State private var filter = AnimalFilter()
     @State private var showArchived = false
-    
+
     @State private var batchMode = false
     @State private var selectedAnimals: Set<Animal> = []
     @State private var showingBatchMoveSheet = false
@@ -38,7 +38,7 @@ struct AnimalListView: View {
                                 Text(tagColorLibrary.formattedTag(for: animal))
                                     .font(.headline)
 
-                                Text((animal.biologicalSex ?? .female).label)
+                                Text((animal.sex ?? .female).label)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
 
@@ -53,7 +53,7 @@ struct AnimalListView: View {
                                 }
                             }
                         }
-                        .tag(animal) 
+                        .tag(animal)
                     }
                     .onDelete(perform: deleteAnimals)
                 }
@@ -71,7 +71,7 @@ struct AnimalListView: View {
                                     Text(tagColorLibrary.formattedTag(for: animal))
                                         .font(.headline)
 
-                                    Text((animal.biologicalSex ?? .female).label)
+                                    Text((animal.sex ?? .female).label)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
 
@@ -99,7 +99,7 @@ struct AnimalListView: View {
         }
         .searchable(text: $searchText, prompt: "Search tag...")
         .toolbar {
-            
+
             // ENTER / EXIT BATCH MODE
             ToolbarItem(placement: .topBarLeading) {
                 Button(batchMode ? "Done" : "Select") {
@@ -148,7 +148,7 @@ struct AnimalListView: View {
                     Image(systemName: "arrow.up.arrow.down")
                 }
             }
-            
+
             ToolbarItem(placement: .topBarLeading) {
                 Button {
                     showArchived.toggle()
@@ -194,7 +194,7 @@ struct AnimalListView: View {
 
     private var filteredAndSortedAnimals: [Animal] {
         var result = animals
-        
+
         // HIDE SOLD + DECEASED unless user wants to see them
         if !showArchived {
             result = result.filter { $0.status == .alive }
@@ -209,9 +209,9 @@ struct AnimalListView: View {
             }
         }
 
-        // FILTER: BIOLOGICAL SEX
-        if let selectedSex = filter.biologicalSex {
-            result = result.filter { $0.biologicalSex == selectedSex }
+        // FILTER: Sex
+        if let selectedSex = filter.sex {
+            result = result.filter { $0.sex == selectedSex }
         }
 
         // FILTER: STATUS
@@ -234,8 +234,8 @@ struct AnimalListView: View {
             result.sort { $0.birthDate > $1.birthDate }
         case .birthDateOldest:
             result.sort { $0.birthDate < $1.birthDate }
-        case .biologicalSex:
-            result.sort { ($0.biologicalSex?.rawValue ?? "") < ($1.biologicalSex?.rawValue ?? "") }
+        case .sex:
+            result.sort { ($0.sex?.rawValue ?? "") < ($1.sex?.rawValue ?? "") }
         case .status:
             result.sort { $0.status.rawValue < $1.status.rawValue }
         }

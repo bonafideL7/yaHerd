@@ -28,11 +28,11 @@ struct AnimalDetailView: View {
             }
         )
     }
-    private var biologicalSexBinding: Binding<BiologicalSex> {
+    private var sexBinding: Binding<Sex> {
         Binding(
-            get: { animal.biologicalSex ?? .female },
+            get: { animal.sex ?? .female },
             set: { newValue in
-                animal.biologicalSex = newValue
+                animal.sex = newValue
                 try? context.save()
             }
         )
@@ -57,7 +57,7 @@ struct AnimalDetailView: View {
             }
         )
     }
-    
+
     var body: some View {
         List {
             Section("Animal Info") {
@@ -80,8 +80,8 @@ struct AnimalDetailView: View {
                         .tag(def.id)
                     }
                 }
-                Picker("Biological Sex", selection: biologicalSexBinding) {
-                    ForEach(BiologicalSex.allCases, id: \.self) { sex in
+                Picker("Sex", selection: sexBinding) {
+                    ForEach(Sex.allCases, id: \.self) { sex in
                         Text(sex.label).tag(sex)
                     }
                 }
@@ -119,7 +119,7 @@ struct AnimalDetailView: View {
                     .foregroundStyle(.secondary)
                 }
             }
-            
+
             Section("Pasture") {
                 if animal.location == .workingPen {
                     HStack {
@@ -134,7 +134,7 @@ struct AnimalDetailView: View {
                     Text("None")
                 }
             }
-            
+
             Section("Pregnancy Checks") {
                 if animal.pregnancyChecks.isEmpty {
                     Text("No records")
@@ -161,7 +161,7 @@ struct AnimalDetailView: View {
                     }
                 }
             }
-            
+
             Section("Health Records") {
                 if animal.healthRecords.isEmpty {
                     Text("No records")
@@ -176,20 +176,20 @@ struct AnimalDetailView: View {
                     }
                 }
             }
-            
+
             Section("Status Actions") {
                 if animal.status != .sold {
                     Button("Mark as Sold") {
                         updateStatus(.sold)
                     }
                 }
-                
+
                 if animal.status != .deceased {
                     Button("Mark as Deceased") {
                         updateStatus(.deceased)
                     }
                 }
-                
+
                 if animal.status != .alive {
                     Button("Restore to Alive") {
                         updateStatus(.alive)
@@ -197,7 +197,7 @@ struct AnimalDetailView: View {
                     .foregroundStyle(.blue)
                 }
             }
-            
+
             Section("Delete Animal") {
                 // Soft delete always available
                 Button("Archive (Soft Delete)") {
@@ -213,7 +213,7 @@ struct AnimalDetailView: View {
                     }
                 }
             }
-            
+
         }
         .navigationTitle("Animal \(tagColorLibrary.formattedTag(for: animal))")
         .navigationBarTitleDisplayMode(.inline)
@@ -222,16 +222,16 @@ struct AnimalDetailView: View {
                 Button("Add Preg Check") {
                     showingAddPregCheck = true
                 }
-                
+
                 Button("Add Health") {
                     showingAddHealth = true
                 }
-                
+
                 Button("Change Pasture") {
                             showingPasturePicker = true
-                        } 
+                        }
             }
-            
+
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
                     AnimalTimelineView(animal: animal)
@@ -271,7 +271,7 @@ struct AnimalDetailView: View {
             AnimalParentPickerView(
                 title: "Select Sire",
                 excludeAnimal: animal,
-                suggestedBiologicalSexes: [.male]
+                suggestedSexes: [.male]
             ) { picked in
                 animal.sire = picked.tagNumber
                 try? context.save()
@@ -281,15 +281,15 @@ struct AnimalDetailView: View {
             AnimalParentPickerView(
                 title: "Select Dam",
                 excludeAnimal: animal,
-                suggestedBiologicalSexes: [.female]
+                suggestedSexes: [.female]
             ) { picked in
                 animal.dam = picked.tagNumber
                 try? context.save()
             }
         }
-        
+
     }
-    
+
     private func updateStatus(_ newStatus: AnimalStatus) {
         let oldStatus = animal.status
         animal.status = newStatus

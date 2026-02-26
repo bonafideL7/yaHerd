@@ -83,7 +83,7 @@ struct WorkingSessionAnimalEditView: View {
 
     private var isFemale: Bool {
         guard let animal else { return false }
-        return (animal.biologicalSex ?? .female) == .female
+        return (animal.sex ?? .female) == .female
     }
 
     private var showPregSection: Bool {
@@ -101,7 +101,7 @@ struct WorkingSessionAnimalEditView: View {
                         Text(tagColorLibrary.formattedTag(for: animal))
                             .font(.title3.bold())
                         Spacer()
-                        Text((animal.biologicalSex ?? .female).label)
+                        Text((animal.sex ?? .female).label)
                             .foregroundStyle(.secondary)
                     }
                 } else {
@@ -248,7 +248,7 @@ struct WorkingSessionAnimalEditView: View {
         AnimalParentPickerView(
             title: "Select Sire",
             excludeAnimal: animal,
-            suggestedBiologicalSexes: [.male]
+            suggestedSexes: [.male]
         ) { picked in
             selectedSire = picked
         }

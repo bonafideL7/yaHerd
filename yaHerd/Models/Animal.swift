@@ -18,8 +18,8 @@ final class Animal {
     /// Stored as a UUID referencing a `TagColorDefinition` persisted in `UserDefaults`.
     var tagColorID: UUID?
 
-    /// Biological sex used to compute `designation`. Optional so existing stores migrate without a versioned schema.
-    var biologicalSex: BiologicalSex?
+    /// Sex used to compute `designation`. Optional so existing stores migrate without a versioned schema.
+    var sex: Sex?
     var birthDate: Date
     var status: AnimalStatus
     var sire: String?
@@ -52,8 +52,8 @@ final class Animal {
     var activeWorkingSession: WorkingSession?
 
 
-    /// Computed classification derived from biological sex and (for females) age.
-    /// If `biologicalSex` is nil (older data), falls back to the legacy stored `sex`.
+    /// Computed classification derived from Sex and (for females) age.
+    /// If `sex` is nil (older data), falls back to the legacy stored `sex`.
 
     var ageInMonths: Int {
         let now = Date()
@@ -70,7 +70,7 @@ final class Animal {
         sire: String? = nil,
         dam: String? = nil,
         pasture: Pasture? = nil,
-        biologicalSex: BiologicalSex? = nil
+        sex: Sex? = nil
     ) {
         self.tagNumber = tagNumber
         self.tagColorID = tagColorID
@@ -85,12 +85,12 @@ final class Animal {
 
 
         // New data-driven fields (optional for migration)
-        let inferredBio = biologicalSex ?? .female
-        self.biologicalSex = inferredBio
+        let inferredBio = sex ?? .female
+        self.sex = inferredBio
     }
 }
 
-enum BiologicalSex: String, Codable, CaseIterable {
+enum Sex: String, Codable, CaseIterable {
     case female
     case male
 

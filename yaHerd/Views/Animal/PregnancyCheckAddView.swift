@@ -87,7 +87,7 @@ struct PregnancyCheckAddView: View {
             AnimalParentPickerView(
                 title: "Select Sire",
                 excludeAnimal: animal,
-                suggestedBiologicalSexes: [.male]
+                suggestedSexes: [.male]
             ) { picked in
                 selectedSire = picked
             }

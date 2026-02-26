@@ -27,22 +27,22 @@ struct SampleDataService {
 
 
         // MARK: - Animals
-        let a1 = Animal(tagNumber: "101", birthDate: daysAgo(900), status: .alive, sire: "A13", dam: "B07", pasture: north, biologicalSex: .female)
-        let a2 = Animal(tagNumber: "102", birthDate: daysAgo(700), status: .alive, sire: "A13", dam: "B07", pasture: south, biologicalSex: .female)
-        let a3 = Animal(tagNumber: "201", birthDate: daysAgo(1400), status: .alive, sire: "X99", dam: "C21", pasture: drylot, biologicalSex: .male)
-        let a4 = Animal(tagNumber: "301", birthDate: daysAgo(300), status: .alive, sire: "A55", dam: "C33", pasture: north, biologicalSex: .female)
+        let a1 = Animal(tagNumber: "101", birthDate: daysAgo(900), status: .alive, sire: "A13", dam: "B07", pasture: north, sex: .female)
+        let a2 = Animal(tagNumber: "102", birthDate: daysAgo(700), status: .alive, sire: "A13", dam: "B07", pasture: south, sex: .female)
+        let a3 = Animal(tagNumber: "201", birthDate: daysAgo(1400), status: .alive, sire: "X99", dam: "C21", pasture: drylot, sex: .male)
+        let a4 = Animal(tagNumber: "301", birthDate: daysAgo(300), status: .alive, sire: "A55", dam: "C33", pasture: north, sex: .female)
 
         // archived examples
-        let a5 = Animal(tagNumber: "401", birthDate: daysAgo(1200), status: .sold, sire: "Z18", dam: "D99", pasture: south, biologicalSex: .female)
-        let a6 = Animal(tagNumber: "402", birthDate: daysAgo(1500), status: .deceased, sire: "Z18", dam: "D99", pasture: east, biologicalSex: .female)
+        let a5 = Animal(tagNumber: "401", birthDate: daysAgo(1200), status: .sold, sire: "Z18", dam: "D99", pasture: south, sex: .female)
+        let a6 = Animal(tagNumber: "402", birthDate: daysAgo(1500), status: .deceased, sire: "Z18", dam: "D99", pasture: east, sex: .female)
 
-        let a7 = Animal(tagNumber: "501", birthDate: daysAgo(1100), status: .alive, sire: "S9", dam: "R2", pasture: east, biologicalSex: .female)
-        let a8 = Animal(tagNumber: "502", birthDate: daysAgo(1050), status: .alive, sire: "S9", dam: "R2", pasture: north, biologicalSex: .female)
+        let a7 = Animal(tagNumber: "501", birthDate: daysAgo(1100), status: .alive, sire: "S9", dam: "R2", pasture: east, sex: .female)
+        let a8 = Animal(tagNumber: "502", birthDate: daysAgo(1050), status: .alive, sire: "S9", dam: "R2", pasture: north, sex: .female)
 
-        let a9 = Animal(tagNumber: "503", birthDate: daysAgo(200), status: .alive, sire: "A9", dam: "F1", pasture: south, biologicalSex: .female)
-        let a10 = Animal(tagNumber: "504", birthDate: daysAgo(150), status: .alive, sire: "A9", dam: "F1", pasture: north, biologicalSex: .female)
-        let a11 = Animal(tagNumber: "601", birthDate: daysAgo(1800), status: .alive, sire: "OldBull", dam: "Matriarch", pasture: drylot, biologicalSex: .male)
-        let a12 = Animal(tagNumber: "701", birthDate: daysAgo(500), status: .alive, sire: "S21", dam: "H04", pasture: east, biologicalSex: .female)
+        let a9 = Animal(tagNumber: "503", birthDate: daysAgo(200), status: .alive, sire: "A9", dam: "F1", pasture: south, sex: .female)
+        let a10 = Animal(tagNumber: "504", birthDate: daysAgo(150), status: .alive, sire: "A9", dam: "F1", pasture: north, sex: .female)
+        let a11 = Animal(tagNumber: "601", birthDate: daysAgo(1800), status: .alive, sire: "OldBull", dam: "Matriarch", pasture: drylot, sex: .male)
+        let a12 = Animal(tagNumber: "701", birthDate: daysAgo(500), status: .alive, sire: "S21", dam: "H04", pasture: east, sex: .female)
 
         let animals = [a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12]
         animals.forEach { context.insert($0) }

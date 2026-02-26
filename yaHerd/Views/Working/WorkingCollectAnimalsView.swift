@@ -42,7 +42,7 @@ struct WorkingCollectAnimalsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(tagColorLibrary.formattedTag(for: animal))
                                 .font(.headline)
-                            Text((animal.biologicalSex ?? .female).label)
+                            Text((animal.sex ?? .female).label)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
