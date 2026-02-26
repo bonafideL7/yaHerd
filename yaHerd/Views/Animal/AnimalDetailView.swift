@@ -39,19 +39,6 @@ struct AnimalDetailView: View {
         )
     }
 
-    private var isCastratedBinding: Binding<Bool> {
-        Binding(
-            get: { animal.isCastrated },
-            set: { newValue in
-                animal.isCastrated = newValue
-                animal.syncLegacySexFromData()
-                try? context.save()
-            }
-        )
-    }
-
-
-
     private var sireBinding: Binding<String> {
         Binding(
             get: { animal.sire ?? "" },
@@ -99,10 +86,6 @@ struct AnimalDetailView: View {
                     ForEach(BiologicalSex.allCases, id: \.self) { sex in
                         Text(sex.label).tag(sex)
                     }
-                }
-
-                if (animal.biologicalSex ?? animal.sex.inferredBiologicalSex) == .male {
-                    Toggle("Castrated", isOn: isCastratedBinding)
                 }
                 Text("Birth Date: \(animal.birthDate.formatted(date: .long, time: .omitted))")
                 Text("Status: \(animal.status.rawValue.capitalized)")

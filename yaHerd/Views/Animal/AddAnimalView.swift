@@ -17,7 +17,6 @@ struct AddAnimalView: View {
     @State private var tagNumber = ""
 	@State private var tagColorID: UUID?
     @State private var biologicalSex: BiologicalSex = .female
-    @State private var isCastrated: Bool = false
     @State private var birthDate = Date()
     @State private var status: AnimalStatus = .alive
     @State private var sire = ""
@@ -32,7 +31,6 @@ struct AddAnimalView: View {
     private var computedDesignation: Sex {
         Animal.computeDesignation(
             biologicalSex: biologicalSex,
-            isCastrated: isCastrated,
             birthDate: birthDate,
             referenceDate: Date()
         )
@@ -67,13 +65,6 @@ struct AddAnimalView: View {
                     ForEach(BiologicalSex.allCases, id: \.self) { sex in
                         Text(sex.label).tag(sex)
                     }
-                }
-                .onChange(of: biologicalSex) { _, newValue in
-                    if newValue != .male { isCastrated = false }
-                }
-
-                if biologicalSex == .male {
-                    Toggle("Castrated", isOn: $isCastrated)
                 }
 
                 Text("Designation: \(computedDesignation.rawValue.capitalized)")

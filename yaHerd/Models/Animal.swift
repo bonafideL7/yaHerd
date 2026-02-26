@@ -22,8 +22,6 @@ final class Animal {
 
     /// Biological sex used to compute `designation`. Optional so existing stores migrate without a versioned schema.
     var biologicalSex: BiologicalSex?
-    /// Applies when `biologicalSex == .male`.
-    var isCastrated: Bool = false
     var birthDate: Date
     var status: AnimalStatus
     var sire: String?
@@ -56,13 +54,12 @@ final class Animal {
     var activeWorkingSession: WorkingSession?
 
 
-    /// Computed classification derived from biological sex, castration, and (for females) age.
+    /// Computed classification derived from biological sex and (for females) age.
     /// If `biologicalSex` is nil (older data), falls back to the legacy stored `sex`.
     var designation: Sex {
         guard let biologicalSex else { return sex }
         return Self.computeDesignation(
             biologicalSex: biologicalSex,
-            isCastrated: isCastrated,
             birthDate: birthDate,
             referenceDate: Date()
         )
@@ -77,7 +74,6 @@ final class Animal {
 
     static func computeDesignation(
         biologicalSex: BiologicalSex,
-        isCastrated: Bool,
         birthDate: Date,
         referenceDate: Date
     ) -> Sex {
@@ -87,7 +83,7 @@ final class Animal {
             let months = max(0, comps.month ?? 0)
             return months >= AnimalConstants.heiferToCowMonths ? .cow : .heifer
         case .male:
-            return isCastrated ? .steer : .bull
+            return .bull
         }
     }
 
@@ -95,7 +91,6 @@ final class Animal {
     func syncLegacySexFromData() {
         guard biologicalSex != nil else { return }
         sex = designation
-        if biologicalSex != .male { isCastrated = false }
     }
 
     init(
@@ -107,8 +102,7 @@ final class Animal {
         sire: String? = nil,
         dam: String? = nil,
         pasture: Pasture? = nil,
-        biologicalSex: BiologicalSex? = nil,
-        isCastrated: Bool = false
+        biologicalSex: BiologicalSex? = nil
     ) {
         self.tagNumber = tagNumber
         self.tagColorID = tagColorID
@@ -126,11 +120,6 @@ final class Animal {
         // New data-driven fields (optional for migration)
         let inferredBio = biologicalSex ?? sex.inferredBiologicalSex
         self.biologicalSex = inferredBio
-        if inferredBio == .male {
-            self.isCastrated = isCastrated || sex == .steer
-        } else {
-            self.isCastrated = false
-        }
         self.syncLegacySexFromData()
     }
 }

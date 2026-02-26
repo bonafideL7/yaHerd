@@ -197,16 +197,6 @@ struct WorkingSessionAnimalEditView: View {
             }
 
             Section("Procedures") {
-                if let animal {
-                    Toggle("Animal is castrated", isOn: Binding(
-                        get: { animal.isCastrated },
-                        set: { newValue in
-                            animal.isCastrated = newValue
-                            animal.syncLegacySexFromData()
-                        }
-                    ))
-                }
-
                 Toggle("Castration performed (this session)", isOn: $castrationPerformedInSession)
                     .disabled(animal == nil)
             }

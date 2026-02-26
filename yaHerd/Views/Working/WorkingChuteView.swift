@@ -45,7 +45,7 @@ struct WorkingChuteView: View {
 
     private var showCastrationSection: Bool {
         guard let animal else { return false }
-        return isMale && (animal.biologicalSex ?? animal.sex.inferredBiologicalSex) == .male && !animal.isCastrated
+        return isMale
     }
 
     var body: some View {
@@ -258,8 +258,6 @@ struct WorkingChuteView: View {
 
         // Castration
         if markCastrated {
-            animal.isCastrated = true
-            animal.syncLegacySexFromData()
             // Upsert a castration record tied to this session.
             if let existing = try? context.fetch(FetchDescriptor<HealthRecord>()) {
                 for r in existing where r.workingSession?.persistentModelID == sid
