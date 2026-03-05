@@ -25,32 +25,29 @@ struct MainTabView: View {
 
     var body: some View {
         TabView {
+
+//            NavigationStack(path: $nav.globalPath) {
+//                DashboardView()
+//                    .navigationDestination(for: Animal.self) { animal in
+//                        AnimalDetailView(animal: animal)
+//                    }
+//                    .navigationDestination(for: Pasture.self) { pasture in
+//                        PastureDetailView(pasture: pasture)
+//                    }
+//                    .navigationDestination(for: DashboardRoute.self) { route in
+//                        switch route {
+//                        case .animalList(let kind):
+//                            DashboardAnimalListView(kind: kind)
+//                        case .pastureList:
+//                            DashboardPastureListView()
+//                        }
+//                    }
+//            }
+//            .tabItem {
+//                Label("Dashboard", systemImage: "speedometer")
+//            }
+//            .tabBadge(alertCount)
             
-            // DASHBOARD TAB
-            NavigationStack(path: $nav.globalPath) {
-                DashboardView()
-                    .navigationDestination(for: Animal.self) { animal in
-                        AnimalDetailView(animal: animal)
-                    }
-                    .navigationDestination(for: Pasture.self) { pasture in
-                        PastureDetailView(pasture: pasture)
-                    }
-                    .navigationDestination(for: DashboardRoute.self) { route in
-                        switch route {
-                        case .animalList(let kind):
-                            DashboardAnimalListView(kind: kind)
-                        case .pastureList:
-                            DashboardPastureListView()
-                        }
-                    }
-            }
-            .tabItem {
-                Label("Dashboard", systemImage: "speedometer")
-            }
-            .tabBadge(alertCount)
-            
-            
-            // HERD TAB
             NavigationStack {
                 AnimalListView()
             }
@@ -58,15 +55,14 @@ struct MainTabView: View {
                 Label {
                     Text("Herd")
                 } icon: {
-                    if let base = UIImage(lucideId: "beef") {
+                    if let base = UIImage(named: "Cow") {
                         let icon = base.scaled(to: CGSize(width: 28, height: 28))
                         Image(uiImage: icon)
                             .renderingMode(.template)
                     }
                 }
             }
-            
-            // PASTURES TAB
+
             NavigationStack {
                 PastureListView()
             }
@@ -74,25 +70,23 @@ struct MainTabView: View {
                 Label("Pastures", systemImage: "leaf")
             }
 
-            // WORK TAB
-            NavigationStack {
-                WorkingSessionsView()
-            }
-            .tabItem {
-                Label("Work", systemImage: "wrench")
-            }
+//            NavigationStack {
+//                WorkingSessionsView()
+//            }
+//            .tabItem {
+//                Label("Work", systemImage: "wrench")
+//            }
             
-            // SETTINGS TAB
-            NavigationStack {
-                SettingsView()
-            }
-            .tabItem {
-                Label("Settings", systemImage: "gearshape")
-            }
+//            NavigationStack {
+//                SettingsView()
+//            }
+//            .tabItem {
+//                Label("Settings", systemImage: "gearshape")
+//            }
         }
         .task {
 //            SampleDataService.seedIfNeeded(context: context)
-            refreshCounts()
+//            refreshCounts()
         }
     }
     

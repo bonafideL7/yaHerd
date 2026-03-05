@@ -125,12 +125,6 @@ struct AddAnimalView: View {
 
     private func validateAndSave() {
         do {
-            try ValidationService.validateAnimal(
-                tagNumber: tagNumber,
-                birthDate: birthDate,
-                context: context
-            )
-
 			let animal = Animal(
 				tagNumber: tagNumber,
 				tagColorID: tagColorIDBinding.wrappedValue,
@@ -142,10 +136,6 @@ struct AddAnimalView: View {
 
             context.insert(animal)
             dismiss()
-
-        } catch {
-            errorMessage = error.localizedDescription
-            showingError = true
         }
     }
 }

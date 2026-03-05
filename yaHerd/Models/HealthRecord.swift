@@ -15,11 +15,7 @@ final class HealthRecord {
     var treatment: String
     var notes: String?
 
-    /// Optional link to the working session that captured this record.
-    /// Stored as optional for painless migration.
-    @Relationship(deleteRule: .nullify)
-    var workingSession: WorkingSession?
-
+    @Relationship(deleteRule: .nullify) var workingSession: WorkingSession?
     @Relationship(inverse: \Animal.healthRecords) var animal: Animal
 
     init(

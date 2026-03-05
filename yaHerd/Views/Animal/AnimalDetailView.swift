@@ -135,47 +135,47 @@ struct AnimalDetailView: View {
                 }
             }
 
-            Section("Pregnancy Checks") {
-                if animal.pregnancyChecks.isEmpty {
-                    Text("No records")
-                } else {
-                    ForEach(animal.pregnancyChecks) { check in
-                        VStack(alignment: .leading) {
-                            let title: String = {
-                                var t = check.result.rawValue.capitalized
-                                if check.result == .pregnant, let due = check.dueDate {
-                                    t += " (Due \(due.formatted(date: .abbreviated, time: .omitted)))"
-                                }
-                                return t
-                            }()
-                            Text(title)
-                            Text(check.date.formatted(date: .abbreviated, time: .omitted))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            if let sire = check.sireAnimal?.tagNumber {
-                                Text("Sire: \(sire)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-            }
+//            Section("Pregnancy Checks") {
+//                if animal.pregnancyChecks.isEmpty {
+//                    Text("No records")
+//                } else {
+//                    ForEach(animal.pregnancyChecks) { check in
+//                        VStack(alignment: .leading) {
+//                            let title: String = {
+//                                var t = check.result.rawValue.capitalized
+//                                if check.result == .pregnant, let due = check.dueDate {
+//                                    t += " (Due \(due.formatted(date: .abbreviated, time: .omitted)))"
+//                                }
+//                                return t
+//                            }()
+//                            Text(title)
+//                            Text(check.date.formatted(date: .abbreviated, time: .omitted))
+//                                .font(.caption)
+//                                .foregroundStyle(.secondary)
+//                            if let sire = check.sireAnimal?.tagNumber {
+//                                Text("Sire: \(sire)")
+//                                    .font(.caption)
+//                                    .foregroundStyle(.secondary)
+//                            }
+//                        }
+//                    }
+//                }
+//            }
 
-            Section("Health Records") {
-                if animal.healthRecords.isEmpty {
-                    Text("No records")
-                } else {
-                    ForEach(animal.healthRecords.sorted(by: { $0.date > $1.date })) { record in
-                        VStack(alignment: .leading) {
-                            Text(record.treatment)
-                            Text(record.date.formatted(date: .abbreviated, time: .omitted))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
+//            Section("Health Records") {
+//                if animal.healthRecords.isEmpty {
+//                    Text("No records")
+//                } else {
+//                    ForEach(animal.healthRecords.sorted(by: { $0.date > $1.date })) { record in
+//                        VStack(alignment: .leading) {
+//                            Text(record.treatment)
+//                            Text(record.date.formatted(date: .abbreviated, time: .omitted))
+//                                .font(.caption)
+//                                .foregroundStyle(.secondary)
+//                        }
+//                    }
+//                }
+//            }
 
             Section("Status Actions") {
                 if animal.status != .sold {
@@ -219,26 +219,26 @@ struct AnimalDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button("Add Preg Check") {
-                    showingAddPregCheck = true
-                }
+//                Button("Add Preg Check") {
+//                    showingAddPregCheck = true
+//                }
+//
+//                Button("Add Health") {
+//                    showingAddHealth = true
+//                }
 
-                Button("Add Health") {
-                    showingAddHealth = true
-                }
-
-                Button("Change Pasture") {
-                            showingPasturePicker = true
-                        }
+//                Button("Change Pasture") {
+//                            showingPasturePicker = true
+//                        }
             }
 
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    AnimalTimelineView(animal: animal)
-                } label: {
-                    Image(systemName: "clock.arrow.circlepath")
-                }
-            }
+//            ToolbarItem(placement: .topBarTrailing) {
+//                NavigationLink {
+//                    AnimalTimelineView(animal: animal)
+//                } label: {
+//                    Image(systemName: "clock.arrow.circlepath")
+//                }
+//            }
         }
         .sheet(isPresented: $showingPasturePicker) {
             PastureTilePickerView { pasture in
@@ -260,12 +260,12 @@ struct AnimalDetailView: View {
                 try? context.save()
             }
         }
-        .sheet(isPresented: $showingAddHealth) {
-            HealthRecordAddView(animal: animal)
-        }
-        .sheet(isPresented: $showingAddPregCheck) {
-            PregnancyCheckAddView(animal: animal)
-        }
+//        .sheet(isPresented: $showingAddHealth) {
+//            HealthRecordAddView(animal: animal)
+//        }
+//        .sheet(isPresented: $showingAddPregCheck) {
+//            PregnancyCheckAddView(animal: animal)
+//        }
 
         .sheet(isPresented: $showingSirePicker) {
             AnimalParentPickerView(
