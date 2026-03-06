@@ -21,6 +21,7 @@ struct AddAnimalView: View {
     @State private var status: AnimalStatus = .alive
     @State private var sire = ""
     @State private var dam = ""
+//    @State private var pasture: Pasture
 
     @State private var showingSirePicker = false
     @State private var showingDamPicker = false
@@ -39,44 +40,21 @@ struct AddAnimalView: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Name", text: $name)
-                TextField("Tag Number", text: $tagNumber)
-				Picker("Tag Color", selection: tagColorIDBinding) {
-					ForEach(tagColorLibrary.colors) { def in
-						HStack(spacing: 10) {
-							TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
-							Text("\(def.name) (\(def.prefix))")
-						}
-						.tag(def.id)
-					}
-				}
-
-                let selectedDef = tagColorLibrary.definition(for: tagColorIDBinding.wrappedValue) ?? tagColorLibrary.defaultColor
-                Text("Tag: \(selectedDef.prefix)\(tagNumber)")
-                    .foregroundStyle(.secondary)
+//                Picker("Pasture", selection:$pasture){
+//                    ForEach(Pasture, id:\.self){
+//                        
+//                    }
+//                }
+                DatePicker("Birth Date", selection: $birthDate, displayedComponents: .date)
                 Picker("Sex", selection: $sex) {
                     ForEach(Sex.allCases, id: \.self) { sex in
                         Text(sex.label).tag(sex)
                     }
-                }
-                    .foregroundStyle(.secondary)
-                DatePicker("Birth Date", selection: $birthDate, displayedComponents: .date)
+                }.foregroundStyle(.secondary)
                 Picker("Status", selection: $status) {
                     ForEach(AnimalStatus.allCases, id: \.self) { Text($0.rawValue.capitalized) }
                 }
-
                 Section("Parents") {
-                    HStack {
-                        TextField("Sire", text: $sire)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                        Button("Pick") { showingSirePicker = true }
-                    }
-                    if !sire.isEmpty {
-                        Button("Clear Sire") { sire = "" }
-                            .foregroundStyle(.secondary)
-                    }
-
                     HStack {
                         TextField("Dam", text: $dam)
                             .textInputAutocapitalization(.never)
@@ -87,7 +65,33 @@ struct AddAnimalView: View {
                         Button("Clear Dam") { dam = "" }
                             .foregroundStyle(.secondary)
                     }
+                    
+                    HStack {
+                        TextField("Sire", text: $sire)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Button("Pick") { showingSirePicker = true }
+                    }
+                    if !sire.isEmpty {
+                        Button("Clear Sire") { sire = "" }
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                
+                TextField("Tag Number", text: $tagNumber)
+				Picker("Tag Color", selection: tagColorIDBinding) {
+					ForEach(tagColorLibrary.colors) { def in
+						HStack(spacing: 10) {
+							TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
+							Text("\(def.name) (\(def.prefix))")
+						}
+						.tag(def.id)
+					}
+				}
+                
+                
+                TextField("Name", text: $name)
+                
             }
             .navigationTitle("Add Animal")
             .toolbar {
