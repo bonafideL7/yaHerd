@@ -9,7 +9,7 @@ import SwiftUI
 struct TagColorTagIcon: View {
     let color: Color
     let accessibilityLabel: String
-    var size: CGFloat = 14
+    var size: CGFloat = 18
 
     var body: some View {
         ZStack {

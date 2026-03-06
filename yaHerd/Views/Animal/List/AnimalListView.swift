@@ -33,11 +33,11 @@ struct AnimalListView: View {
                         HStack(spacing: 12) {
                             let def = tagColorLibrary.resolvedDefinition(for: animal)
                             TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
+                            Text(animal.tagNumber)
 
                             VStack(alignment: .leading) {
-                                Text(tagColorLibrary.formattedTag(for: animal))
+                                Text(animal.name)
                                     .font(.headline)
-
                                 Text((animal.sex ?? .female).label)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -66,11 +66,11 @@ struct AnimalListView: View {
                             HStack(spacing: 12) {
                                 let def = tagColorLibrary.resolvedDefinition(for: animal)
                                 TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
+                                Text(animal.tagNumber)
 
                                 VStack(alignment: .leading) {
-                                    Text(tagColorLibrary.formattedTag(for: animal))
+                                    Text(animal.name)
                                         .font(.headline)
-
                                     Text((animal.sex ?? .female).label)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
@@ -100,7 +100,6 @@ struct AnimalListView: View {
         .searchable(text: $searchText, prompt: "Search tag...")
         .toolbar {
 
-            // ENTER / EXIT BATCH MODE
             ToolbarItem(placement: .topBarLeading) {
                 Button(batchMode ? "Done" : "Select") {
                     batchMode.toggle()
@@ -108,7 +107,6 @@ struct AnimalListView: View {
                 }
             }
 
-            // MOVE TO PASTURE (only visible in batch mode + some selected)
             ToolbarItem(placement: .bottomBar) {
                 if batchMode && !selectedAnimals.isEmpty {
                     Button("Move to Pasture") {
@@ -117,7 +115,6 @@ struct AnimalListView: View {
                 }
             }
 
-            // ADD BUTTON
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showingAdd = true
@@ -126,7 +123,6 @@ struct AnimalListView: View {
                 }
             }
 
-            // FILTER BUTTON
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showingFilters = true
@@ -135,7 +131,6 @@ struct AnimalListView: View {
                 }
             }
 
-            // SORT MENU
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Picker("Sort", selection: $sortOrder) {

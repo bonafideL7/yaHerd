@@ -53,10 +53,10 @@ struct MainTabView: View {
             }
             .tabItem {
                 Label {
-                    Text("Herd")
+                    Text("YaHerd")
                 } icon: {
                     if let base = UIImage(named: "Cow") {
-                        let icon = base.scaled(to: CGSize(width: 28, height: 28))
+                        let icon = base.scaled(to: CGSize(width: 32, height: 32))
                         Image(uiImage: icon)
                             .renderingMode(.template)
                     }
@@ -85,7 +85,7 @@ struct MainTabView: View {
 //            }
         }
         .task {
-//            SampleDataService.seedIfNeeded(context: context)
+            SampleDataService.seedIfNeeded(context: context)
 //            refreshCounts()
         }
     }

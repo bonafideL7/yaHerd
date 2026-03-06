@@ -13,7 +13,7 @@ struct AddAnimalView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-
+    @State private var name: String = ""
     @State private var tagNumber = ""
 	@State private var tagColorID: UUID?
     @State private var sex: Sex = .female
@@ -39,6 +39,7 @@ struct AddAnimalView: View {
     var body: some View {
         NavigationStack {
             Form {
+                TextField("Name", text: $name)
                 TextField("Tag Number", text: $tagNumber)
 				Picker("Tag Color", selection: tagColorIDBinding) {
 					ForEach(tagColorLibrary.colors) { def in
@@ -126,6 +127,7 @@ struct AddAnimalView: View {
     private func validateAndSave() {
         do {
 			let animal = Animal(
+                name: name,
 				tagNumber: tagNumber,
 				tagColorID: tagColorIDBinding.wrappedValue,
                 birthDate: birthDate,

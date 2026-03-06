@@ -62,6 +62,12 @@ struct AnimalDetailView: View {
         List {
             Section("Animal Info") {
                 HStack {
+                    Text("Name")
+                    Spacer()
+                    Text(animal.name)
+                }
+                
+                HStack {
                     Text("Tag")
                     Spacer()
                     HStack(spacing: 8) {

@@ -9,7 +9,7 @@ import Foundation
 
 @Model
 final class Animal {
-
+    var name: String
     var tagNumber: String
     var tagColorID: UUID?
     var sex: Sex?
@@ -39,6 +39,7 @@ final class Animal {
     }
 
     init(
+        name: String,
         tagNumber: String,
         tagColorID: UUID? = nil,
         birthDate: Date,
@@ -48,6 +49,7 @@ final class Animal {
         pasture: Pasture? = nil,
         sex: Sex? = nil
     ) {
+        self.name = name
         self.tagNumber = tagNumber
         self.tagColorID = tagColorID
         self.birthDate = birthDate

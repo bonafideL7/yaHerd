@@ -1,113 +1,213 @@
 import SwiftData
 import Foundation
+import SwiftUI
 
 struct SampleDataService {
-
+    
     static func seedIfNeeded(context: ModelContext) {
-
+        
         // Seed working protocol templates (safe to do independently of animal seed)
         seedProtocolTemplatesIfNeeded(context: context)
-
+        
         // Avoid reseeding sample animals/pastures
         let descriptor = FetchDescriptor<Animal>()
         if let existing = try? context.fetch(descriptor),
            !existing.isEmpty { return }
-
-
+        
+        // Resolve the default "Green" tag color id from the library store.
+        // TagColorDefinition IDs are generated when the library is first seeded, so we look them up by name.
+        let tagColorStore = TagColorLibraryStore()
+        let greenTagColorID = tagColorStore.colors.first(where: { $0.name == "Green" })?.id
+        
         // MARK: - Pastures
-        let north = Pasture(name: "North Pasture", acreage: 35)
-        let south = Pasture(name: "South Pasture", acreage: 28)
-        let east  = Pasture(name: "East Meadow",   acreage: 22)
-        let drylot = Pasture(name: "Drylot",       acreage: 5)
-
-        context.insert(north)
-        context.insert(south)
-        context.insert(east)
-        context.insert(drylot)
-
-
-        // MARK: - Animals
-        let a1 = Animal(tagNumber: "101", birthDate: daysAgo(900), status: .alive, sire: "A13", dam: "B07", pasture: north, sex: .female)
-        let a2 = Animal(tagNumber: "102", birthDate: daysAgo(700), status: .alive, sire: "A13", dam: "B07", pasture: south, sex: .female)
-        let a3 = Animal(tagNumber: "201", birthDate: daysAgo(1400), status: .alive, sire: "X99", dam: "C21", pasture: drylot, sex: .male)
-        let a4 = Animal(tagNumber: "301", birthDate: daysAgo(300), status: .alive, sire: "A55", dam: "C33", pasture: north, sex: .female)
-
-        // archived examples
-        let a5 = Animal(tagNumber: "401", birthDate: daysAgo(1200), status: .sold, sire: "Z18", dam: "D99", pasture: south, sex: .female)
-        let a6 = Animal(tagNumber: "402", birthDate: daysAgo(1500), status: .deceased, sire: "Z18", dam: "D99", pasture: east, sex: .female)
-
-        let a7 = Animal(tagNumber: "501", birthDate: daysAgo(1100), status: .alive, sire: "S9", dam: "R2", pasture: east, sex: .female)
-        let a8 = Animal(tagNumber: "502", birthDate: daysAgo(1050), status: .alive, sire: "S9", dam: "R2", pasture: north, sex: .female)
-
-        let a9 = Animal(tagNumber: "503", birthDate: daysAgo(200), status: .alive, sire: "A9", dam: "F1", pasture: south, sex: .female)
-        let a10 = Animal(tagNumber: "504", birthDate: daysAgo(150), status: .alive, sire: "A9", dam: "F1", pasture: north, sex: .female)
-        let a11 = Animal(tagNumber: "601", birthDate: daysAgo(1800), status: .alive, sire: "OldBull", dam: "Matriarch", pasture: drylot, sex: .male)
-        let a12 = Animal(tagNumber: "701", birthDate: daysAgo(500), status: .alive, sire: "S21", dam: "H04", pasture: east, sex: .female)
-
-        let animals = [a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12]
+        let northwest = Pasture(name: "NorthWest Pasture", acreage: 35)
+        let southwest = Pasture(name: "SouthWest Pasture", acreage: 28)
+        let northeast = Pasture(name: "NorthEast Meadow", acreage: 22)
+        let southeast = Pasture(name: "SouthEast Meadow", acreage: 22)
+        let lower = Pasture(name: "Lower", acreage: 50)
+        let holding = Pasture(name: "Holding", acreage: 5)
+        
+        context.insert(northwest)
+        context.insert(southwest)
+        context.insert(northeast)
+        context.insert(southeast)
+        context.insert(lower)
+        context.insert(holding)
+        
+        // MARK: - Animals (Matthew and Heather's herd)
+        // Tags are green; tag numbers and dates come from the provided list.
+        let jane = Animal(
+            name: "Jane",
+            tagNumber: "1",
+            tagColorID: greenTagColorID,
+            birthDate: makeDate(2020, 1, 17),
+            status: .alive,
+            sire: nil,
+            dam: nil,
+            pasture: northwest,
+            sex: .female
+        )
+        
+        let rudy = Animal(
+            name: "Rudy",
+            tagNumber: "2",
+            tagColorID: greenTagColorID,
+            birthDate: makeDate(2019, 10, 31),
+            status: .alive,
+            sire: nil,
+            dam: nil,
+            pasture: southwest,
+            sex: .female
+        )
+        
+        let roux = Animal(
+            name: "Roux",
+            tagNumber: "3",
+            tagColorID: greenTagColorID,
+            birthDate: makeDate(2023, 3, 14),
+            status: .alive,
+            sire: nil,
+            dam: "2",
+            pasture: northwest,
+            sex: .female
+        )
+        
+        // "spring 2020?" -> mid-spring placeholder
+        let imogene = Animal(
+            name: "Imogene",
+            tagNumber: "4",
+            tagColorID: greenTagColorID,
+            birthDate: makeDate(2020, 4, 15),
+            status: .alive,
+            sire: nil,
+            dam: nil,
+            pasture: northeast,
+            sex: .female
+        )
+        
+        let telly = Animal(
+            name: "Telly",
+            tagNumber: "5",
+            tagColorID: greenTagColorID,
+            birthDate: makeDate(2023, 3, 19),
+            status: .alive,
+            sire: nil,
+            dam: "4",
+            pasture: northeast,
+            sex: .female
+        )
+        
+        // "Jan/Feb 2024" -> Feb 1 placeholder
+        let aelin = Animal(
+            name: "Aelin",
+            tagNumber: "6",
+            tagColorID: greenTagColorID,
+            birthDate: makeDate(2024, 2, 1),
+            status: .alive,
+            sire: nil,
+            dam: nil,
+            pasture: northwest,
+            sex: .female
+        )
+        
+        let izzy = Animal(
+            name: "ZZ (Izzy)",
+            tagNumber: "7",
+            tagColorID: greenTagColorID,
+            birthDate: makeDate(2024, 2, 18),
+            status: .alive,
+            sire: nil,
+            dam: nil,
+            pasture: southwest,
+            sex: .female
+        )
+        
+        let lottie = Animal(
+            name: "Lottie",
+            tagNumber: "8",
+            tagColorID: greenTagColorID,
+            birthDate: makeDate(2025, 2, 27),
+            status: .alive,
+            sire: nil,
+            dam: nil,
+            pasture: northeast,
+            sex: .female
+        )
+        
+        // Calf listed with explicit tag number
+        let limeGreen80 = Animal(
+            name: "Lime green 80",
+            tagNumber: "80",
+            tagColorID: greenTagColorID,
+            birthDate: makeDate(2025, 2, 28),
+            status: .sold,
+            sire: nil,
+            dam: "5",
+            pasture: holding,
+            sex: .male
+        )
+        
+        let animals = [jane, rudy, roux, imogene, telly, aelin, izzy, lottie, limeGreen80]
         animals.forEach { context.insert($0) }
-
-
-        // MARK: - Pregnancy Checks (creates dashboard preg-check alerts)
-        context.insert(PregnancyCheck(date: daysAgo(30), result: .pregnant, technician: "Dr. Smith", animal: a1))
-        context.insert(PregnancyCheck(date: daysAgo(29), result: .open,     technician: "Dr. Smith", animal: a2))
-        context.insert(PregnancyCheck(date: daysAgo(220), result: .pregnant, technician: "Dr. Lee", animal: a7))   // overdue calving
-        context.insert(PregnancyCheck(date: daysAgo(61),  result: .unknown,  technician: "Dr. Lee", animal: a8))
-
-
-        // MARK: - Health Records (creates overdue treatment alerts)
-        context.insert(HealthRecord(date: daysAgo(10),  treatment: "Vaccination", notes: "Booster", animal: a1))
-        context.insert(HealthRecord(date: daysAgo(210), treatment: "Deworming",   notes: nil,       animal: a3))   // overdue treatment
-        context.insert(HealthRecord(date: daysAgo(45),  treatment: "Foot Trim",   notes: "Mild lesion LF", animal: a4))
-        context.insert(HealthRecord(date: daysAgo(5),   treatment: "Antibiotic",  notes: "Metritis", animal: a7))
-        context.insert(HealthRecord(date: daysAgo(7),   treatment: "Vaccination", notes: nil,        animal: a8))
-
-
+        
+        // MARK: - Pregnancy Checks (dashboard alerts)
+        context.insert(PregnancyCheck(date: daysAgo(30), result: .pregnant, technician: "Dr. Smith", animal: jane))
+        context.insert(PregnancyCheck(date: daysAgo(29), result: .open,     technician: "Dr. Smith", animal: rudy))
+        context.insert(PregnancyCheck(date: daysAgo(220), result: .pregnant, technician: "Dr. Lee", animal: imogene))
+        context.insert(PregnancyCheck(date: daysAgo(61),  result: .unknown,  technician: "Dr. Lee", animal: telly))
+        
+        // MARK: - Health Records (dashboard alerts)
+        context.insert(HealthRecord(date: daysAgo(10),  treatment: "Vaccination", notes: "Booster", animal: jane))
+        context.insert(HealthRecord(date: daysAgo(210), treatment: "Deworming",   notes: nil,       animal: limeGreen80))
+        context.insert(HealthRecord(date: daysAgo(45),  treatment: "Foot Trim",   notes: "Mild lesion LF", animal: roux))
+        context.insert(HealthRecord(date: daysAgo(5),   treatment: "Antibiotic",  notes: "Metritis", animal: imogene))
+        context.insert(HealthRecord(date: daysAgo(7),   treatment: "Vaccination", notes: nil,        animal: telly))
+        
         // MARK: - Movement History (timeline)
         let movementData: [(Animal, String?, String, Int)] = [
-            (a1, "South Pasture",   "North Pasture", 120),
-            (a1, "North Pasture",   "East Meadow",   20),
-            (a2, "North Pasture",   "South Pasture", 45),
-            (a3, nil,               "Drylot",        200),
-            (a7, "East Meadow",     "North Pasture", 75),
-            (a8, "North Pasture",   "South Pasture", 30),
+            (jane,        "South Pasture", "North Pasture", 120),
+            (jane,        "North Pasture", "East Meadow",   20),
+            (rudy,        "North Pasture", "South Pasture", 45),
+            (limeGreen80, nil,             "Drylot",        200),
+            (imogene,     "East Meadow",   "North Pasture", 75),
+            (telly,       "North Pasture", "South Pasture", 30),
         ]
-
+        
         for (animal, from, to, days) in movementData {
-            let m = MovementRecord(
-                date: daysAgo(days),
-                fromPasture: from,
-                toPasture: to,
-                animal: animal
+            context.insert(
+                MovementRecord(
+                    date: daysAgo(days),
+                    fromPasture: from,
+                    toPasture: to,
+                    animal: animal
+                )
             )
-            context.insert(m)
         }
-
-
+        
         // MARK: - Status History (timeline + dashboard)
         let statusData: [(Animal, AnimalStatus, AnimalStatus, Int)] = [
-            (a5, .alive,    .sold,     40),
-            (a6, .alive,    .deceased, 300),
+            (limeGreen80, .alive, .sold, 40),
         ]
-
+        
         for (animal, oldStatus, newStatus, days) in statusData {
-            let s = StatusRecord(
-                date: daysAgo(days),
-                oldStatus: oldStatus,
-                newStatus: newStatus,
-                animal: animal
+            context.insert(
+                StatusRecord(
+                    date: daysAgo(days),
+                    oldStatus: oldStatus,
+                    newStatus: newStatus,
+                    animal: animal
+                )
             )
-            context.insert(s)
         }
-
+        
         try? context.save()
     }
-
+    
     private static func seedProtocolTemplatesIfNeeded(context: ModelContext) {
         let desc = FetchDescriptor<WorkingProtocolTemplate>()
         let existing = (try? context.fetch(desc)) ?? []
         guard existing.isEmpty else { return }
-
+        
         let spring = WorkingProtocolTemplate(
             name: "Spring Working",
             items: [
@@ -116,22 +216,25 @@ struct SampleDataService {
                 WorkingProtocolItem(name: "Dewormer", defaultQuantity: nil)
             ]
         )
-
+        
         let fall = WorkingProtocolTemplate(
             name: "Fall Booster",
             items: [
                 WorkingProtocolItem(name: "Booster", defaultQuantity: nil)
             ]
         )
-
+        
         context.insert(spring)
         context.insert(fall)
         try? context.save()
     }
-
-
-    // MARK: - Helper
+    
+    // MARK: - Helpers
     private static func daysAgo(_ days: Int) -> Date {
         Calendar.current.date(byAdding: .day, value: -days, to: .now) ?? .now
+    }
+    
+    private static func makeDate(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        Calendar.current.date(from: DateComponents(year: year, month: month, day: day)) ?? .now
     }
 }
