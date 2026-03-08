@@ -21,7 +21,6 @@ struct AddAnimalView: View {
     @State private var status: AnimalStatus = .alive
     @State private var sire = ""
     @State private var dam = ""
-//    @State private var pasture: Pasture
 
     @State private var showingSirePicker = false
     @State private var showingDamPicker = false
@@ -130,14 +129,15 @@ struct AddAnimalView: View {
 
     private func validateAndSave() {
         do {
-			let animal = Animal(
+            let animal = Animal(
                 name: name,
-				tagNumber: tagNumber,
-				tagColorID: tagColorIDBinding.wrappedValue,
+                tagNumber: tagNumber,
+                tagColorID: tagColorIDBinding.wrappedValue,
                 birthDate: birthDate,
                 status: status,
                 sire: sire.isEmpty ? nil : sire,
-                dam: dam.isEmpty ? nil : dam
+                dam: dam.isEmpty ? nil : dam,
+                sex: sex
             )
 
             context.insert(animal)

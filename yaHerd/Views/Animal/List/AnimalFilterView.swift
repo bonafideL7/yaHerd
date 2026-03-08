@@ -14,7 +14,8 @@ struct AnimalFilterView: View {
     @Environment(\.modelContext) private var context
 
     @Binding var filter: AnimalFilter
-
+    @Binding var showArchived: Bool
+    
     @Query private var pastures: [Pasture]
 
     var body: some View {
@@ -61,6 +62,10 @@ struct AnimalFilterView: View {
                                 .tag(Pasture?.some(pasture))
                         }
                     }
+                }
+                
+                Section("Visibility") {
+                    Toggle("Show Archived", isOn: $showArchived)
                 }
             }
             .navigationTitle("Filters")

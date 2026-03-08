@@ -25,10 +25,12 @@ struct AnimalListView: View {
     @State private var showingFilters = false
     @State private var filter = AnimalFilter()
     @State private var showArchived = false
-    
+    @State private var isSearching = false
+    @FocusState private var isSearchFieldFocused: Bool
     @State private var batchMode = false
     @State private var selectedAnimals: Set<Animal> = []
     @State private var showingBatchMoveSheet = false
+    
     
     // MARK: View
     
@@ -45,11 +47,6 @@ struct AnimalListView: View {
         .navigationDestination(for: Animal.self) { animal in
             AnimalDetailView(animal: animal)
         }
-//        .searchable(
-//            text: $searchText,
-//            placement: .navigationBarDrawer(displayMode: .automatic),
-//            prompt: "Search tag or color"
-//        )
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button(batchMode ? "Done" : "Select") {
@@ -78,7 +75,10 @@ struct AnimalListView: View {
             AddAnimalView()
         }
         .sheet(isPresented: $showingFilters) {
-            AnimalFilterView(filter: $filter)
+            AnimalFilterView(
+                filter: $filter,
+                showArchived: $showArchived
+            )
         }
         .sheet(isPresented: $showingBatchMoveSheet) {
             BatchMoveSheet(
@@ -94,31 +94,36 @@ struct AnimalListView: View {
         .animation(.snappy, value: currentFilterChips.count)
     }
     
+    private var backgroundView: some View {
+        Color(.systemGroupedBackground)
+            .ignoresSafeArea()
+    }
+    
     // MARK: Main List
     
     private var herdList: some View {
-        List(selection: batchMode ? $selectedAnimals : .constant(Set<Animal>())) {
-            if !currentFilterChips.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    activeFilterChips
-                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 6, trailing: 16))
-                        .listRowBackground(Color.clear)
+            List(selection: batchMode ? $selectedAnimals : nil) {
+                if !currentFilterChips.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        activeFilterChips
+                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 6, trailing: 16))
+                            .listRowBackground(Color.clear)
+                    }
                 }
-            }
-            
-            ForEach(groupedAnimals) { section in
-                if shouldUseSections {
-                    Section(section.title) {
+                
+                ForEach(groupedAnimals) { section in
+                    if shouldUseSections {
+                        Section(section.title) {
+                            sectionRows(section.animals)
+                        }
+                    } else {
                         sectionRows(section.animals)
                     }
-                } else {
-                    sectionRows(section.animals)
                 }
             }
-        }
-        .environment(\.editMode, .constant(batchMode ? .active : .inactive))
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.automatic)
+            .environment(\.editMode, .constant(batchMode ? .active : .inactive))
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.automatic)
     }
     
     @ViewBuilder
@@ -145,52 +150,35 @@ struct AnimalListView: View {
     private func animalRow(_ animal: Animal) -> some View {
         let def = tagColorLibrary.resolvedDefinition(for: animal)
         
-        HStack(alignment: .center, spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(def.color.opacity(0.18))
-                    .frame(width: 38, height: 38)
-                
-                TagColorTagIcon(
-                    color: def.color,
-                    accessibilityLabel: "Tag color: \(def.name)"
-                )
-            }
-            
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                if !animal.name.isEmpty {
                     Text(animal.name)
                         .font(.headline)
                         .lineLimit(1)
-                    
-                    Text(animal.tagNumber)
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
                 }
-                
-                HStack(spacing: 8) {
+                tagBadge(for: animal, color: def.color, colorName: def.name)
+            }
+            VStack(alignment: .trailing, spacing: 8) {
+                if animal.name.isEmpty {
                     infoPill(
                         title: (animal.sex ?? .female).label,
-                        systemImage: "pawprint"
+                        systemImage: ""
                     )
-                    
-                    if animal.location == .workingPen {
-                        infoPill(
-                            title: "Working Pen",
-                            systemImage: "figure.corral",
-                            tint: .orange
-                        )
-                    } else if let pasture = animal.pasture {
-                        infoPill(
-                            title: pasture.name,
-                            systemImage: "leaf"
-                        )
-                    }
                 }
+                infoPill(title: (animal.age), systemImage: "clock")
+                infoPill(
+                    title: animal.birthDate.formatted(
+                        .dateTime
+                            .year(.twoDigits)
+                            .month(.twoDigits)
+                            .day(.twoDigits)
+                    ),
+                    systemImage: "calendar"
+                )
+                locationBadges(for: animal)
             }
-            
-            Spacer(minLength: 8)
+            .frame(maxWidth: .infinity, alignment: .trailing)
             
             if batchMode {
                 Image(systemName: selectedAnimals.contains(animal) ? "checkmark.circle.fill" : "circle")
@@ -199,8 +187,28 @@ struct AnimalListView: View {
                     .symbolRenderingMode(.hierarchical)
             }
         }
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
+    }
+    
+    @ViewBuilder
+    private func tagBadge(for animal: Animal, color: Color, colorName: String) -> some View {
+        HStack(spacing: 6) {
+            TagColorTagIcon(
+                color: color,
+                accessibilityLabel: "Tag color: \(colorName)"
+            )
+            
+            Text(animal.tagNumber)
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.18), in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(color.opacity(0.35), lineWidth: 1)
+        )
     }
     
     @ViewBuilder
@@ -212,7 +220,7 @@ struct AnimalListView: View {
         Label(title, systemImage: systemImage)
             .font(.caption)
             .foregroundStyle(tint)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 5)
             .padding(.vertical, 5)
             .background(.thinMaterial, in: Capsule())
     }
@@ -224,6 +232,46 @@ struct AnimalListView: View {
         } else {
             Color.clear
         }
+    }
+    
+    @ViewBuilder
+    private func locationBadges(for animal: Animal) -> some View {
+        HStack(spacing: 6) {
+            if animal.location == .workingPen {
+                pastureBadge(
+                    "Working Pen",
+                    systemImage: "figure.corral",
+                    tint: .orange,
+                    fillOpacity: 0.14
+                )
+            } else if let pasture = animal.pasture {
+                pastureBadge(
+                    pasture.name,
+                    systemImage: "leaf",
+                    tint: .secondary,
+                    fillOpacity: 0.12
+                )
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func pastureBadge(
+        _ title: String,
+        systemImage: String,
+        tint: Color,
+        fillOpacity: Double
+    ) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption2.weight(.medium))
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .foregroundStyle(tint)
+            .background(
+                Capsule()
+                    .fill(tint.opacity(fillOpacity))
+            )
     }
     
     // MARK: Bottom Overlay
@@ -244,34 +292,27 @@ struct AnimalListView: View {
         .padding(.bottom, 10)
     }
     
-    //MARK: Floating Controller
+    //MARK: Floating Control Bar
     
     private var floatingControlBar: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !currentFilterChips.isEmpty {
-                Text("\(currentFilterChips.count) active filter\(currentFilterChips.count == 1 ? "" : "s")")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
-            }
-            
             HStack(spacing: 10) {
-                bottomSearchField
-                
-                if hasAnyActiveCriteria {
-                    Button("Clear") {
-                        clearAllCriteria()
+                if isSearching {
+                    bottomSearchField
+                    
+                    Button("Cancel") {
+                        withAnimation(.snappy) {
+                            searchText = ""
+                            isSearching = false
+                        }
+                        isSearchFieldFocused = false
                     }
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .background(.thinMaterial, in: Capsule())
                     .buttonStyle(.plain)
-                }
-            }
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                } else {
                     Menu {
                         Picker("Sort", selection: $sortOrder) {
                             ForEach(AnimalSortOrder.allCases, id: \.self) { option in
@@ -290,8 +331,8 @@ struct AnimalListView: View {
                         showingFilters = true
                     } label: {
                         floatingControlLabel(
-                            title: filter.isActive ? "Filters On" : "Filters",
-                            systemImage: filter.isActive
+                            title: filter.isActive || showArchived ? "Filters On" : "Filters",
+                            systemImage: (filter.isActive || showArchived)
                             ? "line.3.horizontal.decrease.circle.fill"
                             : "line.3.horizontal.decrease.circle"
                         )
@@ -299,20 +340,36 @@ struct AnimalListView: View {
                     .buttonStyle(.plain)
                     
                     Button {
-                        showArchived.toggle()
+                        withAnimation(.snappy) {
+                            isSearching = true
+                        }
                     } label: {
-                        floatingControlLabel(
-                            title: showArchived ? "Archived" : "Alive",
-                            systemImage: showArchived ? "archivebox.fill" : "heart.text.square.fill"
-                        )
+                        floatingIconControlLabel(systemImage: "magnifyingglass")
                     }
                     .buttonStyle(.plain)
                 }
             }
             
-            if !currentFilterChips.isEmpty {
+            if !isSearching && !currentFilterChips.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
+                        if hasAnyActiveCriteria {
+                            Button("Clear") {
+                                clearAllCriteria()
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(.thinMaterial, in: Capsule())
+                            .buttonStyle(.plain)
+                        }
+                        if !currentFilterChips.isEmpty {
+                            Text("\(currentFilterChips.count) active filter\(currentFilterChips.count == 1 ? "" : "s")")
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                                .padding(.horizontal, 4)
+                        }
+                        
                         ForEach(currentFilterChips) { chip in
                             Button {
                                 chip.remove()
@@ -341,6 +398,19 @@ struct AnimalListView: View {
                 .strokeBorder(.white.opacity(0.18))
         }
         .shadow(radius: 10, y: 4)
+        .onChange(of: isSearching) { _, newValue in
+            if newValue {
+                isSearchFieldFocused = true
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func floatingIconControlLabel(systemImage: String) -> some View {
+        Image(systemName: systemImage)
+            .font(.subheadline.weight(.medium))
+            .frame(width: 44, height: 44)
+            .background(.thinMaterial, in: Capsule())
     }
     
     @ViewBuilder
@@ -354,6 +424,8 @@ struct AnimalListView: View {
             .background(.thinMaterial, in: Capsule())
     }
     
+    //MARK: Bottom Search Field
+    
     private var bottomSearchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
@@ -362,6 +434,8 @@ struct AnimalListView: View {
             TextField("Search tag, color, or name", text: $searchText)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .keyboardType(.numbersAndPunctuation)
+                .focused($isSearchFieldFocused)
             
             if !searchText.isEmpty {
                 Button {
@@ -377,8 +451,11 @@ struct AnimalListView: View {
         .font(.subheadline)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
         .background(.thinMaterial, in: Capsule())
     }
+    
+    //MARK: Batch Action Bar
     
     private var batchActionBar: some View {
         HStack(spacing: 12) {
