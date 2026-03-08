@@ -102,20 +102,20 @@ struct AnimalListView: View {
     // MARK: Main List
     
     private var herdList: some View {
-            List(selection: batchMode ? $selectedAnimals : nil) {
-                ForEach(groupedAnimals) { section in
-                    if shouldUseSections {
-                        Section(section.title) {
-                            sectionRows(section.animals)
-                        }
-                    } else {
+        List(selection: batchMode ? $selectedAnimals : nil) {
+            ForEach(groupedAnimals) { section in
+                if shouldUseSections {
+                    Section(section.title) {
                         sectionRows(section.animals)
                     }
+                } else {
+                    sectionRows(section.animals)
                 }
             }
-            .environment(\.editMode, .constant(batchMode ? .active : .inactive))
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.automatic)
+        }
+        .environment(\.editMode, .constant(batchMode ? .active : .inactive))
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.automatic)
     }
     
     @ViewBuilder
@@ -125,9 +125,17 @@ struct AnimalListView: View {
                 animalRow(animal)
                     .tag(animal)
                     .listRowBackground(batchRowBackground(for: animal))
+                    .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+                    .alignmentGuide(.listRowSeparatorTrailing) { dimensions in
+                        dimensions.width
+                    }
             } else {
                 NavigationLink(value: animal) {
                     animalRow(animal)
+                }
+                .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+                .alignmentGuide(.listRowSeparatorTrailing) { dimensions in
+                    dimensions.width
                 }
             }
         }
@@ -142,33 +150,35 @@ struct AnimalListView: View {
     private func animalRow(_ animal: Animal) -> some View {
         let def = tagColorLibrary.resolvedDefinition(for: animal)
         
-        HStack(spacing: 14) {
+        HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
+                tagBadge(for: animal, color: def.color, colorName: def.name)
                 if !animal.name.isEmpty {
                     Text(animal.name)
-                        .font(.headline)
+                        .font(.subheadline)
                         .lineLimit(1)
-                }
-                tagBadge(for: animal, color: def.color, colorName: def.name)
-            }
-            VStack(alignment: .trailing, spacing: 8) {
-                if animal.name.isEmpty {
+                }else{
                     infoPill(
                         title: (animal.sex ?? .female).label,
                         systemImage: ""
                     )
                 }
-                infoPill(title: (animal.age), systemImage: "clock")
-                infoPill(
-                    title: animal.birthDate.formatted(
-                        .dateTime
-                            .year(.twoDigits)
-                            .month(.twoDigits)
-                            .day(.twoDigits)
-                    ),
-                    systemImage: "calendar"
-                )
+                
+            }
+            VStack(alignment: .trailing, spacing: 8) {
                 locationBadges(for: animal)
+                HStack{
+                    infoPill(title: (animal.age), systemImage: "clock")
+                    infoPill(
+                        title: animal.birthDate.formatted(
+                            .dateTime
+                                .year(.twoDigits)
+                                .month(.twoDigits)
+                                .day(.twoDigits)
+                        ),
+                        systemImage: "calendar"
+                    )
+                }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
             
@@ -209,41 +219,33 @@ struct AnimalListView: View {
         systemImage: String,
         tint: Color = .secondary
     ) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption)
-            .foregroundStyle(tint)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 5)
-            .background(.thinMaterial, in: Capsule())
-    }
-    
-    @ViewBuilder
-    private func batchRowBackground(for animal: Animal) -> some View {
-        if selectedAnimals.contains(animal) {
-            Color.accentColor.opacity(0.14)
-        } else {
-            Color.clear
+        HStack(spacing: 3) {
+            Image(systemName: systemImage)
+            Text(title)
         }
+        .font(.caption)
+        .foregroundStyle(tint)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 5)
+        .background(.thinMaterial, in: Capsule())
     }
     
     @ViewBuilder
     private func locationBadges(for animal: Animal) -> some View {
-        HStack(spacing: 6) {
-            if animal.location == .workingPen {
-                pastureBadge(
-                    "Working Pen",
-                    systemImage: "figure.corral",
-                    tint: .orange,
-                    fillOpacity: 0.14
-                )
-            } else if let pasture = animal.pasture {
-                pastureBadge(
-                    pasture.name,
-                    systemImage: "leaf",
-                    tint: .secondary,
-                    fillOpacity: 0.12
-                )
-            }
+        if animal.location == .workingPen {
+            pastureBadge(
+                "Working Pen",
+                systemImage: "figure.corral",
+                tint: .orange,
+                fillOpacity: 0.14
+            )
+        } else if let pasture = animal.pasture {
+            pastureBadge(
+                pasture.name,
+                systemImage: "leaf",
+                tint: .secondary,
+                fillOpacity: 0.12
+            )
         }
     }
     
@@ -254,16 +256,28 @@ struct AnimalListView: View {
         tint: Color,
         fillOpacity: Double
     ) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption2.weight(.medium))
-            .lineLimit(1)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .foregroundStyle(tint)
-            .background(
-                Capsule()
-                    .fill(tint.opacity(fillOpacity))
-            )
+        HStack(spacing: 3) {
+            Image(systemName: systemImage)
+            Text(title)
+        }
+        .font(.caption2.weight(.medium))
+        .lineLimit(1)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .foregroundStyle(tint)
+        .background(
+            Capsule()
+                .fill(tint.opacity(fillOpacity))
+        )
+    }
+    
+    @ViewBuilder
+    private func batchRowBackground(for animal: Animal) -> some View {
+        if selectedAnimals.contains(animal) {
+            Color.accentColor.opacity(0.14)
+        } else {
+            Color.clear
+        }
     }
     
     // MARK: Bottom Overlay

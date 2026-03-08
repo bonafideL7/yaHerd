@@ -20,10 +20,10 @@ struct SampleDataService {
         let greenTagColorID = tagColorStore.colors.first(where: { $0.name == "Green" })?.id
         
         // MARK: - Pastures
-        let northwest = Pasture(name: "NorthWest Pasture", acreage: 35)
-        let southwest = Pasture(name: "SouthWest Pasture", acreage: 28)
-        let northeast = Pasture(name: "NorthEast Meadow", acreage: 22)
-        let southeast = Pasture(name: "SouthEast Meadow", acreage: 22)
+        let northwest = Pasture(name: "NW Pasture", acreage: 35)
+        let southwest = Pasture(name: "SW Pasture", acreage: 28)
+        let northeast = Pasture(name: "NE Pasture", acreage: 22)
+        let southeast = Pasture(name: "SE Pasture", acreage: 22)
         let lower = Pasture(name: "Lower", acreage: 50)
         let holding = Pasture(name: "Holding", acreage: 5)
         
@@ -165,12 +165,12 @@ struct SampleDataService {
         
         // MARK: - Movement History (timeline)
         let movementData: [(Animal, String?, String, Int)] = [
-            (jane,        "South Pasture", "North Pasture", 120),
-            (jane,        "North Pasture", "East Meadow",   20),
-            (rudy,        "North Pasture", "South Pasture", 45),
-            (limeGreen80, nil,             "Drylot",        200),
-            (imogene,     "East Meadow",   "North Pasture", 75),
-            (telly,       "North Pasture", "South Pasture", 30),
+            (jane,        "SE Pasture", "NW Pasture", 120),
+            (jane,        "NW Pasture", "SE Pasture",   20),
+            (rudy,        "NE Pasture", "SW Pasture", 45),
+            (limeGreen80, nil,             "Holding",        200),
+            (imogene,     "SE Pasture",  "NE Pasture", 75),
+            (telly,       "NW Pasture", "SW Pasture", 30),
         ]
         
         for (animal, from, to, days) in movementData {

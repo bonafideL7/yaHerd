@@ -18,7 +18,7 @@ struct AddAnimalView: View {
     @State private var name: String = ""
     @State private var tagNumber = ""
     @State private var tagColorID: UUID?
-    @State private var sex: Sex = .female
+    @State private var sex: Sex = .unknown
     @State private var birthDate = Date()
     @State private var status: AnimalStatus = .alive
     @State private var selectedPasture: Pasture?
@@ -31,9 +31,9 @@ struct AddAnimalView: View {
     @State private var errorMessage: String?
     @State private var showingError = false
 
-    private var tagColorIDBinding: Binding<UUID> {
+    private var tagColorIDBinding: Binding<UUID?> {
         Binding(
-            get: { tagColorID ?? tagColorLibrary.defaultColor.id },
+            get: { tagColorID },
             set: { tagColorID = $0 }
         )
     }
@@ -49,8 +49,7 @@ struct AddAnimalView: View {
                             Text(sex.label).tag(sex)
                         }
                     }
-                    .foregroundStyle(.secondary)
-
+                    
                     Picker("Status", selection: $status) {
                         ForEach(AnimalStatus.allCases, id: \.self) {
                             Text($0.rawValue.capitalized).tag($0)
@@ -95,12 +94,13 @@ struct AddAnimalView: View {
                     TextField("Tag Number", text: $tagNumber)
 
                     Picker("Tag Color", selection: tagColorIDBinding) {
+                        Text("None").tag(UUID?.none)
                         ForEach(tagColorLibrary.colors) { def in
                             HStack(spacing: 10) {
                                 TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
                                 Text("\(def.name) (\(def.prefix))")
                             }
-                            .tag(def.id)
+                            .tag(Optional(def.id))
                         }
                     }
 

@@ -117,11 +117,12 @@ final class Animal {
 enum Sex: String, Codable, CaseIterable {
     case female
     case male
-
+    case unknown
     var label: String {
         switch self {
         case .female: return "Female"
         case .male: return "Male"
+        case .unknown: return "Unknown"
         }
     }
 }
