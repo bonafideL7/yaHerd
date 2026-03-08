@@ -103,14 +103,6 @@ struct AnimalListView: View {
     
     private var herdList: some View {
             List(selection: batchMode ? $selectedAnimals : nil) {
-                if !currentFilterChips.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        activeFilterChips
-                            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 6, trailing: 16))
-                            .listRowBackground(Color.clear)
-                    }
-                }
-                
                 ForEach(groupedAnimals) { section in
                     if shouldUseSections {
                         Section(section.title) {
@@ -301,11 +293,11 @@ struct AnimalListView: View {
                     bottomSearchField
                     
                     Button("Cancel") {
+                        searchText = ""
+                        isSearchFieldFocused = false
                         withAnimation(.snappy) {
-                            searchText = ""
                             isSearching = false
                         }
-                        isSearchFieldFocused = false
                     }
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 12)
