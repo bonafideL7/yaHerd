@@ -5,7 +5,6 @@
 //  Created by mm on 11/28/25.
 //
 
-
 import SwiftUI
 import SwiftData
 
@@ -13,12 +12,16 @@ struct AddAnimalView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+
+    @Query(sort: \Pasture.name) private var pastures: [Pasture]
+
     @State private var name: String = ""
     @State private var tagNumber = ""
-	@State private var tagColorID: UUID?
+    @State private var tagColorID: UUID?
     @State private var sex: Sex = .female
     @State private var birthDate = Date()
     @State private var status: AnimalStatus = .alive
+    @State private var selectedPasture: Pasture?
     @State private var sire = ""
     @State private var dam = ""
 
@@ -35,24 +38,35 @@ struct AddAnimalView: View {
         )
     }
 
-
     var body: some View {
         NavigationStack {
             Form {
-//                Picker("Pasture", selection:$pasture){
-//                    ForEach(Pasture, id:\.self){
-//                        
-//                    }
-//                }
-                DatePicker("Birth Date", selection: $birthDate, displayedComponents: .date)
-                Picker("Sex", selection: $sex) {
-                    ForEach(Sex.allCases, id: \.self) { sex in
-                        Text(sex.label).tag(sex)
+                Section("Details") {
+                    DatePicker("Birth Date", selection: $birthDate, displayedComponents: .date)
+
+                    Picker("Sex", selection: $sex) {
+                        ForEach(Sex.allCases, id: \.self) { sex in
+                            Text(sex.label).tag(sex)
+                        }
                     }
-                }.foregroundStyle(.secondary)
-                Picker("Status", selection: $status) {
-                    ForEach(AnimalStatus.allCases, id: \.self) { Text($0.rawValue.capitalized) }
+                    .foregroundStyle(.secondary)
+
+                    Picker("Status", selection: $status) {
+                        ForEach(AnimalStatus.allCases, id: \.self) {
+                            Text($0.rawValue.capitalized).tag($0)
+                        }
+                    }
+
+                    Picker("Pasture", selection: $selectedPasture) {
+                        Text("None").tag(Pasture?.none)
+
+                        ForEach(pastures) { pasture in
+                            Text(pasture.name)
+                                .tag(Optional(pasture))
+                        }
+                    }
                 }
+
                 Section("Parents") {
                     HStack {
                         TextField("Dam", text: $dam)
@@ -64,7 +78,7 @@ struct AddAnimalView: View {
                         Button("Clear Dam") { dam = "" }
                             .foregroundStyle(.secondary)
                     }
-                    
+
                     HStack {
                         TextField("Sire", text: $sire)
                             .textInputAutocapitalization(.never)
@@ -76,21 +90,22 @@ struct AddAnimalView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                
-                TextField("Tag Number", text: $tagNumber)
-				Picker("Tag Color", selection: tagColorIDBinding) {
-					ForEach(tagColorLibrary.colors) { def in
-						HStack(spacing: 10) {
-							TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
-							Text("\(def.name) (\(def.prefix))")
-						}
-						.tag(def.id)
-					}
-				}
-                
-                
-                TextField("Name", text: $name)
-                
+
+                Section("Identification") {
+                    TextField("Tag Number", text: $tagNumber)
+
+                    Picker("Tag Color", selection: tagColorIDBinding) {
+                        ForEach(tagColorLibrary.colors) { def in
+                            HStack(spacing: 10) {
+                                TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
+                                Text("\(def.name) (\(def.prefix))")
+                            }
+                            .tag(def.id)
+                        }
+                    }
+
+                    TextField("Name", text: $name)
+                }
             }
             .navigationTitle("Add Animal")
             .toolbar {
@@ -128,20 +143,20 @@ struct AddAnimalView: View {
     }
 
     private func validateAndSave() {
-        do {
-            let animal = Animal(
-                name: name,
-                tagNumber: tagNumber,
-                tagColorID: tagColorIDBinding.wrappedValue,
-                birthDate: birthDate,
-                status: status,
-                sire: sire.isEmpty ? nil : sire,
-                dam: dam.isEmpty ? nil : dam,
-                sex: sex
-            )
+        let animal = Animal(
+            name: name,
+            tagNumber: tagNumber,
+            tagColorID: tagColorIDBinding.wrappedValue,
+            birthDate: birthDate,
+            status: status,
+            sire: sire.isEmpty ? nil : sire,
+            dam: dam.isEmpty ? nil : dam,
+            pasture: selectedPasture,
+            sex: sex
+        )
 
-            context.insert(animal)
-            dismiss()
-        }
+        context.insert(animal)
+        try? context.save()
+        dismiss()
     }
 }
