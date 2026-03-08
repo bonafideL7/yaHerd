@@ -108,8 +108,7 @@ final class Animal {
         self.pasture = pasture
         self.location = AnimalLocation.pasture
         self.activeWorkingSession = nil
-        let inferredBio = sex ?? .female
-        self.sex = inferredBio
+        self.sex = sex ?? .female
     }
 }
 

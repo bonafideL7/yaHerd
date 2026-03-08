@@ -134,10 +134,28 @@ struct AnimalDetailView: View {
                         Text(animal.activeWorkingSession?.protocolName ?? "")
                             .foregroundStyle(.secondary)
                     }
-                } else if let pasture = animal.pasture {
-                    Text(pasture.name)
                 } else {
-                    Text("None")
+                    Button {
+                        showingPasturePicker = true
+                    } label: {
+                        HStack {
+                            Text("Pasture")
+                            Spacer()
+                            Text(animal.pasture?.name ?? "None")
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(Color.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    if animal.pasture != nil {
+                        Button("Clear Pasture") {
+                            clearPasture()
+                        }
+                        .foregroundStyle(.secondary)
+                    }
                 }
             }
 
@@ -223,8 +241,8 @@ struct AnimalDetailView: View {
         }
         .navigationTitle("Animal \(tagColorLibrary.formattedTag(for: animal))")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
+//        .toolbar {
+//            ToolbarItemGroup(placement: .primaryAction) {
 //                Button("Add Preg Check") {
 //                    showingAddPregCheck = true
 //                }
@@ -236,7 +254,7 @@ struct AnimalDetailView: View {
 //                Button("Change Pasture") {
 //                            showingPasturePicker = true
 //                        }
-            }
+//            }
 
 //            ToolbarItem(placement: .topBarTrailing) {
 //                NavigationLink {
@@ -245,7 +263,7 @@ struct AnimalDetailView: View {
 //                    Image(systemName: "clock.arrow.circlepath")
 //                }
 //            }
-        }
+//        }
         .sheet(isPresented: $showingPasturePicker) {
             PastureTilePickerView { pasture in
                 let oldName = animal.pasture?.name
@@ -294,6 +312,25 @@ struct AnimalDetailView: View {
             }
         }
 
+    }
+
+    private func clearPasture() {
+        let previousName = animal.pasture?.name
+        guard previousName != nil else { return }
+
+        animal.pasture = nil
+        animal.location = .pasture
+        animal.activeWorkingSession = nil
+
+        let movement = MovementRecord(
+            date: .now,
+            fromPasture: previousName,
+            toPasture: nil,
+            animal: animal
+        )
+        context.insert(movement)
+
+        try? context.save()
     }
 
     private func updateStatus(_ newStatus: AnimalStatus) {
