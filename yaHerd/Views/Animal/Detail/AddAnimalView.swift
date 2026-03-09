@@ -11,7 +11,6 @@ import SwiftData
 struct AddAnimalView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @Query(sort: \Pasture.name) private var pastures: [Pasture]
 
@@ -25,87 +24,24 @@ struct AddAnimalView: View {
     @State private var sire = ""
     @State private var dam = ""
 
-    @State private var showingSirePicker = false
-    @State private var showingDamPicker = false
-
     @State private var errorMessage: String?
     @State private var showingError = false
-
-    private var tagColorIDBinding: Binding<UUID?> {
-        Binding(
-            get: { tagColorID },
-            set: { tagColorID = $0 }
-        )
-    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Details") {
-                    DatePicker("Birth Date", selection: $birthDate, displayedComponents: .date)
-
-                    Picker("Sex", selection: $sex) {
-                        ForEach(Sex.allCases, id: \.self) { sex in
-                            Text(sex.label).tag(sex)
-                        }
-                    }
-                    
-                    Picker("Status", selection: $status) {
-                        ForEach(AnimalStatus.allCases, id: \.self) {
-                            Text($0.rawValue.capitalized).tag($0)
-                        }
-                    }
-
-                    Picker("Pasture", selection: $selectedPasture) {
-                        Text("None").tag(Pasture?.none)
-
-                        ForEach(pastures) { pasture in
-                            Text(pasture.name)
-                                .tag(Optional(pasture))
-                        }
-                    }
-                }
-
-                Section("Parents") {
-                    HStack {
-                        TextField("Dam", text: $dam)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                        Button("Pick") { showingDamPicker = true }
-                    }
-                    if !dam.isEmpty {
-                        Button("Clear Dam") { dam = "" }
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        TextField("Sire", text: $sire)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                        Button("Pick") { showingSirePicker = true }
-                    }
-                    if !sire.isEmpty {
-                        Button("Clear Sire") { sire = "" }
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section("Identification") {
-                    TextField("Tag Number", text: $tagNumber)
-
-                    Picker("Tag Color", selection: tagColorIDBinding) {
-                        Text("None").tag(UUID?.none)
-                        ForEach(tagColorLibrary.colors) { def in
-                            HStack(spacing: 10) {
-                                TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
-                                Text("\(def.name) (\(def.prefix))")
-                            }
-                            .tag(Optional(def.id))
-                        }
-                    }
-
-                    TextField("Name", text: $name)
-                }
+                AnimalFormView(
+                    name: $name,
+                    tagNumber: $tagNumber,
+                    tagColorID: $tagColorID,
+                    sex: $sex,
+                    birthDate: $birthDate,
+                    status: $status,
+                    pasture: $selectedPasture,
+                    sire: $sire,
+                    dam: $dam,
+                    pastures: pastures
+                )
             }
             .navigationTitle("Add Animal")
             .toolbar {
@@ -122,31 +58,13 @@ struct AddAnimalView: View {
                 Text(errorMessage ?? "")
             }
         }
-        .sheet(isPresented: $showingSirePicker) {
-            AnimalParentPickerView(
-                title: "Select Sire",
-                excludeAnimal: nil,
-                suggestedSexes: [.male]
-            ) { picked in
-                sire = picked.tagNumber
-            }
-        }
-        .sheet(isPresented: $showingDamPicker) {
-            AnimalParentPickerView(
-                title: "Select Dam",
-                excludeAnimal: nil,
-                suggestedSexes: [.female]
-            ) { picked in
-                dam = picked.tagNumber
-            }
-        }
     }
 
     private func validateAndSave() {
         let animal = Animal(
             name: name,
             tagNumber: tagNumber,
-            tagColorID: tagColorIDBinding.wrappedValue,
+            tagColorID: tagColorID,
             birthDate: birthDate,
             status: status,
             sire: sire.isEmpty ? nil : sire,
