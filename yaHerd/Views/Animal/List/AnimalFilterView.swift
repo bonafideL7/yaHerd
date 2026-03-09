@@ -21,19 +21,8 @@ struct AnimalFilterView: View {
     var body: some View {
         NavigationStack {
             Form {
-
-                Section("Sex") {
-                    Picker("Sex", selection: Binding(
-                        get: { filter.sex },
-                        set: { filter.sex = $0 }
-                    )) {
-                        Text("Any").tag(Sex?.none)
-
-                        ForEach(Sex.allCases, id: \.self) { sex in
-                            Text(sex.label)
-                                .tag(Sex?.some(sex))
-                        }
-                    }
+                Section("Visibility") {
+                    Toggle("Show Archived", isOn: $showArchived)
                 }
 
                 Section("Status") {
@@ -46,6 +35,20 @@ struct AnimalFilterView: View {
                         ForEach(AnimalStatus.allCases, id: \.self) { s in
                             Text(s.rawValue.capitalized)
                                 .tag(AnimalStatus?.some(s))
+                        }
+                    }
+                }
+                
+                Section("Sex") {
+                    Picker("Sex", selection: Binding(
+                        get: { filter.sex },
+                        set: { filter.sex = $0 }
+                    )) {
+                        Text("Any").tag(Sex?.none)
+                        
+                        ForEach(Sex.allCases, id: \.self) { sex in
+                            Text(sex.label)
+                                .tag(Sex?.some(sex))
                         }
                     }
                 }
@@ -62,10 +65,6 @@ struct AnimalFilterView: View {
                                 .tag(Pasture?.some(pasture))
                         }
                     }
-                }
-                
-                Section("Visibility") {
-                    Toggle("Show Archived", isOn: $showArchived)
                 }
             }
             .navigationTitle("Filters")

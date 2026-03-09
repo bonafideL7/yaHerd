@@ -181,13 +181,6 @@ struct AnimalListView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
-            
-            if batchMode {
-                Image(systemName: selectedAnimals.contains(animal) ? "checkmark.circle.fill" : "circle")
-                    .imageScale(.large)
-                    .foregroundStyle(selectedAnimals.contains(animal) ? Color.accentColor : .tertiary)
-                    .symbolRenderingMode(.hierarchical)
-            }
         }
     }
     
@@ -465,13 +458,15 @@ struct AnimalListView: View {
     
     private var batchActionBar: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(selectedAnimals.isEmpty ? "Selection Mode" : "\(selectedAnimals.count) Selected")
-                    .font(.headline)
-                
-                Text(selectedAnimals.isEmpty ? "Tap rows to select animals" : "Batch actions are ready")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                
+                Button(allVisibleAnimalsSelected ? "Deselect All" : "Select All") {
+                    toggleSelectAllVisible()
+                }
+                .font(.subheadline.weight(.semibold))
+                .buttonStyle(.automatic)
             }
             
             Spacer()
@@ -491,6 +486,22 @@ struct AnimalListView: View {
                 .strokeBorder(.white.opacity(0.18))
         }
         .shadow(radius: 10, y: 4)
+    }
+    
+    private var allVisibleAnimalsSelected: Bool {
+        !filteredAndSortedAnimals.isEmpty &&
+        selectedAnimals.count == filteredAndSortedAnimals.count &&
+        Set(filteredAndSortedAnimals).isSubset(of: selectedAnimals)
+    }
+    
+    private func toggleSelectAllVisible() {
+        let visible = Set(filteredAndSortedAnimals)
+        
+        if visible.isSubset(of: selectedAnimals) {
+            selectedAnimals.subtract(visible)
+        } else {
+            selectedAnimals.formUnion(visible)
+        }
     }
     
     // MARK: Filter Chips
