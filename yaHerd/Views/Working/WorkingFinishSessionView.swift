@@ -96,22 +96,19 @@ struct WorkingFinishSessionView: View {
     }
 
     private func returnAnimals() {
+        var changedAny = false
+
         for item in orderedItems {
             guard let animal = item.animal else { continue }
-
-            let fromName = item.collectedFromPasture?.name
-            let dest = item.destinationPasture ?? session.sourcePasture
-            let toName = dest?.name
-
-            // Move animal out of working pen
-            animal.pasture = dest
-            animal.location = .pasture
-            animal.activeWorkingSession = nil
-
-            if fromName != toName {
-                let record = MovementRecord(date: .now, fromPasture: fromName, toPasture: toName, animal: animal)
-                context.insert(record)
-            }
+            let destination = item.destinationPasture ?? session.sourcePasture
+            let changed = AnimalMovementService.move(
+                animal,
+                to: destination,
+                in: context,
+                fromPastureName: item.collectedFromPasture?.name,
+                save: false
+            )
+            changedAny = changedAny || changed
         }
 
         session.status = .finished

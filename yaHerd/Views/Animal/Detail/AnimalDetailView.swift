@@ -172,24 +172,7 @@ struct AnimalDetailView: View {
     }
 
     private func updatePasture(to newPasture: Pasture?) {
-        let oldName = animal.pasture?.name
-        let newName = newPasture?.name
-
-        guard oldName != newName else { return }
-
-        animal.pasture = newPasture
-        animal.location = .pasture
-        animal.activeWorkingSession = nil
-
-        let movement = MovementRecord(
-            date: .now,
-            fromPasture: oldName,
-            toPasture: newName,
-            animal: animal
-        )
-        context.insert(movement)
-
-        try? context.save()
+        AnimalMovementService.move(animal, to: newPasture, in: context)
     }
 
     private func updateStatus(_ newStatus: AnimalStatus) {

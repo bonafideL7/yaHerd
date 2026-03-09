@@ -52,27 +52,7 @@ struct PasturePickerView: View {
     }
 
     private func applyPastureChange() {
-        let previousName = animal.pasture?.name
-        let newName = selectedPasture?.name
-
-        // Only log a movement if something actually changed
-        if previousName != newName {
-            // Update the animal
-            animal.pasture = selectedPasture
-            animal.location = .pasture
-            animal.activeWorkingSession = nil
-
-            // Insert movement history record
-            let movement = MovementRecord(
-                date: Date(),
-                fromPasture: previousName,
-                toPasture: newName,
-                animal: animal
-            )
-            context.insert(movement)
-        }
-
-        try? context.save()
+        AnimalMovementService.move(animal, to: selectedPasture, in: context)
         dismiss()
     }
 }

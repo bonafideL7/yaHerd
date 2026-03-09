@@ -29,7 +29,7 @@ struct AnimalListView: View {
     @FocusState private var isSearchFieldFocused: Bool
     @State private var batchMode = false
     @State private var selectedAnimals: Set<Animal> = []
-    @State private var showingBatchMoveSheet = false
+    @State private var showingPasturePicker = false
     
     
     // MARK: View
@@ -80,14 +80,12 @@ struct AnimalListView: View {
                 showArchived: $showArchived
             )
         }
-        .sheet(isPresented: $showingBatchMoveSheet) {
-            BatchMoveSheet(
-                animals: Array(selectedAnimals),
-                onComplete: {
-                    selectedAnimals.removeAll()
-                    batchMode = false
-                }
-            )
+        .sheet(isPresented: $showingPasturePicker) {
+            PastureTilePickerView { pasture in
+                AnimalMovementService.move(Array(selectedAnimals), to: pasture, in: context)
+                selectedAnimals.removeAll()
+                batchMode = false
+            }
         }
         .animation(.snappy, value: batchMode)
         .animation(.snappy, value: selectedAnimals.count)
@@ -472,7 +470,7 @@ struct AnimalListView: View {
             Spacer()
             
             Button {
-                showingBatchMoveSheet = true
+                showingPasturePicker = true
             } label: {
                 Label("Move", systemImage: "arrowshape.turn.up.right.circle.fill")
             }
