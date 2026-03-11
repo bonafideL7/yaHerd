@@ -23,7 +23,7 @@ struct AddAnimalView: View {
     @State private var selectedPasture: Pasture?
     @State private var sire = ""
     @State private var dam = ""
-
+    @State private var activeParentPicker: ParentPickerType?
     @State private var errorMessage: String?
     @State private var showingError = false
 
@@ -40,6 +40,7 @@ struct AddAnimalView: View {
                     pasture: $selectedPasture,
                     sire: $sire,
                     dam: $dam,
+                    activeParentPicker: $activeParentPicker,
                     pastures: pastures
                 )
             }

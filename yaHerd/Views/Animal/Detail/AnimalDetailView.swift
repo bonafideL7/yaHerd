@@ -12,7 +12,7 @@ struct AnimalDetailView: View {
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @AppStorage("allowHardDelete") private var allowHardDelete = false
-
+    @State private var activeParentPicker: ParentPickerType?
     var animal: Animal
 
     @Query(sort: \Pasture.name) private var pastures: [Pasture]
@@ -99,20 +99,14 @@ struct AnimalDetailView: View {
     private var sireBinding: Binding<String> {
         Binding(
             get: { animal.sire ?? "" },
-            set: { newValue in
-                animal.sire = newValue.isEmpty ? nil : newValue
-                try? context.save()
-            }
+            set: { animal.sire = $0.isEmpty ? nil : $0 }
         )
     }
 
     private var damBinding: Binding<String> {
         Binding(
             get: { animal.dam ?? "" },
-            set: { newValue in
-                animal.dam = newValue.isEmpty ? nil : newValue
-                try? context.save()
-            }
+            set: { animal.dam = $0.isEmpty ? nil : $0 }
         )
     }
 
@@ -128,10 +122,11 @@ struct AnimalDetailView: View {
                 pasture: pastureBinding,
                 sire: sireBinding,
                 dam: damBinding,
+                activeParentPicker: $activeParentPicker,
                 pastures: pastures,
                 excludeAnimal: animal
             )
-
+            
             Section("Status Actions") {
                 if animal.status != .sold {
                     Button("Mark as Sold") {
@@ -164,6 +159,31 @@ struct AnimalDetailView: View {
                         context.delete(animal)
                         try? context.save()
                     }
+                }
+            }
+        }.sheet(item: $activeParentPicker) { picker in
+            switch picker {
+                
+            case .sire:
+                AnimalParentPickerView(
+                    title: "Select Sire",
+                    excludeAnimal: animal,
+                    suggestedSexes: [.male]
+                ) { picked in
+                    animal.sire = picked.tagNumber
+                    try? context.save()
+                    activeParentPicker = nil
+                }
+                
+            case .dam:
+                AnimalParentPickerView(
+                    title: "Select Dam",
+                    excludeAnimal: animal,
+                    suggestedSexes: [.female]
+                ) { picked in
+                    animal.dam = picked.tagNumber
+                    try? context.save()
+                    activeParentPicker = nil
                 }
             }
         }

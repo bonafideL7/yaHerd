@@ -1,5 +1,21 @@
+//
+// AnimalFormView.swift
+//
+
 import SwiftUI
 import SwiftData
+
+enum ParentPickerType: Identifiable {
+    case sire
+    case dam
+    
+    var id: Int {
+        switch self {
+        case .sire: return 1
+        case .dam: return 2
+        }
+    }
+}
 
 struct AnimalFormView: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
@@ -17,8 +33,7 @@ struct AnimalFormView: View {
     let pastures: [Pasture]
     let excludeAnimal: Animal?
 
-    @State private var showingSirePicker = false
-    @State private var showingDamPicker = false
+    @Binding var activeParentPicker: ParentPickerType?
 
     init(
         name: Binding<String>,
@@ -30,6 +45,7 @@ struct AnimalFormView: View {
         pasture: Binding<Pasture?>,
         sire: Binding<String>,
         dam: Binding<String>,
+        activeParentPicker: Binding<ParentPickerType?>,
         pastures: [Pasture],
         excludeAnimal: Animal? = nil
     ) {
@@ -42,6 +58,7 @@ struct AnimalFormView: View {
         self._pasture = pasture
         self._sire = sire
         self._dam = dam
+        self._activeParentPicker = activeParentPicker
         self.pastures = pastures
         self.excludeAnimal = excludeAnimal
     }
@@ -50,59 +67,61 @@ struct AnimalFormView: View {
         Group {
             Section("Details") {
                 DatePicker("Birth Date", selection: $birthDate, displayedComponents: .date)
-
+                
                 Picker("Sex", selection: $sex) {
                     ForEach(Sex.allCases, id: \.self) { sex in
                         Text(sex.label).tag(sex)
                     }
                 }
-
+                
                 Picker("Status", selection: $status) {
                     ForEach(AnimalStatus.allCases, id: \.self) { status in
                         Text(status.rawValue.capitalized).tag(status)
                     }
                 }
-
+                
                 Picker("Pasture", selection: $pasture) {
                     Text("None").tag(Pasture?.none)
-
+                    
                     ForEach(pastures) { pasture in
                         Text(pasture.name)
                             .tag(Optional(pasture))
                     }
                 }
             }
-
+            
             Section("Parents") {
                 HStack {
                     TextField("Dam", text: $dam)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    Button("Pick") { showingDamPicker = true }
+                    Button("Pick") { activeParentPicker = .dam }
                 }
+                
                 if !dam.isEmpty {
                     Button("Clear Dam") { dam = "" }
                         .foregroundStyle(.secondary)
                 }
-
+                
                 HStack {
                     TextField("Sire", text: $sire)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    Button("Pick") { showingSirePicker = true }
+                    Button("Pick") { activeParentPicker = .sire }
                 }
+                
                 if !sire.isEmpty {
                     Button("Clear Sire") { sire = "" }
                         .foregroundStyle(.secondary)
                 }
             }
-
+            
             Section("Identification") {
                 TextField("Tag Number", text: $tagNumber)
-
+                
                 Picker("Tag Color", selection: $tagColorID) {
                     Text("None").tag(UUID?.none)
-
+                    
                     ForEach(tagColorLibrary.colors) { def in
                         HStack(spacing: 10) {
                             TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
@@ -111,27 +130,9 @@ struct AnimalFormView: View {
                         .tag(Optional(def.id))
                     }
                 }
-
+                
                 TextField("Name", text: $name)
             }
-        }
-        .sheet(isPresented: $showingSirePicker) {
-            AnimalParentPickerView(
-                title: "Select Sire",
-                excludeAnimal: excludeAnimal,
-                suggestedSexes: [.male]
-            ) { picked in
-                sire = picked.tagNumber
-            }
-        }
-        .sheet(isPresented: $showingDamPicker) {
-            AnimalParentPickerView(
-                title: "Select Dam",
-                excludeAnimal: excludeAnimal,
-                suggestedSexes: [.female]
-            ) { picked in
-                dam = picked.tagNumber
-            }
-        }
+        }        
     }
 }
