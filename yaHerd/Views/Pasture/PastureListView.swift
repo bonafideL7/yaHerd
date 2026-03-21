@@ -27,6 +27,10 @@ struct PastureListView: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
+                            let aliveCount = pasture.animals.filter { $0.status == .alive }.count
+                            Text("Animals: \(aliveCount)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }

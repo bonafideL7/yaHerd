@@ -24,7 +24,7 @@ struct PastureDetailView: View {
 
     @State private var originalName: String = ""
     @State private var originalAcreage: Double? = nil
-    @State private var originalLastGrazedDate: Date? = nil
+//    @State private var originalLastGrazedDate: Date? = nil
 
     private var analytics: PastureAnalytics {
         PastureAnalytics(
@@ -62,14 +62,14 @@ struct PastureDetailView: View {
     private func beginEditing() {
         originalName = pasture.name
         originalAcreage = pasture.acreage
-        originalLastGrazedDate = pasture.lastGrazedDate
+//        originalLastGrazedDate = pasture.lastGrazedDate
         isEditing = true
     }
 
     private func cancelEditing() {
         pasture.name = originalName
         pasture.acreage = originalAcreage
-        pasture.lastGrazedDate = originalLastGrazedDate
+//        pasture.lastGrazedDate = originalLastGrazedDate
         isEditing = false
         try? context.save()
     }
@@ -121,117 +121,121 @@ struct PastureDetailView: View {
                             .frame(width: 120)
                     }
 
-                    HStack {
-                        Text("Last Grazed")
+//                    HStack {
+//                        Text("Last Grazed")
+//                        Spacer()
+//                        if pasture.lastGrazedDate == nil {
+//                            Button("Set") { pasture.lastGrazedDate = Date() }
+//                        } else {
+//                            DatePicker(
+//                                "",
+//                                selection: nonOptionalDateBinding(for: $pasture.lastGrazedDate),
+//                                displayedComponents: [.date]
+//                            )
+//                            .labelsHidden()
+//
+//                            Button("Clear") { pasture.lastGrazedDate = nil }
+//                                .foregroundStyle(.red)
+//                        }
+//                    }
+                } else {
+                    Text("Alive Animals: \(analytics.aliveAnimals)")
+                    HStack{
+                        if let acres = pasture.acreage {
+                            Text("Acreage: \(acres, format: .number)")
+                        }
                         Spacer()
-                        if pasture.lastGrazedDate == nil {
-                            Button("Set") { pasture.lastGrazedDate = Date() }
-                        } else {
-                            DatePicker(
-                                "",
-                                selection: nonOptionalDateBinding(for: $pasture.lastGrazedDate),
-                                displayedComponents: [.date]
-                            )
-                            .labelsHidden()
-
-                            Button("Clear") { pasture.lastGrazedDate = nil }
-                                .foregroundStyle(.red)
+                        if let usable = pasture.usableAcreage, usable != pasture.acreage {
+                            Text("Usable Acres: \(usable, format: .number)")
+                                .foregroundStyle(.secondary)
                         }
                     }
-                } else {
-                    Text("Name: \(pasture.name)")
-
-                    if let acres = pasture.acreage {
-                        Text("Acreage: \(acres, format: .number)")
-                    }
-
-                    if let usable = pasture.usableAcreage {
-                        Text("Usable Acres: \(usable, format: .number)")
-                    }
-
-                    if let last = pasture.lastGrazedDate {
-                        Text("Last Grazed: \(last.formatted(date: .abbreviated, time: .omitted))")
-                    }
+//                    if let last = pasture.lastGrazedDate {
+//                        Text("Last Grazed: \(last.formatted(date: .abbreviated, time: .omitted))")
+//                    }
                 }
             }
 
             Section("Stocking") {
-                Text("Alive Animals: \(analytics.aliveAnimals)")
-                Text("Stocking Rate: \(analytics.headPerAcre, format: .number.precision(.fractionLength(2))) head/acre")
-
-                if let target = analytics.targetHeadPerAcre {
-                    Text("Target Rate: \(target, format: .number.precision(.fractionLength(2))) head/acre")
-                }
-
-                if let cap = analytics.capacityHead {
-                    Text("Capacity: \(cap, format: .number)")
-                }
-
-                if let util = analytics.utilizationPercent {
-                    Text("Utilization: \(util, format: .percent)")
-                        .foregroundStyle(util > 0.9 ? .red : util > 0.75 ? .orange : .green)
-                }
-
-                if analytics.isOverstocked {
-                    Label("Overstocked", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-                } else if analytics.isUnderutilized {
-                    Label("Underutilized", systemImage: "arrow.down.left.and.arrow.up.right")
-                        .foregroundStyle(.blue)
-                }
-            }
-            
-            Section("Stocking Settings") {
-
-                // USABLE ACREAGE
-                HStack {
-                    Text("Usable Acres")
-                    Spacer()
-                    TextField("acres", text: binding(for: $pasture.usableAcreage))
-                        .multilineTextAlignment(.trailing)
-                        .keyboardType(.decimalPad)
-                        .frame(width: 100)
-                }
-
-                // TARGET HEAD / ACRE
-                HStack {
-                    Text("Target Head/Acre")
-                    Spacer()
-                    TextField("rate", text: binding(for: $pasture.targetHeadPerAcre))
-                        .multilineTextAlignment(.trailing)
-                        .keyboardType(.decimalPad)
-                        .frame(width: 100)
-                }
-
-                Button("Apply Defaults") {
-                    if let acres = pasture.acreage {
-                        pasture.usableAcreage = acres * (Double(usableAcreagePercentDefault) / 100)
+                if isEditing {
+                    HStack {
+                        Text("Usable Acres")
+                        Spacer()
+                        TextField("acres", text: binding(for: $pasture.usableAcreage))
+                            .multilineTextAlignment(.trailing)
+                            .keyboardType(.decimalPad)
+                            .frame(width: 100)
                     }
-                    pasture.targetHeadPerAcre = targetHeadPerAcreDefault
-                    try? context.save()
+                    
+                    HStack {
+                        Text("Target Head/Acre")
+                        Spacer()
+                        TextField("rate", text: binding(for: $pasture.targetHeadPerAcre))
+                            .multilineTextAlignment(.trailing)
+                            .keyboardType(.decimalPad)
+                            .frame(width: 100)
+                    }
+                    Button("Apply Defaults") {
+                        if let acres = pasture.acreage {
+                            pasture.usableAcreage = acres * (Double(usableAcreagePercentDefault) / 100)
+                        }
+                        pasture.targetHeadPerAcre = targetHeadPerAcreDefault
+                        try? context.save()
+                    }
+                } else {
+                    
+                    if let cap = analytics.capacityHead {
+                        Text("Capacity: \(cap, format: .number)")
+                    }
+                    
+                    Text("Stocking Rate: \(analytics.headPerAcre, format: .number.precision(.fractionLength(2))) head/acre")
+                    
+                    if let target = analytics.targetHeadPerAcre {
+                        Text("Target Rate: \(target, format: .number.precision(.fractionLength(2))) head/acre")
+                    }
+                    
+                    
+                    HStack{
+                        if let util = analytics.utilizationPercent {
+                            Text("Utilization: \(util, format: .percent.precision(.fractionLength(2)))")
+                                .foregroundStyle(util > 0.9 ? .red : util > 0.75 ? .orange : .green)
+                        }
+                        Spacer()
+                        if analytics.isOverstocked {
+                            Label("Overstocked", systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.red)
+                        } else if analytics.isUnderutilized {
+                            Label("Underutilized", systemImage: "arrow.down.left.and.arrow.up.right")
+                                .foregroundStyle(.blue)
+                        }
+                    }
                 }
             }
 
-            Section("Animals") {
-                ForEach(pasture.animals.filter { $0.status == .alive }) { animal in
-                    NavigationLink(value: animal) {
-                        HStack(spacing: 12) {
-                            let def = tagColorLibrary.resolvedDefinition(for: animal)
-                            TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
-                            Text(tagColorLibrary.formattedTag(for: animal))
+            let aliveAnimals = pasture.animals.filter { $0.status == .alive }
+            
+            if !aliveAnimals.isEmpty {
+                Section("Animals") {
+                    ForEach(aliveAnimals) { animal in
+                        NavigationLink(value: animal) {
+                            HStack(spacing: 12) {
+                                let def = tagColorLibrary.resolvedDefinition(for: animal)
+                                TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
+                                Text(tagColorLibrary.formattedTag(for: animal))
+                            }
                         }
                     }
                 }
             }
             
-            Section("Rotation Group") {
-                Picker("Group", selection: $pasture.group) {
-                    Text("None").tag(Optional<PastureGroup>(nil))
-                    ForEach(groups) { group in
-                        Text(group.name).tag(Optional(group))
-                    }
-                }
-            }
+//            Section("Rotation Group") {
+//                Picker("Group", selection: $pasture.group) {
+//                    Text("None").tag(Optional<PastureGroup>(nil))
+//                    ForEach(groups) { group in
+//                        Text(group.name).tag(Optional(group))
+//                    }
+//                }
+//            }
 
         }
         .navigationTitle(pasture.name)
