@@ -150,7 +150,11 @@ struct AnimalListView: View {
         
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
-                tagBadge(for: animal, color: def.color, colorName: def.name)
+                AnimalTagView(
+                    tagNumber: animal.tagNumber,
+                    color: def.color,
+                    colorName: def.name
+                )
                 if !animal.name.isEmpty {
                     Text(animal.name)
                         .font(.subheadline)
@@ -180,28 +184,6 @@ struct AnimalListView: View {
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
-    }
-    
-    @ViewBuilder
-    private func tagBadge(for animal: Animal, color: Color, colorName: String) -> some View {
-        HStack(spacing: 6) {
-            TagColorTagIcon(
-                color: color,
-                accessibilityLabel: "Tag color: \(colorName)"
-            )
-            
-            Text(animal.tagNumber)
-                .font(.subheadline.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(color.opacity(0.18), in: Capsule())
-        .overlay(
-            Capsule()
-                .stroke(color.opacity(0.35), lineWidth: 1)
-        )
     }
     
     @ViewBuilder
