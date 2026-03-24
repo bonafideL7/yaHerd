@@ -13,7 +13,7 @@ struct PastureDetailView: View {
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Bindable var pasture: Pasture
-    @AppStorage("targetHeadPerAcreDefault") private var targetHeadPerAcreDefault = 1.0
+    @AppStorage("targetAcresPerHeadDefault") private var targetAcresPerHeadDefault = 1.0
     @AppStorage("usableAcreagePercentDefault") private var usableAcreagePercentDefault = 100
     @Query(sort: \PastureGroup.name) private var groups: [PastureGroup]
     @Query(sort: \Pasture.name) private var allPastures: [Pasture]
@@ -168,9 +168,9 @@ struct PastureDetailView: View {
                     }
                     
                     HStack {
-                        Text("Target Head/Acre")
+                        Text("Target Acres/Head")
                         Spacer()
-                        TextField("rate", text: binding(for: $pasture.targetHeadPerAcre))
+                        TextField("rate", text: binding(for: $pasture.targetAcresPerHead))
                             .multilineTextAlignment(.trailing)
                             .keyboardType(.decimalPad)
                             .frame(width: 100)
@@ -179,19 +179,19 @@ struct PastureDetailView: View {
                         if let acres = pasture.acreage {
                             pasture.usableAcreage = acres * (Double(usableAcreagePercentDefault) / 100)
                         }
-                        pasture.targetHeadPerAcre = targetHeadPerAcreDefault
+                        pasture.targetAcresPerHead = targetAcresPerHeadDefault
                         try? context.save()
                     }
                 } else {
                     
                     if let cap = analytics.capacityHead {
-                        Text("Capacity: \(cap, format: .number)")
+                        Text("Capacity: \(cap, format: .number.precision(.fractionLength(2)))")
                     }
                     
-                    Text("Stocking Rate: \(analytics.headPerAcre, format: .number.precision(.fractionLength(2))) head/acre")
+                    Text("Stocking Rate: \(analytics.acresPerHead, format: .number.precision(.fractionLength(2))) acres/head")
                     
-                    if let target = analytics.targetHeadPerAcre {
-                        Text("Target Rate: \(target, format: .number.precision(.fractionLength(2))) head/acre")
+                    if let target = analytics.targetAcresPerHead {
+                        Text("Target Rate: \(target, format: .number.precision(.fractionLength(2))) acres/head")
                     }
                     
                     
@@ -218,11 +218,13 @@ struct PastureDetailView: View {
                 Section("Animals") {
                     ForEach(aliveAnimals) { animal in
                         NavigationLink(value: animal) {
-                            HStack(spacing: 12) {
-                                let def = tagColorLibrary.resolvedDefinition(for: animal)
-                                TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
-                                Text(tagColorLibrary.formattedTag(for: animal))
-                            }
+                            let def = tagColorLibrary.resolvedDefinition(for: animal)
+                            
+                            AnimalTagView(
+                                tagNumber: animal.tagNumber,
+                                color: def.color,
+                                colorName: def.name
+                            )
                         }
                     }
                 }

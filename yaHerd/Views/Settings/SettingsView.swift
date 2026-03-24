@@ -14,7 +14,7 @@ struct SettingsView: View {
     @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
     @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
     @AppStorage("pastureCapacity") private var pastureCapacity = 30  // per 30 acres default guideline
-    @AppStorage("targetHeadPerAcreDefault") private var targetHeadPerAcreDefault = 1.0
+    @AppStorage("targetAcresPerHeadDefault") private var targetAcresPerHeadDefault = 1.0
     @AppStorage("usableAcreagePercentDefault") private var usableAcreagePercentDefault = 100
 
 
@@ -47,8 +47,8 @@ struct SettingsView: View {
                 }
                 
                 Section("Pasture Defaults") {
-                    Stepper("Default target head/acre: \(targetHeadPerAcreDefault, format: .number.precision(.fractionLength(2)))",
-                            value: $targetHeadPerAcreDefault, in: 0.1...3.0, step: 0.1)
+                    Stepper("Default target acres/head: \(targetAcresPerHeadDefault, format: .number.precision(.fractionLength(2)))",
+                            value: $targetAcresPerHeadDefault, in: 0.1...3.0, step: 0.1)
 
                     Stepper("Default usable acreage %: \(usableAcreagePercentDefault)%",
                             value: $usableAcreagePercentDefault, in: 10...100)

@@ -13,7 +13,7 @@ struct AddPastureView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     
-    @AppStorage("targetHeadPerAcreDefault") private var targetHeadPerAcreDefault = 1.0
+    @AppStorage("targetAcresPerHeadDefault") private var targetAcresPerHeadDefault = 1.0
     @AppStorage("usableAcreagePercentDefault") private var usableAcreagePercentDefault = 100
 
     @State private var name = ""
@@ -69,7 +69,7 @@ struct AddPastureView: View {
             name: name,
             acreage: acres,
             usableAcreage: usable,
-            targetHeadPerAcre: targetHeadPerAcreDefault
+            targetAcresPerHead: targetAcresPerHeadDefault
         )
 
         context.insert(pasture)
