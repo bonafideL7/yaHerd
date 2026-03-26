@@ -10,7 +10,7 @@ struct PastureDetailView: View {
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Bindable var pasture: Pasture
-    @AppStorage("targetAcresPerHeadDefault") private var targetAcresPerHeadDefault = 1.0
+    @AppStorage("targetAcresPerHeadDefault") private var targetAcresPerHeadDefault = 3.0
     @AppStorage("usableAcreagePercentDefault") private var usableAcreagePercentDefault = 100
     @Query(sort: \PastureGroup.name) private var groups: [PastureGroup]
     @Query(sort: \Pasture.name) private var allPastures: [Pasture]

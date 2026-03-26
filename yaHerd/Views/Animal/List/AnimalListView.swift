@@ -190,13 +190,13 @@ struct AnimalListView: View {
     private func infoPill(
         title: String,
         systemImage: String,
-        tint: Color = .secondary
+        tint: Color = .accentColor
     ) -> some View {
         HStack(spacing: 3) {
             Image(systemName: systemImage)
             Text(title)
         }
-        .font(.caption)
+        .font(.callout)
         .foregroundStyle(tint)
         .padding(.horizontal, 5)
         .padding(.vertical, 5)
@@ -216,7 +216,7 @@ struct AnimalListView: View {
             pastureBadge(
                 pasture.name,
                 systemImage: "leaf",
-                tint: .secondary,
+                tint: .accent,
                 fillOpacity: 0.12
             )
         }
@@ -233,7 +233,7 @@ struct AnimalListView: View {
             Image(systemName: systemImage)
             Text(title)
         }
-        .font(.caption2.weight(.medium))
+        .font(.callout)
         .lineLimit(1)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
