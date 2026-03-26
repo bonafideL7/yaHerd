@@ -58,6 +58,31 @@ struct AddAnimalView: View {
             } message: {
                 Text(errorMessage ?? "")
             }
+        }.sheet(item: $activeParentPicker) { picker in
+            switch picker {
+                
+            case .sire:
+                AnimalParentPickerView(
+                    title: "Select Sire",
+                    excludeAnimal: nil,
+                    suggestedSexes: [.male]
+                ) { picked in
+                    sire = picked.tagNumber
+                    try? context.save()
+                    activeParentPicker = nil
+                }
+                
+            case .dam:
+                AnimalParentPickerView(
+                    title: "Select Dam",
+                    excludeAnimal: nil,
+                    suggestedSexes: [.female]
+                ) { picked in
+                    dam = picked.tagNumber
+                    try? context.save()
+                    activeParentPicker = nil
+                }
+            }
         }
     }
 

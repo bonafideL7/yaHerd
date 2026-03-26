@@ -130,6 +130,34 @@ struct TagEditorView: View {
     }
 }
 
+struct ParentFieldRow: View {
+    let title: String
+    @Binding var value: String
+    let type: ParentPickerType
+    @Binding var activePicker: ParentPickerType?
+    
+    var body: some View {
+        Button {
+            activePicker = type
+        } label: {
+            HStack {
+                Text(title)
+                Spacer()
+                
+                if value.isEmpty {
+                    Text("—")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(value)
+                        .foregroundStyle(.primary)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct AnimalFormView: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
@@ -203,31 +231,31 @@ struct AnimalFormView: View {
                 }
             }
             
-            Section("Parents") {
-                HStack {
-                    TextField("Dam", text: $dam)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    Button("Pick") { activeParentPicker = .dam }
-                }
-                
-                if !dam.isEmpty {
-                    Button("Clear Dam") { dam = "" }
-                        .foregroundStyle(.secondary)
-                }
-                
-                HStack {
-                    TextField("Sire", text: $sire)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    Button("Pick") { activeParentPicker = .sire }
-                }
-                
-                if !sire.isEmpty {
-                    Button("Clear Sire") { sire = "" }
-                        .foregroundStyle(.secondary)
-                }
-            }
+//            Section("Parents") {
+//                ParentFieldRow(
+//                    title: "Dam",
+//                    value: $dam,
+//                    type: .dam,
+//                    activePicker: $activeParentPicker
+//                )
+//                
+//                if !dam.isEmpty {
+//                    Button("Clear Dam") { dam = "" }
+//                        .foregroundStyle(.secondary)
+//                }
+//                
+//                ParentFieldRow(
+//                    title: "Sire",
+//                    value: $sire,
+//                    type: .sire,
+//                    activePicker: $activeParentPicker
+//                )
+//                
+//                if !sire.isEmpty {
+//                    Button("Clear Sire") { sire = "" }
+//                        .foregroundStyle(.secondary)
+//                }
+//            }
             
             Section("Identification") {
                 TagFieldRow(
