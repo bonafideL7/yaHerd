@@ -54,9 +54,12 @@ struct WorkingChuteView: View {
                 if let animal {
                     HStack {
                         let def = tagColorLibrary.resolvedDefinition(for: animal)
-                        TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)", size: 18)
-                        Text(tagColorLibrary.formattedTag(for: animal))
-                            .font(.title2.bold())
+                        AnimalTagView(
+                            tagNumber: animal.tagNumber,
+                            color: def.color,
+                            colorName: def.name,
+                            size: .prominent
+                        )
                         Spacer()
                         Text((animal.sex ?? .female).label)
                             .foregroundStyle(.secondary)
@@ -116,8 +119,18 @@ struct WorkingChuteView: View {
                             HStack {
                                 Text("Sire")
                                 Spacer()
-                                Text(selectedSire.map { tagColorLibrary.formattedTag(for: $0) } ?? "Choose")
-                                    .foregroundStyle(selectedSire == nil ? .secondary : .primary)
+                                if let selectedSire {
+                                    let def = tagColorLibrary.resolvedDefinition(for: selectedSire)
+                                    AnimalTagView(
+                                        tagNumber: selectedSire.tagNumber,
+                                        color: def.color,
+                                        colorName: def.name,
+                                        size: .compact
+                                    )
+                                } else {
+                                    Text("Choose")
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }

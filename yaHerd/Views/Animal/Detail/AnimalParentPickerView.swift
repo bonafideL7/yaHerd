@@ -66,9 +66,12 @@ struct AnimalParentPickerView: View {
                             } label: {
                                 HStack(spacing: 10) {
                                     let def = tagColorLibrary.resolvedDefinition(for: animal)
-                                    TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(tagColorLibrary.formattedTag(for: animal))
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        AnimalTagView(
+                                            tagNumber: animal.tagNumber,
+                                            color: def.color,
+                                            colorName: def.name
+                                        )
                                         Text((animal.sex ?? .female).label)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)

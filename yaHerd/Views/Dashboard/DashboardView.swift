@@ -316,11 +316,13 @@ struct DashboardView: View {
     private func animalRow(_ animal: Animal) -> some View {
         HStack(spacing: 12) {
             let def = tagColorLibrary.resolvedDefinition(for: animal)
-            TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(tagColorLibrary.formattedTag(for: animal))
-                    .font(.headline)
+            VStack(alignment: .leading, spacing: 6) {
+                AnimalTagView(
+                    tagNumber: animal.tagNumber,
+                    color: def.color,
+                    colorName: def.name
+                )
 
                 HStack(spacing: 6) {
                     Text((animal.sex ?? .female).label)

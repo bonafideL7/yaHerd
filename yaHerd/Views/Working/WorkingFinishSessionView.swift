@@ -33,8 +33,12 @@ struct WorkingFinishSessionView: View {
                         if let animal = item.animal {
                             HStack {
                                 let def = tagColorLibrary.resolvedDefinition(for: animal)
-                                TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
-                                Text(tagColorLibrary.formattedTag(for: animal))
+                                AnimalTagView(
+                                    tagNumber: animal.tagNumber,
+                                    color: def.color,
+                                    colorName: def.name,
+                                    size: .compact
+                                )
                                 Spacer()
                                 Picker("", selection: bindingDestination(for: item)) {
                                     Text("None").tag(Optional<Pasture>(nil))

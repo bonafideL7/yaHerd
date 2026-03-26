@@ -52,10 +52,12 @@ private struct WorkingQueueRow: View {
 
             if let animal {
                 let def = tagColorLibrary.resolvedDefinition(for: animal)
-                TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(tagColorLibrary.formattedTag(for: animal))
-                        .font(.headline)
+                VStack(alignment: .leading, spacing: 6) {
+                    AnimalTagView(
+                        tagNumber: animal.tagNumber,
+                        color: def.color,
+                        colorName: def.name
+                    )
                     Text((animal.sex ?? .female).label)
                         .font(.caption)
                         .foregroundStyle(.secondary)

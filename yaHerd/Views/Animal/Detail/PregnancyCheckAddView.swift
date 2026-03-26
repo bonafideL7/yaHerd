@@ -12,6 +12,7 @@ import SwiftData
 struct PregnancyCheckAddView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @State var animal: Animal
 
@@ -56,8 +57,18 @@ struct PregnancyCheckAddView: View {
                         HStack {
                             Text("Sire")
                             Spacer()
-                            Text(selectedSire?.tagNumber ?? "Choose")
-                                .foregroundStyle(selectedSire == nil ? .secondary : .primary)
+                            if let selectedSire {
+                                let def = tagColorLibrary.resolvedDefinition(for: selectedSire)
+                                AnimalTagView(
+                                    tagNumber: selectedSire.tagNumber,
+                                    color: def.color,
+                                    colorName: def.name,
+                                    size: .compact
+                                )
+                            } else {
+                                Text("Choose")
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }

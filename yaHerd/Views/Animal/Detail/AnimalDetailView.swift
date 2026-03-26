@@ -187,8 +187,19 @@ struct AnimalDetailView: View {
                 }
             }
         }
-        .navigationTitle("Animal \(tagColorLibrary.formattedTag(for: animal))")
+        .navigationTitle("Animal")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                let def = tagColorLibrary.resolvedDefinition(for: animal)
+                AnimalTagView(
+                    tagNumber: animal.tagNumber,
+                    color: def.color,
+                    colorName: def.name,
+                    size: .compact
+                )
+            }
+        }
     }
 
     private func updatePasture(to newPasture: Pasture?) {
