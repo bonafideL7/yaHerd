@@ -106,12 +106,13 @@ final class TagColorLibraryStore: ObservableObject {
     }
 
     func resolvedDefinition(for animal: Animal) -> TagColorDefinition {
-        return definition(for: animal.tagColorID) ?? defaultColor
+        return definition(for: animal.displayTagColorID) ?? defaultColor
     }
 
     func formattedTag(for animal: Animal) -> String {
         let def = resolvedDefinition(for: animal)
-        return "\(def.prefix)\(animal.tagNumber)"
+        let number = animal.displayTagNumber
+        return number.isEmpty ? "—" : "\(def.prefix)\(number)"
     }
 
     // MARK: - CRUD

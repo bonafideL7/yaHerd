@@ -67,7 +67,7 @@ struct AddAnimalView: View {
                     excludeAnimal: nil,
                     suggestedSexes: [.male]
                 ) { picked in
-                    sire = picked.tagNumber
+                    sire = picked.displayTagNumber
                     try? context.save()
                     activeParentPicker = nil
                 }
@@ -78,7 +78,7 @@ struct AddAnimalView: View {
                     excludeAnimal: nil,
                     suggestedSexes: [.female]
                 ) { picked in
-                    dam = picked.tagNumber
+                    dam = picked.displayTagNumber
                     try? context.save()
                     activeParentPicker = nil
                 }
@@ -87,20 +87,33 @@ struct AddAnimalView: View {
     }
 
     private func validateAndSave() {
-        let animal = Animal(
-            name: name,
-            tagNumber: tagNumber,
-            tagColorID: tagColorID,
-            birthDate: birthDate,
-            status: status,
-            sire: sire.isEmpty ? nil : sire,
-            dam: dam.isEmpty ? nil : dam,
-            pasture: selectedPasture,
-            sex: sex
-        )
+        do {
+            try ValidationService.validateAnimal(
+                tagNumber: tagNumber,
+                tagColorID: tagColorID,
+                birthDate: birthDate,
+                context: context
+            )
 
-        context.insert(animal)
-        try? context.save()
-        dismiss()
+            let animal = Animal(
+                name: name,
+                tagNumber: tagNumber.trimmingCharacters(in: .whitespacesAndNewlines),
+                tagColorID: tagColorID,
+                birthDate: birthDate,
+                status: status,
+                sire: sire.isEmpty ? nil : sire,
+                dam: dam.isEmpty ? nil : dam,
+                pasture: selectedPasture,
+                sex: sex
+            )
+
+            context.insert(animal)
+            _ = animal.ensurePrimaryTagRecord()
+            try context.save()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
 }

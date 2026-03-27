@@ -148,7 +148,10 @@ struct SampleDataService {
         )
         
         let animals = [jane, rudy, roux, imogene, telly, aelin, izzy, lottie, limeGreen80]
-        animals.forEach { context.insert($0) }
+        animals.forEach { animal in
+            context.insert(animal)
+            _ = animal.ensurePrimaryTagRecord()
+        }
         
         // MARK: - Pregnancy Checks (dashboard alerts)
         context.insert(PregnancyCheck(date: daysAgo(30), result: .pregnant, technician: "Dr. Smith", animal: jane))

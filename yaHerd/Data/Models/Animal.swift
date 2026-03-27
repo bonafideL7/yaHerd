@@ -25,10 +25,148 @@ final class Animal {
     @Relationship(deleteRule: .cascade) var statusRecords: [StatusRecord] = []
     @Relationship(deleteRule: .nullify) var activeWorkingSession: WorkingSession?
     @Relationship var pasture: Pasture?
+    @Relationship(deleteRule: .cascade, inverse: \AnimalTag.animal) var tags: [AnimalTag] = []
 
     var location: AnimalLocation {
         get { locationRaw ?? .pasture }
         set { locationRaw = newValue }
+    }
+
+
+
+    var activeTags: [AnimalTag] {
+        tags
+            .filter { $0.isActive }
+            .sorted { lhs, rhs in
+                if lhs.isPrimary != rhs.isPrimary { return lhs.isPrimary && !rhs.isPrimary }
+                if lhs.assignedAt != rhs.assignedAt { return lhs.assignedAt > rhs.assignedAt }
+                return lhs.number.localizedStandardCompare(rhs.number) == .orderedAscending
+            }
+    }
+
+    var inactiveTags: [AnimalTag] {
+        tags
+            .filter { !$0.isActive }
+            .sorted { lhs, rhs in
+                let leftDate = lhs.removedAt ?? lhs.assignedAt
+                let rightDate = rhs.removedAt ?? rhs.assignedAt
+                return leftDate > rightDate
+            }
+    }
+
+    var primaryTag: AnimalTag? {
+        activeTags.first(where: { $0.isPrimary }) ?? activeTags.first
+    }
+
+    var secondaryActiveTags: [AnimalTag] {
+        activeTags.filter { tag in
+            guard let primaryTag else { return true }
+            return tag.persistentModelID != primaryTag.persistentModelID
+        }
+    }
+
+    var displayTagNumber: String {
+        primaryTag?.normalizedNumber ?? tagNumber
+    }
+
+    var displayTagColorID: UUID? {
+        primaryTag?.colorID ?? tagColorID
+    }
+
+    func syncPrimaryTagFieldsFromTags() {
+        tagNumber = primaryTag?.normalizedNumber ?? ""
+        tagColorID = primaryTag?.colorID
+    }
+
+    func ensurePrimaryTagRecord() -> AnimalTag {
+        if let primaryTag {
+            if primaryTag.normalizedNumber != tagNumber {
+                primaryTag.number = tagNumber
+            }
+            if primaryTag.colorID != tagColorID {
+                primaryTag.colorID = tagColorID
+            }
+            if !primaryTag.isActive {
+                primaryTag.isActive = true
+                primaryTag.removedAt = nil
+            }
+            primaryTag.isPrimary = true
+            return primaryTag
+        }
+
+        let tag = AnimalTag(
+            number: tagNumber,
+            colorID: tagColorID,
+            isPrimary: true,
+            isActive: true,
+            assignedAt: .now,
+            animal: self
+        )
+        tags.append(tag)
+        syncPrimaryTagFieldsFromTags()
+        return tag
+    }
+
+    func addTag(number: String, colorID: UUID?, isPrimary: Bool, assignedAt: Date = .now) -> AnimalTag {
+        let trimmedNumber = number.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldBePrimary = isPrimary || activeTags.isEmpty
+
+        if shouldBePrimary {
+            for tag in tags where tag.isActive {
+                tag.isPrimary = false
+            }
+        }
+
+        let tag = AnimalTag(
+            number: trimmedNumber,
+            colorID: colorID,
+            isPrimary: shouldBePrimary,
+            isActive: true,
+            assignedAt: assignedAt,
+            animal: self
+        )
+        tags.append(tag)
+        syncPrimaryTagFieldsFromTags()
+        return tag
+    }
+
+    func updatePrimaryTag(number: String, colorID: UUID?) {
+        let trimmedNumber = number.trimmingCharacters(in: .whitespacesAndNewlines)
+        tagNumber = trimmedNumber
+        tagColorID = colorID
+
+        let tag = ensurePrimaryTagRecord()
+        tag.number = trimmedNumber
+        tag.colorID = colorID
+
+        for otherTag in tags where otherTag.persistentModelID != tag.persistentModelID && otherTag.isActive {
+            otherTag.isPrimary = false
+        }
+
+        syncPrimaryTagFieldsFromTags()
+    }
+
+    func promoteTagToPrimary(_ tag: AnimalTag) {
+        for existingTag in tags where existingTag.isActive {
+            existingTag.isPrimary = existingTag.persistentModelID == tag.persistentModelID
+        }
+        tag.isActive = true
+        tag.removedAt = nil
+        syncPrimaryTagFieldsFromTags()
+    }
+
+    func retireTag(_ tag: AnimalTag, on date: Date = .now) {
+        tag.isActive = false
+        tag.isPrimary = false
+        tag.removedAt = date
+
+        if let replacement = activeTags.first {
+            replacement.isPrimary = true
+            replacement.isActive = true
+            replacement.removedAt = nil
+        }
+
+        syncPrimaryTagFieldsFromTags()
     }
 
     var ageInMonths: Int {
