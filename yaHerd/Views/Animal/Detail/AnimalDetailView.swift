@@ -13,6 +13,9 @@ struct AnimalDetailView: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @AppStorage("allowHardDelete") private var allowHardDelete = false
     @State private var activeParentPicker: ParentPickerType?
+    @State private var showingAddTag = false
+    @State private var errorMessage: String?
+    @State private var showingError = false
     var animal: Animal
 
     @Query(sort: \Pasture.name) private var pastures: [Pasture]
@@ -29,20 +32,44 @@ struct AnimalDetailView: View {
 
     private var tagNumberBinding: Binding<String> {
         Binding(
-            get: { animal.tagNumber },
+            get: { animal.displayTagNumber },
             set: { newValue in
-                animal.tagNumber = newValue
-                try? context.save()
+                do {
+                    try ValidationService.validateAnimalTag(
+                        number: newValue,
+                        colorID: animal.displayTagColorID,
+                        animal: animal,
+                        context: context,
+                        existingTag: animal.primaryTag
+                    )
+                    animal.updatePrimaryTag(number: newValue, colorID: animal.displayTagColorID)
+                    try context.save()
+                } catch {
+                    errorMessage = error.localizedDescription
+                    showingError = true
+                }
             }
         )
     }
 
     private var tagColorIDBinding: Binding<UUID?> {
         Binding(
-            get: { animal.tagColorID },
+            get: { animal.displayTagColorID },
             set: { newValue in
-                animal.tagColorID = newValue
-                try? context.save()
+                do {
+                    try ValidationService.validateAnimalTag(
+                        number: animal.displayTagNumber,
+                        colorID: newValue,
+                        animal: animal,
+                        context: context,
+                        existingTag: animal.primaryTag
+                    )
+                    animal.updatePrimaryTag(number: animal.displayTagNumber, colorID: newValue)
+                    try context.save()
+                } catch {
+                    errorMessage = error.localizedDescription
+                    showingError = true
+                }
             }
         )
     }
@@ -126,7 +153,37 @@ struct AnimalDetailView: View {
                 pastures: pastures,
                 excludeAnimal: animal
             )
-            
+
+            Section("Tags") {
+                if animal.activeTags.isEmpty {
+                    Text("No active tags")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(animal.activeTags) { tag in
+                        tagRow(for: tag)
+                    }
+                }
+
+                Button("Add Tag") {
+                    showingAddTag = true
+                }
+            }
+
+            if !animal.inactiveTags.isEmpty {
+                Section("Tag History") {
+                    ForEach(animal.inactiveTags) { tag in
+                        VStack(alignment: .leading, spacing: 4) {
+                            tagBadge(for: tag)
+                            if let removedAt = tag.removedAt {
+                                Text("Removed \(removedAt.formatted(date: .abbreviated, time: .omitted))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+
             Section("Status Actions") {
                 if animal.status != .sold {
                     Button("Mark as Sold") {
@@ -163,29 +220,53 @@ struct AnimalDetailView: View {
             }
         }.sheet(item: $activeParentPicker) { picker in
             switch picker {
-                
+
             case .sire:
                 AnimalParentPickerView(
                     title: "Select Sire",
                     excludeAnimal: animal,
                     suggestedSexes: [.male]
                 ) { picked in
-                    animal.sire = picked.tagNumber
+                    animal.sire = picked.displayTagNumber
                     try? context.save()
                     activeParentPicker = nil
                 }
-                
+
             case .dam:
                 AnimalParentPickerView(
                     title: "Select Dam",
                     excludeAnimal: animal,
                     suggestedSexes: [.female]
                 ) { picked in
-                    animal.dam = picked.tagNumber
+                    animal.dam = picked.displayTagNumber
                     try? context.save()
                     activeParentPicker = nil
                 }
             }
+        }
+        .sheet(isPresented: $showingAddTag) {
+            AnimalTagEditView { number, colorID, isPrimary in
+                do {
+                    try ValidationService.validateAnimalTag(
+                        number: number,
+                        colorID: colorID,
+                        animal: animal,
+                        context: context
+                    )
+                    _ = animal.addTag(number: number, colorID: colorID, isPrimary: isPrimary)
+                    try context.save()
+                    showingAddTag = false
+                } catch {
+                    errorMessage = error.localizedDescription
+                    showingError = true
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .alert("Validation Error", isPresented: $showingError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
         }
         .navigationTitle("Animal")
         .navigationBarTitleDisplayMode(.inline)
@@ -193,13 +274,53 @@ struct AnimalDetailView: View {
             ToolbarItem(placement: .principal) {
                 let def = tagColorLibrary.resolvedDefinition(for: animal)
                 AnimalTagView(
-                    tagNumber: animal.tagNumber,
+                    tagNumber: animal.displayTagNumber,
                     color: def.color,
                     colorName: def.name,
                     size: .compact
                 )
             }
         }
+        .onAppear {
+            if animal.primaryTag == nil, !animal.tagNumber.isEmpty {
+                _ = animal.ensurePrimaryTagRecord()
+                try? context.save()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func tagRow(for tag: AnimalTag) -> some View {
+        HStack(spacing: 12) {
+            tagBadge(for: tag)
+            Spacer()
+            if tag.isPrimary {
+                Text("Primary")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Button("Make Primary") {
+                    animal.promoteTagToPrimary(tag)
+                    try? context.save()
+                }
+                .font(.caption)
+            }
+            Button("Retire", role: .destructive) {
+                animal.retireTag(tag)
+                try? context.save()
+            }
+            .font(.caption)
+        }
+    }
+
+    private func tagBadge(for tag: AnimalTag) -> some View {
+        let def = tagColorLibrary.definition(for: tag.colorID) ?? tagColorLibrary.defaultColor
+        return AnimalTagView(
+            tagNumber: tag.normalizedNumber,
+            color: def.color,
+            colorName: def.name,
+            size: .compact
+        )
     }
 
     private func updatePasture(to newPasture: Pasture?) {
@@ -219,5 +340,75 @@ struct AnimalDetailView: View {
         context.insert(record)
 
         try? context.save()
+    }
+}
+
+private struct AnimalTagEditView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+
+    @State private var number = ""
+    @State private var colorID: UUID?
+    @State private var isPrimary = false
+
+    let onSave: (String, UUID?, Bool) -> Void
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 5)
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Tag Number") {
+                    TextField("Number", text: $number)
+                        .keyboardType(.numberPad)
+                        .font(.title2)
+                }
+
+                Section("Color") {
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        ForEach(tagColorLibrary.colors) { def in
+                            let isSelected = def.id == colorID
+
+                            Circle()
+                                .fill(def.color)
+                                .frame(height: 44)
+                                .overlay {
+                                    if isSelected {
+                                        Circle()
+                                            .strokeBorder(.primary, lineWidth: 3)
+                                    }
+                                }
+                                .onTapGesture {
+                                    colorID = def.id
+                                }
+                        }
+                    }
+                    .padding(.vertical, 4)
+
+                    Button("Clear Color") {
+                        colorID = nil
+                    }
+                    .foregroundStyle(.secondary)
+                }
+
+                Section {
+                    Toggle("Use as primary tag", isOn: $isPrimary)
+                } footer: {
+                    Text("Only the primary tag is used as the main visual identifier throughout the app.")
+                }
+            }
+            .navigationTitle("Add Tag")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave(number.trimmingCharacters(in: .whitespacesAndNewlines), colorID, isPrimary)
+                    }
+                }
+            }
+        }
     }
 }
