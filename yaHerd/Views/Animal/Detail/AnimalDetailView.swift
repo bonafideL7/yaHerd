@@ -137,6 +137,18 @@ struct AnimalDetailView: View {
         )
     }
 
+    private var distinguishingFeaturesBinding: Binding<[DistinguishingFeature]> {
+        Binding(
+            get: { animal.distinguishingFeatures },
+            set: { newValue in
+                animal.distinguishingFeatures = newValue
+                    .map { DistinguishingFeature(id: $0.id, description: $0.description.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                    .filter { !$0.description.isEmpty }
+                try? context.save()
+            }
+        )
+    }
+
     var body: some View {
         Form {
             AnimalFormView(
@@ -149,6 +161,7 @@ struct AnimalDetailView: View {
                 pasture: pastureBinding,
                 sire: sireBinding,
                 dam: damBinding,
+                distinguishingFeatures: distinguishingFeaturesBinding,
                 activeParentPicker: $activeParentPicker,
                 pastures: pastures,
                 excludeAnimal: animal

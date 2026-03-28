@@ -23,6 +23,7 @@ struct AddAnimalView: View {
     @State private var selectedPasture: Pasture?
     @State private var sire = ""
     @State private var dam = ""
+    @State private var distinguishingFeatures: [DistinguishingFeature] = []
     @State private var activeParentPicker: ParentPickerType?
     @State private var errorMessage: String?
     @State private var showingError = false
@@ -40,6 +41,7 @@ struct AddAnimalView: View {
                     pasture: $selectedPasture,
                     sire: $sire,
                     dam: $dam,
+                    distinguishingFeatures: $distinguishingFeatures,
                     activeParentPicker: $activeParentPicker,
                     pastures: pastures
                 )
@@ -104,11 +106,14 @@ struct AddAnimalView: View {
                 sire: sire.isEmpty ? nil : sire,
                 dam: dam.isEmpty ? nil : dam,
                 pasture: selectedPasture,
-                sex: sex
+                sex: sex,
+                distinguishingFeatures: distinguishingFeatures.filter { !$0.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             )
 
             context.insert(animal)
-            _ = animal.ensurePrimaryTagRecord()
+            if !animal.tagNumber.isEmpty {
+                _ = animal.ensurePrimaryTagRecord()
+            }
             try context.save()
             dismiss()
         } catch {

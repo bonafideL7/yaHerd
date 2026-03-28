@@ -18,6 +18,7 @@ final class Animal {
     var sire: String?
     var dam: String?
     var locationRaw: AnimalLocation? = AnimalLocation.pasture
+    var distinguishingFeatures: [DistinguishingFeature] = []
     
     @Relationship(deleteRule: .cascade) var healthRecords: [HealthRecord] = []
     @Relationship(deleteRule: .cascade) var pregnancyChecks: [PregnancyCheck] = []
@@ -234,7 +235,8 @@ final class Animal {
         sire: String? = nil,
         dam: String? = nil,
         pasture: Pasture? = nil,
-        sex: Sex? = nil
+        sex: Sex? = nil,
+        distinguishingFeatures: [DistinguishingFeature] = []
     ) {
         self.name = name
         self.tagNumber = tagNumber
@@ -247,6 +249,17 @@ final class Animal {
         self.location = AnimalLocation.pasture
         self.activeWorkingSession = nil
         self.sex = sex ?? .female
+        self.distinguishingFeatures = distinguishingFeatures
+    }
+}
+
+struct DistinguishingFeature: Codable, Hashable, Identifiable {
+    var id: UUID
+    var description: String
+
+    init(id: UUID = UUID(), description: String) {
+        self.id = id
+        self.description = description
     }
 }
 

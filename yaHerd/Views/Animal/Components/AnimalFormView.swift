@@ -130,6 +130,31 @@ struct TagEditorView: View {
     }
 }
 
+
+struct DistinguishingFeaturesSection: View {
+    @Binding var features: [DistinguishingFeature]
+
+    var body: some View {
+        Section("Distinguishing Features") {
+            if features.isEmpty {
+                Text("No distinguishing features")
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach($features) { $feature in
+                TextField("Feature", text: $feature.description)
+            }
+            .onDelete { offsets in
+                features.remove(atOffsets: offsets)
+            }
+
+            Button("Add Feature") {
+                features.append(DistinguishingFeature(description: ""))
+            }
+        }
+    }
+}
+
 struct ParentFieldRow: View {
     let title: String
     @Binding var value: String
@@ -170,6 +195,7 @@ struct AnimalFormView: View {
     @Binding var pasture: Pasture?
     @Binding var sire: String
     @Binding var dam: String
+    @Binding var distinguishingFeatures: [DistinguishingFeature]
 
     let pastures: [Pasture]
     let excludeAnimal: Animal?
@@ -186,6 +212,7 @@ struct AnimalFormView: View {
         pasture: Binding<Pasture?>,
         sire: Binding<String>,
         dam: Binding<String>,
+        distinguishingFeatures: Binding<[DistinguishingFeature]>,
         activeParentPicker: Binding<ParentPickerType?>,
         pastures: [Pasture],
         excludeAnimal: Animal? = nil
@@ -199,6 +226,7 @@ struct AnimalFormView: View {
         self._pasture = pasture
         self._sire = sire
         self._dam = dam
+        self._distinguishingFeatures = distinguishingFeatures
         self._activeParentPicker = activeParentPicker
         self.pastures = pastures
         self.excludeAnimal = excludeAnimal
@@ -265,6 +293,8 @@ struct AnimalFormView: View {
                 
                 TextField("Name", text: $name)
             }
+
+            DistinguishingFeaturesSection(features: $distinguishingFeatures)
         }        
     }
 }
