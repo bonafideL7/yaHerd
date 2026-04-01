@@ -91,10 +91,7 @@ struct AddAnimalView: View {
     private func validateAndSave() {
         do {
             try ValidationService.validateAnimal(
-                tagNumber: tagNumber,
-                tagColorID: tagColorID,
-                birthDate: birthDate,
-                context: context
+                birthDate: birthDate
             )
 
             let animal = Animal(

@@ -14,8 +14,6 @@ struct AnimalDetailView: View {
     @AppStorage("allowHardDelete") private var allowHardDelete = false
     @State private var activeParentPicker: ParentPickerType?
     @State private var showingAddTag = false
-    @State private var errorMessage: String?
-    @State private var showingError = false
     var animal: Animal
 
     @Query(sort: \Pasture.name) private var pastures: [Pasture]
@@ -34,20 +32,8 @@ struct AnimalDetailView: View {
         Binding(
             get: { animal.displayTagNumber },
             set: { newValue in
-                do {
-                    try ValidationService.validateAnimalTag(
-                        number: newValue,
-                        colorID: animal.displayTagColorID,
-                        animal: animal,
-                        context: context,
-                        existingTag: animal.primaryTag
-                    )
-                    animal.updatePrimaryTag(number: newValue, colorID: animal.displayTagColorID)
-                    try context.save()
-                } catch {
-                    errorMessage = error.localizedDescription
-                    showingError = true
-                }
+                animal.updatePrimaryTag(number: newValue, colorID: animal.displayTagColorID)
+                try? context.save()
             }
         )
     }
@@ -56,20 +42,8 @@ struct AnimalDetailView: View {
         Binding(
             get: { animal.displayTagColorID },
             set: { newValue in
-                do {
-                    try ValidationService.validateAnimalTag(
-                        number: animal.displayTagNumber,
-                        colorID: newValue,
-                        animal: animal,
-                        context: context,
-                        existingTag: animal.primaryTag
-                    )
-                    animal.updatePrimaryTag(number: animal.displayTagNumber, colorID: newValue)
-                    try context.save()
-                } catch {
-                    errorMessage = error.localizedDescription
-                    showingError = true
-                }
+                animal.updatePrimaryTag(number: animal.displayTagNumber, colorID: newValue)
+                try? context.save()
             }
         )
     }
@@ -244,27 +218,11 @@ struct AnimalDetailView: View {
         }
         .sheet(isPresented: $showingAddTag) {
             AnimalTagEditView { number, colorID, isPrimary in
-                do {
-                    try ValidationService.validateAnimalTag(
-                        number: number,
-                        colorID: colorID,
-                        animal: animal,
-                        context: context
-                    )
-                    _ = animal.addTag(number: number, colorID: colorID, isPrimary: isPrimary)
-                    try context.save()
-                    showingAddTag = false
-                } catch {
-                    errorMessage = error.localizedDescription
-                    showingError = true
-                }
+                _ = animal.addTag(number: number, colorID: colorID, isPrimary: isPrimary)
+                try? context.save()
+                showingAddTag = false
             }
             .presentationDetents([.medium, .large])
-        }
-        .alert("Validation Error", isPresented: $showingError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage ?? "")
         }
         .navigationTitle("Animal")
         .navigationBarTitleDisplayMode(.inline)
