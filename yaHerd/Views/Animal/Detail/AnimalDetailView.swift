@@ -293,6 +293,13 @@ struct AnimalDetailView: View {
                     size: .compact
                 )
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    AnimalTimelineView(animal: animal)
+                } label: {
+                    Image(systemName: "clock.arrow.circlepath")
+                }
+            }
         }
         .onAppear {
             if animal.primaryTag == nil, !animal.tagNumber.isEmpty {
