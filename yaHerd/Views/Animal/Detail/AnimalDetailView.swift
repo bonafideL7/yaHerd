@@ -182,21 +182,6 @@ struct AnimalDetailView: View {
                 }
             }
 
-            if !animal.inactiveTags.isEmpty {
-                Section("Tag History") {
-                    ForEach(animal.inactiveTags) { tag in
-                        VStack(alignment: .leading, spacing: 4) {
-                            tagBadge(for: tag)
-                            if let removedAt = tag.removedAt {
-                                Text("Removed \(removedAt.formatted(date: .abbreviated, time: .omitted))")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-            }
-
             Section("Status Actions") {
                 if animal.status != .sold {
                     Button("Mark as Sold") {
@@ -315,21 +300,26 @@ struct AnimalDetailView: View {
             tagBadge(for: tag)
             Spacer()
             if tag.isPrimary {
-                Text("Primary")
+                Label("Primary", systemImage: "star.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            } else {
-                Button("Make Primary") {
-                    animal.promoteTagToPrimary(tag)
-                    try? context.save()
-                }
-                .font(.caption)
             }
+        }
+        .contentShape(Rectangle())
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button("Retire", role: .destructive) {
                 animal.retireTag(tag)
                 try? context.save()
             }
-            .font(.caption)
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            if !tag.isPrimary {
+                Button("Set Primary") {
+                    animal.promoteTagToPrimary(tag)
+                    try? context.save()
+                }
+                .tint(.blue)
+            }
         }
     }
 
@@ -414,7 +404,7 @@ private struct AnimalTagEditView: View {
                 Section {
                     Toggle("Use as primary tag", isOn: $isPrimary)
                 } footer: {
-                    Text("Only the primary tag is used as the main visual identifier throughout the app.")
+                    Text("Swipe right on an active tag in the animal detail screen to make it primary. Swipe left to retire it.")
                 }
             }
             .navigationTitle("Add Tag")

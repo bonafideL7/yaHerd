@@ -99,6 +99,7 @@ struct AnimalTimelineView: View {
         case .pregnancy: return .purple
         case .movement: return .green
         case .status: return .red
+        case .tag: return .orange
         }
     }
 }

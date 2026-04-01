@@ -14,6 +14,7 @@ enum AnimalTimelineEventType {
     case pregnancy
     case movement
     case status
+    case tag
 }
 
 struct AnimalTimelineEvent: Identifiable {
@@ -82,6 +83,32 @@ extension Animal {
                     icon: "badge-alert"
                 )
             )
+        }
+
+        // TAG HISTORY
+        for tag in tags {
+            let details = tag.normalizedNumber
+            events.append(
+                AnimalTimelineEvent(
+                    date: tag.assignedAt,
+                    type: .tag,
+                    title: "Tag Assigned",
+                    details: details,
+                    icon: "tag"
+                )
+            )
+
+            if let removedAt = tag.removedAt {
+                events.append(
+                    AnimalTimelineEvent(
+                        date: removedAt,
+                        type: .tag,
+                        title: "Tag Retired",
+                        details: details,
+                        icon: "tag"
+                    )
+                )
+            }
         }
 
         // Sort newest → oldest
