@@ -10,6 +10,39 @@ import SwiftUI
 import SwiftData
 
 struct AnimalFilterView: View {
+    private enum StatusSelection: Hashable {
+        case any
+        case alive
+        case sold
+        case deceased
+
+        init(status: AnimalStatus?) {
+            switch status {
+            case .alive:
+                self = .alive
+            case .sold:
+                self = .sold
+            case .deceased:
+                self = .deceased
+            case nil:
+                self = .any
+            }
+        }
+
+        var animalStatus: AnimalStatus? {
+            switch self {
+            case .any:
+                return nil
+            case .alive:
+                return .alive
+            case .sold:
+                return .sold
+            case .deceased:
+                return .deceased
+            }
+        }
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
 
@@ -17,6 +50,32 @@ struct AnimalFilterView: View {
     @Binding var showArchived: Bool
     
     @Query private var pastures: [Pasture]
+
+    private var statusSelection: Binding<StatusSelection> {
+        Binding(
+            get: {
+                if !showArchived, filter.status == nil {
+                    return .alive
+                }
+
+                return StatusSelection(status: filter.status)
+            },
+            set: { newValue in
+                filter.status = newValue.animalStatus
+
+                switch newValue {
+                case .any:
+                    showArchived = true
+                case .alive:
+                    if showArchived, filter.status == nil {
+                        showArchived = false
+                    }
+                case .sold, .deceased:
+                    showArchived = true
+                }
+            }
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -26,16 +85,11 @@ struct AnimalFilterView: View {
                 }
 
                 Section("Status") {
-                    Picker("Status", selection: Binding(
-                        get: { filter.status },
-                        set: { filter.status = $0 }
-                    )) {
-                        Text("Any").tag(AnimalStatus?.none)
-
-                        ForEach(AnimalStatus.allCases, id: \.self) { s in
-                            Text(s.rawValue.capitalized)
-                                .tag(AnimalStatus?.some(s))
-                        }
+                    Picker("Status", selection: statusSelection) {
+                        Text("Any").tag(StatusSelection.any)
+                        Text("Alive").tag(StatusSelection.alive)
+                        Text("Sold").tag(StatusSelection.sold)
+                        Text("Deceased").tag(StatusSelection.deceased)
                     }
                 }
                 
@@ -72,6 +126,7 @@ struct AnimalFilterView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Clear") {
                         filter.clear()
+                        showArchived = false
                     }
                 }
 
