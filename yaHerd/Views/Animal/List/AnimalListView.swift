@@ -24,7 +24,8 @@ struct AnimalListView: View {
     @State private var showingAdd = false
     @State private var showingFilters = false
     @State private var filter = AnimalFilter()
-    @State private var showArchived = false
+    @State private var showRemovedStatuses = false
+    @State private var showSoftDeletedRecords = false
     @State private var isSearching = false
     @FocusState private var isSearchFieldFocused: Bool
     @State private var batchMode = false
@@ -77,7 +78,8 @@ struct AnimalListView: View {
         .sheet(isPresented: $showingFilters) {
             AnimalFilterView(
                 filter: $filter,
-                showArchived: $showArchived
+                showRemovedStatuses: $showRemovedStatuses,
+                showSoftDeletedRecords: $showSoftDeletedRecords
             )
         }
         .sheet(isPresented: $showingPasturePicker) {
@@ -151,21 +153,23 @@ struct AnimalListView: View {
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
                 AnimalTagView(
-                    tagNumber: animal.tagNumber,
+                    tagNumber: animal.displayTagNumber,
                     color: def.color,
                     colorName: def.name
                 )
+
                 if !animal.name.isEmpty {
                     Text(animal.name)
                         .font(.subheadline)
                         .lineLimit(1)
-                }else{
+                } else {
                     infoPill(
                         title: (animal.sex ?? .female).label,
                         systemImage: ""
                     )
                 }
-                
+
+                statusPills(for: animal)
             }
             VStack(alignment: .trailing, spacing: 8) {
                 locationBadges(for: animal)
@@ -193,7 +197,9 @@ struct AnimalListView: View {
         tint: Color = .accentColor
     ) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: systemImage)
+            if !systemImage.isEmpty {
+                Image(systemName: systemImage)
+            }
             Text(title)
         }
         .font(.callout)
@@ -201,6 +207,27 @@ struct AnimalListView: View {
         .padding(.horizontal, 5)
         .padding(.vertical, 5)
         .background(.thinMaterial, in: Capsule())
+    }
+
+    @ViewBuilder
+    private func statusPills(for animal: Animal) -> some View {
+        HStack(spacing: 6) {
+            if animal.status != .active {
+                infoPill(
+                    title: animal.status.label,
+                    systemImage: animal.status.systemImage,
+                    tint: .secondary
+                )
+            }
+
+            if animal.isSoftDeleted {
+                infoPill(
+                    title: "Deleted",
+                    systemImage: "trash.slash",
+                    tint: .orange
+                )
+            }
+        }
     }
     
     @ViewBuilder
@@ -310,8 +337,8 @@ struct AnimalListView: View {
                         showingFilters = true
                     } label: {
                         floatingControlLabel(
-                            title: filter.isActive || showArchived ? "Filters On" : "Filters",
-                            systemImage: (filter.isActive || showArchived)
+                            title: filter.isActive || showRemovedStatuses || showSoftDeletedRecords ? "Filters On" : "Filters",
+                            systemImage: (filter.isActive || showRemovedStatuses || showSoftDeletedRecords)
                             ? "line.3.horizontal.decrease.circle.fill"
                             : "line.3.horizontal.decrease.circle"
                         )
@@ -530,10 +557,18 @@ struct AnimalListView: View {
     private var currentFilterChips: [FilterChip] {
         var chips: [FilterChip] = []
         
-        if showArchived {
+        if showRemovedStatuses {
             chips.append(
-                FilterChip(title: "Archived Visible") {
-                    showArchived = false
+                FilterChip(title: "Off-Herd Visible") {
+                    showRemovedStatuses = false
+                }
+            )
+        }
+
+        if showSoftDeletedRecords {
+            chips.append(
+                FilterChip(title: "Deleted Visible") {
+                    showSoftDeletedRecords = false
                 }
             )
         }
@@ -548,7 +583,7 @@ struct AnimalListView: View {
         
         if let status = filter.status {
             chips.append(
-                FilterChip(title: String(describing: status)) {
+                FilterChip(title: status.label) {
                     filter.status = nil
                 }
             )
@@ -568,7 +603,8 @@ struct AnimalListView: View {
     private var hasAnyActiveCriteria: Bool {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         || filter.isActive
-        || showArchived
+        || showRemovedStatuses
+        || showSoftDeletedRecords
     }
     
     private func clearAllCriteria() {
@@ -578,7 +614,16 @@ struct AnimalListView: View {
     
     private func clearAllFilters() {
         filter = AnimalFilter()
-        showArchived = false
+        showRemovedStatuses = false
+        showSoftDeletedRecords = false
+    }
+
+    private var hasHiddenOffHerdAnimals: Bool {
+        animals.contains(where: { $0.status != .active && !$0.isSoftDeleted })
+    }
+
+    private var hasHiddenDeletedRecords: Bool {
+        animals.contains(where: { $0.isSoftDeleted })
     }
     
     // MARK: Empty State
@@ -595,15 +640,21 @@ struct AnimalListView: View {
                 }
                 .buttonStyle(.borderedProminent)
             } else {
-                if filter.isActive || showArchived {
+                if filter.isActive || showRemovedStatuses || showSoftDeletedRecords {
                     Button("Clear Filters") {
                         clearAllFilters()
                     }
                 }
                 
-                if !showArchived && animals.contains(where: { $0.status != .alive }) {
-                    Button("Show Archived") {
-                        showArchived = true
+                if !showRemovedStatuses && hasHiddenOffHerdAnimals {
+                    Button("Show Off-Herd") {
+                        showRemovedStatuses = true
+                    }
+                }
+
+                if !showSoftDeletedRecords && hasHiddenDeletedRecords {
+                    Button("Show Deleted Records") {
+                        showSoftDeletedRecords = true
                     }
                 }
             }
@@ -624,8 +675,16 @@ struct AnimalListView: View {
             return "No Animals Match These Filters"
         }
         
-        if !showArchived {
+        if !showSoftDeletedRecords && hasHiddenDeletedRecords && !showRemovedStatuses && !hasHiddenOffHerdAnimals {
+            return "Deleted Records Hidden"
+        }
+
+        if !showRemovedStatuses {
             return "No Active Animals"
+        }
+
+        if !showSoftDeletedRecords && hasHiddenDeletedRecords {
+            return "Deleted Records Hidden"
         }
         
         return "Nothing to Show"
@@ -644,8 +703,16 @@ struct AnimalListView: View {
             return "Adjust or clear the current filters to see more animals."
         }
         
-        if !showArchived {
-            return "Archived animals are currently hidden."
+        if !showSoftDeletedRecords && hasHiddenDeletedRecords && !showRemovedStatuses && !hasHiddenOffHerdAnimals {
+            return "Soft-deleted records are currently hidden."
+        }
+
+        if !showRemovedStatuses {
+            return "Off-herd animals are currently hidden."
+        }
+
+        if !showSoftDeletedRecords && hasHiddenDeletedRecords {
+            return "Soft-deleted records are currently hidden."
         }
         
         return "Try changing the current filters or sort."
@@ -664,8 +731,16 @@ struct AnimalListView: View {
             return "line.3.horizontal.decrease.circle"
         }
         
-        if !showArchived {
-            return "archivebox"
+        if !showSoftDeletedRecords && hasHiddenDeletedRecords && !showRemovedStatuses && !hasHiddenOffHerdAnimals {
+            return "trash.slash"
+        }
+
+        if !showRemovedStatuses {
+            return "person.3.sequence.fill"
+        }
+
+        if !showSoftDeletedRecords && hasHiddenDeletedRecords {
+            return "trash.slash"
         }
         
         return "tray"
@@ -707,7 +782,7 @@ struct AnimalListView: View {
             
         case .status:
             let grouped = Dictionary(grouping: filteredAndSortedAnimals) { animal in
-                String(describing: animal.status)
+                animal.status.label
             }
             
             return grouped
@@ -740,7 +815,7 @@ struct AnimalListView: View {
             if allowHardDelete {
                 context.delete(animal)
             } else {
-                animal.status = .deceased
+                animal.softDelete()
             }
         }
         
@@ -752,14 +827,18 @@ struct AnimalListView: View {
     private var filteredAndSortedAnimals: [Animal] {
         var result = animals
         
-        if !showArchived {
-            result = result.filter { $0.status == .alive }
+        if !showRemovedStatuses {
+            result = result.filter { $0.status == .active }
+        }
+
+        if !showSoftDeletedRecords {
+            result = result.filter { !$0.isSoftDeleted }
         }
         
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !query.isEmpty {
             result = result.filter {
-                $0.tagNumber.localizedCaseInsensitiveContains(query)
+                $0.displayTagNumber.localizedCaseInsensitiveContains(query)
                 || tagColorLibrary.formattedTag(for: $0).localizedCaseInsensitiveContains(query)
                 || $0.name.localizedCaseInsensitiveContains(query)
             }
@@ -779,9 +858,9 @@ struct AnimalListView: View {
         
         switch sortOrder {
         case .tagAscending:
-            result.sort { $0.tagNumber.localizedStandardCompare($1.tagNumber) == .orderedAscending }
+            result.sort { $0.displayTagNumber.localizedStandardCompare($1.displayTagNumber) == .orderedAscending }
         case .tagDescending:
-            result.sort { $0.tagNumber.localizedStandardCompare($1.tagNumber) == .orderedDescending }
+            result.sort { $0.displayTagNumber.localizedStandardCompare($1.displayTagNumber) == .orderedDescending }
         case .birthDateNewest:
             result.sort { $0.birthDate > $1.birthDate }
         case .birthDateOldest:

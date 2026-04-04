@@ -21,7 +21,7 @@ struct WorkingCollectAnimalsView: View {
     private var eligibleAnimals: [Animal] {
         let src = session.sourcePasture
         return animals
-            .filter { $0.status == .alive }
+            .filter { $0.isActiveInHerd }
             .filter { $0.pasture === src }
             .filter { $0.location == .pasture }
             .filter { animal in

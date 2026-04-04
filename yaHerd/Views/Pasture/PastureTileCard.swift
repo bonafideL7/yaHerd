@@ -14,7 +14,7 @@ struct PastureTileCard: View {
     let onTap: () -> Void
 
     private var headCount: Int {
-        pasture.animals.filter { $0.status == .alive }.count
+        pasture.animals.filter { $0.isActiveInHerd }.count
     }
 
     private var acreage: String {

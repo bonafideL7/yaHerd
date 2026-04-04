@@ -32,7 +32,7 @@ struct PastureDetailView: View {
     private var analytics: PastureAnalytics {
         PastureAnalytics(
             pasture: pasture,
-            aliveAnimals: pasture.animals.filter { $0.status == .alive }.count
+            aliveAnimals: pasture.animals.filter { $0.isActiveInHerd }.count
         )
     }
     
@@ -142,7 +142,7 @@ struct PastureDetailView: View {
                     //                        }
                     //                    }
                 } else {
-                    Text("Alive Animals: \(analytics.aliveAnimals)")
+                    Text("Active Animals: \(analytics.activeAnimals)")
                     HStack{
                         if let acres = pasture.acreage {
                             Text("Acreage: \(acres, format: .number)")
@@ -212,7 +212,7 @@ struct PastureDetailView: View {
                 }
             }
             
-            let aliveAnimals = pasture.animals.filter { $0.status == .alive }
+            let aliveAnimals = pasture.animals.filter { $0.isActiveInHerd }
             
             if !aliveAnimals.isEmpty {
                 Section("Animals") {

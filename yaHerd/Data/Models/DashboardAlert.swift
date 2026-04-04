@@ -30,7 +30,7 @@ enum DashboardAlertDestination: Hashable {
 }
 
 enum DashboardAnimalListKind: String, Hashable {
-    case alive
+    case active
     case workingPen
     case unassigned
     case overduePregChecks
@@ -38,7 +38,7 @@ enum DashboardAnimalListKind: String, Hashable {
 
     var title: String {
         switch self {
-        case .alive: return "Alive"
+        case .active: return "Active"
         case .workingPen: return "Working Pen"
         case .unassigned: return "Unassigned"
         case .overduePregChecks: return "Overdue Pregnancy Checks"

@@ -8,7 +8,7 @@ import SwiftData
 enum ParentPickerType: Identifiable {
     case sire
     case dam
-    
+
     var id: Int {
         switch self {
         case .sire: return 1
@@ -19,16 +19,16 @@ enum ParentPickerType: Identifiable {
 
 struct TagFieldRow: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-    
+
     @Binding var tagNumber: String
     @Binding var tagColorID: UUID?
-    
+
     @State private var showEditor = false
-    
+
     private var selectedDef: TagColorDefinition? {
         tagColorLibrary.colors.first(where: { $0.id == tagColorID })
     }
-    
+
     var body: some View {
         Button {
             showEditor = true
@@ -36,7 +36,7 @@ struct TagFieldRow: View {
             HStack {
                 Text("Tag")
                 Spacer()
-                
+
                 if let def = selectedDef, !tagNumber.isEmpty {
                     AnimalTagView(
                         tagNumber: tagNumber,
@@ -64,15 +64,15 @@ struct TagFieldRow: View {
 struct TagEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-    
+
     @Binding var tagNumber: String
     @Binding var tagColorID: UUID?
-    
+
     @State private var tempNumber: String = ""
     @State private var tempColorID: UUID?
-    
+
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 5)
-    
+
     var body: some View {
         NavigationStack {
             Form {
@@ -81,12 +81,12 @@ struct TagEditorView: View {
                         .keyboardType(.numberPad)
                         .font(.title2)
                 }
-                
+
                 Section("Color") {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(tagColorLibrary.colors) { def in
                             let isSelected = def.id == tempColorID
-                            
+
                             Circle()
                                 .fill(def.color)
                                 .frame(height: 44)
@@ -102,7 +102,7 @@ struct TagEditorView: View {
                         }
                     }
                     .padding(.vertical, 4)
-                    
+
                     Button("Clear Color") {
                         tempColorID = nil
                     }
@@ -129,7 +129,6 @@ struct TagEditorView: View {
         }
     }
 }
-
 
 struct DistinguishingFeaturesSection: View {
     @Binding var features: [DistinguishingFeature]
@@ -160,7 +159,7 @@ struct ParentFieldRow: View {
     @Binding var value: String
     let type: ParentPickerType
     @Binding var activePicker: ParentPickerType?
-    
+
     var body: some View {
         Button {
             activePicker = type
@@ -168,7 +167,7 @@ struct ParentFieldRow: View {
             HStack {
                 Text(title)
                 Spacer()
-                
+
                 if value.isEmpty {
                     Text("—")
                         .foregroundStyle(.secondary)
@@ -199,6 +198,7 @@ struct AnimalFormView: View {
 
     let pastures: [Pasture]
     let excludeAnimal: Animal?
+    let showsStatusPicker: Bool
 
     @Binding var activeParentPicker: ParentPickerType?
 
@@ -215,7 +215,8 @@ struct AnimalFormView: View {
         distinguishingFeatures: Binding<[DistinguishingFeature]>,
         activeParentPicker: Binding<ParentPickerType?>,
         pastures: [Pasture],
-        excludeAnimal: Animal? = nil
+        excludeAnimal: Animal? = nil,
+        showsStatusPicker: Bool = true
     ) {
         self._name = name
         self._tagNumber = tagNumber
@@ -230,71 +231,75 @@ struct AnimalFormView: View {
         self._activeParentPicker = activeParentPicker
         self.pastures = pastures
         self.excludeAnimal = excludeAnimal
+        self.showsStatusPicker = showsStatusPicker
     }
 
     var body: some View {
         Group {
             Section("Details") {
                 DatePicker("Birth Date", selection: $birthDate, displayedComponents: .date)
-                
+
                 Picker("Sex", selection: $sex) {
                     ForEach(Sex.allCases, id: \.self) { sex in
                         Text(sex.label).tag(sex)
                     }
                 }
-                
+
                 Picker("Pasture", selection: $pasture) {
                     Text("None").tag(Pasture?.none)
-                    
+
                     ForEach(pastures) { pasture in
                         Text(pasture.name)
                             .tag(Optional(pasture))
                     }
                 }
-                
-                Picker("Status", selection: $status) {
-                    ForEach(AnimalStatus.allCases, id: \.self) { status in
-                        Text(status.rawValue.capitalized).tag(status)
+
+                if showsStatusPicker {
+                    Picker("Status", selection: $status) {
+                        ForEach(AnimalStatus.allCases, id: \.self) { status in
+                            Label(status.label, systemImage: status.systemImage)
+                                .tag(status)
+                        }
                     }
                 }
             }
-            
-//            Section("Parents") {
-//                ParentFieldRow(
-//                    title: "Dam",
-//                    value: $dam,
-//                    type: .dam,
-//                    activePicker: $activeParentPicker
-//                )
-//                
-//                if !dam.isEmpty {
-//                    Button("Clear Dam") { dam = "" }
-//                        .foregroundStyle(.secondary)
-//                }
-//                
-//                ParentFieldRow(
-//                    title: "Sire",
-//                    value: $sire,
-//                    type: .sire,
-//                    activePicker: $activeParentPicker
-//                )
-//                
-//                if !sire.isEmpty {
-//                    Button("Clear Sire") { sire = "" }
-//                        .foregroundStyle(.secondary)
-//                }
-//            }
-            
+
+            Section("Parents") {
+                ParentFieldRow(
+                    title: "Dam",
+                    value: $dam,
+                    type: .dam,
+                    activePicker: $activeParentPicker
+                )
+
+                if !dam.isEmpty {
+                    Button("Clear Dam") { dam = "" }
+                        .foregroundStyle(.secondary)
+                }
+
+                ParentFieldRow(
+                    title: "Sire",
+                    value: $sire,
+                    type: .sire,
+                    activePicker: $activeParentPicker
+                )
+
+                if !sire.isEmpty {
+                    Button("Clear Sire") { sire = "" }
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Identification") {
                 TagFieldRow(
                     tagNumber: $tagNumber,
                     tagColorID: $tagColorID
                 )
-                
+
                 TextField("Name", text: $name)
             }
 
             DistinguishingFeaturesSection(features: $distinguishingFeatures)
-        }        
+        }
     }
 }

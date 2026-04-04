@@ -95,7 +95,7 @@ struct MainTabView: View {
             let animals = try context.fetch(FetchDescriptor<Animal>())
             let pastures = try context.fetch(FetchDescriptor<Pasture>())
 
-            herdCount = animals.filter { $0.status == .alive }.count
+            herdCount = animals.filter { $0.isActiveInHerd }.count
             pastureCount = pastures.count
 
             // NEW — compute dashboard alerts

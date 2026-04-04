@@ -15,11 +15,20 @@ final class Animal {
     var sex: Sex?
     var birthDate: Date
     var status: AnimalStatus
+    var saleDate: Date?
+    var salePrice: Double?
+    var reasonSold: String?
+    var deathDate: Date?
+    var causeOfDeath: String?
+    var statusReferenceID: UUID?
+    var isSoftDeleted: Bool
+    var softDeletedAt: Date?
+    var softDeleteReason: String?
     var sire: String?
     var dam: String?
     var locationRaw: AnimalLocation? = AnimalLocation.pasture
     var distinguishingFeatures: [DistinguishingFeature] = []
-    
+
     @Relationship(deleteRule: .cascade) var healthRecords: [HealthRecord] = []
     @Relationship(deleteRule: .cascade) var pregnancyChecks: [PregnancyCheck] = []
     @Relationship(deleteRule: .cascade) var movementRecords: [MovementRecord] = []
@@ -33,7 +42,13 @@ final class Animal {
         set { locationRaw = newValue }
     }
 
+    var isActiveInHerd: Bool {
+        status == .active && !isSoftDeleted
+    }
 
+    var isVisibleRecord: Bool {
+        !isSoftDeleted
+    }
 
     var activeTags: [AnimalTag] {
         tags
@@ -170,22 +185,59 @@ final class Animal {
         syncPrimaryTagFieldsFromTags()
     }
 
+    func applyStatus(_ newStatus: AnimalStatus, effectiveDate: Date = .now) {
+        status = newStatus
+
+        switch newStatus {
+        case .active:
+            saleDate = nil
+            salePrice = nil
+            reasonSold = nil
+            deathDate = nil
+            causeOfDeath = nil
+            statusReferenceID = nil
+        case .sold:
+            saleDate = saleDate ?? effectiveDate
+            deathDate = nil
+            causeOfDeath = nil
+            statusReferenceID = nil
+        case .dead:
+            deathDate = deathDate ?? effectiveDate
+            saleDate = nil
+            salePrice = nil
+            reasonSold = nil
+            statusReferenceID = nil
+        }
+    }
+
+    func softDelete(reason: String? = nil, at date: Date = .now) {
+        isSoftDeleted = true
+        softDeletedAt = date
+        softDeleteReason = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func restoreSoftDeletedRecord() {
+        isSoftDeleted = false
+        softDeletedAt = nil
+        softDeleteReason = nil
+    }
+
     var ageInMonths: Int {
         let now = Date()
         guard birthDate <= now else { return 0 }
         let comps = Calendar.current.dateComponents([.month], from: birthDate, to: now)
         return max(0, comps.month ?? 0)
     }
-    
+
     //MARK: Age Calculation
-    
+
     var age: String {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let birth = calendar.startOfDay(for: birthDate)
-        
+
         guard birth <= today else { return "1 day" }
-        
+
         // Years + Months
         let yearMonth = calendar.dateComponents([.year, .month], from: birth, to: today)
         if let y = yearMonth.year, y >= 1 {
@@ -196,18 +248,18 @@ final class Animal {
                 return y == 1 ? "1yr" : "\(y)yr"
             }
         }
-        
+
         // Months
         let months = calendar.dateComponents([.month], from: birth, to: today).month ?? 0
         if months >= 1 {
             return months == 1 ? "1mo" : "\(months)mo"
         }
-        
+
         // Weeks + Days
         let weekDay = calendar.dateComponents([.weekOfYear, .day], from: birth, to: today)
         let w = weekDay.weekOfYear ?? 0
         let d = weekDay.day ?? 0
-        
+
         if w >= 1 {
             if d > 0 {
                 let weekText = w == 1 ? "1 wk" : "\(w) wks"
@@ -217,7 +269,7 @@ final class Animal {
                 return w == 1 ? "1 wk" : "\(w) wks"
             }
         }
-        
+
         // Days
         let days = calendar.dateComponents([.day], from: birth, to: today).day ?? 0
         let dFinal = max(days, 1)
@@ -225,13 +277,22 @@ final class Animal {
     }
 
     //MARK: Constructor
-    
+
     init(
         name: String,
         tagNumber: String,
         tagColorID: UUID? = nil,
         birthDate: Date,
-        status: AnimalStatus = .alive,
+        status: AnimalStatus = .active,
+        saleDate: Date? = nil,
+        salePrice: Double? = nil,
+        reasonSold: String? = nil,
+        deathDate: Date? = nil,
+        causeOfDeath: String? = nil,
+        statusReferenceID: UUID? = nil,
+        isSoftDeleted: Bool = false,
+        softDeletedAt: Date? = nil,
+        softDeleteReason: String? = nil,
         sire: String? = nil,
         dam: String? = nil,
         pasture: Pasture? = nil,
@@ -243,6 +304,15 @@ final class Animal {
         self.tagColorID = tagColorID
         self.birthDate = birthDate
         self.status = status
+        self.saleDate = saleDate
+        self.salePrice = salePrice
+        self.reasonSold = reasonSold
+        self.deathDate = deathDate
+        self.causeOfDeath = causeOfDeath
+        self.statusReferenceID = statusReferenceID
+        self.isSoftDeleted = isSoftDeleted
+        self.softDeletedAt = softDeletedAt
+        self.softDeleteReason = softDeleteReason
         self.sire = sire
         self.dam = dam
         self.pasture = pasture
@@ -269,6 +339,7 @@ enum Sex: String, Codable, CaseIterable {
     case female
     case male
     case unknown
+
     var label: String {
         switch self {
         case .female: return "Female"
@@ -279,9 +350,48 @@ enum Sex: String, Codable, CaseIterable {
 }
 
 enum AnimalStatus: String, Codable, CaseIterable {
-    case alive
+    case active
     case sold
-    case deceased
+    case dead
+
+    var label: String {
+        switch self {
+        case .active: return "Active"
+        case .sold: return "Sold"
+        case .dead: return "Dead"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .active: return "checkmark.circle.fill"
+        case .sold: return "dollarsign.circle.fill"
+        case .dead: return "xmark.circle.fill"
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+
+        switch rawValue.lowercased() {
+        case "active", "alive":
+            self = .active
+        case "sold":
+            self = .sold
+        case "dead", "deceased":
+            self = .dead
+        case "reference":
+            self = .active
+        default:
+            self = .active
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 enum AnimalLocation: String, Codable, CaseIterable {

@@ -19,7 +19,7 @@ struct AddAnimalView: View {
     @State private var tagColorID: UUID?
     @State private var sex: Sex = .unknown
     @State private var birthDate = Date()
-    @State private var status: AnimalStatus = .alive
+    @State private var status: AnimalStatus = .active
     @State private var selectedPasture: Pasture?
     @State private var sire = ""
     @State private var dam = ""
@@ -106,6 +106,7 @@ struct AddAnimalView: View {
                 sex: sex,
                 distinguishingFeatures: distinguishingFeatures.filter { !$0.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             )
+            animal.applyStatus(status)
 
             context.insert(animal)
             if !animal.tagNumber.isEmpty {

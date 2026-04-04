@@ -23,22 +23,23 @@ struct DashboardAnimalListView: View {
 
         let base: [Animal] = {
             switch kind {
-            case .alive:
-                return animals.filter { $0.status == .alive }
+            case .active:
+                return animals.filter { $0.isActiveInHerd }
             case .workingPen:
-                return animals.filter { $0.status == .alive && $0.location == .workingPen }
+                return animals.filter { $0.isActiveInHerd && $0.location == .workingPen }
             case .unassigned:
-                return animals.filter { $0.status == .alive && $0.location == .pasture && $0.pasture == nil }
+                return animals.filter { $0.isActiveInHerd && $0.location == .pasture && $0.pasture == nil }
             case .overduePregChecks:
                 return animals.filter { animal in
-                    guard animal.status == .alive else { return false }
+                    guard animal.isActiveInHerd else { return false }
                     guard let last = animal.pregnancyChecks.sorted(by: { $0.date > $1.date }).first else { return false }
                     let days = Calendar.current.dateComponents([.day], from: last.date, to: now).day ?? 0
                     return days > pregCheckIntervalDays
                 }
             case .overdueTreatments:
-                // Keep this aligned with DashboardService (does not filter by status).
+                // Keep this aligned with DashboardService (does not filter by herd status, but excludes soft-deleted records).
                 return animals.filter { animal in
+                    guard !animal.isSoftDeleted else { return false }
                     guard let last = animal.healthRecords.sorted(by: { $0.date > $1.date }).first else { return false }
                     let days = Calendar.current.dateComponents([.day], from: last.date, to: now).day ?? 0
                     return days > treatmentIntervalDays
@@ -46,7 +47,7 @@ struct DashboardAnimalListView: View {
             }
         }()
 
-        return base.sorted { $0.tagNumber.localizedStandardCompare($1.tagNumber) == .orderedAscending }
+        return base.sorted { $0.displayTagNumber.localizedStandardCompare($1.displayTagNumber) == .orderedAscending }
     }
 
     var body: some View {
@@ -71,7 +72,7 @@ struct DashboardAnimalListView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 AnimalTagView(
-                    tagNumber: animal.tagNumber,
+                    tagNumber: animal.displayTagNumber,
                     color: def.color,
                     colorName: def.name
                 )

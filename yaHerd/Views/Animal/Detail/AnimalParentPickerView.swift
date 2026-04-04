@@ -28,6 +28,7 @@ struct AnimalParentPickerView: View {
 
     private var filtered: [Animal] {
         animals
+            .filter { !$0.isSoftDeleted }
             .filter { animal in
                 guard let excludeAnimal else { return true }
                 return animal.persistentModelID != excludeAnimal.persistentModelID
@@ -35,7 +36,7 @@ struct AnimalParentPickerView: View {
             .filter { animal in
                 guard !searchText.isEmpty else { return true }
                 let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-                return animal.tagNumber.localizedCaseInsensitiveContains(q)
+                return animal.displayTagNumber.localizedCaseInsensitiveContains(q)
                     || tagColorLibrary.formattedTag(for: animal).localizedCaseInsensitiveContains(q)
             }
             .filter { animal in
@@ -68,7 +69,7 @@ struct AnimalParentPickerView: View {
                                     let def = tagColorLibrary.resolvedDefinition(for: animal)
                                     VStack(alignment: .leading, spacing: 6) {
                                         AnimalTagView(
-                                            tagNumber: animal.tagNumber,
+                                            tagNumber: animal.displayTagNumber,
                                             color: def.color,
                                             colorName: def.name
                                         )

@@ -9,21 +9,25 @@ import SwiftUI
 import SwiftData
 
 struct AnimalDetailView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @AppStorage("allowHardDelete") private var allowHardDelete = false
     @State private var activeParentPicker: ParentPickerType?
     @State private var showingAddTag = false
+    @State private var showingSoftDeleteConfirmation = false
+    @State private var showingHardDeleteConfirmation = false
     var animal: Animal
 
     @Query(sort: \Pasture.name) private var pastures: [Pasture]
+    @Query(sort: \AnimalStatusReference.name) private var statusReferences: [AnimalStatusReference]
 
     private var nameBinding: Binding<String> {
         Binding(
             get: { animal.name },
             set: { newValue in
                 animal.name = newValue
-                try? context.save()
+                saveContext()
             }
         )
     }
@@ -33,7 +37,7 @@ struct AnimalDetailView: View {
             get: { animal.displayTagNumber },
             set: { newValue in
                 animal.updatePrimaryTag(number: newValue, colorID: animal.displayTagColorID)
-                try? context.save()
+                saveContext()
             }
         )
     }
@@ -43,7 +47,7 @@ struct AnimalDetailView: View {
             get: { animal.displayTagColorID },
             set: { newValue in
                 animal.updatePrimaryTag(number: animal.displayTagNumber, colorID: newValue)
-                try? context.save()
+                saveContext()
             }
         )
     }
@@ -53,7 +57,7 @@ struct AnimalDetailView: View {
             get: { animal.sex ?? .female },
             set: { newValue in
                 animal.sex = newValue
-                try? context.save()
+                saveContext()
             }
         )
     }
@@ -63,7 +67,7 @@ struct AnimalDetailView: View {
             get: { animal.birthDate },
             set: { newValue in
                 animal.birthDate = newValue
-                try? context.save()
+                saveContext()
             }
         )
     }
@@ -73,17 +77,7 @@ struct AnimalDetailView: View {
             get: { animal.status },
             set: { newValue in
                 guard animal.status != newValue else { return }
-                let oldStatus = animal.status
-                animal.status = newValue
-
-                let record = StatusRecord(
-                    date: Date(),
-                    oldStatus: oldStatus,
-                    newStatus: newValue,
-                    animal: animal
-                )
-                context.insert(record)
-                try? context.save()
+                updateStatus(newValue)
             }
         )
     }
@@ -118,13 +112,90 @@ struct AnimalDetailView: View {
                 animal.distinguishingFeatures = newValue
                     .map { DistinguishingFeature(id: $0.id, description: $0.description.trimmingCharacters(in: .whitespacesAndNewlines)) }
                     .filter { !$0.description.isEmpty }
-                try? context.save()
+                saveContext()
             }
         )
     }
 
+    private var saleDateBinding: Binding<Date> {
+        Binding(
+            get: { animal.saleDate ?? .now },
+            set: { newValue in
+                animal.saleDate = newValue
+                saveContext()
+            }
+        )
+    }
+
+    private var salePriceTextBinding: Binding<String> {
+        Binding(
+            get: {
+                guard let salePrice = animal.salePrice else { return "" }
+                return salePrice.formatted(.number.precision(.fractionLength(0...2)))
+            },
+            set: { newValue in
+                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                animal.salePrice = Double(trimmed)
+                saveContext()
+            }
+        )
+    }
+
+    private var reasonSoldBinding: Binding<String> {
+        Binding(
+            get: { animal.reasonSold ?? "" },
+            set: { newValue in
+                animal.reasonSold = newValue.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                saveContext()
+            }
+        )
+    }
+
+    private var deathDateBinding: Binding<Date> {
+        Binding(
+            get: { animal.deathDate ?? .now },
+            set: { newValue in
+                animal.deathDate = newValue
+                saveContext()
+            }
+        )
+    }
+
+    private var causeOfDeathBinding: Binding<String> {
+        Binding(
+            get: { animal.causeOfDeath ?? "" },
+            set: { newValue in
+                animal.causeOfDeath = newValue.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                saveContext()
+            }
+        )
+    }
+
+    private var availableStatusReferences: [AnimalStatusReference] {
+        statusReferences
+            .filter { $0.baseStatus == animal.status }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    private var statusReferenceBinding: Binding<UUID?> {
+        Binding(
+            get: { animal.statusReferenceID },
+            set: { newValue in
+                animal.statusReferenceID = newValue
+                saveContext()
+            }
+        )
+    }
+
+    private var selectedStatusReference: AnimalStatusReference? {
+        guard let statusReferenceID = animal.statusReferenceID else { return nil }
+        return statusReferences.first(where: { $0.id == statusReferenceID })
+    }
+
     var body: some View {
         Form {
+            statusSummarySection
+
             AnimalFormView(
                 name: nameBinding,
                 tagNumber: tagNumberBinding,
@@ -138,61 +209,17 @@ struct AnimalDetailView: View {
                 distinguishingFeatures: distinguishingFeaturesBinding,
                 activeParentPicker: $activeParentPicker,
                 pastures: pastures,
-                excludeAnimal: animal
+                excludeAnimal: animal,
+                showsStatusPicker: false
             )
 
-            Section("Tags") {
-                if animal.activeTags.isEmpty {
-                    Text("No active tags")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(animal.activeTags) { tag in
-                        tagRow(for: tag)
-                    }
-                }
-
-                Button("Add Tag") {
-                    showingAddTag = true
-                }
-            }
-
-            Section("Status Actions") {
-                if animal.status != .sold {
-                    Button("Mark as Sold") {
-                        updateStatus(.sold)
-                    }
-                }
-
-                if animal.status != .deceased {
-                    Button("Mark as Deceased") {
-                        updateStatus(.deceased)
-                    }
-                }
-
-                if animal.status != .alive {
-                    Button("Restore to Alive") {
-                        updateStatus(.alive)
-                    }
-                    .foregroundStyle(.blue)
-                }
-            }
-
-            Section("Delete Animal") {
-                Button("Archive (Soft Delete)") {
-                    updateStatus(.deceased)
-                }
-                .foregroundStyle(.orange)
-
-                if allowHardDelete {
-                    Button("Permanently Delete", role: .destructive) {
-                        context.delete(animal)
-                        try? context.save()
-                    }
-                }
-            }
-        }.sheet(item: $activeParentPicker) { picker in
+            statusQuickActionsSection
+            statusDetailSection
+            tagsSection
+            recordManagementSection
+        }
+        .sheet(item: $activeParentPicker) { picker in
             switch picker {
-
             case .sire:
                 AnimalParentPickerView(
                     title: "Select Sire",
@@ -200,7 +227,7 @@ struct AnimalDetailView: View {
                     suggestedSexes: [.male]
                 ) { picked in
                     animal.sire = picked.displayTagNumber
-                    try? context.save()
+                    saveContext()
                     activeParentPicker = nil
                 }
 
@@ -211,7 +238,7 @@ struct AnimalDetailView: View {
                     suggestedSexes: [.female]
                 ) { picked in
                     animal.dam = picked.displayTagNumber
-                    try? context.save()
+                    saveContext()
                     activeParentPicker = nil
                 }
             }
@@ -219,10 +246,29 @@ struct AnimalDetailView: View {
         .sheet(isPresented: $showingAddTag) {
             AnimalTagEditView { number, colorID, isPrimary in
                 _ = animal.addTag(number: number, colorID: colorID, isPrimary: isPrimary)
-                try? context.save()
+                saveContext()
                 showingAddTag = false
             }
             .presentationDetents([.medium, .large])
+        }
+        .confirmationDialog("Soft delete this record?", isPresented: $showingSoftDeleteConfirmation, titleVisibility: .visible) {
+            Button("Soft Delete Record", role: .destructive) {
+                animal.softDelete()
+                saveContext()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Soft-deleted records are hidden from normal herd views but can be restored later.")
+        }
+        .confirmationDialog("Permanently delete this animal?", isPresented: $showingHardDeleteConfirmation, titleVisibility: .visible) {
+            Button("Delete Permanently", role: .destructive) {
+                context.delete(animal)
+                saveContext()
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the animal and all related records from the app.")
         }
         .navigationTitle("Animal")
         .navigationBarTitleDisplayMode(.inline)
@@ -247,7 +293,175 @@ struct AnimalDetailView: View {
         .onAppear {
             if animal.primaryTag == nil, !animal.tagNumber.isEmpty {
                 _ = animal.ensurePrimaryTagRecord()
-                try? context.save()
+                saveContext()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var statusSummarySection: some View {
+        Section("Status") {
+            LabeledContent("Current Status") {
+                Label(animal.status.label, systemImage: animal.status.systemImage)
+                    .fontWeight(.semibold)
+            }
+
+            if let selectedStatusReference {
+                LabeledContent("Status Reference") {
+                    Text(selectedStatusReference.name)
+                        .fontWeight(.medium)
+                }
+            }
+
+            if animal.isSoftDeleted {
+                LabeledContent("Record State") {
+                    Label("Soft Deleted", systemImage: "trash.slash.fill")
+                        .foregroundStyle(.orange)
+                }
+
+                if let softDeletedAt = animal.softDeletedAt {
+                    LabeledContent("Deleted On") {
+                        Text(softDeletedAt.formatted(date: .abbreviated, time: .omitted))
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var statusQuickActionsSection: some View {
+        Section("Quick Actions") {
+            switch animal.status {
+            case .active:
+                Button {
+                    updateStatus(.sold)
+                } label: {
+                    Label("Mark Sold", systemImage: AnimalStatus.sold.systemImage)
+                }
+
+                Button {
+                    updateStatus(.dead)
+                } label: {
+                    Label("Mark Dead", systemImage: AnimalStatus.dead.systemImage)
+                }
+
+            case .sold:
+                Button {
+                    updateStatus(.active)
+                } label: {
+                    Label("Return to Active", systemImage: AnimalStatus.active.systemImage)
+                }
+
+                Button {
+                    updateStatus(.dead)
+                } label: {
+                    Label("Correct to Dead", systemImage: AnimalStatus.dead.systemImage)
+                }
+
+            case .dead:
+                Button {
+                    updateStatus(.active)
+                } label: {
+                    Label("Correct to Active", systemImage: AnimalStatus.active.systemImage)
+                }
+
+                Button {
+                    updateStatus(.sold)
+                } label: {
+                    Label("Correct to Sold", systemImage: AnimalStatus.sold.systemImage)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var statusDetailSection: some View {
+        if !availableStatusReferences.isEmpty || animal.statusReferenceID != nil {
+            Section {
+                Picker("Referenced Status", selection: statusReferenceBinding) {
+                    Text("None").tag(UUID?.none)
+                    
+                    ForEach(availableStatusReferences) { reference in
+                        Text(reference.name)
+                            .tag(UUID?.some(reference.id))
+                    }
+                }
+            } header: {
+                Text("Status Reference")
+            } footer: {
+                Text("Use a referenced status definition for user-defined herd statuses. The base herd status remains Active, Sold, or Dead.")
+            }
+        }
+
+        switch animal.status {
+        case .active:
+            EmptyView()
+
+        case .sold:
+            Section("Sale Details") {
+                DatePicker("Sale Date", selection: saleDateBinding, displayedComponents: .date)
+                TextField("Sale Price", text: salePriceTextBinding)
+                    .keyboardType(.decimalPad)
+                TextField("Reason Sold", text: reasonSoldBinding, axis: .vertical)
+                    .lineLimit(2...4)
+            }
+
+        case .dead:
+            Section("Death Details") {
+                DatePicker("Death Date", selection: deathDateBinding, displayedComponents: .date)
+                TextField("Cause of Death", text: causeOfDeathBinding, axis: .vertical)
+                    .lineLimit(2...4)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var tagsSection: some View {
+        Section("Tags") {
+            if animal.activeTags.isEmpty {
+                Text("No active tags")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(animal.activeTags) { tag in
+                    tagRow(for: tag)
+                }
+            }
+
+            Button("Add Tag") {
+                showingAddTag = true
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var recordManagementSection: some View {
+        Section {
+            if animal.isSoftDeleted {
+                Button {
+                    animal.restoreSoftDeletedRecord()
+                    saveContext()
+                } label: {
+                    Label("Restore Record", systemImage: "arrow.uturn.backward.circle.fill")
+                }
+            } else {
+                Button(role: .destructive) {
+                    showingSoftDeleteConfirmation = true
+                } label: {
+                    Label("Soft Delete Record", systemImage: "trash.slash")
+                }
+                .foregroundStyle(.orange)
+            }
+        } header: {
+            Text("Record Management")
+        } footer: {
+            Text("Soft delete hides the record from normal herd views without changing the animal's herd status.")
+        }
+
+        if allowHardDelete {
+            Section("Danger Zone") {
+                Button("Permanently Delete", role: .destructive) {
+                    showingHardDeleteConfirmation = true
+                }
             }
         }
     }
@@ -267,14 +481,14 @@ struct AnimalDetailView: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button("Retire", role: .destructive) {
                 animal.retireTag(tag)
-                try? context.save()
+                saveContext()
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             if !tag.isPrimary {
                 Button("Set Primary") {
                     animal.promoteTagToPrimary(tag)
-                    try? context.save()
+                    saveContext()
                 }
                 .tint(.blue)
             }
@@ -297,16 +511,22 @@ struct AnimalDetailView: View {
 
     private func updateStatus(_ newStatus: AnimalStatus) {
         let oldStatus = animal.status
-        animal.status = newStatus
+        let oldStatusReferenceID = animal.statusReferenceID
+        animal.applyStatus(newStatus)
 
         let record = StatusRecord(
             date: Date(),
             oldStatus: oldStatus,
             newStatus: newStatus,
+            oldStatusReferenceID: oldStatusReferenceID,
+            newStatusReferenceID: animal.statusReferenceID,
             animal: animal
         )
         context.insert(record)
+        saveContext()
+    }
 
+    private func saveContext() {
         try? context.save()
     }
 }
@@ -378,5 +598,11 @@ private struct AnimalTagEditView: View {
                 }
             }
         }
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

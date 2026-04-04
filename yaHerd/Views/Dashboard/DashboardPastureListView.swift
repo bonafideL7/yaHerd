@@ -23,12 +23,12 @@ struct DashboardPastureListView: View {
             return pastures
         case .overstocked:
             return pastures.filter { p in
-                let alive = p.animals.filter { $0.status == .alive }.count
+                let alive = p.animals.filter { $0.isActiveInHerd }.count
                 return PastureAnalytics(pasture: p, aliveAnimals: alive, fallbackCapacityHead: cap).isOverstocked
             }
         case .underutilized:
             return pastures.filter { p in
-                let alive = p.animals.filter { $0.status == .alive }.count
+                let alive = p.animals.filter { $0.isActiveInHerd }.count
                 return PastureAnalytics(pasture: p, aliveAnimals: alive, fallbackCapacityHead: cap).isUnderutilized
             }
         }
@@ -71,7 +71,7 @@ struct DashboardPastureListView: View {
     }
 
     private func pastureRow(_ pasture: Pasture) -> some View {
-        let alive = pasture.animals.filter { $0.status == .alive }.count
+        let alive = pasture.animals.filter { $0.isActiveInHerd }.count
         let analytics = PastureAnalytics(
             pasture: pasture,
             aliveAnimals: alive,

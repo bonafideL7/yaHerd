@@ -73,7 +73,7 @@ extension Animal {
 
         // STATUS HISTORY
         for s in statusRecords {
-            let desc = "\(s.oldStatus.rawValue.capitalized) → \(s.newStatus.rawValue.capitalized)"
+            let desc = "\(s.oldStatus.label) → \(s.newStatus.label)"
             events.append(
                 AnimalTimelineEvent(
                     date: s.date,

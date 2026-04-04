@@ -22,7 +22,7 @@ struct SampleLargeDataService {
             tagNumber: "74",
             tagColorID: whiteTagColorID,
             birthDate: makeDate(2021, 2, 11),
-            status: .alive,
+            status: .active,
             sire: nil,
             dam: nil,
             pasture: pasture,
@@ -39,7 +39,7 @@ struct SampleLargeDataService {
             birthDate: Date,
             pasture: Pasture,
             name: String = "",
-            status: AnimalStatus = .alive,
+            status: AnimalStatus = .active,
             dam: Animal? = nil,
             sire: Animal? = nil,
             oldTag: (number: String, colorID: UUID?)? = nil,
@@ -92,10 +92,10 @@ struct SampleLargeDataService {
                 context.insert(check)
             }
 
-            if let statusChangeDate, status != .alive {
+            if let statusChangeDate, status != .active {
                 let record = StatusRecord(
                     date: statusChangeDate,
-                    oldStatus: .alive,
+                    oldStatus: .active,
                     newStatus: status,
                     animal: animal
                 )
@@ -166,7 +166,7 @@ struct SampleLargeDataService {
             sex: .female,
             birthDate: femaleBirths["046"]!,
             pasture: pasture,
-            status: .deceased,
+            status: .dead,
             sire: bull74,
             featureDescriptions: ["Dead in pond"],
             statusChangeDate: makeDate(2026, 1, 27)
@@ -223,7 +223,7 @@ struct SampleLargeDataService {
             birthDate: makeDate(2025, 10, 12),
             pasture: pasture,
             name: "Dead in pond UT boy",
-            status: .deceased,
+            status: .dead,
             sire: bull74,
             featureDescriptions: ["Dead in pond"],
             statusChangeDate: makeDate(2026, 1, 27)
@@ -236,7 +236,7 @@ struct SampleLargeDataService {
             birthDate: makeDate(2025, 10, 25),
             pasture: pasture,
             name: "Dead in pond UT girl",
-            status: .deceased,
+            status: .dead,
             sire: bull74,
             featureDescriptions: ["Dead in pond"],
             statusChangeDate: makeDate(2026, 1, 27)
@@ -249,7 +249,7 @@ struct SampleLargeDataService {
             birthDate: makeDate(2025, 9, 8),
             pasture: pasture,
             name: "Untagged girl",
-            status: .deceased,
+            status: .dead,
             sire: bull74,
             statusChangeDate: makeDate(2025, 11, 15)
         )

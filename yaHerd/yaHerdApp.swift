@@ -22,6 +22,7 @@ struct yaHerdApp: App {
                 .modelContainer(for: [
                     Animal.self,
                     AnimalTag.self,
+                    AnimalStatusReference.self,
                     Pasture.self,
                     HealthRecord.self,
                     PregnancyCheck.self,

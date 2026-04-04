@@ -44,7 +44,7 @@ struct DashboardView: View {
     }
 
     private var aliveAnimals: [Animal] {
-        animals.filter { $0.status == .alive }
+        animals.filter { $0.isActiveInHerd }
     }
 
     private var workingPenAnimals: [Animal] {
@@ -77,7 +77,7 @@ struct DashboardView: View {
             return sorted
         case .overstocked:
             return sorted.filter { pasture in
-                let alive = pasture.animals.filter { $0.status == .alive }.count
+                let alive = pasture.animals.filter { $0.isActiveInHerd }.count
                 return PastureAnalytics(
                     pasture: pasture,
                     aliveAnimals: alive,
@@ -86,7 +86,7 @@ struct DashboardView: View {
             }
         case .underutilized:
             return sorted.filter { pasture in
-                let alive = pasture.animals.filter { $0.status == .alive }.count
+                let alive = pasture.animals.filter { $0.isActiveInHerd }.count
                 return PastureAnalytics(
                     pasture: pasture,
                     aliveAnimals: alive,
@@ -144,10 +144,10 @@ struct DashboardView: View {
                 DashboardMetricsGrid(
                     items: [
                         DashboardMetric(
-                            title: "Alive",
+                            title: "Active",
                             value: aliveAnimals.count,
                             iconLucide: "beef",
-                            destination: .animalList(.alive)
+                            destination: .animalList(.active)
                         ),
                         DashboardMetric(
                             title: "Working Pen",
@@ -339,7 +339,7 @@ struct DashboardView: View {
     }
 
     private func pastureRow(_ pasture: Pasture) -> some View {
-        let alive = pasture.animals.filter { $0.status == .alive }.count
+        let alive = pasture.animals.filter { $0.isActiveInHerd }.count
         let analytics = PastureAnalytics(
             pasture: pasture,
             aliveAnimals: alive,

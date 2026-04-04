@@ -17,7 +17,7 @@ struct DashboardService {
 
         // MARK: - 1. Unassigned animals
         let unassigned = animals.filter { animal in
-            animal.pasture == nil && animal.status == .alive && animal.location == .pasture
+            animal.pasture == nil && animal.isActiveInHerd && animal.location == .pasture
         }
         if !unassigned.isEmpty {
             alerts.append(
@@ -38,7 +38,7 @@ struct DashboardService {
             }).first else { return false }
 
             let days = Calendar.current.dateComponents([.day], from: last.date, to: now).day ?? 0
-            return days > pregCheckIntervalDays && animal.status == .alive
+            return days > pregCheckIntervalDays && animal.isActiveInHerd
         }
 
         if !overduePreg.isEmpty {
@@ -55,7 +55,8 @@ struct DashboardService {
 
         // MARK: - 3. Calving Windows (283-day gestation)
         let pregnant = animals.filter { animal in
-            animal.pregnancyChecks.sorted(by: { (a: PregnancyCheck, b: PregnancyCheck) in
+            animal.isActiveInHerd
+            && animal.pregnancyChecks.sorted(by: { (a: PregnancyCheck, b: PregnancyCheck) in
                 a.date > b.date
             }).first?.result == .pregnant
         }
@@ -91,7 +92,7 @@ struct DashboardService {
             }).first else { return false }
 
             let days = Calendar.current.dateComponents([.day], from: last.date, to: now).day ?? 0
-            return days > treatmentIntervalDays
+            return days > treatmentIntervalDays && !animal.isSoftDeleted
         }
 
         if !overdueTreatments.isEmpty {
@@ -124,7 +125,7 @@ struct DashboardService {
         
         if enablePastureOverstockWarnings {
             for pasture in pastures {
-                let alive = pasture.animals.filter { $0.status == .alive }.count
+                let alive = pasture.animals.filter { $0.isActiveInHerd }.count
                 let analytics = PastureAnalytics(
                     pasture: pasture,
                     aliveAnimals: alive,

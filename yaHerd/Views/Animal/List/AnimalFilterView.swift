@@ -12,18 +12,18 @@ import SwiftData
 struct AnimalFilterView: View {
     private enum StatusSelection: Hashable {
         case any
-        case alive
+        case active
         case sold
-        case deceased
+        case dead
 
         init(status: AnimalStatus?) {
             switch status {
-            case .alive:
-                self = .alive
+            case .active:
+                self = .active
             case .sold:
                 self = .sold
-            case .deceased:
-                self = .deceased
+            case .dead:
+                self = .dead
             case nil:
                 self = .any
             }
@@ -33,45 +33,44 @@ struct AnimalFilterView: View {
             switch self {
             case .any:
                 return nil
-            case .alive:
-                return .alive
+            case .active:
+                return .active
             case .sold:
                 return .sold
-            case .deceased:
-                return .deceased
+            case .dead:
+                return .dead
             }
         }
     }
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
 
     @Binding var filter: AnimalFilter
-    @Binding var showArchived: Bool
-    
+    @Binding var showRemovedStatuses: Bool
+    @Binding var showSoftDeletedRecords: Bool
+
     @Query private var pastures: [Pasture]
 
     private var statusSelection: Binding<StatusSelection> {
         Binding(
             get: {
-                if !showArchived, filter.status == nil {
-                    return .alive
+                if !showRemovedStatuses, filter.status == nil {
+                    return .active
                 }
 
                 return StatusSelection(status: filter.status)
             },
             set: { newValue in
-                filter.status = newValue.animalStatus
-
                 switch newValue {
                 case .any:
-                    showArchived = true
-                case .alive:
-                    if showArchived, filter.status == nil {
-                        showArchived = false
-                    }
-                case .sold, .deceased:
-                    showArchived = true
+                    filter.status = nil
+                    showRemovedStatuses = true
+                case .active:
+                    filter.status = nil
+                    showRemovedStatuses = false
+                case .sold, .dead:
+                    filter.status = newValue.animalStatus
+                    showRemovedStatuses = true
                 }
             }
         )
@@ -81,25 +80,26 @@ struct AnimalFilterView: View {
         NavigationStack {
             Form {
                 Section("Visibility") {
-                    Toggle("Show Archived", isOn: $showArchived)
+                    Toggle("Include off-herd animals", isOn: $showRemovedStatuses)
+                    Toggle("Show soft-deleted records", isOn: $showSoftDeletedRecords)
                 }
 
                 Section("Status") {
                     Picker("Status", selection: statusSelection) {
                         Text("Any").tag(StatusSelection.any)
-                        Text("Alive").tag(StatusSelection.alive)
+                        Text("Active").tag(StatusSelection.active)
                         Text("Sold").tag(StatusSelection.sold)
-                        Text("Deceased").tag(StatusSelection.deceased)
+                        Text("Dead").tag(StatusSelection.dead)
                     }
                 }
-                
+
                 Section("Sex") {
                     Picker("Sex", selection: Binding(
                         get: { filter.sex },
                         set: { filter.sex = $0 }
                     )) {
                         Text("Any").tag(Sex?.none)
-                        
+
                         ForEach(Sex.allCases, id: \.self) { sex in
                             Text(sex.label)
                                 .tag(Sex?.some(sex))
@@ -121,12 +121,18 @@ struct AnimalFilterView: View {
                     }
                 }
             }
+            .onChange(of: showRemovedStatuses) { _, newValue in
+                if !newValue {
+                    filter.status = nil
+                }
+            }
             .navigationTitle("Filters")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Clear") {
                         filter.clear()
-                        showArchived = false
+                        showRemovedStatuses = false
+                        showSoftDeletedRecords = false
                     }
                 }
 
