@@ -12,10 +12,10 @@ struct AnimalDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-    @AppStorage("allowHardDelete") private var allowHardDelete = false
+    @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
     @State private var activeParentPicker: ParentPickerType?
     @State private var showingAddTag = false
-    @State private var showingSoftDeleteConfirmation = false
+    @State private var showingArchiveConfirmation = false
     @State private var showingHardDeleteConfirmation = false
     var animal: Animal
 
@@ -251,14 +251,14 @@ struct AnimalDetailView: View {
             }
             .presentationDetents([.medium, .large])
         }
-        .confirmationDialog("Soft delete this record?", isPresented: $showingSoftDeleteConfirmation, titleVisibility: .visible) {
-            Button("Soft Delete Record", role: .destructive) {
-                animal.softDelete()
+        .confirmationDialog("Archive this record?", isPresented: $showingArchiveConfirmation, titleVisibility: .visible) {
+            Button("Archive Record", role: .destructive) {
+                animal.archive()
                 saveContext()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Soft-deleted records are hidden from normal herd views but can be restored later.")
+            Text("Archived records are hidden from normal herd views but can be restored later.")
         }
         .confirmationDialog("Permanently delete this animal?", isPresented: $showingHardDeleteConfirmation, titleVisibility: .visible) {
             Button("Delete Permanently", role: .destructive) {
@@ -313,15 +313,15 @@ struct AnimalDetailView: View {
                 }
             }
 
-            if animal.isSoftDeleted {
+            if animal.isArchived {
                 LabeledContent("Record State") {
-                    Label("Soft Deleted", systemImage: "trash.slash.fill")
+                    Label("Archived", systemImage: "archivebox.fill")
                         .foregroundStyle(.orange)
                 }
 
-                if let softDeletedAt = animal.softDeletedAt {
-                    LabeledContent("Deleted On") {
-                        Text(softDeletedAt.formatted(date: .abbreviated, time: .omitted))
+                if let archivedAt = animal.archivedAt {
+                    LabeledContent("Archived On") {
+                        Text(archivedAt.formatted(date: .abbreviated, time: .omitted))
                     }
                 }
             }
@@ -436,32 +436,38 @@ struct AnimalDetailView: View {
     @ViewBuilder
     private var recordManagementSection: some View {
         Section {
-            if animal.isSoftDeleted {
+            if animal.isArchived {
                 Button {
-                    animal.restoreSoftDeletedRecord()
+                    animal.restoreArchivedRecord()
                     saveContext()
                 } label: {
-                    Label("Restore Record", systemImage: "arrow.uturn.backward.circle.fill")
+                    Label("Restore Archived Record", systemImage: "arrow.uturn.backward.circle.fill")
                 }
             } else {
                 Button(role: .destructive) {
-                    showingSoftDeleteConfirmation = true
+                    showingArchiveConfirmation = true
                 } label: {
-                    Label("Soft Delete Record", systemImage: "trash.slash")
+                    Label("Archive Record", systemImage: "archivebox")
                 }
                 .foregroundStyle(.orange)
             }
         } header: {
             Text("Record Management")
         } footer: {
-            Text("Soft delete hides the record from normal herd views without changing the animal's herd status.")
+            Text("Archiving hides the record from normal herd views without changing the animal's herd status.")
         }
 
-        if allowHardDelete {
-            Section("Danger Zone") {
-                Button("Permanently Delete", role: .destructive) {
-                    showingHardDeleteConfirmation = true
-                }
+        Section {
+            Button("Permanently Delete", role: .destructive) {
+                showingHardDeleteConfirmation = true
+            }
+        } header: {
+            Text("Danger Zone")
+        } footer: {
+            if hardDeleteOnSwipe {
+                Text("Swipe actions on the animal list permanently delete records while this setting is enabled.")
+            } else {
+                Text("Permanent delete removes the animal and all related records from the app.")
             }
         }
     }

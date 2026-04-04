@@ -50,6 +50,19 @@ final class Animal {
         !isSoftDeleted
     }
 
+    var isArchived: Bool {
+        isSoftDeleted
+    }
+
+    var archivedAt: Date? {
+        softDeletedAt
+    }
+
+    var archiveReason: String? {
+        softDeleteReason
+    }
+
+
     var activeTags: [AnimalTag] {
         tags
             .filter { $0.isActive }
@@ -210,16 +223,24 @@ final class Animal {
         }
     }
 
-    func softDelete(reason: String? = nil, at date: Date = .now) {
+    func archive(reason: String? = nil, at date: Date = .now) {
         isSoftDeleted = true
         softDeletedAt = date
         softDeleteReason = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    func restoreSoftDeletedRecord() {
+    func restoreArchivedRecord() {
         isSoftDeleted = false
         softDeletedAt = nil
         softDeleteReason = nil
+    }
+
+    func softDelete(reason: String? = nil, at date: Date = .now) {
+        archive(reason: reason, at: date)
+    }
+
+    func restoreSoftDeletedRecord() {
+        restoreArchivedRecord()
     }
 
     var ageInMonths: Int {

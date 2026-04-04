@@ -47,7 +47,7 @@ struct AnimalFilterView: View {
 
     @Binding var filter: AnimalFilter
     @Binding var showRemovedStatuses: Bool
-    @Binding var showSoftDeletedRecords: Bool
+    @Binding var showArchivedRecords: Bool
 
     @Query private var pastures: [Pasture]
 
@@ -81,7 +81,7 @@ struct AnimalFilterView: View {
             Form {
                 Section("Visibility") {
                     Toggle("Include off-herd animals", isOn: $showRemovedStatuses)
-                    Toggle("Show soft-deleted records", isOn: $showSoftDeletedRecords)
+                    Toggle("Show archived records", isOn: $showArchivedRecords)
                 }
 
                 Section("Status") {
@@ -132,7 +132,7 @@ struct AnimalFilterView: View {
                     Button("Clear") {
                         filter.clear()
                         showRemovedStatuses = false
-                        showSoftDeletedRecords = false
+                        showArchivedRecords = false
                     }
                 }
 

@@ -15,7 +15,7 @@ struct AnimalListView: View {
     
     // MARK: Storage
     
-    @AppStorage("allowHardDelete") private var allowHardDelete = false
+    @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
     
     // MARK: State
     
@@ -25,7 +25,7 @@ struct AnimalListView: View {
     @State private var showingFilters = false
     @State private var filter = AnimalFilter()
     @State private var showRemovedStatuses = false
-    @State private var showSoftDeletedRecords = false
+    @State private var showArchivedRecords = false
     @State private var isSearching = false
     @FocusState private var isSearchFieldFocused: Bool
     @State private var batchMode = false
@@ -79,7 +79,7 @@ struct AnimalListView: View {
             AnimalFilterView(
                 filter: $filter,
                 showRemovedStatuses: $showRemovedStatuses,
-                showSoftDeletedRecords: $showSoftDeletedRecords
+                showArchivedRecords: $showArchivedRecords
             )
         }
         .sheet(isPresented: $showingPasturePicker) {
@@ -133,14 +133,37 @@ struct AnimalListView: View {
                 NavigationLink(value: animal) {
                     animalRow(animal)
                 }
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    if animal.isArchived || hardDeleteOnSwipe {
+                        Button(role: .destructive) {
+                            performPrimarySwipeAction(for: animal)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    } else {
+                        Button {
+                            performPrimarySwipeAction(for: animal)
+                        } label: {
+                            Label("Archive", systemImage: "archivebox")
+                        }
+                        .tint(.orange)
+                    }
+                }
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    if animal.isArchived {
+                        Button {
+                            restoreArchivedRecord(animal)
+                        } label: {
+                            Label("Restore", systemImage: "arrow.uturn.backward")
+                        }
+                        .tint(.blue)
+                    }
+                }
                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
                 .alignmentGuide(.listRowSeparatorTrailing) { dimensions in
                     dimensions.width
                 }
             }
-        }
-        .onDelete { offsets in
-            deleteAnimals(at: offsets, in: animals)
         }
     }
     
@@ -220,10 +243,10 @@ struct AnimalListView: View {
                 )
             }
 
-            if animal.isSoftDeleted {
+            if animal.isArchived {
                 infoPill(
-                    title: "Deleted",
-                    systemImage: "trash.slash",
+                    title: "Archived",
+                    systemImage: "archivebox",
                     tint: .orange
                 )
             }
@@ -337,8 +360,8 @@ struct AnimalListView: View {
                         showingFilters = true
                     } label: {
                         floatingControlLabel(
-                            title: filter.isActive || showRemovedStatuses || showSoftDeletedRecords ? "Filters On" : "Filters",
-                            systemImage: (filter.isActive || showRemovedStatuses || showSoftDeletedRecords)
+                            title: filter.isActive || showRemovedStatuses || showArchivedRecords ? "Filters On" : "Filters",
+                            systemImage: (filter.isActive || showRemovedStatuses || showArchivedRecords)
                             ? "line.3.horizontal.decrease.circle.fill"
                             : "line.3.horizontal.decrease.circle"
                         )
@@ -565,10 +588,10 @@ struct AnimalListView: View {
             )
         }
 
-        if showSoftDeletedRecords {
+        if showArchivedRecords {
             chips.append(
-                FilterChip(title: "Deleted Visible") {
-                    showSoftDeletedRecords = false
+                FilterChip(title: "Archived Visible") {
+                    showArchivedRecords = false
                 }
             )
         }
@@ -604,7 +627,7 @@ struct AnimalListView: View {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         || filter.isActive
         || showRemovedStatuses
-        || showSoftDeletedRecords
+        || showArchivedRecords
     }
     
     private func clearAllCriteria() {
@@ -615,15 +638,15 @@ struct AnimalListView: View {
     private func clearAllFilters() {
         filter = AnimalFilter()
         showRemovedStatuses = false
-        showSoftDeletedRecords = false
+        showArchivedRecords = false
     }
 
     private var hasHiddenOffHerdAnimals: Bool {
-        animals.contains(where: { $0.status != .active && !$0.isSoftDeleted })
+        animals.contains(where: { $0.status != .active && !$0.isArchived })
     }
 
-    private var hasHiddenDeletedRecords: Bool {
-        animals.contains(where: { $0.isSoftDeleted })
+    private var hasHiddenArchivedRecords: Bool {
+        animals.contains(where: { $0.isArchived })
     }
     
     // MARK: Empty State
@@ -640,7 +663,7 @@ struct AnimalListView: View {
                 }
                 .buttonStyle(.borderedProminent)
             } else {
-                if filter.isActive || showRemovedStatuses || showSoftDeletedRecords {
+                if filter.isActive || showRemovedStatuses || showArchivedRecords {
                     Button("Clear Filters") {
                         clearAllFilters()
                     }
@@ -652,9 +675,9 @@ struct AnimalListView: View {
                     }
                 }
 
-                if !showSoftDeletedRecords && hasHiddenDeletedRecords {
-                    Button("Show Deleted Records") {
-                        showSoftDeletedRecords = true
+                if !showArchivedRecords && hasHiddenArchivedRecords {
+                    Button("Show Archived Records") {
+                        showArchivedRecords = true
                     }
                 }
             }
@@ -675,16 +698,16 @@ struct AnimalListView: View {
             return "No Animals Match These Filters"
         }
         
-        if !showSoftDeletedRecords && hasHiddenDeletedRecords && !showRemovedStatuses && !hasHiddenOffHerdAnimals {
-            return "Deleted Records Hidden"
+        if !showArchivedRecords && hasHiddenArchivedRecords && !showRemovedStatuses && !hasHiddenOffHerdAnimals {
+            return "Archived Records Hidden"
         }
 
         if !showRemovedStatuses {
             return "No Active Animals"
         }
 
-        if !showSoftDeletedRecords && hasHiddenDeletedRecords {
-            return "Deleted Records Hidden"
+        if !showArchivedRecords && hasHiddenArchivedRecords {
+            return "Archived Records Hidden"
         }
         
         return "Nothing to Show"
@@ -703,16 +726,16 @@ struct AnimalListView: View {
             return "Adjust or clear the current filters to see more animals."
         }
         
-        if !showSoftDeletedRecords && hasHiddenDeletedRecords && !showRemovedStatuses && !hasHiddenOffHerdAnimals {
-            return "Soft-deleted records are currently hidden."
+        if !showArchivedRecords && hasHiddenArchivedRecords && !showRemovedStatuses && !hasHiddenOffHerdAnimals {
+            return "Archived records are currently hidden."
         }
 
         if !showRemovedStatuses {
             return "Off-herd animals are currently hidden."
         }
 
-        if !showSoftDeletedRecords && hasHiddenDeletedRecords {
-            return "Soft-deleted records are currently hidden."
+        if !showArchivedRecords && hasHiddenArchivedRecords {
+            return "Archived records are currently hidden."
         }
         
         return "Try changing the current filters or sort."
@@ -731,16 +754,16 @@ struct AnimalListView: View {
             return "line.3.horizontal.decrease.circle"
         }
         
-        if !showSoftDeletedRecords && hasHiddenDeletedRecords && !showRemovedStatuses && !hasHiddenOffHerdAnimals {
-            return "trash.slash"
+        if !showArchivedRecords && hasHiddenArchivedRecords && !showRemovedStatuses && !hasHiddenOffHerdAnimals {
+            return "archivebox"
         }
 
         if !showRemovedStatuses {
             return "person.3.sequence.fill"
         }
 
-        if !showSoftDeletedRecords && hasHiddenDeletedRecords {
-            return "trash.slash"
+        if !showArchivedRecords && hasHiddenArchivedRecords {
+            return "archivebox"
         }
         
         return "tray"
@@ -808,17 +831,18 @@ struct AnimalListView: View {
     
     // MARK: Delete Animal
     
-    private func deleteAnimals(at offsets: IndexSet, in source: [Animal]) {
-        for index in offsets {
-            let animal = source[index]
-            
-            if allowHardDelete {
-                context.delete(animal)
-            } else {
-                animal.softDelete()
-            }
+    private func performPrimarySwipeAction(for animal: Animal) {
+        if animal.isArchived || hardDeleteOnSwipe {
+            context.delete(animal)
+        } else {
+            animal.archive()
         }
-        
+
+        try? context.save()
+    }
+
+    private func restoreArchivedRecord(_ animal: Animal) {
+        animal.restoreArchivedRecord()
         try? context.save()
     }
     
@@ -831,8 +855,8 @@ struct AnimalListView: View {
             result = result.filter { $0.status == .active }
         }
 
-        if !showSoftDeletedRecords {
-            result = result.filter { !$0.isSoftDeleted }
+        if !showArchivedRecords {
+            result = result.filter { !$0.isArchived }
         }
         
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)

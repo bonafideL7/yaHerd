@@ -37,7 +37,7 @@ struct DashboardAnimalListView: View {
                     return days > pregCheckIntervalDays
                 }
             case .overdueTreatments:
-                // Keep this aligned with DashboardService (does not filter by herd status, but excludes soft-deleted records).
+                // Keep this aligned with DashboardService (does not filter by herd status, but excludes archived records).
                 return animals.filter { animal in
                     guard !animal.isSoftDeleted else { return false }
                     guard let last = animal.healthRecords.sorted(by: { $0.date > $1.date }).first else { return false }

@@ -9,7 +9,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @AppStorage("allowHardDelete") private var allowHardDelete = false
+    @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
     @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
     @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
     @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
@@ -55,11 +55,11 @@ struct SettingsView: View {
                 }
 
                 
-                Section("Danger Zone") {
-                    Toggle("Enable Hard Delete", isOn: $allowHardDelete)
+                Section("Animal List Swipe") {
+                    Toggle("Use hard delete for swipe actions", isOn: $hardDeleteOnSwipe)
                         .tint(.red)
 
-                    Text("When enabled, animals can be permanently removed. This cannot be undone.")
+                    Text("When off, swiping an animal archives the record. When on, swiping permanently deletes it.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
