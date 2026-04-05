@@ -20,42 +20,19 @@ struct AddAnimalView: View {
   @State private var errorMessage: String?
   @State private var showingError = false
 
-  private var availableStatusReferences: [AnimalStatusReference] {
-    statusReferences
-      .filter { $0.baseStatus == draft.status }
-      .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-  }
-
   var body: some View {
     NavigationStack {
       Form {
-        AnimalFormView(
-          name: $draft.name,
-          tagNumber: $draft.tagNumber,
-          tagColorID: $draft.tagColorID,
-          sex: $draft.sex,
-          birthDate: $draft.birthDate,
-          status: $draft.status,
-          pasture: $draft.pasture,
-          sire: $draft.sire,
-          dam: $draft.dam,
-          distinguishingFeatures: $draft.distinguishingFeatures,
+        AnimalEditorSections(
+          draft: $draft,
           activeParentPicker: $activeParentPicker,
-          pastures: pastures
-        )
-
-        AnimalStatusEditorSection(
-          status: $draft.status,
-          statusReferenceID: $draft.statusReferenceID,
-          saleDate: $draft.saleDate,
-          salePriceText: $draft.salePriceText,
-          reasonSold: $draft.reasonSold,
-          deathDate: $draft.deathDate,
-          causeOfDeath: $draft.causeOfDeath,
-          availableStatusReferences: availableStatusReferences
+          pastures: pastures,
+          statusReferences: statusReferences,
+          showsStatusPicker: true
         )
       }
       .navigationTitle("Add Animal")
+      .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .confirmationAction) {
           Button("Save") { validateAndSave() }
@@ -70,29 +47,12 @@ struct AddAnimalView: View {
         Text(errorMessage ?? "")
       }
     }
-    .sheet(item: $activeParentPicker) { picker in
-      switch picker {
-      case .sire:
-        AnimalParentPickerView(
-          title: "Select Sire",
-          excludeAnimal: nil,
-          suggestedSexes: [.male]
-        ) { picked in
-          draft.sire = picked.displayTagNumber
-          activeParentPicker = nil
-        }
-
-      case .dam:
-        AnimalParentPickerView(
-          title: "Select Dam",
-          excludeAnimal: nil,
-          suggestedSexes: [.female]
-        ) { picked in
-          draft.dam = picked.displayTagNumber
-          activeParentPicker = nil
-        }
-      }
-    }
+    .animalParentPickerSheet(
+      activePicker: $activeParentPicker,
+      sire: $draft.sire,
+      dam: $draft.dam,
+      excludeAnimal: nil
+    )
   }
 
   private func validateAndSave() {

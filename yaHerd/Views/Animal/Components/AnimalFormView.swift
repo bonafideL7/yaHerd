@@ -239,6 +239,13 @@ enum ParentPickerType: Identifiable {
   }
 }
 
+extension Sequence where Element == AnimalStatusReference {
+  func matchingBaseStatus(_ status: AnimalStatus) -> [AnimalStatusReference] {
+    filter { $0.baseStatus == status }
+      .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+  }
+}
+
 struct TagFieldRow: View {
   @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
@@ -266,7 +273,7 @@ struct TagFieldRow: View {
             colorName: def.name
           )
         } else {
-          Text("—")
+          Text("Not Set")
             .foregroundStyle(.secondary)
         }
       }
@@ -375,7 +382,6 @@ struct DistinguishingFeaturesSection: View {
     }
   }
 }
-
 
 struct DateFieldRow: View {
   let title: String
@@ -494,27 +500,24 @@ struct ParentFieldRow: View {
     Button {
       activePicker = type
     } label: {
-      HStack {
-        Text(title)
-        Spacer()
-
-        if value.isEmpty {
-          Text("—")
-            .foregroundStyle(.secondary)
-        } else {
-          Text(value)
-            .foregroundStyle(.primary)
-        }
+      LabeledContent(title) {
+        Text(value.isEmpty ? "Select" : value)
+          .foregroundStyle(value.isEmpty ? Color.secondary : Color.primary)
       }
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+      if !value.isEmpty {
+        Button("Clear", role: .destructive) {
+          value = ""
+        }
+      }
+    }
   }
 }
 
 struct AnimalFormView: View {
-  @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-
   @Binding var name: String
   @Binding var tagNumber: String
   @Binding var tagColorID: UUID?
@@ -525,48 +528,14 @@ struct AnimalFormView: View {
   @Binding var sire: String
   @Binding var dam: String
   @Binding var distinguishingFeatures: [DistinguishingFeature]
-
-  let pastures: [Pasture]
-  let excludeAnimal: Animal?
-  let showsStatusPicker: Bool
-
   @Binding var activeParentPicker: ParentPickerType?
 
-  init(
-    name: Binding<String>,
-    tagNumber: Binding<String>,
-    tagColorID: Binding<UUID?>,
-    sex: Binding<Sex>,
-    birthDate: Binding<Date>,
-    status: Binding<AnimalStatus>,
-    pasture: Binding<Pasture?>,
-    sire: Binding<String>,
-    dam: Binding<String>,
-    distinguishingFeatures: Binding<[DistinguishingFeature]>,
-    activeParentPicker: Binding<ParentPickerType?>,
-    pastures: [Pasture],
-    excludeAnimal: Animal? = nil,
-    showsStatusPicker: Bool = true
-  ) {
-    self._name = name
-    self._tagNumber = tagNumber
-    self._tagColorID = tagColorID
-    self._sex = sex
-    self._birthDate = birthDate
-    self._status = status
-    self._pasture = pasture
-    self._sire = sire
-    self._dam = dam
-    self._distinguishingFeatures = distinguishingFeatures
-    self._activeParentPicker = activeParentPicker
-    self.pastures = pastures
-    self.excludeAnimal = excludeAnimal
-    self.showsStatusPicker = showsStatusPicker
-  }
+  let pastures: [Pasture]
+  let showsStatusPicker: Bool
 
   var body: some View {
     Group {
-      Section("Details") {
+      Section("Overview") {
         DateFieldRow(title: "Birth Date", date: $birthDate)
 
         Picker("Sex", selection: $sex) {
@@ -602,22 +571,12 @@ struct AnimalFormView: View {
           activePicker: $activeParentPicker
         )
 
-        if !dam.isEmpty {
-          Button("Clear Dam") { dam = "" }
-            .foregroundStyle(.secondary)
-        }
-
         ParentFieldRow(
           title: "Sire",
           value: $sire,
           type: .sire,
           activePicker: $activeParentPicker
         )
-
-        if !sire.isEmpty {
-          Button("Clear Sire") { sire = "" }
-            .foregroundStyle(.secondary)
-        }
       }
 
       Section("Identification") {
@@ -631,6 +590,102 @@ struct AnimalFormView: View {
 
       DistinguishingFeaturesSection(features: $distinguishingFeatures)
     }
+  }
+}
+
+struct AnimalEditorSections: View {
+  @Binding var draft: AnimalEditorDraft
+  @Binding var activeParentPicker: ParentPickerType?
+
+  let pastures: [Pasture]
+  let statusReferences: [AnimalStatusReference]
+  let showsStatusPicker: Bool
+
+  private var availableStatusReferences: [AnimalStatusReference] {
+    statusReferences.matchingBaseStatus(draft.status)
+  }
+
+  var body: some View {
+    Group {
+      AnimalFormView(
+        name: $draft.name,
+        tagNumber: $draft.tagNumber,
+        tagColorID: $draft.tagColorID,
+        sex: $draft.sex,
+        birthDate: $draft.birthDate,
+        status: $draft.status,
+        pasture: $draft.pasture,
+        sire: $draft.sire,
+        dam: $draft.dam,
+        distinguishingFeatures: $draft.distinguishingFeatures,
+        activeParentPicker: $activeParentPicker,
+        pastures: pastures,
+        showsStatusPicker: showsStatusPicker
+      )
+
+      AnimalStatusEditorSection(
+        status: $draft.status,
+        statusReferenceID: $draft.statusReferenceID,
+        saleDate: $draft.saleDate,
+        salePriceText: $draft.salePriceText,
+        reasonSold: $draft.reasonSold,
+        deathDate: $draft.deathDate,
+        causeOfDeath: $draft.causeOfDeath,
+        availableStatusReferences: availableStatusReferences
+      )
+    }
+  }
+}
+
+private struct AnimalParentPickerSheetModifier: ViewModifier {
+  @Binding var activePicker: ParentPickerType?
+  @Binding var sire: String
+  @Binding var dam: String
+
+  let excludeAnimal: Animal?
+
+  func body(content: Content) -> some View {
+    content.sheet(item: $activePicker) { picker in
+      switch picker {
+      case .sire:
+        AnimalParentPickerView(
+          title: "Select Sire",
+          excludeAnimal: excludeAnimal,
+          suggestedSexes: [.male]
+        ) { picked in
+          sire = picked.displayTagNumber
+          activePicker = nil
+        }
+
+      case .dam:
+        AnimalParentPickerView(
+          title: "Select Dam",
+          excludeAnimal: excludeAnimal,
+          suggestedSexes: [.female]
+        ) { picked in
+          dam = picked.displayTagNumber
+          activePicker = nil
+        }
+      }
+    }
+  }
+}
+
+extension View {
+  func animalParentPickerSheet(
+    activePicker: Binding<ParentPickerType?>,
+    sire: Binding<String>,
+    dam: Binding<String>,
+    excludeAnimal: Animal?
+  ) -> some View {
+    modifier(
+      AnimalParentPickerSheetModifier(
+        activePicker: activePicker,
+        sire: sire,
+        dam: dam,
+        excludeAnimal: excludeAnimal
+      )
+    )
   }
 }
 
