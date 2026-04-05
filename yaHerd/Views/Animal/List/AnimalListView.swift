@@ -670,7 +670,7 @@ struct AnimalListView: View {
                 }
                 
                 if !showRemovedStatuses && hasHiddenOffHerdAnimals {
-                    Button("Show Off-Herd") {
+                    Button("Show Inactive") {
                         showRemovedStatuses = true
                     }
                 }

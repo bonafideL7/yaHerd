@@ -44,7 +44,7 @@ struct WorkingChuteView: View {
     }
 
     private var showCastrationSection: Bool {
-        guard let animal else { return false }
+        guard animal != nil else { return false }
         return isMale
     }
 
