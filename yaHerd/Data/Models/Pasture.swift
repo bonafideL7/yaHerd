@@ -1,16 +1,9 @@
-//
-//  Pasture.swift
-//  yaHerd
-//
-//  Created by mm on 11/28/25.
-//
-
-
-import SwiftData
 import Foundation
+import SwiftData
 
 @Model
 final class Pasture {
+    @Attribute(.unique) var publicID: UUID
     @Attribute(.unique) var name: String
     @Relationship(deleteRule: .nullify, inverse: \Animal.pasture)
     var animals: [Animal] = []
@@ -20,7 +13,14 @@ final class Pasture {
     var lastGrazedDate: Date?
     var group: PastureGroup?
 
-    init(name: String, acreage: Double? = nil, usableAcreage: Double? = nil, targetAcresPerHead: Double? = nil) {
+    init(
+        publicID: UUID = UUID(),
+        name: String,
+        acreage: Double? = nil,
+        usableAcreage: Double? = nil,
+        targetAcresPerHead: Double? = nil
+    ) {
+        self.publicID = publicID
         self.name = name
         self.acreage = acreage
         self.usableAcreage = usableAcreage
