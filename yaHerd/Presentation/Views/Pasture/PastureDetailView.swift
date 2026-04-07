@@ -88,7 +88,7 @@ struct PastureDetailView: View {
             Text(model.errorMessage ?? "Unknown error")
         }
         .navigationDestination(for: Animal.self) { animal in
-            AnimalDetailView(animal: animal)
+            AnimalDetailView(animalID: animal.publicID)
         }
     }
 

@@ -21,7 +21,7 @@ struct PregnancyCheckAddView: View {
     @State private var technician = ""
     @State private var estimatedDaysText: String = ""
     @State private var dueDate: Date = .now
-    @State private var selectedSire: Animal?
+    @State private var selectedSire: AnimalParentOption?
     @State private var showingSirePicker = false
     @State private var errorMessage: String?
     @State private var showingError = false
@@ -58,9 +58,9 @@ struct PregnancyCheckAddView: View {
                             Text("Sire")
                             Spacer()
                             if let selectedSire {
-                                let def = tagColorLibrary.resolvedDefinition(for: selectedSire)
+                                let def = tagColorLibrary.resolvedDefinition(tagColorID: selectedSire.displayTagColorID)
                                 AnimalTagView(
-                                    tagNumber: selectedSire.tagNumber,
+                                    tagNumber: selectedSire.displayTagNumber,
                                     color: def.color,
                                     colorName: def.name,
                                     size: .compact
@@ -97,7 +97,7 @@ struct PregnancyCheckAddView: View {
         .sheet(isPresented: $showingSirePicker) {
             AnimalParentPickerView(
                 title: "Select Sire",
-                excludeAnimal: animal,
+                excludeAnimalID: animal.publicID,
                 suggestedSexes: [.male]
             ) { picked in
                 selectedSire = picked
@@ -115,7 +115,7 @@ struct PregnancyCheckAddView: View {
                 technician: technician.isEmpty ? nil : technician,
                 estimatedDaysPregnant: Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)),
                 dueDate: result == .pregnant ? dueDate : nil,
-                sireAnimal: selectedSire,
+                sireAnimal: resolveAnimal(publicID: selectedSire?.id),
                 workingSession: nil,
                 animal: animal
             )
@@ -136,6 +136,18 @@ struct PregnancyCheckAddView: View {
         if let computed = Calendar.current.date(byAdding: .day, value: remaining, to: date) {
             dueDate = computed
         }
+    }
+
+
+
+    private func resolveAnimal(publicID: UUID?) -> Animal? {
+        guard let publicID else { return nil }
+        let descriptor = FetchDescriptor<Animal>(
+            predicate: #Predicate<Animal> { animal in
+                animal.publicID == publicID
+            }
+        )
+        return try? context.fetch(descriptor).first
     }
 
 }

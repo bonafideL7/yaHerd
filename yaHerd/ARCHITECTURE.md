@@ -22,6 +22,17 @@ The pasture flow is the first fully separated slice:
 - `Presentation/ViewModels/*Pasture*`
 - `Presentation/Views/Pasture/*`
 
+## Animal reference implementation
+
+The animal list/add/detail flow now follows the same layered pattern:
+
+- `Domain/Entities/*Animal*`
+- `Domain/Repositories/AnimalRepository.swift`
+- `Domain/UseCases/*Animal*`
+- `Data/Repositories/SwiftDataAnimalRepository.swift`
+- `Presentation/ViewModels/*Animal*`
+- `Presentation/Views/Animal/*`
+
 ## Dependency direction
 
 - `Presentation` depends on `Domain`

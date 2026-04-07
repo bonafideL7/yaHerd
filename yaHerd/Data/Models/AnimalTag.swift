@@ -3,6 +3,7 @@ import SwiftData
 
 @Model
 final class AnimalTag {
+    @Attribute(.unique) var publicID: UUID
     var number: String
     var colorID: UUID?
     var isPrimary: Bool
@@ -13,6 +14,7 @@ final class AnimalTag {
     var animal: Animal?
 
     init(
+        publicID: UUID = UUID(),
         number: String,
         colorID: UUID? = nil,
         isPrimary: Bool = false,
@@ -21,6 +23,7 @@ final class AnimalTag {
         removedAt: Date? = nil,
         animal: Animal? = nil
     ) {
+        self.publicID = publicID
         self.number = number
         self.colorID = colorID
         self.isPrimary = isPrimary

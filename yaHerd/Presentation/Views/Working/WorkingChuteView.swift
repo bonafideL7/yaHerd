@@ -21,7 +21,7 @@ struct WorkingChuteView: View {
     @State private var pregResult: PregnancyResult = .unknown
     @State private var estimatedDaysText: String = ""
     @State private var dueDate: Date = .now
-    @State private var selectedSire: Animal?
+    @State private var selectedSire: AnimalParentOption?
 
     // Male procedure
     @State private var markCastrated: Bool = false
@@ -120,9 +120,9 @@ struct WorkingChuteView: View {
                                 Text("Sire")
                                 Spacer()
                                 if let selectedSire {
-                                    let def = tagColorLibrary.resolvedDefinition(for: selectedSire)
+                                    let def = tagColorLibrary.resolvedDefinition(tagColorID: selectedSire.displayTagColorID)
                                     AnimalTagView(
-                                        tagNumber: selectedSire.tagNumber,
+                                        tagNumber: selectedSire.displayTagNumber,
                                         color: def.color,
                                         colorName: def.name,
                                         size: .compact
@@ -173,7 +173,7 @@ struct WorkingChuteView: View {
     private var sirePickerSheet: some View {
         AnimalParentPickerView(
             title: "Select Sire",
-            excludeAnimal: animal,
+            excludeAnimalID: animal?.publicID,
             suggestedSexes: [.male]
         ) { picked in
             selectedSire = picked
@@ -261,7 +261,7 @@ struct WorkingChuteView: View {
                     technician: nil,
                     estimatedDaysPregnant: estDays,
                     dueDate: computedDue,
-                    sireAnimal: selectedSire,
+                    sireAnimal: resolveAnimal(publicID: selectedSire?.id),
                     workingSession: session,
                     animal: animal
                 )
@@ -301,6 +301,17 @@ struct WorkingChuteView: View {
         try? context.save()
         dismiss()
     }
+
+    private func resolveAnimal(publicID: UUID?) -> Animal? {
+        guard let publicID else { return nil }
+        let descriptor = FetchDescriptor<Animal>(
+            predicate: #Predicate<Animal> { animal in
+                animal.publicID == publicID
+            }
+        )
+        return try? context.fetch(descriptor).first
+    }
+
 }
 
 private struct TreatmentEntry: Identifiable {

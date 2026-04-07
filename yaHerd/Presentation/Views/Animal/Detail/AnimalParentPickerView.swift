@@ -6,53 +6,37 @@
 //
 
 import SwiftUI
-import SwiftData
 
-/// Simple selector that lets the user pick an existing animal as a sire/dam.
-/// This populates the parent's *tag number* onto the child record (no relationship required).
 struct AnimalParentPickerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
-    @Query(sort: \Animal.tagNumber) private var animals: [Animal]
+    @State private var viewModel = AnimalParentPickerViewModel()
 
     let title: String
-    /// Exclude the current animal (self) from the picker.
-    /// This must NOT be based on tag number, since tag numbers are not globally unique.
-    let excludeAnimal: Animal?
+    let excludeAnimalID: UUID?
     let suggestedSexes: Set<Sex>
-    let onSelect: (Animal) -> Void
+    let onSelect: (AnimalParentOption) -> Void
 
-    @State private var searchText = ""
-    @State private var showAllSexes = false
+    private var repository: SwiftDataAnimalRepository {
+        SwiftDataAnimalRepository(context: context)
+    }
 
-    private var filtered: [Animal] {
-        animals
-            .filter { !$0.isSoftDeleted }
-            .filter { animal in
-                guard let excludeAnimal else { return true }
-                return animal.persistentModelID != excludeAnimal.persistentModelID
-            }
-            .filter { animal in
-                guard !searchText.isEmpty else { return true }
-                let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-                return animal.displayTagNumber.localizedCaseInsensitiveContains(q)
-                    || tagColorLibrary.formattedTag(for: animal).localizedCaseInsensitiveContains(q)
-            }
-            .filter { animal in
-                guard !showAllSexes else { return true }
-                // If the herd doesn't have any in the suggested sexes, still show everything.
-                let hasSuggested = animals.contains { suggestedSexes.contains($0.sex ?? .female) }
-                guard hasSuggested else { return true }
-                return suggestedSexes.contains(animal.sex ?? .female)
-            }
+    private var filtered: [AnimalParentOption] {
+        viewModel.filtered(suggestedSexes: suggestedSexes) { animal in
+            tagColorLibrary.formattedTag(tagNumber: animal.displayTagNumber, colorID: animal.displayTagColorID)
+        }
     }
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    Toggle("Show all", isOn: $showAllSexes)
+                    Toggle("Show all", isOn: Binding(
+                        get: { viewModel.showAllSexes },
+                        set: { viewModel.showAllSexes = $0 }
+                    ))
                 }
 
                 Section {
@@ -66,14 +50,14 @@ struct AnimalParentPickerView: View {
                                 dismiss()
                             } label: {
                                 HStack(spacing: 10) {
-                                    let def = tagColorLibrary.resolvedDefinition(for: animal)
+                                    let def = tagColorLibrary.resolvedDefinition(tagColorID: animal.displayTagColorID)
                                     VStack(alignment: .leading, spacing: 6) {
                                         AnimalTagView(
                                             tagNumber: animal.displayTagNumber,
                                             color: def.color,
                                             colorName: def.name
                                         )
-                                        Text((animal.sex ?? .female).label)
+                                        Text(animal.sex.label)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
@@ -86,12 +70,21 @@ struct AnimalParentPickerView: View {
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "Search tag")
+            .searchable(
+                text: Binding(
+                    get: { viewModel.searchText },
+                    set: { viewModel.searchText = $0 }
+                ),
+                prompt: "Search tag"
+            )
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
             }
+        }
+        .task {
+            viewModel.load(excluding: excludeAnimalID, using: repository)
         }
     }
 }

@@ -1,13 +1,8 @@
 //
 //  AnimalFilterView.swift
-//  yaHerd
 //
-//  Created by mm on 11/30/25.
-//
-
 
 import SwiftUI
-import SwiftData
 
 struct AnimalFilterView: View {
     private enum StatusSelection: Hashable {
@@ -49,7 +44,7 @@ struct AnimalFilterView: View {
     @Binding var showRemovedStatuses: Bool
     @Binding var showArchivedRecords: Bool
 
-    @Query private var pastures: [Pasture]
+    let pastureOptions: [PastureOption]
 
     private var statusSelection: Binding<StatusSelection> {
         Binding(
@@ -57,7 +52,6 @@ struct AnimalFilterView: View {
                 if !showRemovedStatuses, filter.status == nil {
                     return .active
                 }
-
                 return StatusSelection(status: filter.status)
             },
             set: { newValue in
@@ -109,14 +103,14 @@ struct AnimalFilterView: View {
 
                 Section("Pasture") {
                     Picker("Pasture", selection: Binding(
-                        get: { filter.pasture },
-                        set: { filter.pasture = $0 }
+                        get: { filter.pastureID },
+                        set: { filter.pastureID = $0 }
                     )) {
-                        Text("Any").tag(Pasture?.none)
+                        Text("Any").tag(UUID?.none)
 
-                        ForEach(pastures) { pasture in
+                        ForEach(pastureOptions) { pasture in
                             Text(pasture.name)
-                                .tag(Pasture?.some(pasture))
+                                .tag(UUID?.some(pasture.id))
                         }
                     }
                 }

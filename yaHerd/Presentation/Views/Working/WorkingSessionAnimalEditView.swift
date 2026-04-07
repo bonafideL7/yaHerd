@@ -38,7 +38,7 @@ struct WorkingSessionAnimalEditView: View {
     @State private var pregDate: Date = .now
     @State private var estimatedDaysText: String = ""
     @State private var dueDate: Date = .now
-    @State private var selectedSire: Animal?
+    @State private var selectedSire: AnimalParentOption?
     @State private var showingSirePicker: Bool = false
 
     // Castration / observations
@@ -191,9 +191,9 @@ struct WorkingSessionAnimalEditView: View {
                                     Text("Sire")
                                     Spacer()
                                     if let selectedSire {
-                                        let def = tagColorLibrary.resolvedDefinition(for: selectedSire)
+                                        let def = tagColorLibrary.resolvedDefinition(tagColorID: selectedSire.displayTagColorID)
                                         AnimalTagView(
-                                            tagNumber: selectedSire.tagNumber,
+                                            tagNumber: selectedSire.displayTagNumber,
                                             color: def.color,
                                             colorName: def.name,
                                             size: .compact
@@ -260,7 +260,7 @@ struct WorkingSessionAnimalEditView: View {
     private var sirePickerSheet: some View {
         AnimalParentPickerView(
             title: "Select Sire",
-            excludeAnimal: animal,
+            excludeAnimalID: animal?.publicID,
             suggestedSexes: [.male]
         ) { picked in
             selectedSire = picked
@@ -294,7 +294,15 @@ struct WorkingSessionAnimalEditView: View {
             pregDate = existing.date
             estimatedDaysText = existing.estimatedDaysPregnant.map { "\($0)" } ?? ""
             dueDate = existing.dueDate ?? session.date
-            selectedSire = existing.sireAnimal
+            selectedSire = existing.sireAnimal.map {
+                AnimalParentOption(
+                    id: $0.publicID,
+                    displayTagNumber: $0.displayTagNumber,
+                    displayTagColorID: $0.displayTagColorID,
+                    sex: $0.sex ?? .female,
+                    isArchived: $0.isArchived
+                )
+            }
         } else {
             recordPregCheck = false
             pregResult = .unknown
@@ -370,7 +378,7 @@ struct WorkingSessionAnimalEditView: View {
                     technician: nil,
                     estimatedDaysPregnant: estDays,
                     dueDate: computedDue,
-                    sireAnimal: selectedSire,
+                    sireAnimal: resolveAnimal(publicID: selectedSire?.id),
                     workingSession: session,
                     animal: animal
                 )
@@ -433,6 +441,17 @@ struct WorkingSessionAnimalEditView: View {
 
         seedState()
     }
+
+    private func resolveAnimal(publicID: UUID?) -> Animal? {
+        guard let publicID else { return nil }
+        let descriptor = FetchDescriptor<Animal>(
+            predicate: #Predicate<Animal> { animal in
+                animal.publicID == publicID
+            }
+        )
+        return try? context.fetch(descriptor).first
+    }
+
 }
 
 private struct TreatmentEditEntry: Identifiable {

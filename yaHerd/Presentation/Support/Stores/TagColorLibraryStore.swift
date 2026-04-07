@@ -105,14 +105,23 @@ final class TagColorLibraryStore: ObservableObject {
         return colors.first(where: { $0.id == id })
     }
 
+
+    func resolvedDefinition(tagColorID: UUID?) -> TagColorDefinition {
+        definition(for: tagColorID) ?? defaultColor
+    }
+
+    func formattedTag(tagNumber: String, colorID: UUID?) -> String {
+        let def = resolvedDefinition(tagColorID: colorID)
+        let number = tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        return number.isEmpty ? "—" : "\(def.prefix)\(number)"
+    }
+
     func resolvedDefinition(for animal: Animal) -> TagColorDefinition {
-        return definition(for: animal.displayTagColorID) ?? defaultColor
+        resolvedDefinition(tagColorID: animal.displayTagColorID)
     }
 
     func formattedTag(for animal: Animal) -> String {
-        let def = resolvedDefinition(for: animal)
-        let number = animal.displayTagNumber
-        return number.isEmpty ? "—" : "\(def.prefix)\(number)"
+        formattedTag(tagNumber: animal.displayTagNumber, colorID: animal.displayTagColorID)
     }
 
     // MARK: - CRUD

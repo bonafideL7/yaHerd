@@ -9,6 +9,7 @@ import Foundation
 
 @Model
 final class Animal {
+    @Attribute(.unique) var publicID: UUID
     var name: String
     var tagNumber: String
     var tagColorID: UUID?
@@ -62,7 +63,6 @@ final class Animal {
         softDeleteReason
     }
 
-
     var activeTags: [AnimalTag] {
         tags
             .filter { $0.isActive }
@@ -90,7 +90,7 @@ final class Animal {
     var secondaryActiveTags: [AnimalTag] {
         activeTags.filter { tag in
             guard let primaryTag else { return true }
-            return tag.persistentModelID != primaryTag.persistentModelID
+            return tag.publicID != primaryTag.publicID
         }
     }
 
@@ -168,7 +168,7 @@ final class Animal {
         tag.number = trimmedNumber
         tag.colorID = colorID
 
-        for otherTag in tags where otherTag.persistentModelID != tag.persistentModelID && otherTag.isActive {
+        for otherTag in tags where otherTag.publicID != tag.publicID && otherTag.isActive {
             otherTag.isPrimary = false
         }
 
@@ -177,7 +177,7 @@ final class Animal {
 
     func promoteTagToPrimary(_ tag: AnimalTag) {
         for existingTag in tags where existingTag.isActive {
-            existingTag.isPrimary = existingTag.persistentModelID == tag.persistentModelID
+            existingTag.isPrimary = existingTag.publicID == tag.publicID
         }
         tag.isActive = true
         tag.removedAt = nil
@@ -250,8 +250,6 @@ final class Animal {
         return max(0, comps.month ?? 0)
     }
 
-    //MARK: Age Calculation
-
     var age: String {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
@@ -259,7 +257,6 @@ final class Animal {
 
         guard birth <= today else { return "1 day" }
 
-        // Years + Months
         let yearMonth = calendar.dateComponents([.year, .month], from: birth, to: today)
         if let y = yearMonth.year, y >= 1 {
             let m = yearMonth.month ?? 0
@@ -270,13 +267,11 @@ final class Animal {
             }
         }
 
-        // Months
         let months = calendar.dateComponents([.month], from: birth, to: today).month ?? 0
         if months >= 1 {
             return months == 1 ? "1mo" : "\(months)mo"
         }
 
-        // Weeks + Days
         let weekDay = calendar.dateComponents([.weekOfYear, .day], from: birth, to: today)
         let w = weekDay.weekOfYear ?? 0
         let d = weekDay.day ?? 0
@@ -291,15 +286,13 @@ final class Animal {
             }
         }
 
-        // Days
         let days = calendar.dateComponents([.day], from: birth, to: today).day ?? 0
         let dFinal = max(days, 1)
         return dFinal == 1 ? "1 day" : "\(dFinal) days"
     }
 
-    //MARK: Constructor
-
     init(
+        publicID: UUID = UUID(),
         name: String,
         tagNumber: String,
         tagColorID: UUID? = nil,
@@ -320,6 +313,7 @@ final class Animal {
         sex: Sex? = nil,
         distinguishingFeatures: [DistinguishingFeature] = []
     ) {
+        self.publicID = publicID
         self.name = name
         self.tagNumber = tagNumber
         self.tagColorID = tagColorID
@@ -342,80 +336,4 @@ final class Animal {
         self.sex = sex ?? .female
         self.distinguishingFeatures = distinguishingFeatures
     }
-}
-
-struct DistinguishingFeature: Codable, Hashable, Identifiable {
-    var id: UUID
-    var description: String
-
-    init(id: UUID = UUID(), description: String) {
-        self.id = id
-        self.description = description
-    }
-}
-
-//MARK: Constants
-
-enum Sex: String, Codable, CaseIterable {
-    case female
-    case male
-    case unknown
-
-    var label: String {
-        switch self {
-        case .female: return "Female"
-        case .male: return "Male"
-        case .unknown: return "Unknown"
-        }
-    }
-}
-
-enum AnimalStatus: String, Codable, CaseIterable {
-    case active
-    case sold
-    case dead
-
-    var label: String {
-        switch self {
-        case .active: return "Active"
-        case .sold: return "Sold"
-        case .dead: return "Dead"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .active: return "checkmark.circle.fill"
-        case .sold: return "dollarsign.circle.fill"
-        case .dead: return "xmark.circle.fill"
-        }
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let rawValue = try container.decode(String.self)
-
-        switch rawValue.lowercased() {
-        case "active", "alive":
-            self = .active
-        case "sold":
-            self = .sold
-        case "dead", "deceased":
-            self = .dead
-        case "reference":
-            self = .active
-        default:
-            self = .active
-        }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
-    }
-}
-
-enum AnimalLocation: String, Codable, CaseIterable {
-    case pasture
-    case workingPen
 }

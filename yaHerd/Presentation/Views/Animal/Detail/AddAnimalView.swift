@@ -5,70 +5,78 @@
 //  Created by mm on 11/28/25.
 //
 
-import SwiftData
 import SwiftUI
 
 struct AddAnimalView: View {
-  @Environment(\.modelContext) private var context
-  @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
 
-  @Query(sort: \Pasture.name) private var pastures: [Pasture]
-  @Query(sort: \AnimalStatusReference.name) private var statusReferences: [AnimalStatusReference]
+    @State private var form = AnimalFormViewModel()
+    @State private var activeParentPicker: ParentPickerType?
+    @State private var showingError = false
 
-  @State private var draft = AnimalEditorDraft()
-  @State private var activeParentPicker: ParentPickerType?
-  @State private var errorMessage: String?
-  @State private var showingError = false
+    private var repository: SwiftDataAnimalRepository {
+        SwiftDataAnimalRepository(context: context)
+    }
 
-  var body: some View {
-    NavigationStack {
-      Form {
-        AnimalEditorSections(
-          draft: $draft,
-          activeParentPicker: $activeParentPicker,
-          pastures: pastures,
-          statusReferences: statusReferences,
-          showsStatusPicker: true
+    var body: some View {
+        NavigationStack {
+            Form {
+                AnimalEditorSections(
+                    draft: Binding(
+                        get: { form.draft },
+                        set: { form.draft = $0 }
+                    ),
+                    activeParentPicker: $activeParentPicker,
+                    pastures: form.pastureOptions,
+                    statusReferences: form.statusReferenceOptions,
+                    showsStatusPicker: true
+                )
+            }
+            .navigationTitle("Add Animal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { validateAndSave() }
+                }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: { dismiss() })
+                }
+            }
+            .alert("Validation Error", isPresented: $showingError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(form.errorMessage ?? "")
+            }
+        }
+        .task {
+            form.loadSupportData(using: repository)
+        }
+        .animalParentPickerSheet(
+            activePicker: $activeParentPicker,
+            sire: Binding(
+                get: { form.draft.sire },
+                set: { form.draft.sire = $0 }
+            ),
+            dam: Binding(
+                get: { form.draft.dam },
+                set: { form.draft.dam = $0 }
+            ),
+            excludeAnimalID: nil
         )
-      }
-      .navigationTitle("Add Animal")
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Save") { validateAndSave() }
+        .onChange(of: form.errorMessage) { _, newValue in
+            showingError = newValue != nil
         }
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel", action: { dismiss() })
+    }
+
+    private func validateAndSave() {
+        do {
+            let input = try form.makeInput()
+            _ = try CreateAnimalUseCase(repository: repository).execute(input: input)
+            dismiss()
+        } catch {
+            form.errorMessage = error.localizedDescription
+            showingError = true
         }
-      }
-      .alert("Validation Error", isPresented: $showingError) {
-        Button("OK", role: .cancel) {}
-      } message: {
-        Text(errorMessage ?? "")
-      }
     }
-    .animalParentPickerSheet(
-      activePicker: $activeParentPicker,
-      sire: $draft.sire,
-      dam: $draft.dam,
-      excludeAnimal: nil
-    )
-  }
-
-  private func validateAndSave() {
-    do {
-      let animal = try draft.makeAnimal()
-      context.insert(animal)
-
-      if !animal.tagNumber.isEmpty {
-        _ = animal.ensurePrimaryTagRecord()
-      }
-
-      try context.save()
-      dismiss()
-    } catch {
-      errorMessage = error.localizedDescription
-      showingError = true
-    }
-  }
 }
