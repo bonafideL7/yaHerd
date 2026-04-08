@@ -4,9 +4,11 @@ import SwiftUI
 
 struct SampleDataService {
     
-    static func seedIfNeeded(context: ModelContext) {
-        
-        // Seed working protocol templates (safe to do independently of animal seed)
+    static func seedDefaultsIfNeeded(context: ModelContext) {
+        seedProtocolTemplatesIfNeeded(context: context)
+    }
+
+    static func seedSampleDataIfNeeded(context: ModelContext) {
         seedProtocolTemplatesIfNeeded(context: context)
         
         // Avoid reseeding sample animals/pastures

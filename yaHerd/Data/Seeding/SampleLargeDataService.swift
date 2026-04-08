@@ -138,28 +138,28 @@ struct SampleLargeDataService {
         let mom68 = makeAnimal(tagNumber: "68", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["68"]!, pasture: pasture, sire: bull74)
         let mom227 = makeAnimal(tagNumber: "227", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["227"]!, pasture: pasture, sire: bull74)
 
-        _ = makeAnimal(tagNumber: "67", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["67"]!, pasture: pasture, sire: bull74, pregDate: pregnancyCheckDate)
-        _ = makeAnimal(tagNumber: "83", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["83"]!, pasture: pasture, sire: bull74)
-        _ = makeAnimal(tagNumber: "020", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["020"]!, pasture: pasture, sire: bull74, oldTag: ("91", whiteTagColorID))
-        _ = makeAnimal(tagNumber: "287", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["287"]!, pasture: pasture, sire: bull74, pregDate: pregnancyCheckDate)
-        _ = makeAnimal(tagNumber: "352", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["352"]!, pasture: pasture, sire: bull74)
-        _ = makeAnimal(tagNumber: "365", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["365"]!, pasture: pasture, sire: bull74)
-        _ = makeAnimal(tagNumber: "366", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["366"]!, pasture: pasture, sire: bull74, oldTag: ("16", whiteTagColorID), pregDate: pregnancyCheckDate)
-        _ = makeAnimal(tagNumber: "372", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["372"]!, pasture: pasture, sire: bull74, oldTag: ("143", blueTagColorID))
-        _ = makeAnimal(tagNumber: "379", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["379"]!, pasture: pasture, sire: bull74, oldTag: ("46", whiteTagColorID), featureDescriptions: ["Bad eye"], pregDate: pregnancyCheckDate)
-        _ = makeAnimal(tagNumber: "380", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["380"]!, pasture: pasture, sire: bull74, oldTag: ("047", whiteTagColorID))
-        _ = makeAnimal(tagNumber: "385", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["385"]!, pasture: pasture, sire: bull74, oldTag: ("040", whiteTagColorID))
-        _ = makeAnimal(tagNumber: "395", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["395"]!, pasture: pasture, sire: bull74, oldTag: ("014", whiteTagColorID), pregDate: pregnancyCheckDate)
-        _ = makeAnimal(tagNumber: "403", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["403"]!, pasture: pasture, sire: bull74, oldTag: ("072", whiteTagColorID), pregDate: pregnancyCheckDate, isHeifer: true)
-        _ = makeAnimal(tagNumber: "426", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["426"]!, pasture: pasture, sire: bull74, oldTag: ("039", whiteTagColorID), pregDate: pregnancyCheckDate, isHeifer: true)
-        _ = makeAnimal(tagNumber: "427", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["427"]!, pasture: pasture, sire: bull74, oldTag: ("041", whiteTagColorID), pregDate: pregnancyCheckDate, isHeifer: true)
+        _ = makeAnimal(tagNumber: "67", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["67"]!, pasture: pasture, pregDate: pregnancyCheckDate)
+        _ = makeAnimal(tagNumber: "83", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["83"]!, pasture: pasture)
+        _ = makeAnimal(tagNumber: "020", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["020"]!, pasture: pasture, oldTag: ("91", whiteTagColorID))
+        _ = makeAnimal(tagNumber: "287", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["287"]!, pasture: pasture, pregDate: pregnancyCheckDate)
+        _ = makeAnimal(tagNumber: "352", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["352"]!, pasture: pasture)
+        _ = makeAnimal(tagNumber: "365", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["365"]!, pasture: pasture)
+        _ = makeAnimal(tagNumber: "366", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["366"]!, pasture: pasture, oldTag: ("16", whiteTagColorID), pregDate: pregnancyCheckDate)
+        _ = makeAnimal(tagNumber: "372", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["372"]!, pasture: pasture, oldTag: ("143", blueTagColorID))
+        _ = makeAnimal(tagNumber: "379", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["379"]!, pasture: pasture, oldTag: ("46", whiteTagColorID), featureDescriptions: ["Bad eye"], pregDate: pregnancyCheckDate)
+        _ = makeAnimal(tagNumber: "380", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["380"]!, pasture: pasture, oldTag: ("047", whiteTagColorID))
+        _ = makeAnimal(tagNumber: "385", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["385"]!, pasture: pasture, oldTag: ("040", whiteTagColorID))
+        _ = makeAnimal(tagNumber: "395", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["395"]!, pasture: pasture, oldTag: ("014", whiteTagColorID), pregDate: pregnancyCheckDate)
+        _ = makeAnimal(tagNumber: "403", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["403"]!, pasture: pasture, oldTag: ("072", whiteTagColorID), pregDate: pregnancyCheckDate, isHeifer: true)
+        _ = makeAnimal(tagNumber: "426", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["426"]!, pasture: pasture, oldTag: ("039", whiteTagColorID), pregDate: pregnancyCheckDate, isHeifer: true)
+        _ = makeAnimal(tagNumber: "427", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["427"]!, pasture: pasture, oldTag: ("041", whiteTagColorID), pregDate: pregnancyCheckDate, isHeifer: true)
 
-        _ = makeAnimal(tagNumber: "6", colorID: greenTagColorID, sex: .female, birthDate: femaleBirths["6"]!, pasture: pasture, name: "Aelin", sire: bull74)
-        _ = makeAnimal(tagNumber: "7", colorID: greenTagColorID, sex: .female, birthDate: femaleBirths["7"]!, pasture: pasture, name: "ZZ Top", sire: bull74)
-        _ = makeAnimal(tagNumber: "8", colorID: greenTagColorID, sex: .female, birthDate: femaleBirths["8"]!, pasture: pasture, name: "Lottie", sire: bull74)
+        _ = makeAnimal(tagNumber: "6", colorID: greenTagColorID, sex: .female, birthDate: femaleBirths["6"]!, pasture: pasture, name: "Aelin")
+        _ = makeAnimal(tagNumber: "7", colorID: greenTagColorID, sex: .female, birthDate: femaleBirths["7"]!, pasture: pasture, name: "ZZ Top")
+        _ = makeAnimal(tagNumber: "8", colorID: greenTagColorID, sex: .female, birthDate: femaleBirths["8"]!, pasture: pasture, name: "Lottie")
 
-        _ = makeAnimal(tagNumber: "424", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["424"]!, pasture: pasture, sire: bull74, oldTag: ("017", whiteTagColorID))
-        _ = makeAnimal(tagNumber: "423", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["423"]!, pasture: pasture, sire: bull74, oldTag: ("043", whiteTagColorID))
+        _ = makeAnimal(tagNumber: "424", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["424"]!, pasture: pasture, oldTag: ("017", whiteTagColorID))
+        _ = makeAnimal(tagNumber: "423", colorID: whiteTagColorID, sex: .female, birthDate: femaleBirths["423"]!, pasture: pasture, oldTag: ("043", whiteTagColorID))
         _ = makeAnimal(
             tagNumber: "046",
             colorID: whiteTagColorID,
@@ -167,7 +167,6 @@ struct SampleLargeDataService {
             birthDate: femaleBirths["046"]!,
             pasture: pasture,
             status: .dead,
-            sire: bull74,
             featureDescriptions: ["Dead in pond"],
             statusChangeDate: makeDate(2026, 1, 27)
         )
@@ -211,7 +210,6 @@ struct SampleLargeDataService {
             sex: .unknown,
             birthDate: makeDate(2026, 3, 6),
             pasture: pasture,
-            name: "Calf of 227",
             dam: mom227,
             sire: bull74
         )
@@ -222,10 +220,7 @@ struct SampleLargeDataService {
             sex: .male,
             birthDate: makeDate(2025, 10, 12),
             pasture: pasture,
-            name: "Dead in pond UT boy",
             status: .dead,
-            sire: bull74,
-            featureDescriptions: ["Dead in pond"],
             statusChangeDate: makeDate(2026, 1, 27)
         )
 
@@ -235,10 +230,7 @@ struct SampleLargeDataService {
             sex: .female,
             birthDate: makeDate(2025, 10, 25),
             pasture: pasture,
-            name: "Dead in pond UT girl",
             status: .dead,
-            sire: bull74,
-            featureDescriptions: ["Dead in pond"],
             statusChangeDate: makeDate(2026, 1, 27)
         )
 
@@ -248,9 +240,7 @@ struct SampleLargeDataService {
             sex: .female,
             birthDate: makeDate(2025, 9, 8),
             pasture: pasture,
-            name: "Untagged girl",
             status: .dead,
-            sire: bull74,
             statusChangeDate: makeDate(2025, 11, 15)
         )
 

@@ -615,6 +615,12 @@ struct AnimalListView: View {
                     showingAdd = true
                 }
                 .buttonStyle(.borderedProminent)
+
+                Button("Add Sample Data") {
+                    SampleDataService.seedSampleDataIfNeeded(context: context)
+                    reload()
+                }
+                .buttonStyle(.bordered)
             } else {
                 if filter.isActive || showRemovedStatuses || showArchivedRecords {
                     Button("Clear Filters") {
