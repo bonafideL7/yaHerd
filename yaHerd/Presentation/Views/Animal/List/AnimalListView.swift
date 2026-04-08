@@ -3,6 +3,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct AnimalListView: View {
     @Environment(\.modelContext) private var context
@@ -65,7 +66,7 @@ struct AnimalListView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomOverlay
         }
-        .sheet(isPresented: $showingAdd) {
+        .sheet(isPresented: $showingAdd, onDismiss: reload) {
             AddAnimalView()
         }
         .sheet(isPresented: $showingFilters) {
@@ -87,19 +88,23 @@ struct AnimalListView: View {
                 batchMode = false
             }
         }
-        .task {
-            viewModel.load(using: repository)
-        }
-        .onAppear {
-            viewModel.load(using: repository)
-        }
+        .onAppear(perform: reload)
         .animation(.snappy, value: batchMode)
         .animation(.snappy, value: selectedAnimalIDs.count)
         .animation(.snappy, value: currentFilterChips.count)
     }
 
+    private func reload() {
+        viewModel.load(using: repository)
+    }
+
+    private var backgroundView: some View {
+        Color(.systemGroupedBackground)
+            .ignoresSafeArea()
+    }
+
     private var herdList: some View {
-        List {
+        List(selection: batchMode ? $selectedAnimalIDs : nil) {
             ForEach(groupedAnimals) { section in
                 if shouldUseSections {
                     Section(section.title) {
@@ -110,6 +115,7 @@ struct AnimalListView: View {
                 }
             }
         }
+        .environment(\.editMode, .constant(batchMode ? .active : .inactive))
         .listStyle(.insetGrouped)
         .scrollContentBackground(.automatic)
     }
@@ -118,15 +124,13 @@ struct AnimalListView: View {
     private func sectionRows(_ animals: [AnimalSummary]) -> some View {
         ForEach(animals) { animal in
             if batchMode {
-                Button {
-                    toggleSelection(for: animal.id)
-                } label: {
-                    animalRow(animal)
-                }
-                .buttonStyle(.plain)
-                .listRowBackground(batchRowBackground(for: animal))
-                .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
-                .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
+                animalRow(animal)
+                    .tag(animal.id)
+                    .listRowBackground(batchRowBackground(for: animal))
+                    .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+                    .alignmentGuide(.listRowSeparatorTrailing) { dimensions in
+                        dimensions.width
+                    }
             } else {
                 NavigationLink(value: animal.id) {
                     animalRow(animal)
@@ -158,7 +162,9 @@ struct AnimalListView: View {
                     }
                 }
                 .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
-                .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
+                .alignmentGuide(.listRowSeparatorTrailing) { dimensions in
+                    dimensions.width
+                }
             }
         }
     }
@@ -260,7 +266,7 @@ struct AnimalListView: View {
             pastureBadge(
                 pastureName,
                 systemImage: "leaf",
-                tint: .accentColor,
+                tint: .accent,
                 fillOpacity: 0.12
             )
         }
@@ -303,109 +309,123 @@ struct AnimalListView: View {
             if batchMode {
                 batchActionBar
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                floatingControlBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+    }
+
+    private var floatingControlBar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                if isSearching {
+                    bottomSearchField
+
+                    Button("Cancel") {
+                        searchText = ""
+                        isSearchFieldFocused = false
+                        withAnimation(.snappy) {
+                            isSearching = false
+                        }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(.thinMaterial, in: Capsule())
+                    .buttonStyle(.plain)
+                } else {
+                    Menu {
+                        Picker("Sort", selection: $sortOrder) {
+                            ForEach(AnimalSortOrder.allCases, id: \.self) { option in
+                                Label(option.label, systemImage: option.icon)
+                                    .tag(option)
+                            }
+                        }
+                    } label: {
+                        floatingControlLabel(
+                            title: sortOrder.label,
+                            systemImage: "arrow.up.arrow.down"
+                        )
+                    }
+
+                    Button {
+                        showingFilters = true
+                    } label: {
+                        floatingControlLabel(
+                            title: filter.isActive || showRemovedStatuses || showArchivedRecords ? "Filters On" : "Filters",
+                            systemImage: (filter.isActive || showRemovedStatuses || showArchivedRecords)
+                            ? "line.3.horizontal.decrease.circle.fill"
+                            : "line.3.horizontal.decrease.circle"
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        withAnimation(.snappy) {
+                            isSearching = true
+                        }
+                    } label: {
+                        floatingIconControlLabel(systemImage: "magnifyingglass")
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
-            VStack(spacing: 10) {
-                HStack(spacing: 10) {
-                    if isSearching {
-                        bottomSearchField
-                            .transition(.move(edge: .trailing).combined(with: .opacity))
-                    } else {
-                        Button {
-                            withAnimation(.snappy) {
-                                isSearching = true
-                            }
-                        } label: {
-                            floatingIconControlLabel(systemImage: "magnifyingglass")
-                        }
-                        .buttonStyle(.plain)
-
-                        Menu {
-                            Picker("Sort", selection: $sortOrder) {
-                                ForEach(AnimalSortOrder.allCases, id: \.self) { order in
-                                    Label(order.label, systemImage: order.icon)
-                                        .tag(order)
-                                }
-                            }
-                        } label: {
-                            floatingIconControlLabel(systemImage: "arrow.up.arrow.down")
-                        }
-                        .buttonStyle(.plain)
-
-                        Button {
-                            showingFilters = true
-                        } label: {
-                            floatingControlLabel(title: "Filters", systemImage: "line.3.horizontal.decrease.circle")
-                        }
-                        .buttonStyle(.plain)
-
+            if !isSearching && !currentFilterChips.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
                         if hasAnyActiveCriteria {
-                            Button {
+                            Button("Clear") {
                                 clearAllCriteria()
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(.thinMaterial, in: Capsule())
+                            .buttonStyle(.plain)
+                        }
+                        if !currentFilterChips.isEmpty {
+                            Text("\(currentFilterChips.count) active filter\(currentFilterChips.count == 1 ? "" : "s")")
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                                .padding(.horizontal, 4)
+                        }
+
+                        ForEach(currentFilterChips) { chip in
+                            Button {
+                                chip.remove()
                             } label: {
-                                Text("Clear")
-                                    .font(.subheadline.weight(.semibold))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 10)
-                                    .background(.thinMaterial, in: Capsule())
+                                HStack(spacing: 6) {
+                                    Text(chip.title)
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.caption)
+                                }
+                                .font(.caption.weight(.medium))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .background(.thinMaterial, in: Capsule())
                             }
                             .buttonStyle(.plain)
                         }
                     }
                 }
-
-                if !currentFilterChips.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            if !isSearching {
-                                Button {
-                                    withAnimation(.snappy) {
-                                        isSearching = true
-                                    }
-                                } label: {
-                                    floatingIconControlLabel(systemImage: "magnifyingglass")
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            if !currentFilterChips.isEmpty {
-                                Text("\(currentFilterChips.count) active filter\(currentFilterChips.count == 1 ? "" : "s")")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.primary)
-                                    .padding(.horizontal, 4)
-                            }
-
-                            ForEach(currentFilterChips) { chip in
-                                Button {
-                                    chip.remove()
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Text(chip.title)
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(.caption)
-                                    }
-                                    .font(.caption.weight(.medium))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 8)
-                                    .background(.thinMaterial, in: Capsule())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                }
             }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .strokeBorder(.white.opacity(0.18))
-            }
-            .shadow(radius: 10, y: 4)
-            .onChange(of: isSearching) { _, newValue in
-                if newValue {
-                    isSearchFieldFocused = true
-                }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(.white.opacity(0.18))
+        }
+        .shadow(radius: 10, y: 4)
+        .onChange(of: isSearching) { _, newValue in
+            if newValue {
+                isSearchFieldFocused = true
             }
         }
     }
@@ -726,7 +746,11 @@ struct AnimalListView: View {
 
             return grouped
                 .map { key, value in
-                    AnimalSection(id: "sex-\(key)", title: key, animals: value)
+                    AnimalSection(
+                        id: "sex-\(key)",
+                        title: key,
+                        animals: value
+                    )
                 }
                 .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
 
@@ -737,12 +761,22 @@ struct AnimalListView: View {
 
             return grouped
                 .map { key, value in
-                    AnimalSection(id: "status-\(key)", title: key, animals: value)
+                    AnimalSection(
+                        id: "status-\(key)",
+                        title: key,
+                        animals: value
+                    )
                 }
                 .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
 
         default:
-            return [AnimalSection(id: "all", title: "Animals", animals: filteredAndSortedAnimals)]
+            return [
+                AnimalSection(
+                    id: "all",
+                    title: "Animals",
+                    animals: filteredAndSortedAnimals
+                )
+            ]
         }
     }
 
@@ -806,13 +840,5 @@ struct AnimalListView: View {
         }
 
         return result
-    }
-
-    private func toggleSelection(for animalID: UUID) {
-        if selectedAnimalIDs.contains(animalID) {
-            selectedAnimalIDs.remove(animalID)
-        } else {
-            selectedAnimalIDs.insert(animalID)
-        }
     }
 }

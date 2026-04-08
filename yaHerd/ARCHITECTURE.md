@@ -11,9 +11,24 @@
 - `Presentation/`
   - SwiftUI views, screen models, presentation support types
 
+## Dashboard reference implementation
+
+The dashboard flow now follows the same layered split as the rest of the app:
+
+- `Domain/Entities/Dashboard/*`
+- `Domain/Repositories/DashboardRepository.swift`
+- `Domain/UseCases/Dashboard/*`
+- `Domain/Services/DashboardService.swift`
+- `Data/Repositories/SwiftDataDashboardRepository.swift`
+- `Presentation/ViewModels/Dashboard/*`
+- `Presentation/Views/Dashboard/*`
+- `App/Navigation/DashboardRoute.swift`
+
+The dashboard UI is now a thin composition layer. Alert generation, overdue rules, stocking logic, list derivation, and snapshot assembly live in `Domain`.
+
 ## Pasture reference implementation
 
-The pasture flow is the first fully separated slice:
+The pasture flow is separated as:
 
 - `Domain/Entities/*Pasture*`
 - `Domain/Repositories/PastureRepository.swift`
@@ -24,7 +39,7 @@ The pasture flow is the first fully separated slice:
 
 ## Animal reference implementation
 
-The animal list/add/detail flow now follows the same layered pattern:
+The animal list/add/detail flow follows the same layered pattern:
 
 - `Domain/Entities/*Animal*`
 - `Domain/Repositories/AnimalRepository.swift`
@@ -40,12 +55,10 @@ The animal list/add/detail flow now follows the same layered pattern:
 - `Domain` does not depend on `Presentation` or `Data`
 - `App` wires the layers together
 
-## Migration path for the rest of the project
+## Rules for future growth
 
-Move the remaining slices the same way:
-
-1. create domain entities and repository protocols
-2. add use cases for application actions
-3. implement SwiftData repositories in `Data/Repositories`
-4. move screen state out of views into `Presentation/ViewModels`
-5. keep views thin and declarative
+1. keep views declarative and state-light
+2. move screen logic into presentation view models
+3. put business rules and derivations in domain services and use cases
+4. keep SwiftData access inside data repositories
+5. keep navigation types in `App` or `Presentation`, never in `Data`

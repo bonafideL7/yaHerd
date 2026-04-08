@@ -1,23 +1,157 @@
 import Foundation
-import SwiftData
 
 struct DashboardService {
+    func makeSnapshot(
+        records: DashboardRecords,
+        configuration: DashboardConfiguration,
+        now: Date = .now
+    ) -> DashboardSnapshot {
+        let searchableAnimals = sortedAnimalItems(from: activeAnimals(in: records))
+        let pastures = sortedPastureItems(from: records.pastures, configuration: configuration)
 
-    static func generateAlerts(
-        animals: [Animal],
-        pastures: [Pasture],
-        pregCheckIntervalDays: Int,
-        treatmentIntervalDays: Int,
-        enablePastureOverstockWarnings: Bool,
-        pastureCapacity: Int
+        return DashboardSnapshot(
+            activeSession: activeSession(in: records),
+            alerts: alerts(in: records, configuration: configuration, now: now),
+            overview: overview(in: records),
+            searchableAnimals: searchableAnimals,
+            pastures: pastures
+        )
+    }
+
+    func makeAnimalList(
+        kind: DashboardAnimalListKind,
+        records: DashboardRecords,
+        configuration: DashboardConfiguration,
+        now: Date = .now
+    ) -> [DashboardAnimalItem] {
+        let animals: [DashboardAnimalRecord]
+
+        switch kind {
+        case .active:
+            animals = activeAnimals(in: records)
+        case .workingPen:
+            animals = activeAnimals(in: records).filter { $0.location == .workingPen }
+        case .unassigned:
+            animals = activeAnimals(in: records).filter { $0.location == .pasture && $0.pastureID == nil }
+        case .overduePregChecks:
+            animals = records.animals.filter { animal in
+                guard animal.isActiveInHerd else { return false }
+                guard let lastCheckDate = animal.lastPregnancyCheckDate else { return false }
+                let days = Calendar.current.dateComponents([.day], from: lastCheckDate, to: now).day ?? 0
+                return days > configuration.pregnancyCheckIntervalDays
+            }
+        case .overdueTreatments:
+            animals = records.animals.filter { animal in
+                guard !animal.isArchived else { return false }
+                guard let lastTreatmentDate = animal.lastTreatmentDate else { return false }
+                let days = Calendar.current.dateComponents([.day], from: lastTreatmentDate, to: now).day ?? 0
+                return days > configuration.treatmentIntervalDays
+            }
+        }
+
+        return sortedAnimalItems(from: animals)
+    }
+
+    func filterPastures(
+        _ items: [DashboardPastureItem],
+        filter: DashboardPastureFilter
+    ) -> [DashboardPastureItem] {
+        switch filter {
+        case .all:
+            return items
+        case .overstocked:
+            return items.filter { $0.isOverstocked }
+        case .underutilized:
+            return items.filter { $0.isUnderutilized }
+        }
+    }
+
+    private func overview(in records: DashboardRecords) -> DashboardOverview {
+        let active = activeAnimals(in: records)
+
+        return DashboardOverview(
+            activeAnimalCount: active.count,
+            workingPenCount: active.filter { $0.location == .workingPen }.count,
+            unassignedAnimalCount: active.filter { $0.location == .pasture && $0.pastureID == nil }.count,
+            pastureCount: records.pastures.count
+        )
+    }
+
+    private func activeAnimals(in records: DashboardRecords) -> [DashboardAnimalRecord] {
+        records.animals.filter { $0.isActiveInHerd }
+    }
+
+    private func activeSession(in records: DashboardRecords) -> DashboardWorkingSessionSummary? {
+        records.workingSessions
+            .sorted { lhs, rhs in
+                lhs.date > rhs.date
+            }
+            .first(where: { $0.isActive })
+            .map { session in
+                DashboardWorkingSessionSummary(
+                    id: session.id,
+                    date: session.date,
+                    sourcePastureName: session.sourcePastureName,
+                    protocolName: session.protocolName,
+                    totalQueueItems: session.totalQueueItems,
+                    completedQueueItems: session.completedQueueItems
+                )
+            }
+    }
+
+    private func sortedAnimalItems(from animals: [DashboardAnimalRecord]) -> [DashboardAnimalItem] {
+        animals
+            .map { animal in
+                DashboardAnimalItem(
+                    id: animal.id,
+                    displayTagNumber: animal.displayTagNumber,
+                    displayTagColorID: animal.displayTagColorID,
+                    sex: animal.sex,
+                    pastureID: animal.pastureID,
+                    pastureName: animal.pastureName,
+                    location: animal.location
+                )
+            }
+            .sorted { lhs, rhs in
+                lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
+            }
+    }
+
+    private func sortedPastureItems(
+        from pastures: [DashboardPastureRecord],
+        configuration: DashboardConfiguration
+    ) -> [DashboardPastureItem] {
+        pastures
+            .map { pasture in
+                DashboardPastureItem(
+                    id: pasture.id,
+                    name: pasture.name,
+                    activeAnimalCount: pasture.activeAnimalCount,
+                    metrics: PastureMetrics(
+                        acreage: pasture.acreage,
+                        usableAcreage: pasture.usableAcreage,
+                        activeAnimals: pasture.activeAnimalCount,
+                        targetAcresPerHead: pasture.targetAcresPerHead,
+                        fallbackCapacityHead: Double(configuration.fallbackPastureCapacity)
+                    ),
+                    lastGrazedDate: pasture.lastGrazedDate
+                )
+            }
+            .sorted { lhs, rhs in
+                lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+            }
+    }
+
+    private func alerts(
+        in records: DashboardRecords,
+        configuration: DashboardConfiguration,
+        now: Date
     ) -> [DashboardAlert] {
-
         var alerts: [DashboardAlert] = []
-        let now = Date()
+        let active = activeAnimals(in: records)
 
-        // MARK: - 1. Unassigned animals
-        let unassigned = animals.filter { animal in
-            animal.pasture == nil && animal.isActiveInHerd && animal.location == .pasture
+        let unassigned = active.filter { animal in
+            animal.pastureID == nil && animal.location == .pasture
         }
         if !unassigned.isEmpty {
             alerts.append(
@@ -31,21 +165,16 @@ struct DashboardService {
             )
         }
 
-        // MARK: - 2. Overdue Pregnancy Checks
-        let overduePreg = animals.filter { animal in
-            guard let last = animal.pregnancyChecks.sorted(by: { (a: PregnancyCheck, b: PregnancyCheck) in
-                a.date > b.date
-            }).first else { return false }
-
-            let days = Calendar.current.dateComponents([.day], from: last.date, to: now).day ?? 0
-            return days > pregCheckIntervalDays && animal.isActiveInHerd
+        let overduePregnancyChecks = active.filter { animal in
+            guard let lastCheckDate = animal.lastPregnancyCheckDate else { return false }
+            let days = Calendar.current.dateComponents([.day], from: lastCheckDate, to: now).day ?? 0
+            return days > configuration.pregnancyCheckIntervalDays
         }
-
-        if !overduePreg.isEmpty {
+        if !overduePregnancyChecks.isEmpty {
             alerts.append(
                 DashboardAlert(
-                    title: "\(overduePreg.count) animals overdue for pregnancy check",
-                    message: "Last check exceeds \(pregCheckIntervalDays) days.",
+                    title: "\(overduePregnancyChecks.count) animals overdue for pregnancy check",
+                    message: "Last check exceeds \(configuration.pregnancyCheckIntervalDays) days.",
                     icon: "stethoscope",
                     severity: .warning,
                     destination: .animalList(.overduePregChecks)
@@ -53,53 +182,35 @@ struct DashboardService {
             )
         }
 
-        // MARK: - 3. Calving Windows (283-day gestation)
-        let pregnant = animals.filter { animal in
-            animal.isActiveInHerd
-            && animal.pregnancyChecks.sorted(by: { (a: PregnancyCheck, b: PregnancyCheck) in
-                a.date > b.date
-            }).first?.result == .pregnant
+        let calvingOverdueAnimals = active.filter { animal in
+            guard animal.lastPregnancyStatus == .pregnant else { return false }
+            guard let expectedCalvingDate = animal.expectedCalvingDate else { return false }
+            return now > expectedCalvingDate
         }
-
-        for animal in pregnant {
-            guard let last = animal.pregnancyChecks.sorted(by: { (a: PregnancyCheck, b: PregnancyCheck) in
-                a.date > b.date
-            }).first else { continue }
-
-            let calvingDate: Date = {
-                if let due = last.dueDate { return due }
-                // fallback: 283-day gestation from check date
-                return Calendar.current.date(byAdding: .day, value: 283, to: last.date) ?? last.date
-            }()
-
-            if now > calvingDate {
-                alerts.append(
-                    DashboardAlert(
-                        title: "Calving possibly overdue for \(animal.tagNumber)",
-                        message: "Expected around \(calvingDate.formatted(date: .abbreviated, time: .omitted))",
-                        icon: "baby",
-                        severity: .critical,
-                        destination: .animal(animal)
-                    )
+        for animal in calvingOverdueAnimals {
+            guard let expectedCalvingDate = animal.expectedCalvingDate else { continue }
+            alerts.append(
+                DashboardAlert(
+                    title: "Calving possibly overdue for \(animal.displayTagNumber)",
+                    message: "Expected around \(expectedCalvingDate.formatted(date: .abbreviated, time: .omitted))",
+                    icon: "baby",
+                    severity: .critical,
+                    destination: .animal(animal.id)
                 )
-            }
+            )
         }
 
-        // MARK: - 4. Overdue Treatments
-        let overdueTreatments = animals.filter { animal in
-            guard let last = animal.healthRecords.sorted(by: { (a: HealthRecord, b: HealthRecord) in
-                a.date > b.date
-            }).first else { return false }
-
-            let days = Calendar.current.dateComponents([.day], from: last.date, to: now).day ?? 0
-            return days > treatmentIntervalDays && !animal.isSoftDeleted
+        let overdueTreatments = records.animals.filter { animal in
+            guard !animal.isArchived else { return false }
+            guard let lastTreatmentDate = animal.lastTreatmentDate else { return false }
+            let days = Calendar.current.dateComponents([.day], from: lastTreatmentDate, to: now).day ?? 0
+            return days > configuration.treatmentIntervalDays
         }
-
         if !overdueTreatments.isEmpty {
             alerts.append(
                 DashboardAlert(
                     title: "\(overdueTreatments.count) animals overdue for treatments",
-                    message: "Treatments older than \(treatmentIntervalDays) days.",
+                    message: "Treatments older than \(configuration.treatmentIntervalDays) days.",
                     icon: "pill",
                     severity: .warning,
                     destination: .animalList(.overdueTreatments)
@@ -107,51 +218,26 @@ struct DashboardService {
             )
         }
 
-        // MARK: - 5. Pasture Overstock
-//        if enablePastureOverstockWarnings {
-//            for pasture in pastures {
-//                if pasture.animals.count > pastureCapacity {
-//                    alerts.append(
-//                        DashboardAlert(
-//                            title: "Overstock warning: \(pasture.name)",
-//                            message: "\(pasture.animals.count) animals > capacity \(pastureCapacity)",
-//                            icon: "alert-triangle",
-//                            severity: .warning
-//                        )
-//                    )
-//                }
-//            }
-//        }
-        
-        if enablePastureOverstockWarnings {
-            for pasture in pastures {
-                let alive = pasture.animals.filter { $0.isActiveInHerd }.count
-                let analytics = PastureAnalytics(
-                    pasture: pasture,
-                    aliveAnimals: alive,
-                    fallbackCapacityHead: Double(pastureCapacity)
-                )
-                
-                if analytics.isOverstocked,
-                   let cap = analytics.capacityHead {
-                    alerts.append(
-                        DashboardAlert(
-                            title: "Overstock warning in \(pasture.name)",
-                            message: "\(alive) animals > capacity \(Int(cap))",
-                            icon: "alert-triangle",
-                            severity: .warning,
-                            destination: .pasture(pasture)
-                        )
+        if configuration.enablePastureOverstockWarnings {
+            let overstockedPastures = sortedPastureItems(from: records.pastures, configuration: configuration)
+                .filter { $0.isOverstocked }
+
+            for pasture in overstockedPastures {
+                let capacity = pasture.capacityHead.map { Int($0) } ?? configuration.fallbackPastureCapacity
+                alerts.append(
+                    DashboardAlert(
+                        title: "Overstock warning in \(pasture.name)",
+                        message: "\(pasture.activeAnimalCount) animals > capacity \(capacity)",
+                        icon: "alert-triangle",
+                        severity: .warning,
+                        destination: .pasture(pasture.id)
                     )
-                }
+                )
             }
         }
 
-        // MARK: - Final Sort (severity)
-        let sortedAlerts = alerts.sorted(by: { (a: DashboardAlert, b: DashboardAlert) in
-            a.severityOrder > b.severityOrder
-        })
-
-        return sortedAlerts
+        return alerts.sorted { lhs, rhs in
+            lhs.severityOrder > rhs.severityOrder
+        }
     }
 }

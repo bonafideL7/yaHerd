@@ -1,45 +1,81 @@
-//
-//  DashboardPastureListView.swift
-//  yaHerd
-//
-
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct DashboardPastureListView: View {
-
     @Environment(\.modelContext) private var context
 
+    @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
+    @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
+    @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
     @AppStorage("pastureCapacity") private var pastureCapacity = 30
 
-    @Query(sort: \Pasture.name) private var pastures: [Pasture]
+    @Query private var animals: [Animal]
+    @Query private var pastures: [Pasture]
 
-    @State private var filter: Filter = .all
+    @State private var viewModel = DashboardPastureListViewModel()
+    @State private var filter: DashboardPastureFilter = .all
 
-    private var filteredPastures: [Pasture] {
-        let cap = Double(pastureCapacity)
-        switch filter {
-        case .all:
-            return pastures
-        case .overstocked:
-            return pastures.filter { p in
-                let alive = p.animals.filter { $0.isActiveInHerd }.count
-                return PastureAnalytics(pasture: p, aliveAnimals: alive, fallbackCapacityHead: cap).isOverstocked
+    private var repository: any DashboardRepository {
+        SwiftDataDashboardRepository(context: context)
+    }
+
+    private var configuration: DashboardConfiguration {
+        DashboardConfiguration(
+            pregnancyCheckIntervalDays: pregCheckIntervalDays,
+            treatmentIntervalDays: treatmentIntervalDays,
+            enablePastureOverstockWarnings: enablePastureOverstockWarnings,
+            fallbackPastureCapacity: pastureCapacity
+        )
+    }
+
+    private var configurationSignature: String {
+        [
+            String(configuration.pregnancyCheckIntervalDays),
+            String(configuration.treatmentIntervalDays),
+            String(configuration.enablePastureOverstockWarnings),
+            String(configuration.fallbackPastureCapacity)
+        ].joined(separator: ":")
+    }
+
+    private var filteredPastures: [DashboardPastureItem] {
+        viewModel.filteredItems(filter)
+    }
+
+
+    private var reloadKey: String {
+        [
+            configurationSignature,
+            animalObservationSignature,
+            pastureObservationSignature
+        ].joined(separator: "|")
+    }
+
+    private var animalObservationSignature: String {
+        animals
+            .sorted { $0.publicID.uuidString < $1.publicID.uuidString }
+            .map { animal in
+                [
+                    animal.publicID.uuidString,
+                    animal.status.rawValue,
+                    String(animal.isArchived),
+                    animal.pasture?.publicID.uuidString ?? "nil"
+                ].joined(separator: ":")
             }
-        case .underutilized:
-            return pastures.filter { p in
-                let alive = p.animals.filter { $0.isActiveInHerd }.count
-                return PastureAnalytics(pasture: p, aliveAnimals: alive, fallbackCapacityHead: cap).isUnderutilized
-            }
-        }
+            .joined(separator: "|")
+    }
+
+    private var pastureObservationSignature: String {
+        let sortedPastures = pastures.sorted { $0.publicID.uuidString < $1.publicID.uuidString }
+        let signatures = sortedPastures.map(pastureSignature)
+        return signatures.joined(separator: "|")
     }
 
     var body: some View {
         List {
             Section {
                 Picker("Pastures", selection: $filter) {
-                    ForEach(Filter.allCases, id: \.self) { f in
-                        Text(f.label).tag(f)
+                    ForEach(DashboardPastureFilter.allCases, id: \.self) { option in
+                        Text(option.label).tag(option)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -51,13 +87,16 @@ struct DashboardPastureListView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(filteredPastures) { pasture in
-                        NavigationLink(value: pasture) {
+                        NavigationLink(value: DashboardRoute.pasture(pasture.id)) {
                             pastureRow(pasture)
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button {
-                                pasture.lastGrazedDate = .now
-                                try? context.save()
+                                viewModel.markPastureGrazedToday(
+                                    pastureID: pasture.id,
+                                    configuration: configuration,
+                                    using: repository
+                                )
                             } label: {
                                 Label("Grazed today", systemImage: "calendar")
                             }
@@ -68,28 +107,63 @@ struct DashboardPastureListView: View {
             }
         }
         .navigationTitle("Pastures")
+        .task(id: reloadKey) {
+            viewModel.load(configuration: configuration, using: repository)
+        }
+        .alert("Dashboard Error", isPresented: errorBinding) {
+            Button("OK", role: .cancel) {
+                viewModel.errorMessage = nil
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? "Unknown error")
+        }
     }
 
-    private func pastureRow(_ pasture: Pasture) -> some View {
-        let alive = pasture.animals.filter { $0.isActiveInHerd }.count
-        let analytics = PastureAnalytics(
-            pasture: pasture,
-            aliveAnimals: alive,
-            fallbackCapacityHead: Double(pastureCapacity)
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    viewModel.errorMessage = nil
+                }
+            }
         )
+    }
 
-        return VStack(alignment: .leading, spacing: 6) {
+    private func pastureSignature(_ pasture: Pasture) -> String {
+        [
+            pasture.publicID.uuidString,
+            pasture.name,
+            formattedDateString(pasture.lastGrazedDate),
+            formattedDoubleString(pasture.acreage),
+            formattedDoubleString(pasture.usableAcreage),
+            formattedDoubleString(pasture.targetAcresPerHead)
+        ].joined(separator: ":")
+    }
+
+    private func formattedDateString(_ date: Date?) -> String {
+        guard let date else { return "nil" }
+        return date.formatted(date: .numeric, time: .standard)
+    }
+
+    private func formattedDoubleString(_ value: Double?) -> String {
+        guard let value else { return "nil" }
+        return String(value)
+    }
+
+    private func pastureRow(_ pasture: DashboardPastureItem) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text(pasture.name)
                     .font(.headline)
 
                 Spacer()
 
-                if analytics.isOverstocked {
+                if pasture.isOverstocked {
                     Label("Over", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(.red)
-                } else if analytics.isUnderutilized {
+                } else if pasture.isUnderutilized {
                     Label("Low", systemImage: "arrow.down.right")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -97,34 +171,20 @@ struct DashboardPastureListView: View {
             }
 
             HStack(spacing: 10) {
-                Text("\(alive) head")
-                if analytics.acres > 0 {
-                    Text("• \(analytics.acres.formatted(.number.precision(.fractionLength(0...1)))) ac")
+                Text("\(pasture.activeAnimalCount) head")
+                if pasture.acres > 0 {
+                    Text("• \(pasture.acres.formatted(.number.precision(.fractionLength(0...1)))) ac")
                 }
-                if let cap = analytics.capacityHead {
-                    Text("• cap \(Int(cap))")
+                if let capacity = pasture.capacityHead {
+                    Text("• cap \(Int(capacity))")
                 }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
 
-            if let cap = analytics.capacityHead, cap > 0 {
-                ProgressView(value: Double(alive), total: cap)
+            if let capacity = pasture.capacityHead, capacity > 0 {
+                ProgressView(value: Double(pasture.activeAnimalCount), total: capacity)
             }
-        }
-    }
-}
-
-private enum Filter: CaseIterable, Hashable {
-    case all
-    case overstocked
-    case underutilized
-
-    var label: String {
-        switch self {
-        case .all: return "All"
-        case .overstocked: return "Over"
-        case .underutilized: return "Low"
         }
     }
 }

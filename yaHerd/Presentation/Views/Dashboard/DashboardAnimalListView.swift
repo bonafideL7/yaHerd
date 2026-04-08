@@ -1,88 +1,141 @@
-//
-//  DashboardAnimalListView.swift
-//  yaHerd
-//
-
-import SwiftUI
 import SwiftData
+import SwiftUI
 
-/// Lightweight, read-only animal list used for dashboard drill-downs.
 struct DashboardAnimalListView: View {
-
+    @Environment(\.modelContext) private var context
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
     @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
+    @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
+    @AppStorage("pastureCapacity") private var pastureCapacity = 30
 
     @Query private var animals: [Animal]
+    @Query private var pastures: [Pasture]
+
+    @State private var viewModel = DashboardAnimalListViewModel()
 
     let kind: DashboardAnimalListKind
 
-    private var filtered: [Animal] {
-        let now = Date()
+    private var repository: any DashboardRepository {
+        SwiftDataDashboardRepository(context: context)
+    }
 
-        let base: [Animal] = {
-            switch kind {
-            case .active:
-                return animals.filter { $0.isActiveInHerd }
-            case .workingPen:
-                return animals.filter { $0.isActiveInHerd && $0.location == .workingPen }
-            case .unassigned:
-                return animals.filter { $0.isActiveInHerd && $0.location == .pasture && $0.pasture == nil }
-            case .overduePregChecks:
-                return animals.filter { animal in
-                    guard animal.isActiveInHerd else { return false }
-                    guard let last = animal.pregnancyChecks.sorted(by: { $0.date > $1.date }).first else { return false }
-                    let days = Calendar.current.dateComponents([.day], from: last.date, to: now).day ?? 0
-                    return days > pregCheckIntervalDays
-                }
-            case .overdueTreatments:
-                // Keep this aligned with DashboardService (does not filter by herd status, but excludes archived records).
-                return animals.filter { animal in
-                    guard !animal.isSoftDeleted else { return false }
-                    guard let last = animal.healthRecords.sorted(by: { $0.date > $1.date }).first else { return false }
-                    let days = Calendar.current.dateComponents([.day], from: last.date, to: now).day ?? 0
-                    return days > treatmentIntervalDays
-                }
+    private var configuration: DashboardConfiguration {
+        DashboardConfiguration(
+            pregnancyCheckIntervalDays: pregCheckIntervalDays,
+            treatmentIntervalDays: treatmentIntervalDays,
+            enablePastureOverstockWarnings: enablePastureOverstockWarnings,
+            fallbackPastureCapacity: pastureCapacity
+        )
+    }
+
+    private var configurationSignature: String {
+        [
+            String(configuration.pregnancyCheckIntervalDays),
+            String(configuration.treatmentIntervalDays),
+            String(configuration.enablePastureOverstockWarnings),
+            String(configuration.fallbackPastureCapacity)
+        ].joined(separator: ":")
+    }
+
+
+    private var reloadKey: String {
+        [
+            kind.rawValue,
+            configurationSignature,
+            animalObservationSignature,
+            pastureObservationSignature
+        ].joined(separator: "|")
+    }
+
+    private var animalObservationSignature: String {
+        animals
+            .sorted { $0.publicID.uuidString < $1.publicID.uuidString }
+            .map { animal in
+                let latestPregnancyCheck = animal.pregnancyChecks.max { lhs, rhs in lhs.date < rhs.date }
+                let latestTreatment = animal.healthRecords.max { lhs, rhs in lhs.date < rhs.date }
+                return [
+                    animal.publicID.uuidString,
+                    animal.displayTagNumber,
+                    animal.displayTagColorID?.uuidString ?? "nil",
+                    animal.status.rawValue,
+                    String(animal.isArchived),
+                    animal.location.rawValue,
+                    animal.pasture?.publicID.uuidString ?? "nil",
+                    latestPregnancyCheck?.date.formatted(date: .numeric, time: .standard) ?? "nil",
+                    latestTreatment?.date.formatted(date: .numeric, time: .standard) ?? "nil"
+                ].joined(separator: ":")
             }
-        }()
+            .joined(separator: "|")
+    }
 
-        return base.sorted { $0.displayTagNumber.localizedStandardCompare($1.displayTagNumber) == .orderedAscending }
+    private var pastureObservationSignature: String {
+        pastures
+            .sorted { $0.publicID.uuidString < $1.publicID.uuidString }
+            .map { pasture in
+                [
+                    pasture.publicID.uuidString,
+                    pasture.name
+                ].joined(separator: ":")
+            }
+            .joined(separator: "|")
     }
 
     var body: some View {
         List {
-            if filtered.isEmpty {
+            if viewModel.items.isEmpty {
                 Text("Nothing to show.")
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(filtered) { animal in
-                    NavigationLink(value: animal) {
+                ForEach(viewModel.items) { animal in
+                    NavigationLink(value: DashboardRoute.animal(animal.id)) {
                         row(animal)
                     }
                 }
             }
         }
         .navigationTitle(kind.title)
+        .task(id: reloadKey) {
+            viewModel.load(kind: kind, configuration: configuration, using: repository)
+        }
+        .alert("Dashboard Error", isPresented: errorBinding) {
+            Button("OK", role: .cancel) {
+                viewModel.errorMessage = nil
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? "Unknown error")
+        }
     }
 
-    private func row(_ animal: Animal) -> some View {
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    viewModel.errorMessage = nil
+                }
+            }
+        )
+    }
+
+    private func row(_ animal: DashboardAnimalItem) -> some View {
         HStack(spacing: 12) {
-            let def = tagColorLibrary.resolvedDefinition(for: animal)
+            let definition = tagColorLibrary.resolvedDefinition(tagColorID: animal.displayTagColorID)
 
             VStack(alignment: .leading, spacing: 6) {
                 AnimalTagView(
                     tagNumber: animal.displayTagNumber,
-                    color: def.color,
-                    colorName: def.name
+                    color: definition.color,
+                    colorName: definition.name
                 )
 
                 HStack(spacing: 6) {
-                    Text((animal.sex ?? .female).label)
+                    Text(animal.sex.label)
                     if animal.location == .workingPen {
                         Text("• Working Pen")
-                    } else if let pasture = animal.pasture?.name {
-                        Text("• \(pasture)")
+                    } else if let pastureName = animal.pastureName {
+                        Text("• \(pastureName)")
                     }
                 }
                 .font(.caption)
