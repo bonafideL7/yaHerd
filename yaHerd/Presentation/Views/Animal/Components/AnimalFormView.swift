@@ -16,67 +16,44 @@ enum ParentPickerType: Identifiable {
     }
 }
 
-struct TagFieldRow: View {
-    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-
-    @Binding var tagNumber: String
-    @Binding var tagColorID: UUID?
-
-    @State private var showEditor = false
-
-    private var selectedDef: TagColorDefinition? {
-        tagColorLibrary.colors.first(where: { $0.id == tagColorID })
-    }
-
-    var body: some View {
-        Button {
-            showEditor = true
-        } label: {
-            HStack {
-                Text("Tag")
-                Spacer()
-
-                if let def = selectedDef, !tagNumber.isEmpty {
-                    AnimalTagView(
-                        tagNumber: tagNumber,
-                        color: def.color,
-                        colorName: def.name
-                    )
-                } else {
-                    Text("Not Set")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .sheet(isPresented: $showEditor) {
-            TagEditorView(
-                tagNumber: $tagNumber,
-                tagColorID: $tagColorID
-            )
-            .presentationDetents([.medium, .large])
-        }
-    }
-}
-
-struct TagEditorView: View {
+struct AnimalTagEditView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
-    @Binding var tagNumber: String
-    @Binding var tagColorID: UUID?
+    @State private var number: String
+    @State private var colorID: UUID?
+    @State private var isPrimary: Bool
 
-    @State private var tempNumber: String = ""
-    @State private var tempColorID: UUID?
+    private let title: String
+    private let saveButtonTitle: String
+    private let showsPrimaryToggle: Bool
+    private let onSave: (String, UUID?, Bool) -> Void
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 5)
+
+    init(
+        initialNumber: String = "",
+        initialColorID: UUID? = nil,
+        initialIsPrimary: Bool = false,
+        title: String = "Add Tag",
+        saveButtonTitle: String = "Save",
+        showsPrimaryToggle: Bool = false,
+        onSave: @escaping (String, UUID?, Bool) -> Void
+    ) {
+        _number = State(initialValue: initialNumber)
+        _colorID = State(initialValue: initialColorID)
+        _isPrimary = State(initialValue: initialIsPrimary)
+        self.title = title
+        self.saveButtonTitle = saveButtonTitle
+        self.showsPrimaryToggle = showsPrimaryToggle
+        self.onSave = onSave
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Tag Number") {
-                    TextField("Number", text: $tempNumber)
+                    TextField("Number", text: $number)
                         .keyboardType(.numberPad)
                         .font(.title2)
                 }
@@ -84,7 +61,7 @@ struct TagEditorView: View {
                 Section("Color") {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(tagColorLibrary.colors) { def in
-                            let isSelected = def.id == tempColorID
+                            let isSelected = def.id == colorID
 
                             Circle()
                                 .fill(def.color)
@@ -96,38 +73,147 @@ struct TagEditorView: View {
                                     }
                                 }
                                 .onTapGesture {
-                                    tempColorID = def.id
+                                    colorID = def.id
                                 }
                         }
                     }
                     .padding(.vertical, 4)
 
                     Button("Clear Color") {
-                        tempColorID = nil
+                        colorID = nil
                     }
                     .foregroundStyle(.secondary)
                 }
+
+                if showsPrimaryToggle {
+                    Section {
+                        Toggle("Use as primary tag", isOn: $isPrimary)
+                    } footer: {
+                        Text("Primary tags become the animal's display tag.")
+                    }
+                }
             }
-            .navigationTitle("Edit Tag")
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        tagNumber = tempNumber
-                        tagColorID = tempColorID
+                    Button(saveButtonTitle) {
+                        onSave(number.trimmingCharacters(in: .whitespacesAndNewlines), colorID, isPrimary)
                         dismiss()
                     }
                 }
             }
         }
-        .onAppear {
-            tempNumber = tagNumber
-            tempColorID = tagColorID
-        }
     }
 }
+
+struct AnimalTagManagementActions {
+    let onAdd: (String, UUID?, Bool) -> Void
+    let onPromote: (UUID) -> Void
+    let onRetire: (UUID) -> Void
+}
+
+struct AnimalTagManagementSection: View {
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+
+    let detail: AnimalDetailSnapshot
+    let actions: AnimalTagManagementActions
+
+    @State private var showingAddTag = false
+
+    var body: some View {
+        Section {
+            ForEach(detail.activeTags) { tag in
+                activeTagRow(for: tag)
+            }
+
+            if !detail.inactiveTags.isEmpty {
+                DisclosureGroup("Retired Tags (\(detail.inactiveTags.count))") {
+                    ForEach(detail.inactiveTags) { tag in
+                        inactiveTagRow(for: tag)
+                    }
+                }
+            }
+
+            Button {
+                showingAddTag = true
+            } label: {
+                Label("Add Tag", systemImage: "plus")
+            }
+        } header: {
+            Text("Tags")
+        } footer: {
+            Text("Add secondary tags, promote an active tag to primary, or retire a tag from here.")
+        }
+        .sheet(isPresented: $showingAddTag) {
+            AnimalTagEditView(
+                title: "Add Tag",
+                saveButtonTitle: "Save",
+                showsPrimaryToggle: true
+            ) { number, colorID, isPrimary in
+                actions.onAdd(number, colorID, isPrimary)
+            }
+            .presentationDetents([.medium, .large])
+        }
+    }
+
+    private func activeTagRow(for tag: AnimalTagSnapshot) -> some View {
+        HStack(spacing: 12) {
+            tagBadge(for: tag)
+            Spacer()
+            if tag.isPrimary {
+                Label("Primary", systemImage: "star.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            if !tag.isPrimary {
+                Button {
+                    actions.onPromote(tag.id)
+                } label: {
+                    Label("Make Primary", systemImage: "star")
+                }
+                .tint(.yellow)
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                actions.onRetire(tag.id)
+            } label: {
+                Label("Retire", systemImage: "archivebox")
+            }
+        }
+    }
+
+    private func inactiveTagRow(for tag: AnimalTagSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            tagBadge(for: tag)
+                .opacity(0.65)
+
+            if let removedAt = tag.removedAt {
+                Text("Retired \(removedAt.formatted(date: .abbreviated, time: .omitted))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func tagBadge(for tag: AnimalTagSnapshot) -> some View {
+        let def = tagColorLibrary.resolvedDefinition(tagColorID: tag.colorID)
+        return AnimalTagView(
+            tagNumber: tag.normalizedNumber,
+            color: def.color,
+            colorName: def.name,
+            size: .compact
+        )
+    }
+}
+
 
 struct DistinguishingFeaturesSection: View {
     @Binding var features: [DistinguishingFeature]
@@ -302,6 +388,8 @@ struct AnimalFormView: View {
 
     let pastures: [PastureOption]
     let showsStatusPicker: Bool
+    let tagDetail: AnimalDetailSnapshot?
+    let tagActions: AnimalTagManagementActions?
 
     var body: some View {
         Group {
@@ -331,6 +419,8 @@ struct AnimalFormView: View {
                         }
                     }
                 }
+                
+                TextField("Name", text: $name)
             }
 
             Section("Parents") {
@@ -349,13 +439,8 @@ struct AnimalFormView: View {
                 )
             }
 
-            Section("Identification") {
-                TagFieldRow(
-                    tagNumber: $tagNumber,
-                    tagColorID: $tagColorID
-                )
-
-                TextField("Name", text: $name)
+            if let tagDetail, let tagActions {
+                AnimalTagManagementSection(detail: tagDetail, actions: tagActions)
             }
 
             DistinguishingFeaturesSection(features: $distinguishingFeatures)
@@ -370,6 +455,8 @@ struct AnimalEditorSections: View {
     let pastures: [PastureOption]
     let statusReferences: [AnimalStatusReferenceOption]
     let showsStatusPicker: Bool
+    let tagDetail: AnimalDetailSnapshot?
+    let tagActions: AnimalTagManagementActions?
 
     private var availableStatusReferences: [AnimalStatusReferenceOption] {
         statusReferences
@@ -392,7 +479,9 @@ struct AnimalEditorSections: View {
                 distinguishingFeatures: $draft.distinguishingFeatures,
                 activeParentPicker: $activeParentPicker,
                 pastures: pastures,
-                showsStatusPicker: showsStatusPicker
+                showsStatusPicker: showsStatusPicker,
+                tagDetail: tagDetail,
+                tagActions: tagActions
             )
 
             AnimalStatusEditorSection(

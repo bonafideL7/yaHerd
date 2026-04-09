@@ -24,6 +24,11 @@ final class AnimalFormViewModel {
         errorMessage = nil
     }
 
+    func syncPrimaryTag(from detail: AnimalDetailSnapshot) {
+        draft.tagNumber = detail.displayTagNumber
+        draft.tagColorID = detail.displayTagColorID
+    }
+
     var availableStatusReferences: [AnimalStatusReferenceOption] {
         statusReferenceOptions
             .filter { $0.baseStatus == draft.status }

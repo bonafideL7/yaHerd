@@ -30,7 +30,9 @@ struct AddAnimalView: View {
                     activeParentPicker: $activeParentPicker,
                     pastures: form.pastureOptions,
                     statusReferences: form.statusReferenceOptions,
-                    showsStatusPicker: true
+                    showsStatusPicker: true,
+                    tagDetail: nil,
+                    tagActions: nil
                 )
             }
             .navigationTitle("Add Animal")

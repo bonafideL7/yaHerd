@@ -54,6 +54,39 @@ final class AnimalDetailViewModel {
         }
     }
 
+    func addTag(animalID: UUID, number: String, colorID: UUID?, isPrimary: Bool, using repository: any AnimalRepository) {
+        do {
+            let updated = try AddAnimalTagUseCase(repository: repository).execute(
+                animalID: animalID,
+                input: AnimalTagInput(number: number, colorID: colorID, isPrimary: isPrimary)
+            )
+            detail = updated
+            form.syncPrimaryTag(from: updated)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func promoteTag(animalID: UUID, tagID: UUID, using repository: any AnimalRepository) {
+        do {
+            let updated = try PromoteAnimalTagUseCase(repository: repository).execute(animalID: animalID, tagID: tagID)
+            detail = updated
+            form.syncPrimaryTag(from: updated)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func retireTag(animalID: UUID, tagID: UUID, using repository: any AnimalRepository) {
+        do {
+            let updated = try RetireAnimalTagUseCase(repository: repository).execute(animalID: animalID, tagID: tagID)
+            detail = updated
+            form.syncPrimaryTag(from: updated)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func quickUpdateStatus(animalID: UUID, to status: AnimalStatus, using repository: any AnimalRepository) {
         guard let detail else { return }
 
@@ -112,33 +145,4 @@ final class AnimalDetailViewModel {
         }
     }
 
-    func addTag(animalID: UUID, input: AnimalTagInput, using repository: any AnimalRepository) {
-        do {
-            let updated = try AddAnimalTagUseCase(repository: repository).execute(animalID: animalID, input: input)
-            detail = updated
-            form.populate(from: updated)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    func promoteTag(animalID: UUID, tagID: UUID, using repository: any AnimalRepository) {
-        do {
-            let updated = try PromoteAnimalTagUseCase(repository: repository).execute(animalID: animalID, tagID: tagID)
-            detail = updated
-            form.populate(from: updated)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    func retireTag(animalID: UUID, tagID: UUID, using repository: any AnimalRepository) {
-        do {
-            let updated = try RetireAnimalTagUseCase(repository: repository).execute(animalID: animalID, tagID: tagID)
-            detail = updated
-            form.populate(from: updated)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
 }
