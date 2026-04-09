@@ -13,6 +13,7 @@ struct AddAnimalView: View {
 
     @State private var form = AnimalFormViewModel()
     @State private var activeParentPicker: ParentPickerType?
+    @State private var pendingTags: [PendingAnimalTag] = []
     @State private var showingError = false
 
     private var repository: SwiftDataAnimalRepository {
@@ -28,6 +29,7 @@ struct AddAnimalView: View {
                         set: { form.draft = $0 }
                     ),
                     activeParentPicker: $activeParentPicker,
+                    pendingTags: $pendingTags,
                     pastures: form.pastureOptions,
                     statusReferences: form.statusReferenceOptions,
                     showsStatusPicker: true,
@@ -74,7 +76,19 @@ struct AddAnimalView: View {
     private func validateAndSave() {
         do {
             let input = try form.makeInput()
-            _ = try CreateAnimalUseCase(repository: repository).execute(input: input)
+            let created = try CreateAnimalUseCase(repository: repository).execute(input: input)
+
+            for tag in pendingTags where !tag.isPrimary {
+                _ = try AddAnimalTagUseCase(repository: repository).execute(
+                    animalID: created.id,
+                    input: AnimalTagInput(
+                        number: tag.normalizedNumber,
+                        colorID: tag.colorID,
+                        isPrimary: false
+                    )
+                )
+            }
+
             dismiss()
         } catch {
             form.errorMessage = error.localizedDescription

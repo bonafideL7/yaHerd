@@ -110,6 +110,25 @@ struct AnimalTagEditView: View {
     }
 }
 
+
+struct PendingAnimalTag: Identifiable, Hashable {
+    let id: UUID
+    var number: String
+    var colorID: UUID?
+    var isPrimary: Bool
+
+    init(id: UUID = UUID(), number: String, colorID: UUID?, isPrimary: Bool) {
+        self.id = id
+        self.number = number.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.colorID = colorID
+        self.isPrimary = isPrimary
+    }
+
+    var normalizedNumber: String {
+        number.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 struct AnimalTagManagementActions {
     let onAdd: (String, UUID?, Bool) -> Void
     let onPromote: (UUID) -> Void
@@ -385,6 +404,7 @@ struct AnimalFormView: View {
     @Binding var dam: String
     @Binding var distinguishingFeatures: [DistinguishingFeature]
     @Binding var activeParentPicker: ParentPickerType?
+    @Binding var pendingTags: [PendingAnimalTag]
 
     let pastures: [PastureOption]
     let showsStatusPicker: Bool
@@ -441,6 +461,12 @@ struct AnimalFormView: View {
 
             if let tagDetail, let tagActions {
                 AnimalTagManagementSection(detail: tagDetail, actions: tagActions)
+            } else {
+                AnimalPendingTagManagementSection(
+                    tags: $pendingTags,
+                    primaryTagNumber: $tagNumber,
+                    primaryTagColorID: $tagColorID
+                )
             }
 
             DistinguishingFeaturesSection(features: $distinguishingFeatures)
@@ -448,9 +474,132 @@ struct AnimalFormView: View {
     }
 }
 
+struct AnimalPendingTagManagementSection: View {
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+
+    @Binding var tags: [PendingAnimalTag]
+    @Binding var primaryTagNumber: String
+    @Binding var primaryTagColorID: UUID?
+
+    @State private var showingAddTag = false
+
+    var body: some View {
+        Section {
+            ForEach(tags) { tag in
+                pendingTagRow(for: tag)
+            }
+            .onDelete(perform: deleteTags)
+
+            Button {
+                showingAddTag = true
+            } label: {
+                Label("Add Tag", systemImage: "plus")
+            }
+        } header: {
+            Text("Tags")
+        } footer: {
+            Text("Add tags before saving. The primary tag becomes the animal's display tag.")
+        }
+        .sheet(isPresented: $showingAddTag) {
+            AnimalTagEditView(
+                title: "Add Tag",
+                saveButtonTitle: "Save",
+                showsPrimaryToggle: true
+            ) { number, colorID, isPrimary in
+                addTag(number: number, colorID: colorID, isPrimary: isPrimary)
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .onAppear(perform: syncPrimaryFields)
+        .onChange(of: tags) { _, _ in
+            syncPrimaryFields()
+        }
+    }
+
+    private func pendingTagRow(for tag: PendingAnimalTag) -> some View {
+        let def = tagColorLibrary.resolvedDefinition(tagColorID: tag.colorID)
+
+        return HStack(spacing: 12) {
+            AnimalTagView(
+                tagNumber: tag.normalizedNumber,
+                color: def.color,
+                colorName: def.name,
+                size: .compact
+            )
+            Spacer()
+            if tag.isPrimary {
+                Label("Primary", systemImage: "star.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            if !tag.isPrimary {
+                Button {
+                    promoteTag(tag.id)
+                } label: {
+                    Label("Make Primary", systemImage: "star")
+                }
+                .tint(.yellow)
+            }
+        }
+    }
+
+    private func addTag(number: String, colorID: UUID?, isPrimary: Bool) {
+        let trimmed = number.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let shouldBePrimary = isPrimary || tags.isEmpty
+        if shouldBePrimary {
+            for index in tags.indices {
+                tags[index].isPrimary = false
+            }
+        }
+
+        tags.append(
+            PendingAnimalTag(
+                number: trimmed,
+                colorID: colorID,
+                isPrimary: shouldBePrimary
+            )
+        )
+        syncPrimaryFields()
+    }
+
+    private func promoteTag(_ id: UUID) {
+        for index in tags.indices {
+            tags[index].isPrimary = tags[index].id == id
+        }
+        syncPrimaryFields()
+    }
+
+    private func deleteTags(at offsets: IndexSet) {
+        let removedPrimary = offsets.contains { offset in
+            tags.indices.contains(offset) && tags[offset].isPrimary
+        }
+        tags.remove(atOffsets: offsets)
+
+        if removedPrimary, let firstIndex = tags.indices.first {
+            tags[firstIndex].isPrimary = true
+        }
+        syncPrimaryFields()
+    }
+
+    private func syncPrimaryFields() {
+        if let primary = tags.first(where: { $0.isPrimary }) ?? tags.first {
+            primaryTagNumber = primary.normalizedNumber
+            primaryTagColorID = primary.colorID
+        } else {
+            primaryTagNumber = ""
+            primaryTagColorID = nil
+        }
+    }
+}
+
 struct AnimalEditorSections: View {
     @Binding var draft: AnimalEditorDraft
     @Binding var activeParentPicker: ParentPickerType?
+    @Binding var pendingTags: [PendingAnimalTag]
 
     let pastures: [PastureOption]
     let statusReferences: [AnimalStatusReferenceOption]
@@ -478,6 +627,7 @@ struct AnimalEditorSections: View {
                 dam: $draft.dam,
                 distinguishingFeatures: $draft.distinguishingFeatures,
                 activeParentPicker: $activeParentPicker,
+                pendingTags: $pendingTags,
                 pastures: pastures,
                 showsStatusPicker: showsStatusPicker,
                 tagDetail: tagDetail,

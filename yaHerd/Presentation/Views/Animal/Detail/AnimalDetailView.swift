@@ -177,6 +177,7 @@ struct AnimalDetailView: View {
                 set: { viewModel.form.draft = $0 }
             ),
             activeParentPicker: $activeParentPicker,
+            pendingTags: .constant([]),
             pastures: viewModel.form.pastureOptions,
             statusReferences: viewModel.form.statusReferenceOptions,
             showsStatusPicker: true,
