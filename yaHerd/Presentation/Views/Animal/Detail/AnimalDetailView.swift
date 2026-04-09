@@ -19,6 +19,7 @@ struct AnimalDetailView: View {
     @State private var showingArchiveConfirmation = false
     @State private var showingHardDeleteConfirmation = false
     @State private var showingError = false
+    @State private var showingAddTag = false
 
     let animalID: UUID
 
@@ -74,6 +75,22 @@ struct AnimalDetailView: View {
             ),
             excludeAnimalID: animalID
         )
+        .sheet(isPresented: $showingAddTag) {
+            AnimalTagEditView(
+                title: "Add Tag",
+                saveButtonTitle: "Save",
+                showsPrimaryToggle: true
+            ) { number, colorID, isPrimary in
+                viewModel.addTag(
+                    animalID: animalID,
+                    number: number,
+                    colorID: colorID,
+                    isPrimary: isPrimary,
+                    using: repository
+                )
+            }
+            .presentationDetents([.medium, .large])
+        }
         .confirmationDialog(
             "Archive this record?",
             isPresented: $showingArchiveConfirmation,
@@ -177,28 +194,22 @@ struct AnimalDetailView: View {
                 set: { viewModel.form.draft = $0 }
             ),
             activeParentPicker: $activeParentPicker,
-            pendingTags: .constant([]),
             pastures: viewModel.form.pastureOptions,
             statusReferences: viewModel.form.statusReferenceOptions,
             showsStatusPicker: true,
             tagDetail: viewModel.detail,
             tagActions: AnimalTagManagementActions(
-                onAdd: { number, colorID, isPrimary in
-                    viewModel.addTag(
-                        animalID: animalID,
-                        number: number,
-                        colorID: colorID,
-                        isPrimary: isPrimary,
-                        using: repository
-                    )
-                },
+                onAdd: { _, _, _ in },
                 onPromote: { tagID in
                     viewModel.promoteTag(animalID: animalID, tagID: tagID, using: repository)
                 },
                 onRetire: { tagID in
                     viewModel.retireTag(animalID: animalID, tagID: tagID, using: repository)
                 }
-            )
+            ),
+            pendingTags: nil,
+            onAddExistingTag: { showingAddTag = true },
+            onAddPendingTag: nil
         )
     }
 
