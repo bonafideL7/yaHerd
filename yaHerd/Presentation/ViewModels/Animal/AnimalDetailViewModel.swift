@@ -1,6 +1,10 @@
 import Foundation
 import Observation
 
+enum AnimalEditorScrollTarget: Hashable {
+    case status
+}
+
 @MainActor
 @Observable
 final class AnimalDetailViewModel {
@@ -10,6 +14,7 @@ final class AnimalDetailViewModel {
     var hasLoaded = false
     var errorMessage: String?
     var didDelete = false
+    var pendingScrollTarget: AnimalEditorScrollTarget?
 
     func load(animalID: UUID, using repository: any AnimalRepository) {
         defer { hasLoaded = true }
@@ -30,15 +35,18 @@ final class AnimalDetailViewModel {
     func beginEditing() {
         guard let detail else { return }
         form.populate(from: detail)
+        pendingScrollTarget = nil
         isEditing = true
     }
 
     func cancelEditing() {
         guard let detail else {
+            pendingScrollTarget = nil
             isEditing = false
             return
         }
         form.populate(from: detail)
+        pendingScrollTarget = nil
         isEditing = false
     }
 
@@ -48,6 +56,7 @@ final class AnimalDetailViewModel {
             let updated = try UpdateAnimalUseCase(repository: repository).execute(id: animalID, input: input)
             self.detail = updated
             form.populate(from: updated)
+            pendingScrollTarget = nil
             isEditing = false
         } catch {
             errorMessage = error.localizedDescription
@@ -87,35 +96,34 @@ final class AnimalDetailViewModel {
         }
     }
 
-    func quickUpdateStatus(animalID: UUID, to status: AnimalStatus, using repository: any AnimalRepository) {
+    func beginEditingStatus(_ status: AnimalStatus? = nil) {
         guard let detail else { return }
 
-        let input = AnimalInput(
-            name: detail.name,
-            tagNumber: detail.displayTagNumber,
-            tagColorID: detail.displayTagColorID,
-            sex: detail.sex,
-            birthDate: detail.birthDate,
-            status: status,
-            pastureID: detail.pastureID,
-            sire: detail.sire,
-            dam: detail.dam,
-            distinguishingFeatures: detail.distinguishingFeatures,
-            saleDate: status == .sold ? .now : nil,
-            salePrice: nil,
-            reasonSold: nil,
-            deathDate: status == .dead ? .now : nil,
-            causeOfDeath: nil,
-            statusReferenceID: nil
-        )
+        form.populate(from: detail)
 
-        do {
-            let updated = try UpdateAnimalUseCase(repository: repository).execute(id: animalID, input: input)
-            self.detail = updated
-            form.populate(from: updated)
-        } catch {
-            errorMessage = error.localizedDescription
+        if let status {
+            form.draft.status = status
+            form.draft.statusReferenceID = nil
+
+            switch status {
+            case .active:
+                break
+            case .sold:
+                if detail.status != .sold {
+                    form.draft.saleDate = .now
+                    form.draft.salePriceText = ""
+                    form.draft.reasonSold = ""
+                }
+            case .dead:
+                if detail.status != .dead {
+                    form.draft.deathDate = .now
+                    form.draft.causeOfDeath = ""
+                }
+            }
         }
+
+        pendingScrollTarget = .status
+        isEditing = true
     }
 
     func archive(animalID: UUID, using repository: any AnimalRepository) {

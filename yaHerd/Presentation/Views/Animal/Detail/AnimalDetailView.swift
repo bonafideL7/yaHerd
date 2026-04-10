@@ -52,11 +52,22 @@ struct AnimalDetailView: View {
     var body: some View {
         Group {
             if let detail = viewModel.detail {
-                Form {
-                    if viewModel.isEditing {
-                        editingContent
-                    } else {
-                        readOnlyContent(detail)
+                ScrollViewReader { proxy in
+                    Form {
+                        if viewModel.isEditing {
+                            editingContent
+                        } else {
+                            readOnlyContent(detail)
+                        }
+                    }
+                    .onAppear {
+                        scrollFormIfNeeded(using: proxy)
+                    }
+                    .onChange(of: viewModel.isEditing) { _, _ in
+                        scrollFormIfNeeded(using: proxy)
+                    }
+                    .onChange(of: viewModel.pendingScrollTarget) { _, _ in
+                        scrollFormIfNeeded(using: proxy)
                     }
                 }
             } else {
@@ -90,30 +101,6 @@ struct AnimalDetailView: View {
                 )
             }
             .presentationDetents([.medium, .large])
-        }
-        .confirmationDialog(
-            "Archive this record?",
-            isPresented: $showingArchiveConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Archive Record", role: .destructive) {
-                viewModel.archive(animalID: animalID, using: repository)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Archived records are hidden from normal herd views but can be restored later.")
-        }
-        .confirmationDialog(
-            "Permanently delete this animal?",
-            isPresented: $showingHardDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Delete Permanently", role: .destructive) {
-                viewModel.delete(animalID: animalID, using: repository)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes the animal and all related records from the app.")
         }
         .alert("Can’t Save", isPresented: $showingError) {
             Button("OK", role: .cancel) {}
@@ -186,6 +173,15 @@ struct AnimalDetailView: View {
         return viewModel.form.draft.hasChanges(comparedTo: detail)
     }
 
+    private func scrollFormIfNeeded(using proxy: ScrollViewProxy) {
+        guard viewModel.isEditing, let target = viewModel.pendingScrollTarget else { return }
+        DispatchQueue.main.async {
+            withAnimation {
+                proxy.scrollTo(target, anchor: .top)
+            }
+        }
+    }
+
     @ViewBuilder
     private var editingContent: some View {
         AnimalEditorSections(
@@ -196,7 +192,6 @@ struct AnimalDetailView: View {
             activeParentPicker: $activeParentPicker,
             pastures: viewModel.form.pastureOptions,
             statusReferences: viewModel.form.statusReferenceOptions,
-            showsStatusPicker: true,
             tagDetail: viewModel.detail,
             tagActions: AnimalTagManagementActions(
                 onAdd: { _, _, _ in },
@@ -209,7 +204,8 @@ struct AnimalDetailView: View {
             ),
             pendingTags: nil,
             onAddExistingTag: { showingAddTag = true },
-            onAddPendingTag: nil
+            onAddPendingTag: nil,
+            scrollTarget: .status
         )
     }
 
@@ -217,9 +213,9 @@ struct AnimalDetailView: View {
     private func readOnlyContent(_ detail: AnimalDetailSnapshot) -> some View {
         overviewSection(detail)
         tagsSection(detail)
-        statusSection(detail)
+        distinguishingFeaturesSection(detail)
         lineageSection(detail)
-        distinguishingFeaturesSection(detail)        
+        statusSection(detail)       
         recordManagementSection(detail)
     }
 
@@ -342,39 +338,39 @@ struct AnimalDetailView: View {
         switch detail.status {
         case .active:
             Button {
-                viewModel.quickUpdateStatus(animalID: animalID, to: .sold, using: repository)
+                viewModel.beginEditingStatus(.sold)
             } label: {
                 Label("Mark Sold", systemImage: AnimalStatus.sold.systemImage)
             }
 
             Button {
-                viewModel.quickUpdateStatus(animalID: animalID, to: .dead, using: repository)
+                viewModel.beginEditingStatus(.dead)
             } label: {
                 Label("Mark Dead", systemImage: AnimalStatus.dead.systemImage)
             }
 
         case .sold:
             Button {
-                viewModel.quickUpdateStatus(animalID: animalID, to: .active, using: repository)
+                viewModel.beginEditingStatus(.active)
             } label: {
                 Label("Return to Active", systemImage: AnimalStatus.active.systemImage)
             }
 
             Button {
-                viewModel.quickUpdateStatus(animalID: animalID, to: .dead, using: repository)
+                viewModel.beginEditingStatus(.dead)
             } label: {
                 Label("Correct to Dead", systemImage: AnimalStatus.dead.systemImage)
             }
 
         case .dead:
             Button {
-                viewModel.quickUpdateStatus(animalID: animalID, to: .active, using: repository)
+                viewModel.beginEditingStatus(.active)
             } label: {
                 Label("Correct to Active", systemImage: AnimalStatus.active.systemImage)
             }
 
             Button {
-                viewModel.quickUpdateStatus(animalID: animalID, to: .sold, using: repository)
+                viewModel.beginEditingStatus(.sold)
             } label: {
                 Label("Correct to Sold", systemImage: AnimalStatus.sold.systemImage)
             }
@@ -396,11 +392,8 @@ struct AnimalDetailView: View {
 
     @ViewBuilder
     private func distinguishingFeaturesSection(_ detail: AnimalDetailSnapshot) -> some View {
-        Section("Distinguishing Features") {
-            if detail.distinguishingFeatures.isEmpty {
-                Text("No distinguishing features")
-                    .foregroundStyle(.secondary)
-            } else {
+        if !detail.distinguishingFeatures.isEmpty {
+            Section("Distinguishing Features") {
                 ForEach(detail.distinguishingFeatures) { feature in
                     Text(feature.description)
                 }
@@ -422,8 +415,21 @@ struct AnimalDetailView: View {
                     showingArchiveConfirmation = true
                 } label: {
                     Label("Archive Record", systemImage: "archivebox")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .confirmationDialog(
+                            "Archive this record?",
+                            isPresented: $showingArchiveConfirmation,
+                            titleVisibility: .visible
+                        ) {
+                            Button("Archive Record", role: .destructive) {
+                                viewModel.archive(animalID: animalID, using: repository)
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("Archived records are hidden from normal herd views but can be restored later.")
+                        }
                 }
-                .foregroundStyle(.orange)
+                .foregroundStyle(.orange)                
             }
         } header: {
             Text("Record Management")
@@ -436,6 +442,13 @@ struct AnimalDetailView: View {
         Section {
             Button("Permanently Delete", role: .destructive) {
                 showingHardDeleteConfirmation = true
+            }.alert("Permanently delete this animal?", isPresented: $showingHardDeleteConfirmation) {
+                Button("Delete Permanently", role: .destructive) {
+                    viewModel.delete(animalID: animalID, using: repository)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This removes the animal and all related records from the app.")
             }
         } header: {
             Text("Danger Zone")

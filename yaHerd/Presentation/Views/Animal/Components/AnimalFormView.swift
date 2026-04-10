@@ -7,7 +7,7 @@ import SwiftUI
 enum ParentPickerType: Identifiable {
     case sire
     case dam
-
+    
     var id: Int {
         switch self {
         case .sire: return 1
@@ -19,18 +19,18 @@ enum ParentPickerType: Identifiable {
 struct AnimalTagEditView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-
+    
     @State private var number: String
     @State private var colorID: UUID?
     @State private var isPrimary: Bool
-
+    
     private let title: String
     private let saveButtonTitle: String
     private let showsPrimaryToggle: Bool
     private let onSave: (String, UUID?, Bool) -> Void
-
+    
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 5)
-
+    
     init(
         initialNumber: String = "",
         initialColorID: UUID? = nil,
@@ -48,7 +48,7 @@ struct AnimalTagEditView: View {
         self.showsPrimaryToggle = showsPrimaryToggle
         self.onSave = onSave
     }
-
+    
     var body: some View {
         NavigationStack {
             Form {
@@ -57,12 +57,12 @@ struct AnimalTagEditView: View {
                         .keyboardType(.numberPad)
                         .font(.title2)
                 }
-
+                
                 Section("Color") {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(tagColorLibrary.colors) { def in
                             let isSelected = def.id == colorID
-
+                            
                             Circle()
                                 .fill(def.color)
                                 .frame(height: 44)
@@ -78,13 +78,13 @@ struct AnimalTagEditView: View {
                         }
                     }
                     .padding(.vertical, 4)
-
+                    
                     Button("Clear Color") {
                         colorID = nil
                     }
                     .foregroundStyle(.secondary)
                 }
-
+                
                 if showsPrimaryToggle {
                     Section {
                         Toggle("Use as primary tag", isOn: $isPrimary)
@@ -118,17 +118,17 @@ struct AnimalTagManagementActions {
 
 struct AnimalTagManagementSection: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-
+    
     let detail: AnimalDetailSnapshot
     let actions: AnimalTagManagementActions
     let onAddTag: () -> Void
-
+    
     var body: some View {
         Section {
             ForEach(detail.activeTags) { tag in
                 activeTagRow(for: tag)
             }
-
+            
             if !detail.inactiveTags.isEmpty {
                 DisclosureGroup("Retired Tags (\(detail.inactiveTags.count))") {
                     ForEach(detail.inactiveTags) { tag in
@@ -136,17 +136,23 @@ struct AnimalTagManagementSection: View {
                     }
                 }
             }
-
-            Button(action: onAddTag) {
-                Label("Add Tag", systemImage: "plus")
+            
+            Button {
+                onAddTag()
+            } label: {
+                HStack {
+                    Text("Add Tag")
+                    Spacer()
+                    Image(systemName: "plus.circle.fill")
+                }
             }
         } header: {
             Text("Tags")
         } footer: {
-            Text("Add secondary tags, promote an active tag to primary, or retire a tag from here.")
+            Text("Add secondary tags, swipte right to promote an active tag to primary, or swipe left to retire a tag from here.")
         }
     }
-
+    
     private func activeTagRow(for tag: AnimalTagSnapshot) -> some View {
         HStack(spacing: 12) {
             tagBadge(for: tag)
@@ -175,12 +181,12 @@ struct AnimalTagManagementSection: View {
             }
         }
     }
-
+    
     private func inactiveTagRow(for tag: AnimalTagSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             tagBadge(for: tag)
                 .opacity(0.65)
-
+            
             if let removedAt = tag.removedAt {
                 Text("Retired \(removedAt.formatted(date: .abbreviated, time: .omitted))")
                     .font(.caption)
@@ -189,7 +195,7 @@ struct AnimalTagManagementSection: View {
         }
         .padding(.vertical, 2)
     }
-
+    
     private func tagBadge(for tag: AnimalTagSnapshot) -> some View {
         let def = tagColorLibrary.resolvedDefinition(tagColorID: tag.colorID)
         return AnimalTagView(
@@ -203,13 +209,13 @@ struct AnimalTagManagementSection: View {
 
 struct PendingAnimalTagManagementSection: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-
+    
     @Binding var tagNumber: String
     @Binding var tagColorID: UUID?
     @Binding var pendingTags: [AnimalTagSnapshot]
-
+    
     let onAddTag: () -> Void
-
+    
     var body: some View {
         Section {
             ForEach(pendingTags) { tag in
@@ -240,17 +246,23 @@ struct PendingAnimalTagManagementSection: View {
                     }
                 }
             }
-
-            Button(action: onAddTag) {
-                Label("Add Tag", systemImage: "plus")
+            
+            Button {
+                onAddTag()
+            } label: {
+                HStack {
+                    Text("Add Tag")
+                    Spacer()
+                    Image(systemName: "plus.circle.fill")
+                }
             }
         } header: {
             Text("Tags")
         } footer: {
-            Text("Add secondary tags, promote an active tag to primary, or remove a pending tag from here.")
+            Text("Add secondary tags, swipe right to promote an active tag to primary, or swipe left to remove a pending tag from here.")
         }
     }
-
+    
     private func makePrimary(_ tagID: UUID) {
         pendingTags = pendingTags.map { tag in
             AnimalTagSnapshot(
@@ -263,20 +275,20 @@ struct PendingAnimalTagManagementSection: View {
                 removedAt: tag.removedAt
             )
         }
-
+        
         syncPrimaryTag()
     }
-
+    
     private func deleteTag(_ tagID: UUID) {
         pendingTags.removeAll { $0.id == tagID }
-
+        
         if !pendingTags.contains(where: { $0.isPrimary }), let firstID = pendingTags.first?.id {
             makePrimary(firstID)
         } else {
             syncPrimaryTag()
         }
     }
-
+    
     private func syncPrimaryTag() {
         if let primary = pendingTags.first(where: { $0.isPrimary }) {
             tagNumber = primary.normalizedNumber
@@ -286,7 +298,7 @@ struct PendingAnimalTagManagementSection: View {
             tagColorID = nil
         }
     }
-
+    
     private func tagBadge(for tag: AnimalTagSnapshot) -> some View {
         let def = tagColorLibrary.resolvedDefinition(tagColorID: tag.colorID)
         return AnimalTagView(
@@ -301,14 +313,9 @@ struct PendingAnimalTagManagementSection: View {
 
 struct DistinguishingFeaturesSection: View {
     @Binding var features: [DistinguishingFeature]
-
+    
     var body: some View {
         Section("Distinguishing Features") {
-            if features.isEmpty {
-                Text("No distinguishing features")
-                    .foregroundStyle(.secondary)
-            }
-
             ForEach($features) { $feature in
                 TextField("Feature", text: $feature.description)
             }
@@ -316,8 +323,14 @@ struct DistinguishingFeaturesSection: View {
                 features.remove(atOffsets: offsets)
             }
 
-            Button("Add Feature") {
+            Button {
                 features.append(DistinguishingFeature(description: ""))
+            }label: {
+                HStack {
+                    Text("Note Distinguishing Feature(s)")
+                    Spacer()
+                    Image(systemName: "plus.circle.fill")
+                }
             }
         }
     }
@@ -326,13 +339,13 @@ struct DistinguishingFeaturesSection: View {
 struct DateFieldRow: View {
     let title: String
     @Binding var date: Date
-
+    
     @State private var isPresentingPicker = false
-
+    
     private var formattedDate: String {
         date.formatted(date: .abbreviated, time: .omitted)
     }
-
+    
     var body: some View {
         Button {
             isPresentingPicker = true
@@ -382,16 +395,16 @@ struct AnimalStatusEditorSection: View {
     @Binding var reasonSold: String
     @Binding var deathDate: Date
     @Binding var causeOfDeath: String
-
+    
     let availableStatusReferences: [AnimalStatusReferenceOption]
-
+    
     var body: some View {
         Group {
             if !availableStatusReferences.isEmpty || statusReferenceID != nil {
                 Section {
                     Picker("Referenced Status", selection: $statusReferenceID) {
                         Text("None").tag(UUID?.none)
-
+                        
                         ForEach(availableStatusReferences) { reference in
                             Text(reference.name)
                                 .tag(UUID?.some(reference.id))
@@ -405,11 +418,11 @@ struct AnimalStatusEditorSection: View {
                     )
                 }
             }
-
+            
             switch status {
             case .active:
                 EmptyView()
-
+                
             case .sold:
                 Section("Sale Details") {
                     DateFieldRow(title: "Sale Date", date: $saleDate)
@@ -418,7 +431,7 @@ struct AnimalStatusEditorSection: View {
                     TextField("Reason Sold", text: $reasonSold, axis: .vertical)
                         .lineLimit(2...4)
                 }
-
+                
             case .dead:
                 Section("Death Details") {
                     DateFieldRow(title: "Death Date", date: $deathDate)
@@ -435,7 +448,7 @@ struct ParentFieldRow: View {
     @Binding var value: String
     let type: ParentPickerType
     @Binding var activePicker: ParentPickerType?
-
+    
     var body: some View {
         Button {
             activePicker = type
@@ -470,46 +483,38 @@ struct AnimalFormView: View {
     @Binding var distinguishingFeatures: [DistinguishingFeature]
     @Binding var activeParentPicker: ParentPickerType?
 
+    @State private var isShowingNameField = false
+    
     let pastures: [PastureOption]
-    let showsStatusPicker: Bool
     let tagDetail: AnimalDetailSnapshot?
     let tagActions: AnimalTagManagementActions?
     let pendingTags: Binding<[AnimalTagSnapshot]>?
     let onAddExistingTag: (() -> Void)?
     let onAddPendingTag: (() -> Void)?
-
+    
     var body: some View {
         Group {
             Section("Overview") {
                 DateFieldRow(title: "Birth Date", date: $birthDate)
-
+                
                 Picker("Sex", selection: $sex) {
                     ForEach(Sex.allCases, id: \.self) { sex in
                         Text(sex.label).tag(sex)
                     }
                 }
-
+                
                 Picker("Pasture", selection: $pastureID) {
                     Text("None").tag(UUID?.none)
-
+                    
                     ForEach(pastures) { pasture in
                         Text(pasture.name)
                             .tag(UUID?.some(pasture.id))
                     }
                 }
-
-                if showsStatusPicker {
-                    Picker("Status", selection: $status) {
-                        ForEach(AnimalStatus.allCases, id: \.self) { status in
-                            Label(status.label, systemImage: status.systemImage)
-                                .tag(status)
-                        }
-                    }
-                }
                 
-                TextField("Name", text: $name)
+                
             }
-
+            
             Section("Parents") {
                 ParentFieldRow(
                     title: "Dam",
@@ -517,7 +522,7 @@ struct AnimalFormView: View {
                     type: .dam,
                     activePicker: $activeParentPicker
                 )
-
+                
                 ParentFieldRow(
                     title: "Sire",
                     value: $sire,
@@ -525,7 +530,7 @@ struct AnimalFormView: View {
                     activePicker: $activeParentPicker
                 )
             }
-
+            
             if let tagDetail, let tagActions, let onAddExistingTag {
                 AnimalTagManagementSection(
                     detail: tagDetail,
@@ -540,7 +545,30 @@ struct AnimalFormView: View {
                     onAddTag: onAddPendingTag
                 )
             }
-
+            
+            Section("Name") {
+                if isShowingNameField {
+                    VStack(alignment: .leading, spacing: 12) {
+                        TextField("Name", text: $name)
+                            .textInputAutocapitalization(.words)
+                        
+                        Button("Cancel", role: .cancel) {
+                            isShowingNameField = false
+                            name = ""
+                        }
+                    }
+                } else {
+                    Button {
+                        isShowingNameField = true
+                    } label: {
+                        HStack {
+                            Text("Add Name")
+                            Spacer()
+                            Image(systemName: "plus.circle.fill")
+                        }
+                    }
+                }
+            }
             DistinguishingFeaturesSection(features: $distinguishingFeatures)
         }
     }
@@ -549,22 +577,22 @@ struct AnimalFormView: View {
 struct AnimalEditorSections: View {
     @Binding var draft: AnimalEditorDraft
     @Binding var activeParentPicker: ParentPickerType?
-
+    
     let pastures: [PastureOption]
     let statusReferences: [AnimalStatusReferenceOption]
-    let showsStatusPicker: Bool
     let tagDetail: AnimalDetailSnapshot?
     let tagActions: AnimalTagManagementActions?
     let pendingTags: Binding<[AnimalTagSnapshot]>?
     let onAddExistingTag: (() -> Void)?
     let onAddPendingTag: (() -> Void)?
-
+    let scrollTarget: AnimalEditorScrollTarget?
+    
     private var availableStatusReferences: [AnimalStatusReferenceOption] {
         statusReferences
             .filter { $0.baseStatus == draft.status }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
-
+    
     var body: some View {
         Group {
             AnimalFormView(
@@ -580,14 +608,13 @@ struct AnimalEditorSections: View {
                 distinguishingFeatures: $draft.distinguishingFeatures,
                 activeParentPicker: $activeParentPicker,
                 pastures: pastures,
-                showsStatusPicker: showsStatusPicker,
                 tagDetail: tagDetail,
                 tagActions: tagActions,
                 pendingTags: pendingTags,
                 onAddExistingTag: onAddExistingTag,
                 onAddPendingTag: onAddPendingTag
             )
-
+            
             AnimalStatusEditorSection(
                 status: $draft.status,
                 statusReferenceID: $draft.statusReferenceID,
@@ -598,6 +625,7 @@ struct AnimalEditorSections: View {
                 causeOfDeath: $draft.causeOfDeath,
                 availableStatusReferences: availableStatusReferences
             )
+            .id(scrollTarget)
         }
     }
 }
@@ -606,9 +634,9 @@ private struct AnimalParentPickerSheetModifier: ViewModifier {
     @Binding var activePicker: ParentPickerType?
     @Binding var sire: String
     @Binding var dam: String
-
+    
     let excludeAnimalID: UUID?
-
+    
     func body(content: Content) -> some View {
         content.sheet(item: $activePicker) { picker in
             switch picker {
@@ -621,7 +649,7 @@ private struct AnimalParentPickerSheetModifier: ViewModifier {
                     sire = picked.displayTagNumber
                     activePicker = nil
                 }
-
+                
             case .dam:
                 AnimalParentPickerView(
                     title: "Select Dam",

@@ -32,12 +32,12 @@ struct AddAnimalView: View {
                     activeParentPicker: $activeParentPicker,
                     pastures: form.pastureOptions,
                     statusReferences: form.statusReferenceOptions,
-                    showsStatusPicker: true,
                     tagDetail: nil,
                     tagActions: nil,
                     pendingTags: $pendingTags,
                     onAddExistingTag: nil,
-                    onAddPendingTag: { showingAddTag = true }
+                    onAddPendingTag: { showingAddTag = true },
+                    scrollTarget: nil
                 )
             }
             .navigationTitle("Add Animal")
