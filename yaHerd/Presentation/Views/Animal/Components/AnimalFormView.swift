@@ -154,7 +154,7 @@ struct AnimalTagManagementSection: View {
     }
     
     private func activeTagRow(for tag: AnimalTagSnapshot) -> some View {
-        HStack(spacing: 12) {
+        HStack {
             tagBadge(for: tag)
             Spacer()
             if tag.isPrimary {
@@ -484,6 +484,8 @@ struct AnimalFormView: View {
     @Binding var activeParentPicker: ParentPickerType?
 
     @State private var isShowingNameField = false
+    @FocusState private var isNameFieldFocused: Bool
+    @State private var isParentsExpanded = false
     
     let pastures: [PastureOption]
     let tagDetail: AnimalDetailSnapshot?
@@ -491,6 +493,14 @@ struct AnimalFormView: View {
     let pendingTags: Binding<[AnimalTagSnapshot]>?
     let onAddExistingTag: (() -> Void)?
     let onAddPendingTag: (() -> Void)?
+    
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    private var shouldShowNameField: Bool {
+        isShowingNameField || isNameFieldFocused || !trimmedName.isEmpty
+    }
     
     var body: some View {
         Group {
@@ -515,22 +525,6 @@ struct AnimalFormView: View {
                 
             }
             
-            Section("Parents") {
-                ParentFieldRow(
-                    title: "Dam",
-                    value: $dam,
-                    type: .dam,
-                    activePicker: $activeParentPicker
-                )
-                
-                ParentFieldRow(
-                    title: "Sire",
-                    value: $sire,
-                    type: .sire,
-                    activePicker: $activeParentPicker
-                )
-            }
-            
             if let tagDetail, let tagActions, let onAddExistingTag {
                 AnimalTagManagementSection(
                     detail: tagDetail,
@@ -547,16 +541,22 @@ struct AnimalFormView: View {
             }
             
             Section("Name") {
-                if isShowingNameField {
-                    VStack(alignment: .leading, spacing: 12) {
-                        TextField("Name", text: $name)
-                            .textInputAutocapitalization(.words)
-                        
-                        Button("Cancel", role: .cancel) {
-                            isShowingNameField = false
-                            name = ""
+                if shouldShowNameField {
+                    TextField("Name", text: $name)
+                        .textInputAutocapitalization(.words)
+                        .focused($isNameFieldFocused)
+                        .onAppear {
+                            if isShowingNameField && trimmedName.isEmpty {
+                                DispatchQueue.main.async {
+                                    isNameFieldFocused = true
+                                }
+                            }
                         }
-                    }
+                        .onChange(of: isNameFieldFocused) { _, isFocused in
+                            if !isFocused && trimmedName.isEmpty {
+                                isShowingNameField = false
+                            }
+                        }
                 } else {
                     Button {
                         isShowingNameField = true
@@ -569,7 +569,35 @@ struct AnimalFormView: View {
                     }
                 }
             }
+
             DistinguishingFeaturesSection(features: $distinguishingFeatures)
+            
+            Section {
+                DisclosureGroup("Parents", isExpanded: $isParentsExpanded) {
+                    ParentFieldRow(
+                        title: "Dam",
+                        value: $dam,
+                        type: .dam,
+                        activePicker: $activeParentPicker
+                    )
+                    
+                    ParentFieldRow(
+                        title: "Sire",
+                        value: $sire,
+                        type: .sire,
+                        activePicker: $activeParentPicker
+                    )
+                }
+            } footer: {
+                if !dam.isEmpty || !sire.isEmpty {
+                    Text([
+                        dam.isEmpty ? nil : "Dam: \(dam)",
+                        sire.isEmpty ? nil : "Sire: \(sire)"
+                    ]
+                        .compactMap { $0 }
+                        .joined(separator: " • "))
+                }
+            }
         }
     }
 }

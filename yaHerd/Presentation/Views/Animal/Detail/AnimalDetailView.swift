@@ -20,7 +20,8 @@ struct AnimalDetailView: View {
     @State private var showingHardDeleteConfirmation = false
     @State private var showingError = false
     @State private var showingAddTag = false
-
+    @State private var isLineageExpanded = false
+    
     let animalID: UUID
 
     init(animalID: UUID) {
@@ -376,16 +377,31 @@ struct AnimalDetailView: View {
             }
         }
     }
-
+    
     @ViewBuilder
     private func lineageSection(_ detail: AnimalDetailSnapshot) -> some View {
-        Section("Parents") {
-            LabeledContent("Dam") {
-                Text(detail.dam ?? "—")
-            }
-
-            LabeledContent("Sire") {
-                Text(detail.sire ?? "—")
+        let dam = detail.dam?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sire = detail.sire?.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        let hasDam = !(dam ?? "").isEmpty
+        let hasSire = !(sire ?? "").isEmpty
+        let hasLineage = hasDam || hasSire
+        
+        if hasLineage {
+            Section {
+                DisclosureGroup("Parents", isExpanded: $isLineageExpanded) {
+                    if let dam, !dam.isEmpty {
+                        LabeledContent("Dam") {
+                            Text(dam)
+                        }
+                    }
+                    
+                    if let sire, !sire.isEmpty {
+                        LabeledContent("Sire") {
+                            Text(sire)
+                        }
+                    }
+                }
             }
         }
     }
@@ -465,7 +481,7 @@ struct AnimalDetailView: View {
 
     @ViewBuilder
     private func tagRow(for tag: AnimalTagSnapshot) -> some View {
-        HStack(spacing: 12) {
+        HStack {
             tagBadge(for: tag)
             Spacer()
             if tag.isPrimary {
