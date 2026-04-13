@@ -15,6 +15,7 @@ enum AnimalSortOrder: String, CaseIterable {
     case birthDateOldest
     case sex
     case status
+    case pasture
 
     var label: String {
         switch self {
@@ -24,6 +25,7 @@ enum AnimalSortOrder: String, CaseIterable {
         case .birthDateOldest: return "Birth Date (Oldest)"
         case .sex: return "Sex"
         case .status: return "Status"
+        case .pasture: return "Pasture"
         }
     }
 
@@ -35,6 +37,7 @@ enum AnimalSortOrder: String, CaseIterable {
         case .birthDateOldest: return "clock"
         case .sex: return "person.2"
         case .status: return "tag"
+        case .pasture: return "leaf"
         }
     }
 }

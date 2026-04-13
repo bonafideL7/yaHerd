@@ -736,7 +736,7 @@ struct AnimalListView: View {
 
     private var shouldUseSections: Bool {
         switch sortOrder {
-        case .sex, .status:
+        case .sex, .status, .pasture:
             return true
         default:
             return false
@@ -774,6 +774,23 @@ struct AnimalListView: View {
                     )
                 }
                 .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+
+        case .pasture:
+            let grouped = Dictionary(grouping: filteredAndSortedAnimals) { animal in
+                pastureSectionTitle(for: animal)
+            }
+
+            return grouped
+                .map { key, value in
+                    AnimalSection(
+                        id: "pasture-\(key)",
+                        title: key,
+                        animals: value
+                    )
+                }
+                .sorted { lhs, rhs in
+                    pastureSectionSortKey(for: lhs.title) < pastureSectionSortKey(for: rhs.title)
+                }
 
         default:
             return [
@@ -840,11 +857,61 @@ struct AnimalListView: View {
         case .birthDateOldest:
             result.sort { $0.birthDate < $1.birthDate }
         case .sex:
-            result.sort { $0.sex.rawValue < $1.sex.rawValue }
+            result.sort { lhs, rhs in
+                if lhs.sex.rawValue != rhs.sex.rawValue {
+                    return lhs.sex.rawValue < rhs.sex.rawValue
+                }
+
+                return lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
+            }
         case .status:
-            result.sort { $0.status.rawValue < $1.status.rawValue }
+            result.sort { lhs, rhs in
+                if lhs.status.rawValue != rhs.status.rawValue {
+                    return lhs.status.rawValue < rhs.status.rawValue
+                }
+
+                return lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
+            }
+        case .pasture:
+            result.sort { lhs, rhs in
+                let lhsKey = pastureSortKey(for: lhs)
+                let rhsKey = pastureSortKey(for: rhs)
+
+                if lhsKey != rhsKey {
+                    return lhsKey < rhsKey
+                }
+
+                return lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
+            }
         }
 
         return result
+    }
+
+    private func pastureSectionTitle(for animal: AnimalSummary) -> String {
+        if animal.location == .workingPen {
+            return "Working Pen"
+        }
+
+        if let pastureName = animal.pastureName, !pastureName.isEmpty {
+            return pastureName
+        }
+
+        return "No Pasture"
+    }
+
+    private func pastureSectionSortKey(for title: String) -> String {
+        switch title {
+        case "Working Pen":
+            return "0-working-pen"
+        case "No Pasture":
+            return "2-no-pasture"
+        default:
+            return "1-\(title.lowercased())"
+        }
+    }
+
+    private func pastureSortKey(for animal: AnimalSummary) -> String {
+        pastureSectionSortKey(for: pastureSectionTitle(for: animal))
     }
 }
