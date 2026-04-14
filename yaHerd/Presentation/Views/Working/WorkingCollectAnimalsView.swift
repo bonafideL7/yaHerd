@@ -16,6 +16,8 @@ struct WorkingCollectAnimalsView: View {
     @Query(sort: \Animal.tagNumber) private var animals: [Animal]
 
     @State private var selected: Set<Animal> = []
+    @State private var errorMessage: String?
+    @State private var showingError = false
     @State private var searchText: String = ""
 
     private var eligibleAnimals: [Animal] {
@@ -68,6 +70,11 @@ struct WorkingCollectAnimalsView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .alert("Can’t Save", isPresented: $showingError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
     }
 
@@ -96,7 +103,12 @@ struct WorkingCollectAnimalsView: View {
             order += 1
         }
 
-        try? context.save()
-        dismiss()
+        do {
+            try context.save()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
 }

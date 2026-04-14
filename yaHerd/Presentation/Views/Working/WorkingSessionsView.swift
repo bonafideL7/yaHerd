@@ -15,6 +15,8 @@ struct WorkingSessionsView: View {
     @State private var showingNewSession = false
     @State private var sessionPendingDelete: WorkingSession?
     @State private var showingDeleteAlert: Bool = false
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     private var activeSessions: [WorkingSession] {
         sessions.filter { $0.status == .active }
@@ -96,6 +98,11 @@ struct WorkingSessionsView: View {
                 Text("This will delete the session and its recorded work data.")
             }
         }
+        .alert("Can’t Save", isPresented: $showingError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
     private func requestDelete(from list: [WorkingSession], offsets: IndexSet) {
@@ -106,6 +113,7 @@ struct WorkingSessionsView: View {
     }
 
     private func deleteSession(_ session: WorkingSession) {
+        do {
         // Return any animals still in the working pen for this session.
         for item in session.queueItems {
             guard let animal = item.animal else { continue }
@@ -133,7 +141,11 @@ struct WorkingSessionsView: View {
         }
 
         context.delete(session)
-        try? context.save()
+        try context.save()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
 }
 

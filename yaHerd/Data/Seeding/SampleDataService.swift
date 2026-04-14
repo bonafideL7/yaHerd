@@ -205,7 +205,7 @@ struct SampleDataService {
             )
         }
         
-        try? context.save()
+        do { try context.save() } catch { assertionFailure("Failed to save seeded data: \(error.localizedDescription)") }
     }
     
     private static func seedProtocolTemplatesIfNeeded(context: ModelContext) {
@@ -231,7 +231,7 @@ struct SampleDataService {
         
         context.insert(spring)
         context.insert(fall)
-        try? context.save()
+        do { try context.save() } catch { assertionFailure("Failed to save seeded data: \(error.localizedDescription)") }
     }
     
     // MARK: - Helpers

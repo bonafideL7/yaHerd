@@ -9,9 +9,6 @@ struct DashboardPastureListView: View {
     @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
     @AppStorage("pastureCapacity") private var pastureCapacity = 30
 
-    @Query private var animals: [Animal]
-    @Query private var pastures: [Pasture]
-
     @State private var viewModel = DashboardPastureListViewModel()
     @State private var filter: DashboardPastureFilter = .all
 
@@ -39,35 +36,6 @@ struct DashboardPastureListView: View {
 
     private var filteredPastures: [DashboardPastureItem] {
         viewModel.filteredItems(filter)
-    }
-
-
-    private var reloadKey: String {
-        [
-            configurationSignature,
-            animalObservationSignature,
-            pastureObservationSignature
-        ].joined(separator: "|")
-    }
-
-    private var animalObservationSignature: String {
-        animals
-            .sorted { $0.publicID.uuidString < $1.publicID.uuidString }
-            .map { animal in
-                [
-                    animal.publicID.uuidString,
-                    animal.status.rawValue,
-                    String(animal.isArchived),
-                    animal.pasture?.publicID.uuidString ?? "nil"
-                ].joined(separator: ":")
-            }
-            .joined(separator: "|")
-    }
-
-    private var pastureObservationSignature: String {
-        let sortedPastures = pastures.sorted { $0.publicID.uuidString < $1.publicID.uuidString }
-        let signatures = sortedPastures.map(pastureSignature)
-        return signatures.joined(separator: "|")
     }
 
     var body: some View {
@@ -107,7 +75,13 @@ struct DashboardPastureListView: View {
             }
         }
         .navigationTitle("Pastures")
-        .task(id: reloadKey) {
+        .task {
+            viewModel.load(configuration: configuration, using: repository)
+        }
+        .onChange(of: configurationSignature) { _, _ in
+            viewModel.load(configuration: configuration, using: repository)
+        }
+        .onAppear {
             viewModel.load(configuration: configuration, using: repository)
         }
         .alert("Dashboard Error", isPresented: errorBinding) {
@@ -128,27 +102,6 @@ struct DashboardPastureListView: View {
                 }
             }
         )
-    }
-
-    private func pastureSignature(_ pasture: Pasture) -> String {
-        [
-            pasture.publicID.uuidString,
-            pasture.name,
-            formattedDateString(pasture.lastGrazedDate),
-            formattedDoubleString(pasture.acreage),
-            formattedDoubleString(pasture.usableAcreage),
-            formattedDoubleString(pasture.targetAcresPerHead)
-        ].joined(separator: ":")
-    }
-
-    private func formattedDateString(_ date: Date?) -> String {
-        guard let date else { return "nil" }
-        return date.formatted(date: .numeric, time: .standard)
-    }
-
-    private func formattedDoubleString(_ value: Double?) -> String {
-        guard let value else { return "nil" }
-        return String(value)
     }
 
     private func pastureRow(_ pasture: DashboardPastureItem) -> some View {

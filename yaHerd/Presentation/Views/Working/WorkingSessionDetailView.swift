@@ -12,6 +12,10 @@ struct WorkingSessionDetailView: View {
 
     @State private var showingCollect = false
     @State private var showingFinish = false
+    @State private var sessionPendingDelete: WorkingSession?
+    @State private var showingDeleteAlert = false
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     private var queuedCount: Int {
         session.queueItems.filter { $0.status == .queued || $0.status == .inProgress }.count
@@ -99,51 +103,60 @@ struct WorkingSessionDetailView: View {
         .sheet(isPresented: $showingFinish) {
             WorkingFinishSessionView(session: session)
         }
-        .alert("Delete working session?", isPresented: $showingDeleteAlert, presenting: sessionPendingDelete) { s in
+        .alert("Delete working session?", isPresented: $showingDeleteAlert, presenting: sessionPendingDelete) { selected in
             Button("Delete", role: .destructive) {
-                deleteSession(s)
+                deleteSession(selected)
             }
             Button("Cancel", role: .cancel) {}
-        } message: { s in
-            if s.status == .active {
+        } message: { selected in
+            if selected.status == .active {
                 Text("Deleting an active session will return any animals currently in the working pen back to the source/collected pasture and remove the session records.")
             } else {
                 Text("This will delete the session and its recorded work data.")
             }
         }
+        .alert("Can’t Save", isPresented: $showingError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
-    @State private var sessionPendingDelete: WorkingSession?
-    @State private var showingDeleteAlert: Bool = false
-
     private func deleteSession(_ session: WorkingSession) {
-        // Return any animals still in the working pen for this session.
-        for item in session.queueItems {
-            guard let animal = item.animal else { continue }
-            if animal.activeWorkingSession?.persistentModelID == session.persistentModelID || animal.location == .workingPen {
-                let dest = item.collectedFromPasture ?? session.sourcePasture
-                animal.pasture = dest
-                animal.location = .pasture
-                animal.activeWorkingSession = nil
+        do {
+            for item in session.queueItems {
+                guard let animal = item.animal else { continue }
+                if animal.activeWorkingSession?.persistentModelID == session.persistentModelID || animal.location == .workingPen {
+                    let destination = item.collectedFromPasture ?? session.sourcePasture
+                    animal.pasture = destination
+                    animal.location = .pasture
+                    animal.activeWorkingSession = nil
+                }
             }
-        }
 
-        // Delete session-linked records (treatments, preg checks, session-tied health records).
-        // NOTE: SwiftData predicate macros are unreliable when comparing relationship values in predicates.
-        // Fetch and filter in-memory instead.
-        let sid = session.persistentModelID
+            let sid = session.persistentModelID
 
-        if let all = try? context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) {
-            for r in all where r.session?.persistentModelID == sid { context.delete(r) }
-        }
-        if let all = try? context.fetch(FetchDescriptor<PregnancyCheck>()) {
-            for c in all where c.workingSession?.persistentModelID == sid { context.delete(c) }
-        }
-        if let all = try? context.fetch(FetchDescriptor<HealthRecord>()) {
-            for h in all where h.workingSession?.persistentModelID == sid { context.delete(h) }
-        }
+            if let all = try? context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) {
+                for record in all where record.session?.persistentModelID == sid {
+                    context.delete(record)
+                }
+            }
+            if let all = try? context.fetch(FetchDescriptor<PregnancyCheck>()) {
+                for check in all where check.workingSession?.persistentModelID == sid {
+                    context.delete(check)
+                }
+            }
+            if let all = try? context.fetch(FetchDescriptor<HealthRecord>()) {
+                for record in all where record.workingSession?.persistentModelID == sid {
+                    context.delete(record)
+                }
+            }
 
-        context.delete(session)
-        try? context.save()
+            context.delete(session)
+            try context.save()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
 }

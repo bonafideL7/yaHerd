@@ -244,7 +244,7 @@ struct SampleLargeDataService {
             statusChangeDate: makeDate(2025, 11, 15)
         )
 
-        try? context.save()
+        do { try context.save() } catch { assertionFailure("Failed to save seeded data: \(error.localizedDescription)") }
     }
 
     private static func makeDate(_ year: Int, _ month: Int, _ day: Int) -> Date {

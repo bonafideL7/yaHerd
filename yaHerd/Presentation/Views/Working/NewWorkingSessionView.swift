@@ -149,8 +149,13 @@ struct NewWorkingSessionView: View {
             protocolItems: cleanedItems
         )
 
-        context.insert(session)
-        try? context.save()
-        dismiss()
+        do {
+            context.insert(session)
+            try context.save()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
 }

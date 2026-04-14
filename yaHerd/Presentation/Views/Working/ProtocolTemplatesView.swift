@@ -9,7 +9,10 @@ import SwiftData
 struct ProtocolTemplatesView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \WorkingProtocolTemplate.name) private var templates: [WorkingProtocolTemplate]
+
     @State private var showingAdd = false
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     var body: some View {
         List {
@@ -46,16 +49,26 @@ struct ProtocolTemplatesView: View {
                 }
             }
         }
+        .alert("Can’t Save", isPresented: $showingError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
         .sheet(isPresented: $showingAdd) {
             ProtocolTemplateAddView()
         }
     }
 
     private func delete(at offsets: IndexSet) {
-        for i in offsets {
-            context.delete(templates[i])
+        do {
+            for i in offsets {
+                context.delete(templates[i])
+            }
+            try context.save()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
         }
-        try? context.save()
     }
 }
 
@@ -65,6 +78,8 @@ private struct ProtocolTemplateAddView: View {
 
     @State private var name: String = ""
     @State private var items: [WorkingProtocolItem] = [WorkingProtocolItem(name: "")]
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     var body: some View {
         NavigationStack {
@@ -103,6 +118,11 @@ private struct ProtocolTemplateAddView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .alert("Can’t Save", isPresented: $showingError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
     }
 
@@ -114,10 +134,15 @@ private struct ProtocolTemplateAddView: View {
             .filter { !$0.name.isEmpty }
         guard !cleaned.isEmpty else { return }
 
-        let template = WorkingProtocolTemplate(name: trimmed, items: cleaned)
-        context.insert(template)
-        try? context.save()
-        dismiss()
+        do {
+            let template = WorkingProtocolTemplate(name: trimmed, items: cleaned)
+            context.insert(template)
+            try context.save()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
 }
 
@@ -128,6 +153,8 @@ private struct ProtocolTemplateDetailView: View {
 
     @State private var nameDraft: String = ""
     @State private var items: [WorkingProtocolItem] = []
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     var body: some View {
         Form {
@@ -176,6 +203,11 @@ private struct ProtocolTemplateDetailView: View {
             nameDraft = template.name
             items = template.items
         }
+        .alert("Can’t Save", isPresented: $showingError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
     private func save() {
@@ -186,9 +218,14 @@ private struct ProtocolTemplateDetailView: View {
             .filter { !$0.name.isEmpty }
         guard !cleaned.isEmpty else { return }
 
-        template.name = trimmedName
-        template.items = cleaned
-        try? context.save()
-        dismiss()
+        do {
+            template.name = trimmedName
+            template.items = cleaned
+            try context.save()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
 }

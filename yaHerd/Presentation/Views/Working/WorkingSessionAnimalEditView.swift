@@ -14,8 +14,6 @@ struct WorkingSessionAnimalEditView: View {
     let session: WorkingSession
     @Bindable var queueItem: WorkingQueueItem
 
-    // SwiftData predicate macros can be unreliable when comparing relationship values.
-    // Fetch broadly and filter in-memory for stable compilation and behavior.
     @Query(sort: [SortDescriptor(\WorkingTreatmentRecord.itemName)])
     private var allTreatmentRecords: [WorkingTreatmentRecord]
 
@@ -27,29 +25,25 @@ struct WorkingSessionAnimalEditView: View {
 
     @Query(sort: \Pasture.name) private var pastures: [Pasture]
 
-    private var animal: Animal? { queueItem.animal }
-
-    // Treatments
     @State private var treatmentEntries: [TreatmentEditEntry] = []
-
-    // Preg check
-    @State private var recordPregCheck: Bool = false
+    @State private var recordPregCheck = false
     @State private var pregResult: PregnancyResult = .unknown
     @State private var pregDate: Date = .now
     @State private var estimatedDaysText: String = ""
     @State private var dueDate: Date = .now
     @State private var selectedSire: AnimalParentOption?
-    @State private var showingSirePicker: Bool = false
-
-    // Castration / observations
-    @State private var castrationPerformedInSession: Bool = false
+    @State private var showingSirePicker = false
+    @State private var castrationPerformedInSession = false
     @State private var observationNotes: String = ""
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     init(session: WorkingSession, queueItem: WorkingQueueItem) {
         self.session = session
         self._queueItem = Bindable(wrappedValue: queueItem)
     }
 
+    private var animal: Animal? { queueItem.animal }
     private var sid: PersistentIdentifier { session.persistentModelID }
     private var aid: PersistentIdentifier? { queueItem.animal?.persistentModelID }
 
@@ -70,14 +64,18 @@ struct WorkingSessionAnimalEditView: View {
     private var observationRecords: [HealthRecord] {
         guard let aid else { return [] }
         return allHealthRecords.filter {
-            $0.workingSession?.persistentModelID == sid && $0.animal.persistentModelID == aid && $0.treatment == "Observation"
+            $0.workingSession?.persistentModelID == sid
+                && $0.animal.persistentModelID == aid
+                && $0.treatment == "Observation"
         }
     }
 
     private var castrationRecords: [HealthRecord] {
         guard let aid else { return [] }
         return allHealthRecords.filter {
-            $0.workingSession?.persistentModelID == sid && $0.animal.persistentModelID == aid && $0.treatment == "Castration"
+            $0.workingSession?.persistentModelID == sid
+                && $0.animal.persistentModelID == aid
+                && $0.treatment == "Castration"
         }
     }
 
@@ -115,8 +113,8 @@ struct WorkingSessionAnimalEditView: View {
 
             Section("Queue") {
                 Picker("Status", selection: $queueItem.status) {
-                    ForEach(WorkingQueueStatus.allCases, id: \.self) { s in
-                        Text(s.rawValue.capitalized).tag(s)
+                    ForEach(WorkingQueueStatus.allCases, id: \.self) { status in
+                        Text(status.rawValue.capitalized).tag(status)
                     }
                 }
 
@@ -168,8 +166,8 @@ struct WorkingSessionAnimalEditView: View {
                         DatePicker("Date", selection: $pregDate, displayedComponents: [.date])
 
                         Picker("Result", selection: $pregResult) {
-                            ForEach(PregnancyResult.allCases, id: \.self) { v in
-                                Text(v.rawValue.capitalized).tag(v)
+                            ForEach(PregnancyResult.allCases, id: \.self) { value in
+                                Text(value.rawValue.capitalized).tag(value)
                             }
                         }
 
@@ -248,10 +246,15 @@ struct WorkingSessionAnimalEditView: View {
         .sheet(isPresented: $showingSirePicker) {
             sirePickerSheet
         }
+        .alert("Can’t Save", isPresented: $showingError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
     private var completedBinding: Binding<Date> {
-        Binding<Date>(
+        Binding(
             get: { queueItem.completedAt ?? session.date },
             set: { queueItem.completedAt = $0 }
         )
@@ -268,16 +271,16 @@ struct WorkingSessionAnimalEditView: View {
     }
 
     private func seedState() {
-        // Treatments: map existing records by item name
         let map = Dictionary(grouping: treatmentRecords, by: { $0.itemName })
 
         treatmentEntries = session.protocolItems.map { item in
             let existing = map[item.name]?.sorted(by: { $0.date > $1.date }).first
-            let qtyText = {
-                if let q = existing?.quantity { return "\(q)" }
-                if let d = item.defaultQuantity { return "\(d)" }
+            let qtyText: String = {
+                if let quantity = existing?.quantity { return "\(quantity)" }
+                if let defaultQuantity = item.defaultQuantity { return "\(defaultQuantity)" }
                 return ""
             }()
+
             return TreatmentEditEntry(
                 id: item.id,
                 name: item.name,
@@ -287,7 +290,6 @@ struct WorkingSessionAnimalEditView: View {
             )
         }
 
-        // Preg check
         if let existing = pregChecks.first {
             recordPregCheck = true
             pregResult = existing.result
@@ -312,7 +314,6 @@ struct WorkingSessionAnimalEditView: View {
             selectedSire = nil
         }
 
-        // Session-tied castration/observation
         castrationPerformedInSession = !castrationRecords.isEmpty
         observationNotes = observationRecords.first?.notes ?? ""
     }
@@ -333,7 +334,6 @@ struct WorkingSessionAnimalEditView: View {
         let sid = session.persistentModelID
         let aid = animal.persistentModelID
 
-        // Queue bookkeeping
         if queueItem.status == .done && queueItem.completedAt == nil {
             queueItem.completedAt = .now
         }
@@ -341,35 +341,33 @@ struct WorkingSessionAnimalEditView: View {
             queueItem.completedAt = nil
         }
 
-        // Upsert treatments
         if let existing = try? context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) {
-            for r in existing where r.session?.persistentModelID == sid && r.animal?.persistentModelID == aid {
-                context.delete(r)
+            for record in existing where record.session?.persistentModelID == sid && record.animal?.persistentModelID == aid {
+                context.delete(record)
             }
         }
         for entry in treatmentEntries {
-            let qty = Double(entry.quantityText.trimmingCharacters(in: .whitespacesAndNewlines))
-            let rec = WorkingTreatmentRecord(
+            let quantity = Double(entry.quantityText.trimmingCharacters(in: .whitespacesAndNewlines))
+            let record = WorkingTreatmentRecord(
                 date: entry.date,
                 itemName: entry.name,
                 given: entry.given,
-                quantity: qty,
+                quantity: quantity,
                 animal: animal,
                 session: session
             )
-            context.insert(rec)
+            context.insert(record)
         }
 
-        // Upsert preg checks for this session+animal
         if let existingChecks = try? context.fetch(FetchDescriptor<PregnancyCheck>()) {
-            for c in existingChecks where c.workingSession?.persistentModelID == sid && c.animal.persistentModelID == aid {
-                context.delete(c)
+            for check in existingChecks where check.workingSession?.persistentModelID == sid && check.animal.persistentModelID == aid {
+                context.delete(check)
             }
         }
 
         if showPregSection && recordPregCheck {
             let estDays = Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines))
-            let computedDue: Date? = (pregResult == .pregnant) ? dueDate : nil
+            let computedDue: Date? = pregResult == .pregnant ? dueDate : nil
 
             if pregResult == .open || pregResult == .pregnant {
                 let check = PregnancyCheck(
@@ -386,31 +384,34 @@ struct WorkingSessionAnimalEditView: View {
             }
         }
 
-        // Upsert session-tied castration record
         if let existing = try? context.fetch(FetchDescriptor<HealthRecord>()) {
-            for r in existing where r.workingSession?.persistentModelID == sid && r.animal.persistentModelID == aid && r.treatment == "Castration" {
-                context.delete(r)
+            for record in existing where record.workingSession?.persistentModelID == sid && record.animal.persistentModelID == aid && record.treatment == "Castration" {
+                context.delete(record)
             }
         }
         if castrationPerformedInSession {
-            let rec = HealthRecord(date: .now, treatment: "Castration", notes: nil, workingSession: session, animal: animal)
-            context.insert(rec)
+            let record = HealthRecord(date: .now, treatment: "Castration", notes: nil, workingSession: session, animal: animal)
+            context.insert(record)
         }
 
-        // Upsert session-tied observation record
         if let existing = try? context.fetch(FetchDescriptor<HealthRecord>()) {
-            for r in existing where r.workingSession?.persistentModelID == sid && r.animal.persistentModelID == aid && r.treatment == "Observation" {
-                context.delete(r)
+            for record in existing where record.workingSession?.persistentModelID == sid && record.animal.persistentModelID == aid && record.treatment == "Observation" {
+                context.delete(record)
             }
         }
         let trimmedObs = observationNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedObs.isEmpty {
-            let rec = HealthRecord(date: .now, treatment: "Observation", notes: trimmedObs, workingSession: session, animal: animal)
-            context.insert(rec)
+            let record = HealthRecord(date: .now, treatment: "Observation", notes: trimmedObs, workingSession: session, animal: animal)
+            context.insert(record)
         }
 
-        try? context.save()
-        dismiss()
+        do {
+            try context.save()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
 
     private func deleteWorkDataForAnimal() {
@@ -420,26 +421,31 @@ struct WorkingSessionAnimalEditView: View {
         let aid = animal.persistentModelID
 
         if let treatments = try? context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) {
-            for r in treatments where r.session?.persistentModelID == sid && r.animal?.persistentModelID == aid {
-                context.delete(r)
+            for record in treatments where record.session?.persistentModelID == sid && record.animal?.persistentModelID == aid {
+                context.delete(record)
             }
         }
         if let checks = try? context.fetch(FetchDescriptor<PregnancyCheck>()) {
-            for c in checks where c.workingSession?.persistentModelID == sid && c.animal.persistentModelID == aid {
-                context.delete(c)
+            for check in checks where check.workingSession?.persistentModelID == sid && check.animal.persistentModelID == aid {
+                context.delete(check)
             }
         }
         if let health = try? context.fetch(FetchDescriptor<HealthRecord>()) {
-            for h in health where h.workingSession?.persistentModelID == sid && h.animal.persistentModelID == aid {
-                context.delete(h)
+            for record in health where record.workingSession?.persistentModelID == sid && record.animal.persistentModelID == aid {
+                context.delete(record)
             }
         }
 
         queueItem.status = .queued
         queueItem.completedAt = nil
-        try? context.save()
 
-        seedState()
+        do {
+            try context.save()
+            seedState()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
 
     private func resolveAnimal(publicID: UUID?) -> Animal? {
@@ -451,7 +457,6 @@ struct WorkingSessionAnimalEditView: View {
         )
         return try? context.fetch(descriptor).first
     }
-
 }
 
 private struct TreatmentEditEntry: Identifiable {

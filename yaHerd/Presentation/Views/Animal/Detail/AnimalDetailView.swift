@@ -164,9 +164,6 @@ struct AnimalDetailView: View {
                 viewModel.load(animalID: animalID, using: repository)
             }
         }
-        .onAppear {
-            viewModel.load(animalID: animalID, using: repository)
-        }
         .onChange(of: viewModel.errorMessage) { _, newValue in
             showingError = newValue != nil
         }

@@ -17,6 +17,8 @@ struct PasturePickerView: View {
 
     @State var animal: Animal
     @State private var selectedPasture: Pasture?
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     var body: some View {
         NavigationStack {
@@ -48,11 +50,21 @@ struct PasturePickerView: View {
             .onAppear {
                 selectedPasture = animal.pasture
             }
+            .alert("Can’t Save", isPresented: $showingError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
     }
 
     private func applyPastureChange() {
-        AnimalMovementService.move(animal, to: selectedPasture, in: context)
-        dismiss()
+        do {
+            try AnimalMovementService.move(animal, to: selectedPasture, in: context)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
 }

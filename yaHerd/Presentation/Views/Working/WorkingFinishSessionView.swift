@@ -15,6 +15,9 @@ struct WorkingFinishSessionView: View {
 
     @Query(sort: \Pasture.name) private var pastures: [Pasture]
 
+    @State private var errorMessage: String?
+    @State private var showingError = false
+
     private var orderedItems: [WorkingQueueItem] {
         session.queueItems.sorted { $0.queueOrder < $1.queueOrder }
     }
@@ -80,6 +83,11 @@ struct WorkingFinishSessionView: View {
                     }
                 }
             }
+            .alert("Can’t Save", isPresented: $showingError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
     }
 
@@ -100,23 +108,30 @@ struct WorkingFinishSessionView: View {
     }
 
     private func returnAnimals() {
-        var changedAny = false
+        do {
+            var changedAny = false
 
-        for item in orderedItems {
-            guard let animal = item.animal else { continue }
-            let destination = item.destinationPasture ?? session.sourcePasture
-            let changed = AnimalMovementService.move(
-                animal,
-                to: destination,
-                in: context,
-                fromPastureName: item.collectedFromPasture?.name,
-                save: false
-            )
-            changedAny = changedAny || changed
+            for item in orderedItems {
+                guard let animal = item.animal else { continue }
+                let destination = item.destinationPasture ?? session.sourcePasture
+                let changed = try AnimalMovementService.move(
+                    animal,
+                    to: destination,
+                    in: context,
+                    fromPastureName: item.collectedFromPasture?.name,
+                    save: false
+                )
+                changedAny = changedAny || changed
+            }
+
+            session.status = .finished
+            if changedAny || session.status == .finished {
+                try context.save()
+            }
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
         }
-
-        session.status = .finished
-        try? context.save()
-        dismiss()
     }
 }

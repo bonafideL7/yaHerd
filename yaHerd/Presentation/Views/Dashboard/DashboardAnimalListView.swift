@@ -10,9 +10,6 @@ struct DashboardAnimalListView: View {
     @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
     @AppStorage("pastureCapacity") private var pastureCapacity = 30
 
-    @Query private var animals: [Animal]
-    @Query private var pastures: [Pasture]
-
     @State private var viewModel = DashboardAnimalListViewModel()
 
     let kind: DashboardAnimalListKind
@@ -39,49 +36,6 @@ struct DashboardAnimalListView: View {
         ].joined(separator: ":")
     }
 
-
-    private var reloadKey: String {
-        [
-            kind.rawValue,
-            configurationSignature,
-            animalObservationSignature,
-            pastureObservationSignature
-        ].joined(separator: "|")
-    }
-
-    private var animalObservationSignature: String {
-        animals
-            .sorted { $0.publicID.uuidString < $1.publicID.uuidString }
-            .map { animal in
-                let latestPregnancyCheck = animal.pregnancyChecks.max { lhs, rhs in lhs.date < rhs.date }
-                let latestTreatment = animal.healthRecords.max { lhs, rhs in lhs.date < rhs.date }
-                return [
-                    animal.publicID.uuidString,
-                    animal.displayTagNumber,
-                    animal.displayTagColorID?.uuidString ?? "nil",
-                    animal.status.rawValue,
-                    String(animal.isArchived),
-                    animal.location.rawValue,
-                    animal.pasture?.publicID.uuidString ?? "nil",
-                    latestPregnancyCheck?.date.formatted(date: .numeric, time: .standard) ?? "nil",
-                    latestTreatment?.date.formatted(date: .numeric, time: .standard) ?? "nil"
-                ].joined(separator: ":")
-            }
-            .joined(separator: "|")
-    }
-
-    private var pastureObservationSignature: String {
-        pastures
-            .sorted { $0.publicID.uuidString < $1.publicID.uuidString }
-            .map { pasture in
-                [
-                    pasture.publicID.uuidString,
-                    pasture.name
-                ].joined(separator: ":")
-            }
-            .joined(separator: "|")
-    }
-
     var body: some View {
         List {
             if viewModel.items.isEmpty {
@@ -96,7 +50,13 @@ struct DashboardAnimalListView: View {
             }
         }
         .navigationTitle(kind.title)
-        .task(id: reloadKey) {
+        .task {
+            viewModel.load(kind: kind, configuration: configuration, using: repository)
+        }
+        .onChange(of: configurationSignature) { _, _ in
+            viewModel.load(kind: kind, configuration: configuration, using: repository)
+        }
+        .onAppear {
             viewModel.load(kind: kind, configuration: configuration, using: repository)
         }
         .alert("Dashboard Error", isPresented: errorBinding) {

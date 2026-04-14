@@ -15,8 +15,6 @@ struct DashboardView: View {
     @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
     @AppStorage("pastureCapacity") private var pastureCapacity = 30
 
-    @Query private var animals: [Animal]
-    @Query private var pastures: [Pasture]
     @Query(sort: \WorkingSession.date, order: .reverse) private var workingSessions: [WorkingSession]
 
     @State private var viewModel = DashboardViewModel()
@@ -56,59 +54,6 @@ struct DashboardView: View {
 
     private var filteredPastures: [DashboardPastureItem] {
         viewModel.pastures(filteredBy: pastureFilter)
-    }
-
-
-    private var reloadKey: String {
-        [
-            configurationSignature,
-            animalObservationSignature,
-            pastureObservationSignature,
-            workingSessionObservationSignature
-        ].joined(separator: "|")
-    }
-
-    private var animalObservationSignature: String {
-        animals
-            .sorted { $0.publicID.uuidString < $1.publicID.uuidString }
-            .map { animal in
-                let latestPregnancyCheck = animal.pregnancyChecks.max { lhs, rhs in lhs.date < rhs.date }
-                let latestTreatment = animal.healthRecords.max { lhs, rhs in lhs.date < rhs.date }
-                return [
-                    animal.publicID.uuidString,
-                    animal.displayTagNumber,
-                    animal.displayTagColorID?.uuidString ?? "nil",
-                    animal.status.rawValue,
-                    String(animal.isArchived),
-                    animal.location.rawValue,
-                    animal.pasture?.publicID.uuidString ?? "nil",
-                    latestPregnancyCheck?.date.formatted(date: .numeric, time: .standard) ?? "nil",
-                    latestPregnancyCheck?.result.rawValue ?? "nil",
-                    latestTreatment?.date.formatted(date: .numeric, time: .standard) ?? "nil"
-                ].joined(separator: ":")
-            }
-            .joined(separator: "|")
-    }
-
-    private var pastureObservationSignature: String {
-        let sortedPastures = pastures.sorted { $0.publicID.uuidString < $1.publicID.uuidString }
-        let signatures = sortedPastures.map(pastureSignature)
-        return signatures.joined(separator: "|")
-    }
-
-    private var workingSessionObservationSignature: String {
-        workingSessions
-            .map { session in
-                [
-                    session.date.formatted(date: .numeric, time: .standard),
-                    session.status.rawValue,
-                    session.protocolName,
-                    session.sourcePasture?.name ?? "nil",
-                    String(session.queueItems.count),
-                    String(session.queueItems.filter { $0.status == .done }.count)
-                ].joined(separator: ":")
-            }
-            .joined(separator: "|")
     }
 
     private var activeSession: WorkingSession? {
@@ -248,7 +193,13 @@ struct DashboardView: View {
                 }
             }
         }
-        .task(id: reloadKey) {
+        .task {
+            viewModel.load(configuration: configuration, using: repository)
+        }
+        .onChange(of: configurationSignature) { _, _ in
+            viewModel.load(configuration: configuration, using: repository)
+        }
+        .onAppear {
             viewModel.load(configuration: configuration, using: repository)
         }
         .sheet(isPresented: addAnimalBinding) {
@@ -330,27 +281,6 @@ struct DashboardView: View {
                 }
             }
         )
-    }
-
-    private func pastureSignature(_ pasture: Pasture) -> String {
-        [
-            pasture.publicID.uuidString,
-            pasture.name,
-            formattedDateString(pasture.lastGrazedDate),
-            formattedDoubleString(pasture.acreage),
-            formattedDoubleString(pasture.usableAcreage),
-            formattedDoubleString(pasture.targetAcresPerHead)
-        ].joined(separator: ":")
-    }
-
-    private func formattedDateString(_ date: Date?) -> String {
-        guard let date else { return "nil" }
-        return date.formatted(date: .numeric, time: .standard)
-    }
-
-    private func formattedDoubleString(_ value: Double?) -> String {
-        guard let value else { return "nil" }
-        return String(value)
     }
 
     private func alertRow(_ alert: DashboardAlert) -> some View {
@@ -584,28 +514,27 @@ private struct WorkingSessionSummaryCard: View {
                 Text(session.protocolName)
                     .font(.headline)
                 Spacer()
-                Text("Continue")
+                Text(session.status.rawValue.capitalized)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 8) {
+            HStack {
                 Text(session.date.formatted(date: .abbreviated, time: .shortened))
-                if let sourcePasture = session.sourcePasture?.name {
-                    Text("• \(sourcePasture)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let source = session.sourcePasture?.name {
+                    Text("• \(source)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
                 if total > 0 {
                     Text("\(completed)/\(total)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            if total > 0 {
-                ProgressView(value: Double(completed), total: Double(total))
-            }
         }
-        .padding(.vertical, 4)
     }
 }

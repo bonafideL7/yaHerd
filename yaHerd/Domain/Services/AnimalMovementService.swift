@@ -11,7 +11,7 @@ struct AnimalMovementService {
         fromPastureName: String? = nil,
         date: Date = .now,
         save: Bool = true
-    ) -> Bool {
+    ) throws -> Bool {
         let previousName = fromPastureName ?? animal.pasture?.name
         let newName = pasture?.name
 
@@ -30,7 +30,7 @@ struct AnimalMovementService {
         context.insert(movement)
 
         if save {
-            try? context.save()
+            try context.save()
         }
 
         return true
@@ -42,7 +42,7 @@ struct AnimalMovementService {
         in context: ModelContext,
         date: Date = .now,
         save: Bool = true
-    ) {
+    ) throws {
         var changedAny = false
 
         for animal in animals {
@@ -51,7 +51,7 @@ struct AnimalMovementService {
         }
 
         if save, changedAny {
-            try? context.save()
+            try context.save()
         }
     }
 }

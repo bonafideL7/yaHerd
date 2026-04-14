@@ -17,14 +17,14 @@ struct WorkingChuteView: View {
     @State private var treatEntries: [TreatmentEntry] = []
     @State private var observationNotes: String = ""
 
-    // Preg check
     @State private var pregResult: PregnancyResult = .unknown
     @State private var estimatedDaysText: String = ""
     @State private var dueDate: Date = .now
     @State private var selectedSire: AnimalParentOption?
-
-    // Male procedure
     @State private var markCastrated: Bool = false
+    @State private var showingSirePicker = false
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     private var animal: Animal? { queueItem.animal }
 
@@ -95,8 +95,8 @@ struct WorkingChuteView: View {
             if showPregSection {
                 Section("Preg Check") {
                     Picker("Result", selection: $pregResult) {
-                        ForEach(PregnancyResult.allCases, id: \.self) { v in
-                            Text(v.rawValue.capitalized).tag(v)
+                        ForEach(PregnancyResult.allCases, id: \.self) { value in
+                            Text(value.rawValue.capitalized).tag(value)
                         }
                     }
 
@@ -113,7 +113,6 @@ struct WorkingChuteView: View {
                         DatePicker("Due Date", selection: $dueDate, displayedComponents: .date)
 
                         Button {
-                            // reuse existing picker UI
                             showingSirePicker = true
                         } label: {
                             HStack {
@@ -166,9 +165,12 @@ struct WorkingChuteView: View {
         .sheet(isPresented: $showingSirePicker) {
             sirePickerSheet
         }
+        .alert("Can’t Save", isPresented: $showingError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
-
-    @State private var showingSirePicker: Bool = false
 
     private var sirePickerSheet: some View {
         AnimalParentPickerView(
@@ -181,34 +183,30 @@ struct WorkingChuteView: View {
     }
 
     private func seedState() {
-        // Initialize protocol items for this session
         if treatEntries.isEmpty {
             treatEntries = session.protocolItems.map { item in
                 TreatmentEntry(
                     id: item.id,
                     name: item.name,
                     given: true,
-                    // Avoid ambiguous overload resolution on String.init
                     quantityText: item.defaultQuantity.map { "\($0)" } ?? ""
                 )
             }
         }
 
-        // Default preg check state
         pregResult = .unknown
         estimatedDaysText = ""
-        dueDate = Date()
+        dueDate = .now
         selectedSire = nil
         markCastrated = false
     }
 
     private func recalcDueDate() {
         guard pregResult == .pregnant else { return }
-        let checkDate = Date()
         guard let est = Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
 
         let remaining = max(0, WorkingConstants.gestationDays - est)
-        if let computed = Calendar.current.date(byAdding: .day, value: remaining, to: checkDate) {
+        if let computed = Calendar.current.date(byAdding: .day, value: remaining, to: .now) {
             dueDate = computed
         }
     }
@@ -222,12 +220,9 @@ struct WorkingChuteView: View {
         queueItem.status = .done
         queueItem.completedAt = .now
 
-        // Upsert treatment completion for this animal+session (avoid duplicates if re-worked)
-        // NOTE: SwiftData predicate macros are unreliable when comparing relationship values.
-        // Fetch and filter in-memory instead.
         if let existing = try? context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) {
-            for rec in existing where rec.session?.persistentModelID == sid && rec.animal?.persistentModelID == aid {
-                context.delete(rec)
+            for record in existing where record.session?.persistentModelID == sid && record.animal?.persistentModelID == aid {
+                context.delete(record)
             }
         }
         for entry in treatEntries {
@@ -243,17 +238,16 @@ struct WorkingChuteView: View {
             context.insert(record)
         }
 
-        // Preg check capture (only if user set Open/Pregnant). Upsert for this session+animal.
         if showPregSection {
             if let existingChecks = try? context.fetch(FetchDescriptor<PregnancyCheck>()) {
-                for c in existingChecks where c.workingSession?.persistentModelID == sid && c.animal.persistentModelID == aid {
-                    context.delete(c)
+                for check in existingChecks where check.workingSession?.persistentModelID == sid && check.animal.persistentModelID == aid {
+                    context.delete(check)
                 }
             }
 
             if pregResult == .open || pregResult == .pregnant {
                 let estDays = Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines))
-                let computedDue: Date? = (pregResult == .pregnant) ? dueDate : nil
+                let computedDue: Date? = pregResult == .pregnant ? dueDate : nil
 
                 let check = PregnancyCheck(
                     date: .now,
@@ -269,37 +263,52 @@ struct WorkingChuteView: View {
             }
         }
 
-        // Castration
         if markCastrated {
-            // Upsert a castration record tied to this session.
             if let existing = try? context.fetch(FetchDescriptor<HealthRecord>()) {
-                for r in existing where r.workingSession?.persistentModelID == sid
-                    && r.animal.persistentModelID == aid
-                    && r.treatment == "Castration" {
-                    context.delete(r)
+                for record in existing where record.workingSession?.persistentModelID == sid
+                    && record.animal.persistentModelID == aid
+                    && record.treatment == "Castration" {
+                    context.delete(record)
                 }
             }
-            let record = HealthRecord(date: .now, treatment: "Castration", notes: nil, workingSession: session, animal: animal)
+
+            let record = HealthRecord(
+                date: .now,
+                treatment: "Castration",
+                notes: nil,
+                workingSession: session,
+                animal: animal
+            )
             context.insert(record)
         }
 
-        // Observations
         let trimmedObs = observationNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedObs.isEmpty {
-            // Upsert a single observation record tied to this session.
             if let existing = try? context.fetch(FetchDescriptor<HealthRecord>()) {
-                for r in existing where r.workingSession?.persistentModelID == sid
-                    && r.animal.persistentModelID == aid
-                    && r.treatment == "Observation" {
-                    context.delete(r)
+                for record in existing where record.workingSession?.persistentModelID == sid
+                    && record.animal.persistentModelID == aid
+                    && record.treatment == "Observation" {
+                    context.delete(record)
                 }
             }
-            let record = HealthRecord(date: .now, treatment: "Observation", notes: trimmedObs, workingSession: session, animal: animal)
+
+            let record = HealthRecord(
+                date: .now,
+                treatment: "Observation",
+                notes: trimmedObs,
+                workingSession: session,
+                animal: animal
+            )
             context.insert(record)
         }
 
-        try? context.save()
-        dismiss()
+        do {
+            try context.save()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
     }
 
     private func resolveAnimal(publicID: UUID?) -> Animal? {
@@ -311,7 +320,6 @@ struct WorkingChuteView: View {
         )
         return try? context.fetch(descriptor).first
     }
-
 }
 
 private struct TreatmentEntry: Identifiable {
