@@ -33,7 +33,8 @@ struct MainTabView: View {
             }
         }
         .task {
-            SampleDataService.seedDefaultsIfNeeded(context: context)
+//            SampleDataService.seedDefaultsIfNeeded(context: context)
+//            SampleLargeDataService.seedIfNeeded(context: context)            
         }
     }
 }

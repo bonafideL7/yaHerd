@@ -63,15 +63,25 @@ struct AnimalTagView: View {
     let colorName: String
     var size: Size = .regular
 
+    private var normalizedTagText: String {
+        let trimmed = tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "UT" : trimmed
+    }
+
+    private var normalizedColorName: String {
+        let trimmed = colorName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "White" : trimmed
+    }
+
     var body: some View {
         HStack(spacing: size.spacing) {
             TagColorTagIcon(
                 color: color,
-                accessibilityLabel: "Tag color: \(colorName)",
+                accessibilityLabel: "Tag color: \(normalizedColorName)",
                 size: size.iconSize
             )
 
-            Text(tagNumber)
+            Text(normalizedTagText)
                 .font(size.font)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
@@ -84,6 +94,6 @@ struct AnimalTagView: View {
                 .stroke(color.opacity(0.35), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Animal tag \(colorName) \(tagNumber)")
+        .accessibilityLabel("Animal tag \(normalizedColorName) \(normalizedTagText)")
     }
 }

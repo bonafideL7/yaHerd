@@ -97,7 +97,8 @@ final class TagColorLibraryStore: ObservableObject {
     }
 
     var defaultColor: TagColorDefinition {
-        colors.first ?? TagColorDefinition(name: "Yellow", rgba: RGBAColor(r: 1, g: 1, b: 0))
+        colors.first(where: { $0.name.caseInsensitiveCompare("White") == .orderedSame })
+            ?? TagColorDefinition(name: "White", rgba: RGBAColor(r: 1, g: 1, b: 1))
     }
 
     func definition(for id: UUID?) -> TagColorDefinition? {
@@ -113,7 +114,7 @@ final class TagColorLibraryStore: ObservableObject {
     func formattedTag(tagNumber: String, colorID: UUID?) -> String {
         let def = resolvedDefinition(tagColorID: colorID)
         let number = tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-        return number.isEmpty ? "—" : "\(def.prefix)\(number)"
+        return number.isEmpty ? "UT" : "\(def.prefix)\(number)"
     }
 
     func resolvedDefinition(for animal: Animal) -> TagColorDefinition {

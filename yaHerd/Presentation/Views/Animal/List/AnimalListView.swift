@@ -182,20 +182,23 @@ struct AnimalListView: View {
                 )
 
                 if !animal.name.isEmpty {
-                    Text(animal.name)
-                        .font(.subheadline)
-                        .lineLimit(1)
+                    infoPill(
+                        title:animal.name,
+                        systemImage: ""
+                    )
                 } else {
                     infoPill(
                         title: animal.sex.label,
                         systemImage: ""
                     )
                 }
-
-                statusPills(for: animal)
             }
             VStack(alignment: .trailing, spacing: 8) {
-                locationBadges(for: animal)
+                if animal.status != .active || animal.isArchived {
+                    statusPills(for: animal)
+                } else {
+                    locationBadges(for: animal)
+                }
                 HStack {
                     infoPill(title: animal.age, systemImage: "clock")
                     infoPill(
@@ -269,6 +272,8 @@ struct AnimalListView: View {
                 tint: .accent,
                 fillOpacity: 0.12
             )
+        } else {
+            Spacer()
         }
     }
 
