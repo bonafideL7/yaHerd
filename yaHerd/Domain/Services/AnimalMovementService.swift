@@ -46,7 +46,7 @@ struct AnimalMovementService {
         var changedAny = false
 
         for animal in animals {
-            let changed = move(animal, to: pasture, in: context, date: date, save: false)
+            let changed = try move(animal, to: pasture, in: context, date: date, save: false)
             changedAny = changedAny || changed
         }
 
