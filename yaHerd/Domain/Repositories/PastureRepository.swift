@@ -9,4 +9,11 @@ protocol PastureRepository {
     @discardableResult
     func update(id: UUID, input: PastureInput) throws -> PastureDetailSnapshot
     func delete(ids: [UUID]) throws
+    func createGroup(input: PastureGroupInput) throws
+}
+
+struct PastureGroupInput: Hashable {
+    var name: String
+    var grazeDays: Int
+    var restDays: Int
 }

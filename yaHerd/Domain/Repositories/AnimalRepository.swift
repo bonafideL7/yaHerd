@@ -20,4 +20,23 @@ protocol AnimalRepository {
     func promoteTag(animalID: UUID, tagID: UUID) throws -> AnimalDetailSnapshot
     @discardableResult
     func retireTag(animalID: UUID, tagID: UUID) throws -> AnimalDetailSnapshot
+    @discardableResult
+    func addHealthRecord(animalID: UUID, input: HealthRecordInput) throws -> AnimalDetailSnapshot
+    @discardableResult
+    func addPregnancyCheck(animalID: UUID, input: PregnancyCheckInput) throws -> AnimalDetailSnapshot
+}
+
+struct HealthRecordInput: Hashable {
+    var date: Date
+    var treatment: String
+    var notes: String?
+}
+
+struct PregnancyCheckInput: Hashable {
+    var date: Date
+    var result: PregnancyResult
+    var technician: String?
+    var estimatedDaysPregnant: Int?
+    var dueDate: Date?
+    var sireAnimalID: UUID?
 }

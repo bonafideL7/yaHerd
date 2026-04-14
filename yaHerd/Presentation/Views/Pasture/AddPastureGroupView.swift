@@ -50,14 +50,9 @@ struct AddPastureGroupView: View {
 
     private func save() {
         do {
-            context.insert(
-                PastureGroup(
-                    name: name,
-                    grazeDays: grazeDays,
-                    restDays: restDays
-                )
-            )
-            try context.save()
+            let repository = SwiftDataPastureRepository(context: context)
+            let useCase = CreatePastureGroupUseCase(repository: repository)
+            try useCase.execute(name: name, grazeDays: grazeDays, restDays: restDays)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

@@ -114,34 +114,9 @@ struct WorkingSessionsView: View {
 
     private func deleteSession(_ session: WorkingSession) {
         do {
-        // Return any animals still in the working pen for this session.
-        for item in session.queueItems {
-            guard let animal = item.animal else { continue }
-            if animal.activeWorkingSession?.persistentModelID == session.persistentModelID || animal.location == .workingPen {
-                let dest = item.collectedFromPasture ?? session.sourcePasture
-                animal.pasture = dest
-                animal.location = .pasture
-                animal.activeWorkingSession = nil
-            }
-        }
-
-        // Delete session-linked records (treatments, preg checks, session-tied health records).
-        // NOTE: SwiftData predicate macros are unreliable when comparing relationship values in predicates.
-        // Fetch and filter in-memory instead.
-        let sid = session.persistentModelID
-
-        if let all = try? context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) {
-            for r in all where r.session?.persistentModelID == sid { context.delete(r) }
-        }
-        if let all = try? context.fetch(FetchDescriptor<PregnancyCheck>()) {
-            for c in all where c.workingSession?.persistentModelID == sid { context.delete(c) }
-        }
-        if let all = try? context.fetch(FetchDescriptor<HealthRecord>()) {
-            for h in all where h.workingSession?.persistentModelID == sid { context.delete(h) }
-        }
-
-        context.delete(session)
-        try context.save()
+            let repository = SwiftDataWorkingRepository(context: context)
+            let useCase = DeleteWorkingSessionUseCase(repository: repository)
+            try useCase.execute(session: session)
         } catch {
             errorMessage = error.localizedDescription
             showingError = true

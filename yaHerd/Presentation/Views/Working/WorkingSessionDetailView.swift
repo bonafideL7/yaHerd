@@ -124,36 +124,9 @@ struct WorkingSessionDetailView: View {
 
     private func deleteSession(_ session: WorkingSession) {
         do {
-            for item in session.queueItems {
-                guard let animal = item.animal else { continue }
-                if animal.activeWorkingSession?.persistentModelID == session.persistentModelID || animal.location == .workingPen {
-                    let destination = item.collectedFromPasture ?? session.sourcePasture
-                    animal.pasture = destination
-                    animal.location = .pasture
-                    animal.activeWorkingSession = nil
-                }
-            }
-
-            let sid = session.persistentModelID
-
-            if let all = try? context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) {
-                for record in all where record.session?.persistentModelID == sid {
-                    context.delete(record)
-                }
-            }
-            if let all = try? context.fetch(FetchDescriptor<PregnancyCheck>()) {
-                for check in all where check.workingSession?.persistentModelID == sid {
-                    context.delete(check)
-                }
-            }
-            if let all = try? context.fetch(FetchDescriptor<HealthRecord>()) {
-                for record in all where record.workingSession?.persistentModelID == sid {
-                    context.delete(record)
-                }
-            }
-
-            context.delete(session)
-            try context.save()
+            let repository = SwiftDataWorkingRepository(context: context)
+            let useCase = DeleteWorkingSessionUseCase(repository: repository)
+            try useCase.execute(session: session)
         } catch {
             errorMessage = error.localizedDescription
             showingError = true

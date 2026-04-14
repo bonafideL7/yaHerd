@@ -79,32 +79,10 @@ struct WorkingCollectAnimalsView: View {
     }
 
     private func collectSelected() {
-        let startOrder = (session.queueItems.map { $0.queueOrder }.max() ?? -1) + 1
-        var order = startOrder
-        let source = session.sourcePasture
-
-        for animal in selected.sorted(by: { $0.tagNumber < $1.tagNumber }) {
-            // Remove from pasture, mark as in working pen
-            animal.pasture = nil
-            animal.location = .workingPen
-            animal.activeWorkingSession = session
-
-            let item = WorkingQueueItem(
-                queueOrder: order,
-                status: .queued,
-                collectedFromPasture: source,
-                destinationPasture: nil,
-                workNotes: nil,
-                animal: animal,
-                session: session
-            )
-            context.insert(item)
-            session.queueItems.append(item)
-            order += 1
-        }
-
         do {
-            try context.save()
+            let repository = SwiftDataWorkingRepository(context: context)
+            let useCase = CollectWorkingAnimalsUseCase(repository: repository)
+            try useCase.execute(session: session, animals: Array(selected))
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

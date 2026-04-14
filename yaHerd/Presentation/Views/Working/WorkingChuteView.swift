@@ -212,98 +212,41 @@ struct WorkingChuteView: View {
     }
 
     private func complete() {
-        guard let animal else { return }
+        guard animal != nil else { return }
 
-        let sid = session.persistentModelID
-        let aid = animal.persistentModelID
-
-        queueItem.status = .done
-        queueItem.completedAt = .now
-
-        if let existing = try? context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) {
-            for record in existing where record.session?.persistentModelID == sid && record.animal?.persistentModelID == aid {
-                context.delete(record)
-            }
-        }
-        for entry in treatEntries {
-            let qty = Double(entry.quantityText.trimmingCharacters(in: .whitespacesAndNewlines))
-            let record = WorkingTreatmentRecord(
+        let treatmentInputs = treatEntries.map { entry in
+            WorkingTreatmentEntryInput(
                 date: .now,
                 itemName: entry.name,
                 given: entry.given,
-                quantity: qty,
-                animal: animal,
-                session: session
+                quantity: Double(entry.quantityText.trimmingCharacters(in: .whitespacesAndNewlines))
             )
-            context.insert(record)
         }
 
-        if showPregSection {
-            if let existingChecks = try? context.fetch(FetchDescriptor<PregnancyCheck>()) {
-                for check in existingChecks where check.workingSession?.persistentModelID == sid && check.animal.persistentModelID == aid {
-                    context.delete(check)
-                }
-            }
-
-            if pregResult == .open || pregResult == .pregnant {
-                let estDays = Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines))
-                let computedDue: Date? = pregResult == .pregnant ? dueDate : nil
-
-                let check = PregnancyCheck(
-                    date: .now,
-                    result: pregResult,
-                    technician: nil,
-                    estimatedDaysPregnant: estDays,
-                    dueDate: computedDue,
-                    sireAnimal: resolveAnimal(publicID: selectedSire?.id),
-                    workingSession: session,
-                    animal: animal
-                )
-                context.insert(check)
-            }
-        }
-
-        if markCastrated {
-            if let existing = try? context.fetch(FetchDescriptor<HealthRecord>()) {
-                for record in existing where record.workingSession?.persistentModelID == sid
-                    && record.animal.persistentModelID == aid
-                    && record.treatment == "Castration" {
-                    context.delete(record)
-                }
-            }
-
-            let record = HealthRecord(
+        let pregnancyInput: WorkingPregnancyCheckInput?
+        if showPregSection, pregResult == .open || pregResult == .pregnant {
+            pregnancyInput = WorkingPregnancyCheckInput(
                 date: .now,
-                treatment: "Castration",
-                notes: nil,
-                workingSession: session,
-                animal: animal
+                result: pregResult,
+                estimatedDaysPregnant: Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)),
+                dueDate: pregResult == .pregnant ? dueDate : nil,
+                sireAnimalID: selectedSire?.id
             )
-            context.insert(record)
-        }
-
-        let trimmedObs = observationNotes.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedObs.isEmpty {
-            if let existing = try? context.fetch(FetchDescriptor<HealthRecord>()) {
-                for record in existing where record.workingSession?.persistentModelID == sid
-                    && record.animal.persistentModelID == aid
-                    && record.treatment == "Observation" {
-                    context.delete(record)
-                }
-            }
-
-            let record = HealthRecord(
-                date: .now,
-                treatment: "Observation",
-                notes: trimmedObs,
-                workingSession: session,
-                animal: animal
-            )
-            context.insert(record)
+        } else {
+            pregnancyInput = nil
         }
 
         do {
-            try context.save()
+            let repository = SwiftDataWorkingRepository(context: context)
+            let useCase = CompleteWorkingQueueItemUseCase(repository: repository)
+            try useCase.execute(
+                queueItem: queueItem,
+                session: session,
+                treatmentEntries: treatmentInputs,
+                pregnancyCheck: pregnancyInput,
+                markCastrated: markCastrated,
+                observationNotes: observationNotes
+            )
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
@@ -311,15 +254,6 @@ struct WorkingChuteView: View {
         }
     }
 
-    private func resolveAnimal(publicID: UUID?) -> Animal? {
-        guard let publicID else { return nil }
-        let descriptor = FetchDescriptor<Animal>(
-            predicate: #Predicate<Animal> { animal in
-                animal.publicID == publicID
-            }
-        )
-        return try? context.fetch(descriptor).first
-    }
 }
 
 private struct TreatmentEntry: Identifiable {

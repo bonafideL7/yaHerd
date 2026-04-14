@@ -109,25 +109,9 @@ struct WorkingFinishSessionView: View {
 
     private func returnAnimals() {
         do {
-            var changedAny = false
-
-            for item in orderedItems {
-                guard let animal = item.animal else { continue }
-                let destination = item.destinationPasture ?? session.sourcePasture
-                let changed = try AnimalMovementService.move(
-                    animal,
-                    to: destination,
-                    in: context,
-                    fromPastureName: item.collectedFromPasture?.name,
-                    save: false
-                )
-                changedAny = changedAny || changed
-            }
-
-            session.status = .finished
-            if changedAny || session.status == .finished {
-                try context.save()
-            }
+            let repository = SwiftDataWorkingRepository(context: context)
+            let useCase = FinishWorkingSessionUseCase(repository: repository)
+            try useCase.execute(session: session)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

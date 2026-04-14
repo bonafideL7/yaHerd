@@ -219,6 +219,36 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         return try makeDetail(from: animal)
     }
 
+
+    func addHealthRecord(animalID: UUID, input: HealthRecordInput) throws -> AnimalDetailSnapshot {
+        guard let animal = try fetchAnimal(id: animalID) else {
+            throw AnimalValidationError.animalNotFound
+        }
+        let record = HealthRecord(date: input.date, treatment: input.treatment, notes: input.notes, animal: animal)
+        context.insert(record)
+        try context.save()
+        return try makeDetail(from: animal)
+    }
+
+    func addPregnancyCheck(animalID: UUID, input: PregnancyCheckInput) throws -> AnimalDetailSnapshot {
+        guard let animal = try fetchAnimal(id: animalID) else {
+            throw AnimalValidationError.animalNotFound
+        }
+        let check = PregnancyCheck(
+            date: input.date,
+            result: input.result,
+            technician: input.technician,
+            estimatedDaysPregnant: input.estimatedDaysPregnant,
+            dueDate: input.dueDate,
+            sireAnimal: try fetchAnimal(id: input.sireAnimalID),
+            workingSession: nil,
+            animal: animal
+        )
+        context.insert(check)
+        try context.save()
+        return try makeDetail(from: animal)
+    }
+
     private func updateArchiveState(ids: [UUID], isArchived: Bool) throws {
         guard !ids.isEmpty else { return }
         let idSet = Set(ids)

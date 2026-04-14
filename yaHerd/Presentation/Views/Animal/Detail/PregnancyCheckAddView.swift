@@ -107,21 +107,19 @@ struct PregnancyCheckAddView: View {
 
     private func save() {
         do {
-            try ValidationService.validatePregCheck()
-
-            let check = PregnancyCheck(
-                date: date,
-                result: result,
-                technician: technician.isEmpty ? nil : technician,
-                estimatedDaysPregnant: Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)),
-                dueDate: result == .pregnant ? dueDate : nil,
-                sireAnimal: resolveAnimal(publicID: selectedSire?.id),
-                workingSession: nil,
-                animal: animal
+            let repository = SwiftDataAnimalRepository(context: context)
+            let useCase = AddPregnancyCheckUseCase(repository: repository)
+            _ = try useCase.execute(
+                animalID: animal.publicID,
+                input: PregnancyCheckInput(
+                    date: date,
+                    result: result,
+                    technician: technician.isEmpty ? nil : technician,
+                    estimatedDaysPregnant: Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)),
+                    dueDate: result == .pregnant ? dueDate : nil,
+                    sireAnimalID: selectedSire?.id
+                )
             )
-
-            context.insert(check)
-            try context.save()
             dismiss()
 
         } catch {
@@ -137,18 +135,6 @@ struct PregnancyCheckAddView: View {
         if let computed = Calendar.current.date(byAdding: .day, value: remaining, to: date) {
             dueDate = computed
         }
-    }
-
-
-
-    private func resolveAnimal(publicID: UUID?) -> Animal? {
-        guard let publicID else { return nil }
-        let descriptor = FetchDescriptor<Animal>(
-            predicate: #Predicate<Animal> { animal in
-                animal.publicID == publicID
-            }
-        )
-        return try? context.fetch(descriptor).first
     }
 
 }

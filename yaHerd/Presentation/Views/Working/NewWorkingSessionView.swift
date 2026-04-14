@@ -141,17 +141,15 @@ struct NewWorkingSessionView: View {
             return
         }
 
-        let session = WorkingSession(
-            date: date,
-            status: .active,
-            sourcePasture: sourcePasture,
-            protocolName: trimmedName,
-            protocolItems: cleanedItems
-        )
-
         do {
-            context.insert(session)
-            try context.save()
+            let repository = SwiftDataWorkingRepository(context: context)
+            let useCase = CreateWorkingSessionUseCase(repository: repository)
+            _ = try useCase.execute(
+                date: date,
+                sourcePasture: sourcePasture,
+                protocolName: trimmedName,
+                protocolItems: cleanedItems
+            )
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

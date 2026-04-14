@@ -55,6 +55,12 @@ struct SwiftDataPastureRepository: PastureRepository {
         return makeDetail(from: pasture)
     }
 
+    func createGroup(input: PastureGroupInput) throws {
+        let group = PastureGroup(name: input.name, grazeDays: input.grazeDays, restDays: input.restDays)
+        context.insert(group)
+        try context.save()
+    }
+
     func delete(ids: [UUID]) throws {
         guard !ids.isEmpty else { return }
 

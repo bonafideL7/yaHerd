@@ -329,84 +329,42 @@ struct WorkingSessionAnimalEditView: View {
     }
 
     private func save() {
-        guard let animal else { return }
+        guard animal != nil else { return }
 
-        let sid = session.persistentModelID
-        let aid = animal.persistentModelID
-
-        if queueItem.status == .done && queueItem.completedAt == nil {
-            queueItem.completedAt = .now
-        }
-        if queueItem.status != .done {
-            queueItem.completedAt = nil
-        }
-
-        if let existing = try? context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) {
-            for record in existing where record.session?.persistentModelID == sid && record.animal?.persistentModelID == aid {
-                context.delete(record)
-            }
-        }
-        for entry in treatmentEntries {
-            let quantity = Double(entry.quantityText.trimmingCharacters(in: .whitespacesAndNewlines))
-            let record = WorkingTreatmentRecord(
-                date: entry.date,
-                itemName: entry.name,
-                given: entry.given,
-                quantity: quantity,
-                animal: animal,
-                session: session
+        let pregnancyInput: WorkingPregnancyCheckInput?
+        if showPregSection, recordPregCheck, pregResult == .open || pregResult == .pregnant {
+            pregnancyInput = WorkingPregnancyCheckInput(
+                date: pregDate,
+                result: pregResult,
+                estimatedDaysPregnant: Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)),
+                dueDate: pregResult == .pregnant ? dueDate : nil,
+                sireAnimalID: selectedSire?.id
             )
-            context.insert(record)
+        } else {
+            pregnancyInput = nil
         }
 
-        if let existingChecks = try? context.fetch(FetchDescriptor<PregnancyCheck>()) {
-            for check in existingChecks where check.workingSession?.persistentModelID == sid && check.animal.persistentModelID == aid {
-                context.delete(check)
-            }
-        }
-
-        if showPregSection && recordPregCheck {
-            let estDays = Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines))
-            let computedDue: Date? = pregResult == .pregnant ? dueDate : nil
-
-            if pregResult == .open || pregResult == .pregnant {
-                let check = PregnancyCheck(
-                    date: pregDate,
-                    result: pregResult,
-                    technician: nil,
-                    estimatedDaysPregnant: estDays,
-                    dueDate: computedDue,
-                    sireAnimal: resolveAnimal(publicID: selectedSire?.id),
-                    workingSession: session,
-                    animal: animal
+        let input = WorkingSessionAnimalEditInput(
+            status: queueItem.status,
+            completedAt: queueItem.status == .done ? queueItem.completedAt : nil,
+            destinationPastureID: queueItem.destinationPasture?.publicID,
+            treatmentEntries: treatmentEntries.map { entry in
+                WorkingTreatmentEntryInput(
+                    date: entry.date,
+                    itemName: entry.name,
+                    given: entry.given,
+                    quantity: Double(entry.quantityText.trimmingCharacters(in: .whitespacesAndNewlines))
                 )
-                context.insert(check)
-            }
-        }
-
-        if let existing = try? context.fetch(FetchDescriptor<HealthRecord>()) {
-            for record in existing where record.workingSession?.persistentModelID == sid && record.animal.persistentModelID == aid && record.treatment == "Castration" {
-                context.delete(record)
-            }
-        }
-        if castrationPerformedInSession {
-            let record = HealthRecord(date: .now, treatment: "Castration", notes: nil, workingSession: session, animal: animal)
-            context.insert(record)
-        }
-
-        if let existing = try? context.fetch(FetchDescriptor<HealthRecord>()) {
-            for record in existing where record.workingSession?.persistentModelID == sid && record.animal.persistentModelID == aid && record.treatment == "Observation" {
-                context.delete(record)
-            }
-        }
-        let trimmedObs = observationNotes.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedObs.isEmpty {
-            let record = HealthRecord(date: .now, treatment: "Observation", notes: trimmedObs, workingSession: session, animal: animal)
-            context.insert(record)
-        }
+            },
+            pregnancyCheck: pregnancyInput,
+            castrationPerformed: castrationPerformedInSession,
+            observationNotes: observationNotes
+        )
 
         do {
-            try context.save()
+            let repository = SwiftDataWorkingRepository(context: context)
+            let useCase = SaveWorkingQueueItemEditsUseCase(repository: repository)
+            try useCase.execute(queueItem: queueItem, session: session, input: input)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
@@ -415,32 +373,12 @@ struct WorkingSessionAnimalEditView: View {
     }
 
     private func deleteWorkDataForAnimal() {
-        guard let animal else { return }
-
-        let sid = session.persistentModelID
-        let aid = animal.persistentModelID
-
-        if let treatments = try? context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) {
-            for record in treatments where record.session?.persistentModelID == sid && record.animal?.persistentModelID == aid {
-                context.delete(record)
-            }
-        }
-        if let checks = try? context.fetch(FetchDescriptor<PregnancyCheck>()) {
-            for check in checks where check.workingSession?.persistentModelID == sid && check.animal.persistentModelID == aid {
-                context.delete(check)
-            }
-        }
-        if let health = try? context.fetch(FetchDescriptor<HealthRecord>()) {
-            for record in health where record.workingSession?.persistentModelID == sid && record.animal.persistentModelID == aid {
-                context.delete(record)
-            }
-        }
-
-        queueItem.status = .queued
-        queueItem.completedAt = nil
+        guard animal != nil else { return }
 
         do {
-            try context.save()
+            let repository = SwiftDataWorkingRepository(context: context)
+            let useCase = DeleteWorkingQueueItemDataUseCase(repository: repository)
+            try useCase.execute(queueItem: queueItem, session: session)
             seedState()
         } catch {
             errorMessage = error.localizedDescription
@@ -448,15 +386,8 @@ struct WorkingSessionAnimalEditView: View {
         }
     }
 
-    private func resolveAnimal(publicID: UUID?) -> Animal? {
-        guard let publicID else { return nil }
-        let descriptor = FetchDescriptor<Animal>(
-            predicate: #Predicate<Animal> { animal in
-                animal.publicID == publicID
-            }
-        )
-        return try? context.fetch(descriptor).first
-    }
+
+
 }
 
 private struct TreatmentEditEntry: Identifiable {

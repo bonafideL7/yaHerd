@@ -54,17 +54,14 @@ struct HealthRecordAddView: View {
 
     private func save() {
         do {
-            try ValidationService.validateHealthRecord(treatment: treatment)
-
-            let record = HealthRecord(
+            let repository = SwiftDataAnimalRepository(context: context)
+            let useCase = AddHealthRecordUseCase(repository: repository)
+            _ = try useCase.execute(
+                animalID: animal.publicID,
                 date: date,
                 treatment: treatment,
-                notes: notes.isEmpty ? nil : notes,
-                animal: animal
+                notes: notes.isEmpty ? nil : notes
             )
-
-            context.insert(record)
-            try context.save()
             dismiss()
 
         } catch {
