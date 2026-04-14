@@ -24,6 +24,7 @@ struct yaHerdApp: App {
                     AnimalTag.self,
                     AnimalStatusReference.self,
                     Pasture.self,
+                    PastureGroup.self,
                     HealthRecord.self,
                     PregnancyCheck.self,
                     MovementRecord.self,

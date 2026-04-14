@@ -121,6 +121,7 @@ struct PregnancyCheckAddView: View {
             )
 
             context.insert(check)
+            try context.save()
             dismiss()
 
         } catch {

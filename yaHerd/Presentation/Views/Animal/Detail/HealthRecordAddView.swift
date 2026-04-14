@@ -64,6 +64,7 @@ struct HealthRecordAddView: View {
             )
 
             context.insert(record)
+            try context.save()
             dismiss()
 
         } catch {

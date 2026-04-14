@@ -16,6 +16,8 @@ struct AddPastureGroupView: View {
     @State private var name = ""
     @State private var grazeDays = 7
     @State private var restDays = 21
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     var body: some View {
         NavigationStack {
@@ -29,14 +31,7 @@ struct AddPastureGroupView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        context.insert(
-                            PastureGroup(
-                                name: name,
-                                grazeDays: grazeDays,
-                                restDays: restDays
-                            )
-                        )
-                        dismiss()
+                        save()
                     }
                     .disabled(name.isEmpty)
                 }
@@ -45,6 +40,28 @@ struct AddPastureGroupView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+            .alert("Unable to Save", isPresented: $showingError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
+        }
+    }
+
+    private func save() {
+        do {
+            context.insert(
+                PastureGroup(
+                    name: name,
+                    grazeDays: grazeDays,
+                    restDays: restDays
+                )
+            )
+            try context.save()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
         }
     }
 }
