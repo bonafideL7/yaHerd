@@ -77,9 +77,17 @@ struct AnimalDetailView: View {
         }
         .animalParentPickerSheet(
             activePicker: $activeParentPicker,
+            sireID: Binding(
+                get: { viewModel.form.draft.sireID },
+                set: { viewModel.form.draft.sireID = $0 }
+            ),
             sire: Binding(
                 get: { viewModel.form.draft.sire },
                 set: { viewModel.form.draft.sire = $0 }
+            ),
+            damID: Binding(
+                get: { viewModel.form.draft.damID },
+                set: { viewModel.form.draft.damID = $0 }
             ),
             dam: Binding(
                 get: { viewModel.form.draft.dam },

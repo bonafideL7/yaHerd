@@ -59,6 +59,9 @@ struct SwiftDataAnimalRepository: AnimalRepository {
 
     func create(input: AnimalInput) throws -> AnimalDetailSnapshot {
         let pasture = try fetchPasture(id: input.pastureID)
+        let sireAnimal = try fetchAnimal(id: input.sireID)
+        let damAnimal = try fetchAnimal(id: input.damID)
+
         let animal = Animal(
             name: input.name,
             tagNumber: input.tagNumber,
@@ -71,8 +74,8 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             deathDate: input.deathDate,
             causeOfDeath: input.causeOfDeath,
             statusReferenceID: input.statusReferenceID,
-            sire: input.sire,
-            dam: input.dam,
+            sireAnimal: sireAnimal,
+            damAnimal: damAnimal,
             pasture: pasture,
             sex: input.sex,
             distinguishingFeatures: input.distinguishingFeatures
@@ -94,12 +97,14 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         let oldStatus = animal.status
         let oldStatusReferenceID = animal.statusReferenceID
         let pasture = try fetchPasture(id: input.pastureID)
+        let sireAnimal = try fetchAnimal(id: input.sireID)
+        let damAnimal = try fetchAnimal(id: input.damID)
 
         animal.name = input.name
         animal.sex = input.sex
         animal.birthDate = input.birthDate
-        animal.sire = input.sire
-        animal.dam = input.dam
+        animal.sireAnimal = sireAnimal
+        animal.damAnimal = damAnimal
         animal.distinguishingFeatures = input.distinguishingFeatures
 
         if input.tagNumber.isEmpty, animal.tags.isEmpty {
@@ -228,7 +233,8 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         try context.save()
     }
 
-    private func fetchAnimal(id: UUID) throws -> Animal? {
+    private func fetchAnimal(id: UUID?) throws -> Animal? {
+        guard let id else { return nil }
         let descriptor = FetchDescriptor<Animal>(
             predicate: #Predicate<Animal> { animal in
                 animal.publicID == id
@@ -275,8 +281,10 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             status: animal.status,
             pastureID: animal.pasture?.publicID,
             pastureName: animal.pasture?.name,
-            sire: animal.sire,
-            dam: animal.dam,
+            sireID: animal.sireAnimal?.publicID,
+            sire: animal.sireAnimal?.displayTagNumber,
+            damID: animal.damAnimal?.publicID,
+            dam: animal.damAnimal?.displayTagNumber,
             distinguishingFeatures: animal.distinguishingFeatures,
             saleDate: animal.saleDate,
             salePrice: animal.salePrice,

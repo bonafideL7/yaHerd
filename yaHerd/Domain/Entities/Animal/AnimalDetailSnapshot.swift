@@ -10,7 +10,9 @@ struct AnimalDetailSnapshot: Identifiable, Hashable {
     let status: AnimalStatus
     let pastureID: UUID?
     let pastureName: String?
+    let sireID: UUID?
     let sire: String?
+    let damID: UUID?
     let dam: String?
     let distinguishingFeatures: [DistinguishingFeature]
     let saleDate: Date?

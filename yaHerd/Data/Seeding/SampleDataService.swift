@@ -44,8 +44,8 @@ struct SampleDataService {
             tagColorID: greenTagColorID,
             birthDate: makeDate(2020, 1, 17),
             status: .active,
-            sire: nil,
-            dam: nil,
+            sireAnimal: nil,
+            damAnimal: nil,
             pasture: northwest,
             sex: .female
         )
@@ -56,8 +56,8 @@ struct SampleDataService {
             tagColorID: greenTagColorID,
             birthDate: makeDate(2019, 10, 31),
             status: .active,
-            sire: nil,
-            dam: nil,
+            sireAnimal: nil,
+            damAnimal: nil,
             pasture: southwest,
             sex: .female
         )
@@ -68,8 +68,8 @@ struct SampleDataService {
             tagColorID: greenTagColorID,
             birthDate: makeDate(2023, 3, 14),
             status: .active,
-            sire: nil,
-            dam: "2",
+            sireAnimal: nil,
+            damAnimal: rudy,
             pasture: northwest,
             sex: .female
         )
@@ -81,8 +81,8 @@ struct SampleDataService {
             tagColorID: greenTagColorID,
             birthDate: makeDate(2020, 4, 15),
             status: .active,
-            sire: nil,
-            dam: nil,
+            sireAnimal: nil,
+            damAnimal: nil,
             pasture: northeast,
             sex: .female
         )
@@ -93,8 +93,8 @@ struct SampleDataService {
             tagColorID: greenTagColorID,
             birthDate: makeDate(2023, 3, 19),
             status: .active,
-            sire: nil,
-            dam: "4",
+            sireAnimal: nil,
+            damAnimal: imogene,
             pasture: northeast,
             sex: .female
         )
@@ -106,8 +106,8 @@ struct SampleDataService {
             tagColorID: greenTagColorID,
             birthDate: makeDate(2024, 2, 1),
             status: .active,
-            sire: nil,
-            dam: nil,
+            sireAnimal: nil,
+            damAnimal: nil,
             pasture: northwest,
             sex: .female
         )
@@ -118,8 +118,8 @@ struct SampleDataService {
             tagColorID: greenTagColorID,
             birthDate: makeDate(2024, 2, 18),
             status: .active,
-            sire: nil,
-            dam: nil,
+            sireAnimal: nil,
+            damAnimal: nil,
             pasture: southwest,
             sex: .female
         )
@@ -130,8 +130,8 @@ struct SampleDataService {
             tagColorID: greenTagColorID,
             birthDate: makeDate(2025, 2, 27),
             status: .active,
-            sire: nil,
-            dam: nil,
+            sireAnimal: nil,
+            damAnimal: nil,
             pasture: northeast,
             sex: .female
         )
@@ -143,8 +143,8 @@ struct SampleDataService {
             tagColorID: greenTagColorID,
             birthDate: makeDate(2025, 2, 28),
             status: .sold,
-            sire: nil,
-            dam: "5",
+            sireAnimal: nil,
+            damAnimal: telly,
             pasture: holding,
             sex: .male
         )

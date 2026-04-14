@@ -23,8 +23,8 @@ struct SampleLargeDataService {
             tagColorID: whiteTagColorID,
             birthDate: makeDate(2021, 2, 11),
             status: .active,
-            sire: nil,
-            dam: nil,
+            sireAnimal: nil,
+            damAnimal: nil,
             pasture: pasture,
             sex: .male
         )
@@ -54,8 +54,8 @@ struct SampleLargeDataService {
                 tagColorID: colorID,
                 birthDate: birthDate,
                 status: status,
-                sire: sire?.displayTagNumber,
-                dam: dam?.displayTagNumber,
+                sireAnimal: sire,
+                damAnimal: dam,
                 pasture: pasture,
                 sex: sex,
                 distinguishingFeatures: featureDescriptions.map { DistinguishingFeature(description: $0) }

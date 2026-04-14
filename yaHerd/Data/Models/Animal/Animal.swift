@@ -25,8 +25,6 @@ final class Animal {
     var isSoftDeleted: Bool
     var softDeletedAt: Date?
     var softDeleteReason: String?
-    var sire: String?
-    var dam: String?
     var locationRaw: AnimalLocation? = AnimalLocation.pasture
     var distinguishingFeatures: [DistinguishingFeature] = []
 
@@ -35,6 +33,8 @@ final class Animal {
     @Relationship(deleteRule: .cascade) var movementRecords: [MovementRecord] = []
     @Relationship(deleteRule: .cascade) var statusRecords: [StatusRecord] = []
     @Relationship(deleteRule: .nullify) var activeWorkingSession: WorkingSession?
+    @Relationship(deleteRule: .nullify) var sireAnimal: Animal?
+    @Relationship(deleteRule: .nullify) var damAnimal: Animal?
     @Relationship var pasture: Pasture?
     @Relationship(deleteRule: .cascade, inverse: \AnimalTag.animal) var tags: [AnimalTag] = []
 
@@ -307,8 +307,8 @@ final class Animal {
         isSoftDeleted: Bool = false,
         softDeletedAt: Date? = nil,
         softDeleteReason: String? = nil,
-        sire: String? = nil,
-        dam: String? = nil,
+        sireAnimal: Animal? = nil,
+        damAnimal: Animal? = nil,
         pasture: Pasture? = nil,
         sex: Sex? = nil,
         distinguishingFeatures: [DistinguishingFeature] = []
@@ -328,8 +328,8 @@ final class Animal {
         self.isSoftDeleted = isSoftDeleted
         self.softDeletedAt = softDeletedAt
         self.softDeleteReason = softDeleteReason
-        self.sire = sire
-        self.dam = dam
+        self.sireAnimal = sireAnimal
+        self.damAnimal = damAnimal
         self.pasture = pasture
         self.location = AnimalLocation.pasture
         self.activeWorkingSession = nil

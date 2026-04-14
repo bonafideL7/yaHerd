@@ -446,6 +446,7 @@ struct AnimalStatusEditorSection: View {
 struct ParentFieldRow: View {
     let title: String
     @Binding var value: String
+    let onClear: () -> Void
     let type: ParentPickerType
     @Binding var activePicker: ParentPickerType?
     
@@ -463,7 +464,7 @@ struct ParentFieldRow: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if !value.isEmpty {
                 Button("Clear", role: .destructive) {
-                    value = ""
+                    onClear()
                 }
             }
         }
@@ -478,7 +479,9 @@ struct AnimalFormView: View {
     @Binding var birthDate: Date
     @Binding var status: AnimalStatus
     @Binding var pastureID: UUID?
+    @Binding var sireID: UUID?
     @Binding var sire: String
+    @Binding var damID: UUID?
     @Binding var dam: String
     @Binding var distinguishingFeatures: [DistinguishingFeature]
     @Binding var activeParentPicker: ParentPickerType?
@@ -577,6 +580,10 @@ struct AnimalFormView: View {
                     ParentFieldRow(
                         title: "Dam",
                         value: $dam,
+                        onClear: {
+                            dam = ""
+                            damID = nil
+                        },
                         type: .dam,
                         activePicker: $activeParentPicker
                     )
@@ -584,6 +591,10 @@ struct AnimalFormView: View {
                     ParentFieldRow(
                         title: "Sire",
                         value: $sire,
+                        onClear: {
+                            sire = ""
+                            sireID = nil
+                        },
                         type: .sire,
                         activePicker: $activeParentPicker
                     )
@@ -631,7 +642,9 @@ struct AnimalEditorSections: View {
                 birthDate: $draft.birthDate,
                 status: $draft.status,
                 pastureID: $draft.pastureID,
+                sireID: $draft.sireID,
                 sire: $draft.sire,
+                damID: $draft.damID,
                 dam: $draft.dam,
                 distinguishingFeatures: $draft.distinguishingFeatures,
                 activeParentPicker: $activeParentPicker,
@@ -660,7 +673,9 @@ struct AnimalEditorSections: View {
 
 private struct AnimalParentPickerSheetModifier: ViewModifier {
     @Binding var activePicker: ParentPickerType?
+    @Binding var sireID: UUID?
     @Binding var sire: String
+    @Binding var damID: UUID?
     @Binding var dam: String
     
     let excludeAnimalID: UUID?
@@ -674,6 +689,7 @@ private struct AnimalParentPickerSheetModifier: ViewModifier {
                     excludeAnimalID: excludeAnimalID,
                     suggestedSexes: [.male]
                 ) { picked in
+                    sireID = picked.id
                     sire = picked.displayTagNumber
                     activePicker = nil
                 }
@@ -684,6 +700,7 @@ private struct AnimalParentPickerSheetModifier: ViewModifier {
                     excludeAnimalID: excludeAnimalID,
                     suggestedSexes: [.female]
                 ) { picked in
+                    damID = picked.id
                     dam = picked.displayTagNumber
                     activePicker = nil
                 }
@@ -695,14 +712,18 @@ private struct AnimalParentPickerSheetModifier: ViewModifier {
 extension View {
     func animalParentPickerSheet(
         activePicker: Binding<ParentPickerType?>,
+        sireID: Binding<UUID?>,
         sire: Binding<String>,
+        damID: Binding<UUID?>,
         dam: Binding<String>,
         excludeAnimalID: UUID?
     ) -> some View {
         modifier(
             AnimalParentPickerSheetModifier(
                 activePicker: activePicker,
+                sireID: sireID,
                 sire: sire,
+                damID: damID,
                 dam: dam,
                 excludeAnimalID: excludeAnimalID
             )

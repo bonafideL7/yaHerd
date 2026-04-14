@@ -8,8 +8,8 @@ struct AnimalInput: Hashable {
     let birthDate: Date
     let status: AnimalStatus
     let pastureID: UUID?
-    let sire: String?
-    let dam: String?
+    let sireID: UUID?
+    let damID: UUID?
     let distinguishingFeatures: [DistinguishingFeature]
     let saleDate: Date?
     let salePrice: Double?

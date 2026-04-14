@@ -8,7 +8,9 @@ struct AnimalEditorDraft {
     var birthDate: Date = .now
     var status: AnimalStatus = .active
     var pastureID: UUID?
+    var sireID: UUID?
     var sire = ""
+    var damID: UUID?
     var dam = ""
     var distinguishingFeatures: [DistinguishingFeature] = []
     var saleDate: Date = .now
@@ -28,7 +30,9 @@ struct AnimalEditorDraft {
         birthDate = detail.birthDate
         status = detail.status
         pastureID = detail.pastureID
+        sireID = detail.sireID
         sire = detail.sire ?? ""
+        damID = detail.damID
         dam = detail.dam ?? ""
         distinguishingFeatures = detail.distinguishingFeatures
         saleDate = detail.saleDate ?? .now
@@ -47,14 +51,6 @@ struct AnimalEditorDraft {
 
     var normalizedTagNumber: String {
         tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    var normalizedSire: String? {
-        sire.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-    }
-
-    var normalizedDam: String? {
-        dam.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
     }
 
     var normalizedReasonSold: String? {
@@ -97,8 +93,8 @@ struct AnimalEditorDraft {
         if sex != detail.sex { return true }
         if birthDate != detail.birthDate { return true }
         if pastureID != detail.pastureID { return true }
-        if normalizedSire != detail.sire { return true }
-        if normalizedDam != detail.dam { return true }
+        if sireID != detail.sireID { return true }
+        if damID != detail.damID { return true }
         if cleanedDistinguishingFeatures != detail.distinguishingFeatures { return true }
         if status != detail.status { return true }
         if statusReferenceID != detail.statusReferenceID { return true }

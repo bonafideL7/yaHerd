@@ -71,9 +71,17 @@ struct AddAnimalView: View {
         }
         .animalParentPickerSheet(
             activePicker: $activeParentPicker,
+            sireID: Binding(
+                get: { form.draft.sireID },
+                set: { form.draft.sireID = $0 }
+            ),
             sire: Binding(
                 get: { form.draft.sire },
                 set: { form.draft.sire = $0 }
+            ),
+            damID: Binding(
+                get: { form.draft.damID },
+                set: { form.draft.damID = $0 }
             ),
             dam: Binding(
                 get: { form.draft.dam },
