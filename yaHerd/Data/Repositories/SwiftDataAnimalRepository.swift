@@ -115,7 +115,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         }
 
         if animal.pasture?.publicID != pasture?.publicID {
-            try AnimalMovementService.move(animal, to: pasture, in: context, save: false)
+            try AnimalMovementStore.move(animal, to: pasture, in: context, save: false)
         }
 
         if animal.status != input.status {
@@ -183,7 +183,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         let pasture = try fetchPasture(id: toPastureID)
         let descriptor = FetchDescriptor<Animal>()
         let animals = try context.fetch(descriptor).filter { idSet.contains($0.publicID) }
-        try AnimalMovementService.move(animals, to: pasture, in: context)
+        try AnimalMovementStore.move(animals, to: pasture, in: context)
     }
 
     func addTag(animalID: UUID, input: AnimalTagInput) throws -> AnimalDetailSnapshot {

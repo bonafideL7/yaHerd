@@ -5,6 +5,7 @@ import Observation
 @Observable
 final class PastureDetailViewModel {
     private(set) var detail: PastureDetailSnapshot?
+    private(set) var residentAnimals: [AnimalSummary] = []
     let form = PastureFormViewModel()
     var isEditing = false
     var hasLoaded = false
@@ -16,6 +17,7 @@ final class PastureDetailViewModel {
         do {
             let loadedDetail = try LoadPastureDetailUseCase(repository: repository).execute(id: pastureID)
             detail = loadedDetail
+            residentAnimals = try repository.fetchResidentAnimals(pastureID: pastureID)
             if !isEditing {
                 form.populate(from: loadedDetail)
             }
@@ -47,6 +49,7 @@ final class PastureDetailViewModel {
                 input: input
             )
             detail = updated
+            residentAnimals = try repository.fetchResidentAnimals(pastureID: pastureID)
             form.populate(from: updated)
             isEditing = false
         } catch {

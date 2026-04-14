@@ -5,19 +5,12 @@ struct PastureDetailView: View {
     @Environment(\.modelContext) private var context
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
-    @Query private var matchingPastures: [Pasture]
-
     @State private var model = PastureDetailViewModel()
 
     private let pastureID: UUID
 
     init(pastureID: UUID) {
         self.pastureID = pastureID
-        _matchingPastures = Query(
-            filter: #Predicate<Pasture> { pasture in
-                pasture.publicID == pastureID
-            }
-        )
     }
 
     init(pasture: Pasture) {
@@ -28,14 +21,6 @@ struct PastureDetailView: View {
         SwiftDataPastureRepository(context: context)
     }
 
-    private var livePasture: Pasture? {
-        matchingPastures.first
-    }
-
-    private var residentAnimals: [Animal] {
-        guard let livePasture else { return [] }
-        return livePasture.animals.filter(\.isActiveInHerd)
-    }
 
     var body: some View {
         Group {
@@ -86,9 +71,6 @@ struct PastureDetailView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(model.errorMessage ?? "Unknown error")
-        }
-        .navigationDestination(for: Animal.self) { animal in
-            AnimalDetailView(animalID: animal.publicID)
         }
     }
 
@@ -188,14 +170,16 @@ struct PastureDetailView: View {
 
     @ViewBuilder
     private var animalsSection: some View {
-        if !residentAnimals.isEmpty {
+        if !model.residentAnimals.isEmpty {
             Section("Animals") {
-                ForEach(residentAnimals) { animal in
-                    NavigationLink(value: animal) {
+                ForEach(model.residentAnimals) { animal in
+                    NavigationLink {
+                        AnimalDetailView(animalID: animal.id)
+                    } label: {
                         let definition = tagColorLibrary.resolvedDefinition(for: animal)
 
                         AnimalTagView(
-                            tagNumber: animal.tagNumber,
+                            tagNumber: animal.displayTagNumber,
                             color: definition.color,
                             colorName: definition.name
                         )

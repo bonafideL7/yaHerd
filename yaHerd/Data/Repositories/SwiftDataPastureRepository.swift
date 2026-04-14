@@ -18,6 +18,31 @@ struct SwiftDataPastureRepository: PastureRepository {
         return nil
     }
 
+
+    func fetchResidentAnimals(pastureID: UUID) throws -> [AnimalSummary] {
+        guard let pasture = try fetchModel(id: pastureID) else { return [] }
+        return pasture.animals
+            .filter(\.isActiveInHerd)
+            .map { animal in
+                AnimalSummary(
+                    id: animal.publicID,
+                    name: animal.name,
+                    displayTagNumber: animal.displayTagNumber,
+                    displayTagColorID: animal.displayTagColorID,
+                    sex: animal.sex ?? .female,
+                    birthDate: animal.birthDate,
+                    status: animal.status,
+                    isArchived: animal.isArchived,
+                    pastureID: animal.pasture?.publicID,
+                    pastureName: animal.pasture?.name,
+                    location: animal.location
+                )
+            }
+            .sorted { lhs, rhs in
+                lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
+            }
+    }
+
     func nameExists(_ name: String, excluding id: UUID?) throws -> Bool {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let descriptor = FetchDescriptor<Pasture>()

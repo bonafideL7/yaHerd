@@ -157,7 +157,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         for item in session.queueItems.sorted(by: { $0.queueOrder < $1.queueOrder }) {
             guard let animal = item.animal else { continue }
             let destination = item.destinationPasture ?? session.sourcePasture
-            let changed = try AnimalMovementService.move(animal, to: destination, in: context, fromPastureName: item.collectedFromPasture?.name, save: false)
+            let changed = try AnimalMovementStore.move(animal, to: destination, in: context, fromPastureName: item.collectedFromPasture?.name, save: false)
             changedAny = changedAny || changed
         }
         session.status = .finished

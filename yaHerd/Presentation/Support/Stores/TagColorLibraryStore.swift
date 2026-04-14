@@ -121,7 +121,15 @@ final class TagColorLibraryStore: ObservableObject {
         resolvedDefinition(tagColorID: animal.displayTagColorID)
     }
 
+    func resolvedDefinition(for animal: AnimalSummary) -> TagColorDefinition {
+        resolvedDefinition(tagColorID: animal.displayTagColorID)
+    }
+
     func formattedTag(for animal: Animal) -> String {
+        formattedTag(tagNumber: animal.displayTagNumber, colorID: animal.displayTagColorID)
+    }
+
+    func formattedTag(for animal: AnimalSummary) -> String {
         formattedTag(tagNumber: animal.displayTagNumber, colorID: animal.displayTagColorID)
     }
 

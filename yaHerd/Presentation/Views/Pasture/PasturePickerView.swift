@@ -1,11 +1,3 @@
-//
-//  PasturePickerView.swift
-//  yaHerd
-//
-//  Created by mm on 11/29/25.
-//
-
-
 import SwiftUI
 import SwiftData
 
@@ -15,22 +7,38 @@ struct PasturePickerView: View {
 
     @Query(sort: \Pasture.name) private var pastures: [Pasture]
 
-    @State var animal: Animal
-    @State private var selectedPasture: Pasture?
-    @State private var errorMessage: String?
+    let animalID: UUID
+    let currentPastureID: UUID?
+
+    @State private var model = PastureChangeViewModel()
     @State private var showingError = false
+
+    private var repository: any AnimalRepository {
+        SwiftDataAnimalRepository(context: context)
+    }
+
+    init(animal: Animal) {
+        self.animalID = animal.publicID
+        self.currentPastureID = animal.pasture?.publicID
+    }
 
     var body: some View {
         NavigationStack {
             List {
                 Section("Assign Pasture") {
-                    Picker("Pasture", selection: $selectedPasture) {
+                    Picker(
+                        "Pasture",
+                        selection: Binding(
+                            get: { model.selectedPastureID },
+                            set: { model.selectedPastureID = $0 }
+                        )
+                    ) {
                         Text("None")
-                            .tag(Pasture?.none)
+                            .tag(UUID?.none)
 
                         ForEach(pastures) { pasture in
                             Text(pasture.name)
-                                .tag(Optional(pasture))
+                                .tag(Optional(pasture.publicID))
                         }
                     }
                 }
@@ -39,7 +47,11 @@ struct PasturePickerView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        applyPastureChange()
+                        if model.moveAnimal(animalID: animalID, using: repository) {
+                            dismiss()
+                        } else {
+                            showingError = true
+                        }
                     }
                 }
 
@@ -47,24 +59,14 @@ struct PasturePickerView: View {
                     Button("Cancel") { dismiss() }
                 }
             }
-            .onAppear {
-                selectedPasture = animal.pasture
+            .task {
+                model.selectedPastureID = currentPastureID
             }
             .alert("Can’t Save", isPresented: $showingError) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(errorMessage ?? "")
+                Text(model.errorMessage ?? "")
             }
-        }
-    }
-
-    private func applyPastureChange() {
-        do {
-            try AnimalMovementService.move(animal, to: selectedPasture, in: context)
-            dismiss()
-        } catch {
-            errorMessage = error.localizedDescription
-            showingError = true
         }
     }
 }

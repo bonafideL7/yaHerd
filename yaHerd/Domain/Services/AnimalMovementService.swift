@@ -1,57 +1,28 @@
 import Foundation
-import SwiftData
+
+struct AnimalMovementChange: Hashable {
+    var animalID: UUID
+    var fromPastureName: String?
+    var toPastureName: String?
+    var date: Date
+
+    var changed: Bool {
+        fromPastureName != toPastureName
+    }
+}
 
 struct AnimalMovementService {
-
-    @discardableResult
-    static func move(
-        _ animal: Animal,
-        to pasture: Pasture?,
-        in context: ModelContext,
-        fromPastureName: String? = nil,
-        date: Date = .now,
-        save: Bool = true
-    ) throws -> Bool {
-        let previousName = fromPastureName ?? animal.pasture?.name
-        let newName = pasture?.name
-
-        guard previousName != newName else { return false }
-
-        animal.pasture = pasture
-        animal.location = .pasture
-        animal.activeWorkingSession = nil
-
-        let movement = MovementRecord(
-            date: date,
-            fromPasture: previousName,
-            toPasture: newName,
-            animal: animal
+    static func movementChange(
+        animalID: UUID,
+        fromPastureName: String?,
+        toPastureName: String?,
+        date: Date = .now
+    ) -> AnimalMovementChange {
+        AnimalMovementChange(
+            animalID: animalID,
+            fromPastureName: fromPastureName,
+            toPastureName: toPastureName,
+            date: date
         )
-        context.insert(movement)
-
-        if save {
-            try context.save()
-        }
-
-        return true
-    }
-
-    static func move(
-        _ animals: [Animal],
-        to pasture: Pasture?,
-        in context: ModelContext,
-        date: Date = .now,
-        save: Bool = true
-    ) throws {
-        var changedAny = false
-
-        for animal in animals {
-            let changed = try move(animal, to: pasture, in: context, date: date, save: false)
-            changedAny = changedAny || changed
-        }
-
-        if save, changedAny {
-            try context.save()
-        }
     }
 }

@@ -1,11 +1,3 @@
-//
-//  HealthRecordAddView.swift
-//  yaHerd
-//
-//  Created by mm on 11/29/25.
-//
-
-
 import SwiftUI
 import SwiftData
 
@@ -13,31 +5,40 @@ struct HealthRecordAddView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
-    @State var animal: Animal
+    let animalID: UUID
 
-    @State private var date = Date()
-    @State private var treatment = ""
-    @State private var notes = ""
-    @State private var errorMessage: String?
+    @State private var model = HealthRecordAddViewModel()
     @State private var showingError = false
+
+    private var repository: any AnimalRepository {
+        SwiftDataAnimalRepository(context: context)
+    }
+
+    init(animal: Animal) {
+        self.animalID = animal.publicID
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                DatePicker("Date", selection: $date, displayedComponents: .date)
+                DatePicker("Date", selection: Binding(get: { model.date }, set: { model.date = $0 }), displayedComponents: .date)
 
-                TextField("Treatment", text: $treatment)
+                TextField("Treatment", text: Binding(get: { model.treatment }, set: { model.treatment = $0 }))
 
-                TextField("Notes", text: $notes, axis: .vertical)
+                TextField("Notes", text: Binding(get: { model.notes }, set: { model.notes = $0 }), axis: .vertical)
                     .lineLimit(3...6)
             }
             .navigationTitle("Add Health Record")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        save()
+                        if model.save(animalID: animalID, using: repository) {
+                            dismiss()
+                        } else {
+                            showingError = true
+                        }
                     }
-                    .disabled(treatment.isEmpty)
+                    .disabled(model.isSaveDisabled)
                 }
 
                 ToolbarItem(placement: .cancellationAction) {
@@ -47,26 +48,8 @@ struct HealthRecordAddView: View {
             .alert("Validation Error", isPresented: $showingError) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(errorMessage ?? "")
+                Text(model.errorMessage ?? "")
             }
-        }
-    }
-
-    private func save() {
-        do {
-            let repository = SwiftDataAnimalRepository(context: context)
-            let useCase = AddHealthRecordUseCase(repository: repository)
-            _ = try useCase.execute(
-                animalID: animal.publicID,
-                date: date,
-                treatment: treatment,
-                notes: notes.isEmpty ? nil : notes
-            )
-            dismiss()
-
-        } catch {
-            errorMessage = error.localizedDescription
-            showingError = true
         }
     }
 }

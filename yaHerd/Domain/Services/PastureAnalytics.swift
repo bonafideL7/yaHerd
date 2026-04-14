@@ -4,13 +4,13 @@ struct PastureAnalytics {
     let metrics: PastureMetrics
     let activeAnimals: Int
 
-    init(pasture: Pasture, aliveAnimals: Int, fallbackCapacityHead: Double? = nil) {
+    init(acreage: Double?, usableAcreage: Double?, aliveAnimals: Int, targetAcresPerHead: Double?, fallbackCapacityHead: Double? = nil) {
         self.activeAnimals = aliveAnimals
         self.metrics = PastureMetrics(
-            acreage: pasture.acreage,
-            usableAcreage: pasture.usableAcreage,
+            acreage: acreage,
+            usableAcreage: usableAcreage,
             activeAnimals: aliveAnimals,
-            targetAcresPerHead: pasture.targetAcresPerHead,
+            targetAcresPerHead: targetAcresPerHead,
             fallbackCapacityHead: fallbackCapacityHead
         )
     }

@@ -1,11 +1,3 @@
-//
-//  PregnancyCheckAddView.swift
-//  yaHerd
-//
-//  Created by mm on 11/29/25.
-//
-
-
 import SwiftUI
 import SwiftData
 
@@ -14,42 +6,44 @@ struct PregnancyCheckAddView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
-    @State var animal: Animal
+    let animalID: UUID
 
-    @State private var date = Date()
-    @State private var result: PregnancyResult = .unknown
-    @State private var technician = ""
-    @State private var estimatedDaysText: String = ""
-    @State private var dueDate: Date = .now
-    @State private var selectedSire: AnimalParentOption?
+    @State private var model = PregnancyCheckAddViewModel()
     @State private var showingSirePicker = false
-    @State private var errorMessage: String?
     @State private var showingError = false
+
+    private var repository: any AnimalRepository {
+        SwiftDataAnimalRepository(context: context)
+    }
+
+    init(animal: Animal) {
+        self.animalID = animal.publicID
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                DatePicker("Check Date", selection: $date, displayedComponents: .date)
+                DatePicker("Check Date", selection: Binding(get: { model.date }, set: { model.date = $0 }), displayedComponents: .date)
 
-                Picker("Result", selection: $result) {
+                Picker("Result", selection: Binding(get: { model.result }, set: { model.result = $0 })) {
                     ForEach(PregnancyResult.allCases, id: \.self) { value in
                         Text(value.rawValue.capitalized)
                     }
                 }
 
-                TextField("Technician", text: $technician)
+                TextField("Technician", text: Binding(get: { model.technician }, set: { model.technician = $0 }))
 
-                if result == .pregnant {
+                if model.result == .pregnant {
                     HStack {
                         Text("Est. days")
                         Spacer()
-                        TextField("", text: $estimatedDaysText)
+                        TextField("", text: Binding(get: { model.estimatedDaysText }, set: { model.estimatedDaysText = $0 }))
                             .multilineTextAlignment(.trailing)
                             .keyboardType(.numberPad)
                             .frame(width: 120)
                     }
 
-                    DatePicker("Due Date", selection: $dueDate, displayedComponents: .date)
+                    DatePicker("Due Date", selection: Binding(get: { model.dueDate }, set: { model.dueDate = $0 }), displayedComponents: .date)
 
                     Button {
                         showingSirePicker = true
@@ -57,7 +51,7 @@ struct PregnancyCheckAddView: View {
                         HStack {
                             Text("Sire")
                             Spacer()
-                            if let selectedSire {
+                            if let selectedSire = model.selectedSire {
                                 let def = tagColorLibrary.resolvedDefinition(tagColorID: selectedSire.displayTagColorID)
                                 AnimalTagView(
                                     tagNumber: selectedSire.displayTagNumber,
@@ -77,7 +71,11 @@ struct PregnancyCheckAddView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        save()
+                        if model.save(animalID: animalID, using: repository) {
+                            dismiss()
+                        } else {
+                            showingError = true
+                        }
                     }
                 }
 
@@ -88,53 +86,20 @@ struct PregnancyCheckAddView: View {
             .alert("Validation Error", isPresented: $showingError) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(errorMessage ?? "")
+                Text(model.errorMessage ?? "")
             }
         }
-        .onChange(of: estimatedDaysText) { _, _ in
-            recalcDueDate()
+        .onChange(of: model.estimatedDaysText) { _, _ in
+            model.recalcDueDate()
         }
         .sheet(isPresented: $showingSirePicker) {
             AnimalParentPickerView(
                 title: "Select Sire",
-                excludeAnimalID: animal.publicID,
+                excludeAnimalID: animalID,
                 suggestedSexes: [.male]
             ) { picked in
-                selectedSire = picked
+                model.selectedSire = picked
             }
         }
     }
-
-    private func save() {
-        do {
-            let repository = SwiftDataAnimalRepository(context: context)
-            let useCase = AddPregnancyCheckUseCase(repository: repository)
-            _ = try useCase.execute(
-                animalID: animal.publicID,
-                input: PregnancyCheckInput(
-                    date: date,
-                    result: result,
-                    technician: technician.isEmpty ? nil : technician,
-                    estimatedDaysPregnant: Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)),
-                    dueDate: result == .pregnant ? dueDate : nil,
-                    sireAnimalID: selectedSire?.id
-                )
-            )
-            dismiss()
-
-        } catch {
-            errorMessage = error.localizedDescription
-            showingError = true
-        }
-    }
-
-    private func recalcDueDate() {
-        guard result == .pregnant else { return }
-        guard let est = Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
-        let remaining = max(0, WorkingConstants.gestationDays - est)
-        if let computed = Calendar.current.date(byAdding: .day, value: remaining, to: date) {
-            dueDate = computed
-        }
-    }
-
 }

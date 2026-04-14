@@ -3,6 +3,7 @@ import Foundation
 protocol PastureRepository {
     func fetchPastures() throws -> [PastureSummary]
     func fetchPastureDetail(id: UUID) throws -> PastureDetailSnapshot?
+    func fetchResidentAnimals(pastureID: UUID) throws -> [AnimalSummary]
     func nameExists(_ name: String, excluding id: UUID?) throws -> Bool
     @discardableResult
     func create(input: PastureInput) throws -> PastureDetailSnapshot
