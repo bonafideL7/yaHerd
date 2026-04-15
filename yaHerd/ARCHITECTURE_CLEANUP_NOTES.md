@@ -278,3 +278,34 @@ Working is much cleaner now, but it is still not fully view-model-first everywhe
 - Added `AnimalRepository.fetchTimeline(id:)` so the timeline screen now loads through the repository boundary instead of fetching a live `Animal` model from presentation.
 - Moved animal timeline event types to domain-facing entities and kept timeline construction in the data layer.
 - Removed stale `SwiftData` imports from dashboard and pasture presentation files that no longer use it.
+
+## Pass 12 - File Splitting and View Extraction
+
+This pass focused on splitting oversized source files without changing feature behavior.
+
+### What was split
+
+- `Presentation/Views/Animal/Components/AnimalFormView.swift`
+  - extracted into:
+    - `AnimalTagEditingViews.swift`
+    - `AnimalFormFieldSections.swift`
+    - `AnimalEditorSections.swift`
+
+- `Presentation/Views/Dashboard/DashboardView.swift`
+  - extracted reusable dashboard UI into:
+    - `DashboardMetricViews.swift`
+    - `DashboardRows.swift`
+
+- `Presentation/Views/Animal/Detail/AnimalDetailView.swift`
+  - extracted read-only sections and timeline container into:
+    - `AnimalDetailReadOnlySections.swift`
+    - `AnimalTimelineContainerView.swift`
+
+- `Presentation/Views/Animal/List/AnimalListView.swift`
+  - extracted row UI and bottom controls into:
+    - `AnimalListRowComponents.swift`
+    - `AnimalListControlBars.swift`
+
+### Result
+
+The large files are more focused and easier to navigate. The main screen files are now mostly orchestration, while repeated row/section/control UI lives in dedicated files.

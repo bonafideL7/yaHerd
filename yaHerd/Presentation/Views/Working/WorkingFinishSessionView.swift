@@ -92,7 +92,7 @@ struct WorkingFinishSessionView: View {
         guard let session else { return }
         if !force && !destinationPastureIDs.isEmpty { return }
         destinationPastureIDs = Dictionary(uniqueKeysWithValues: session.queueItems.map {
-            ($0.id, Optional($0.destinationPastureID ?? session.sourcePastureID))
+            ($0.id, $0.destinationPastureID ?? session.sourcePastureID)
         })
     }
 

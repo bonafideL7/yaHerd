@@ -101,11 +101,6 @@ struct AnimalListView: View {
         viewModel.load(using: repository)
     }
 
-    private var backgroundView: some View {
-        Color(.systemGroupedBackground)
-            .ignoresSafeArea()
-    }
-
     private var herdList: some View {
         List(selection: batchMode ? $selectedAnimalIDs : nil) {
             ForEach(groupedAnimals) { section in
@@ -174,132 +169,7 @@ struct AnimalListView: View {
 
     @ViewBuilder
     private func animalRow(_ animal: AnimalSummary) -> some View {
-        let def = tagColorLibrary.resolvedDefinition(tagColorID: animal.displayTagColorID)
-
-        HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                AnimalTagView(
-                    tagNumber: animal.displayTagNumber,
-                    color: def.color,
-                    colorName: def.name
-                )
-
-                if !animal.name.isEmpty {
-                    infoPill(
-                        title:animal.name,
-                        systemImage: ""
-                    )
-                } else {
-                    infoPill(
-                        title: animal.sex.label,
-                        systemImage: ""
-                    )
-                }
-            }
-            VStack(alignment: .trailing, spacing: 8) {
-                if animal.status != .active || animal.isArchived {
-                    statusPills(for: animal)
-                } else {
-                    locationBadges(for: animal)
-                }
-                HStack {
-                    infoPill(title: animal.age, systemImage: "clock")
-                    infoPill(
-                        title: animal.birthDate.formatted(
-                            .dateTime
-                                .year(.twoDigits)
-                                .month(.twoDigits)
-                                .day(.twoDigits)
-                        ),
-                        systemImage: "calendar"
-                    )
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-    }
-
-    @ViewBuilder
-    private func infoPill(
-        title: String,
-        systemImage: String,
-        tint: Color = .accentColor
-    ) -> some View {
-        HStack(spacing: 3) {
-            if !systemImage.isEmpty {
-                Image(systemName: systemImage)
-            }
-            Text(title)
-        }
-        .font(.callout)
-        .foregroundStyle(tint)
-        .padding(.horizontal, 5)
-        .padding(.vertical, 5)
-        .background(.thinMaterial, in: Capsule())
-    }
-
-    @ViewBuilder
-    private func statusPills(for animal: AnimalSummary) -> some View {
-        HStack(spacing: 6) {
-            if animal.status != .active {
-                infoPill(
-                    title: animal.status.label,
-                    systemImage: animal.status.systemImage,
-                    tint: .secondary
-                )
-            }
-
-            if animal.isArchived {
-                infoPill(
-                    title: "Archived",
-                    systemImage: "archivebox",
-                    tint: .orange
-                )
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func locationBadges(for animal: AnimalSummary) -> some View {
-        if animal.location == .workingPen {
-            pastureBadge(
-                "Working Pen",
-                systemImage: "figure.corral",
-                tint: .orange,
-                fillOpacity: 0.14
-            )
-        } else if let pastureName = animal.pastureName {
-            pastureBadge(
-                pastureName,
-                systemImage: "leaf",
-                tint: .accent,
-                fillOpacity: 0.12
-            )
-        } else {
-            Spacer()
-        }
-    }
-
-    @ViewBuilder
-    private func pastureBadge(
-        _ title: String,
-        systemImage: String,
-        tint: Color,
-        fillOpacity: Double
-    ) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: systemImage)
-            Text(title)
-        }
-        .font(.callout)
-        .lineLimit(1)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .foregroundStyle(tint)
-        .background(
-            Capsule()
-                .fill(tint.opacity(fillOpacity))
-        )
+        AnimalListRowContent(animal: animal)
     }
 
     @ViewBuilder
@@ -311,7 +181,6 @@ struct AnimalListView: View {
         }
     }
 
-    @ViewBuilder
     private var bottomOverlay: some View {
         VStack(spacing: 10) {
             if batchMode {
@@ -328,194 +197,27 @@ struct AnimalListView: View {
     }
 
     private var floatingControlBar: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                if isSearching {
-                    bottomSearchField
-
-                    Button("Cancel") {
-                        searchText = ""
-                        isSearchFieldFocused = false
-                        withAnimation(.snappy) {
-                            isSearching = false
-                        }
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(.thinMaterial, in: Capsule())
-                    .buttonStyle(.plain)
-                } else {
-                    Menu {
-                        Picker("Sort", selection: $sortOrder) {
-                            ForEach(AnimalSortOrder.allCases, id: \.self) { option in
-                                Label(option.label, systemImage: option.icon)
-                                    .tag(option)
-                            }
-                        }
-                    } label: {
-                        floatingControlLabel(
-                            title: sortOrder.label,
-                            systemImage: "arrow.up.arrow.down"
-                        )
-                    }
-
-                    Button {
-                        showingFilters = true
-                    } label: {
-                        floatingControlLabel(
-                            title: filter.isActive || showRemovedStatuses || showArchivedRecords ? "Filters On" : "Filters",
-                            systemImage: (filter.isActive || showRemovedStatuses || showArchivedRecords)
-                            ? "line.3.horizontal.decrease.circle.fill"
-                            : "line.3.horizontal.decrease.circle"
-                        )
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        withAnimation(.snappy) {
-                            isSearching = true
-                        }
-                    } label: {
-                        floatingIconControlLabel(systemImage: "magnifyingglass")
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            if !isSearching && !currentFilterChips.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        if hasAnyActiveCriteria {
-                            Button("Clear") {
-                                clearAllCriteria()
-                            }
-                            .font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(.thinMaterial, in: Capsule())
-                            .buttonStyle(.plain)
-                        }
-                        if !currentFilterChips.isEmpty {
-                            Text("\(currentFilterChips.count) active filter\(currentFilterChips.count == 1 ? "" : "s")")
-                                .font(.subheadline)
-                                .foregroundStyle(.primary)
-                                .padding(.horizontal, 4)
-                        }
-
-                        ForEach(currentFilterChips) { chip in
-                            Button {
-                                chip.remove()
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Text(chip.title)
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.caption)
-                                }
-                                .font(.caption.weight(.medium))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 8)
-                                .background(.thinMaterial, in: Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(.white.opacity(0.18))
-        }
-        .shadow(radius: 10, y: 4)
-        .onChange(of: isSearching) { _, newValue in
-            if newValue {
-                isSearchFieldFocused = true
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func floatingIconControlLabel(systemImage: String) -> some View {
-        Image(systemName: systemImage)
-            .font(.subheadline.weight(.medium))
-            .frame(width: 44, height: 44)
-            .background(.thinMaterial, in: Capsule())
-    }
-
-    @ViewBuilder
-    private func floatingControlLabel(title: String, systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.subheadline.weight(.medium))
-            .lineLimit(1)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity)
-            .background(.thinMaterial, in: Capsule())
-    }
-
-    private var bottomSearchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-
-            TextField("Search tag, color, or name", text: $searchText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.numbersAndPunctuation)
-                .focused($isSearchFieldFocused)
-
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Color.tertiary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear Search")
-            }
-        }
-        .font(.subheadline)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(.thinMaterial, in: Capsule())
+        AnimalListFloatingControlBar(
+            isSearching: $isSearching,
+            searchText: $searchText,
+            sortOrder: $sortOrder,
+            filtersAreActive: filter.isActive || showRemovedStatuses || showArchivedRecords,
+            filterChipCount: currentFilterChips.count,
+            hasAnyActiveCriteria: hasAnyActiveCriteria,
+            chips: currentFilterChips,
+            onShowFilters: { showingFilters = true },
+            onClearAllCriteria: clearAllCriteria,
+            isSearchFieldFocused: $isSearchFieldFocused
+        )
     }
 
     private var batchActionBar: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(selectedAnimalIDs.isEmpty ? "Selection Mode" : "\(selectedAnimalIDs.count) Selected")
-                    .font(.caption)
-
-                Button(allVisibleAnimalsSelected ? "Deselect All" : "Select All") {
-                    toggleSelectAllVisible()
-                }
-                .font(.subheadline.weight(.semibold))
-                .buttonStyle(.automatic)
-            }
-
-            Spacer()
-
-            Button {
-                showingPasturePicker = true
-            } label: {
-                Label("Move", systemImage: "arrowshape.turn.up.right.circle.fill")
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(selectedAnimalIDs.isEmpty)
-        }
-        .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(.white.opacity(0.18))
-        }
-        .shadow(radius: 10, y: 4)
+        AnimalListBatchActionBar(
+            selectedCount: selectedAnimalIDs.count,
+            allVisibleAnimalsSelected: allVisibleAnimalsSelected,
+            onToggleSelectAllVisible: toggleSelectAllVisible,
+            onMove: { showingPasturePicker = true }
+        )
     }
 
     private var allVisibleAnimalsSelected: Bool {
@@ -534,18 +236,13 @@ struct AnimalListView: View {
         }
     }
 
-    private struct FilterChip: Identifiable {
-        let id = UUID()
-        let title: String
-        let remove: () -> Void
-    }
 
-    private var currentFilterChips: [FilterChip] {
-        var chips: [FilterChip] = []
+    private var currentFilterChips: [AnimalListFilterChip] {
+        var chips: [AnimalListFilterChip] = []
 
         if showRemovedStatuses {
             chips.append(
-                FilterChip(title: "Off-Herd Visible") {
+                AnimalListFilterChip(title: "Off-Herd Visible") {
                     showRemovedStatuses = false
                 }
             )
@@ -553,7 +250,7 @@ struct AnimalListView: View {
 
         if showArchivedRecords {
             chips.append(
-                FilterChip(title: "Archived Visible") {
+                AnimalListFilterChip(title: "Archived Visible") {
                     showArchivedRecords = false
                 }
             )
@@ -561,7 +258,7 @@ struct AnimalListView: View {
 
         if let sex = filter.sex {
             chips.append(
-                FilterChip(title: sex.label) {
+                AnimalListFilterChip(title: sex.label) {
                     filter.sex = nil
                 }
             )
@@ -569,7 +266,7 @@ struct AnimalListView: View {
 
         if let status = filter.status {
             chips.append(
-                FilterChip(title: status.label) {
+                AnimalListFilterChip(title: status.label) {
                     filter.status = nil
                 }
             )
@@ -577,7 +274,7 @@ struct AnimalListView: View {
 
         if let pastureName = viewModel.pastureName(for: filter.pastureID) {
             chips.append(
-                FilterChip(title: pastureName) {
+                AnimalListFilterChip(title: pastureName) {
                     filter.pastureID = nil
                 }
             )

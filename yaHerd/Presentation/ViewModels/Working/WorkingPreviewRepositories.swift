@@ -22,6 +22,7 @@ struct EmptyWorkingRepository: WorkingRepository {
 struct EmptyAnimalRepository: AnimalRepository {
     func fetchAnimals() throws -> [AnimalSummary] { [] }
     func fetchAnimalDetail(id: UUID) throws -> AnimalDetailSnapshot? { nil }
+    func fetchTimeline(id: UUID) throws -> [AnimalTimelineEvent] { [] }
     func fetchPastureOptions() throws -> [PastureOption] { [] }
     func fetchStatusReferenceOptions() throws -> [AnimalStatusReferenceOption] { [] }
     func fetchParentOptions(excluding excludedAnimalID: UUID?) throws -> [AnimalParentOption] { [] }

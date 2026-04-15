@@ -63,7 +63,7 @@ struct DashboardView: View {
                 Section("Search Results") {
                     ForEach(searchResults) { animal in
                         NavigationLink(value: DashboardRoute.animal(animal.id)) {
-                            animalRow(animal)
+                            DashboardAnimalRow(animal: animal)
                         }
                     }
                 }
@@ -73,7 +73,7 @@ struct DashboardView: View {
                 if viewModel.snapshot == nil {
                     ProgressView()
                 } else if let session = activeSessionSummary {
-                    activeSessionCard(session)
+                    DashboardActiveSessionCard(session: session)
                 } else {
                     Button {
                         viewModel.isPresentingNewWorkingSession = true
@@ -132,7 +132,7 @@ struct DashboardView: View {
 
                     ForEach(filteredPastures) { pasture in
                         NavigationLink(value: DashboardRoute.pasture(pasture.id)) {
-                            pastureRow(pasture)
+                            DashboardPastureRow(pasture: pasture)
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button {
@@ -238,32 +238,6 @@ struct DashboardView: View {
     }
 
 
-    @ViewBuilder
-    private func activeSessionCard(_ session: DashboardWorkingSessionSummary) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "wrench.and.screwdriver")
-                    .foregroundStyle(.tint)
-                Text(session.protocolName)
-                    .font(.headline)
-                Spacer()
-                Text("In progress")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let sourcePastureName = session.sourcePastureName, !sourcePastureName.isEmpty {
-                Text("Source pasture: \(sourcePastureName)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            Text(session.date.formatted(date: .abbreviated, time: .shortened))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     private var addAnimalBinding: Binding<Bool> {
         Binding(
             get: { viewModel.isPresentingAddAnimal },
@@ -300,31 +274,10 @@ struct DashboardView: View {
         Group {
             if let destination = alert.destination {
                 NavigationLink(value: route(for: destination)) {
-                    alertRowContent(alert)
+                    DashboardAlertRow(alert: alert, colorForSeverity: color)
                 }
             } else {
-                alertRowContent(alert)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func alertRowContent(_ alert: DashboardAlert) -> some View {
-        HStack(spacing: 12) {
-            if let icon = UIImage(lucideId: alert.icon) {
-                Image(uiImage: icon.scaled(to: CGSize(width: 22, height: 22)))
-                    .renderingMode(.template)
-                    .foregroundStyle(color(for: alert.severity))
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(alert.title)
-                    .font(.headline)
-                if let message = alert.message {
-                    Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                DashboardAlertRow(alert: alert, colorForSeverity: color)
             }
         }
     }
@@ -346,68 +299,6 @@ struct DashboardView: View {
         }
     }
 
-    private func animalRow(_ animal: DashboardAnimalItem) -> some View {
-        HStack(spacing: 12) {
-            let definition = tagColorLibrary.resolvedDefinition(tagColorID: animal.displayTagColorID)
-
-            VStack(alignment: .leading, spacing: 6) {
-                AnimalTagView(
-                    tagNumber: animal.displayTagNumber,
-                    color: definition.color,
-                    colorName: definition.name
-                )
-
-                HStack(spacing: 6) {
-                    Text(animal.sex.label)
-                    if animal.location == .workingPen {
-                        Text("• Working Pen")
-                    } else if let pastureName = animal.pastureName {
-                        Text("• \(pastureName)")
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func pastureRow(_ pasture: DashboardPastureItem) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(pasture.name)
-                    .font(.headline)
-
-                Spacer()
-
-                if pasture.isOverstocked {
-                    Label("Over", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                } else if pasture.isUnderutilized {
-                    Label("Low", systemImage: "arrow.down.right")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            HStack(spacing: 10) {
-                Text("\(pasture.activeAnimalCount) head")
-                if pasture.acres > 0 {
-                    Text("• \(pasture.acres.formatted(.number.precision(.fractionLength(0...1)))) ac")
-                }
-                if let capacity = pasture.capacityHead {
-                    Text("• cap \(Int(capacity))")
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            if let capacity = pasture.capacityHead, capacity > 0 {
-                ProgressView(value: Double(pasture.activeAnimalCount), total: capacity)
-            }
-        }
-    }
-
     private func color(for severity: DashboardAlertSeverity) -> Color {
         switch severity {
         case .critical:
@@ -420,134 +311,3 @@ struct DashboardView: View {
     }
 }
 
-private struct DashboardMetric: Identifiable {
-    let id: String
-    let title: String
-    let value: Int
-    var iconSystem: String? = nil
-    var iconLucide: String? = nil
-    var destination: DashboardNavigationTarget?
-
-    init(
-        title: String,
-        value: Int,
-        iconSystem: String? = nil,
-        iconLucide: String? = nil,
-        destination: DashboardNavigationTarget? = nil
-    ) {
-        self.id = title
-        self.title = title
-        self.value = value
-        self.iconSystem = iconSystem
-        self.iconLucide = iconLucide
-        self.destination = destination
-    }
-}
-
-private struct DashboardMetricsGrid: View {
-    let items: [DashboardMetric]
-    let onNavigate: (DashboardNavigationTarget) -> Void
-
-    private var rows: [[DashboardMetric]] {
-        stride(from: 0, to: items.count, by: 2).map { start in
-            let end = min(start + 2, items.count)
-            return Array(items[start..<end])
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 12) {
-            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                HStack(spacing: 12) {
-                    ForEach(row) { item in
-                        cell(item)
-                            .frame(maxWidth: .infinity)
-                    }
-                    if row.count == 1 {
-                        Spacer(minLength: 0)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-    }
-
-    @ViewBuilder
-    private func cell(_ item: DashboardMetric) -> some View {
-        if let destination = item.destination {
-            Button {
-                onNavigate(destination)
-            } label: {
-                card(item)
-            }
-            .buttonStyle(.plain)
-        } else {
-            card(item)
-        }
-    }
-
-    private func card(_ item: DashboardMetric) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                if let lucide = item.iconLucide, let base = UIImage(lucideId: lucide) {
-                    Image(uiImage: base.scaled(to: CGSize(width: 22, height: 22)))
-                        .renderingMode(.template)
-                } else if let system = item.iconSystem {
-                    Image(systemName: system)
-                }
-                Spacer()
-            }
-
-            Text(item.title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Text("\(item.value)")
-                .font(.title2.weight(.semibold))
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 86, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.thinMaterial)
-        )
-    }
-}
-
-private struct WorkingSessionSummaryCard: View {
-    let session: WorkingSession
-
-    private var total: Int { session.queueItems.count }
-    private var completed: Int { session.queueItems.filter { $0.status == .done }.count }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(session.protocolName)
-                    .font(.headline)
-                Spacer()
-                Text(session.status.rawValue.capitalized)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            HStack {
-                Text(session.date.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if let source = session.sourcePasture?.name {
-                    Text("• \(source)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if total > 0 {
-                    Text("\(completed)/\(total)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-}
