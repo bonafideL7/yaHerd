@@ -15,8 +15,8 @@ struct PregnancyCheckAddView: View {
         dependencies.animalRepository
     }
 
-    init(animal: Animal) {
-        self.animalID = animal.publicID
+    init(animalID: UUID) {
+        self.animalID = animalID
     }
 
     var body: some View {

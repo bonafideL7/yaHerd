@@ -10,6 +10,15 @@ import SwiftUI
 import UIKit
 #endif
 
+protocol AnimalTagDisplayRepresentable {
+    var displayTagNumber: String { get }
+    var displayTagColorID: UUID? { get }
+}
+
+extension AnimalSummary: AnimalTagDisplayRepresentable {}
+extension AnimalDetailSnapshot: AnimalTagDisplayRepresentable {}
+extension AnimalParentOption: AnimalTagDisplayRepresentable {}
+
 struct TagColorDefinition: Identifiable, Codable, Hashable {
     var id: UUID
     var name: String
@@ -117,19 +126,11 @@ final class TagColorLibraryStore: ObservableObject {
         return number.isEmpty ? "UT" : "\(def.prefix)\(number)"
     }
 
-    func resolvedDefinition(for animal: Animal) -> TagColorDefinition {
+    func resolvedDefinition(for animal: some AnimalTagDisplayRepresentable) -> TagColorDefinition {
         resolvedDefinition(tagColorID: animal.displayTagColorID)
     }
 
-    func resolvedDefinition(for animal: AnimalSummary) -> TagColorDefinition {
-        resolvedDefinition(tagColorID: animal.displayTagColorID)
-    }
-
-    func formattedTag(for animal: Animal) -> String {
-        formattedTag(tagNumber: animal.displayTagNumber, colorID: animal.displayTagColorID)
-    }
-
-    func formattedTag(for animal: AnimalSummary) -> String {
+    func formattedTag(for animal: some AnimalTagDisplayRepresentable) -> String {
         formattedTag(tagNumber: animal.displayTagNumber, colorID: animal.displayTagColorID)
     }
 

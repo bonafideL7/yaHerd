@@ -16,9 +16,9 @@ struct PasturePickerView: View {
         dependencies.animalRepository
     }
 
-    init(animal: Animal) {
-        self.animalID = animal.publicID
-        self.currentPastureID = animal.pasture?.publicID
+    init(animalID: UUID, currentPastureID: UUID? = nil) {
+        self.animalID = animalID
+        self.currentPastureID = currentPastureID
     }
 
     var body: some View {
