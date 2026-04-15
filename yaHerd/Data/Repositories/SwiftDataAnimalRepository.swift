@@ -7,14 +7,17 @@ struct SwiftDataAnimalRepository: AnimalRepository {
     func fetchAnimals() throws -> [AnimalSummary] {
         let descriptor = FetchDescriptor<Animal>()
         return try context.fetch(descriptor)
-            .map { animal in
-                makeSummary(from: animal)
-            }
+            .map(AnimalMapper.makeSummary)
     }
 
     func fetchAnimalDetail(id: UUID) throws -> AnimalDetailSnapshot? {
         guard let animal = try fetchAnimal(id: id) else { return nil }
         return try makeDetail(from: animal)
+    }
+
+    func fetchTimeline(id: UUID) throws -> [AnimalTimelineEvent] {
+        guard let animal = try fetchAnimal(id: id) else { return [] }
+        return AnimalMapper.makeTimeline(from: animal)
     }
 
     func fetchPastureOptions() throws -> [PastureOption] {
@@ -46,21 +49,14 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             .sorted { lhs, rhs in
                 lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
             }
-            .map { animal in
-                AnimalParentOption(
-                    id: animal.publicID,
-                    displayTagNumber: animal.displayTagNumber,
-                    displayTagColorID: animal.displayTagColorID,
-                    sex: animal.sex ?? .female,
-                    isArchived: animal.isArchived
-                )
-            }
+            .map(AnimalMapper.makeParentOption)
     }
 
     func create(input: AnimalInput) throws -> AnimalDetailSnapshot {
         let pasture = try fetchPasture(id: input.pastureID)
         let sireAnimal = try fetchAnimal(id: input.sireID)
         let damAnimal = try fetchAnimal(id: input.damID)
+        try validateAnimalInput(input, animalID: nil, sireAnimal: sireAnimal, damAnimal: damAnimal)
 
         let animal = Animal(
             name: input.name,
@@ -99,6 +95,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         let pasture = try fetchPasture(id: input.pastureID)
         let sireAnimal = try fetchAnimal(id: input.sireID)
         let damAnimal = try fetchAnimal(id: input.damID)
+        try validateAnimalInput(input, animalID: id, sireAnimal: sireAnimal, damAnimal: damAnimal)
 
         animal.name = input.name
         animal.sex = input.sex
@@ -283,65 +280,26 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         return try context.fetch(descriptor).first
     }
 
-    private func makeSummary(from animal: Animal) -> AnimalSummary {
-        AnimalSummary(
-            id: animal.publicID,
-            name: animal.name,
-            displayTagNumber: animal.displayTagNumber,
-            displayTagColorID: animal.displayTagColorID,
-            sex: animal.sex ?? .female,
-            birthDate: animal.birthDate,
-            status: animal.status,
-            isArchived: animal.isArchived,
-            pastureID: animal.pasture?.publicID,
-            pastureName: animal.pasture?.name,
-            location: animal.location
+
+    private func validateAnimalInput(_ input: AnimalInput, animalID: UUID?, sireAnimal: Animal?, damAnimal: Animal?) throws {
+        try ValidationService.validateAnimal(
+            ValidationService.AnimalValidationRules(
+                birthDate: input.birthDate,
+                status: input.status,
+                saleDate: input.saleDate,
+                deathDate: input.deathDate,
+                animalID: animalID,
+                sireID: input.sireID,
+                sireSex: sireAnimal?.sex,
+                damID: input.damID,
+                damSex: damAnimal?.sex
+            )
         )
     }
 
     private func makeDetail(from animal: Animal) throws -> AnimalDetailSnapshot {
         let statusReferenceName = try fetchStatusReferenceName(id: animal.statusReferenceID)
-        return AnimalDetailSnapshot(
-            id: animal.publicID,
-            name: animal.name,
-            displayTagNumber: animal.displayTagNumber,
-            displayTagColorID: animal.displayTagColorID,
-            sex: animal.sex ?? .female,
-            birthDate: animal.birthDate,
-            status: animal.status,
-            pastureID: animal.pasture?.publicID,
-            pastureName: animal.pasture?.name,
-            sireID: animal.sireAnimal?.publicID,
-            sire: animal.sireAnimal?.displayTagNumber,
-            damID: animal.damAnimal?.publicID,
-            dam: animal.damAnimal?.displayTagNumber,
-            distinguishingFeatures: animal.distinguishingFeatures,
-            saleDate: animal.saleDate,
-            salePrice: animal.salePrice,
-            reasonSold: animal.reasonSold,
-            deathDate: animal.deathDate,
-            causeOfDeath: animal.causeOfDeath,
-            statusReferenceID: animal.statusReferenceID,
-            statusReferenceName: statusReferenceName,
-            isArchived: animal.isArchived,
-            archivedAt: animal.archivedAt,
-            archiveReason: animal.archiveReason,
-            activeTags: animal.activeTags.map { tag in makeTagSnapshot(from: tag) },
-            inactiveTags: animal.inactiveTags.map { tag in makeTagSnapshot(from: tag) },
-            location: animal.location
-        )
-    }
-
-    private func makeTagSnapshot(from tag: AnimalTag) -> AnimalTagSnapshot {
-        AnimalTagSnapshot(
-            id: tag.publicID,
-            number: tag.number,
-            colorID: tag.colorID,
-            isPrimary: tag.isPrimary,
-            isActive: tag.isActive,
-            assignedAt: tag.assignedAt,
-            removedAt: tag.removedAt
-        )
+        return AnimalMapper.makeDetail(from: animal, statusReferenceName: statusReferenceName)
     }
 
     private func fetchStatusReferenceName(id: UUID?) throws -> String? {

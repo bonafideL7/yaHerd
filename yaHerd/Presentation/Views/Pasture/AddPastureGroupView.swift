@@ -7,10 +7,9 @@
 
 
 import SwiftUI
-import SwiftData
 
 struct AddPastureGroupView: View {
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
     @Environment(\.dismiss) private var dismiss
     
     @State private var name = ""
@@ -50,8 +49,7 @@ struct AddPastureGroupView: View {
 
     private func save() {
         do {
-            let repository = SwiftDataPastureRepository(context: context)
-            let useCase = CreatePastureGroupUseCase(repository: repository)
+            let useCase = CreatePastureGroupUseCase(repository: dependencies.pastureRepository)
             try useCase.execute(name: name, grazeDays: grazeDays, restDays: restDays)
             dismiss()
         } catch {

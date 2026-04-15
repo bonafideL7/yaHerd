@@ -1,30 +1,14 @@
-//
-//  WorkingSessionAnimalEditView.swift
-//  yaHerd
-//
-
 import SwiftUI
-import SwiftData
 
 struct WorkingSessionAnimalEditView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
+    @StateObject private var viewModel: WorkingQueueItemEditorViewModel
 
-    let session: WorkingSession
-    @Bindable var queueItem: WorkingQueueItem
-
-    @Query(sort: [SortDescriptor(\WorkingTreatmentRecord.itemName)])
-    private var allTreatmentRecords: [WorkingTreatmentRecord]
-
-    @Query(sort: [SortDescriptor(\PregnancyCheck.date, order: .reverse)])
-    private var allPregChecks: [PregnancyCheck]
-
-    @Query(sort: [SortDescriptor(\HealthRecord.date, order: .reverse)])
-    private var allHealthRecords: [HealthRecord]
-
-    @Query(sort: \Pasture.name) private var pastures: [Pasture]
-
+    @State private var status: WorkingQueueStatus = .queued
+    @State private var completedAt: Date = .now
+    @State private var destinationPastureID: UUID?
     @State private var treatmentEntries: [TreatmentEditEntry] = []
     @State private var recordPregCheck = false
     @State private var pregResult: PregnancyResult = .unknown
@@ -38,71 +22,35 @@ struct WorkingSessionAnimalEditView: View {
     @State private var errorMessage: String?
     @State private var showingError = false
 
-    init(session: WorkingSession, queueItem: WorkingQueueItem) {
-        self.session = session
-        self._queueItem = Bindable(wrappedValue: queueItem)
+    init(sessionID: UUID, queueItemID: UUID) {
+        _viewModel = StateObject(wrappedValue: WorkingQueueItemEditorViewModel(sessionID: sessionID, queueItemID: queueItemID, workingRepository: EmptyWorkingRepository(), animalRepository: EmptyAnimalRepository()))
     }
 
-    private var animal: Animal? { queueItem.animal }
-    private var sid: PersistentIdentifier { session.persistentModelID }
-    private var aid: PersistentIdentifier? { queueItem.animal?.persistentModelID }
-
-    private var treatmentRecords: [WorkingTreatmentRecord] {
-        guard let aid else { return [] }
-        return allTreatmentRecords.filter {
-            $0.session?.persistentModelID == sid && $0.animal?.persistentModelID == aid
-        }
-    }
-
-    private var pregChecks: [PregnancyCheck] {
-        guard let aid else { return [] }
-        return allPregChecks.filter {
-            $0.workingSession?.persistentModelID == sid && $0.animal.persistentModelID == aid
-        }
-    }
-
-    private var observationRecords: [HealthRecord] {
-        guard let aid else { return [] }
-        return allHealthRecords.filter {
-            $0.workingSession?.persistentModelID == sid
-                && $0.animal.persistentModelID == aid
-                && $0.treatment == "Observation"
-        }
-    }
-
-    private var castrationRecords: [HealthRecord] {
-        guard let aid else { return [] }
-        return allHealthRecords.filter {
-            $0.workingSession?.persistentModelID == sid
-                && $0.animal.persistentModelID == aid
-                && $0.treatment == "Castration"
-        }
-    }
+    private var snapshot: WorkingQueueItemEditorSnapshot? { viewModel.snapshot }
 
     private var isFemale: Bool {
-        guard let animal else { return false }
-        return (animal.sex ?? .female) == .female
+        snapshot?.animalSex == .female
     }
 
     private var showPregSection: Bool {
-        guard let animal else { return false }
-        return isFemale && animal.ageInMonths >= WorkingConstants.pregCheckEligibleMonths
+        guard let snapshot else { return false }
+        return isFemale && snapshot.animalAgeInMonths >= WorkingConstants.pregCheckEligibleMonths
     }
 
     var body: some View {
         Form {
             Section {
-                if let animal {
+                if let snapshot, let tagNumber = snapshot.animalDisplayTagNumber {
                     HStack {
-                        let def = tagColorLibrary.resolvedDefinition(for: animal)
+                        let def = tagColorLibrary.resolvedDefinition(tagColorID: snapshot.animalDisplayTagColorID)
                         AnimalTagView(
-                            tagNumber: animal.tagNumber,
+                            tagNumber: tagNumber,
                             color: def.color,
                             colorName: def.name,
                             size: .prominent
                         )
                         Spacer()
-                        Text((animal.sex ?? .female).label)
+                        Text(snapshot.animalSex.label)
                             .foregroundStyle(.secondary)
                     }
                 } else {
@@ -112,24 +60,24 @@ struct WorkingSessionAnimalEditView: View {
             }
 
             Section("Queue") {
-                Picker("Status", selection: $queueItem.status) {
-                    ForEach(WorkingQueueStatus.allCases, id: \.self) { status in
-                        Text(status.rawValue.capitalized).tag(status)
+                Picker("Status", selection: $status) {
+                    ForEach(WorkingQueueStatus.allCases, id: \.self) { value in
+                        Text(value.rawValue.capitalized).tag(value)
                     }
                 }
 
-                if queueItem.status == .done {
-                    DatePicker("Completed", selection: completedBinding, displayedComponents: [.date, .hourAndMinute])
+                if status == .done {
+                    DatePicker("Completed", selection: $completedAt, displayedComponents: [.date, .hourAndMinute])
                 }
 
-                if let source = queueItem.collectedFromPasture?.name ?? session.sourcePasture?.name {
+                if let source = snapshot?.collectedFromPastureName ?? snapshot?.sessionSourcePastureName {
                     LabeledContent("Collected from", value: source)
                 }
 
-                Picker("Destination", selection: $queueItem.destinationPasture) {
-                    Text("None").tag(Optional<Pasture>(nil))
-                    ForEach(pastures) { pasture in
-                        Text(pasture.name).tag(Optional(pasture))
+                Picker("Destination", selection: $destinationPastureID) {
+                    Text("None").tag(Optional<UUID>(nil))
+                    ForEach(viewModel.pastures) { pasture in
+                        Text(pasture.name).tag(Optional(pasture.id))
                     }
                 }
             }
@@ -209,7 +157,7 @@ struct WorkingSessionAnimalEditView: View {
 
             Section("Procedures") {
                 Toggle("Castration performed (this session)", isOn: $castrationPerformedInSession)
-                    .disabled(animal == nil)
+                    .disabled(snapshot?.animalID == nil)
             }
 
             Section("Observations") {
@@ -222,7 +170,7 @@ struct WorkingSessionAnimalEditView: View {
                 } label: {
                     Text("Delete this animal's work data")
                 }
-                .disabled(animal == nil)
+                .disabled(snapshot?.animalID == nil)
             } footer: {
                 Text("Deletes treatments, preg checks, and session-tied records for this animal in this session. It does not delete movement or status history.")
             }
@@ -231,14 +179,17 @@ struct WorkingSessionAnimalEditView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") {
-                    save()
-                }
-                .disabled(animal == nil)
+                Button("Save") { save() }
+                    .disabled(snapshot?.animalID == nil)
             }
         }
-        .onAppear {
+        .task {
+            viewModel.configure(workingRepository: dependencies.workingRepository, animalRepository: dependencies.animalRepository)
+            viewModel.load()
             seedState()
+        }
+        .onChange(of: viewModel.snapshot?.id) { _, _ in
+            seedState(force: true)
         }
         .onChange(of: estimatedDaysText) { _, _ in
             recalcDueDate()
@@ -249,90 +200,63 @@ struct WorkingSessionAnimalEditView: View {
         .alert("Can’t Save", isPresented: $showingError) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(errorMessage ?? "")
+            Text(errorMessage ?? viewModel.errorMessage ?? "")
         }
-    }
-
-    private var completedBinding: Binding<Date> {
-        Binding(
-            get: { queueItem.completedAt ?? session.date },
-            set: { queueItem.completedAt = $0 }
-        )
     }
 
     private var sirePickerSheet: some View {
         AnimalParentPickerView(
             title: "Select Sire",
-            excludeAnimalID: animal?.publicID,
+            excludeAnimalID: snapshot?.animalID,
             suggestedSexes: [.male]
         ) { picked in
             selectedSire = picked
         }
     }
 
-    private func seedState() {
-        let map = Dictionary(grouping: treatmentRecords, by: { $0.itemName })
+    private func seedState(force: Bool = false) {
+        guard let snapshot else { return }
+        if !force && !treatmentEntries.isEmpty { return }
 
-        treatmentEntries = session.protocolItems.map { item in
-            let existing = map[item.name]?.sorted(by: { $0.date > $1.date }).first
-            let qtyText: String = {
-                if let quantity = existing?.quantity { return "\(quantity)" }
-                if let defaultQuantity = item.defaultQuantity { return "\(defaultQuantity)" }
-                return ""
-            }()
-
+        let grouped = Dictionary(grouping: snapshot.treatmentRecords, by: { $0.itemName })
+        treatmentEntries = snapshot.protocolItems.map { item in
+            let existing = grouped[item.name]?.sorted(by: { $0.date > $1.date }).first
             return TreatmentEditEntry(
                 id: item.id,
                 name: item.name,
                 given: existing?.given ?? true,
-                quantityText: qtyText,
-                date: existing?.date ?? session.date
+                quantityText: existing?.quantity.map { "\($0)" } ?? item.defaultQuantity.map { "\($0)" } ?? "",
+                date: existing?.date ?? snapshot.sessionDate
             )
         }
 
-        if let existing = pregChecks.first {
-            recordPregCheck = true
-            pregResult = existing.result
-            pregDate = existing.date
-            estimatedDaysText = existing.estimatedDaysPregnant.map { "\($0)" } ?? ""
-            dueDate = existing.dueDate ?? session.date
-            selectedSire = existing.sireAnimal.map {
-                AnimalParentOption(
-                    id: $0.publicID,
-                    displayTagNumber: $0.displayTagNumber,
-                    displayTagColorID: $0.displayTagColorID,
-                    sex: $0.sex ?? .female,
-                    isArchived: $0.isArchived
-                )
-            }
-        } else {
-            recordPregCheck = false
-            pregResult = .unknown
-            pregDate = session.date
-            estimatedDaysText = ""
-            dueDate = session.date
-            selectedSire = nil
-        }
-
-        castrationPerformedInSession = !castrationRecords.isEmpty
-        observationNotes = observationRecords.first?.notes ?? ""
+        status = snapshot.status
+        completedAt = snapshot.completedAt ?? snapshot.sessionDate
+        destinationPastureID = snapshot.destinationPastureID
+        recordPregCheck = snapshot.pregnancyCheck != nil
+        pregResult = snapshot.pregnancyCheck?.result ?? .unknown
+        pregDate = snapshot.pregnancyCheck?.date ?? snapshot.sessionDate
+        estimatedDaysText = snapshot.pregnancyCheck?.estimatedDaysPregnant.map { "\($0)" } ?? ""
+        dueDate = snapshot.pregnancyCheck?.dueDate ?? snapshot.sessionDate
+        selectedSire = snapshot.pregnancyCheck?.sire
+        castrationPerformedInSession = snapshot.castrationPerformedInSession
+        observationNotes = snapshot.observationNotes
     }
 
     private func recalcDueDate() {
         guard pregResult == .pregnant else { return }
         guard let est = Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
-
         let remaining = max(0, WorkingConstants.gestationDays - est)
-        if let computed = Calendar.current.date(byAdding: .day, value: remaining, to: pregDate) {
+        if let computed = Calendar.current.date(byAdding: .day, value: remaining, to: .now) {
             dueDate = computed
         }
     }
 
     private func save() {
-        guard animal != nil else { return }
+        guard let snapshot else { return }
 
         let pregnancyInput: WorkingPregnancyCheckInput?
-        if showPregSection, recordPregCheck, pregResult == .open || pregResult == .pregnant {
+        if showPregSection && recordPregCheck && (pregResult == .open || pregResult == .pregnant) {
             pregnancyInput = WorkingPregnancyCheckInput(
                 date: pregDate,
                 result: pregResult,
@@ -345,15 +269,15 @@ struct WorkingSessionAnimalEditView: View {
         }
 
         let input = WorkingSessionAnimalEditInput(
-            status: queueItem.status,
-            completedAt: queueItem.status == .done ? queueItem.completedAt : nil,
-            destinationPastureID: queueItem.destinationPasture?.publicID,
-            treatmentEntries: treatmentEntries.map { entry in
+            status: status,
+            completedAt: status == .done ? completedAt : nil,
+            destinationPastureID: destinationPastureID,
+            treatmentEntries: treatmentEntries.map {
                 WorkingTreatmentEntryInput(
-                    date: entry.date,
-                    itemName: entry.name,
-                    given: entry.given,
-                    quantity: Double(entry.quantityText.trimmingCharacters(in: .whitespacesAndNewlines))
+                    date: $0.date,
+                    itemName: $0.name,
+                    given: $0.given,
+                    quantity: Double($0.quantityText.trimmingCharacters(in: .whitespacesAndNewlines))
                 )
             },
             pregnancyCheck: pregnancyInput,
@@ -362,9 +286,8 @@ struct WorkingSessionAnimalEditView: View {
         )
 
         do {
-            let repository = SwiftDataWorkingRepository(context: context)
-            let useCase = SaveWorkingQueueItemEditsUseCase(repository: repository)
-            try useCase.execute(queueItem: queueItem, session: session, input: input)
+            let useCase = SaveWorkingQueueItemEditsUseCase(repository: dependencies.workingRepository)
+            try useCase.execute(queueItemID: snapshot.id, sessionID: snapshot.sessionID, input: input)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
@@ -373,21 +296,16 @@ struct WorkingSessionAnimalEditView: View {
     }
 
     private func deleteWorkDataForAnimal() {
-        guard animal != nil else { return }
-
+        guard let snapshot else { return }
         do {
-            let repository = SwiftDataWorkingRepository(context: context)
-            let useCase = DeleteWorkingQueueItemDataUseCase(repository: repository)
-            try useCase.execute(queueItem: queueItem, session: session)
-            seedState()
+            let useCase = DeleteWorkingQueueItemDataUseCase(repository: dependencies.workingRepository)
+            try useCase.execute(queueItemID: snapshot.id, sessionID: snapshot.sessionID)
+            dismiss()
         } catch {
             errorMessage = error.localizedDescription
             showingError = true
         }
     }
-
-
-
 }
 
 private struct TreatmentEditEntry: Identifiable {

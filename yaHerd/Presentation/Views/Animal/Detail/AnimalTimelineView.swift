@@ -10,8 +10,7 @@ import SwiftUI
 import LucideIcons
 
 struct AnimalTimelineView: View {
-    let animal: Animal
-    private var events: [AnimalTimelineEvent] { animal.timelineEvents }
+    let events: [AnimalTimelineEvent]
     
     private var grouped: [String: [String: [AnimalTimelineEvent]]] {
         Dictionary(
@@ -29,7 +28,7 @@ struct AnimalTimelineView: View {
         List {
             ForEach(grouped.keys.sorted(by: >), id: \.self) { year in
                 Section(year) {
-                    let months = grouped[year]!.keys.sorted(by: >)
+                    let months = (grouped[year]?.keys.sorted(by: >)) ?? []
 
                     ForEach(months, id: \.self) { month in
                         VStack(alignment: .leading, spacing: 8) {
@@ -37,7 +36,7 @@ struct AnimalTimelineView: View {
                                 .font(.headline)
                                 .padding(.top, 4)
 
-                            ForEach(mergedByDay(grouped[year]![month]!)) { dayGroup in
+                            ForEach(mergedByDay(grouped[year]?[month] ?? [])) { dayGroup in
                                 VStack(alignment: .leading) {
                                     Text(dayGroup.dateString)
                                         .font(.subheadline)

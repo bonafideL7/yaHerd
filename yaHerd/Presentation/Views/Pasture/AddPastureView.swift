@@ -1,9 +1,8 @@
-import SwiftData
 import SwiftUI
 
 struct AddPastureView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
 
     @AppStorage("targetAcresPerHeadDefault") private var targetAcresPerHeadDefault = 3.0
     @AppStorage("usableAcreagePercentDefault") private var usableAcreagePercentDefault = 100
@@ -17,7 +16,7 @@ struct AddPastureView: View {
     }
 
     private var repository: any PastureRepository {
-        SwiftDataPastureRepository(context: context)
+        dependencies.pastureRepository
     }
 
     var body: some View {

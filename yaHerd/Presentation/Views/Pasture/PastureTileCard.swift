@@ -10,12 +10,10 @@ import SwiftUI
 import LucideIcons
 
 struct PastureTileCard: View {
-    let pasture: Pasture
+    let pasture: PastureSummary
     let onTap: () -> Void
 
-    private var headCount: Int {
-        pasture.animals.filter { $0.isActiveInHerd }.count
-    }
+    private var headCount: Int { pasture.activeAnimalCount }
 
     private var acreage: String {
         if let acres = pasture.acreage {

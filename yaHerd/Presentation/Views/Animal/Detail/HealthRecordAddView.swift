@@ -1,8 +1,7 @@
 import SwiftUI
-import SwiftData
 
 struct HealthRecordAddView: View {
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
     @Environment(\.dismiss) private var dismiss
 
     let animalID: UUID
@@ -11,7 +10,7 @@ struct HealthRecordAddView: View {
     @State private var showingError = false
 
     private var repository: any AnimalRepository {
-        SwiftDataAnimalRepository(context: context)
+        dependencies.animalRepository
     }
 
     init(animal: Animal) {

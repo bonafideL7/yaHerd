@@ -1,8 +1,7 @@
 import SwiftUI
-import SwiftData
 
 struct PregnancyCheckAddView: View {
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
@@ -13,7 +12,7 @@ struct PregnancyCheckAddView: View {
     @State private var showingError = false
 
     private var repository: any AnimalRepository {
-        SwiftDataAnimalRepository(context: context)
+        dependencies.animalRepository
     }
 
     init(animal: Animal) {

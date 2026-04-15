@@ -5,12 +5,11 @@
 //  Created by mm on 11/28/25.
 //
 
-import SwiftData
 import SwiftUI
 
 struct AnimalDetailView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
 
@@ -28,12 +27,8 @@ struct AnimalDetailView: View {
         self.animalID = animalID
     }
 
-    init(animal: Animal) {
-        self.init(animalID: animal.publicID)
-    }
-
-    private var repository: SwiftDataAnimalRepository {
-        SwiftDataAnimalRepository(context: context)
+    private var repository: any AnimalRepository {
+        dependencies.animalRepository
     }
 
     private var displayedTagNumber: String {
@@ -511,31 +506,29 @@ struct AnimalDetailView: View {
 }
 
 private struct AnimalTimelineContainerView: View {
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
 
     let animalID: UUID
 
-    @State private var animal: Animal?
+    @State private var events: [AnimalTimelineEvent] = []
+    @State private var hasLoaded = false
 
     var body: some View {
         Group {
-            if let animal {
-                AnimalTimelineView(animal: animal)
+            if hasLoaded {
+                if events.isEmpty {
+                    ContentUnavailableView("Timeline Unavailable", systemImage: "clock.arrow.circlepath")
+                } else {
+                    AnimalTimelineView(events: events)
+                }
             } else {
-                ContentUnavailableView("Timeline Unavailable", systemImage: "clock.arrow.circlepath")
+                ProgressView()
             }
         }
         .task {
-            animal = fetchAnimal()
+            guard !hasLoaded else { return }
+            events = (try? dependencies.animalRepository.fetchTimeline(id: animalID)) ?? []
+            hasLoaded = true
         }
-    }
-
-    private func fetchAnimal() -> Animal? {
-        let descriptor = FetchDescriptor<Animal>(
-            predicate: #Predicate<Animal> { animal in
-                animal.publicID == animalID
-            }
-        )
-        return try? context.fetch(descriptor).first
     }
 }

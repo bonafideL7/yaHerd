@@ -333,7 +333,7 @@ final class Animal {
         self.pasture = pasture
         self.location = AnimalLocation.pasture
         self.activeWorkingSession = nil
-        self.sex = sex ?? .female
+        self.sex = sex ?? .unknown
         self.distinguishingFeatures = distinguishingFeatures
     }
 }

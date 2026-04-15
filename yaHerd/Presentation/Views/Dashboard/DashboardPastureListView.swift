@@ -1,8 +1,6 @@
-import SwiftData
 import SwiftUI
 
 struct DashboardPastureListView: View {
-    @Environment(\.modelContext) private var context
 
     @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
     @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
@@ -12,8 +10,10 @@ struct DashboardPastureListView: View {
     @State private var viewModel = DashboardPastureListViewModel()
     @State private var filter: DashboardPastureFilter = .all
 
-    private var repository: any DashboardRepository {
-        SwiftDataDashboardRepository(context: context)
+    private let repository: any DashboardRepository
+
+    init(repository: any DashboardRepository) {
+        self.repository = repository
     }
 
     private var configuration: DashboardConfiguration {

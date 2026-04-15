@@ -12,28 +12,42 @@ import SwiftData
 struct yaHerdApp: App {
     @StateObject private var nav = NavigationCoordinator()
     @StateObject private var tagColorLibrary = TagColorLibraryStore()
-    
+    private let sharedModelContainer: ModelContainer
+    private let dependencies: AppDependencies
+
+    init() {
+        let schema = Schema([
+            Animal.self,
+            AnimalTag.self,
+            AnimalStatusReference.self,
+            Pasture.self,
+            PastureGroup.self,
+            HealthRecord.self,
+            PregnancyCheck.self,
+            MovementRecord.self,
+            StatusRecord.self,
+            WorkingSession.self,
+            WorkingQueueItem.self,
+            WorkingTreatmentRecord.self,
+            WorkingProtocolTemplate.self
+        ])
+
+        do {
+            let container = try ModelContainer(for: schema)
+            self.sharedModelContainer = container
+            self.dependencies = AppDependencies(context: container.mainContext)
+        } catch {
+            fatalError("Failed to create model container: \(error)")
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             MainTabView()
                 .environmentObject(nav)
                 .environmentObject(tagColorLibrary)
+                .environmentObject(dependencies)
         }
-                .modelContainer(for: [
-                    Animal.self,
-                    AnimalTag.self,
-                    AnimalStatusReference.self,
-                    Pasture.self,
-                    PastureGroup.self,
-                    HealthRecord.self,
-                    PregnancyCheck.self,
-                    MovementRecord.self,
-                    StatusRecord.self,
-                    WorkingSession.self,
-                    WorkingQueueItem.self,
-                    WorkingTreatmentRecord.self,
-                    WorkingProtocolTemplate.self
-                ])
-        
+        .modelContainer(sharedModelContainer)
     }
 }

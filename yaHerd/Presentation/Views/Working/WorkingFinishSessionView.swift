@@ -1,25 +1,25 @@
-//
-//  WorkingFinishSessionView.swift
-//  yaHerd
-//
-
 import SwiftUI
-import SwiftData
 
 struct WorkingFinishSessionView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+    @StateObject private var viewModel: WorkingFinishSessionViewModel
 
-    @Bindable var session: WorkingSession
-
-    @Query(sort: \Pasture.name) private var pastures: [Pasture]
-
+    @State private var destinationPastureIDs: [UUID: UUID?] = [:]
     @State private var errorMessage: String?
     @State private var showingError = false
 
-    private var orderedItems: [WorkingQueueItem] {
-        session.queueItems.sorted { $0.queueOrder < $1.queueOrder }
+    init(sessionID: UUID) {
+        _viewModel = StateObject(wrappedValue: WorkingFinishSessionViewModel(sessionID: sessionID, workingRepository: EmptyWorkingRepository(), animalRepository: EmptyAnimalRepository()))
+    }
+
+    private var session: WorkingSessionDetailSnapshot? {
+        viewModel.session
+    }
+
+    private var orderedItems: [WorkingQueueItemSnapshot] {
+        session?.queueItems.sorted { $0.queueOrder < $1.queueOrder } ?? []
     }
 
     var body: some View {
@@ -33,20 +33,20 @@ struct WorkingFinishSessionView: View {
 
                 Section("Animals") {
                     ForEach(orderedItems) { item in
-                        if let animal = item.animal {
+                        if let tagNumber = item.animalDisplayTagNumber {
                             HStack {
-                                let def = tagColorLibrary.resolvedDefinition(for: animal)
+                                let def = tagColorLibrary.resolvedDefinition(tagColorID: item.animalDisplayTagColorID)
                                 AnimalTagView(
-                                    tagNumber: animal.tagNumber,
+                                    tagNumber: tagNumber,
                                     color: def.color,
                                     colorName: def.name,
                                     size: .compact
                                 )
                                 Spacer()
                                 Picker("", selection: bindingDestination(for: item)) {
-                                    Text("None").tag(Optional<Pasture>(nil))
-                                    ForEach(pastures) { pasture in
-                                        Text(pasture.name).tag(Optional(pasture))
+                                    Text("None").tag(Optional<UUID>(nil))
+                                    ForEach(viewModel.pastures) { pasture in
+                                        Text(pasture.name).tag(Optional(pasture.id))
                                     }
                                 }
                                 .labelsHidden()
@@ -59,59 +59,67 @@ struct WorkingFinishSessionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Return") {
-                        returnAnimals()
-                    }
+                    Button("Return") { returnAnimals() }
+                        .disabled(session == nil)
                 }
 
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("All to Source") {
-                        assignAllToSource()
-                    }
-                    .disabled(session.sourcePasture == nil)
+                    Button("All to Source") { assignAllToSource() }
+                        .disabled(session?.sourcePastureID == nil)
                 }
 
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
             }
-            .onAppear {
-                // default destinations
-                if let source = session.sourcePasture {
-                    for item in orderedItems where item.destinationPasture == nil {
-                        item.destinationPasture = source
-                    }
-                }
+            .task {
+                viewModel.configure(workingRepository: dependencies.workingRepository, animalRepository: dependencies.animalRepository)
+                viewModel.load()
+                seedDestinations()
+            }
+            .onChange(of: viewModel.session?.id) { _, _ in
+                seedDestinations(force: true)
             }
             .alert("Can’t Save", isPresented: $showingError) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(errorMessage ?? "")
+                Text(errorMessage ?? viewModel.errorMessage ?? "")
             }
         }
     }
 
-    private func bindingDestination(for item: WorkingQueueItem) -> Binding<Pasture?> {
-        Binding<Pasture?>(
-            get: { item.destinationPasture ?? session.sourcePasture },
-            set: { newValue in
-                item.destinationPasture = newValue
-            }
+    private func seedDestinations(force: Bool = false) {
+        guard let session else { return }
+        if !force && !destinationPastureIDs.isEmpty { return }
+        destinationPastureIDs = Dictionary(uniqueKeysWithValues: session.queueItems.map {
+            ($0.id, Optional($0.destinationPastureID ?? session.sourcePastureID))
+        })
+    }
+
+    private func bindingDestination(for item: WorkingQueueItemSnapshot) -> Binding<UUID?> {
+        Binding<UUID?>(
+            get: { destinationPastureIDs[item.id] ?? item.destinationPastureID ?? session?.sourcePastureID },
+            set: { newValue in destinationPastureIDs[item.id] = newValue }
         )
     }
 
     private func assignAllToSource() {
-        guard let source = session.sourcePasture else { return }
+        guard let sourcePastureID = session?.sourcePastureID else { return }
         for item in orderedItems {
-            item.destinationPasture = source
+            destinationPastureIDs[item.id] = sourcePastureID
         }
     }
 
     private func returnAnimals() {
+        guard let session else { return }
+        let assignments = orderedItems.map {
+            WorkingQueueDestinationAssignment(queueItemID: $0.id, destinationPastureID: destinationPastureIDs[$0.id] ?? $0.destinationPastureID ?? session.sourcePastureID)
+        }
         do {
-            let repository = SwiftDataWorkingRepository(context: context)
-            let useCase = FinishWorkingSessionUseCase(repository: repository)
-            try useCase.execute(session: session)
+            let saveUseCase = SaveWorkingDestinationsUseCase(repository: dependencies.workingRepository)
+            try saveUseCase.execute(sessionID: session.id, assignments: assignments)
+            let finishUseCase = FinishWorkingSessionUseCase(repository: dependencies.workingRepository)
+            try finishUseCase.execute(sessionID: session.id)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

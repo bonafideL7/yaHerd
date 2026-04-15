@@ -10,12 +10,10 @@ import SwiftUI
 import LucideIcons
 
 struct QuickPastureCard: View {
-    let pasture: Pasture
+    let pasture: PastureSummary
     let onTap: () -> Void
     
-    private var headCount: Int {
-        pasture.animals.filter { $0.isActiveInHerd }.count
-    }
+    private var headCount: Int { pasture.activeAnimalCount }
     
     var body: some View {
         Button(action: onTap) {

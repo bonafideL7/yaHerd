@@ -1,18 +1,18 @@
-//
-//  WorkingSessionAnimalsView.swift
-//  yaHerd
-//
-
 import SwiftUI
-import SwiftData
 
-/// Review and edit per-animal work data captured in a session.
 struct WorkingSessionAnimalsView: View {
+    @EnvironmentObject private var dependencies: AppDependencies
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-    @Bindable var session: WorkingSession
+    @StateObject private var viewModel: WorkingSessionDetailViewModel
+    private let sessionID: UUID
 
-    private var orderedItems: [WorkingQueueItem] {
-        session.queueItems.sorted { $0.queueOrder < $1.queueOrder }
+    init(sessionID: UUID) {
+        self.sessionID = sessionID
+        _viewModel = StateObject(wrappedValue: WorkingSessionDetailViewModel(sessionID: sessionID, repository: EmptyWorkingRepository()))
+    }
+
+    private var orderedItems: [WorkingQueueItemSnapshot] {
+        viewModel.session?.queueItems.sorted { $0.queueOrder < $1.queueOrder } ?? []
     }
 
     var body: some View {
@@ -26,7 +26,7 @@ struct WorkingSessionAnimalsView: View {
             } else {
                 ForEach(orderedItems) { item in
                     NavigationLink {
-                        WorkingSessionAnimalEditView(session: session, queueItem: item)
+                        WorkingSessionAnimalEditView(sessionID: sessionID, queueItemID: item.id)
                     } label: {
                         row(for: item)
                     }
@@ -35,16 +35,20 @@ struct WorkingSessionAnimalsView: View {
         }
         .navigationTitle("Animals")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            viewModel.configure(repository: dependencies.workingRepository)
+            viewModel.load()
+        }
     }
 
     @ViewBuilder
-    private func row(for item: WorkingQueueItem) -> some View {
-        if let animal = item.animal {
+    private func row(for item: WorkingQueueItemSnapshot) -> some View {
+        if let tagNumber = item.animalDisplayTagNumber {
             HStack(spacing: 12) {
-                let def = tagColorLibrary.resolvedDefinition(for: animal)
+                let def = tagColorLibrary.resolvedDefinition(tagColorID: item.animalDisplayTagColorID)
                 VStack(alignment: .leading, spacing: 6) {
                     AnimalTagView(
-                        tagNumber: animal.tagNumber,
+                        tagNumber: tagNumber,
                         color: def.color,
                         colorName: def.name
                     )

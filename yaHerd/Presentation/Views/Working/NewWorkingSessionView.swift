@@ -4,18 +4,16 @@
 //
 
 import SwiftUI
-import SwiftData
 
 struct NewWorkingSessionView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
 
-    @Query(sort: \Pasture.name) private var pastures: [Pasture]
-    @Query(sort: \WorkingProtocolTemplate.name) private var templates: [WorkingProtocolTemplate]
+    @StateObject private var viewModel = NewWorkingSessionViewModel(animalRepository: EmptyAnimalRepository(), workingRepository: EmptyWorkingRepository())
 
     @State private var date: Date = .now
-    @State private var sourcePasture: Pasture?
-    @State private var selectedTemplate: WorkingProtocolTemplate?
+    @State private var sourcePasture: PastureOption?
+    @State private var selectedTemplateID: UUID?
 
     @State private var protocolName: String = ""
     @State private var items: [WorkingProtocolItem] = []
@@ -43,19 +41,19 @@ struct NewWorkingSessionView: View {
                 }
 
                 Section("Protocol") {
-                    Picker("Template", selection: $selectedTemplate) {
+                    Picker("Template", selection: $selectedTemplateID) {
                         Text("Custom")
-                            .tag(Optional<WorkingProtocolTemplate>(nil))
-                        ForEach(templates) { template in
+                            .tag(Optional<UUID>(nil))
+                        ForEach(viewModel.templates) { template in
                             Text(template.name)
-                                .tag(Optional(template))
+                                .tag(Optional(template.id))
                         }
                     }
-                    .onChange(of: selectedTemplate) { _, newValue in
-                        if let t = newValue {
-                            protocolName = t.name
-                            items = t.items
-                        }
+                    .onChange(of: selectedTemplateID) { _, newValue in
+                        guard let id = newValue,
+                              let template = viewModel.templateDetail(id: id) else { return }
+                        protocolName = template.name
+                        items = template.items
                     }
 
                     TextField("Protocol Name", text: $protocolName)
@@ -99,27 +97,53 @@ struct NewWorkingSessionView: View {
                 }
             }
             .sheet(isPresented: $showingPasturePicker) {
-                PastureTilePickerView { pasture in
-                    sourcePasture = pasture
+                NavigationStack {
+                    List(viewModel.pastures) { pasture in
+                        Button {
+                            sourcePasture = pasture
+                            showingPasturePicker = false
+                        } label: {
+                            HStack {
+                                Text(pasture.name)
+                                Spacer()
+                                if sourcePasture?.id == pasture.id {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .navigationTitle("Choose Pasture")
+                    .navigationBarTitleDisplayMode(.inline)
                 }
             }
-            .onAppear {
-                if selectedTemplate == nil, protocolName.isEmpty {
-                    if let first = templates.first {
-                        selectedTemplate = first
-                        protocolName = first.name
-                        items = first.items
-                    } else {
-                        protocolName = "Working"
-                        items = [WorkingProtocolItem(name: "7-way")]
-                    }
-                }
+            .task {
+                viewModel.configure(animalRepository: dependencies.animalRepository, workingRepository: dependencies.workingRepository)
+                viewModel.load()
+                seedDefaultsIfNeeded()
             }
             .alert("Can’t Create", isPresented: $showingError) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(errorMessage ?? "")
+                Text(errorMessage ?? viewModel.errorMessage ?? "")
             }
+            .onChange(of: viewModel.errorMessage) { _, newValue in
+                if newValue != nil { showingError = true }
+            }
+        }
+    }
+
+    private func seedDefaultsIfNeeded() {
+        guard protocolName.isEmpty else { return }
+        if let first = viewModel.templates.first,
+           let detail = viewModel.templateDetail(id: first.id) {
+            selectedTemplateID = first.id
+            protocolName = detail.name
+            items = detail.items
+        } else {
+            protocolName = "Working"
+            items = [WorkingProtocolItem(name: "7-way")]
         }
     }
 
@@ -142,11 +166,10 @@ struct NewWorkingSessionView: View {
         }
 
         do {
-            let repository = SwiftDataWorkingRepository(context: context)
-            let useCase = CreateWorkingSessionUseCase(repository: repository)
+            let useCase = CreateWorkingSessionUseCase(repository: dependencies.workingRepository)
             _ = try useCase.execute(
                 date: date,
-                sourcePasture: sourcePasture,
+                sourcePastureID: sourcePasture?.id,
                 protocolName: trimmedName,
                 protocolItems: cleanedItems
             )

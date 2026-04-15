@@ -1,11 +1,10 @@
 import SwiftUI
-import SwiftData
 
 struct PasturePickerView: View {
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
     @Environment(\.dismiss) private var dismiss
 
-    @Query(sort: \Pasture.name) private var pastures: [Pasture]
+    @State private var pastureOptions: [PastureOption] = []
 
     let animalID: UUID
     let currentPastureID: UUID?
@@ -14,7 +13,7 @@ struct PasturePickerView: View {
     @State private var showingError = false
 
     private var repository: any AnimalRepository {
-        SwiftDataAnimalRepository(context: context)
+        dependencies.animalRepository
     }
 
     init(animal: Animal) {
@@ -36,9 +35,9 @@ struct PasturePickerView: View {
                         Text("None")
                             .tag(UUID?.none)
 
-                        ForEach(pastures) { pasture in
+                        ForEach(pastureOptions) { pasture in
                             Text(pasture.name)
-                                .tag(Optional(pasture.publicID))
+                                .tag(Optional(pasture.id))
                         }
                     }
                 }
@@ -61,6 +60,12 @@ struct PasturePickerView: View {
             }
             .task {
                 model.selectedPastureID = currentPastureID
+                do {
+                    pastureOptions = try repository.fetchPastureOptions()
+                } catch {
+                    model.errorMessage = error.localizedDescription
+                    showingError = true
+                }
             }
             .alert("Can’t Save", isPresented: $showingError) {
                 Button("OK", role: .cancel) {}

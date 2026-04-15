@@ -30,7 +30,7 @@ struct SettingsView: View {
                             Text("Beef cattle herd management")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
-                            Text("iOS 18 • Swift 6 • SwiftUI • SwiftData")
+                            Text("iOS 26+ • Swift 6 • SwiftUI • SwiftData")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

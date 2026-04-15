@@ -9,7 +9,7 @@ import SwiftUI
 
 struct AnimalParentPickerView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @State private var viewModel = AnimalParentPickerViewModel()
@@ -19,8 +19,8 @@ struct AnimalParentPickerView: View {
     let suggestedSexes: Set<Sex>
     let onSelect: (AnimalParentOption) -> Void
 
-    private var repository: SwiftDataAnimalRepository {
-        SwiftDataAnimalRepository(context: context)
+    private var repository: any AnimalRepository {
+        dependencies.animalRepository
     }
 
     private var filtered: [AnimalParentOption] {

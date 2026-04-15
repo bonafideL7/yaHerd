@@ -6,14 +6,12 @@ struct SwiftDataPastureRepository: PastureRepository {
 
     func fetchPastures() throws -> [PastureSummary] {
         let descriptor = FetchDescriptor<Pasture>(sortBy: [SortDescriptor(\Pasture.name)])
-        return try context.fetch(descriptor).map { pasture in
-            makeSummary(from: pasture)
-        }
+        return try context.fetch(descriptor).map(PastureMapper.makeSummary)
     }
 
     func fetchPastureDetail(id: UUID) throws -> PastureDetailSnapshot? {
         if let pasture = try fetchModel(id: id) {
-            return makeDetail(from: pasture)
+            return PastureMapper.makeDetail(from: pasture)
         }
         return nil
     }
@@ -23,21 +21,7 @@ struct SwiftDataPastureRepository: PastureRepository {
         guard let pasture = try fetchModel(id: pastureID) else { return [] }
         return pasture.animals
             .filter(\.isActiveInHerd)
-            .map { animal in
-                AnimalSummary(
-                    id: animal.publicID,
-                    name: animal.name,
-                    displayTagNumber: animal.displayTagNumber,
-                    displayTagColorID: animal.displayTagColorID,
-                    sex: animal.sex ?? .female,
-                    birthDate: animal.birthDate,
-                    status: animal.status,
-                    isArchived: animal.isArchived,
-                    pastureID: animal.pasture?.publicID,
-                    pastureName: animal.pasture?.name,
-                    location: animal.location
-                )
-            }
+            .map(PastureMapper.makeResidentAnimalSummary)
             .sorted { lhs, rhs in
                 lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
             }
@@ -63,7 +47,7 @@ struct SwiftDataPastureRepository: PastureRepository {
         )
         context.insert(pasture)
         try context.save()
-        return makeDetail(from: pasture)
+        return PastureMapper.makeDetail(from: pasture)
     }
 
     func update(id: UUID, input: PastureInput) throws -> PastureDetailSnapshot {
@@ -77,7 +61,7 @@ struct SwiftDataPastureRepository: PastureRepository {
         pasture.targetAcresPerHead = input.targetAcresPerHead
         try context.save()
 
-        return makeDetail(from: pasture)
+        return PastureMapper.makeDetail(from: pasture)
     }
 
     func createGroup(input: PastureGroupInput) throws {
@@ -104,28 +88,5 @@ struct SwiftDataPastureRepository: PastureRepository {
             }
         )
         return try context.fetch(descriptor).first
-    }
-
-    private func makeSummary(from pasture: Pasture) -> PastureSummary {
-        PastureSummary(
-            id: pasture.publicID,
-            name: pasture.name,
-            acreage: pasture.acreage,
-            usableAcreage: pasture.usableAcreage,
-            targetAcresPerHead: pasture.targetAcresPerHead,
-            activeAnimalCount: pasture.animals.filter(\.isActiveInHerd).count
-        )
-    }
-
-    private func makeDetail(from pasture: Pasture) -> PastureDetailSnapshot {
-        PastureDetailSnapshot(
-            id: pasture.publicID,
-            name: pasture.name,
-            acreage: pasture.acreage,
-            usableAcreage: pasture.usableAcreage,
-            targetAcresPerHead: pasture.targetAcresPerHead,
-            activeAnimalCount: pasture.animals.filter(\.isActiveInHerd).count,
-            lastGrazedDate: pasture.lastGrazedDate
-        )
     }
 }

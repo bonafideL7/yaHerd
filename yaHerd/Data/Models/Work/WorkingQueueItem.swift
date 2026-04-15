@@ -8,6 +8,7 @@ import Foundation
 
 @Model
 final class WorkingQueueItem {
+    @Attribute(.unique) var publicID: UUID
     var queueOrder: Int
     var status: WorkingQueueStatus
     var completedAt: Date?
@@ -29,6 +30,7 @@ final class WorkingQueueItem {
     var session: WorkingSession
 
     init(
+        publicID: UUID = UUID(),
         queueOrder: Int,
         status: WorkingQueueStatus = .queued,
         collectedFromPasture: Pasture? = nil,
@@ -37,6 +39,7 @@ final class WorkingQueueItem {
         animal: Animal,
         session: WorkingSession
     ) {
+        self.publicID = publicID
         self.queueOrder = queueOrder
         self.status = status
         self.completedAt = nil

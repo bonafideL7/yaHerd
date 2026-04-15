@@ -2,14 +2,21 @@ import SwiftUI
 #if canImport(UIKit)
 import UIKit
 #endif
-import SwiftData
 
 struct MainTabView: View {
     @EnvironmentObject private var nav: NavigationCoordinator
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
 
     var body: some View {
         TabView {
+//            NavigationStack(path: $nav.globalPath) {
+//                DashboardView()
+//                    .navigationDestination(for: DashboardRoute.self, destination: dashboardDestination)
+//            }
+//            .tabItem {
+//                Label("Dashboard", systemImage: "rectangle.3.group")
+//            }
+
             NavigationStack {
                 AnimalListView()
             }
@@ -26,7 +33,7 @@ struct MainTabView: View {
             }
 
             NavigationStack {
-                PastureListView()
+                PastureListView(repository: dependencies.pastureRepository)
             }
             .tabItem {
                 Label("Pastures", systemImage: "leaf")
@@ -34,7 +41,21 @@ struct MainTabView: View {
         }
         .task {
 //            SampleDataService.seedDefaultsIfNeeded(context: context)
-//            SampleLargeDataService.seedIfNeeded(context: context)            
+//            SampleLargeDataService.seedIfNeeded(context: context)
+        }
+    }
+
+    @ViewBuilder
+    private func dashboardDestination(for route: DashboardRoute) -> some View {
+        switch route {
+        case .animal(let id):
+            AnimalDetailView(animalID: id)
+        case .pasture(let id):
+            PastureDetailView(pastureID: id)
+        case .animalList(let kind):
+            DashboardAnimalListView(kind: kind, repository: dependencies.dashboardRepository)
+        case .pastureList:
+            DashboardPastureListView(repository: dependencies.dashboardRepository)
         }
     }
 }

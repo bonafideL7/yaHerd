@@ -3,12 +3,15 @@
 //
 
 import SwiftUI
-import SwiftData
-
+#Preview {
+    AnimalListView()
+        .preferredColorScheme(.dark)
+}
 struct AnimalListView: View {
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-
+    @Environment(\.colorScheme) private var colorScheme
+    
     @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
 
     @State private var viewModel = AnimalListViewModel()
@@ -25,8 +28,8 @@ struct AnimalListView: View {
     @State private var selectedAnimalIDs: Set<UUID> = []
     @State private var showingPasturePicker = false
 
-    private var repository: SwiftDataAnimalRepository {
-        SwiftDataAnimalRepository(context: context)
+    private var repository: any AnimalRepository {
+        dependencies.animalRepository
     }
 
     var body: some View {
@@ -81,7 +84,7 @@ struct AnimalListView: View {
             PastureTilePickerView { pasture in
                 viewModel.move(
                     ids: Array(selectedAnimalIDs),
-                    toPastureID: pasture.publicID,
+                    toPastureID: pasture.id,
                     using: repository
                 )
                 selectedAnimalIDs.removeAll()
@@ -620,9 +623,9 @@ struct AnimalListView: View {
                     showingAdd = true
                 }
                 .buttonStyle(.borderedProminent)
-
+                .foregroundStyle(colorScheme == .dark ? .black : .white)
                 Button("Add Sample Data") {
-                    SampleDataService.seedSampleDataIfNeeded(context: context)
+                    dependencies.seedSampleDataIfNeeded()
                     reload()
                 }
                 .buttonStyle(.bordered)

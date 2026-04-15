@@ -1,8 +1,6 @@
-import SwiftData
 import SwiftUI
 
 struct DashboardAnimalListView: View {
-    @Environment(\.modelContext) private var context
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
@@ -13,9 +11,11 @@ struct DashboardAnimalListView: View {
     @State private var viewModel = DashboardAnimalListViewModel()
 
     let kind: DashboardAnimalListKind
+    private let repository: any DashboardRepository
 
-    private var repository: any DashboardRepository {
-        SwiftDataDashboardRepository(context: context)
+    init(kind: DashboardAnimalListKind, repository: any DashboardRepository) {
+        self.kind = kind
+        self.repository = repository
     }
 
     private var configuration: DashboardConfiguration {

@@ -1,63 +1,60 @@
-import SwiftData
 import SwiftUI
 
 struct PastureListView: View {
-    @Environment(\.modelContext) private var context
-
     @State private var model = PastureListViewModel()
 
-    private var repository: any PastureRepository {
-        SwiftDataPastureRepository(context: context)
+    private let repository: any PastureRepository
+
+    init(repository: any PastureRepository) {
+        self.repository = repository
     }
 
     var body: some View {
         @Bindable var model = model
 
-        NavigationStack {
-            List {
-                if model.items.isEmpty {
-                    ContentUnavailableView(
-                        "No pastures",
-                        systemImage: "leaf",
-                        description: Text("Add a pasture to start tracking acreage and stocking.")
-                    )
-                } else {
-                    ForEach(model.items) { pasture in
-                        NavigationLink(value: pasture) {
-                            pastureRow(pasture)
-                        }
-                    }
-                    .onDelete { offsets in
-                        model.delete(at: offsets, using: repository)
+        List {
+            if model.items.isEmpty {
+                ContentUnavailableView(
+                    "No pastures",
+                    systemImage: "leaf",
+                    description: Text("Add a pasture to start tracking acreage and stocking.")
+                )
+            } else {
+                ForEach(model.items) { pasture in
+                    NavigationLink(value: pasture) {
+                        pastureRow(pasture)
                     }
                 }
-            }
-            .navigationTitle("Pastures")
-            .navigationDestination(for: PastureSummary.self) { pasture in
-                PastureDetailView(pastureID: pasture.id)
-            }
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        model.isPresentingAddPasture = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
+                .onDelete { offsets in
+                    model.delete(at: offsets, using: repository)
                 }
             }
-            .sheet(isPresented: $model.isPresentingAddPasture) {
-                AddPastureView {
-                    model.load(using: repository)
+        }
+        .navigationTitle("Pastures")
+        .navigationDestination(for: PastureSummary.self) { pasture in
+            PastureDetailView(pastureID: pasture.id)
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    model.isPresentingAddPasture = true
+                } label: {
+                    Image(systemName: "plus")
                 }
             }
-            .task {
+        }
+        .sheet(isPresented: $model.isPresentingAddPasture) {
+            AddPastureView {
                 model.load(using: repository)
             }
-            .alert("Can’t Complete Request", isPresented: errorBinding) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(model.errorMessage ?? "Unknown error")
-            }
+        }
+        .task {
+            model.load(using: repository)
+        }
+        .alert("Can’t Complete Request", isPresented: errorBinding) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.errorMessage ?? "Unknown error")
         }
     }
 

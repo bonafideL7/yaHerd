@@ -82,7 +82,19 @@ struct AnimalEditorDraft {
     }
 
     func validate() throws {
-        try ValidationService.validateAnimal(birthDate: birthDate)
+        try ValidationService.validateAnimal(
+            ValidationService.AnimalValidationRules(
+                birthDate: birthDate,
+                status: status,
+                saleDate: status == .sold ? saleDate : nil,
+                deathDate: status == .dead ? deathDate : nil,
+                animalID: nil,
+                sireID: sireID,
+                sireSex: nil,
+                damID: damID,
+                damSex: nil
+            )
+        )
         _ = try parsedSalePrice()
     }
 
@@ -98,9 +110,15 @@ struct AnimalEditorDraft {
         if cleanedDistinguishingFeatures != detail.distinguishingFeatures { return true }
         if status != detail.status { return true }
         if statusReferenceID != detail.statusReferenceID { return true }
-        if saleDate != (detail.saleDate ?? .now) { return true }
+
+        let draftSaleDate: Date? = status == .sold ? saleDate : nil
+        let detailSaleDate: Date? = detail.status == .sold ? detail.saleDate : nil
+        if draftSaleDate != detailSaleDate { return true }
         if normalizedReasonSold != detail.reasonSold { return true }
-        if deathDate != (detail.deathDate ?? .now) { return true }
+
+        let draftDeathDate: Date? = status == .dead ? deathDate : nil
+        let detailDeathDate: Date? = detail.status == .dead ? detail.deathDate : nil
+        if draftDeathDate != detailDeathDate { return true }
         if normalizedCauseOfDeath != detail.causeOfDeath { return true }
 
         let currentSalePriceText = detail.salePrice.map {

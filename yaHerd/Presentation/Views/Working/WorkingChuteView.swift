@@ -1,22 +1,13 @@
-//
-//  WorkingChuteView.swift
-//  yaHerd
-//
-
 import SwiftUI
-import SwiftData
 
 struct WorkingChuteView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-
-    let session: WorkingSession
-    @Bindable var queueItem: WorkingQueueItem
+    @StateObject private var viewModel: WorkingQueueItemEditorViewModel
 
     @State private var treatEntries: [TreatmentEntry] = []
     @State private var observationNotes: String = ""
-
     @State private var pregResult: PregnancyResult = .unknown
     @State private var estimatedDaysText: String = ""
     @State private var dueDate: Date = .now
@@ -26,42 +17,43 @@ struct WorkingChuteView: View {
     @State private var errorMessage: String?
     @State private var showingError = false
 
-    private var animal: Animal? { queueItem.animal }
+    init(sessionID: UUID, queueItemID: UUID) {
+        _viewModel = StateObject(wrappedValue: WorkingQueueItemEditorViewModel(sessionID: sessionID, queueItemID: queueItemID, workingRepository: EmptyWorkingRepository(), animalRepository: EmptyAnimalRepository()))
+    }
+
+    private var snapshot: WorkingQueueItemEditorSnapshot? { viewModel.snapshot }
 
     private var isFemale: Bool {
-        guard let animal else { return false }
-        return (animal.sex ?? .female) == .female
+        snapshot?.animalSex == .female
     }
 
     private var isMale: Bool {
-        guard let animal else { return false }
-        return (animal.sex ?? .female) == .male
+        snapshot?.animalSex == .male
     }
 
     private var showPregSection: Bool {
-        guard let animal else { return false }
-        return isFemale && animal.ageInMonths >= WorkingConstants.pregCheckEligibleMonths
+        guard let snapshot else { return false }
+        return isFemale && snapshot.animalAgeInMonths >= WorkingConstants.pregCheckEligibleMonths
     }
 
     private var showCastrationSection: Bool {
-        guard animal != nil else { return false }
-        return isMale
+        snapshot != nil && isMale
     }
 
     var body: some View {
         Form {
             Section {
-                if let animal {
+                if let snapshot, let tagNumber = snapshot.animalDisplayTagNumber {
                     HStack {
-                        let def = tagColorLibrary.resolvedDefinition(for: animal)
+                        let def = tagColorLibrary.resolvedDefinition(tagColorID: snapshot.animalDisplayTagColorID)
                         AnimalTagView(
-                            tagNumber: animal.tagNumber,
+                            tagNumber: tagNumber,
                             color: def.color,
                             colorName: def.name,
                             size: .prominent
                         )
                         Spacer()
-                        Text((animal.sex ?? .female).label)
+                        Text(snapshot.animalSex.label)
                             .foregroundStyle(.secondary)
                     }
                 } else {
@@ -153,10 +145,15 @@ struct WorkingChuteView: View {
                 Button("Done") {
                     complete()
                 }
-                .disabled(animal == nil)
+                .disabled(snapshot?.animalID == nil)
             }
         }
-        .onAppear {
+        .task {
+            viewModel.configure(workingRepository: dependencies.workingRepository, animalRepository: dependencies.animalRepository)
+            viewModel.load()
+            seedState()
+        }
+        .onChange(of: viewModel.snapshot?.id) { _, _ in
             seedState()
         }
         .onChange(of: estimatedDaysText) { _, _ in
@@ -168,14 +165,14 @@ struct WorkingChuteView: View {
         .alert("Can’t Save", isPresented: $showingError) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(errorMessage ?? "")
+            Text(errorMessage ?? viewModel.errorMessage ?? "")
         }
     }
 
     private var sirePickerSheet: some View {
         AnimalParentPickerView(
             title: "Select Sire",
-            excludeAnimalID: animal?.publicID,
+            excludeAnimalID: snapshot?.animalID,
             suggestedSexes: [.male]
         ) { picked in
             selectedSire = picked
@@ -183,28 +180,27 @@ struct WorkingChuteView: View {
     }
 
     private func seedState() {
-        if treatEntries.isEmpty {
-            treatEntries = session.protocolItems.map { item in
-                TreatmentEntry(
-                    id: item.id,
-                    name: item.name,
-                    given: true,
-                    quantityText: item.defaultQuantity.map { "\($0)" } ?? ""
-                )
-            }
+        guard let snapshot, treatEntries.isEmpty else { return }
+        treatEntries = snapshot.protocolItems.map { item in
+            let existing = snapshot.treatmentRecords.first(where: { $0.itemName == item.name })
+            return TreatmentEntry(
+                id: item.id,
+                name: item.name,
+                given: existing?.given ?? true,
+                quantityText: existing?.quantity.map { "\($0)" } ?? item.defaultQuantity.map { "\($0)" } ?? ""
+            )
         }
-
-        pregResult = .unknown
-        estimatedDaysText = ""
-        dueDate = .now
-        selectedSire = nil
-        markCastrated = false
+        pregResult = snapshot.pregnancyCheck?.result ?? .unknown
+        estimatedDaysText = snapshot.pregnancyCheck?.estimatedDaysPregnant.map { "\($0)" } ?? ""
+        dueDate = snapshot.pregnancyCheck?.dueDate ?? snapshot.sessionDate
+        selectedSire = snapshot.pregnancyCheck?.sire
+        markCastrated = snapshot.castrationPerformedInSession
+        observationNotes = snapshot.observationNotes
     }
 
     private func recalcDueDate() {
         guard pregResult == .pregnant else { return }
         guard let est = Int(estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
-
         let remaining = max(0, WorkingConstants.gestationDays - est)
         if let computed = Calendar.current.date(byAdding: .day, value: remaining, to: .now) {
             dueDate = computed
@@ -212,7 +208,7 @@ struct WorkingChuteView: View {
     }
 
     private func complete() {
-        guard animal != nil else { return }
+        guard let snapshot else { return }
 
         let treatmentInputs = treatEntries.map { entry in
             WorkingTreatmentEntryInput(
@@ -237,11 +233,10 @@ struct WorkingChuteView: View {
         }
 
         do {
-            let repository = SwiftDataWorkingRepository(context: context)
-            let useCase = CompleteWorkingQueueItemUseCase(repository: repository)
+            let useCase = CompleteWorkingQueueItemUseCase(repository: dependencies.workingRepository)
             try useCase.execute(
-                queueItem: queueItem,
-                session: session,
+                queueItemID: snapshot.id,
+                sessionID: snapshot.sessionID,
                 treatmentEntries: treatmentInputs,
                 pregnancyCheck: pregnancyInput,
                 markCastrated: markCastrated,
@@ -253,7 +248,6 @@ struct WorkingChuteView: View {
             showingError = true
         }
     }
-
 }
 
 private struct TreatmentEntry: Identifiable {

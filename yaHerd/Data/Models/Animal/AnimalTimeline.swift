@@ -5,33 +5,13 @@
 //  Created by mm on 12/1/25.
 //
 
-
 import Foundation
-import LucideIcons
-
-enum AnimalTimelineEventType {
-    case health
-    case pregnancy
-    case movement
-    case status
-    case tag
-}
-
-struct AnimalTimelineEvent: Identifiable {
-    let id = UUID()
-    let date: Date
-    let type: AnimalTimelineEventType
-    let title: String
-    let details: String?
-    let icon: String
-}
 
 // MARK: - Timeline Construction
 extension Animal {
     var timelineEvents: [AnimalTimelineEvent] {
         var events: [AnimalTimelineEvent] = []
 
-        // HEALTH RECORDS
         for r in healthRecords {
             events.append(
                 AnimalTimelineEvent(
@@ -44,7 +24,6 @@ extension Animal {
             )
         }
 
-        // PREGNANCY CHECKS
         for p in pregnancyChecks {
             events.append(
                 AnimalTimelineEvent(
@@ -57,7 +36,6 @@ extension Animal {
             )
         }
 
-        // MOVEMENT HISTORY
         for m in movementRecords {
             let desc = "\(m.fromPasture ?? "—") → \(m.toPasture ?? "—")"
             events.append(
@@ -71,7 +49,6 @@ extension Animal {
             )
         }
 
-        // STATUS HISTORY
         for s in statusRecords {
             let desc = "\(s.oldStatus.label) → \(s.newStatus.label)"
             events.append(
@@ -85,7 +62,6 @@ extension Animal {
             )
         }
 
-        // TAG HISTORY
         for tag in tags {
             let details = tag.normalizedNumber
             events.append(
@@ -111,7 +87,6 @@ extension Animal {
             }
         }
 
-        // Sort newest → oldest
         return events.sorted { $0.date > $1.date }
     }
 }

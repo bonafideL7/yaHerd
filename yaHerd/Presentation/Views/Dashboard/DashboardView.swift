@@ -1,28 +1,25 @@
 import LucideIcons
-import SwiftData
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
 #endif
 
 struct DashboardView: View {
-    @Environment(\.modelContext) private var context
     @EnvironmentObject private var nav: NavigationCoordinator
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+    @EnvironmentObject private var dependencies: AppDependencies
 
     @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
     @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
     @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
     @AppStorage("pastureCapacity") private var pastureCapacity = 30
 
-    @Query(sort: \WorkingSession.date, order: .reverse) private var workingSessions: [WorkingSession]
-
     @State private var viewModel = DashboardViewModel()
     @State private var searchText = ""
     @State private var pastureFilter: DashboardPastureFilter = .all
 
     private var repository: any DashboardRepository {
-        SwiftDataDashboardRepository(context: context)
+        dependencies.dashboardRepository
     }
 
     private var configuration: DashboardConfiguration {
@@ -56,15 +53,8 @@ struct DashboardView: View {
         viewModel.pastures(filteredBy: pastureFilter)
     }
 
-    private var activeSession: WorkingSession? {
-        guard let summary = viewModel.snapshot?.activeSession else { return nil }
-
-        return workingSessions.first { session in
-            session.status == .active
-                && session.protocolName == summary.protocolName
-                && session.date == summary.date
-                && session.sourcePasture?.name == summary.sourcePastureName
-        }
+    private var activeSessionSummary: DashboardWorkingSessionSummary? {
+        viewModel.snapshot?.activeSession
     }
 
     var body: some View {
@@ -82,12 +72,8 @@ struct DashboardView: View {
             Section("Active Work") {
                 if viewModel.snapshot == nil {
                     ProgressView()
-                } else if let session = activeSession {
-                    NavigationLink {
-                        WorkingSessionDetailView(session: session)
-                    } label: {
-                        WorkingSessionSummaryCard(session: session)
-                    }
+                } else if let session = activeSessionSummary {
+                    activeSessionCard(session)
                 } else {
                     Button {
                         viewModel.isPresentingNewWorkingSession = true
@@ -249,6 +235,33 @@ struct DashboardView: View {
                 destination: .pastureList
             )
         ]
+    }
+
+
+    @ViewBuilder
+    private func activeSessionCard(_ session: DashboardWorkingSessionSummary) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "wrench.and.screwdriver")
+                    .foregroundStyle(.tint)
+                Text(session.protocolName)
+                    .font(.headline)
+                Spacer()
+                Text("In progress")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let sourcePastureName = session.sourcePastureName, !sourcePastureName.isEmpty {
+                Text("Source pasture: \(sourcePastureName)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(session.date.formatted(date: .abbreviated, time: .shortened))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var addAnimalBinding: Binding<Bool> {

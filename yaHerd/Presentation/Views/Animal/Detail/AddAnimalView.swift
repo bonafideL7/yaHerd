@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct AddAnimalView: View {
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
     @Environment(\.dismiss) private var dismiss
 
     @State private var form = AnimalFormViewModel()
@@ -17,8 +17,8 @@ struct AddAnimalView: View {
     @State private var showingAddTag = false
     @State private var pendingTags: [AnimalTagSnapshot] = []
 
-    private var repository: SwiftDataAnimalRepository {
-        SwiftDataAnimalRepository(context: context)
+    private var repository: any AnimalRepository {
+        dependencies.animalRepository
     }
 
     var body: some View {

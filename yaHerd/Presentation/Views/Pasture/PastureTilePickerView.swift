@@ -7,26 +7,25 @@
 
 
 import SwiftUI
-import SwiftData
-import LucideIcons
 
 struct PastureTilePickerView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var dependencies: AppDependencies
 
     /// Called when user selects a pasture
-    let onSelect: (Pasture) -> Void
+    let onSelect: (PastureSummary) -> Void
 
     /// Raw storage for recent pasture names (pipe-delimited)
     @AppStorage("recentPastureNames") private var recentPastureNamesRaw: String = ""
 
-    @Query(sort: \Pasture.name) private var pastures: [Pasture]
+    @State private var pastures: [PastureSummary] = []
 
     // Parsed recent names from storage
     private var recentNames: [String] {
         recentPastureNamesRaw.split(separator: "|").map(String.init)
     }
 
-    private var recentPastures: [Pasture] {
+    private var recentPastures: [PastureSummary] {
         let nameSet = Set(recentNames)
         return pastures.filter { nameSet.contains($0.name) }
     }
@@ -36,7 +35,6 @@ struct PastureTilePickerView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
 
-                    // QUICK ACTIONS
                     if !recentPastures.isEmpty {
                         Text("Recent")
                             .font(.title3.bold())
@@ -54,7 +52,6 @@ struct PastureTilePickerView: View {
                         }
                     }
 
-                    // ALL PASTURES GRID
                     Text("All Pastures")
                         .font(.title3.bold())
                         .padding(.horizontal)
@@ -74,6 +71,7 @@ struct PastureTilePickerView: View {
                 .padding(.top)
             }
             .navigationTitle("Choose Pasture")
+            .task { load() }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -82,8 +80,15 @@ struct PastureTilePickerView: View {
         }
     }
 
-    // MARK: - Selection + recents
-    private func selectPasture(_ pasture: Pasture) {
+    private func load() {
+        do {
+            pastures = try dependencies.pastureRepository.fetchPastures()
+        } catch {
+            pastures = []
+        }
+    }
+
+    private func selectPasture(_ pasture: PastureSummary) {
         let name = pasture.name
 
         var names = recentNames
@@ -93,11 +98,9 @@ struct PastureTilePickerView: View {
             names = Array(names.prefix(4))
         }
 
-        // Write back to AppStorage
         recentPastureNamesRaw = names.joined(separator: "|")
 
         onSelect(pasture)
         dismiss()
     }
 }
-

@@ -1,16 +1,18 @@
-//
-//  WorkingQueueView.swift
-//  yaHerd
-//
-
 import SwiftUI
-import SwiftData
 
 struct WorkingQueueView: View {
-    @Bindable var session: WorkingSession
+    @EnvironmentObject private var dependencies: AppDependencies
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+    @StateObject private var viewModel: WorkingSessionDetailViewModel
+    private let sessionID: UUID
 
-    private var orderedItems: [WorkingQueueItem] {
-        session.queueItems.sorted { $0.queueOrder < $1.queueOrder }
+    init(sessionID: UUID) {
+        self.sessionID = sessionID
+        _viewModel = StateObject(wrappedValue: WorkingSessionDetailViewModel(sessionID: sessionID, repository: EmptyWorkingRepository()))
+    }
+
+    private var orderedItems: [WorkingQueueItemSnapshot] {
+        viewModel.session?.queueItems.sorted { $0.queueOrder < $1.queueOrder } ?? []
     }
 
     var body: some View {
@@ -18,7 +20,7 @@ struct WorkingQueueView: View {
             Section {
                 ForEach(orderedItems) { item in
                     NavigationLink {
-                        WorkingChuteView(session: session, queueItem: item)
+                        WorkingChuteView(sessionID: sessionID, queueItemID: item.id)
                     } label: {
                         WorkingQueueRow(item: item)
                     }
@@ -27,14 +29,16 @@ struct WorkingQueueView: View {
         }
         .navigationTitle("Queue")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            viewModel.configure(repository: dependencies.workingRepository)
+            viewModel.load()
+        }
     }
 }
 
 private struct WorkingQueueRow: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-    let item: WorkingQueueItem
-
-    private var animal: Animal? { item.animal }
+    let item: WorkingQueueItemSnapshot
 
     private var statusIcon: String {
         switch item.status {
@@ -50,15 +54,15 @@ private struct WorkingQueueRow: View {
             Image(systemName: statusIcon)
                 .foregroundStyle(item.status == .done ? .green : item.status == .skipped ? .orange : .secondary)
 
-            if let animal {
-                let def = tagColorLibrary.resolvedDefinition(for: animal)
+            if let tagNumber = item.animalDisplayTagNumber {
+                let def = tagColorLibrary.resolvedDefinition(tagColorID: item.animalDisplayTagColorID)
                 VStack(alignment: .leading, spacing: 6) {
                     AnimalTagView(
-                        tagNumber: animal.tagNumber,
+                        tagNumber: tagNumber,
                         color: def.color,
                         colorName: def.name
                     )
-                    Text((animal.sex ?? .female).label)
+                    Text(item.animalSex.label)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

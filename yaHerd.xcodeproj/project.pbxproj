@@ -10,14 +10,30 @@
 		8DF60AAE2EDD278F00AF766C /* LucideIcons in Frameworks */ = {isa = PBXBuildFile; productRef = 8DF60AAD2EDD278F00AF766C /* LucideIcons */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		A1B2C3D42F0011110000000A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8D40A2822EDAA29E00C89DD2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8D40A2892EDAA29E00C89DD2;
+			remoteInfo = yaHerd;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		8D40A28A2EDAA29E00C89DD2 /* yaHerd.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = yaHerd.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D42F00111100000001 /* yaHerdTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = yaHerdTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		8D40A28C2EDAA29E00C89DD2 /* yaHerd */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = yaHerd;
+			sourceTree = "<group>";
+		};
+		A1B2C3D42F00111100000002 /* yaHerdTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = yaHerdTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -31,6 +47,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1B2C3D42F00111100000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -38,6 +61,7 @@
 			isa = PBXGroup;
 			children = (
 				8D40A28C2EDAA29E00C89DD2 /* yaHerd */,
+				A1B2C3D42F00111100000002 /* yaHerdTests */,
 				8D40A28B2EDAA29E00C89DD2 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,6 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				8D40A28A2EDAA29E00C89DD2 /* yaHerd.app */,
+				A1B2C3D42F00111100000001 /* yaHerdTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -75,6 +100,29 @@
 			productName = yaHerd;
 			productReference = 8D40A28A2EDAA29E00C89DD2 /* yaHerd.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A1B2C3D42F00111100000006 /* yaHerdTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D42F00111100000007 /* Build configuration list for PBXNativeTarget "yaHerdTests" */;
+			buildPhases = (
+				A1B2C3D42F00111100000004 /* Sources */,
+				A1B2C3D42F00111100000003 /* Frameworks */,
+				A1B2C3D42F00111100000005 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1B2C3D42F0011110000000B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A1B2C3D42F00111100000002 /* yaHerdTests */,
+			);
+			name = yaHerdTests;
+			packageProductDependencies = (
+			);
+			productName = yaHerdTests;
+			productReference = A1B2C3D42F00111100000001 /* yaHerdTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -109,12 +157,20 @@
 			projectRoot = "";
 			targets = (
 				8D40A2892EDAA29E00C89DD2 /* yaHerd */,
+				A1B2C3D42F00111100000006 /* yaHerdTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		8D40A2882EDAA29E00C89DD2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3D42F00111100000005 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -131,7 +187,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1B2C3D42F00111100000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A1B2C3D42F0011110000000B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8D40A2892EDAA29E00C89DD2 /* yaHerd */;
+			targetProxy = A1B2C3D42F0011110000000A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		8D40A2952EDAA2A200C89DD2 /* Debug */ = {
@@ -317,6 +388,52 @@
 			};
 			name = Release;
 		};
+		A1B2C3D42F00111100000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ltd.yaherdTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/yaHerd.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/yaHerd";
+			};
+			name = Debug;
+		};
+		A1B2C3D42F00111100000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ltd.yaherdTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/yaHerd.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/yaHerd";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -334,6 +451,15 @@
 			buildConfigurations = (
 				8D40A2982EDAA2A200C89DD2 /* Debug */,
 				8D40A2992EDAA2A200C89DD2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B2C3D42F00111100000007 /* Build configuration list for PBXNativeTarget "yaHerdTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D42F00111100000008 /* Debug */,
+				A1B2C3D42F00111100000009 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

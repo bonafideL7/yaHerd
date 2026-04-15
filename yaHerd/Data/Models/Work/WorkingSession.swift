@@ -10,6 +10,7 @@ import Foundation
 /// for a collected lot of animals.
 @Model
 final class WorkingSession {
+    @Attribute(.unique) var publicID: UUID
     var date: Date
     var status: WorkingSessionStatus
 
@@ -31,6 +32,7 @@ final class WorkingSession {
     var queueItems: [WorkingQueueItem] = []
 
     init(
+        publicID: UUID = UUID(),
         date: Date = .now,
         status: WorkingSessionStatus = .active,
         sourcePasture: Pasture? = nil,
@@ -38,6 +40,7 @@ final class WorkingSession {
         protocolItems: [WorkingProtocolItem],
         notes: String? = nil
     ) {
+        self.publicID = publicID
         self.date = date
         self.status = status
         self.sourcePasture = sourcePasture

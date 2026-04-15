@@ -4,11 +4,10 @@
 //
 
 import SwiftUI
-import SwiftData
 
 struct ProtocolTemplatesView: View {
-    @Environment(\.modelContext) private var context
-    @Query(sort: \WorkingProtocolTemplate.name) private var templates: [WorkingProtocolTemplate]
+    @EnvironmentObject private var dependencies: AppDependencies
+    @StateObject private var viewModel = WorkingProtocolTemplatesViewModel(repository: EmptyWorkingRepository())
 
     @State private var showingAdd = false
     @State private var errorMessage: String?
@@ -16,21 +15,21 @@ struct ProtocolTemplatesView: View {
 
     var body: some View {
         List {
-            if templates.isEmpty {
+            if viewModel.templates.isEmpty {
                 ContentUnavailableView(
                     "No protocols",
                     systemImage: "list.bullet",
                     description: Text("Add a protocol template to reuse your predetermined shots.")
                 )
             } else {
-                ForEach(templates) { template in
+                ForEach(viewModel.templates) { template in
                     NavigationLink {
-                        ProtocolTemplateDetailView(template: template)
+                        ProtocolTemplateDetailView(templateID: template.id)
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(template.name)
                                 .font(.headline)
-                            Text("\(template.items.count) items")
+                            Text("\(template.itemCount) items")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -49,10 +48,22 @@ struct ProtocolTemplatesView: View {
                 }
             }
         }
+        .task {
+            viewModel.configure(repository: dependencies.workingRepository)
+            viewModel.load()
+        }
+        .onChange(of: showingAdd) { _, isPresented in
+            if !isPresented {
+                viewModel.load()
+            }
+        }
         .alert("Can’t Save", isPresented: $showingError) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(errorMessage ?? "")
+            Text(errorMessage ?? viewModel.errorMessage ?? "")
+        }
+        .onChange(of: viewModel.errorMessage) { _, newValue in
+            if newValue != nil { showingError = true }
         }
         .sheet(isPresented: $showingAdd) {
             ProtocolTemplateAddView()
@@ -61,9 +72,9 @@ struct ProtocolTemplatesView: View {
 
     private func delete(at offsets: IndexSet) {
         do {
-            let repository = SwiftDataWorkingRepository(context: context)
-            let useCase = DeleteWorkingProtocolTemplatesUseCase(repository: repository)
-            try useCase.execute(offsets.map { templates[$0] })
+            let useCase = DeleteWorkingProtocolTemplatesUseCase(repository: dependencies.workingRepository)
+            try useCase.execute(offsets.map { viewModel.templates[$0].id })
+            viewModel.load()
         } catch {
             errorMessage = error.localizedDescription
             showingError = true
@@ -73,7 +84,7 @@ struct ProtocolTemplatesView: View {
 
 private struct ProtocolTemplateAddView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
 
     @State private var name: String = ""
     @State private var items: [WorkingProtocolItem] = [WorkingProtocolItem(name: "")]
@@ -134,8 +145,7 @@ private struct ProtocolTemplateAddView: View {
         guard !cleaned.isEmpty else { return }
 
         do {
-            let repository = SwiftDataWorkingRepository(context: context)
-            let useCase = CreateWorkingProtocolTemplateUseCase(repository: repository)
+            let useCase = CreateWorkingProtocolTemplateUseCase(repository: dependencies.workingRepository)
             _ = try useCase.execute(name: trimmed, items: cleaned)
             dismiss()
         } catch {
@@ -146,14 +156,18 @@ private struct ProtocolTemplateAddView: View {
 }
 
 private struct ProtocolTemplateDetailView: View {
-    @Environment(\.modelContext) private var context
+    @EnvironmentObject private var dependencies: AppDependencies
     @Environment(\.dismiss) private var dismiss
-    @Bindable var template: WorkingProtocolTemplate
+    @StateObject private var viewModel: WorkingProtocolTemplateDetailViewModel
 
     @State private var nameDraft: String = ""
     @State private var items: [WorkingProtocolItem] = []
     @State private var errorMessage: String?
     @State private var showingError = false
+
+    init(templateID: UUID) {
+        _viewModel = StateObject(wrappedValue: WorkingProtocolTemplateDetailViewModel(templateID: templateID, repository: EmptyWorkingRepository()))
+    }
 
     var body: some View {
         Form {
@@ -198,18 +212,29 @@ private struct ProtocolTemplateDetailView: View {
                 Button("Cancel") { dismiss() }
             }
         }
-        .onAppear {
-            nameDraft = template.name
-            items = template.items
+        .task {
+            viewModel.configure(repository: dependencies.workingRepository)
+            viewModel.load()
+            seedFromSnapshot()
+        }
+        .onChange(of: viewModel.template?.id) { _, _ in
+            seedFromSnapshot()
         }
         .alert("Can’t Save", isPresented: $showingError) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(errorMessage ?? "")
+            Text(errorMessage ?? viewModel.errorMessage ?? "")
         }
     }
 
+    private func seedFromSnapshot() {
+        guard let template = viewModel.template else { return }
+        nameDraft = template.name
+        items = template.items
+    }
+
     private func save() {
+        guard let template = viewModel.template else { return }
         let trimmedName = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
         let cleaned = items
@@ -218,9 +243,8 @@ private struct ProtocolTemplateDetailView: View {
         guard !cleaned.isEmpty else { return }
 
         do {
-            let repository = SwiftDataWorkingRepository(context: context)
-            let useCase = UpdateWorkingProtocolTemplateUseCase(repository: repository)
-            try useCase.execute(template: template, name: trimmedName, items: cleaned)
+            let useCase = UpdateWorkingProtocolTemplateUseCase(repository: dependencies.workingRepository)
+            try useCase.execute(templateID: template.id, name: trimmedName, items: cleaned)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

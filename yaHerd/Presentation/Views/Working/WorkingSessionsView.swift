@@ -4,26 +4,27 @@
 //
 
 import SwiftUI
-import SwiftData
 
 struct WorkingSessionsView: View {
-    @Environment(\.modelContext) private var context
-
-    @Query(sort: \WorkingSession.date, order: .reverse)
-    private var sessions: [WorkingSession]
+    @EnvironmentObject private var dependencies: AppDependencies
+    @StateObject private var viewModel: WorkingSessionsViewModel
 
     @State private var showingNewSession = false
-    @State private var sessionPendingDelete: WorkingSession?
+    @State private var sessionPendingDeleteID: UUID?
     @State private var showingDeleteAlert: Bool = false
     @State private var errorMessage: String?
     @State private var showingError = false
 
-    private var activeSessions: [WorkingSession] {
-        sessions.filter { $0.status == .active }
+    init() {
+        _viewModel = StateObject(wrappedValue: WorkingSessionsViewModel(repository: EmptyWorkingRepository()))
     }
 
-    private var finishedSessions: [WorkingSession] {
-        sessions.filter { $0.status != .active }
+    private var activeSessions: [WorkingSessionSummary] {
+        viewModel.sessions.filter { $0.status == .active }
+    }
+
+    private var finishedSessions: [WorkingSessionSummary] {
+        viewModel.sessions.filter { $0.status != .active }
     }
 
     var body: some View {
@@ -40,7 +41,7 @@ struct WorkingSessionsView: View {
                 Section("Active") {
                     ForEach(activeSessions) { session in
                         NavigationLink {
-                            WorkingSessionDetailView(session: session)
+                            WorkingSessionDetailView(sessionID: session.id)
                         } label: {
                             WorkingSessionRow(session: session)
                         }
@@ -55,7 +56,7 @@ struct WorkingSessionsView: View {
                 Section("History") {
                     ForEach(finishedSessions) { session in
                         NavigationLink {
-                            WorkingSessionDetailView(session: session)
+                            WorkingSessionDetailView(sessionID: session.id)
                         } label: {
                             WorkingSessionRow(session: session)
                         }
@@ -85,14 +86,23 @@ struct WorkingSessionsView: View {
                 .accessibilityLabel("Protocols")
             }
         }
+        .task {
+            viewModel.configure(repository: dependencies.workingRepository)
+            viewModel.load()
+        }
+        .onChange(of: showingNewSession) { _, isPresented in
+            if !isPresented {
+                viewModel.load()
+            }
+        }
         .sheet(isPresented: $showingNewSession) {
             NewWorkingSessionView()
         }
-        .alert("Delete working session?", isPresented: $showingDeleteAlert, presenting: sessionPendingDelete) { s in
-            Button("Delete", role: .destructive) { deleteSession(s) }
+        .alert("Delete working session?", isPresented: $showingDeleteAlert, presenting: pendingSession) { session in
+            Button("Delete", role: .destructive) { deleteSession(session) }
             Button("Cancel", role: .cancel) {}
-        } message: { s in
-            if s.status == .active {
+        } message: { session in
+            if session.status == .active {
                 Text("Deleting an active session will return any animals currently in the working pen back to the source/collected pasture and remove the session records.")
             } else {
                 Text("This will delete the session and its recorded work data.")
@@ -101,22 +111,29 @@ struct WorkingSessionsView: View {
         .alert("Can’t Save", isPresented: $showingError) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(errorMessage ?? "")
+            Text(errorMessage ?? viewModel.errorMessage ?? "")
+        }
+        .onChange(of: viewModel.errorMessage) { _, newValue in
+            if newValue != nil { showingError = true }
         }
     }
 
-    private func requestDelete(from list: [WorkingSession], offsets: IndexSet) {
-        // Only handle the first one for now (swipe-to-delete is typically single-row).
+    private var pendingSession: WorkingSessionSummary? {
+        guard let sessionPendingDeleteID else { return nil }
+        return viewModel.sessions.first(where: { $0.id == sessionPendingDeleteID })
+    }
+
+    private func requestDelete(from list: [WorkingSessionSummary], offsets: IndexSet) {
         guard let idx = offsets.first, idx < list.count else { return }
-        sessionPendingDelete = list[idx]
+        sessionPendingDeleteID = list[idx].id
         showingDeleteAlert = true
     }
 
-    private func deleteSession(_ session: WorkingSession) {
+    private func deleteSession(_ session: WorkingSessionSummary) {
         do {
-            let repository = SwiftDataWorkingRepository(context: context)
-            let useCase = DeleteWorkingSessionUseCase(repository: repository)
-            try useCase.execute(session: session)
+            let useCase = DeleteWorkingSessionUseCase(repository: dependencies.workingRepository)
+            try useCase.execute(sessionID: session.id)
+            viewModel.load()
         } catch {
             errorMessage = error.localizedDescription
             showingError = true
@@ -125,10 +142,7 @@ struct WorkingSessionsView: View {
 }
 
 private struct WorkingSessionRow: View {
-    let session: WorkingSession
-
-    private var total: Int { session.queueItems.count }
-    private var done: Int { session.queueItems.filter { $0.status == .done }.count }
+    let session: WorkingSessionSummary
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -145,14 +159,14 @@ private struct WorkingSessionRow: View {
                 Text(session.date.formatted(date: .abbreviated, time: .shortened))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if let source = session.sourcePasture?.name {
+                if let source = session.sourcePastureName {
                     Text("• \(source)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                if total > 0 {
-                    Text("\(done)/\(total)")
+                if session.totalQueueItems > 0 {
+                    Text("\(session.completedQueueItems)/\(session.totalQueueItems)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -160,3 +174,4 @@ private struct WorkingSessionRow: View {
         }
     }
 }
+
