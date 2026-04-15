@@ -3,15 +3,17 @@
 //
 
 import SwiftUI
+
 #Preview {
     AnimalListView()
         .preferredColorScheme(.dark)
 }
+
 struct AnimalListView: View {
     @EnvironmentObject private var dependencies: AppDependencies
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.colorScheme) private var colorScheme
-    
+
     @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
 
     @State private var viewModel = AnimalListViewModel()
@@ -28,8 +30,45 @@ struct AnimalListView: View {
     @State private var selectedAnimalIDs: Set<UUID> = []
     @State private var showingPasturePicker = false
 
-    private var repository: any AnimalRepository {
-        dependencies.animalRepository
+    private var repository: any AnimalRepository { dependencies.animalRepository }
+
+    private var filteredAndSortedAnimals: [AnimalSummary] {
+        AnimalListDerivations.filteredAndSortedAnimals(
+            items: viewModel.items,
+            searchText: searchText,
+            sortOrder: sortOrder,
+            filter: filter,
+            showRemovedStatuses: showRemovedStatuses,
+            showArchivedRecords: showArchivedRecords
+        ) { tagNumber, colorID in
+            tagColorLibrary.formattedTag(tagNumber: tagNumber, colorID: colorID)
+        }
+    }
+
+    private var groupedAnimals: [AnimalSection] {
+        AnimalListDerivations.groupedAnimals(filteredAndSortedAnimals, sortOrder: sortOrder)
+    }
+
+    private var shouldUseSections: Bool {
+        AnimalListDerivations.shouldUseSections(for: sortOrder)
+    }
+
+    private var emptyStateConfiguration: AnimalListEmptyStateConfiguration {
+        AnimalListDerivations.emptyStateConfiguration(
+            items: viewModel.items,
+            searchText: searchText,
+            filter: filter,
+            showRemovedStatuses: showRemovedStatuses,
+            showArchivedRecords: showArchivedRecords
+        )
+    }
+
+    private var hasHiddenOffHerdAnimals: Bool {
+        AnimalListDerivations.hasHiddenOffHerdAnimals(items: viewModel.items)
+    }
+
+    private var hasHiddenArchivedRecords: Bool {
+        AnimalListDerivations.hasHiddenArchivedRecords(items: viewModel.items)
     }
 
     var body: some View {
@@ -42,9 +81,7 @@ struct AnimalListView: View {
         }
         .navigationTitle("YaHerd")
         .navigationBarTitleDisplayMode(.large)
-        .navigationDestination(for: UUID.self) { animalID in
-            AnimalDetailView(animalID: animalID)
-        }
+        .navigationDestination(for: UUID.self) { AnimalDetailView(animalID: $0) }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button(batchMode ? "Done" : "Select") {
@@ -58,20 +95,14 @@ struct AnimalListView: View {
             }
 
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    showingAdd = true
-                } label: {
+                Button { showingAdd = true } label: {
                     Image(systemName: "plus")
                 }
                 .accessibilityLabel("Add Animal")
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            bottomOverlay
-        }
-        .sheet(isPresented: $showingAdd, onDismiss: reload) {
-            AddAnimalView()
-        }
+        .safeAreaInset(edge: .bottom, spacing: 0) { bottomOverlay }
+        .sheet(isPresented: $showingAdd, onDismiss: reload) { AddAnimalView() }
         .sheet(isPresented: $showingFilters) {
             AnimalFilterView(
                 filter: $filter,
@@ -82,11 +113,7 @@ struct AnimalListView: View {
         }
         .sheet(isPresented: $showingPasturePicker) {
             PastureTilePickerView { pasture in
-                viewModel.move(
-                    ids: Array(selectedAnimalIDs),
-                    toPastureID: pasture.id,
-                    using: repository
-                )
+                viewModel.move(ids: Array(selectedAnimalIDs), toPastureID: pasture.id, using: repository)
                 selectedAnimalIDs.removeAll()
                 batchMode = false
             }
@@ -97,88 +124,37 @@ struct AnimalListView: View {
         .animation(.snappy, value: currentFilterChips.count)
     }
 
-    private func reload() {
-        viewModel.load(using: repository)
-    }
-
     private var herdList: some View {
-        List(selection: batchMode ? $selectedAnimalIDs : nil) {
-            ForEach(groupedAnimals) { section in
-                if shouldUseSections {
-                    Section(section.title) {
-                        sectionRows(section.animals)
-                    }
-                } else {
-                    sectionRows(section.animals)
-                }
-            }
-        }
-        .environment(\.editMode, .constant(batchMode ? .active : .inactive))
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.automatic)
+        AnimalListContentList(
+            groupedAnimals: groupedAnimals,
+            shouldUseSections: shouldUseSections,
+            batchMode: batchMode,
+            selectedAnimalIDs: $selectedAnimalIDs,
+            hardDeleteOnSwipe: hardDeleteOnSwipe,
+            onPrimarySwipeAction: performPrimarySwipeAction,
+            onRestoreArchivedRecord: restoreArchivedRecord
+        )
     }
 
-    @ViewBuilder
-    private func sectionRows(_ animals: [AnimalSummary]) -> some View {
-        ForEach(animals) { animal in
-            if batchMode {
-                animalRow(animal)
-                    .tag(animal.id)
-                    .listRowBackground(batchRowBackground(for: animal))
-                    .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
-                    .alignmentGuide(.listRowSeparatorTrailing) { dimensions in
-                        dimensions.width
-                    }
-            } else {
-                NavigationLink(value: animal.id) {
-                    animalRow(animal)
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    if animal.isArchived || hardDeleteOnSwipe {
-                        Button(role: .destructive) {
-                            performPrimarySwipeAction(for: animal)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    } else {
-                        Button {
-                            performPrimarySwipeAction(for: animal)
-                        } label: {
-                            Label("Archive", systemImage: "archivebox")
-                        }
-                        .tint(.orange)
-                    }
-                }
-                .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                    if animal.isArchived {
-                        Button {
-                            restoreArchivedRecord(animal)
-                        } label: {
-                            Label("Restore", systemImage: "arrow.uturn.backward")
-                        }
-                        .tint(.blue)
-                    }
-                }
-                .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
-                .alignmentGuide(.listRowSeparatorTrailing) { dimensions in
-                    dimensions.width
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func animalRow(_ animal: AnimalSummary) -> some View {
-        AnimalListRowContent(animal: animal)
-    }
-
-    @ViewBuilder
-    private func batchRowBackground(for animal: AnimalSummary) -> some View {
-        if selectedAnimalIDs.contains(animal.id) {
-            Color.accentColor.opacity(0.14)
-        } else {
-            Color.clear
-        }
+    private var emptyStateView: some View {
+        AnimalListEmptyStateView(
+            configuration: emptyStateConfiguration,
+            hasItems: !viewModel.items.isEmpty,
+            filtersAreActive: filter.isActive || showRemovedStatuses || showArchivedRecords,
+            hasHiddenOffHerdAnimals: hasHiddenOffHerdAnimals,
+            hasHiddenArchivedRecords: hasHiddenArchivedRecords,
+            showRemovedStatuses: showRemovedStatuses,
+            showArchivedRecords: showArchivedRecords,
+            colorScheme: colorScheme,
+            onAddAnimal: { showingAdd = true },
+            onAddSampleData: {
+                dependencies.seedSampleDataIfNeeded()
+                reload()
+            },
+            onClearFilters: clearAllFilters,
+            onShowInactive: { showRemovedStatuses = true },
+            onShowArchivedRecords: { showArchivedRecords = true }
+        )
     }
 
     private var bottomOverlay: some View {
@@ -221,63 +197,32 @@ struct AnimalListView: View {
     }
 
     private var allVisibleAnimalsSelected: Bool {
-        !filteredAndSortedAnimals.isEmpty &&
-        selectedAnimalIDs.count == filteredAndSortedAnimals.count &&
-        Set(filteredAndSortedAnimals.map(\.id)).isSubset(of: selectedAnimalIDs)
+        !filteredAndSortedAnimals.isEmpty
+        && selectedAnimalIDs.count == filteredAndSortedAnimals.count
+        && Set(filteredAndSortedAnimals.map(\.id)).isSubset(of: selectedAnimalIDs)
     }
-
-    private func toggleSelectAllVisible() {
-        let visible = Set(filteredAndSortedAnimals.map(\.id))
-
-        if visible.isSubset(of: selectedAnimalIDs) {
-            selectedAnimalIDs.subtract(visible)
-        } else {
-            selectedAnimalIDs.formUnion(visible)
-        }
-    }
-
 
     private var currentFilterChips: [AnimalListFilterChip] {
         var chips: [AnimalListFilterChip] = []
 
         if showRemovedStatuses {
-            chips.append(
-                AnimalListFilterChip(title: "Off-Herd Visible") {
-                    showRemovedStatuses = false
-                }
-            )
+            chips.append(.init(title: "Off-Herd Visible") { showRemovedStatuses = false })
         }
 
         if showArchivedRecords {
-            chips.append(
-                AnimalListFilterChip(title: "Archived Visible") {
-                    showArchivedRecords = false
-                }
-            )
+            chips.append(.init(title: "Archived Visible") { showArchivedRecords = false })
         }
 
         if let sex = filter.sex {
-            chips.append(
-                AnimalListFilterChip(title: sex.label) {
-                    filter.sex = nil
-                }
-            )
+            chips.append(.init(title: sex.label) { filter.sex = nil })
         }
 
         if let status = filter.status {
-            chips.append(
-                AnimalListFilterChip(title: status.label) {
-                    filter.status = nil
-                }
-            )
+            chips.append(.init(title: status.label) { filter.status = nil })
         }
 
         if let pastureName = viewModel.pastureName(for: filter.pastureID) {
-            chips.append(
-                AnimalListFilterChip(title: pastureName) {
-                    filter.pastureID = nil
-                }
-            )
+            chips.append(.init(title: pastureName) { filter.pastureID = nil })
         }
 
         return chips
@@ -288,6 +233,20 @@ struct AnimalListView: View {
         || filter.isActive
         || showRemovedStatuses
         || showArchivedRecords
+    }
+
+    private func reload() {
+        viewModel.load(using: repository)
+    }
+
+    private func toggleSelectAllVisible() {
+        let visible = Set(filteredAndSortedAnimals.map(\.id))
+
+        if visible.isSubset(of: selectedAnimalIDs) {
+            selectedAnimalIDs.subtract(visible)
+        } else {
+            selectedAnimalIDs.formUnion(visible)
+        }
     }
 
     private func clearAllCriteria() {
@@ -301,213 +260,6 @@ struct AnimalListView: View {
         showArchivedRecords = false
     }
 
-    private var hasHiddenOffHerdAnimals: Bool {
-        viewModel.items.contains(where: { $0.status != .active && !$0.isArchived })
-    }
-
-    private var hasHiddenArchivedRecords: Bool {
-        viewModel.items.contains(where: \.isArchived)
-    }
-
-    private var emptyStateView: some View {
-        ContentUnavailableView {
-            Label(emptyStateTitle, systemImage: emptyStateSystemImage)
-        } description: {
-            Text(emptyStateDescription)
-        } actions: {
-            if viewModel.items.isEmpty {
-                Button("Add Animal") {
-                    showingAdd = true
-                }
-                .buttonStyle(.borderedProminent)
-                .foregroundStyle(colorScheme == .dark ? .black : .white)
-                Button("Add Sample Data") {
-                    dependencies.seedSampleDataIfNeeded()
-                    reload()
-                }
-                .buttonStyle(.bordered)
-            } else {
-                if filter.isActive || showRemovedStatuses || showArchivedRecords {
-                    Button("Clear Filters") {
-                        clearAllFilters()
-                    }
-                }
-
-                if !showRemovedStatuses && hasHiddenOffHerdAnimals {
-                    Button("Show Inactive") {
-                        showRemovedStatuses = true
-                    }
-                }
-
-                if !showArchivedRecords && hasHiddenArchivedRecords {
-                    Button("Show Archived Records") {
-                        showArchivedRecords = true
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var emptyStateTitle: String {
-        if viewModel.items.isEmpty {
-            return "No Animals Yet"
-        }
-
-        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "No Matches"
-        }
-
-        if filter.isActive {
-            return "No Animals Match These Filters"
-        }
-
-        if !showArchivedRecords && hasHiddenArchivedRecords && !showRemovedStatuses && !hasHiddenOffHerdAnimals {
-            return "Archived Records Hidden"
-        }
-
-        if !showRemovedStatuses {
-            return "No Active Animals"
-        }
-
-        if !showArchivedRecords && hasHiddenArchivedRecords {
-            return "Archived Records Hidden"
-        }
-
-        return "Nothing to Show"
-    }
-
-    private var emptyStateDescription: String {
-        if viewModel.items.isEmpty {
-            return "Add your first animal to start building the herd."
-        }
-
-        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "Try a different search or clear your text."
-        }
-
-        if filter.isActive {
-            return "Adjust or clear the current filters to see more animals."
-        }
-
-        if !showArchivedRecords && hasHiddenArchivedRecords && !showRemovedStatuses && !hasHiddenOffHerdAnimals {
-            return "Archived records are currently hidden."
-        }
-
-        if !showRemovedStatuses {
-            return "Off-herd animals are currently hidden."
-        }
-
-        if !showArchivedRecords && hasHiddenArchivedRecords {
-            return "Archived records are currently hidden."
-        }
-
-        return "Try changing the current filters or sort."
-    }
-
-    private var emptyStateSystemImage: String {
-        if viewModel.items.isEmpty {
-            return "pawprint"
-        }
-
-        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "magnifyingglass"
-        }
-
-        if filter.isActive {
-            return "line.3.horizontal.decrease.circle"
-        }
-
-        if !showArchivedRecords && hasHiddenArchivedRecords && !showRemovedStatuses && !hasHiddenOffHerdAnimals {
-            return "archivebox"
-        }
-
-        if !showRemovedStatuses {
-            return "person.3.sequence.fill"
-        }
-
-        if !showArchivedRecords && hasHiddenArchivedRecords {
-            return "archivebox"
-        }
-
-        return "tray"
-    }
-
-    private struct AnimalSection: Identifiable {
-        let id: String
-        let title: String
-        let animals: [AnimalSummary]
-    }
-
-    private var shouldUseSections: Bool {
-        switch sortOrder {
-        case .sex, .status, .pasture:
-            return true
-        default:
-            return false
-        }
-    }
-
-    private var groupedAnimals: [AnimalSection] {
-        switch sortOrder {
-        case .sex:
-            let grouped = Dictionary(grouping: filteredAndSortedAnimals) { animal in
-                animal.sex.label
-            }
-
-            return grouped
-                .map { key, value in
-                    AnimalSection(
-                        id: "sex-\(key)",
-                        title: key,
-                        animals: value
-                    )
-                }
-                .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-
-        case .status:
-            let grouped = Dictionary(grouping: filteredAndSortedAnimals) { animal in
-                animal.status.label
-            }
-
-            return grouped
-                .map { key, value in
-                    AnimalSection(
-                        id: "status-\(key)",
-                        title: key,
-                        animals: value
-                    )
-                }
-                .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-
-        case .pasture:
-            let grouped = Dictionary(grouping: filteredAndSortedAnimals) { animal in
-                pastureSectionTitle(for: animal)
-            }
-
-            return grouped
-                .map { key, value in
-                    AnimalSection(
-                        id: "pasture-\(key)",
-                        title: key,
-                        animals: value
-                    )
-                }
-                .sorted { lhs, rhs in
-                    pastureSectionSortKey(for: lhs.title) < pastureSectionSortKey(for: rhs.title)
-                }
-
-        default:
-            return [
-                AnimalSection(
-                    id: "all",
-                    title: "Animals",
-                    animals: filteredAndSortedAnimals
-                )
-            ]
-        }
-    }
-
     private func performPrimarySwipeAction(for animal: AnimalSummary) {
         viewModel.performPrimarySwipeAction(
             animalID: animal.id,
@@ -518,105 +270,5 @@ struct AnimalListView: View {
 
     private func restoreArchivedRecord(_ animal: AnimalSummary) {
         viewModel.restore(animalID: animal.id, using: repository)
-    }
-
-    private var filteredAndSortedAnimals: [AnimalSummary] {
-        var result = viewModel.items
-
-        if !showRemovedStatuses {
-            result = result.filter { $0.status == .active }
-        }
-
-        if !showArchivedRecords {
-            result = result.filter { !$0.isArchived }
-        }
-
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !query.isEmpty {
-            result = result.filter {
-                $0.displayTagNumber.localizedCaseInsensitiveContains(query)
-                || tagColorLibrary.formattedTag(tagNumber: $0.displayTagNumber, colorID: $0.displayTagColorID).localizedCaseInsensitiveContains(query)
-                || $0.name.localizedCaseInsensitiveContains(query)
-            }
-        }
-
-        if let selectedSex = filter.sex {
-            result = result.filter { $0.sex == selectedSex }
-        }
-
-        if let selectedStatus = filter.status {
-            result = result.filter { $0.status == selectedStatus }
-        }
-
-        if let selectedPastureID = filter.pastureID {
-            result = result.filter { $0.pastureID == selectedPastureID }
-        }
-
-        switch sortOrder {
-        case .tagAscending:
-            result.sort { $0.displayTagNumber.localizedStandardCompare($1.displayTagNumber) == .orderedAscending }
-        case .tagDescending:
-            result.sort { $0.displayTagNumber.localizedStandardCompare($1.displayTagNumber) == .orderedDescending }
-        case .birthDateNewest:
-            result.sort { $0.birthDate > $1.birthDate }
-        case .birthDateOldest:
-            result.sort { $0.birthDate < $1.birthDate }
-        case .sex:
-            result.sort { lhs, rhs in
-                if lhs.sex.rawValue != rhs.sex.rawValue {
-                    return lhs.sex.rawValue < rhs.sex.rawValue
-                }
-
-                return lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
-            }
-        case .status:
-            result.sort { lhs, rhs in
-                if lhs.status.rawValue != rhs.status.rawValue {
-                    return lhs.status.rawValue < rhs.status.rawValue
-                }
-
-                return lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
-            }
-        case .pasture:
-            result.sort { lhs, rhs in
-                let lhsKey = pastureSortKey(for: lhs)
-                let rhsKey = pastureSortKey(for: rhs)
-
-                if lhsKey != rhsKey {
-                    return lhsKey < rhsKey
-                }
-
-                return lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
-            }
-        }
-
-        return result
-    }
-
-    private func pastureSectionTitle(for animal: AnimalSummary) -> String {
-        if animal.location == .workingPen {
-            return "Working Pen"
-        }
-
-        if let pastureName = animal.pastureName, !pastureName.isEmpty {
-            return pastureName
-        }
-
-        return "No Pasture"
-    }
-
-    private func pastureSectionSortKey(for title: String) -> String {
-        switch title {
-        case "Working Pen":
-            return "0-working-pen"
-        case "No Pasture":
-            return "2-no-pasture"
-        default:
-            return "1-\(title.lowercased())"
-        }
-    }
-
-    private func pastureSortKey(for animal: AnimalSummary) -> String {
-        pastureSectionSortKey(for: pastureSectionTitle(for: animal))
     }
 }
