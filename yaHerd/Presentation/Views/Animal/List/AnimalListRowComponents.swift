@@ -23,7 +23,7 @@ struct AnimalListRowContent: View {
                 if !animal.name.isEmpty {
                     AnimalListInfoPill(title: animal.name, systemImage: "")
                 } else {
-                    AnimalListInfoPill(title: animal.sex.label, systemImage: "")
+                    AnimalListInfoPill(title: animal.animalType.label, systemImage: "")
                 }
             }
 

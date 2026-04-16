@@ -6,6 +6,7 @@ struct AnimalDetailSnapshot: Identifiable, Hashable {
     let displayTagNumber: String
     let displayTagColorID: UUID?
     let sex: Sex
+    let animalType: AnimalType
     let birthDate: Date
     let status: AnimalStatus
     let pastureID: UUID?
@@ -36,6 +37,7 @@ struct AnimalDetailSnapshot: Identifiable, Hashable {
             displayTagNumber: displayTagNumber,
             displayTagColorID: displayTagColorID,
             sex: sex,
+            animalType: animalType,
             birthDate: birthDate,
             status: status,
             isArchived: isArchived,

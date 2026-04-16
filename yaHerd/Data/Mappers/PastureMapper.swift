@@ -31,6 +31,7 @@ enum PastureMapper {
             displayTagNumber: animal.displayTagNumber,
             displayTagColorID: animal.displayTagColorID,
             sex: animal.sex ?? .unknown,
+            animalType: animal.animalType,
             birthDate: animal.birthDate,
             status: animal.status,
             isArchived: animal.isArchived,

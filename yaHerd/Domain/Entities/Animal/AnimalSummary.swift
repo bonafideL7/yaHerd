@@ -6,6 +6,7 @@ struct AnimalSummary: Identifiable, Hashable {
     let displayTagNumber: String
     let displayTagColorID: UUID?
     let sex: Sex
+    let animalType: AnimalType
     let birthDate: Date
     let status: AnimalStatus
     let isArchived: Bool

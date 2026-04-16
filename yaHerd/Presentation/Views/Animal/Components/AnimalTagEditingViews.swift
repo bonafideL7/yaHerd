@@ -158,7 +158,7 @@ struct AnimalTagManagementSection: View {
                 } label: {
                     Label("Make Primary", systemImage: "star")
                 }
-                .tint(.yellow)
+                .tint(.blue)
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -223,7 +223,7 @@ struct PendingAnimalTagManagementSection: View {
                         } label: {
                             Label("Make Primary", systemImage: "star")
                         }
-                        .tint(.yellow)
+                        .tint(.blue)
                     }
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
