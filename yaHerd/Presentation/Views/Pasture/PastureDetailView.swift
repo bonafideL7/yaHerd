@@ -3,7 +3,7 @@ import SwiftUI
 struct PastureDetailView: View {
     @EnvironmentObject private var dependencies: AppDependencies
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-
+    @State private var isStockingExpanded = false
     @State private var model = PastureDetailViewModel()
 
     private let pastureID: UUID
@@ -105,8 +105,8 @@ struct PastureDetailView: View {
     @ViewBuilder
     private func stockingSection(_ detail: PastureDetailSnapshot) -> some View {
         let metrics = detail.metrics
-
-        Section("Stocking") {
+        
+        DisclosureGroup("Stocking", isExpanded: $isStockingExpanded) {
             if model.isEditing {
                 HStack {
                     Text("Usable Acres")
