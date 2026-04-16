@@ -9,15 +9,17 @@ import Foundation
 
 struct AnimalFilter {
     var sex: Sex? = nil
+    var animalType: AnimalType? = nil
     var status: AnimalStatus? = nil
     var pastureID: UUID? = nil
 
     var isActive: Bool {
-        sex != nil || status != nil || pastureID != nil
+        sex != nil || animalType != nil || status != nil || pastureID != nil
     }
 
     mutating func clear() {
         sex = nil
+        animalType = nil
         status = nil
         pastureID = nil
     }

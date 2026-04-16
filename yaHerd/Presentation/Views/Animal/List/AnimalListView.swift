@@ -217,6 +217,10 @@ struct AnimalListView: View {
             chips.append(.init(title: sex.label) { filter.sex = nil })
         }
 
+        if let animalType = filter.animalType {
+            chips.append(.init(title: animalType.label) { filter.animalType = nil })
+        }
+
         if let status = filter.status {
             chips.append(.init(title: status.label) { filter.status = nil })
         }

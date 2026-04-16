@@ -45,6 +45,10 @@ enum AnimalListDerivations {
             result = result.filter { $0.sex == selectedSex }
         }
 
+        if let selectedAnimalType = filter.animalType {
+            result = result.filter { $0.animalType == selectedAnimalType }
+        }
+
         if let selectedStatus = filter.status {
             result = result.filter { $0.status == selectedStatus }
         }

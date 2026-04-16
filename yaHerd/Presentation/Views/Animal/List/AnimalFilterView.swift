@@ -101,6 +101,20 @@ struct AnimalFilterView: View {
                     }
                 }
 
+                Section("Animal Type") {
+                    Picker("Animal Type", selection: Binding(
+                        get: { filter.animalType },
+                        set: { filter.animalType = $0 }
+                    )) {
+                        Text("Any").tag(AnimalType?.none)
+
+                        ForEach(AnimalType.allCases, id: \.self) { animalType in
+                            Text(animalType.label)
+                                .tag(AnimalType?.some(animalType))
+                        }
+                    }
+                }
+
                 Section("Pasture") {
                     Picker("Pasture", selection: Binding(
                         get: { filter.pastureID },
