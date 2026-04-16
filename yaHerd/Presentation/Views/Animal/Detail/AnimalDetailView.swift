@@ -95,13 +95,7 @@ struct AnimalDetailView: View {
                 saveButtonTitle: "Save",
                 showsPrimaryToggle: true
             ) { number, colorID, isPrimary in
-                viewModel.addTag(
-                    animalID: animalID,
-                    number: number,
-                    colorID: colorID,
-                    isPrimary: isPrimary,
-                    using: repository
-                )
+                viewModel.addDraftTag(number: number, colorID: colorID, isPrimary: isPrimary)
             }
             .presentationDetents([.medium, .large])
         }
@@ -114,13 +108,11 @@ struct AnimalDetailView: View {
                 saveButtonTitle: "Save",
                 showsPrimaryToggle: tag.isActive
             ) { number, colorID, isPrimary in
-                viewModel.updateTag(
-                    animalID: animalID,
+                viewModel.updateDraftTag(
                     tagID: tag.id,
                     number: number,
                     colorID: colorID,
-                    isPrimary: tag.isActive ? isPrimary : false,
-                    using: repository
+                    isPrimary: tag.isActive ? isPrimary : false
                 )
             }
             .presentationDetents([.medium, .large])
@@ -190,7 +182,9 @@ struct AnimalDetailView: View {
 
     private var canSaveChanges: Bool {
         guard let detail = viewModel.detail else { return false }
-        return viewModel.form.draft.hasChanges(comparedTo: detail)
+        let draftChanged = viewModel.form.draft.hasChanges(comparedTo: detail)
+        let tagChanged = viewModel.draftTags != (detail.activeTags + detail.inactiveTags)
+        return draftChanged || tagChanged
     }
 
     private func scrollFormIfNeeded(using proxy: ScrollViewProxy) {
@@ -212,23 +206,30 @@ struct AnimalDetailView: View {
             activeParentPicker: $activeParentPicker,
             pastures: viewModel.form.pastureOptions,
             statusReferences: viewModel.form.statusReferenceOptions,
-            tagDetail: viewModel.detail,
-            tagActions: AnimalTagManagementActions(
-                onEdit: { tag in
-                    editingTag = tag
-                },
-                onPromote: { tagID in
-                    viewModel.promoteTag(animalID: animalID, tagID: tagID, using: repository)
-                },
-                onRetire: { tagID in
-                    viewModel.retireTag(animalID: animalID, tagID: tagID, using: repository)
-                }
-            ),
+            tagDetail: nil,
+            tagActions: nil,
             pendingTags: nil,
             onAddExistingTag: { showingAddTag = true },
             onEditExistingTag: { editingTag = $0 },
             onAddPendingTag: nil,
             onEditPendingTag: nil,
+            draftTags: Binding(
+                get: { viewModel.draftTags },
+                set: { viewModel.draftTags = $0 }
+            ),
+            draftTagActions: AnimalTagManagementActions(
+                onEdit: { tag in
+                    editingTag = tag
+                },
+                onPromote: { tagID in
+                    viewModel.promoteDraftTag(tagID: tagID)
+                },
+                onRetire: { tagID in
+                    viewModel.retireDraftTag(tagID: tagID)
+                }
+            ),
+            onAddDraftTag: { showingAddTag = true },
+            onEditDraftTag: { editingTag = $0 },
             scrollTarget: .status
         )
     }

@@ -31,6 +31,10 @@ struct AnimalFormView: View {
     let onEditExistingTag: ((AnimalTagSnapshot) -> Void)?
     let onAddPendingTag: (() -> Void)?
     let onEditPendingTag: ((AnimalTagSnapshot) -> Void)?
+    let draftTags: Binding<[AnimalTagSnapshot]>?
+    let draftTagActions: AnimalTagManagementActions?
+    let onAddDraftTag: (() -> Void)?
+    let onEditDraftTag: ((AnimalTagSnapshot) -> Void)?
     
     private var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -72,6 +76,16 @@ struct AnimalFormView: View {
                         onRetire: tagActions.onRetire
                     ),
                     onAddTag: onAddExistingTag
+                )
+            } else if let draftTags, let draftTagActions, let onAddDraftTag, let onEditDraftTag {
+                DraftAnimalTagManagementSection(
+                    draftTags: draftTags,
+                    actions: AnimalTagManagementActions(
+                        onEdit: onEditDraftTag,
+                        onPromote: draftTagActions.onPromote,
+                        onRetire: draftTagActions.onRetire
+                    ),
+                    onAddTag: onAddDraftTag
                 )
             } else if let pendingTags, let onAddPendingTag, let onEditPendingTag {
                 PendingAnimalTagManagementSection(
@@ -166,6 +180,10 @@ struct AnimalEditorSections: View {
     let onEditExistingTag: ((AnimalTagSnapshot) -> Void)?
     let onAddPendingTag: (() -> Void)?
     let onEditPendingTag: ((AnimalTagSnapshot) -> Void)?
+    let draftTags: Binding<[AnimalTagSnapshot]>?
+    let draftTagActions: AnimalTagManagementActions?
+    let onAddDraftTag: (() -> Void)?
+    let onEditDraftTag: ((AnimalTagSnapshot) -> Void)?
     let scrollTarget: AnimalEditorScrollTarget?
     
     private var availableStatusReferences: [AnimalStatusReferenceOption] {
@@ -197,7 +215,11 @@ struct AnimalEditorSections: View {
                 onAddExistingTag: onAddExistingTag,
                 onEditExistingTag: onEditExistingTag,
                 onAddPendingTag: onAddPendingTag,
-                onEditPendingTag: onEditPendingTag
+                onEditPendingTag: onEditPendingTag,
+                draftTags: draftTags,
+                draftTagActions: draftTagActions,
+                onAddDraftTag: onAddDraftTag,
+                onEditDraftTag: onEditDraftTag
             )
             
             AnimalStatusEditorSection(

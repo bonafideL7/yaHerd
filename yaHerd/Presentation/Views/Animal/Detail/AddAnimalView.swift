@@ -40,6 +40,10 @@ struct AddAnimalView: View {
                     onEditExistingTag: nil,
                     onAddPendingTag: { showingAddTag = true },
                     onEditPendingTag: { editingPendingTag = $0 },
+                    draftTags: nil,
+                    draftTagActions: nil,
+                    onAddDraftTag: nil,
+                    onEditDraftTag: nil,
                     scrollTarget: nil
                 )
             }
