@@ -28,7 +28,9 @@ struct AnimalFormView: View {
     let tagActions: AnimalTagManagementActions?
     let pendingTags: Binding<[AnimalTagSnapshot]>?
     let onAddExistingTag: (() -> Void)?
+    let onEditExistingTag: ((AnimalTagSnapshot) -> Void)?
     let onAddPendingTag: (() -> Void)?
+    let onEditPendingTag: ((AnimalTagSnapshot) -> Void)?
     
     private var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -61,18 +63,23 @@ struct AnimalFormView: View {
                 
             }
             
-            if let tagDetail, let tagActions, let onAddExistingTag {
+            if let tagDetail, let tagActions, let onAddExistingTag, let onEditExistingTag {
                 AnimalTagManagementSection(
                     detail: tagDetail,
-                    actions: tagActions,
+                    actions: AnimalTagManagementActions(
+                        onEdit: onEditExistingTag,
+                        onPromote: tagActions.onPromote,
+                        onRetire: tagActions.onRetire
+                    ),
                     onAddTag: onAddExistingTag
                 )
-            } else if let pendingTags, let onAddPendingTag {
+            } else if let pendingTags, let onAddPendingTag, let onEditPendingTag {
                 PendingAnimalTagManagementSection(
                     tagNumber: $tagNumber,
                     tagColorID: $tagColorID,
                     pendingTags: pendingTags,
-                    onAddTag: onAddPendingTag
+                    onAddTag: onAddPendingTag,
+                    onEditTag: onEditPendingTag
                 )
             }
             
@@ -156,7 +163,9 @@ struct AnimalEditorSections: View {
     let tagActions: AnimalTagManagementActions?
     let pendingTags: Binding<[AnimalTagSnapshot]>?
     let onAddExistingTag: (() -> Void)?
+    let onEditExistingTag: ((AnimalTagSnapshot) -> Void)?
     let onAddPendingTag: (() -> Void)?
+    let onEditPendingTag: ((AnimalTagSnapshot) -> Void)?
     let scrollTarget: AnimalEditorScrollTarget?
     
     private var availableStatusReferences: [AnimalStatusReferenceOption] {
@@ -186,7 +195,9 @@ struct AnimalEditorSections: View {
                 tagActions: tagActions,
                 pendingTags: pendingTags,
                 onAddExistingTag: onAddExistingTag,
-                onAddPendingTag: onAddPendingTag
+                onEditExistingTag: onEditExistingTag,
+                onAddPendingTag: onAddPendingTag,
+                onEditPendingTag: onEditPendingTag
             )
             
             AnimalStatusEditorSection(

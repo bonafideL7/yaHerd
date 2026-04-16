@@ -192,6 +192,18 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         return try makeDetail(from: animal)
     }
 
+    func updateTag(animalID: UUID, tagID: UUID, input: AnimalTagInput) throws -> AnimalDetailSnapshot {
+        guard let animal = try fetchAnimal(id: animalID) else {
+            throw AnimalValidationError.animalNotFound
+        }
+        guard let tag = animal.tags.first(where: { $0.publicID == tagID }) else {
+            throw AnimalValidationError.animalTagNotFound
+        }
+        animal.updateTag(tag, number: input.number, colorID: input.colorID, isPrimary: input.isPrimary)
+        try context.save()
+        return try makeDetail(from: animal)
+    }
+
     func promoteTag(animalID: UUID, tagID: UUID) throws -> AnimalDetailSnapshot {
         guard let animal = try fetchAnimal(id: animalID) else {
             throw AnimalValidationError.animalNotFound

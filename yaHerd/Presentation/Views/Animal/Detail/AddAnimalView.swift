@@ -15,6 +15,7 @@ struct AddAnimalView: View {
     @State private var activeParentPicker: ParentPickerType?
     @State private var showingError = false
     @State private var showingAddTag = false
+    @State private var editingPendingTag: AnimalTagSnapshot?
     @State private var pendingTags: [AnimalTagSnapshot] = []
 
     private var repository: any AnimalRepository {
@@ -36,7 +37,9 @@ struct AddAnimalView: View {
                     tagActions: nil,
                     pendingTags: $pendingTags,
                     onAddExistingTag: nil,
+                    onEditExistingTag: nil,
                     onAddPendingTag: { showingAddTag = true },
+                    onEditPendingTag: { editingPendingTag = $0 },
                     scrollTarget: nil
                 )
             }
@@ -66,6 +69,19 @@ struct AddAnimalView: View {
                 showsPrimaryToggle: true
             ) { number, colorID, isPrimary in
                 addPendingTag(number: number, colorID: colorID, isPrimary: isPrimary)
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $editingPendingTag) { tag in
+            AnimalTagEditView(
+                initialNumber: tag.normalizedNumber,
+                initialColorID: tag.colorID,
+                initialIsPrimary: tag.isPrimary,
+                title: "Edit Tag",
+                saveButtonTitle: "Save",
+                showsPrimaryToggle: true
+            ) { number, colorID, isPrimary in
+                updatePendingTag(tagID: tag.id, number: number, colorID: colorID, isPrimary: isPrimary)
             }
             .presentationDetents([.medium, .large])
         }
@@ -154,4 +170,35 @@ struct AddAnimalView: View {
             form.draft.tagColorID = primary.colorID
         }
     }
+    private func updatePendingTag(tagID: UUID, number: String, colorID: UUID?, isPrimary: Bool) {
+        let normalizedNumber = number.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedNumber.isEmpty else { return }
+
+        let shouldBePrimary = isPrimary || pendingTags.filter({ $0.id != tagID }).isEmpty
+
+        pendingTags = pendingTags.map { tag in
+            AnimalTagSnapshot(
+                id: tag.id,
+                number: tag.id == tagID ? normalizedNumber : tag.number,
+                colorID: tag.id == tagID ? colorID : tag.colorID,
+                isPrimary: tag.id == tagID ? shouldBePrimary : (shouldBePrimary ? false : tag.isPrimary),
+                isActive: tag.isActive,
+                assignedAt: tag.assignedAt,
+                removedAt: tag.removedAt
+            )
+        }
+
+        syncPendingPrimaryTagToDraft()
+    }
+
+    private func syncPendingPrimaryTagToDraft() {
+        if let primary = pendingTags.first(where: { $0.isPrimary }) {
+            form.draft.tagNumber = primary.normalizedNumber
+            form.draft.tagColorID = primary.colorID
+        } else {
+            form.draft.tagNumber = ""
+            form.draft.tagColorID = nil
+        }
+    }
+
 }

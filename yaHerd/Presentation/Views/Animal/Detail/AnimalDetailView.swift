@@ -17,6 +17,7 @@ struct AnimalDetailView: View {
     @State private var activeParentPicker: ParentPickerType?
     @State private var showingError = false
     @State private var showingAddTag = false
+    @State private var editingTag: AnimalTagSnapshot?
     @State private var isLineageExpanded = false
     
     let animalID: UUID
@@ -99,6 +100,26 @@ struct AnimalDetailView: View {
                     number: number,
                     colorID: colorID,
                     isPrimary: isPrimary,
+                    using: repository
+                )
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $editingTag) { tag in
+            AnimalTagEditView(
+                initialNumber: tag.normalizedNumber,
+                initialColorID: tag.colorID,
+                initialIsPrimary: tag.isPrimary,
+                title: "Edit Tag",
+                saveButtonTitle: "Save",
+                showsPrimaryToggle: tag.isActive
+            ) { number, colorID, isPrimary in
+                viewModel.updateTag(
+                    animalID: animalID,
+                    tagID: tag.id,
+                    number: number,
+                    colorID: colorID,
+                    isPrimary: tag.isActive ? isPrimary : false,
                     using: repository
                 )
             }
@@ -193,7 +214,9 @@ struct AnimalDetailView: View {
             statusReferences: viewModel.form.statusReferenceOptions,
             tagDetail: viewModel.detail,
             tagActions: AnimalTagManagementActions(
-                onAdd: { _, _, _ in },
+                onEdit: { tag in
+                    editingTag = tag
+                },
                 onPromote: { tagID in
                     viewModel.promoteTag(animalID: animalID, tagID: tagID, using: repository)
                 },
@@ -203,7 +226,9 @@ struct AnimalDetailView: View {
             ),
             pendingTags: nil,
             onAddExistingTag: { showingAddTag = true },
+            onEditExistingTag: { editingTag = $0 },
             onAddPendingTag: nil,
+            onEditPendingTag: nil,
             scrollTarget: .status
         )
     }

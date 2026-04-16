@@ -33,6 +33,7 @@ struct EmptyAnimalRepository: AnimalRepository {
     func restore(ids: [UUID]) throws {}
     func move(ids: [UUID], toPastureID: UUID?) throws {}
     func addTag(animalID: UUID, input: AnimalTagInput) throws -> AnimalDetailSnapshot { fatalError() }
+    func updateTag(animalID: UUID, tagID: UUID, input: AnimalTagInput) throws -> AnimalDetailSnapshot { fatalError() }
     func promoteTag(animalID: UUID, tagID: UUID) throws -> AnimalDetailSnapshot { fatalError() }
     func retireTag(animalID: UUID, tagID: UUID) throws -> AnimalDetailSnapshot { fatalError() }
     func addHealthRecord(animalID: UUID, input: HealthRecordInput) throws -> AnimalDetailSnapshot { fatalError() }

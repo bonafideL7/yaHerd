@@ -76,6 +76,20 @@ final class AnimalDetailViewModel {
         }
     }
 
+    func updateTag(animalID: UUID, tagID: UUID, number: String, colorID: UUID?, isPrimary: Bool, using repository: any AnimalRepository) {
+        do {
+            let updated = try UpdateAnimalTagUseCase(repository: repository).execute(
+                animalID: animalID,
+                tagID: tagID,
+                input: AnimalTagInput(number: number, colorID: colorID, isPrimary: isPrimary)
+            )
+            detail = updated
+            form.syncPrimaryTag(from: updated)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func promoteTag(animalID: UUID, tagID: UUID, using repository: any AnimalRepository) {
         do {
             let updated = try PromoteAnimalTagUseCase(repository: repository).execute(animalID: animalID, tagID: tagID)

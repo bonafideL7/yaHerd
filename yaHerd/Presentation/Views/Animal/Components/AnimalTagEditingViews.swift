@@ -99,7 +99,7 @@ struct AnimalTagEditView: View {
 }
 
 struct AnimalTagManagementActions {
-    let onAdd: (String, UUID?, Bool) -> Void
+    let onEdit: (AnimalTagSnapshot) -> Void
     let onPromote: (UUID) -> Void
     let onRetire: (UUID) -> Void
 }
@@ -137,20 +137,26 @@ struct AnimalTagManagementSection: View {
         } header: {
             Text("Tags")
         } footer: {
-            Text("Add secondary tags, swipte right to promote an active tag to primary, or swipe left to retire a tag from here.")
+            Text("Tap a tag to edit it, swipe right to promote an active tag to primary, or swipe left to retire a tag.")
         }
     }
     
     private func activeTagRow(for tag: AnimalTagSnapshot) -> some View {
-        HStack {
-            tagBadge(for: tag)
-            Spacer()
-            if tag.isPrimary {
-                Label("Primary", systemImage: "star.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        Button {
+            actions.onEdit(tag)
+        } label: {
+            HStack {
+                tagBadge(for: tag)
+                Spacer()
+                if tag.isPrimary {
+                    Label("Primary", systemImage: "star.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             if !tag.isPrimary {
                 Button {
@@ -171,17 +177,24 @@ struct AnimalTagManagementSection: View {
     }
     
     private func inactiveTagRow(for tag: AnimalTagSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            tagBadge(for: tag)
-                .opacity(0.65)
-            
-            if let removedAt = tag.removedAt {
-                Text("Retired \(removedAt.formatted(date: .abbreviated, time: .omitted))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        Button {
+            actions.onEdit(tag)
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                tagBadge(for: tag)
+                    .opacity(0.65)
+                
+                if let removedAt = tag.removedAt {
+                    Text("Retired \(removedAt.formatted(date: .abbreviated, time: .omitted))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 2)
+        .buttonStyle(.plain)
     }
     
     private func tagBadge(for tag: AnimalTagSnapshot) -> some View {
@@ -203,19 +216,26 @@ struct PendingAnimalTagManagementSection: View {
     @Binding var pendingTags: [AnimalTagSnapshot]
     
     let onAddTag: () -> Void
+    let onEditTag: (AnimalTagSnapshot) -> Void
     
     var body: some View {
         Section {
             ForEach(pendingTags) { tag in
-                HStack(spacing: 12) {
-                    tagBadge(for: tag)
-                    Spacer()
-                    if tag.isPrimary {
-                        Label("Primary", systemImage: "star.fill")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                Button {
+                    onEditTag(tag)
+                } label: {
+                    HStack(spacing: 12) {
+                        tagBadge(for: tag)
+                        Spacer()
+                        if tag.isPrimary {
+                            Label("Primary", systemImage: "star.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .swipeActions(edge: .leading, allowsFullSwipe: false) {
                     if !tag.isPrimary {
                         Button {
@@ -247,7 +267,7 @@ struct PendingAnimalTagManagementSection: View {
         } header: {
             Text("Tags")
         } footer: {
-            Text("Add secondary tags, swipe right to promote an active tag to primary, or swipe left to remove a pending tag from here.")
+            Text("Tap a tag to edit it, swipe right to promote a pending tag to primary, or swipe left to remove it.")
         }
     }
     
@@ -297,5 +317,3 @@ struct PendingAnimalTagManagementSection: View {
         )
     }
 }
-
-

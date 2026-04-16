@@ -18,6 +18,8 @@ protocol AnimalRepository {
     @discardableResult
     func addTag(animalID: UUID, input: AnimalTagInput) throws -> AnimalDetailSnapshot
     @discardableResult
+    func updateTag(animalID: UUID, tagID: UUID, input: AnimalTagInput) throws -> AnimalDetailSnapshot
+    @discardableResult
     func promoteTag(animalID: UUID, tagID: UUID) throws -> AnimalDetailSnapshot
     @discardableResult
     func retireTag(animalID: UUID, tagID: UUID) throws -> AnimalDetailSnapshot

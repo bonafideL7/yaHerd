@@ -176,6 +176,31 @@ final class Animal {
         syncPrimaryTagFieldsFromTags()
     }
 
+    func updateTag(_ tag: AnimalTag, number: String, colorID: UUID?, isPrimary: Bool) {
+        let trimmedNumber = number.trimmingCharacters(in: .whitespacesAndNewlines)
+        tag.number = trimmedNumber
+        tag.colorID = colorID
+
+        if tag.isActive {
+            if isPrimary {
+                for existingTag in tags where existingTag.isActive {
+                    existingTag.isPrimary = existingTag.publicID == tag.publicID
+                }
+            } else if activeTags.filter({ $0.publicID != tag.publicID }).isEmpty {
+                tag.isPrimary = true
+            } else {
+                tag.isPrimary = false
+                if primaryTag == nil, let firstActiveTag = activeTags.first {
+                    firstActiveTag.isPrimary = true
+                }
+            }
+        } else {
+            tag.isPrimary = false
+        }
+
+        syncPrimaryTagFieldsFromTags()
+    }
+
     func promoteTagToPrimary(_ tag: AnimalTag) {
         for existingTag in tags where existingTag.isActive {
             existingTag.isPrimary = existingTag.publicID == tag.publicID
