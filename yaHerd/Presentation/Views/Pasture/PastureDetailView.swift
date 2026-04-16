@@ -165,9 +165,14 @@ struct PastureDetailView: View {
 
     @ViewBuilder
     private var animalsSection: some View {
-        if !model.residentAnimals.isEmpty {
-            Section("Animals") {
-                ForEach(model.residentAnimals) { animal in
+        let sections = AnimalListDerivations.groupedAnimals(
+            model.residentAnimals,
+            sortOrder: .animalType
+        )
+
+        ForEach(sections) { section in
+            Section(section.title) {
+                ForEach(section.animals) { animal in
                     NavigationLink {
                         AnimalDetailView(animalID: animal.id)
                     } label: {
