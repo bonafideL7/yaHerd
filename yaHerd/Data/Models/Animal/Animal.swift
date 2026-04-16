@@ -35,6 +35,7 @@ final class Animal {
     @Relationship(deleteRule: .nullify) var activeWorkingSession: WorkingSession?
     @Relationship(deleteRule: .nullify) var sireAnimal: Animal?
     @Relationship(deleteRule: .nullify) var damAnimal: Animal?
+    @Relationship(inverse: \Animal.damAnimal) var maternalOffspring: [Animal] = []
     @Relationship var pasture: Pasture?
     @Relationship(deleteRule: .cascade, inverse: \AnimalTag.animal) var tags: [AnimalTag] = []
 
@@ -248,6 +249,44 @@ final class Animal {
         guard birthDate <= now else { return 0 }
         let comps = Calendar.current.dateComponents([.month], from: birthDate, to: now)
         return max(0, comps.month ?? 0)
+    }
+
+    private static let calfAgeThresholdInMonths: Int = 12
+
+    var animalType: AnimalType {
+        if ageInMonths < Self.calfAgeThresholdInMonths {
+            return .calf
+        }
+
+        switch sex ?? .unknown {
+        case .female:
+            return maternalOffspring.isEmpty ? .heifer : .cow
+        case .male:
+            return hasCastrationOrBandingRecord ? .steer : .bull
+        case .unknown:
+            return hasCastrationOrBandingRecord ? .steer : .bull
+        }
+    }
+
+    var hasOffspring: Bool {
+        !maternalOffspring.isEmpty
+    }
+
+    var offspringCount: Int {
+        maternalOffspring.count
+    }
+
+    var hasCastrationOrBandingRecord: Bool {
+        healthRecords.contains { record in
+            let normalizedTreatment = record.treatment
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+
+            return normalizedTreatment == "castration"
+                || normalizedTreatment == "castrated"
+                || normalizedTreatment == "banding"
+                || normalizedTreatment == "banded"
+        }
     }
 
     var age: String {

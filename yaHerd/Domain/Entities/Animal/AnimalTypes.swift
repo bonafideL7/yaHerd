@@ -73,3 +73,22 @@ struct DistinguishingFeature: Codable, Hashable, Identifiable {
         self.description = description
     }
 }
+
+
+enum AnimalType: String, Codable, CaseIterable {
+    case calf
+    case heifer
+    case steer
+    case cow
+    case bull
+
+    var label: String {
+        switch self {
+        case .calf: return "Calf"
+        case .heifer: return "Heifer"
+        case .steer: return "Steer"
+        case .cow: return "Cow"
+        case .bull: return "Bull"
+        }
+    }
+}
