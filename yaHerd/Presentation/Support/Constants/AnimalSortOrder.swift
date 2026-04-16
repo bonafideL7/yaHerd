@@ -14,6 +14,7 @@ enum AnimalSortOrder: String, CaseIterable {
     case birthDateNewest
     case birthDateOldest
     case sex
+    case animalType
     case status
     case pasture
 
@@ -24,6 +25,7 @@ enum AnimalSortOrder: String, CaseIterable {
         case .birthDateNewest: return "Birth Date (Newest)"
         case .birthDateOldest: return "Birth Date (Oldest)"
         case .sex: return "Sex"
+        case .animalType: return "Animal Type"
         case .status: return "Status"
         case .pasture: return "Pasture"
         }
@@ -36,6 +38,7 @@ enum AnimalSortOrder: String, CaseIterable {
         case .birthDateNewest: return "clock.arrow.circlepath"
         case .birthDateOldest: return "clock"
         case .sex: return "person.2"
+        case .animalType: return "pawprint"
         case .status: return "tag"
         case .pasture: return "leaf"
         }

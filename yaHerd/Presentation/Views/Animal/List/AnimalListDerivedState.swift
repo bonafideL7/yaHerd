@@ -70,6 +70,17 @@ enum AnimalListDerivations {
 
                 return tagAscending(lhs, rhs)
             }
+        case .animalType:
+            result.sort { lhs, rhs in
+                let lhsKey = animalTypeSortKey(for: lhs.animalType)
+                let rhsKey = animalTypeSortKey(for: rhs.animalType)
+
+                if lhsKey != rhsKey {
+                    return lhsKey < rhsKey
+                }
+
+                return tagAscending(lhs, rhs)
+            }
         case .status:
             result.sort { lhs, rhs in
                 if lhs.status.rawValue != rhs.status.rawValue {
@@ -104,6 +115,14 @@ enum AnimalListDerivations {
                 }
                 .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
 
+        case .animalType:
+            let grouped = Dictionary(grouping: animals) { $0.animalType.label }
+            return grouped
+                .map { key, value in
+                    AnimalSection(id: "animal-type-\(key)", title: key, animals: value)
+                }
+                .sorted { animalTypeSectionSortKey(for: $0.title) < animalTypeSectionSortKey(for: $1.title) }
+
         case .status:
             let grouped = Dictionary(grouping: animals) { $0.status.label }
             return grouped
@@ -127,7 +146,7 @@ enum AnimalListDerivations {
 
     static func shouldUseSections(for sortOrder: AnimalSortOrder) -> Bool {
         switch sortOrder {
-        case .sex, .status, .pasture:
+        case .sex, .animalType, .status, .pasture:
             return true
         default:
             return false
@@ -206,6 +225,28 @@ enum AnimalListDerivations {
 
     static func hasHiddenArchivedRecords(items: [AnimalSummary]) -> Bool {
         items.contains(where: \.isArchived)
+    }
+
+
+    private static func animalTypeSectionSortKey(for title: String) -> String {
+        switch title {
+        case AnimalType.calf.label:
+            return "0-calf"
+        case AnimalType.heifer.label:
+            return "1-heifer"
+        case AnimalType.steer.label:
+            return "2-steer"
+        case AnimalType.cow.label:
+            return "3-cow"
+        case AnimalType.bull.label:
+            return "4-bull"
+        default:
+            return "9-\(title.lowercased())"
+        }
+    }
+
+    private static func animalTypeSortKey(for animalType: AnimalType) -> String {
+        animalTypeSectionSortKey(for: animalType.label)
     }
 
     private static func pastureSectionTitle(for animal: AnimalSummary) -> String {
