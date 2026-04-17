@@ -1,6 +1,7 @@
 import Foundation
 
 enum AnimalTimelineEventType {
+    case birth
     case health
     case pregnancy
     case movement

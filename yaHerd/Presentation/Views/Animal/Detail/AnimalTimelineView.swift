@@ -94,6 +94,7 @@ struct AnimalTimelineView: View {
 
     private func color(for type: AnimalTimelineEventType) -> Color {
         switch type {
+        case .birth: return .pink
         case .health: return .blue
         case .pregnancy: return .purple
         case .movement: return .green
