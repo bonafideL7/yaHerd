@@ -14,7 +14,11 @@ final class FieldChecksViewModel {
     }
 
     var recentSessions: [FieldCheckSessionSummary] {
-        Array(sessions.prefix(12))
+        Array(
+            sessions
+                .filter(\.isCompleted)
+                .prefix(12)
+        )
     }
 
     func load(using repository: any FieldCheckRepository) {
