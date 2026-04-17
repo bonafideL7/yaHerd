@@ -22,6 +22,46 @@ struct AnimalEditorDraft {
 
     init() {}
 
+    init(
+        name: String = "",
+        tagNumber: String = "",
+        tagColorID: UUID? = nil,
+        sex: Sex = .unknown,
+        birthDate: Date = .now,
+        status: AnimalStatus = .active,
+        pastureID: UUID? = nil,
+        sireID: UUID? = nil,
+        sire: String = "",
+        damID: UUID? = nil,
+        dam: String = "",
+        distinguishingFeatures: [DistinguishingFeature] = [],
+        saleDate: Date = .now,
+        salePriceText: String = "",
+        reasonSold: String = "",
+        deathDate: Date = .now,
+        causeOfDeath: String = "",
+        statusReferenceID: UUID? = nil
+    ) {
+        self.name = name
+        self.tagNumber = tagNumber
+        self.tagColorID = tagColorID
+        self.sex = sex
+        self.birthDate = birthDate
+        self.status = status
+        self.pastureID = pastureID
+        self.sireID = sireID
+        self.sire = sire
+        self.damID = damID
+        self.dam = dam
+        self.distinguishingFeatures = distinguishingFeatures
+        self.saleDate = saleDate
+        self.salePriceText = salePriceText
+        self.reasonSold = reasonSold
+        self.deathDate = deathDate
+        self.causeOfDeath = causeOfDeath
+        self.statusReferenceID = statusReferenceID
+    }
+
     init(detail: AnimalDetailSnapshot) {
         name = detail.name
         tagNumber = detail.displayTagNumber

@@ -7,6 +7,7 @@ protocol AnimalRepository {
     func fetchPastureOptions() throws -> [PastureOption]
     func fetchStatusReferenceOptions() throws -> [AnimalStatusReferenceOption]
     func fetchParentOptions(excluding excludedAnimalID: UUID?) throws -> [AnimalParentOption]
+    func fetchOffspringDraftSeed(forDamID damID: UUID) throws -> OffspringDraftSeed?
     @discardableResult
     func create(input: AnimalInput) throws -> AnimalDetailSnapshot
     @discardableResult

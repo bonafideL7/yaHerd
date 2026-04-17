@@ -52,10 +52,26 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             .map(AnimalMapper.makeParentOption)
     }
 
+    func fetchOffspringDraftSeed(forDamID damID: UUID) throws -> OffspringDraftSeed? {
+        guard let damAnimal = try fetchAnimal(id: damID), !damAnimal.isSoftDeleted else {
+            return nil
+        }
+
+        let inferredSire = try inferSingleSire(inSamePastureAs: damAnimal, excludingAnimalID: damID)
+        return OffspringDraftSeed(
+            damID: damAnimal.publicID,
+            damDisplayName: damAnimal.displayTagNumber,
+            pastureID: damAnimal.pasture?.publicID,
+            pastureName: damAnimal.pasture?.name,
+            inferredSireID: inferredSire?.publicID,
+            inferredSireDisplayName: inferredSire?.displayTagNumber
+        )
+    }
+
     func create(input: AnimalInput) throws -> AnimalDetailSnapshot {
         let pasture = try fetchPasture(id: input.pastureID)
-        let sireAnimal = try fetchAnimal(id: input.sireID)
         let damAnimal = try fetchAnimal(id: input.damID)
+        let sireAnimal = try resolvedSireAnimal(for: input, pasture: pasture, damAnimal: damAnimal)
         try validateAnimalInput(input, animalID: nil, sireAnimal: sireAnimal, damAnimal: damAnimal)
 
         let animal = Animal(
@@ -93,8 +109,8 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         let oldStatus = animal.status
         let oldStatusReferenceID = animal.statusReferenceID
         let pasture = try fetchPasture(id: input.pastureID)
-        let sireAnimal = try fetchAnimal(id: input.sireID)
         let damAnimal = try fetchAnimal(id: input.damID)
+        let sireAnimal = try resolvedSireAnimal(for: input, pasture: pasture, damAnimal: damAnimal)
         try validateAnimalInput(input, animalID: id, sireAnimal: sireAnimal, damAnimal: damAnimal)
 
         animal.name = input.name
@@ -333,5 +349,40 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         case .dead:
             return input.deathDate ?? .now
         }
+    }
+}
+
+
+private extension SwiftDataAnimalRepository {
+    func resolvedSireAnimal(for input: AnimalInput, pasture: Pasture?, damAnimal: Animal?) throws -> Animal? {
+        if let explicitSire = try fetchAnimal(id: input.sireID) {
+            return explicitSire
+        }
+
+        guard input.damID != nil else { return nil }
+        let pastureToUse = pasture ?? damAnimal?.pasture
+        guard let pastureToUse else { return nil }
+        return try inferSingleSire(inPastureID: pastureToUse.publicID, excludingAnimalID: input.damID)
+    }
+
+    func inferSingleSire(inSamePastureAs animal: Animal, excludingAnimalID: UUID?) throws -> Animal? {
+        guard let pastureID = animal.pasture?.publicID else { return nil }
+        return try inferSingleSire(inPastureID: pastureID, excludingAnimalID: excludingAnimalID)
+    }
+
+    func inferSingleSire(inPastureID pastureID: UUID, excludingAnimalID: UUID?) throws -> Animal? {
+        let descriptor = FetchDescriptor<Animal>()
+        let matches = try context.fetch(descriptor)
+            .filter { animal in
+                guard !animal.isSoftDeleted else { return false }
+                guard animal.status == .active else { return false }
+                guard animal.sex == .male else { return false }
+                guard animal.animalType == .bull else { return false }
+                guard animal.pasture?.publicID == pastureID else { return false }
+                guard animal.publicID != excludingAnimalID else { return false }
+                return true
+            }
+
+        return matches.count == 1 ? matches[0] : nil
     }
 }

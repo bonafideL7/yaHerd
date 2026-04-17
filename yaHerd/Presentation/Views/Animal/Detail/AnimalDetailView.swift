@@ -19,6 +19,7 @@ struct AnimalDetailView: View {
     @State private var showingAddTag = false
     @State private var editingTag: AnimalTagSnapshot?
     @State private var isLineageExpanded = false
+    @State private var showingAddOffspring = false
     
     let animalID: UUID
 
@@ -116,6 +117,13 @@ struct AnimalDetailView: View {
                 )
             }
             .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showingAddOffspring, onDismiss: {
+            viewModel.load(animalID: animalID, using: repository)
+        }) {
+            if let seed = viewModel.offspringDraftSeed {
+                AddAnimalView(title: "Add Offspring", initialDraft: seed.makeDraft())
+            }
         }
         .alert("Can’t Save", isPresented: $showingError) {
             Button("OK", role: .cancel) {}
@@ -239,6 +247,11 @@ struct AnimalDetailView: View {
         AnimalDetailOverviewSection(detail: detail)
         AnimalDetailTagsSection(detail: detail)
         AnimalDetailDistinguishingFeaturesSection(detail: detail)
+        AnimalDetailOffspringSection(
+            detail: detail,
+            canAddOffspring: viewModel.canAddOffspring && viewModel.offspringDraftSeed != nil,
+            onAddOffspring: { showingAddOffspring = true }
+        )
         AnimalDetailLineageSection(isExpanded: $isLineageExpanded, detail: detail)
         AnimalDetailStatusSection(detail: detail) { status in
             viewModel.beginEditingStatus(status)

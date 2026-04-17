@@ -47,7 +47,14 @@ struct AnimalMapper {
             archiveReason: animal.archiveReason,
             activeTags: animal.activeTags.map(makeTagSnapshot),
             inactiveTags: animal.inactiveTags.map(makeTagSnapshot),
-            location: animal.location
+            location: animal.location,
+            maternalOffspring: animal.maternalOffspring
+                .filter { !$0.isSoftDeleted }
+                .sorted { lhs, rhs in
+                    if lhs.birthDate != rhs.birthDate { return lhs.birthDate > rhs.birthDate }
+                    return lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
+                }
+                .map(makeSummary)
         )
     }
 

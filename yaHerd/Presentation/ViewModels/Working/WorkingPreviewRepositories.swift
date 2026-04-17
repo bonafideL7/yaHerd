@@ -26,6 +26,7 @@ struct EmptyAnimalRepository: AnimalRepository {
     func fetchPastureOptions() throws -> [PastureOption] { [] }
     func fetchStatusReferenceOptions() throws -> [AnimalStatusReferenceOption] { [] }
     func fetchParentOptions(excluding excludedAnimalID: UUID?) throws -> [AnimalParentOption] { [] }
+    func fetchOffspringDraftSeed(forDamID damID: UUID) throws -> OffspringDraftSeed? { nil }
     func create(input: AnimalInput) throws -> AnimalDetailSnapshot { fatalError() }
     func update(id: UUID, input: AnimalInput) throws -> AnimalDetailSnapshot { fatalError() }
     func delete(ids: [UUID]) throws {}

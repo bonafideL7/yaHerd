@@ -8,15 +8,22 @@
 import SwiftUI
 
 struct AddAnimalView: View {
+    private let title: String
     @EnvironmentObject private var dependencies: AppDependencies
     @Environment(\.dismiss) private var dismiss
 
-    @State private var form = AnimalFormViewModel()
+    @State private var form: AnimalFormViewModel
     @State private var activeParentPicker: ParentPickerType?
     @State private var showingError = false
     @State private var showingAddTag = false
     @State private var editingPendingTag: AnimalTagSnapshot?
     @State private var pendingTags: [AnimalTagSnapshot] = []
+
+
+    init(title: String = "Add Animal", initialDraft: AnimalEditorDraft = AnimalEditorDraft()) {
+        self.title = title
+        _form = State(initialValue: AnimalFormViewModel(draft: initialDraft))
+    }
 
     private var repository: any AnimalRepository {
         dependencies.animalRepository
@@ -47,7 +54,7 @@ struct AddAnimalView: View {
                     scrollTarget: nil
                 )
             }
-            .navigationTitle("Add Animal")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

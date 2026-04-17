@@ -29,6 +29,7 @@ struct AnimalDetailSnapshot: Identifiable, Hashable {
     let activeTags: [AnimalTagSnapshot]
     let inactiveTags: [AnimalTagSnapshot]
     let location: AnimalLocation
+    let maternalOffspring: [AnimalSummary]
 
     var age: String {
         AnimalSummary(

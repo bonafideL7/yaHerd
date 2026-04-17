@@ -4,10 +4,14 @@ import Observation
 @MainActor
 @Observable
 final class AnimalFormViewModel {
-    var draft = AnimalEditorDraft()
+    var draft: AnimalEditorDraft
     private(set) var pastureOptions: [PastureOption] = []
     private(set) var statusReferenceOptions: [AnimalStatusReferenceOption] = []
     var errorMessage: String?
+
+    init(draft: AnimalEditorDraft = AnimalEditorDraft()) {
+        self.draft = draft
+    }
 
     func loadSupportData(using repository: any AnimalRepository) {
         do {

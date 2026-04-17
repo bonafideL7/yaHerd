@@ -319,3 +319,43 @@ struct AnimalDetailRecordManagementSection: View {
         }
     }
 }
+
+
+struct AnimalDetailOffspringSection: View {
+    let detail: AnimalDetailSnapshot
+    let canAddOffspring: Bool
+    let onAddOffspring: () -> Void
+
+    var body: some View {
+        if detail.sex == .female {
+            Section {
+                if !detail.maternalOffspring.isEmpty {
+                    ForEach(detail.maternalOffspring) { offspring in
+                        NavigationLink(value: offspring.id) {
+                            AnimalListRowContent(animal: offspring)
+                        }
+                    }
+                }
+
+                if canAddOffspring {
+                    Button {
+                        onAddOffspring()
+                    } label: {
+                        HStack {
+                            Text("Add Offspring")
+                            Spacer()
+                            Image(systemName: "plus.circle.fill")
+                        }
+                    }
+                }
+
+                if detail.maternalOffspring.isEmpty {
+                    Text("No offspring recorded")
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Offspring")
+            }
+        }
+    }
+}
