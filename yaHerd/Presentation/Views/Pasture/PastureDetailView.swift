@@ -23,6 +23,7 @@ struct PastureDetailView: View {
                 Form {
                     pastureInfoSection(detail)
                     stockingSection(detail)
+                    checkSection(detail)
                     animalsSection
                 }
             } else if model.hasLoaded {
@@ -97,6 +98,20 @@ struct PastureDetailView: View {
                         Text("Usable Acres: \(usableAcreage, format: .number)")
                             .foregroundStyle(.secondary)
                     }
+                }
+            }
+        }
+    }
+
+
+    @ViewBuilder
+    private func checkSection(_ detail: PastureDetailSnapshot) -> some View {
+        if !model.isEditing {
+            Section("Checks") {
+                NavigationLink {
+                    FieldCheckSessionSetupView(suggestedPastureID: detail.id)
+                } label: {
+                    Label("Start Pasture Check", systemImage: "checklist")
                 }
             }
         }

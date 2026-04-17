@@ -33,6 +33,13 @@ struct MainTabView: View {
             }
 
             NavigationStack {
+                FieldChecksView()
+            }
+            .tabItem {
+                Label("Checks", systemImage: "checklist")
+            }
+
+            NavigationStack {
                 PastureListView(repository: dependencies.pastureRepository)
             }
             .tabItem {

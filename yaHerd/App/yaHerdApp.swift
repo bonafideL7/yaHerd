@@ -29,7 +29,11 @@ struct yaHerdApp: App {
             WorkingSession.self,
             WorkingQueueItem.self,
             WorkingTreatmentRecord.self,
-            WorkingProtocolTemplate.self
+            WorkingProtocolTemplate.self,
+            FieldCheckSession.self,
+            FieldCheckAnimalCheck.self,
+            FieldCheckFinding.self,
+            FieldCheckNewbornDraft.self
         ])
 
         do {

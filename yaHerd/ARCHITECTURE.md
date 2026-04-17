@@ -48,6 +48,22 @@ The animal list/add/detail flow follows the same layered pattern:
 - `Presentation/ViewModels/*Animal*`
 - `Presentation/Views/Animal/*`
 
+
+## Check reference implementation
+
+The pasture check flow is separated as:
+
+- `Domain/Entities/Check/*`
+- `Domain/Repositories/FieldCheckRepository.swift`
+- `Domain/UseCases/Check/*`
+- `Data/Models/Check/*`
+- `Data/Mappers/FieldCheckMapper.swift`
+- `Data/Repositories/SwiftDataFieldCheckRepository.swift`
+- `Presentation/ViewModels/Check/*`
+- `Presentation/Views/Check/*`
+
+Checks stay flexible by design: one session can mix head counts, tag-by-tag verification, findings, and newborn records without templates or type-specific modes.
+
 ## Dependency direction
 
 - `Presentation` depends on `Domain`
