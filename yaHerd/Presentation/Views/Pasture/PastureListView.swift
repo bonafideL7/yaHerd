@@ -20,13 +20,15 @@ struct PastureListView: View {
                     description: Text("Add a pasture to start tracking acreage and stocking.")
                 )
             } else {
-                ForEach(model.items) { pasture in
-                    NavigationLink(value: pasture) {
-                        pastureRow(pasture)
+                Section("Pastures") {
+                    ForEach(model.items) { pasture in
+                        NavigationLink(value: pasture) {
+                            pastureRow(pasture)
+                        }
                     }
-                }
-                .onDelete { offsets in
-                    model.delete(at: offsets, using: repository)
+                    .onDelete { offsets in
+                        model.delete(at: offsets, using: repository)
+                    }
                 }
             }
         }
@@ -35,12 +37,19 @@ struct PastureListView: View {
             PastureDetailView(pastureID: pasture.id)
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                NavigationLink {
+                    FieldChecksView()
+                } label: {
+                    Label("Field Checks", systemImage: "checklist")
+                }
+
                 Button {
                     model.isPresentingAddPasture = true
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add Pasture")
             }
         }
         .sheet(isPresented: $model.isPresentingAddPasture) {
