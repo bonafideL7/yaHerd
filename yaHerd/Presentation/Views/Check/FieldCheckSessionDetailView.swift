@@ -5,11 +5,28 @@ struct FieldCheckSessionDetailView: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @State private var model = FieldCheckSessionDetailViewModel()
+    @State private var setupModel = FieldCheckSessionSetupViewModel()
     @State private var rosterFilter: FieldCheckRosterFilter = .remaining
     @State private var rosterSearchText = ""
     @State private var showingAddFinding = false
+    @State private var currentSessionID: UUID?
+    @State private var selectedPastureID: UUID?
+    @State private var countMode: FieldCheckCountMode = .individual
+    @State private var startedAt: Date = .now
 
-    let sessionID: UUID
+    private let suggestedPastureID: UUID?
+
+    init(sessionID: UUID) {
+        self.suggestedPastureID = nil
+        _currentSessionID = State(initialValue: sessionID)
+        _selectedPastureID = State(initialValue: nil)
+    }
+
+    init(suggestedPastureID: UUID? = nil) {
+        self.suggestedPastureID = suggestedPastureID
+        _currentSessionID = State(initialValue: nil)
+        _selectedPastureID = State(initialValue: suggestedPastureID)
+    }
 
     private var repository: any FieldCheckRepository {
         dependencies.fieldCheckRepository
@@ -54,27 +71,10 @@ struct FieldCheckSessionDetailView: View {
 
     var body: some View {
         Group {
-            if let detail = model.detail {
-                List {
-                    summarySection(detail)
-
-                    if detail.countMode != .quick && detail.countMode != .observationOnly {
-                        rosterSection(detail)
-                    }
-
-                    if detail.countMode != .observationOnly {
-                        quickCountSection(detail)
-                    }
-
-                    findingsSection
-                    notesSection
-                    completionSection(detail)
-                }
-                .searchable(
-                    text: $rosterSearchText,
-                    placement: .navigationBarDrawer(displayMode: .automatic),
-                    prompt: "Search roster"
-                )
+            if currentSessionID == nil {
+                setupContent
+            } else if let detail = model.detail {
+                detailContent(detail)
             } else if model.hasLoaded {
                 ContentUnavailableView(
                     "Check unavailable",
@@ -86,13 +86,23 @@ struct FieldCheckSessionDetailView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle(model.detail?.displayTitle ?? "Check")
+        .navigationTitle(model.detail?.displayTitle ?? (currentSessionID == nil ? "Start Pasture Check" : "Check"))
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: sessionID) {
-            model.load(sessionID: sessionID, using: repository)
+        .task(id: currentSessionID) {
+            setupModel.load(using: repository)
+
+            if selectedPastureID == nil {
+                selectedPastureID = suggestedPastureID
+            }
+
+            if let currentSessionID {
+                model.load(sessionID: currentSessionID, using: repository)
+            }
         }
         .onDisappear {
-            model.persistNotes(sessionID: sessionID, using: repository)
+            if let currentSessionID {
+                model.persistNotes(sessionID: currentSessionID, using: repository)
+            }
         }
         .sheet(isPresented: $showingAddFinding) {
             NavigationStack {
@@ -100,29 +110,113 @@ struct FieldCheckSessionDetailView: View {
                     suggestedTypes: suggestedFindingTypes,
                     animals: model.detail?.animalChecks ?? []
                 ) { input in
-                    model.addFinding(sessionID: sessionID, input: input, using: repository)
+                    guard let currentSessionID else { return }
+                    model.addFinding(sessionID: currentSessionID, input: input, using: repository)
                 }
             }
         }
         .alert("Can’t Update Check", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(model.errorMessage ?? "Unknown error")
+            Text(errorMessage ?? "Unknown error")
+        }
+    }
+
+    @ViewBuilder
+    private var setupContent: some View {
+        Form {
+            startDetailsSection
+        }
+    }
+
+    @ViewBuilder
+    private func detailContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+        List {
+            startDetailsSection
+            summarySection(detail)
+
+            if detail.countMode != .quick && detail.countMode != .observationOnly {
+                rosterSection(detail)
+            }
+
+            if detail.countMode != .observationOnly {
+                quickCountSection(detail)
+            }
+
+            findingsSection
+            notesSection
+            completionSection(detail)
+        }
+        .searchable(
+            text: $rosterSearchText,
+            placement: .navigationBarDrawer(displayMode: .automatic),
+            prompt: "Search roster"
+        )
+    }
+
+    @ViewBuilder
+    private var startDetailsSection: some View {
+        Section(currentSessionID == nil ? "Start Details" : "Started") {
+            LabeledContent("Pasture") {
+                if currentSessionID == nil {
+                    Picker("Pasture", selection: $selectedPastureID) {
+                        Text("Select").tag(Optional<UUID>.none)
+                        ForEach(setupModel.pastures) { pasture in
+                            Text(pasture.name).tag(Optional(pasture.id))
+                        }
+                    }
+                    .labelsHidden()
+                } else {
+                    Text(model.detail?.pastureName ?? "—")
+                }
+            }
+
+            LabeledContent("Count Method") {
+                if currentSessionID == nil {
+                    Picker("Count Method", selection: $countMode) {
+                        ForEach(FieldCheckCountMode.allCases) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                } else {
+                    Text(model.detail?.countMode.label ?? countMode.label)
+                        .fontWeight(.semibold)
+                }
+            }
+
+            LabeledContent("Started") {
+                if currentSessionID == nil {
+                    DatePicker(
+                        "Started",
+                        selection: $startedAt,
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                    .labelsHidden()
+                } else {
+                    Text((model.detail?.startedAt ?? startedAt).formatted(date: .abbreviated, time: .shortened))
+                }
+            }
+
+            if currentSessionID == nil {
+                TextField("Opening notes", text: $model.notesDraft, axis: .vertical)
+                    .lineLimit(3...5)
+
+                Button {
+                    startSession()
+                } label: {
+                    Label("Start Pasture Check", systemImage: "checkmark.circle.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(selectedPastureID == nil)
+            }
         }
     }
 
     @ViewBuilder
     private func summarySection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section("Summary") {
-            LabeledContent("Pasture") {
-                Text(detail.pastureName ?? "—")
-            }
-
-            LabeledContent("Count Method") {
-                Text(detail.countMode.label)
-                    .fontWeight(.semibold)
-            }
-
             if detail.countMode != .observationOnly {
                 LabeledContent("Expected") {
                     Text("\(detail.expectedHeadCountSnapshot)")
@@ -197,24 +291,27 @@ struct FieldCheckSessionDetailView: View {
                     FieldCheckAnimalCheckRow(
                         check: check,
                         onToggleCounted: {
+                            guard let currentSessionID else { return }
                             model.setAnimalCheckCounted(
-                                sessionID: sessionID,
+                                sessionID: currentSessionID,
                                 animalCheckID: check.id,
                                 isCounted: !check.wasCounted,
                                 using: repository
                             )
                         },
                         onToggleNeedsAttention: {
+                            guard let currentSessionID else { return }
                             model.setAnimalCheckNeedsAttention(
-                                sessionID: sessionID,
+                                sessionID: currentSessionID,
                                 animalCheckID: check.id,
                                 needsAttention: !check.needsAttention,
                                 using: repository
                             )
                         },
                         onToggleMissing: {
+                            guard let currentSessionID else { return }
                             model.setAnimalCheckMissing(
-                                sessionID: sessionID,
+                                sessionID: currentSessionID,
                                 animalCheckID: check.id,
                                 isMissing: !check.isMissing,
                                 using: repository
@@ -274,7 +371,8 @@ struct FieldCheckSessionDetailView: View {
                                 note: "",
                                 animalID: nil
                             )
-                            model.addFinding(sessionID: sessionID, input: input, using: repository)
+                            guard let currentSessionID else { return }
+                            model.addFinding(sessionID: currentSessionID, input: input, using: repository)
                         } label: {
                             Label(type.label, systemImage: type.systemImage)
                         }
@@ -293,8 +391,9 @@ struct FieldCheckSessionDetailView: View {
                     FieldCheckFindingRow(
                         finding: finding,
                         onStatusChange: { status in
+                            guard let currentSessionID else { return }
                             model.updateFindingStatus(
-                                sessionID: sessionID,
+                                sessionID: currentSessionID,
                                 findingID: finding.id,
                                 status: status,
                                 using: repository
@@ -303,7 +402,8 @@ struct FieldCheckSessionDetailView: View {
                     )
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button("Delete", role: .destructive) {
-                            model.deleteFinding(sessionID: sessionID, findingID: finding.id, using: repository)
+                            guard let currentSessionID else { return }
+                            model.deleteFinding(sessionID: currentSessionID, findingID: finding.id, using: repository)
                         }
                     }
                 }
@@ -334,11 +434,13 @@ struct FieldCheckSessionDetailView: View {
                 }
 
                 Button("Reopen Check") {
-                    model.reopenSession(sessionID: sessionID, using: repository)
+                    guard let currentSessionID else { return }
+                    model.reopenSession(sessionID: currentSessionID, using: repository)
                 }
             } else {
                 Button {
-                    model.completeSession(sessionID: sessionID, using: repository)
+                    guard let currentSessionID else { return }
+                    model.completeSession(sessionID: currentSessionID, using: repository)
                 } label: {
                     Label("Complete Check", systemImage: "checkmark.circle.fill")
                 }
@@ -351,8 +453,9 @@ struct FieldCheckSessionDetailView: View {
         Binding(
             get: { detail.quickTaggedCount },
             set: { newValue in
+                guard let currentSessionID else { return }
                 model.updateQuickCounts(
-                    sessionID: sessionID,
+                    sessionID: currentSessionID,
                     quickTaggedCount: newValue,
                     quickUntaggedCount: detail.quickUntaggedCount,
                     using: repository
@@ -365,14 +468,35 @@ struct FieldCheckSessionDetailView: View {
         Binding(
             get: { detail.quickUntaggedCount },
             set: { newValue in
+                guard let currentSessionID else { return }
                 model.updateQuickCounts(
-                    sessionID: sessionID,
+                    sessionID: currentSessionID,
                     quickTaggedCount: detail.quickTaggedCount,
                     quickUntaggedCount: newValue,
                     using: repository
                 )
             }
         )
+    }
+
+    private func startSession() {
+        do {
+            let sessionID = try setupModel.createSession(
+                pastureID: selectedPastureID,
+                startedAt: startedAt,
+                notes: model.notesDraft,
+                countMode: countMode,
+                using: repository
+            )
+            currentSessionID = sessionID
+            model.load(sessionID: sessionID, using: repository)
+        } catch {
+            setupModel.errorMessage = error.localizedDescription
+        }
+    }
+
+    private var errorMessage: String? {
+        model.errorMessage ?? setupModel.errorMessage
     }
 
     private func defaultSeverity(for type: FieldCheckFindingType) -> FieldCheckFindingSeverity {
@@ -388,10 +512,11 @@ struct FieldCheckSessionDetailView: View {
 
     private var errorBinding: Binding<Bool> {
         Binding(
-            get: { model.errorMessage != nil },
+            get: { errorMessage != nil },
             set: { newValue in
                 if !newValue {
                     model.errorMessage = nil
+                    setupModel.errorMessage = nil
                 }
             }
         )

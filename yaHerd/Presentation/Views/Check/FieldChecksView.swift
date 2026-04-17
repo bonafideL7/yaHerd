@@ -10,15 +10,6 @@ struct FieldChecksView: View {
 
     var body: some View {
         List {
-            Section {
-                NavigationLink {
-                    FieldCheckSessionSetupView()
-                } label: {
-                    Label("Start Pasture Check", systemImage: "plus.circle.fill")
-                        .fontWeight(.semibold)
-                }
-            }
-
             if !model.activeSessions.isEmpty {
                 Section("In Progress") {
                     ForEach(model.activeSessions) { session in
@@ -55,7 +46,7 @@ struct FieldChecksView: View {
                 }
             }
         }
-        .navigationTitle("Checks")
+        .navigationTitle("Field Checks")
         .task {
             model.load(using: repository)
         }
@@ -81,118 +72,6 @@ struct FieldChecksView: View {
     }
 }
 
-struct FieldCheckSessionSetupView: View {
-    @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var dependencies: AppDependencies
-
-    @State private var model = FieldCheckSessionSetupViewModel()
-    @State private var createdSessionID: UUID?
-    @State private var navigateToCreatedSession = false
-    @State private var selectedPastureID: UUID?
-    @State private var countMode: FieldCheckCountMode = .individual
-    @State private var startedAt: Date = .now
-    @State private var notes = ""
-
-    private let suggestedPastureID: UUID?
-
-    init(suggestedPastureID: UUID? = nil) {
-        self.suggestedPastureID = suggestedPastureID
-        _selectedPastureID = State(initialValue: suggestedPastureID)
-    }
-
-    private var repository: any FieldCheckRepository {
-        dependencies.fieldCheckRepository
-    }
-
-    var body: some View {
-        Form {
-            Section("Session") {
-                Picker("Pasture", selection: $selectedPastureID) {
-                    Text("Select").tag(Optional<UUID>.none)
-                    ForEach(model.pastures) { pasture in
-                        Text(pasture.name).tag(Optional(pasture.id))
-                    }
-                }
-
-                Picker("Count Method", selection: $countMode) {
-                    ForEach(FieldCheckCountMode.allCases) { mode in
-                        Text(mode.label).tag(mode)
-                    }
-                }
-
-                DatePicker("Started", selection: $startedAt, displayedComponents: [.date, .hourAndMinute])
-            }
-
-
-            Section("Notes") {
-                TextField("Opening notes", text: $notes, axis: .vertical)
-                    .lineLimit(3...5)
-            }
-        }
-        .navigationTitle("Start Check")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(isPresented: $navigateToCreatedSession) {
-            Group {
-                if let createdSessionID {
-                    FieldCheckSessionDetailView(sessionID: createdSessionID)
-                } else {
-                    EmptyView()
-                }
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Start") {
-                    startSession()
-                }
-                .disabled(selectedPastureID == nil)
-            }
-
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") {
-                    dismiss()
-                }
-            }
-        }
-        .task {
-            model.load(using: repository)
-            if selectedPastureID == nil {
-                selectedPastureID = suggestedPastureID
-            }
-        }
-        .alert("Can’t Start Check", isPresented: errorBinding) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(model.errorMessage ?? "Unknown error")
-        }
-    }
-
-    private func startSession() {
-        do {
-            createdSessionID = try model.createSession(
-                pastureID: selectedPastureID,
-                startedAt: startedAt,
-                notes: notes,
-                countMode: countMode,
-                using: repository
-            )
-            navigateToCreatedSession = createdSessionID != nil
-        } catch {
-            model.errorMessage = error.localizedDescription
-        }
-    }
-
-    private var errorBinding: Binding<Bool> {
-        Binding(
-            get: { model.errorMessage != nil },
-            set: { newValue in
-                if !newValue {
-                    model.errorMessage = nil
-                }
-            }
-        )
-    }
-}
 
 private struct FieldCheckSessionSummaryRow: View {
     let session: FieldCheckSessionSummary

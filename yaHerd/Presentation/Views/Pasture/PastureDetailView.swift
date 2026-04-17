@@ -109,7 +109,7 @@ struct PastureDetailView: View {
         if !model.isEditing {
             Section("Checks") {
                 NavigationLink {
-                    FieldCheckSessionSetupView(suggestedPastureID: detail.id)
+                    FieldCheckSessionDetailView(suggestedPastureID: detail.id)
                 } label: {
                     Label("Start Pasture Check", systemImage: "checklist")
                 }

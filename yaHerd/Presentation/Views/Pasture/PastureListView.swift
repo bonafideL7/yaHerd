@@ -2,6 +2,8 @@ import SwiftUI
 
 struct PastureListView: View {
     @State private var model = PastureListViewModel()
+    @State private var showingStartPastureCheck = false
+    @State private var showingFieldChecks = false
 
     private let repository: any PastureRepository
 
@@ -36,10 +38,26 @@ struct PastureListView: View {
         .navigationDestination(for: PastureSummary.self) { pasture in
             PastureDetailView(pastureID: pasture.id)
         }
+        .navigationDestination(isPresented: $showingStartPastureCheck) {
+            FieldCheckSessionDetailView()
+        }
+        .navigationDestination(isPresented: $showingFieldChecks) {
+            FieldChecksView()
+        }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                NavigationLink {
-                    FieldChecksView()
+                Menu {
+                    Button {
+                        showingStartPastureCheck = true
+                    } label: {
+                        Label("Start Pasture Check", systemImage: "plus.circle")
+                    }
+
+                    Button {
+                        showingFieldChecks = true
+                    } label: {
+                        Label("View Pasture Checks", systemImage: "checklist")
+                    }
                 } label: {
                     Label("Field Checks", systemImage: "checklist")
                 }
