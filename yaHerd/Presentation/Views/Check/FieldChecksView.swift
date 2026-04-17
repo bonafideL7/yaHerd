@@ -104,10 +104,6 @@ struct FieldCheckSessionSetupView: View {
         dependencies.fieldCheckRepository
     }
 
-    private var selectedPastureName: String? {
-        model.pastures.first(where: { $0.id == selectedPastureID })?.name
-    }
-
     var body: some View {
         Form {
             Section("Session") {
@@ -127,11 +123,6 @@ struct FieldCheckSessionSetupView: View {
                 DatePicker("Started", selection: $startedAt, displayedComponents: [.date, .hourAndMinute])
             }
 
-            if let selectedPastureName {
-                Section("Pasture") {
-                    Text(selectedPastureName)
-                }
-            }
 
             Section("Notes") {
                 TextField("Opening notes", text: $notes, axis: .vertical)
