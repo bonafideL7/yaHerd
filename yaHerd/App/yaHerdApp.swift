@@ -32,8 +32,7 @@ struct yaHerdApp: App {
             WorkingProtocolTemplate.self,
             FieldCheckSession.self,
             FieldCheckAnimalCheck.self,
-            FieldCheckFinding.self,
-            FieldCheckNewbornDraft.self
+            FieldCheckFinding.self
         ])
 
         do {

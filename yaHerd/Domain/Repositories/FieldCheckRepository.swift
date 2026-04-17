@@ -4,7 +4,6 @@ enum FieldCheckRepositoryError: LocalizedError {
     case sessionNotFound
     case animalCheckNotFound
     case findingNotFound
-    case newbornNotFound
     case pastureNotFound
 
     var errorDescription: String? {
@@ -15,8 +14,6 @@ enum FieldCheckRepositoryError: LocalizedError {
             return "The roster entry could not be found."
         case .findingNotFound:
             return "The finding could not be found."
-        case .newbornNotFound:
-            return "The newborn record could not be found."
         case .pastureNotFound:
             return "The pasture could not be found."
         }
@@ -38,10 +35,6 @@ protocol FieldCheckRepository {
     func addFinding(sessionID: UUID, input: FieldCheckFindingInput) throws
     func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus) throws
     func deleteFinding(sessionID: UUID, findingID: UUID) throws
-    func addNewborn(sessionID: UUID, input: FieldCheckNewbornInput) throws
-    func deleteNewborn(sessionID: UUID, newbornID: UUID) throws
-    @discardableResult
-    func convertNewbornToAnimal(sessionID: UUID, newbornID: UUID) throws -> UUID
     func completeSession(id: UUID) throws
     func reopenSession(id: UUID) throws
 }

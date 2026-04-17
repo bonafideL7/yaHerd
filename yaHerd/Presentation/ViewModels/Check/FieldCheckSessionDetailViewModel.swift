@@ -116,35 +116,6 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func addNewborn(sessionID: UUID, input: FieldCheckNewbornInput, using repository: any FieldCheckRepository) {
-        do {
-            try repository.addNewborn(sessionID: sessionID, input: input)
-            refresh(sessionID: sessionID, using: repository)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    func deleteNewborn(sessionID: UUID, newbornID: UUID, using repository: any FieldCheckRepository) {
-        do {
-            try repository.deleteNewborn(sessionID: sessionID, newbornID: newbornID)
-            refresh(sessionID: sessionID, using: repository)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    func convertNewbornToAnimal(sessionID: UUID, newbornID: UUID, using repository: any FieldCheckRepository) -> UUID? {
-        do {
-            let animalID = try repository.convertNewbornToAnimal(sessionID: sessionID, newbornID: newbornID)
-            refresh(sessionID: sessionID, using: repository)
-            return animalID
-        } catch {
-            errorMessage = error.localizedDescription
-            return nil
-        }
-    }
-
     func completeSession(sessionID: UUID, using repository: any FieldCheckRepository) {
         do {
             persistNotes(sessionID: sessionID, using: repository)

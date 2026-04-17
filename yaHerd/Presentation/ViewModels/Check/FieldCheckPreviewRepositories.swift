@@ -14,9 +14,6 @@ struct EmptyFieldCheckRepository: FieldCheckRepository {
     func addFinding(sessionID: UUID, input: FieldCheckFindingInput) throws {}
     func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus) throws {}
     func deleteFinding(sessionID: UUID, findingID: UUID) throws {}
-    func addNewborn(sessionID: UUID, input: FieldCheckNewbornInput) throws {}
-    func deleteNewborn(sessionID: UUID, newbornID: UUID) throws {}
-    func convertNewbornToAnimal(sessionID: UUID, newbornID: UUID) throws -> UUID { UUID() }
     func completeSession(id: UUID) throws {}
     func reopenSession(id: UUID) throws {}
 }

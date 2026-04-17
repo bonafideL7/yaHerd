@@ -4,7 +4,6 @@ import SwiftData
 @Model
 final class FieldCheckSession {
     @Attribute(.unique) var publicID: UUID
-    var title: String
     var startedAt: Date
     var completedAt: Date?
     var notes: String
@@ -22,12 +21,8 @@ final class FieldCheckSession {
     @Relationship(deleteRule: .cascade)
     var findings: [FieldCheckFinding] = []
 
-    @Relationship(deleteRule: .cascade)
-    var newbornDrafts: [FieldCheckNewbornDraft] = []
-
     init(
         publicID: UUID = UUID(),
-        title: String = "",
         startedAt: Date = .now,
         completedAt: Date? = nil,
         notes: String = "",
@@ -38,7 +33,6 @@ final class FieldCheckSession {
         pasture: Pasture? = nil
     ) {
         self.publicID = publicID
-        self.title = title
         self.startedAt = startedAt
         self.completedAt = completedAt
         self.notes = notes
@@ -177,55 +171,6 @@ final class FieldCheckFinding {
     }
 }
 
-@Model
-final class FieldCheckNewbornDraft {
-    @Attribute(.unique) var publicID: UUID
-    var recordedAt: Date
-    var sexRawValue: String?
-    var isTagged: Bool
-    var tagNumber: String
-    var notes: String
-
-    @Relationship(deleteRule: .nullify)
-    var dam: Animal?
-
-    @Relationship(inverse: \FieldCheckSession.newbornDrafts)
-    var session: FieldCheckSession?
-
-    @Relationship(deleteRule: .nullify)
-    var convertedAnimal: Animal?
-
-    init(
-        publicID: UUID = UUID(),
-        recordedAt: Date = .now,
-        sex: Sex? = nil,
-        isTagged: Bool = false,
-        tagNumber: String = "",
-        notes: String = "",
-        dam: Animal? = nil,
-        session: FieldCheckSession? = nil,
-        convertedAnimal: Animal? = nil
-    ) {
-        self.publicID = publicID
-        self.recordedAt = recordedAt
-        self.sexRawValue = sex?.rawValue
-        self.isTagged = isTagged
-        self.tagNumber = tagNumber
-        self.notes = notes
-        self.dam = dam
-        self.session = session
-        self.convertedAnimal = convertedAnimal
-    }
-
-    var sex: Sex? {
-        get {
-            guard let sexRawValue else { return nil }
-            return Sex(rawValue: sexRawValue)
-        }
-        set { sexRawValue = newValue?.rawValue }
-    }
-}
-
 enum FieldCheckCountMode: String, Codable, CaseIterable, Identifiable, Hashable {
     case individual
     case quick
@@ -247,18 +192,6 @@ enum FieldCheckCountMode: String, Codable, CaseIterable, Identifiable, Hashable 
         }
     }
 
-    var description: String {
-        switch self {
-        case .individual:
-            return "Verify animals individually by tag. Untagged head can still be entered separately."
-        case .quick:
-            return "Enter pasture-level totals without verifying each tagged animal."
-        case .mixed:
-            return "Verify some animals individually and use quick counts for the remainder."
-        case .observationOnly:
-            return "Record issues, newborns, and notes without doing a count."
-        }
-    }
 }
 
 enum FieldCheckFindingType: String, Codable, CaseIterable, Identifiable, Hashable {
@@ -269,7 +202,6 @@ enum FieldCheckFindingType: String, Codable, CaseIterable, Identifiable, Hashabl
     case offFeed
     case injury
     case medicalAttention
-    case newbornPresent
     case calvingInProgress
     case missingAnimal
     case fenceIssue
@@ -287,7 +219,6 @@ enum FieldCheckFindingType: String, Codable, CaseIterable, Identifiable, Hashabl
         case .offFeed: return "Off Feed"
         case .injury: return "Injury"
         case .medicalAttention: return "Needs Treatment"
-        case .newbornPresent: return "Newborn"
         case .calvingInProgress: return "Calving"
         case .missingAnimal: return "Missing Animal"
         case .fenceIssue: return "Fence Issue"
@@ -305,7 +236,6 @@ enum FieldCheckFindingType: String, Codable, CaseIterable, Identifiable, Hashabl
         case .offFeed: return "fork.knife"
         case .injury: return "bandage"
         case .medicalAttention: return "cross.case"
-        case .newbornPresent: return "figure.and.child.holdinghands"
         case .calvingInProgress: return "hourglass"
         case .missingAnimal: return "questionmark.circle"
         case .fenceIssue: return "square.dashed"

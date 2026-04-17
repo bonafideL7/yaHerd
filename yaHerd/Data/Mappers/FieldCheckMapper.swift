@@ -27,22 +27,7 @@ enum FieldCheckMapper {
             animalID: finding.animal?.publicID,
             animalDisplayTagNumber: trimmed(finding.animal?.displayTagNumber) ?? trimmed(finding.animal?.name),
             pastureName: finding.session?.pasture?.name,
-            sessionID: finding.session?.publicID ?? UUID(),
-            sessionTitle: trimmed(finding.session?.title) ?? finding.session?.pasture?.name ?? "Pasture Check"
-        )
-    }
-
-    static func makeNewbornSnapshot(from newborn: FieldCheckNewbornDraft) -> FieldCheckNewbornSnapshot {
-        FieldCheckNewbornSnapshot(
-            id: newborn.publicID,
-            recordedAt: newborn.recordedAt,
-            sex: newborn.sex,
-            isTagged: newborn.isTagged,
-            tagNumber: newborn.tagNumber,
-            notes: newborn.notes,
-            damID: newborn.dam?.publicID,
-            damDisplayTagNumber: trimmed(newborn.dam?.displayTagNumber) ?? trimmed(newborn.dam?.name),
-            convertedAnimalID: newborn.convertedAnimal?.publicID
+            sessionID: finding.session?.publicID ?? UUID()
         )
     }
 
@@ -52,7 +37,6 @@ enum FieldCheckMapper {
 
         return FieldCheckSessionSummary(
             id: session.publicID,
-            title: trimmed(session.title) ?? session.pasture?.name ?? "Pasture Check",
             startedAt: session.startedAt,
             completedAt: session.completedAt,
             pastureID: session.pasture?.publicID,
@@ -69,7 +53,6 @@ enum FieldCheckMapper {
     static func makeSessionDetail(from session: FieldCheckSession) -> FieldCheckSessionDetailSnapshot {
         FieldCheckSessionDetailSnapshot(
             id: session.publicID,
-            title: session.title,
             startedAt: session.startedAt,
             completedAt: session.completedAt,
             notes: session.notes,
@@ -80,8 +63,7 @@ enum FieldCheckMapper {
             quickTaggedCount: session.quickTaggedCount,
             quickUntaggedCount: session.quickUntaggedCount,
             animalChecks: session.animalChecks.map(makeAnimalCheckSnapshot),
-            findings: session.findings.map(makeFindingSnapshot),
-            newborns: session.newbornDrafts.map(makeNewbornSnapshot)
+            findings: session.findings.map(makeFindingSnapshot)
         )
     }
 }

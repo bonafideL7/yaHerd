@@ -90,7 +90,6 @@ struct FieldCheckSessionSetupView: View {
     @State private var navigateToCreatedSession = false
     @State private var selectedPastureID: UUID?
     @State private var countMode: FieldCheckCountMode = .individual
-    @State private var title = ""
     @State private var startedAt: Date = .now
     @State private var notes = ""
 
@@ -125,13 +124,6 @@ struct FieldCheckSessionSetupView: View {
                     }
                 }
 
-                LabeledContent("Method Notes") {
-                    Text(countMode.description)
-                        .multilineTextAlignment(.trailing)
-                        .foregroundStyle(.secondary)
-                }
-
-                TextField("Optional title", text: $title)
                 DatePicker("Started", selection: $startedAt, displayedComponents: [.date, .hourAndMinute])
             }
 
@@ -188,7 +180,6 @@ struct FieldCheckSessionSetupView: View {
         do {
             createdSessionID = try model.createSession(
                 pastureID: selectedPastureID,
-                title: title,
                 startedAt: startedAt,
                 notes: notes,
                 countMode: countMode,
@@ -219,7 +210,7 @@ private struct FieldCheckSessionSummaryRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(session.title)
+                    Text(session.displayTitle)
                         .fontWeight(.semibold)
                     Text(session.startedAt.formatted(date: .abbreviated, time: .shortened))
                         .font(.footnote)

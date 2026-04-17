@@ -19,7 +19,6 @@ final class FieldCheckSessionSetupViewModel {
 
     func createSession(
         pastureID: UUID?,
-        title: String,
         startedAt: Date,
         notes: String,
         countMode: FieldCheckCountMode,
@@ -31,7 +30,6 @@ final class FieldCheckSessionSetupViewModel {
 
         let input = FieldCheckSessionStartInput(
             pastureID: pastureID,
-            title: title,
             startedAt: startedAt,
             notes: notes,
             countMode: countMode

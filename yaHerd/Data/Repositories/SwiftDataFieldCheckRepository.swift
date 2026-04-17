@@ -44,7 +44,6 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             }
 
         let session = FieldCheckSession(
-            title: input.title.trimmingCharacters(in: .whitespacesAndNewlines),
             startedAt: input.startedAt,
             completedAt: nil,
             notes: input.notes.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -148,66 +147,6 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try context.save()
     }
 
-    func addNewborn(sessionID: UUID, input: FieldCheckNewbornInput) throws {
-        guard let session = try fetchSession(id: sessionID) else {
-            throw FieldCheckRepositoryError.sessionNotFound
-        }
-
-        let newborn = FieldCheckNewbornDraft(
-            recordedAt: input.recordedAt,
-            sex: input.sex,
-            isTagged: input.isTagged,
-            tagNumber: input.isTagged ? input.tagNumber.trimmingCharacters(in: .whitespacesAndNewlines) : "",
-            notes: input.notes.trimmingCharacters(in: .whitespacesAndNewlines),
-            dam: try fetchAnimal(id: input.damID),
-            session: session
-        )
-        context.insert(newborn)
-        try context.save()
-    }
-
-    func deleteNewborn(sessionID: UUID, newbornID: UUID) throws {
-        let newborn = try fetchNewborn(id: newbornID, sessionID: sessionID)
-        context.delete(newborn)
-        try context.save()
-    }
-
-    func convertNewbornToAnimal(sessionID: UUID, newbornID: UUID) throws -> UUID {
-        guard let session = try fetchSession(id: sessionID) else {
-            throw FieldCheckRepositoryError.sessionNotFound
-        }
-        let newborn = try fetchNewborn(id: newbornID, sessionID: sessionID)
-
-        if let convertedAnimal = newborn.convertedAnimal {
-            return convertedAnimal.publicID
-        }
-
-        let pasture = session.pasture
-        let inferredSire = try inferSingleSire(inPastureID: pasture?.publicID, excludingAnimalID: newborn.dam?.publicID)
-        let tagNumber = newborn.isTagged ? newborn.tagNumber.trimmingCharacters(in: .whitespacesAndNewlines) : ""
-
-        let animal = Animal(
-            name: "",
-            tagNumber: tagNumber,
-            tagColorID: nil,
-            birthDate: newborn.recordedAt,
-            status: .active,
-            sireAnimal: inferredSire,
-            damAnimal: newborn.dam,
-            pasture: pasture,
-            sex: newborn.sex ?? .unknown,
-            distinguishingFeatures: []
-        )
-        context.insert(animal)
-        if !tagNumber.isEmpty {
-            _ = animal.ensurePrimaryTagRecord()
-        }
-
-        newborn.convertedAnimal = animal
-        try context.save()
-        return animal.publicID
-    }
-
     func completeSession(id: UUID) throws {
         guard let session = try fetchSession(id: id) else {
             throw FieldCheckRepositoryError.sessionNotFound
@@ -259,19 +198,6 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         return finding
     }
 
-    private func fetchNewborn(id: UUID, sessionID: UUID) throws -> FieldCheckNewbornDraft {
-        let descriptor = FetchDescriptor<FieldCheckNewbornDraft>(
-            predicate: #Predicate<FieldCheckNewbornDraft> { newborn in
-                newborn.publicID == id
-            }
-        )
-        guard let newborn = try context.fetch(descriptor).first,
-              newborn.session?.publicID == sessionID else {
-            throw FieldCheckRepositoryError.newbornNotFound
-        }
-        return newborn
-    }
-
     private func fetchPasture(id: UUID?) throws -> Pasture? {
         guard let id else { return nil }
         let descriptor = FetchDescriptor<Pasture>(
@@ -290,20 +216,5 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             }
         )
         return try context.fetch(descriptor).first
-    }
-
-    private func inferSingleSire(inPastureID pastureID: UUID?, excludingAnimalID: UUID?) throws -> Animal? {
-        guard let pastureID else { return nil }
-        let descriptor = FetchDescriptor<Animal>()
-        let matches = try context.fetch(descriptor).filter { animal in
-            guard !animal.isSoftDeleted else { return false }
-            guard animal.status == .active else { return false }
-            guard animal.sex == .male else { return false }
-            guard animal.animalType == .bull else { return false }
-            guard animal.pasture?.publicID == pastureID else { return false }
-            guard animal.publicID != excludingAnimalID else { return false }
-            return true
-        }
-        return matches.count == 1 ? matches[0] : nil
     }
 }

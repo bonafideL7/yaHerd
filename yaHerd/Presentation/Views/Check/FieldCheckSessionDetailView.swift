@@ -8,7 +8,6 @@ struct FieldCheckSessionDetailView: View {
     @State private var rosterFilter: FieldCheckRosterFilter = .remaining
     @State private var rosterSearchText = ""
     @State private var showingAddFinding = false
-    @State private var showingAddNewborn = false
 
     let sessionID: UUID
 
@@ -49,20 +48,8 @@ struct FieldCheckSessionDetailView: View {
         (model.detail?.findings ?? []).sorted { $0.recordedAt > $1.recordedAt }
     }
 
-    private var sortedNewborns: [FieldCheckNewbornSnapshot] {
-        (model.detail?.newborns ?? []).sorted { $0.recordedAt > $1.recordedAt }
-    }
-
     private var suggestedFindingTypes: [FieldCheckFindingType] {
-        [.pinkEye, .limping, .newbornPresent, .missingAnimal, .waterIssue, .fenceIssue]
-    }
-
-    private var damOptions: [FieldCheckAnimalCheckSnapshot] {
-        (model.detail?.animalChecks ?? [])
-            .filter { $0.animalID != nil && $0.animalSex != .male }
-            .sorted { left, right in
-                left.displayTagNumber.localizedStandardCompare(right.displayTagNumber) == .orderedAscending
-            }
+        [.pinkEye, .limping, .missingAnimal, .waterIssue, .fenceIssue]
     }
 
     var body: some View {
@@ -79,8 +66,7 @@ struct FieldCheckSessionDetailView: View {
                         quickCountSection(detail)
                     }
 
-                    findingsSection(detail)
-                    newbornSection(detail)
+                    findingsSection
                     notesSection
                     completionSection(detail)
                 }
@@ -115,13 +101,6 @@ struct FieldCheckSessionDetailView: View {
                     animals: model.detail?.animalChecks ?? []
                 ) { input in
                     model.addFinding(sessionID: sessionID, input: input, using: repository)
-                }
-            }
-        }
-        .sheet(isPresented: $showingAddNewborn) {
-            NavigationStack {
-                FieldCheckNewbornEditorView(damOptions: damOptions) { input in
-                    model.addNewborn(sessionID: sessionID, input: input, using: repository)
                 }
             }
         }
@@ -281,7 +260,7 @@ struct FieldCheckSessionDetailView: View {
     }
 
     @ViewBuilder
-    private func findingsSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+    private var findingsSection: some View {
         Section("Findings") {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -334,36 +313,6 @@ struct FieldCheckSessionDetailView: View {
                 showingAddFinding = true
             } label: {
                 Label("Add Finding", systemImage: "plus")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func newbornSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
-        Section("Newborns") {
-            if sortedNewborns.isEmpty {
-                Text("No newborns recorded.")
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(sortedNewborns) { newborn in
-                    FieldCheckNewbornRow(
-                        newborn: newborn,
-                        onConvert: {
-                            _ = model.convertNewbornToAnimal(sessionID: sessionID, newbornID: newborn.id, using: repository)
-                        }
-                    )
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button("Delete", role: .destructive) {
-                            model.deleteNewborn(sessionID: sessionID, newbornID: newborn.id, using: repository)
-                        }
-                    }
-                }
-            }
-
-            Button {
-                showingAddNewborn = true
-            } label: {
-                Label("Add Newborn", systemImage: "figure.and.child.holdinghands")
             }
         }
     }
@@ -594,58 +543,6 @@ struct FieldCheckFindingRow: View {
     }
 }
 
-private struct FieldCheckNewbornRow: View {
-    let newborn: FieldCheckNewbornSnapshot
-    let onConvert: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(newborn.isTagged ? (newborn.tagNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Tagged Newborn" : newborn.tagNumber) : "Untagged Newborn")
-                    .fontWeight(.semibold)
-                Spacer()
-                if newborn.convertedAnimalID != nil {
-                    FieldCheckBadge(title: "Added", tint: .green)
-                }
-            }
-
-            HStack(spacing: 8) {
-                if let damDisplayTagNumber = newborn.damDisplayTagNumber {
-                    Text("Dam \(damDisplayTagNumber)")
-                }
-                if let sex = newborn.sex {
-                    Text(sex.label)
-                }
-            }
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-
-            if !newborn.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text(newborn.notes)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let convertedAnimalID = newborn.convertedAnimalID {
-                NavigationLink {
-                    AnimalDetailView(animalID: convertedAnimalID)
-                } label: {
-                    Label("Open Animal", systemImage: "arrow.right.circle")
-                }
-                .font(.footnote)
-            } else {
-                Button {
-                    onConvert()
-                } label: {
-                    Label("Add to Herd", systemImage: "plus.circle")
-                }
-                .buttonStyle(.bordered)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-}
-
 struct FieldCheckBadge: View {
     let title: String
     let tint: Color
@@ -749,75 +646,6 @@ private struct FieldCheckFindingEditorView: View {
                             status: status,
                             note: note,
                             animalID: selectedAnimalID
-                        )
-                    )
-                    dismiss()
-                }
-            }
-        }
-    }
-}
-
-private struct FieldCheckNewbornEditorView: View {
-    @Environment(\.dismiss) private var dismiss
-
-    let damOptions: [FieldCheckAnimalCheckSnapshot]
-    let onSave: (FieldCheckNewbornInput) -> Void
-
-    @State private var recordedAt: Date = .now
-    @State private var selectedDamID: UUID?
-    @State private var sex: Sex = .unknown
-    @State private var isTagged = false
-    @State private var tagNumber = ""
-    @State private var notes = ""
-
-    var body: some View {
-        Form {
-            Section("Newborn") {
-                DatePicker("Observed", selection: $recordedAt, displayedComponents: [.date, .hourAndMinute])
-
-                Picker("Dam", selection: $selectedDamID) {
-                    Text("Unknown").tag(Optional<UUID>.none)
-                    ForEach(damOptions) { animal in
-                        Text(animal.displayTagNumber).tag(animal.animalID)
-                    }
-                }
-
-                Picker("Sex", selection: $sex) {
-                    ForEach(Sex.allCases, id: \.self) { sex in
-                        Text(sex.label).tag(sex)
-                    }
-                }
-
-                Toggle("Tagged", isOn: $isTagged)
-
-                if isTagged {
-                    TextField("Tag number", text: $tagNumber)
-                }
-            }
-
-            Section("Notes") {
-                TextField("Notes", text: $notes, axis: .vertical)
-                    .lineLimit(3...5)
-            }
-        }
-        .navigationTitle("Add Newborn")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
-            }
-
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Save") {
-                    onSave(
-                        FieldCheckNewbornInput(
-                            recordedAt: recordedAt,
-                            sex: sex == .unknown ? nil : sex,
-                            isTagged: isTagged,
-                            tagNumber: tagNumber,
-                            notes: notes,
-                            damID: selectedDamID
                         )
                     )
                     dismiss()

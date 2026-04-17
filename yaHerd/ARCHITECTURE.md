@@ -62,7 +62,7 @@ The pasture check flow is separated as:
 - `Presentation/ViewModels/Check/*`
 - `Presentation/Views/Check/*`
 
-Checks stay flexible by design: one session can mix head counts, tag-by-tag verification, findings, and newborn records without templates or type-specific modes.
+Checks stay flexible by design: one session can mix head counts, tag-by-tag verification, and findings without templates or type-specific modes.
 
 ## Dependency direction
 

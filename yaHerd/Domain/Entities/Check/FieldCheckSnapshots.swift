@@ -2,7 +2,6 @@ import Foundation
 
 struct FieldCheckSessionStartInput: Hashable {
     let pastureID: UUID
-    let title: String
     let startedAt: Date
     let notes: String
     let countMode: FieldCheckCountMode
@@ -32,24 +31,10 @@ struct FieldCheckFindingSnapshot: Identifiable, Hashable {
     let animalDisplayTagNumber: String?
     let pastureName: String?
     let sessionID: UUID
-    let sessionTitle: String
-}
-
-struct FieldCheckNewbornSnapshot: Identifiable, Hashable {
-    let id: UUID
-    let recordedAt: Date
-    let sex: Sex?
-    let isTagged: Bool
-    let tagNumber: String
-    let notes: String
-    let damID: UUID?
-    let damDisplayTagNumber: String?
-    let convertedAnimalID: UUID?
 }
 
 struct FieldCheckSessionSummary: Identifiable, Hashable {
     let id: UUID
-    let title: String
     let startedAt: Date
     let completedAt: Date?
     let pastureID: UUID?
@@ -60,6 +45,11 @@ struct FieldCheckSessionSummary: Identifiable, Hashable {
     let quickUntaggedCount: Int
     let animalChecks: [FieldCheckAnimalCheckSnapshot]
     let openFindingsCount: Int
+
+    var displayTitle: String {
+        let trimmedPastureName = pastureName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmedPastureName.isEmpty ? "Pasture Check" : trimmedPastureName
+    }
 
     var isCompleted: Bool {
         completedAt != nil
@@ -85,7 +75,6 @@ struct FieldCheckSessionSummary: Identifiable, Hashable {
 
 struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
     let id: UUID
-    let title: String
     let startedAt: Date
     let completedAt: Date?
     let notes: String
@@ -97,17 +86,10 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
     let quickUntaggedCount: Int
     let animalChecks: [FieldCheckAnimalCheckSnapshot]
     let findings: [FieldCheckFindingSnapshot]
-    let newborns: [FieldCheckNewbornSnapshot]
 
     var displayTitle: String {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedTitle.isEmpty {
-            return trimmedTitle
-        }
-        if let pastureName, !pastureName.isEmpty {
-            return pastureName
-        }
-        return "Pasture Check"
+        let trimmedPastureName = pastureName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmedPastureName.isEmpty ? "Pasture Check" : trimmedPastureName
     }
 
     var isCompleted: Bool {
@@ -155,13 +137,4 @@ struct FieldCheckFindingInput: Hashable {
     let status: FieldCheckFindingStatus
     let note: String
     let animalID: UUID?
-}
-
-struct FieldCheckNewbornInput: Hashable {
-    let recordedAt: Date
-    let sex: Sex?
-    let isTagged: Bool
-    let tagNumber: String
-    let notes: String
-    let damID: UUID?
 }
