@@ -13,6 +13,7 @@ struct FieldCheckSessionDetailView: View {
     @State private var selectedPastureID: UUID?
     @State private var countMode: FieldCheckCountMode = .individual
     @State private var startedAt: Date = .now
+    @State private var selectedPane: FieldCheckSessionPane = .summary
 
     private let suggestedPastureID: UUID?
 
@@ -69,6 +70,14 @@ struct FieldCheckSessionDetailView: View {
         [.pinkEye, .limping, .missingAnimal, .waterIssue, .fenceIssue]
     }
 
+    private var availablePanes: [FieldCheckSessionPane] {
+        guard let countMode = model.detail?.countMode else {
+            return [.summary, .findings, .notes]
+        }
+
+        return FieldCheckSessionPane.availablePanes(for: countMode)
+    }
+
     var body: some View {
         Group {
             if currentSessionID == nil {
@@ -97,7 +106,11 @@ struct FieldCheckSessionDetailView: View {
 
             if let currentSessionID {
                 model.load(sessionID: currentSessionID, using: repository)
+                syncSelectedPane()
             }
+        }
+        .onChange(of: model.detail?.countMode) { _, _ in
+            syncSelectedPane()
         }
         .onDisappear {
             if let currentSessionID {
@@ -133,18 +146,25 @@ struct FieldCheckSessionDetailView: View {
     private func detailContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         List {
             startDetailsSection
-            summarySection(detail)
+            sessionPaneSection(detail)
 
-            if detail.countMode != .quick && detail.countMode != .observationOnly {
-                rosterSection(detail)
+            switch selectedPane {
+            case .summary:
+                summarySection(detail)
+            case .roster:
+                if detail.countMode != .quick && detail.countMode != .observationOnly {
+                    rosterSection(detail)
+                }
+            case .quickCount:
+                if detail.countMode != .observationOnly {
+                    quickCountSection(detail)
+                }
+            case .findings:
+                findingsSection
+            case .notes:
+                notesSection
             }
 
-            if detail.countMode != .observationOnly {
-                quickCountSection(detail)
-            }
-
-            findingsSection
-            notesSection
             completionSection(detail)
         }
         .searchable(
@@ -171,15 +191,20 @@ struct FieldCheckSessionDetailView: View {
                 }
             }
 
-            LabeledContent("Count Method") {
-                if currentSessionID == nil {
-                    Picker("Count Method", selection: $countMode) {
-                        ForEach(FieldCheckCountMode.allCases) { mode in
-                            Text(mode.label).tag(mode)
-                        }
-                    }
-                    .labelsHidden()
-                } else {
+            if currentSessionID == nil {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Count Method")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    countModeButtons(selection: $countMode)
+
+                    Text(countMode.supportingText)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                LabeledContent("Count Method") {
                     Text(model.detail?.countMode.label ?? countMode.label)
                         .fontWeight(.semibold)
                 }
@@ -215,6 +240,81 @@ struct FieldCheckSessionDetailView: View {
     }
 
     @ViewBuilder
+    private func sessionPaneSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+        if availablePanes.count > 1 {
+            Section {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(availablePanes) { pane in
+                            Button {
+                                selectedPane = pane
+                            } label: {
+                                Text(pane.label)
+                                    .font(.subheadline.weight(.semibold))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.plain)
+                            .background {
+                                Capsule()
+                                    .fill(selectedPane == pane ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.12))
+                            }
+                            .overlay {
+                                Capsule()
+                                    .stroke(selectedPane == pane ? Color.accentColor : Color.secondary.opacity(0.15), lineWidth: 1)
+                            }
+                            .foregroundStyle(selectedPane == pane ? Color.accentColor : Color.primary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func countModeButtons(selection: Binding<FieldCheckCountMode>) -> some View {
+        VStack(spacing: 8) {
+            ForEach(FieldCheckCountMode.allCases) { mode in
+                Button {
+                    selection.wrappedValue = mode
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Image(systemName: selection.wrappedValue == mode ? "checkmark.circle.fill" : "circle")
+                            .imageScale(.large)
+                            .foregroundStyle(selection.wrappedValue == mode ? Color.accentColor : Color.secondary)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(mode.label)
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+
+                            Text(mode.supportingText)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .background {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(selection.wrappedValue == mode ? Color.accentColor.opacity(0.1) : Color(uiColor: .secondarySystemGroupedBackground))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(selection.wrappedValue == mode ? Color.accentColor : Color.secondary.opacity(0.12), lineWidth: 1)
+                }
+            }
+        }
+    }
+
     private func summarySection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section("Summary") {
             if detail.countMode != .observationOnly {
@@ -489,6 +589,7 @@ struct FieldCheckSessionDetailView: View {
                 using: repository
             )
             currentSessionID = sessionID
+            selectedPane = FieldCheckSessionPane.defaultPane(for: countMode)
             model.load(sessionID: sessionID, using: repository)
         } catch {
             setupModel.errorMessage = error.localizedDescription
@@ -497,6 +598,18 @@ struct FieldCheckSessionDetailView: View {
 
     private var errorMessage: String? {
         model.errorMessage ?? setupModel.errorMessage
+    }
+
+    private func syncSelectedPane() {
+        let availablePanes = availablePanes
+        guard !availablePanes.isEmpty else {
+            selectedPane = .summary
+            return
+        }
+
+        if !availablePanes.contains(selectedPane) {
+            selectedPane = FieldCheckSessionPane.defaultPane(for: model.detail?.countMode ?? countMode)
+        }
     }
 
     private func defaultSeverity(for type: FieldCheckFindingType) -> FieldCheckFindingSeverity {
@@ -801,6 +914,70 @@ private enum FieldCheckRosterFilter: String, CaseIterable, Identifiable {
             return "Flagged"
         case .missing:
             return "Missing"
+        }
+    }
+}
+
+private enum FieldCheckSessionPane: String, CaseIterable, Identifiable {
+    case summary
+    case roster
+    case quickCount
+    case findings
+    case notes
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .summary:
+            return "Summary"
+        case .roster:
+            return "Roster"
+        case .quickCount:
+            return "Quick Count"
+        case .findings:
+            return "Findings"
+        case .notes:
+            return "Notes"
+        }
+    }
+
+    static func availablePanes(for countMode: FieldCheckCountMode) -> [FieldCheckSessionPane] {
+        switch countMode {
+        case .individual:
+            return [.summary, .roster, .quickCount, .findings, .notes]
+        case .quick:
+            return [.summary, .quickCount, .findings, .notes]
+        case .mixed:
+            return [.summary, .roster, .quickCount, .findings, .notes]
+        case .observationOnly:
+            return [.summary, .findings, .notes]
+        }
+    }
+
+    static func defaultPane(for countMode: FieldCheckCountMode) -> FieldCheckSessionPane {
+        switch countMode {
+        case .individual, .mixed:
+            return .roster
+        case .quick:
+            return .quickCount
+        case .observationOnly:
+            return .findings
+        }
+    }
+}
+
+private extension FieldCheckCountMode {
+    var supportingText: String {
+        switch self {
+        case .individual:
+            return "Work the roster one animal at a time and only use a quick count for untagged animals."
+        case .quick:
+            return "Enter observed totals without verifying each tagged animal individually."
+        case .mixed:
+            return "Verify some animals individually, then use quick counts for the remainder."
+        case .observationOnly:
+            return "Skip counting and record findings, issues, and notes only."
         }
     }
 }
