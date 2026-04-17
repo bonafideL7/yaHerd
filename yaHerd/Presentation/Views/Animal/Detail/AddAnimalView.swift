@@ -20,9 +20,13 @@ struct AddAnimalView: View {
     @State private var pendingTags: [AnimalTagSnapshot] = []
 
 
-    init(title: String = "Add Animal", initialDraft: AnimalEditorDraft = AnimalEditorDraft()) {
+    init(
+        title: String = "Add Animal",
+        initialDraft: AnimalEditorDraft = AnimalEditorDraft(),
+        editorContext: AnimalEditorContext = .standard
+    ) {
         self.title = title
-        _form = State(initialValue: AnimalFormViewModel(draft: initialDraft))
+        _form = State(initialValue: AnimalFormViewModel(draft: initialDraft, context: editorContext))
     }
 
     private var repository: any AnimalRepository {
@@ -38,6 +42,7 @@ struct AddAnimalView: View {
                         set: { form.draft = $0 }
                     ),
                     activeParentPicker: $activeParentPicker,
+                    editorContext: form.context,
                     pastures: form.pastureOptions,
                     statusReferences: form.statusReferenceOptions,
                     tagDetail: nil,

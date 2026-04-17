@@ -22,7 +22,8 @@ struct AnimalFormView: View {
     @State private var isShowingNameField = false
     @FocusState private var isNameFieldFocused: Bool
     @State private var isParentsExpanded = false
-    
+
+    let editorContext: AnimalEditorContext
     let pastures: [PastureOption]
     let tagDetail: AnimalDetailSnapshot?
     let tagActions: AnimalTagManagementActions?
@@ -35,38 +36,49 @@ struct AnimalFormView: View {
     let draftTagActions: AnimalTagManagementActions?
     let onAddDraftTag: (() -> Void)?
     let onEditDraftTag: ((AnimalTagSnapshot) -> Void)?
-    
+
     private var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    
+
     private var shouldShowNameField: Bool {
         isShowingNameField || isNameFieldFocused || !trimmedName.isEmpty
     }
-    
+
+    private var parentSummary: String {
+        [
+            dam.isEmpty ? nil : "Dam: \(dam)",
+            sire.isEmpty ? nil : "Sire: \(sire)"
+        ]
+        .compactMap { $0 }
+        .joined(separator: " • ")
+    }
+
     var body: some View {
         Group {
             Section("Overview") {
-                DateFieldRow(title: "Birth Date", date: $birthDate)
-                
+                DateFieldRow(
+                    title: "Birth Date",
+                    date: $birthDate,
+                    quickSelections: editorContext.birthDateQuickSelections
+                )
+
                 Picker("Sex", selection: $sex) {
                     ForEach(Sex.allCases, id: \.self) { sex in
                         Text(sex.label).tag(sex)
                     }
                 }
-                
+
                 Picker("Pasture", selection: $pastureID) {
                     Text("None").tag(UUID?.none)
-                    
+
                     ForEach(pastures) { pasture in
                         Text(pasture.name)
                             .tag(UUID?.some(pasture.id))
                     }
                 }
-                
-                
             }
-            
+
             if let tagDetail, let tagActions, let onAddExistingTag, let onEditExistingTag {
                 AnimalTagManagementSection(
                     detail: tagDetail,
@@ -96,7 +108,7 @@ struct AnimalFormView: View {
                     onEditTag: onEditPendingTag
                 )
             }
-            
+
             Section("Name") {
                 if shouldShowNameField {
                     TextField("Name", text: $name)
@@ -128,7 +140,7 @@ struct AnimalFormView: View {
             }
 
             DistinguishingFeaturesSection(features: $distinguishingFeatures)
-            
+
             Section {
                 DisclosureGroup("Parents", isExpanded: $isParentsExpanded) {
                     ParentFieldRow(
@@ -141,7 +153,7 @@ struct AnimalFormView: View {
                         type: .dam,
                         activePicker: $activeParentPicker
                     )
-                    
+
                     ParentFieldRow(
                         title: "Sire",
                         value: $sire,
@@ -154,13 +166,17 @@ struct AnimalFormView: View {
                     )
                 }
             } footer: {
-                if !dam.isEmpty || !sire.isEmpty {
-                    Text([
-                        dam.isEmpty ? nil : "Dam: \(dam)",
-                        sire.isEmpty ? nil : "Sire: \(sire)"
-                    ]
-                        .compactMap { $0 }
-                        .joined(separator: " • "))
+                if !parentSummary.isEmpty, let helperText = editorContext.offspringMetadata?.inferredSireHelperText {
+                    Text(parentSummary + "\n\n" + helperText)
+                } else if !parentSummary.isEmpty {
+                    Text(parentSummary)
+                } else if let helperText = editorContext.offspringMetadata?.inferredSireHelperText {
+                    Text(helperText)
+                }
+            }
+            .onAppear {
+                if editorContext.offspringMetadata != nil, (!dam.isEmpty || !sire.isEmpty) {
+                    isParentsExpanded = true
                 }
             }
         }
@@ -170,7 +186,8 @@ struct AnimalFormView: View {
 struct AnimalEditorSections: View {
     @Binding var draft: AnimalEditorDraft
     @Binding var activeParentPicker: ParentPickerType?
-    
+
+    let editorContext: AnimalEditorContext
     let pastures: [PastureOption]
     let statusReferences: [AnimalStatusReferenceOption]
     let tagDetail: AnimalDetailSnapshot?
@@ -185,13 +202,13 @@ struct AnimalEditorSections: View {
     let onAddDraftTag: (() -> Void)?
     let onEditDraftTag: ((AnimalTagSnapshot) -> Void)?
     let scrollTarget: AnimalEditorScrollTarget?
-    
+
     private var availableStatusReferences: [AnimalStatusReferenceOption] {
         statusReferences
             .filter { $0.baseStatus == draft.status }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
-    
+
     var body: some View {
         Group {
             AnimalFormView(
@@ -208,6 +225,7 @@ struct AnimalEditorSections: View {
                 dam: $draft.dam,
                 distinguishingFeatures: $draft.distinguishingFeatures,
                 activeParentPicker: $activeParentPicker,
+                editorContext: editorContext,
                 pastures: pastures,
                 tagDetail: tagDetail,
                 tagActions: tagActions,
@@ -221,7 +239,7 @@ struct AnimalEditorSections: View {
                 onAddDraftTag: onAddDraftTag,
                 onEditDraftTag: onEditDraftTag
             )
-            
+
             AnimalStatusEditorSection(
                 status: $draft.status,
                 statusReferenceID: $draft.statusReferenceID,
@@ -243,9 +261,9 @@ private struct AnimalParentPickerSheetModifier: ViewModifier {
     @Binding var sire: String
     @Binding var damID: UUID?
     @Binding var dam: String
-    
+
     let excludeAnimalID: UUID?
-    
+
     func body(content: Content) -> some View {
         content.sheet(item: $activePicker) { picker in
             switch picker {
@@ -259,7 +277,6 @@ private struct AnimalParentPickerSheetModifier: ViewModifier {
                     sire = picked.displayTagNumber
                     activePicker = nil
                 }
-                
             case .dam:
                 AnimalParentPickerView(
                     title: "Select Dam",

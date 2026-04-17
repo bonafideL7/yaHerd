@@ -16,7 +16,7 @@ final class AnimalDetailViewModel {
     var errorMessage: String?
     var didDelete = false
     var pendingScrollTarget: AnimalEditorScrollTarget?
-    var offspringDraftSeed: OffspringDraftSeed?
+    var preparedOffspringEditor: PreparedAnimalEditor?
 
     func load(animalID: UUID, using repository: any AnimalRepository) {
         defer { hasLoaded = true }
@@ -26,7 +26,7 @@ final class AnimalDetailViewModel {
         do {
             let loadedDetail = try LoadAnimalDetailUseCase(repository: repository).execute(id: animalID)
             detail = loadedDetail
-            offspringDraftSeed = try PrepareOffspringDraftUseCase(repository: repository).execute(forDamID: animalID)
+            preparedOffspringEditor = try PrepareOffspringDraftUseCase(repository: repository).execute(forDamID: animalID)
             if let loadedDetail, !isEditing {
                 form.populate(from: loadedDetail)
                 draftTags = loadedDetail.activeTags + loadedDetail.inactiveTags
@@ -101,6 +101,7 @@ final class AnimalDetailViewModel {
                 updated = try RetireAnimalTagUseCase(repository: repository).execute(animalID: animalID, tagID: tag.id)
             }
 
+            let currentTags = updated.activeTags + updated.inactiveTags
             let newActiveTags = desiredTags.filter { currentTagsByID[$0.id] == nil && $0.isActive }
             for tag in newActiveTags.filter({ !$0.isPrimary }) {
                 updated = try AddAnimalTagUseCase(repository: repository).execute(

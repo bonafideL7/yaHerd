@@ -64,7 +64,8 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             pastureID: damAnimal.pasture?.publicID,
             pastureName: damAnimal.pasture?.name,
             inferredSireID: inferredSire?.publicID,
-            inferredSireDisplayName: inferredSire?.displayTagNumber
+            inferredSireDisplayName: inferredSire?.displayTagNumber,
+            defaultBirthDate: Calendar.current.startOfDay(for: .now)
         )
     }
 

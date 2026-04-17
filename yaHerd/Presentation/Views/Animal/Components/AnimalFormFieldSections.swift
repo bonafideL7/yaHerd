@@ -32,9 +32,16 @@ struct DistinguishingFeaturesSection: View {
 struct DateFieldRow: View {
     let title: String
     @Binding var date: Date
+    let quickSelections: [AnimalEditorContext.DateQuickSelection]
     
     @State private var isPresentingPicker = false
     
+    init(title: String, date: Binding<Date>, quickSelections: [AnimalEditorContext.DateQuickSelection] = []) {
+        self.title = title
+        self._date = date
+        self.quickSelections = quickSelections
+    }
+
     private var formattedDate: String {
         date.formatted(date: .abbreviated, time: .omitted)
     }
@@ -53,6 +60,16 @@ struct DateFieldRow: View {
         .sheet(isPresented: $isPresentingPicker) {
             NavigationStack {
                 Form {
+                    if !quickSelections.isEmpty {
+                        Section("Quick Select") {
+                            ForEach(quickSelections) { selection in
+                                Button(selection.title) {
+                                    date = selection.resolvedDate()
+                                }
+                            }
+                        }
+                    }
+
                     Section {
                         DatePicker(
                             title,

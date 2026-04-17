@@ -121,8 +121,12 @@ struct AnimalDetailView: View {
         .sheet(isPresented: $showingAddOffspring, onDismiss: {
             viewModel.load(animalID: animalID, using: repository)
         }) {
-            if let seed = viewModel.offspringDraftSeed {
-                AddAnimalView(title: "Add Offspring", initialDraft: seed.makeDraft())
+            if let preparedEditor = viewModel.preparedOffspringEditor {
+                AddAnimalView(
+                    title: "Add Offspring",
+                    initialDraft: preparedEditor.draft,
+                    editorContext: preparedEditor.context
+                )
             }
         }
         .alert("Can’t Save", isPresented: $showingError) {
@@ -212,6 +216,7 @@ struct AnimalDetailView: View {
                 set: { viewModel.form.draft = $0 }
             ),
             activeParentPicker: $activeParentPicker,
+            editorContext: viewModel.form.context,
             pastures: viewModel.form.pastureOptions,
             statusReferences: viewModel.form.statusReferenceOptions,
             tagDetail: nil,
@@ -249,7 +254,7 @@ struct AnimalDetailView: View {
         AnimalDetailDistinguishingFeaturesSection(detail: detail)
         AnimalDetailOffspringSection(
             detail: detail,
-            canAddOffspring: viewModel.canAddOffspring && viewModel.offspringDraftSeed != nil,
+            canAddOffspring: viewModel.canAddOffspring && viewModel.preparedOffspringEditor != nil,
             onAddOffspring: { showingAddOffspring = true }
         )
         AnimalDetailLineageSection(isExpanded: $isLineageExpanded, detail: detail)
