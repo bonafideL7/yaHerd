@@ -3,7 +3,9 @@ import SwiftUI
 struct FieldCheckSessionDetailView: View {
     @EnvironmentObject private var dependencies: AppDependencies
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-
+    @Environment(\.colorScheme) private var colorScheme
+    
+    
     @State private var model = FieldCheckSessionDetailViewModel()
     @State private var setupModel = FieldCheckSessionSetupViewModel()
     @State private var rosterFilter: FieldCheckRosterFilter = .remaining
@@ -13,25 +15,30 @@ struct FieldCheckSessionDetailView: View {
     @State private var selectedPastureID: UUID?
     @State private var startedAt: Date = .now
     @State private var selectedPane: FieldCheckSessionPane = .summary
-
+    
     private let suggestedPastureID: UUID?
-
+    
     init(sessionID: UUID) {
         self.suggestedPastureID = nil
         _currentSessionID = State(initialValue: sessionID)
         _selectedPastureID = State(initialValue: nil)
     }
-
+    
     init(suggestedPastureID: UUID? = nil) {
         self.suggestedPastureID = suggestedPastureID
         _currentSessionID = State(initialValue: nil)
         _selectedPastureID = State(initialValue: suggestedPastureID)
     }
-
+    
     private var repository: any FieldCheckRepository {
         dependencies.fieldCheckRepository
     }
-
+    
+    private var navigationSubtitleText: String {
+        guard let detail = model.detail else { return "" }
+        return detail.startedAt.formatted(date: .abbreviated, time: .shortened)
+    }
+    
     private var filteredAnimalChecks: [FieldCheckAnimalCheckSnapshot] {
         let checks = (model.detail?.animalChecks ?? [])
             .sorted { left, right in
@@ -51,28 +58,28 @@ struct FieldCheckSessionDetailView: View {
                     return check.isMissing
                 }
             }
-
+        
         let query = rosterSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return checks }
-
+        
         return checks.filter { check in
             check.displayTagNumber.localizedCaseInsensitiveContains(query)
             || check.animalName.localizedCaseInsensitiveContains(query)
         }
     }
-
+    
     private var sortedFindings: [FieldCheckFindingSnapshot] {
         (model.detail?.findings ?? []).sorted { $0.recordedAt > $1.recordedAt }
     }
-
+    
     private var suggestedFindingTypes: [FieldCheckFindingType] {
         [.waterIssue, .fenceIssue]
     }
-
+    
     private var availablePanes: [FieldCheckSessionPane] {
         FieldCheckSessionPane.allCases
     }
-
+    
     var body: some View {
         Group {
             if currentSessionID == nil {
@@ -92,13 +99,14 @@ struct FieldCheckSessionDetailView: View {
         }
         .navigationTitle(model.detail?.displayTitle ?? (currentSessionID == nil ? "Start Pasture Check" : "Check"))
         .navigationBarTitleDisplayMode(.inline)
+        .applyFieldCheckNavigationSubtitle(navigationSubtitleText)
         .task(id: currentSessionID) {
             setupModel.load(using: repository)
-
+            
             if selectedPastureID == nil {
                 selectedPastureID = suggestedPastureID
             }
-
+            
             if let currentSessionID {
                 model.load(sessionID: currentSessionID, using: repository)
                 syncSelectedPane()
@@ -126,20 +134,21 @@ struct FieldCheckSessionDetailView: View {
             Text(errorMessage ?? "Unknown error")
         }
     }
-
+    
     @ViewBuilder
     private var setupContent: some View {
         Form {
             startDetailsSection
         }
     }
-
+    
     @ViewBuilder
     private func detailContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         List {
-            startDetailsSection
+            completionSection(detail)
+            
             sessionPaneSection()
-
+            
             switch selectedPane {
             case .summary:
                 summarySection(detail)
@@ -152,8 +161,6 @@ struct FieldCheckSessionDetailView: View {
             case .notes:
                 notesSection
             }
-
-            completionSection(detail)
         }
         .searchable(
             text: $rosterSearchText,
@@ -161,57 +168,47 @@ struct FieldCheckSessionDetailView: View {
             prompt: "Search roster"
         )
     }
-
+    
     @ViewBuilder
     private var startDetailsSection: some View {
-        Section(currentSessionID == nil ? "Start Details" : "Started") {
+        Section("Start Details") {
             LabeledContent("Pasture") {
-                if currentSessionID == nil {
-                    Picker("Pasture", selection: $selectedPastureID) {
-                        Text("Select").tag(Optional<UUID>.none)
-                        ForEach(setupModel.pastures) { pasture in
-                            Text(pasture.name).tag(Optional(pasture.id))
-                        }
+                Picker("Pasture", selection: $selectedPastureID) {
+                    Text("Select").tag(Optional<UUID>.none)
+                    ForEach(setupModel.pastures) { pasture in
+                        Text(pasture.name).tag(Optional(pasture.id))
                     }
-                    .labelsHidden()
-                } else {
-                    Text(model.detail?.pastureName ?? "—")
                 }
+                .labelsHidden()
             }
-
+            
             LabeledContent("Started") {
-                if currentSessionID == nil {
-                    DatePicker(
-                        "Started",
-                        selection: $startedAt,
-                        displayedComponents: [.date, .hourAndMinute]
-                    )
-                    .labelsHidden()
-                } else {
-                    Text((model.detail?.startedAt ?? startedAt).formatted(date: .abbreviated, time: .shortened))
-                }
+                DatePicker(
+                    "Started",
+                    selection: $startedAt,
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+                .labelsHidden()
             }
-
-            if currentSessionID == nil {
-                Text("Roster verification, quick counts, findings, and notes are all available in the session.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                TextField("Opening notes", text: $model.notesDraft, axis: .vertical)
-                    .lineLimit(3...5)
-
-                Button {
-                    startSession()
-                } label: {
-                    Label("Start Pasture Check", systemImage: "checkmark.circle.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(selectedPastureID == nil)
+            
+            Text("Roster verification, quick counts, findings, and notes are all available in the session.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            
+            TextField("Opening notes", text: $model.notesDraft, axis: .vertical)
+                .lineLimit(3...5)
+            
+            Button {
+                startSession()
+            } label: {
+                Label("Start Pasture Check", systemImage: "checkmark.circle.fill")
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.borderedProminent)
+            .disabled(selectedPastureID == nil)
         }
     }
-
+    
     @ViewBuilder
     private func sessionPaneSection() -> some View {
         if availablePanes.count > 1 {
@@ -246,47 +243,47 @@ struct FieldCheckSessionDetailView: View {
             }
         }
     }
-
+    
     private func summarySection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section("Summary") {
             LabeledContent("Expected") {
                 Text("\(detail.expectedHeadCountSnapshot)")
             }
-
+            
             LabeledContent("Seen") {
                 Text("\(detail.totalSeen)")
                     .fontWeight(.semibold)
             }
-
+            
             LabeledContent("Individually Verified") {
                 Text("\(detail.individuallyVerifiedCount)")
             }
-
+            
             LabeledContent("Quick Tagged") {
                 Text("\(detail.quickTaggedCount)")
             }
-
+            
             LabeledContent("Quick Untagged") {
                 Text("\(detail.quickUntaggedCount)")
             }
-
+            
             LabeledContent("Variance") {
                 Text(detail.countVariance == 0 ? "Matched" : detail.countVariance > 0 ? "+\(detail.countVariance)" : "\(detail.countVariance)")
                     .foregroundStyle(detail.countVariance == 0 ? .green : .orange)
             }
-
+            
             LabeledContent("Remaining") {
                 Text("\(detail.remainingExpectedCount)")
                     .foregroundStyle(detail.remainingExpectedCount == 0 ? .green : .orange)
             }
-
+            
             if detail.missingAnimalCount > 0 {
                 LabeledContent("Marked Missing") {
                     Text("\(detail.missingAnimalCount)")
                         .foregroundStyle(.orange)
                 }
             }
-
+            
             if detail.openFindingsCount > 0 {
                 LabeledContent("Open Findings") {
                     Text("\(detail.openFindingsCount)")
@@ -295,7 +292,7 @@ struct FieldCheckSessionDetailView: View {
             }
         }
     }
-
+    
     @ViewBuilder
     private func rosterSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section {
@@ -305,7 +302,7 @@ struct FieldCheckSessionDetailView: View {
                 }
             }
             .pickerStyle(.segmented)
-
+            
             if filteredAnimalChecks.isEmpty {
                 ContentUnavailableView(
                     "No Animals",
@@ -335,7 +332,7 @@ struct FieldCheckSessionDetailView: View {
             Text("Each animal can be marked counted once, which prevents accidental double counting. Use quick counts for tagged or untagged animals you do not verify individually.")
         }
     }
-
+    
     @ViewBuilder
     private func quickCountSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section {
@@ -347,7 +344,7 @@ struct FieldCheckSessionDetailView: View {
                     Text("\(detail.quickTaggedCount)")
                 }
             }
-
+            
             Stepper(
                 value: quickUntaggedBinding(detail),
                 in: 0...10_000
@@ -362,7 +359,7 @@ struct FieldCheckSessionDetailView: View {
             Text("Use these totals for animals seen without individual roster verification.")
         }
     }
-
+    
     @ViewBuilder
     private var findingsSection: some View {
         Section("Findings") {
@@ -389,7 +386,7 @@ struct FieldCheckSessionDetailView: View {
                 .padding(.vertical, 4)
             }
             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-
+            
             if sortedFindings.isEmpty {
                 Text("No findings recorded.")
                     .foregroundStyle(.secondary)
@@ -415,7 +412,7 @@ struct FieldCheckSessionDetailView: View {
                     }
                 }
             }
-
+            
             Button {
                 showingAddFinding = true
             } label: {
@@ -423,7 +420,7 @@ struct FieldCheckSessionDetailView: View {
             }
         }
     }
-
+    
     @ViewBuilder
     private var notesSection: some View {
         Section("Notes") {
@@ -431,31 +428,30 @@ struct FieldCheckSessionDetailView: View {
                 .lineLimit(3...6)
         }
     }
-
+    
     @ViewBuilder
     private func completionSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
-        Section {
-            if detail.isCompleted {
-                LabeledContent("Completed") {
-                    Text((detail.completedAt ?? .now).formatted(date: .abbreviated, time: .shortened))
-                }
-
-                Button("Reopen Check") {
-                    guard let currentSessionID else { return }
-                    model.reopenSession(sessionID: currentSessionID, using: repository)
-                }
-            } else {
-                Button {
-                    guard let currentSessionID else { return }
-                    model.completeSession(sessionID: currentSessionID, using: repository)
-                } label: {
-                    Label("Complete Check", systemImage: "checkmark.circle.fill")
-                }
-                .buttonStyle(.borderedProminent)
+        if detail.isCompleted {
+            LabeledContent("Completed") {
+                Text((detail.completedAt ?? .now).formatted(date: .abbreviated, time: .shortened))
             }
+            
+            Button("Reopen Check") {
+                guard let currentSessionID else { return }
+                model.reopenSession(sessionID: currentSessionID, using: repository)
+            }
+        } else {
+            Button {
+                guard let currentSessionID else { return }
+                model.completeSession(sessionID: currentSessionID, using: repository)
+            } label: {
+                Label("Complete Check", systemImage: "checkmark.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .foregroundStyle(colorScheme == .dark ? .black : .white)
         }
     }
-
+    
     private func quickTaggedBinding(_ detail: FieldCheckSessionDetailSnapshot) -> Binding<Int> {
         Binding(
             get: { detail.quickTaggedCount },
@@ -470,7 +466,7 @@ struct FieldCheckSessionDetailView: View {
             }
         )
     }
-
+    
     private func quickUntaggedBinding(_ detail: FieldCheckSessionDetailSnapshot) -> Binding<Int> {
         Binding(
             get: { detail.quickUntaggedCount },
@@ -485,7 +481,7 @@ struct FieldCheckSessionDetailView: View {
             }
         )
     }
-
+    
     private func startSession() {
         do {
             let sessionID = try setupModel.createSession(
@@ -501,23 +497,23 @@ struct FieldCheckSessionDetailView: View {
             setupModel.errorMessage = error.localizedDescription
         }
     }
-
+    
     private var errorMessage: String? {
         model.errorMessage ?? setupModel.errorMessage
     }
-
+    
     private func syncSelectedPane() {
         let availablePanes = availablePanes
         guard !availablePanes.isEmpty else {
             selectedPane = .summary
             return
         }
-
+        
         if !availablePanes.contains(selectedPane) {
             selectedPane = FieldCheckSessionPane.defaultPane
         }
     }
-
+    
     private func defaultSeverity(for type: FieldCheckFindingType) -> FieldCheckFindingSeverity {
         switch type {
         case .injury, .medicalAttention, .calvingInProgress:
@@ -528,7 +524,7 @@ struct FieldCheckSessionDetailView: View {
             return .info
         }
     }
-
+    
     private var errorBinding: Binding<Bool> {
         Binding(
             get: { errorMessage != nil },
@@ -544,14 +540,15 @@ struct FieldCheckSessionDetailView: View {
 
 private struct FieldCheckAnimalCheckRow: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-
+    @Environment(\.colorScheme) private var colorScheme
+    
     let sessionID: UUID
     let check: FieldCheckAnimalCheckSnapshot
     let onToggleCounted: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 let definition = tagColorLibrary.resolvedDefinition(tagColorID: check.displayTagColorID)
                 AnimalTagView(
                     tagNumber: check.displayTagNumber,
@@ -580,10 +577,8 @@ private struct FieldCheckAnimalCheckRow: View {
                     }
                 }
 
-                Spacer()
-            }
+                Spacer(minLength: 8)
 
-            HStack(spacing: 8) {
                 Button {
                     onToggleCounted()
                 } label: {
@@ -591,6 +586,7 @@ private struct FieldCheckAnimalCheckRow: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(check.wasCounted ? .green : .accentColor)
+                .foregroundStyle(colorScheme == .dark ? .black : .white)
             }
 
             if let animalID = check.animalID {
@@ -1020,4 +1016,15 @@ private enum FieldCheckSessionPane: String, CaseIterable, Identifiable {
     }
 
     static let defaultPane: FieldCheckSessionPane = .roster
+}
+
+private extension View {
+    @ViewBuilder
+    func applyFieldCheckNavigationSubtitle(_ subtitle: String) -> some View {
+        if #available(iOS 26.0, *) {
+            self.navigationSubtitle(subtitle)
+        } else {
+            self
+        }
+    }
 }
