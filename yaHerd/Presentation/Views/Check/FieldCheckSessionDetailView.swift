@@ -66,7 +66,7 @@ struct FieldCheckSessionDetailView: View {
     }
 
     private var suggestedFindingTypes: [FieldCheckFindingType] {
-        [.pinkEye, .limping, .missingAnimal, .waterIssue, .fenceIssue]
+        [.waterIssue, .fenceIssue]
     }
 
     private var availablePanes: [FieldCheckSessionPane] {
@@ -315,6 +315,7 @@ struct FieldCheckSessionDetailView: View {
             } else {
                 ForEach(filteredAnimalChecks) { check in
                     FieldCheckAnimalCheckRow(
+                        sessionID: detail.id,
                         check: check,
                         onToggleCounted: {
                             guard let currentSessionID else { return }
@@ -322,24 +323,6 @@ struct FieldCheckSessionDetailView: View {
                                 sessionID: currentSessionID,
                                 animalCheckID: check.id,
                                 isCounted: !check.wasCounted,
-                                using: repository
-                            )
-                        },
-                        onToggleNeedsAttention: {
-                            guard let currentSessionID else { return }
-                            model.setAnimalCheckNeedsAttention(
-                                sessionID: currentSessionID,
-                                animalCheckID: check.id,
-                                needsAttention: !check.needsAttention,
-                                using: repository
-                            )
-                        },
-                        onToggleMissing: {
-                            guard let currentSessionID else { return }
-                            model.setAnimalCheckMissing(
-                                sessionID: currentSessionID,
-                                animalCheckID: check.id,
-                                isMissing: !check.isMissing,
                                 using: repository
                             )
                         }
@@ -562,10 +545,9 @@ struct FieldCheckSessionDetailView: View {
 private struct FieldCheckAnimalCheckRow: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
+    let sessionID: UUID
     let check: FieldCheckAnimalCheckSnapshot
     let onToggleCounted: () -> Void
-    let onToggleNeedsAttention: () -> Void
-    let onToggleMissing: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -609,25 +591,11 @@ private struct FieldCheckAnimalCheckRow: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(check.wasCounted ? .green : .accentColor)
-
-                Button {
-                    onToggleNeedsAttention()
-                } label: {
-                    Label("Flag", systemImage: check.needsAttention ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
-                }
-                .buttonStyle(.bordered)
-
-                Button {
-                    onToggleMissing()
-                } label: {
-                    Label("Missing", systemImage: check.isMissing ? "questionmark.circle.fill" : "questionmark.circle")
-                }
-                .buttonStyle(.bordered)
             }
 
             if let animalID = check.animalID {
                 NavigationLink {
-                    AnimalDetailView(animalID: animalID)
+                    FieldCheckAnimalDetailView(sessionID: sessionID, animalID: animalID)
                 } label: {
                     Label("Open Animal", systemImage: "arrow.right.circle")
                         .font(.footnote)
@@ -666,7 +634,7 @@ struct FieldCheckFindingRow: View {
             if let animalDisplayTagNumber = finding.animalDisplayTagNumber {
                 if showsAnimalLink, let animalID = finding.animalID {
                     NavigationLink {
-                        AnimalDetailView(animalID: animalID)
+                        FieldCheckAnimalDetailView(sessionID: finding.sessionID, animalID: animalID)
                     } label: {
                         Text(animalDisplayTagNumber)
                             .font(.subheadline)
@@ -701,6 +669,192 @@ struct FieldCheckFindingRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+
+private struct FieldCheckAnimalDetailView: View {
+    @EnvironmentObject private var dependencies: AppDependencies
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+
+    @State private var model = FieldCheckAnimalDetailViewModel()
+    @State private var isLineageExpanded = false
+    @State private var showingAddOffspring = false
+
+    let sessionID: UUID
+    let animalID: UUID
+
+    private var animalRepository: any AnimalRepository {
+        dependencies.animalRepository
+    }
+
+    private var fieldCheckRepository: any FieldCheckRepository {
+        dependencies.fieldCheckRepository
+    }
+
+    private var displayedTagNumber: String {
+        model.animalDetail?.displayTagNumber ?? ""
+    }
+
+    private var displayedTagColorID: UUID? {
+        model.animalDetail?.displayTagColorID
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { model.errorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    model.errorMessage = nil
+                }
+            }
+        )
+    }
+
+    var body: some View {
+        Group {
+            if let detail = model.animalDetail {
+                Form {
+                    if let animalCheck = model.animalCheck {
+                        fieldCheckFindingsSection(animalCheck)
+                    }
+
+                    AnimalDetailOffspringSection(
+                        detail: detail,
+                        canAddOffspring: model.preparedOffspringEditor != nil,
+                        onAddOffspring: {
+                            showingAddOffspring = true
+                        }
+                    )
+                    AnimalDetailDistinguishingFeaturesSection(detail: detail)
+                    AnimalDetailLineageSection(isExpanded: $isLineageExpanded, detail: detail)
+                }
+            } else if model.hasLoaded {
+                ContentUnavailableView("Animal Not Found", systemImage: "tag")
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .navigationTitle("Field Check Animal")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !displayedTagNumber.isEmpty {
+                ToolbarItem(placement: .principal) {
+                    let def = tagColorLibrary.resolvedDefinition(tagColorID: displayedTagColorID)
+                    AnimalTagView(
+                        tagNumber: displayedTagNumber,
+                        color: def.color,
+                        colorName: def.name,
+                        size: .compact
+                    )
+                }
+            }
+        }
+        .sheet(isPresented: $showingAddOffspring, onDismiss: {
+            model.refresh(
+                animalID: animalID,
+                sessionID: sessionID,
+                animalRepository: animalRepository,
+                fieldCheckRepository: fieldCheckRepository
+            )
+        }) {
+            if let preparedEditor = model.preparedOffspringEditor {
+                AddAnimalView(
+                    title: "Add Offspring",
+                    initialDraft: preparedEditor.draft,
+                    editorContext: preparedEditor.context
+                )
+            }
+        }
+        .task {
+            if !model.hasLoaded {
+                model.load(
+                    animalID: animalID,
+                    sessionID: sessionID,
+                    animalRepository: animalRepository,
+                    fieldCheckRepository: fieldCheckRepository
+                )
+            }
+        }
+        .alert("Can’t Update Animal", isPresented: errorBinding) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.errorMessage ?? "Unknown error")
+        }
+    }
+
+    @ViewBuilder
+    private func fieldCheckFindingsSection(_ animalCheck: FieldCheckAnimalCheckSnapshot) -> some View {
+        Section {
+            if animalCheck.isMissing {
+                HStack(spacing: 8) {
+                    FieldCheckBadge(title: "Missing", tint: .orange)
+                }
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    findingButton(.pinkEye)
+                    findingButton(.limping)
+                    findingButton(.missingAnimal)
+                }
+                .padding(.vertical, 4)
+            }
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+
+            if model.animalFindings.isEmpty {
+                Text("No findings recorded for this animal in this check.")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(model.animalFindings) { finding in
+                    FieldCheckFindingRow(
+                        finding: finding,
+                        showsAnimalLink: false,
+                        onStatusChange: { status in
+                            model.updateFindingStatus(
+                                animalID: animalID,
+                                sessionID: sessionID,
+                                findingID: finding.id,
+                                status: status,
+                                animalRepository: animalRepository,
+                                fieldCheckRepository: fieldCheckRepository
+                            )
+                        }
+                    )
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button("Delete", role: .destructive) {
+                            model.deleteFinding(
+                                animalID: animalID,
+                                sessionID: sessionID,
+                                findingID: finding.id,
+                                animalRepository: animalRepository,
+                                fieldCheckRepository: fieldCheckRepository
+                            )
+                        }
+                    }
+                }
+            }
+        } header: {
+            Text("Findings")
+        } footer: {
+            Text("This animal is marked as needing attention whenever findings exist in the current check.")
+        }
+    }
+
+    private func findingButton(_ type: FieldCheckFindingType) -> some View {
+        Button {
+            model.addFinding(
+                animalID: animalID,
+                sessionID: sessionID,
+                type: type,
+                animalRepository: animalRepository,
+                fieldCheckRepository: fieldCheckRepository
+            )
+        } label: {
+            Label(type.label, systemImage: type.systemImage)
+        }
+        .buttonStyle(.bordered)
     }
 }
 
