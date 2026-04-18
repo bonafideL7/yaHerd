@@ -4,7 +4,6 @@ struct FieldCheckSessionStartInput: Hashable {
     let pastureID: UUID
     let startedAt: Date
     let notes: String
-    let countMode: FieldCheckCountMode
 }
 
 struct FieldCheckAnimalCheckSnapshot: Identifiable, Hashable {
@@ -39,7 +38,6 @@ struct FieldCheckSessionSummary: Identifiable, Hashable {
     let completedAt: Date?
     let pastureID: UUID?
     let pastureName: String?
-    let countMode: FieldCheckCountMode
     let expectedHeadCountSnapshot: Int
     let quickTaggedCount: Int
     let quickUntaggedCount: Int
@@ -60,16 +58,7 @@ struct FieldCheckSessionSummary: Identifiable, Hashable {
     }
 
     var totalSeen: Int {
-        switch countMode {
-        case .individual:
-            return individuallyVerifiedCount + max(quickUntaggedCount, 0)
-        case .quick:
-            return max(quickTaggedCount, 0) + max(quickUntaggedCount, 0)
-        case .mixed:
-            return individuallyVerifiedCount + max(quickTaggedCount, 0) + max(quickUntaggedCount, 0)
-        case .observationOnly:
-            return 0
-        }
+        individuallyVerifiedCount + max(quickTaggedCount, 0) + max(quickUntaggedCount, 0)
     }
 }
 
@@ -78,7 +67,6 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
     let startedAt: Date
     let completedAt: Date?
     let notes: String
-    let countMode: FieldCheckCountMode
     let pastureID: UUID?
     let pastureName: String?
     let expectedHeadCountSnapshot: Int
@@ -101,16 +89,7 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
     }
 
     var totalSeen: Int {
-        switch countMode {
-        case .individual:
-            return individuallyVerifiedCount + max(quickUntaggedCount, 0)
-        case .quick:
-            return max(quickTaggedCount, 0) + max(quickUntaggedCount, 0)
-        case .mixed:
-            return individuallyVerifiedCount + max(quickTaggedCount, 0) + max(quickUntaggedCount, 0)
-        case .observationOnly:
-            return 0
-        }
+        individuallyVerifiedCount + max(quickTaggedCount, 0) + max(quickUntaggedCount, 0)
     }
 
     var countVariance: Int {

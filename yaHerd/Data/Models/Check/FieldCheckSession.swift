@@ -7,7 +7,6 @@ final class FieldCheckSession {
     var startedAt: Date
     var completedAt: Date?
     var notes: String
-    var countModeRawValue: String
     var expectedHeadCountSnapshot: Int
     var quickTaggedCount: Int
     var quickUntaggedCount: Int
@@ -26,7 +25,6 @@ final class FieldCheckSession {
         startedAt: Date = .now,
         completedAt: Date? = nil,
         notes: String = "",
-        countMode: FieldCheckCountMode = .individual,
         expectedHeadCountSnapshot: Int = 0,
         quickTaggedCount: Int = 0,
         quickUntaggedCount: Int = 0,
@@ -36,17 +34,12 @@ final class FieldCheckSession {
         self.startedAt = startedAt
         self.completedAt = completedAt
         self.notes = notes
-        self.countModeRawValue = countMode.rawValue
         self.expectedHeadCountSnapshot = expectedHeadCountSnapshot
         self.quickTaggedCount = quickTaggedCount
         self.quickUntaggedCount = quickUntaggedCount
         self.pasture = pasture
     }
 
-    var countMode: FieldCheckCountMode {
-        get { FieldCheckCountMode(rawValue: countModeRawValue) ?? .individual }
-        set { countModeRawValue = newValue.rawValue }
-    }
 }
 
 @Model
@@ -169,29 +162,6 @@ final class FieldCheckFinding {
         get { FieldCheckFindingStatus(rawValue: statusRawValue) ?? .open }
         set { statusRawValue = newValue.rawValue }
     }
-}
-
-enum FieldCheckCountMode: String, Codable, CaseIterable, Identifiable, Hashable {
-    case individual
-    case quick
-    case mixed
-    case observationOnly
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .individual:
-            return "Individual"
-        case .quick:
-            return "Quick"
-        case .mixed:
-            return "Mixed"
-        case .observationOnly:
-            return "Observation Only"
-        }
-    }
-
 }
 
 enum FieldCheckFindingType: String, Codable, CaseIterable, Identifiable, Hashable {

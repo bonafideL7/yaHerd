@@ -100,9 +100,7 @@ private struct FieldCheckSessionSummaryRow: View {
                     Label(pastureName, systemImage: "leaf")
                 }
 
-                if session.countMode != .observationOnly {
-                    Label("\(session.totalSeen)/\(session.expectedHeadCountSnapshot)", systemImage: "number.circle")
-                }
+                Label("\(session.totalSeen)/\(session.expectedHeadCountSnapshot)", systemImage: "number.circle")
 
                 if session.openFindingsCount > 0 {
                     Label("\(session.openFindingsCount)", systemImage: "exclamationmark.circle")

@@ -47,7 +47,6 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             startedAt: input.startedAt,
             completedAt: nil,
             notes: input.notes.trimmingCharacters(in: .whitespacesAndNewlines),
-            countMode: input.countMode,
             expectedHeadCountSnapshot: rosterAnimals.count,
             quickTaggedCount: 0,
             quickUntaggedCount: 0,

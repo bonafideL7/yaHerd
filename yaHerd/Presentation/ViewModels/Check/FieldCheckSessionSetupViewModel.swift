@@ -21,7 +21,6 @@ final class FieldCheckSessionSetupViewModel {
         pastureID: UUID?,
         startedAt: Date,
         notes: String,
-        countMode: FieldCheckCountMode,
         using repository: any FieldCheckRepository
     ) throws -> UUID {
         guard let pastureID else {
@@ -31,8 +30,7 @@ final class FieldCheckSessionSetupViewModel {
         let input = FieldCheckSessionStartInput(
             pastureID: pastureID,
             startedAt: startedAt,
-            notes: notes,
-            countMode: countMode
+            notes: notes
         )
         return try CreateFieldCheckSessionUseCase(repository: repository).execute(input: input)
     }
