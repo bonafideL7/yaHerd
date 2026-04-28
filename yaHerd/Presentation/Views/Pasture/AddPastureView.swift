@@ -36,21 +36,23 @@ struct AddPastureView: View {
                     }
                 }
 
-                Section("Stocking") {
-                    HStack {
-                        Text("Usable Acres")
-                        Spacer()
-                        TextField("usable acres", text: $model.usableAcreageText)
-                            .multilineTextAlignment(.trailing)
-                            .keyboardType(.decimalPad)
-                    }
-
-                    HStack {
-                        Text("Target Acres/Head")
-                        Spacer()
-                        TextField("rate", text: $model.targetAcresPerHeadText)
-                            .multilineTextAlignment(.trailing)
-                            .keyboardType(.decimalPad)
+                if model.shouldShowStockingFields {
+                    Section("Stocking") {
+                        HStack {
+                            Text("Usable Acres")
+                            Spacer()
+                            TextField("usable acres", text: $model.usableAcreageText)
+                                .multilineTextAlignment(.trailing)
+                                .keyboardType(.decimalPad)
+                        }
+                        
+                        HStack {
+                            Text("Target Acres/Head")
+                            Spacer()
+                            TextField("rate", text: $model.targetAcresPerHeadText)
+                                .multilineTextAlignment(.trailing)
+                                .keyboardType(.decimalPad)
+                        }
                     }
                 }
             }

@@ -205,6 +205,7 @@ struct FieldCheckSessionDetailView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .foregroundStyle(colorScheme == .dark ? .black : .white)
             .disabled(selectedPastureID == nil)
         }
     }

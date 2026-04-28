@@ -11,6 +11,15 @@ final class PastureDetailViewModel {
     var hasLoaded = false
     var errorMessage: String?
 
+    var shouldShowStockingSection: Bool {
+        if isEditing {
+            return form.shouldShowStockingFields
+        }
+        
+        guard let acreage = detail?.acreage else { return false }
+        return acreage > 1
+    }
+    
     func load(pastureID: UUID, using repository: any PastureRepository) {
         defer { hasLoaded = true }
 

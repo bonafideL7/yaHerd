@@ -22,7 +22,9 @@ struct PastureDetailView: View {
             if let detail = model.detail {
                 Form {
                     pastureInfoSection(detail)
-                    stockingSection(detail)
+                    if model.shouldShowStockingSection {
+                        stockingSection(detail)
+                    }
                     checkSection(detail)
                     animalsSection
                 }
@@ -86,17 +88,17 @@ struct PastureDetailView: View {
             } else {
                 Text("Active Animals: \(detail.activeAnimalCount)")
 
-                HStack {
-                    if let acreage = detail.acreage {
+                if let acreage = detail.acreage, acreage > 1 {
+                    HStack {
                         Text("Acreage: \(acreage, format: .number)")
-                    }
-
-                    Spacer()
-
-                    if let usableAcreage = detail.usableAcreage,
-                       usableAcreage != detail.acreage {
-                        Text("Usable Acres: \(usableAcreage, format: .number)")
-                            .foregroundStyle(.secondary)
+                        
+                        Spacer()
+                        
+                        if let usableAcreage = detail.usableAcreage,
+                           usableAcreage != acreage {
+                            Text("Usable Acres: \(usableAcreage, format: .number)")
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -119,10 +121,10 @@ struct PastureDetailView: View {
 
     @ViewBuilder
     private func stockingSection(_ detail: PastureDetailSnapshot) -> some View {
-        let metrics = detail.metrics
-        
-        DisclosureGroup("Stocking", isExpanded: $isStockingExpanded) {
-            if model.isEditing {
+        let metrics = detail.metrics        
+
+        if model.isEditing {
+            Section("Stocking") {
                 HStack {
                     Text("Usable Acres")
                     Spacer()
@@ -130,7 +132,7 @@ struct PastureDetailView: View {
                         .multilineTextAlignment(.trailing)
                         .keyboardType(.decimalPad)
                 }
-
+                
                 HStack {
                     Text("Target Acres/Head")
                     Spacer()
@@ -138,21 +140,23 @@ struct PastureDetailView: View {
                         .multilineTextAlignment(.trailing)
                         .keyboardType(.decimalPad)
                 }
-            } else {
+            }
+        } else {
+            DisclosureGroup("Stocking", isExpanded: $isStockingExpanded) {
                 if let capacityHead = metrics.capacityHead {
                     Text("Capacity: \(capacityHead, format: .number.precision(.fractionLength(2)))")
                 }
-
+                
                 Text(
                     "Stocking Rate: \(metrics.acresPerHead, format: .number.precision(.fractionLength(2))) acres/head"
                 )
-
+                
                 if let targetAcresPerHead = metrics.targetAcresPerHead {
                     Text(
                         "Target Rate: \(targetAcresPerHead, format: .number.precision(.fractionLength(2))) acres/head"
                     )
                 }
-
+                
                 HStack {
                     if let utilizationPercent = metrics.utilizationPercent {
                         Text(
@@ -160,12 +164,12 @@ struct PastureDetailView: View {
                         )
                         .foregroundStyle(
                             utilizationPercent > 0.9 ? .red :
-                            utilizationPercent > 0.75 ? .orange : .green
+                                utilizationPercent > 0.75 ? .orange : .green
                         )
                     }
-
+                    
                     Spacer()
-
+                    
                     if metrics.isOverstocked {
                         Label("Overstocked", systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.red)

@@ -46,7 +46,7 @@ struct FieldChecksView: View {
                 }
             }
         }
-        .navigationTitle("Field Checks")
+        .navigationTitle("Pasture Checks")
         .task {
             model.load(using: repository)
         }
@@ -112,3 +112,4 @@ private struct FieldCheckSessionSummaryRow: View {
         .padding(.vertical, 4)
     }
 }
+

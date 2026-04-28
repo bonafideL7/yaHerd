@@ -10,6 +10,18 @@ final class PastureFormViewModel {
     var targetAcresPerHeadText = ""
     var errorMessage: String?
 
+    var shouldShowStockingFields: Bool {
+        guard let acreage = parseDecimal(acreageText) else { return false }
+        return acreage > 1
+    }
+    
+    var canSaveNewPasture: Bool {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return false }
+        
+        return true
+    }
+    
     private var hasPreparedDefaultValues = false
 
     func prepareForCreate(
@@ -39,44 +51,48 @@ final class PastureFormViewModel {
         targetAcresPerHeadText = Self.string(from: detail.targetAcresPerHead)
         errorMessage = nil
     }
-
-    var canSaveNewPasture: Bool {
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty else { return false }
-        guard let acreage = parseDecimal(acreageText) else { return false }
-        return acreage > 0
-    }
-
+    
     func makeCreateInput(
         defaultTargetAcresPerHead: Double,
         usableAcreagePercentDefault: Int
     ) throws -> PastureInput {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard let acreage = parseDecimal(acreageText), acreage > 0 else {
-            throw PastureValidationError.invalidAcreage
-        }
-
+        let acreage = try parsePositiveOptional(acreageText, error: .invalidAcreage)
+        
+        let shouldSaveStocking = (acreage ?? 0) > 1
+        
         let usableAcreage: Double?
-        if usableAcreageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            usableAcreage = acreage * (Double(usableAcreagePercentDefault) / 100)
+        if shouldSaveStocking {
+            if usableAcreageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if let acreage {
+                    usableAcreage = acreage * (Double(usableAcreagePercentDefault) / 100)
+                } else {
+                    usableAcreage = nil
+                }
+            } else {
+                usableAcreage = try parsePositiveOptional(
+                    usableAcreageText,
+                    error: .invalidUsableAcreage
+                )
+            }
         } else {
-            usableAcreage = try parsePositiveOptional(
-                usableAcreageText,
-                error: .invalidUsableAcreage
-            )
+            usableAcreage = nil
         }
-
+        
         let targetAcresPerHead: Double?
-        if targetAcresPerHeadText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            targetAcresPerHead = defaultTargetAcresPerHead > 0 ? defaultTargetAcresPerHead : nil
+        if shouldSaveStocking {
+            if targetAcresPerHeadText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                targetAcresPerHead = defaultTargetAcresPerHead > 0 ? defaultTargetAcresPerHead : nil
+            } else {
+                targetAcresPerHead = try parsePositiveOptional(
+                    targetAcresPerHeadText,
+                    error: .invalidTargetAcresPerHead
+                )
+            }
         } else {
-            targetAcresPerHead = try parsePositiveOptional(
-                targetAcresPerHeadText,
-                error: .invalidTargetAcresPerHead
-            )
+            targetAcresPerHead = nil
         }
-
+        
         return PastureInput(
             name: trimmedName,
             acreage: acreage,
@@ -86,14 +102,18 @@ final class PastureFormViewModel {
     }
 
     func makeUpdateInput() throws -> PastureInput {
-        PastureInput(
+        let acreage = try parsePositiveOptional(acreageText, error: .invalidAcreage)
+        let shouldSaveStocking = (acreage ?? 0) > 1
+        
+        return PastureInput(
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-            acreage: try parsePositiveOptional(acreageText, error: .invalidAcreage),
-            usableAcreage: try parsePositiveOptional(usableAcreageText, error: .invalidUsableAcreage),
-            targetAcresPerHead: try parsePositiveOptional(
-                targetAcresPerHeadText,
-                error: .invalidTargetAcresPerHead
-            )
+            acreage: acreage,
+            usableAcreage: shouldSaveStocking
+            ? try parsePositiveOptional(usableAcreageText, error: .invalidUsableAcreage)
+            : nil,
+            targetAcresPerHead: shouldSaveStocking
+            ? try parsePositiveOptional(targetAcresPerHeadText, error: .invalidTargetAcresPerHead)
+            : nil
         )
     }
 

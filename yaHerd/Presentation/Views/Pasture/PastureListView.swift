@@ -22,7 +22,7 @@ struct PastureListView: View {
                     description: Text("Add a pasture to start tracking acreage and stocking.")
                 )
             } else {
-                Section("Pastures") {
+                Section {
                     ForEach(model.items) { pasture in
                         NavigationLink(value: pasture) {
                             pastureRow(pasture)
@@ -59,7 +59,7 @@ struct PastureListView: View {
                         Label("View Pasture Checks", systemImage: "checklist")
                     }
                 } label: {
-                    Label("Field Checks", systemImage: "checklist")
+                    Label("Pasture Checks", systemImage: "checklist")
                 }
 
                 Button {
