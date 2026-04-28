@@ -229,8 +229,15 @@ struct AnimalListView: View {
             chips.append(.init(title: status.label) { filter.status = nil })
         }
 
-        if let pastureName = viewModel.pastureName(for: filter.pastureID) {
-            chips.append(.init(title: pastureName) { filter.pastureID = nil })
+        switch filter.pasture {
+        case .any:
+            break
+        case .noPasture:
+            chips.append(.init(title: "No Pasture") { filter.pasture = .any })
+        case let .pasture(pastureID):
+            if let pastureName = viewModel.pastureName(for: pastureID) {
+                chips.append(.init(title: pastureName) { filter.pasture = .any })
+            }
         }
 
         return chips

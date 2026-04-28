@@ -53,7 +53,12 @@ enum AnimalListDerivations {
             result = result.filter { $0.status == selectedStatus }
         }
 
-        if let selectedPastureID = filter.pastureID {
+        switch filter.pasture {
+        case .any:
+            break
+        case .noPasture:
+            result = result.filter { isNoPasture($0) }
+        case let .pasture(selectedPastureID):
             result = result.filter { $0.pastureID == selectedPastureID }
         }
 
@@ -184,6 +189,14 @@ enum AnimalListDerivations {
             )
         }
 
+        if filter.pasture == .noPasture {
+            return .init(
+                title: "No Animals Without a Pasture",
+                description: "Every visible animal is currently assigned to a pasture.",
+                systemImage: "map"
+            )
+        }
+
         if filter.isActive {
             return .init(
                 title: "No Animals Match These Filters",
@@ -263,6 +276,10 @@ enum AnimalListDerivations {
         }
 
         return "No Pasture"
+    }
+
+    private static func isNoPasture(_ animal: AnimalSummary) -> Bool {
+        animal.location != .workingPen && animal.pastureID == nil
     }
 
     private static func pastureSectionSortKey(for title: String) -> String {

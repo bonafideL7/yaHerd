@@ -117,14 +117,15 @@ struct AnimalFilterView: View {
 
                 Section("Pasture") {
                     Picker("Pasture", selection: Binding(
-                        get: { filter.pastureID },
-                        set: { filter.pastureID = $0 }
+                        get: { filter.pasture },
+                        set: { filter.pasture = $0 }
                     )) {
-                        Text("Any").tag(UUID?.none)
+                        Text("Any").tag(AnimalPastureFilter.any)
+                        Text("No Pasture").tag(AnimalPastureFilter.noPasture)
 
                         ForEach(pastureOptions) { pasture in
                             Text(pasture.name)
-                                .tag(UUID?.some(pasture.id))
+                                .tag(AnimalPastureFilter.pasture(pasture.id))
                         }
                     }
                 }
