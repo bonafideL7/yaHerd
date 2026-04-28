@@ -6,6 +6,7 @@ final class Pasture {
     @Attribute(.unique) var publicID: UUID
     @Attribute(.unique) var name: String
     @Relationship(deleteRule: .nullify, inverse: \Animal.pasture)
+    
     var animals: [Animal] = []
     var acreage: Double?
     var usableAcreage: Double?

@@ -13,7 +13,8 @@ final class FieldCheckSession {
 
     @Relationship(deleteRule: .nullify)
     var pasture: Pasture?
-
+    var pastureID: UUID?
+    
     @Relationship(deleteRule: .cascade)
     var animalChecks: [FieldCheckAnimalCheck] = []
 
@@ -28,6 +29,7 @@ final class FieldCheckSession {
         expectedHeadCountSnapshot: Int = 0,
         quickTaggedCount: Int = 0,
         quickUntaggedCount: Int = 0,
+        pastureID: UUID? = nil,
         pasture: Pasture? = nil
     ) {
         self.publicID = publicID
@@ -37,6 +39,7 @@ final class FieldCheckSession {
         self.expectedHeadCountSnapshot = expectedHeadCountSnapshot
         self.quickTaggedCount = quickTaggedCount
         self.quickUntaggedCount = quickUntaggedCount
+        self.pastureID = pastureID
         self.pasture = pasture
     }
 

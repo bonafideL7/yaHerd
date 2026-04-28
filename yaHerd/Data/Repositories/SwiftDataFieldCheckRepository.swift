@@ -50,6 +50,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             expectedHeadCountSnapshot: rosterAnimals.count,
             quickTaggedCount: 0,
             quickUntaggedCount: 0,
+            pastureID: pasture.publicID,
             pasture: pasture
         )
         context.insert(session)

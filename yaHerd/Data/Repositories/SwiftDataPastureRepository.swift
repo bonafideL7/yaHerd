@@ -72,12 +72,28 @@ struct SwiftDataPastureRepository: PastureRepository {
 
     func delete(ids: [UUID]) throws {
         guard !ids.isEmpty else { return }
-
+        
         let identifierSet = Set(ids)
-        let descriptor = FetchDescriptor<Pasture>()
-        for pasture in try context.fetch(descriptor) where identifierSet.contains(pasture.publicID) {
+        
+        let pastureDescriptor = FetchDescriptor<Pasture>()
+        let pasturesToDelete = try context.fetch(pastureDescriptor)
+            .filter { identifierSet.contains($0.publicID) }
+        
+        let sessionDescriptor = FetchDescriptor<FieldCheckSession>()
+        let sessionsToDelete = try context.fetch(sessionDescriptor)
+            .filter { session in
+                guard let pastureID = session.pastureID else { return false }
+                return identifierSet.contains(pastureID)
+            }
+        
+        for session in sessionsToDelete {
+            context.delete(session)
+        }
+        
+        for pasture in pasturesToDelete {
             context.delete(pasture)
         }
+        
         try context.save()
     }
 
