@@ -11,6 +11,7 @@ struct AnimalListEmptyStateView: View {
     let colorScheme: ColorScheme
     let onAddAnimal: () -> Void
     let onAddSampleData: () -> Void
+    let onAddLargeSampleData: () -> Void
     let onClearFilters: () -> Void
     let onShowInactive: () -> Void
     let onShowArchivedRecords: () -> Void
@@ -27,6 +28,8 @@ struct AnimalListEmptyStateView: View {
                     .foregroundStyle(colorScheme == .dark ? .black : .white)
 
                 Button("Add Sample Data", action: onAddSampleData)
+                    .buttonStyle(.bordered)
+                Button("Add Large Sample Data", action: onAddLargeSampleData)
                     .buttonStyle(.bordered)
             } else {
                 if filtersAreActive {

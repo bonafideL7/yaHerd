@@ -151,6 +151,10 @@ struct AnimalListView: View {
                 dependencies.seedSampleDataIfNeeded()
                 reload()
             },
+            onAddLargeSampleData: {
+                dependencies.seedLargeSampleDataIfNeeded()
+                reload()
+            },
             onClearFilters: clearAllFilters,
             onShowInactive: { showRemovedStatuses = true },
             onShowArchivedRecords: { showArchivedRecords = true }

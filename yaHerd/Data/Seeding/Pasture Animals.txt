@@ -1,3 +1,184 @@
+ignore x's "x". If there are two numbers with a slash "/", the second number is an old tag number. The letter before the number is the color prefix. If there is no color letter prefix, default to white. If the color is white or green, it's female. If it's blue, it's male. If there is a +1 (mm/dd), that is an untagged newborn to the animal tag number preceding. Ensure the relationships are established. The sire should be the bull. Some animals have "PREG" after that indicates a positive pregnancy and if they are a heifer. PregnacyCheck record should be created based on the data. Some animals have their name after the number and slash "/". UT stands for "untagged". Untagged should not have any tag assigned. Some animals have a status of deceased with the gender and date. The Animal status should reflect the according status. Some animals have info following their number describing distinguishing feature (Add a DistinguishingFeature array type to the Animal model and update the form. Multiple distinguishing features can be added.). The animals born last fall should have birthdays from last fall. Make up birthdays for all other animals ensuring the animal age would be old enough to be a heifer or bred cow. All animals in this data should be in one pasture.
+two numbers with a slash "/", the second number is a retired tag number. “think it’s” lines are also a retired tag number. “lost tag” can be a retired tag UT mean the animal does not have a tag assigned and Tag should be empty. x/xx can be ignored +1 creates a calf record and should align with the "2026 Calves" section count-only lines should align with the rest of the data. For example: 34 cows, 15 Babies - 123456, 7 untagged, New babies - 18 - this all means there should be at least 34 cows in the pasture, 7 UT, 18 calves, 15 babies less than a year old, last season calves. “nursing” should be handled as having a baby that's less than a year old (last season calves) GR 2 Rudy girl - 3/5/26 vs GR 2/Rudy - +1 (3/5) girl. is the same animal. The tag is green 2, Rudy has a calf, girl born 3/5/26 “moved” lines should be handled as a timeline record for pasture move pregnancy checks should be dated with last season dates anticipating birth this season. No merge rule for import yet. This will be seeded data for the project. Seed data is just a current snapshot. Output should be for the attached project data structure as the "Large" sample data seed.
+ 
+NW Pasture Animals Jan 2026
+18 cows
+1 blind heifer
+1 Bull
+10 calves
+ 6 - New calves 2026 xxxxx
+
+80 +1 (1/29) girl x
+81 x
+203 nursing girl x
+220 x DIED
+345 x
+347 +1 (2/26) boy x
+354 x
+355 nursing baby boy x
+356 boy nursing PREG xx
+361 boy untagged x
+362 PREG x 
+375 x
+404 xx DIED
+405 +1 (2/16) boy x
+406/586 +1 (2/12) x
+407 2/24/26 bad right back leg + 1 (3/3) boy x
+GR 3/Roux +1 (4/17)
+Y66 Bull - moved 2/26/26 
+UT (2) x
+UT (219) x
+
+10 calves
+Heifer calves white tag - 3
+W031 x 362
+W034 x
+W038 (203) x
+
+UT Mom being bred 2/26/26
+
+Steer calves blue tag - 2
+B130 xx 354
+B132 nursing UT Mom x
+UT BIg Boy - 1 x
+UT boys - xxx
+UT heifer - xx (4/24 in SW)
+Blind heifer - x
+
+Lost tags Momma’s
+128 -DIED 11/26/25
+205 - retqgged
+211
+219
+231 - 
+286 - retagged
+
+7 untagged
+
+LF Pasture Animals Jan 2026
+Bull xx
+31 cows when 17 is back
+3 calves (2 boys, 1 girl)
+Babies 2026 -  14
+
+W05 xx
+W06 xx
+W011 B155 - xx
+W014 xx
+W015 xx
+W017 x holding pen PREG
+W018 xx
+W77 girl nursing xx
+W87 xx
+W95 +1 (3/11)  xx
+W226 +1 (3/20) xx
+W271 +1 (3/7) xx
+W323 (white on udder and up on belly) +1 (4/2 DIED 4/4) xx
+W328 +1 (3/28) girl xx
+W370 knot on right jaw +1 (3/28) xx
+W376 +1 boy (3/22) xx
+W408/P122 +1 (3/8) xx
+*W409 (think it’s 264) PREG xx
+W410/P120 boy nursing xx  
+W411 xx
+W412 + 1 (3/5)  xx
+*W413 +1 (3/13) xx
+W414 (think it’s 304) +1 (4/7) xx
+*W415 +1 (3/21) xx
+W416/P116 +1 (3/14) xx
+W417/P110  xx
+W418/P118 boy nursing +1 (4/3) xx
+W419 PREG xx
+W420 +1 (3/12) boy xx
+W421 (b156) xx
+UT Mom ( right ear frozen) boy nursing xx
+(baby boy died 2/23/26)
+W428 xx
+W429 xx
+W430 xx
+W431 xx
+
+B155 xx
+B156 xx
+
+Lost 2 calves 2/22/26
+1 boy (UT Mom)
+1 girl (417s)
+Dead bull calf - 3/3/26
+
+
+NE Pasture animals
+26 cows
+1 heifer
+Irish bull - x moved to NE 2/27/26
+Babies (tagged)- 9
+2026 Babies - 6 xxxxxx
+
+9  DIED - w029 moved to holding pasture
+59 (UT) - x
+78 x
+96 w026 x
+97 x
+99 +1 (2/28) x
+023/165 +1(1/9) x
+216 +1 (1/3) x
+025/243 b129 x
+247 x
+252 x
+024/254/185 x
+314 x
+319 b123 x
+349 w028 x
+358 PREG x
+373 x
+378/187 +1 (1/20) x
+397 b128 x
+399 PREG x
+400 w023 PREG x
+401 (1/12 BABY DIED) x
+402/Purple 69 b126 x
+579 +1 (1/7) x
+584 w024 x
+Green 4/Imogene +1 (1/15) boy x
+Orange 2/Little tag W025 - PREG x
+8 Kramer moved to NE 2/27/26
+16 Chuck moved to NE 2/27/26
+B 123 - x
+B 126 - x
+B 128 - x
+B 129 - x
+W 023 - x
+W 024 - x
+W 026 - x
+W 028 - x
+W036 - x
+
+Babies - 9
+W023
+W024 
+W026 
+W028 
+W029 pulled to working pen 2/8/26
+W036 
+B123
+B126 
+B128
+B129
+
+New calves - 6
+
+
+Lost tags
+W59 (white on udder) - 
+W71 (short tail)
+W159 - W398
+W244 -
+W272 - (torn ears)
+W280 - 
+W290 -
+Purple 69 (piece of purple tag in ear)
+
+
 SW Pasture Animals
 34 cows 
 New babies - 18 ✅
@@ -61,7 +242,7 @@ Wally’s Pasture Animals Jan 2026
 3 Green Tag Heifers
 7 White tag heifers (3 heifers are pregnant)
 6 older calves tagged
-2026 babies - 7 xxxxxxx
+2026 babies - 8
 
 67 +1 (4/7) xx
 68 +1 (3/17) xx
@@ -105,252 +286,3 @@ Dead in pond UT girl - 1/27/26
 Dead in pond heifer W046 - 1/27/26
 
 11/15/25 - Untagged girl died
-
-NW Pasture Animals Jan 2026
-18 cows
-1 blind heifer
-1 Bull
-10 calves
- 5 - New calves 2026 xxxxx
-
-80 +1 (1/29) x
-81 x
-203 nursing girl x
-220 x DIED
-345 x
-347 +1 (2/26) x
-354 x
-355 nursing baby boy x
-356 boy nursing PREG xx
-361 boy untagged x
-362 PREG x 
-375 x
-404 xx DIED
-405 +1 (2/16) x
-406/586 +1 (2/12) x
-407 2/24/26 bad right back leg + 1 (3/3) boy x
-GR 3/Roux PREG x
-Y66 Bull - moved 2/26/26 
-UT (2) x
-UT (219) x
-
-10 calves
-Heifer calves white tag - 3
-W031 x 362
-W034 x
-W038 (203) x
-
-UT Mom being bred 2/26/26
-
-Steer calves blue tag - 2
-B130 xx 354
-B132 nursing UT Mom x
-UT BIg Boy - 1 x
-UT boys - xx
-UT heifer - xx
-Blind heifer - x
-
-
-Lost tags Momma’s
-128 -DIED 11/26/25
-205 - retqgged
-211
-219
-231 - 
-286 - retagged
-
-7 untagged
-
-LF Pasture Animals Jan 2026
-Bull xx
-31 cows when 17 is back
-3 calves (2 boys, 1 girl)
-Babies 2026 -  14
-
-W05 xx
-W06 xx
-W011 B155 - xx
-W014 xx
-W015 xx
-W017 x holding pen PREG
-W018 xx
-W77 girl nursing xx
-W87 xx
-W95 +1 (3/11)  xx
-W226 +1 (3/20) xx
-W271 +1 (3/7) xx
-W323 (white on udder and up on belly) +1 (4/2 DIED 4/4) xx
-W328 +1 (3/28) girl xx
-W370 knot on right jaw +1 (3/28) xx
-W376 +1 boy (3/22) xx
-W408/P122 +1 (3/8) xx
-*W409 (think it’s 264) PREG xx
-W410/P120 boy nursing xx
-W411 xx
-W412 + 1 (3/5)  xx
-*W413 +1 (3/13) xx
-W414 (think it’s 304) +1 (4/7) xx
-*W415 +1 (3/21) xx
-W416/P116 +1 (3/14) xx
-W417/P110  xx
-W418/P118 boy nursing +1 (4/3) xx
-W419 PREG xx
-W420 +1 (3/12) boy xx
-W421 (b156) xx
-UT Mom ( right ear frozen) boy nursing xx
-(baby boy died 2/23/26)
-W428 xx
-W429 xx
-W430 xx
-W431 xx
-
-B155 xx
-B156 xx
-
-Lost 2 calves 2/22/26
-1 boy (UT Mom)
-1 girl (417s)
-Dead bull calf - 3/3/26
-
-NE Pasture animals
-26 cows
-1 heifer
-Irish bull - x moved to NE 2/27/26
-Babies (tagged)- 9
-2026 Babies - 6 xxxxxx
-
-9  DIED - w029 moved to holding pasture
-59 (UT) - xx
-78 xx
-96 w026 xx
-97 xx
-99 +1 (2/28) xx
-023/165 +1(1/9) xx
-216 +1 (1/3) xx
-025/243 b129 xx
-247 xx
-252 xx
-024/254/185 xx
-314 xx
-319 b123 xx
-349 w028 xx
-358 PREG xx
-373 xx
-378/187 +1 (1/20) xx
-397 b128 xx
-399 PREG xx
-400 w023 PREG xx
-401 (1/12 BABY DIED) xx
-402/Purple 69 b126 xx
-579 +1 (1/7) xx
-584 w024 xx
-Green 4/Imogene +1 (1/15) boy xx
-Orange 2/Little tag W025 - PREG xx
-8 Kramer moved to NE 2/27/26
-16 Chuck moved to NE 2/27/26
-B 123 - xx
-B 126 - xx
-B 128 - xx
-B 129 - xx
-W 023 - xx
-W 024 - xx
-W 026 - xx
-W 028 - xx
-W036 - xx
-
-Babies - 9
-W023
-W024 
-W026 
-W028 
-W029 pulled to working pen 2/8/26
-W036 
-B123
-B126 
-B128
-B129
-
-New calves - 6
-
-
-Lost tags
-W59 (white on udder) - 
-W71 (short tail)
-W159 - W398
-W244 -
-W272 - (torn ears)
-W280 - 
-W290 -
-Purple 69 (piece of purple tag in ear)
-
-
- 2026  Calves
-52/55
-
-SE/NE - 6/7
-216 - 1/3/26
-579 - 1/7/26
-023 - 1/9/26  
-401 - 1/12/26 (Dead 1/19/26)
-GR 4 - 1/15/26 boy
-378 - 1/20/26
-99 - 2/28/26
-
-SW - 19
-257 - 1/23/26
-381 - 1/30/26
-296 - 2/1/26
-364 - 2/1/26
-265 - 2/1/26
-UT Mom (white on right side of udder) - 2/2/26
-047 - 2/3/26
-21 - 2/10/26
-386 - 2/18/26
-White Sox - 2/22/26
-GR 2 Rudy girl - 3/5/26
-377 - 3/5/26
-302 - 3/6/26
-UT Mom old - 3/8/26
-85 - 3/12/26
-Blank Tag - 3/16/26
-230 - 3/23/26
-369 - 3/31/26 
-389 - 4/11/26
-
-NW - 5/6
-80 - 1/29/26
-406 - 2/12/26
-405 - 2/16/26
-404  down (DIED)& dead calf/half eaten 2/22/26
-347 - 2/26/26
-407 - 3/3/26 boy
-
-LF - 14/15
-87 - stuff hanging out 2/7/26
-328 - 2/23/26 girl 
-412 - 3/5/26
-271 - 3/7/26
-408 - 3/8/26
-95 - 3/11/26
-420 - 3/12/26 boy
-413 - 3/13/26
-416 - 3/14/26
-226 - 3/20/26
-415 - 3/21/26
-376 - 3/22/26 boy
-370 - 3/29/26
-323 - 4/2/26 premie died 4/4/26
-418 - 4/3/26
-414 - 4/7/26
-
-
-Wally’s - 8
-227 - 3/6/26
-68 - 3/17/26
-379 - 3/29/26
-395 - 3/31/26
-366 - 4/7/26
-67 - 4/7/26
-287 - 4/6/26
-380 - 4/11/26
-

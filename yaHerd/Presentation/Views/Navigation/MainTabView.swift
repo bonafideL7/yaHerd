@@ -39,10 +39,6 @@ struct MainTabView: View {
                 Label("Pastures", systemImage: "leaf")
             }
         }
-        .task {
-//            SampleDataService.seedDefaultsIfNeeded(context: context)
-//            SampleLargeDataService.seedIfNeeded(context: context)
-        }
     }
 
     @ViewBuilder

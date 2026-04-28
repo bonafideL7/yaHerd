@@ -22,12 +22,13 @@ struct SampleDataService {
         let greenTagColorID = tagColorStore.colors.first(where: { $0.name == "Green" })?.id
         
         // MARK: - Pastures
-        let northwest = Pasture(name: "NW Pasture", acreage: 35, usableAcreage: 30, targetAcresPerHead: 3)
-        let southwest = Pasture(name: "SW Pasture", acreage: 30, usableAcreage: 30, targetAcresPerHead: 3)
-        let northeast = Pasture(name: "NE Pasture", acreage: 30, usableAcreage: 30, targetAcresPerHead: 3)
-        let southeast = Pasture(name: "SE Pasture", acreage: 30, usableAcreage: 30, targetAcresPerHead: 3)
-        let lower = Pasture(name: "Lower", acreage: 50, usableAcreage: 30, targetAcresPerHead: 3)
-        let holding = Pasture(name: "Holding", acreage: 5, usableAcreage: 3, targetAcresPerHead: 3)
+        let northwest = Pasture(name: "NW Pasture", acreage: 35, usableAcreage: 25, targetAcresPerHead: 3)
+        let southwest = Pasture(name: "SW Pasture", acreage: 80, usableAcreage: 65, targetAcresPerHead: 3)
+        let northeast = Pasture(name: "NE Pasture", acreage: 30, usableAcreage: 25, targetAcresPerHead: 3)
+        let southeast = Pasture(name: "SE Pasture", acreage: 35, usableAcreage: 20, targetAcresPerHead: 3)
+        let lower = Pasture(name: "Lower", acreage: 65, usableAcreage: 50, targetAcresPerHead: 3)
+        let holding = Pasture(name: "Holding", acreage: 7, usableAcreage: 5, targetAcresPerHead: 3)
+        let wallys = Pasture(name: "Wally's", acreage: 48, usableAcreage: 40, targetAcresPerHead: 3)
         
         context.insert(northwest)
         context.insert(southwest)
