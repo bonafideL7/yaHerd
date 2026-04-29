@@ -28,6 +28,7 @@ enum FieldCheckMapper {
             note: finding.note,
             animalID: finding.animal?.publicID,
             animalDisplayTagNumber: trimmed(finding.animal?.displayTagNumber) ?? trimmed(finding.animal?.name),
+            animalDisplayTagColorID: finding.animal?.displayTagColorID,
             pastureName: finding.session?.pasture?.name,
             sessionID: finding.session?.publicID ?? UUID()
         )

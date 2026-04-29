@@ -30,6 +30,7 @@ struct FieldCheckFindingSnapshot: Identifiable, Hashable {
     let note: String
     let animalID: UUID?
     let animalDisplayTagNumber: String?
+    let animalDisplayTagColorID: UUID?
     let pastureName: String?
     let sessionID: UUID
 }

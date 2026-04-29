@@ -8,26 +8,28 @@ struct FieldCheckSessionDetailView: View {
     
     @State private var model = FieldCheckSessionDetailViewModel()
     @State private var setupModel = FieldCheckSessionSetupViewModel()
-    @State private var rosterFilter: FieldCheckRosterFilter = .remaining
+    @State private var rosterFilter: FieldCheckRosterFilter = .all
     @State private var rosterSearchText = ""
     @State private var showingAddFinding = false
     @State private var currentSessionID: UUID?
     @State private var selectedPastureID: UUID?
     @State private var startedAt: Date = .now
-    @State private var selectedPane: FieldCheckSessionPane = .summary
+    @State private var selectedPane: FieldCheckSessionPane
     
     private let suggestedPastureID: UUID?
     
-    init(sessionID: UUID) {
+    init(sessionID: UUID, opensFindings: Bool = false) {
         self.suggestedPastureID = nil
         _currentSessionID = State(initialValue: sessionID)
         _selectedPastureID = State(initialValue: nil)
+        _selectedPane = State(initialValue: opensFindings ? .findings : .summary)
     }
     
     init(suggestedPastureID: UUID? = nil) {
         self.suggestedPastureID = suggestedPastureID
         _currentSessionID = State(initialValue: nil)
         _selectedPastureID = State(initialValue: suggestedPastureID)
+        _selectedPane = State(initialValue: .summary)
     }
     
     private var repository: any FieldCheckRepository {
@@ -50,12 +52,8 @@ struct FieldCheckSessionDetailView: View {
                     return true
                 case .remaining:
                     return !check.wasCounted && !check.isMissing
-                case .counted:
-                    return check.wasCounted
                 case .flagged:
                     return check.needsAttention
-                case .missing:
-                    return check.isMissing
                 }
             }
         
@@ -364,29 +362,16 @@ struct FieldCheckSessionDetailView: View {
     @ViewBuilder
     private var findingsSection: some View {
         Section("Findings") {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(suggestedFindingTypes) { type in
-                        Button {
-                            let input = FieldCheckFindingInput(
-                                recordedAt: .now,
-                                type: type,
-                                severity: defaultSeverity(for: type),
-                                status: .open,
-                                note: "",
-                                animalID: nil
-                            )
-                            guard let currentSessionID else { return }
-                            model.addFinding(sessionID: currentSessionID, input: input, using: repository)
-                        } label: {
-                            Label(type.label, systemImage: type.systemImage)
-                        }
-                        .buttonStyle(.bordered)
-                    }
+            
+            Button {
+                showingAddFinding = true
+            } label: {
+                HStack {
+                    Text("Add Finding")
+                    Spacer()
+                    Image(systemName: "plus.circle.fill")
                 }
-                .padding(.vertical, 4)
             }
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
             
             if sortedFindings.isEmpty {
                 Text("No findings recorded.")
@@ -413,12 +398,6 @@ struct FieldCheckSessionDetailView: View {
                     }
                 }
             }
-            
-            Button {
-                showingAddFinding = true
-            } label: {
-                Label("Add Finding", systemImage: "plus")
-            }
         }
     }
     
@@ -442,14 +421,26 @@ struct FieldCheckSessionDetailView: View {
                 model.reopenSession(sessionID: currentSessionID, using: repository)
             }
         } else {
-            Button {
-                guard let currentSessionID else { return }
-                model.completeSession(sessionID: currentSessionID, using: repository)
-            } label: {
-                Label("Complete Check", systemImage: "checkmark.circle.fill")
+            VStack(alignment: .leading, spacing: 8) {
+                Button {
+                    guard let currentSessionID else { return }
+                    model.completeSession(sessionID: currentSessionID, using: repository)
+                } label: {
+                    Label("Complete Check", systemImage: "checkmark.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .foregroundStyle(colorScheme == .dark ? .black : .white)
+                
+                HStack(spacing: 12) {
+                    Text("Seen \(detail.totalSeen)")
+                        .font(.caption.weight(.semibold))
+                    
+                    Text("Expected \(detail.expectedHeadCountSnapshot)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
             }
-            .buttonStyle(.borderedProminent)
-            .foregroundStyle(colorScheme == .dark ? .black : .white)
         }
     }
     
@@ -546,7 +537,7 @@ private struct FieldCheckAnimalCheckRow: View {
     let sessionID: UUID
     let check: FieldCheckAnimalCheckSnapshot
     let onToggleCounted: () -> Void
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
@@ -561,29 +552,20 @@ private struct FieldCheckAnimalCheckRow: View {
                     damTagColor: damDefinition.color,
                     damTagColorName: damDefinition.name
                 )
-
+                
                 VStack(alignment: .leading, spacing: 4) {
                     if !check.animalName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text(check.animalName)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-
-                    HStack(spacing: 8) {
-                        if check.wasCounted {
-                            FieldCheckBadge(title: "Counted", tint: .green)
-                        }
-                        if check.needsAttention {
-                            FieldCheckBadge(title: "Flagged", tint: .orange)
-                        }
-                        if check.isMissing {
-                            FieldCheckBadge(title: "Missing", tint: .orange)
-                        }
+                    if check.needsAttention {
+                        FieldCheckBadge(title: "Flagged", tint: .orange)
                     }
                 }
-
+                
                 Spacer(minLength: 8)
-
+                
                 Button {
                     onToggleCounted()
                 } label: {
@@ -593,7 +575,7 @@ private struct FieldCheckAnimalCheckRow: View {
                 .tint(check.wasCounted ? .green : .accentColor)
                 .foregroundStyle(colorScheme == .dark ? .black : .white)
             }
-
+            
             if let animalID = check.animalID {
                 NavigationLink {
                     FieldCheckAnimalDetailView(sessionID: sessionID, animalID: animalID)
@@ -608,10 +590,12 @@ private struct FieldCheckAnimalCheckRow: View {
 }
 
 struct FieldCheckFindingRow: View {
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+    
     let finding: FieldCheckFindingSnapshot
-    var showsAnimalLink = true
+    var showsAnimalDisplayTagNumber = true
     var onStatusChange: ((FieldCheckFindingStatus) -> Void)? = nil
-
+    
     private var tint: Color {
         switch finding.severity {
         case .info:
@@ -622,85 +606,160 @@ struct FieldCheckFindingRow: View {
             return .red
         }
     }
-
+    
+    private var trimmedNote: String {
+        finding.note.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Label(finding.type.label, systemImage: finding.type.systemImage)
-                    .fontWeight(.semibold)
-                Spacer()
-                FieldCheckBadge(title: finding.status.label, tint: tint)
+        VStack(alignment: .leading, spacing: 12) {
+            header
+            
+            if !trimmedNote.isEmpty {
+                noteRow
             }
-
-            if let animalDisplayTagNumber = finding.animalDisplayTagNumber {
-                if showsAnimalLink, let animalID = finding.animalID {
-                    NavigationLink {
-                        FieldCheckAnimalDetailView(sessionID: finding.sessionID, animalID: animalID)
-                    } label: {
-                        Text(animalDisplayTagNumber)
-                            .font(.subheadline)
-                    }
-                } else {
-                    Text(animalDisplayTagNumber)
-                        .font(.subheadline)
-                }
-            }
-
-            if let pastureName = finding.pastureName {
-                Text(pastureName)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            if !finding.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text(finding.note)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
+            
             if let onStatusChange {
-                Menu("Update Status") {
-                    ForEach(FieldCheckFindingStatus.allCases) { status in
-                        Button(status.label) {
-                            onStatusChange(status)
-                        }
-                    }
-                }
-                .font(.footnote)
+                statusMenu(onStatusChange)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
+        .contentShape(.rect(cornerRadius: 16))
+    }
+    
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: finding.type.systemImage)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 34, height: 34)
+                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(finding.type.label)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                    
+                    FieldCheckBadge(title: finding.status.label, tint: tint)
+                }
+                
+                if let pastureName = finding.pastureName {
+                    Label(pastureName, systemImage: "map")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            
+            Spacer(minLength: 0)
+            
+            if showsAnimalDisplayTagNumber,
+               let animalDisplayTagNumber = finding.animalDisplayTagNumber {
+                animalTagRow(animalDisplayTagNumber)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func animalTagRow(_ animalDisplayTagNumber: String) -> some View {
+        
+        animalTagLabel(animalDisplayTagNumber)
+        
+    }
+    
+    private func animalTagLabel(_ animalDisplayTagNumber: String) -> some View {
+        let definition = tagColorLibrary.resolvedDefinition(tagColorID: finding.animalDisplayTagColorID)
+        
+        return HStack(spacing: 8) {
+            AnimalTagView(
+                tagNumber: animalDisplayTagNumber,
+                color: definition.color,
+                colorName: definition.name,
+                size: .compact
+            )
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(alignment: .trailing)
+        .accessibilityLabel("Open animal with tag \(animalDisplayTagNumber)")
+    }
+    
+    
+    private var noteRow: some View {
+        Text(trimmedNote)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+    
+    private func statusMenu(_ onStatusChange: @escaping (FieldCheckFindingStatus) -> Void) -> some View {
+        Menu {
+            ForEach(FieldCheckFindingStatus.allCases) { status in
+                Button(status.label) {
+                    onStatusChange(status)
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.footnote.weight(.semibold))
+                
+                Text("Update Status")
+                    .font(.footnote.weight(.semibold))
+                
+                Spacer(minLength: 0)
+                
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(.regularMaterial, in: Capsule())
+            .overlay {
+                Capsule()
+                    .strokeBorder(.primary.opacity(0.08))
+            }
+        }
+        .menuIndicator(.hidden)
     }
 }
 
 
-private struct FieldCheckAnimalDetailView: View {
+struct FieldCheckAnimalDetailView: View {
     @EnvironmentObject private var dependencies: AppDependencies
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-
+    
     @State private var model = FieldCheckAnimalDetailViewModel()
     @State private var isLineageExpanded = false
     @State private var showingAddOffspring = false
-
+    
     let sessionID: UUID
     let animalID: UUID
-
+    
     private var animalRepository: any AnimalRepository {
         dependencies.animalRepository
     }
-
+    
     private var fieldCheckRepository: any FieldCheckRepository {
         dependencies.fieldCheckRepository
     }
-
+    
     private var displayedTagNumber: String {
         model.animalDetail?.displayTagNumber ?? ""
     }
-
+    
     private var displayedTagColorID: UUID? {
         model.animalDetail?.displayTagColorID
     }
-
+    
     private var errorBinding: Binding<Bool> {
         Binding(
             get: { model.errorMessage != nil },
@@ -711,7 +770,7 @@ private struct FieldCheckAnimalDetailView: View {
             }
         )
     }
-
+    
     var body: some View {
         Group {
             if let detail = model.animalDetail {
@@ -719,7 +778,7 @@ private struct FieldCheckAnimalDetailView: View {
                     if let animalCheck = model.animalCheck {
                         fieldCheckFindingsSection(animalCheck)
                     }
-
+                    
                     AnimalDetailOffspringSection(
                         detail: detail,
                         canAddOffspring: model.preparedOffspringEditor != nil,
@@ -784,7 +843,7 @@ private struct FieldCheckAnimalDetailView: View {
             Text(model.errorMessage ?? "Unknown error")
         }
     }
-
+    
     @ViewBuilder
     private func fieldCheckFindingsSection(_ animalCheck: FieldCheckAnimalCheckSnapshot) -> some View {
         Section {
@@ -793,7 +852,7 @@ private struct FieldCheckAnimalDetailView: View {
                     FieldCheckBadge(title: "Missing", tint: .orange)
                 }
             }
-
+            
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     findingButton(.pinkEye)
@@ -803,7 +862,7 @@ private struct FieldCheckAnimalDetailView: View {
                 .padding(.vertical, 4)
             }
             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-
+            
             if model.animalFindings.isEmpty {
                 Text("No findings recorded for this animal in this check.")
                     .foregroundStyle(.secondary)
@@ -811,7 +870,7 @@ private struct FieldCheckAnimalDetailView: View {
                 ForEach(model.animalFindings) { finding in
                     FieldCheckFindingRow(
                         finding: finding,
-                        showsAnimalLink: false,
+                        showsAnimalDisplayTagNumber: false,
                         onStatusChange: { status in
                             model.updateFindingStatus(
                                 animalID: animalID,
@@ -842,7 +901,7 @@ private struct FieldCheckAnimalDetailView: View {
             Text("This animal is marked as needing attention whenever findings exist in the current check.")
         }
     }
-
+    
     private func findingButton(_ type: FieldCheckFindingType) -> some View {
         Button {
             model.addFinding(
@@ -862,7 +921,7 @@ private struct FieldCheckAnimalDetailView: View {
 struct FieldCheckBadge: View {
     let title: String
     let tint: Color
-
+    
     var body: some View {
         Text(title)
             .font(.caption.weight(.semibold))
@@ -875,18 +934,18 @@ struct FieldCheckBadge: View {
 
 private struct FieldCheckFindingEditorView: View {
     @Environment(\.dismiss) private var dismiss
-
+    
     let suggestedTypes: [FieldCheckFindingType]
     let animals: [FieldCheckAnimalCheckSnapshot]
     let onSave: (FieldCheckFindingInput) -> Void
-
+    
     @State private var recordedAt: Date = .now
     @State private var type: FieldCheckFindingType
     @State private var severity: FieldCheckFindingSeverity
     @State private var status: FieldCheckFindingStatus = .open
     @State private var note = ""
     @State private var selectedAnimalID: UUID?
-
+    
     init(
         suggestedTypes: [FieldCheckFindingType],
         animals: [FieldCheckAnimalCheckSnapshot],
@@ -898,7 +957,7 @@ private struct FieldCheckFindingEditorView: View {
         _type = State(initialValue: suggestedTypes.first ?? .generalObservation)
         _severity = State(initialValue: .warning)
     }
-
+    
     private var animalOptions: [FieldCheckAnimalCheckSnapshot] {
         animals
             .filter { $0.animalID != nil }
@@ -906,31 +965,31 @@ private struct FieldCheckFindingEditorView: View {
                 left.displayTagNumber.localizedStandardCompare(right.displayTagNumber) == .orderedAscending
             }
     }
-
+    
     var body: some View {
         Form {
             Section("Finding") {
                 DatePicker("Observed", selection: $recordedAt, displayedComponents: [.date, .hourAndMinute])
-
+                
                 Picker("Type", selection: $type) {
                     ForEach(FieldCheckFindingType.allCases) { type in
                         Text(type.label).tag(type)
                     }
                 }
-
+                
                 Picker("Severity", selection: $severity) {
                     ForEach(FieldCheckFindingSeverity.allCases) { severity in
                         Text(severity.label).tag(severity)
                     }
                 }
-
+                
                 Picker("Status", selection: $status) {
                     ForEach(FieldCheckFindingStatus.allCases) { status in
                         Text(status.label).tag(status)
                     }
                 }
             }
-
+            
             Section("Animal") {
                 Picker("Linked Animal", selection: $selectedAnimalID) {
                     Text("None").tag(Optional<UUID>.none)
@@ -939,7 +998,7 @@ private struct FieldCheckFindingEditorView: View {
                     }
                 }
             }
-
+            
             Section("Notes") {
                 TextField("Notes", text: $note, axis: .vertical)
                     .lineLimit(3...5)
@@ -951,7 +1010,7 @@ private struct FieldCheckFindingEditorView: View {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Cancel") { dismiss() }
             }
-
+            
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
                     onSave(
@@ -974,24 +1033,18 @@ private struct FieldCheckFindingEditorView: View {
 private enum FieldCheckRosterFilter: String, CaseIterable, Identifiable {
     case all
     case remaining
-    case counted
     case flagged
-    case missing
-
+    
     var id: String { rawValue }
-
+    
     var label: String {
         switch self {
         case .all:
             return "All"
         case .remaining:
             return "Remaining"
-        case .counted:
-            return "Counted"
         case .flagged:
             return "Flagged"
-        case .missing:
-            return "Missing"
         }
     }
 }
@@ -1002,9 +1055,9 @@ private enum FieldCheckSessionPane: String, CaseIterable, Identifiable {
     case quickCount
     case findings
     case notes
-
+    
     var id: String { rawValue }
-
+    
     var label: String {
         switch self {
         case .summary:
@@ -1019,7 +1072,7 @@ private enum FieldCheckSessionPane: String, CaseIterable, Identifiable {
             return "Notes"
         }
     }
-
+    
     static let defaultPane: FieldCheckSessionPane = .roster
 }
 

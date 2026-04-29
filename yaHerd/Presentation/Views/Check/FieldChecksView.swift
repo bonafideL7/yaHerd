@@ -39,9 +39,9 @@ struct FieldChecksView: View {
                         Section("Open Findings") {
                             ForEach(model.openFindings) { finding in
                                 NavigationLink {
-                                    FieldCheckSessionDetailView(sessionID: finding.sessionID)
+                                    openFindingDestination(for: finding)
                                 } label: {
-                                    FieldCheckFindingRow(finding: finding, showsAnimalLink: false)
+                                    FieldCheckFindingRow(finding: finding)
                                 }
                             }
                         }
@@ -87,6 +87,12 @@ struct FieldChecksView: View {
             Text(model.errorMessage ?? "Unknown error")
         }
     }
+
+    @ViewBuilder
+    private func openFindingDestination(for finding: FieldCheckFindingSnapshot) -> some View {
+        FieldCheckSessionDetailView(sessionID: finding.sessionID, opensFindings: true)
+    }
+
 
     private var errorBinding: Binding<Bool> {
         Binding(
