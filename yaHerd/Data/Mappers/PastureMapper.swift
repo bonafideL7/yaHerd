@@ -30,7 +30,7 @@ enum PastureMapper {
             name: animal.name,
             displayTagNumber: animal.displayTagNumber,
             displayTagColorID: animal.displayTagColorID,
-            damDisplayTagNumber: animal.damAnimal?.displayTagNumber,
+            damDisplayTagNumber: AnimalDisplayTagFormatter.displayTagNumber(for: animal.damAnimal),
             damDisplayTagColorID: animal.damAnimal?.displayTagColorID,
             sex: animal.sex ?? .unknown,
             animalType: animal.animalType,

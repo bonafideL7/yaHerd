@@ -21,7 +21,7 @@ enum DashboardMapper {
             id: animal.publicID,
             displayTagNumber: animal.displayTagNumber,
             displayTagColorID: animal.displayTagColorID,
-            damDisplayTagNumber: animal.damAnimal?.displayTagNumber,
+            damDisplayTagNumber: AnimalDisplayTagFormatter.displayTagNumber(for: animal.damAnimal),
             damDisplayTagColorID: animal.damAnimal?.displayTagColorID,
             sex: animal.sex ?? .unknown,
             status: animal.status,
@@ -72,4 +72,5 @@ enum DashboardMapper {
             return .unknown
         }
     }
+
 }

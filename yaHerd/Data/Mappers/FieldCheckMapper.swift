@@ -7,7 +7,7 @@ enum FieldCheckMapper {
             animalID: check.animal?.publicID,
             displayTagNumber: check.displayTagNumber,
             displayTagColorID: check.animal?.displayTagColorID ?? check.rosterTagColorID,
-            damDisplayTagNumber: check.animal?.damAnimal?.displayTagNumber,
+            damDisplayTagNumber: AnimalDisplayTagFormatter.displayTagNumber(for: check.animal?.damAnimal),
             damDisplayTagColorID: check.animal?.damAnimal?.displayTagColorID,
             animalName: check.animal?.name ?? check.animalName,
             animalSex: check.animal?.sex ?? check.animalSex,
@@ -74,4 +74,5 @@ private extension FieldCheckMapper {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
+
 }
