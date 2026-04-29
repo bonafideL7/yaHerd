@@ -12,12 +12,13 @@ struct AnimalListContentList: View {
     var body: some View {
         List(selection: batchMode ? $selectedAnimalIDs : nil) {
             ForEach(groupedAnimals) { section in
-                if shouldUseSections {
-                    Section(section.title) {
-                        sectionRows(section.animals)
-                    }
-                } else {
+                Section {
                     sectionRows(section.animals)
+                } header: {
+                    AnimalListSectionHeader(
+                        title: shouldUseSections ? section.title : nil,
+                        count: section.animals.count
+                    )
                 }
             }
         }
@@ -83,5 +84,32 @@ struct AnimalListContentList: View {
         } else {
             Color.clear
         }
+    }
+}
+
+private struct AnimalListSectionHeader: View {
+    let title: String?
+    let count: Int
+
+    private var countText: String {
+        count == 1 ? "1 animal" : "\(count) animals"
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let title {
+                Text(title)
+            } else {
+                Text(countText)
+            }
+
+            if title != nil {
+                Spacer(minLength: 12)
+                Text(countText)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.caption.weight(.semibold))
+        .textCase(.uppercase)
     }
 }
