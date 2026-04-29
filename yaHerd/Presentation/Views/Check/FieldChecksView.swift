@@ -3,57 +3,85 @@ import SwiftUI
 struct FieldChecksView: View {
     @EnvironmentObject private var dependencies: AppDependencies
     @State private var model = FieldChecksViewModel()
+    @State private var showingStartPastureCheck = false
 
     private var repository: any FieldCheckRepository {
         dependencies.fieldCheckRepository
     }
 
+    private var isEmpty: Bool {
+        model.activeSessions.isEmpty
+        && model.openFindings.isEmpty
+        && model.recentSessions.isEmpty
+    }
+
     var body: some View {
-        List {
-            if !model.activeSessions.isEmpty {
-                Section("In Progress") {
-                    ForEach(model.activeSessions) { session in
-                        NavigationLink {
-                            FieldCheckSessionDetailView(sessionID: session.id)
-                        } label: {
-                            FieldCheckSessionSummaryRow(session: session)
+        Group {
+            if isEmpty {
+                FieldChecksEmptyState {
+                    showingStartPastureCheck = true
+                }
+            } else {
+                List {
+                    if !model.activeSessions.isEmpty {
+                        Section("In Progress") {
+                            ForEach(model.activeSessions) { session in
+                                NavigationLink {
+                                    FieldCheckSessionDetailView(sessionID: session.id)
+                                } label: {
+                                    FieldCheckSessionSummaryRow(session: session)
+                                }
+                            }
+                        }
+                    }
+
+                    if !model.openFindings.isEmpty {
+                        Section("Open Findings") {
+                            ForEach(model.openFindings) { finding in
+                                NavigationLink {
+                                    FieldCheckSessionDetailView(sessionID: finding.sessionID)
+                                } label: {
+                                    FieldCheckFindingRow(finding: finding, showsAnimalLink: false)
+                                }
+                            }
+                        }
+                    }
+
+                    if !model.recentSessions.isEmpty {
+                        Section("Recent Checks") {
+                            ForEach(model.recentSessions) { session in
+                                NavigationLink {
+                                    FieldCheckSessionDetailView(sessionID: session.id)
+                                } label: {
+                                    FieldCheckSessionSummaryRow(session: session)
+                                }
+                            }
                         }
                     }
                 }
-            }
-
-            if !model.openFindings.isEmpty {
-                Section("Open Findings") {
-                    ForEach(model.openFindings) { finding in
-                        NavigationLink {
-                            FieldCheckSessionDetailView(sessionID: finding.sessionID)
-                        } label: {
-                            FieldCheckFindingRow(finding: finding, showsAnimalLink: false)
-                        }
-                    }
-                }
-            }
-
-            if !model.recentSessions.isEmpty {
-                Section("Recent Checks") {
-                    ForEach(model.recentSessions) { session in
-                        NavigationLink {
-                            FieldCheckSessionDetailView(sessionID: session.id)
-                        } label: {
-                            FieldCheckSessionSummaryRow(session: session)
-                        }
-                    }
+                .refreshable {
+                    model.load(using: repository)
                 }
             }
         }
         .navigationTitle("Pasture Checks")
+        .navigationDestination(isPresented: $showingStartPastureCheck) {
+            FieldCheckSessionDetailView()
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showingStartPastureCheck = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("Start Pasture Check")
+            }
+        }
         .task {
             model.load(using: repository)
         }
-        .refreshable {
-            model.load(using: repository)
-        }
-        .alert("Can’t Load Checks", isPresented: errorBinding) {
+        .alert("Can't Load Checks", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(model.errorMessage ?? "Unknown error")
@@ -70,8 +98,45 @@ struct FieldChecksView: View {
             }
         )
     }
+
+
 }
 
+private struct FieldChecksEmptyState: View {
+    let onStartPastureCheck: () -> Void
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "checklist")
+                .font(.system(size: 42, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            VStack(spacing: 8) {
+                Text("No pasture checks")
+                    .font(.title3.weight(.semibold))
+
+                Text("Start a pasture check to verify head counts, record findings, and capture notes.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Button(action: onStartPastureCheck) {
+                Label("Start Pasture Check", systemImage: "plus.circle.fill")
+                    .font(.headline)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+        }
+        .padding(32)
+        .frame(maxWidth: 420)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .background(Color(.systemGroupedBackground))
+    }
+}
 
 private struct FieldCheckSessionSummaryRow: View {
     let session: FieldCheckSessionSummary
@@ -112,4 +177,3 @@ private struct FieldCheckSessionSummaryRow: View {
         .padding(.vertical, 4)
     }
 }
-
