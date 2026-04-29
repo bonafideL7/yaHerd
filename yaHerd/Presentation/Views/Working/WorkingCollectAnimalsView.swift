@@ -43,11 +43,15 @@ struct WorkingCollectAnimalsView: View {
                 ForEach(eligibleAnimals) { animal in
                     HStack(spacing: 12) {
                         let def = tagColorLibrary.resolvedDefinition(tagColorID: animal.displayTagColorID)
+                        let damDef = tagColorLibrary.resolvedDefinition(tagColorID: animal.damDisplayTagColorID)
                         VStack(alignment: .leading, spacing: 6) {
                             AnimalTagView(
                                 tagNumber: animal.displayTagNumber,
                                 color: def.color,
-                                colorName: def.name
+                                colorName: def.name,
+                                damTagNumber: animal.damDisplayTagNumber,
+                                damTagColor: damDef.color,
+                                damTagColorName: damDef.name
                             )
                             Text(animal.sex.label)
                                 .font(.caption)

@@ -196,11 +196,15 @@ struct PastureDetailView: View {
                         AnimalDetailView(animalID: animal.id)
                     } label: {
                         let definition = tagColorLibrary.resolvedDefinition(for: animal)
+                        let damDefinition = tagColorLibrary.resolvedDefinition(tagColorID: animal.damDisplayTagColorID)
 
                         AnimalTagView(
                             tagNumber: animal.displayTagNumber,
                             color: definition.color,
-                            colorName: definition.name
+                            colorName: definition.name,
+                            damTagNumber: animal.damDisplayTagNumber,
+                            damTagColor: damDefinition.color,
+                            damTagColorName: damDefinition.name
                         )
                     }
                 }

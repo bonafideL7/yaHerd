@@ -43,11 +43,15 @@ struct WorkingSessionAnimalEditView: View {
                 if let snapshot, let tagNumber = snapshot.animalDisplayTagNumber {
                     HStack {
                         let def = tagColorLibrary.resolvedDefinition(tagColorID: snapshot.animalDisplayTagColorID)
+                        let damDef = tagColorLibrary.resolvedDefinition(tagColorID: snapshot.animalDamDisplayTagColorID)
                         AnimalTagView(
                             tagNumber: tagNumber,
                             color: def.color,
                             colorName: def.name,
-                            size: .prominent
+                            size: .prominent,
+                            damTagNumber: snapshot.animalDamDisplayTagNumber,
+                            damTagColor: damDef.color,
+                            damTagColorName: damDef.name
                         )
                         Spacer()
                         Text(snapshot.animalSex.label)

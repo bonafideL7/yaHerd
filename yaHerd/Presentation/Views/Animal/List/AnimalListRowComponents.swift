@@ -11,13 +11,17 @@ struct AnimalListRowContent: View {
 
     var body: some View {
         let def = tagColorLibrary.resolvedDefinition(tagColorID: animal.displayTagColorID)
+        let damDef = tagColorLibrary.resolvedDefinition(tagColorID: animal.damDisplayTagColorID)
 
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
                 AnimalTagView(
                     tagNumber: animal.displayTagNumber,
                     color: def.color,
-                    colorName: def.name
+                    colorName: def.name,
+                    damTagNumber: animal.damDisplayTagNumber,
+                    damTagColor: damDef.color,
+                    damTagColorName: damDef.name
                 )
 
                 if !animal.name.isEmpty {

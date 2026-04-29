@@ -29,6 +29,8 @@ struct WorkingQueueItemEditorSnapshot: Identifiable, Hashable {
     let animalID: UUID?
     let animalDisplayTagNumber: String?
     let animalDisplayTagColorID: UUID?
+    let animalDamDisplayTagNumber: String?
+    let animalDamDisplayTagColorID: UUID?
     let animalSex: Sex
     let animalAgeInMonths: Int
     let treatmentRecords: [WorkingTreatmentRecordSnapshot]

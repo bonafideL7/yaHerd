@@ -11,6 +11,8 @@ struct FieldCheckAnimalCheckSnapshot: Identifiable, Hashable {
     let animalID: UUID?
     let displayTagNumber: String
     let displayTagColorID: UUID?
+    let damDisplayTagNumber: String?
+    let damDisplayTagColorID: UUID?
     let animalName: String
     let animalSex: Sex
     let wasExpectedAtStart: Bool

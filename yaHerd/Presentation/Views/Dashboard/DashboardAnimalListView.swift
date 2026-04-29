@@ -82,12 +82,16 @@ struct DashboardAnimalListView: View {
     private func row(_ animal: DashboardAnimalItem) -> some View {
         HStack(spacing: 12) {
             let definition = tagColorLibrary.resolvedDefinition(tagColorID: animal.displayTagColorID)
+            let damDefinition = tagColorLibrary.resolvedDefinition(tagColorID: animal.damDisplayTagColorID)
 
             VStack(alignment: .leading, spacing: 6) {
                 AnimalTagView(
                     tagNumber: animal.displayTagNumber,
                     color: definition.color,
-                    colorName: definition.name
+                    colorName: definition.name,
+                    damTagNumber: animal.damDisplayTagNumber,
+                    damTagColor: damDefinition.color,
+                    damTagColorName: damDefinition.name
                 )
 
                 HStack(spacing: 6) {

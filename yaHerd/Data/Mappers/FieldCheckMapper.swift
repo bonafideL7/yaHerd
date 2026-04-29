@@ -7,6 +7,8 @@ enum FieldCheckMapper {
             animalID: check.animal?.publicID,
             displayTagNumber: check.displayTagNumber,
             displayTagColorID: check.animal?.displayTagColorID ?? check.rosterTagColorID,
+            damDisplayTagNumber: check.animal?.damAnimal?.displayTagNumber,
+            damDisplayTagColorID: check.animal?.damAnimal?.displayTagColorID,
             animalName: check.animal?.name ?? check.animalName,
             animalSex: check.animal?.sex ?? check.animalSex,
             wasExpectedAtStart: check.wasExpectedAtStart,

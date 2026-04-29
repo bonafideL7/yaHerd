@@ -551,11 +551,15 @@ private struct FieldCheckAnimalCheckRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
                 let definition = tagColorLibrary.resolvedDefinition(tagColorID: check.displayTagColorID)
+                let damDefinition = tagColorLibrary.resolvedDefinition(tagColorID: check.damDisplayTagColorID)
                 AnimalTagView(
                     tagNumber: check.displayTagNumber,
                     color: definition.color,
                     colorName: definition.name,
-                    size: .compact
+                    size: .compact,
+                    damTagNumber: check.damDisplayTagNumber,
+                    damTagColor: damDefinition.color,
+                    damTagColorName: damDefinition.name
                 )
 
                 VStack(alignment: .leading, spacing: 4) {

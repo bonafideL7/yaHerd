@@ -36,11 +36,15 @@ struct WorkingFinishSessionView: View {
                         if let tagNumber = item.animalDisplayTagNumber {
                             HStack {
                                 let def = tagColorLibrary.resolvedDefinition(tagColorID: item.animalDisplayTagColorID)
+                let damDef = tagColorLibrary.resolvedDefinition(tagColorID: item.animalDamDisplayTagColorID)
                                 AnimalTagView(
                                     tagNumber: tagNumber,
                                     color: def.color,
                                     colorName: def.name,
-                                    size: .compact
+                                    size: .compact,
+                                    damTagNumber: item.animalDamDisplayTagNumber,
+                                    damTagColor: damDef.color,
+                                    damTagColorName: damDef.name
                                 )
                                 Spacer()
                                 Picker("", selection: bindingDestination(for: item)) {

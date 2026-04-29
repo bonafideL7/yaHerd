@@ -37,6 +37,8 @@ struct AnimalDetailSnapshot: Identifiable, Hashable {
             name: name,
             displayTagNumber: displayTagNumber,
             displayTagColorID: displayTagColorID,
+            damDisplayTagNumber: dam,
+            damDisplayTagColorID: nil,
             sex: sex,
             animalType: animalType,
             birthDate: birthDate,

@@ -8,6 +8,8 @@ struct WorkingQueueItemSnapshot: Identifiable, Hashable {
     let animalID: UUID?
     let animalDisplayTagNumber: String?
     let animalDisplayTagColorID: UUID?
+    let animalDamDisplayTagNumber: String?
+    let animalDamDisplayTagColorID: UUID?
     let animalSex: Sex
     let collectedFromPastureName: String?
     let destinationPastureID: UUID?

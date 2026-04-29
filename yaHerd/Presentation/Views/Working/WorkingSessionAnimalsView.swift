@@ -46,11 +46,15 @@ struct WorkingSessionAnimalsView: View {
         if let tagNumber = item.animalDisplayTagNumber {
             HStack(spacing: 12) {
                 let def = tagColorLibrary.resolvedDefinition(tagColorID: item.animalDisplayTagColorID)
+                let damDef = tagColorLibrary.resolvedDefinition(tagColorID: item.animalDamDisplayTagColorID)
                 VStack(alignment: .leading, spacing: 6) {
                     AnimalTagView(
                         tagNumber: tagNumber,
                         color: def.color,
-                        colorName: def.name
+                        colorName: def.name,
+                        damTagNumber: item.animalDamDisplayTagNumber,
+                        damTagColor: damDef.color,
+                        damTagColorName: damDef.name
                     )
                     Text(item.status.rawValue.capitalized)
                         .font(.caption)

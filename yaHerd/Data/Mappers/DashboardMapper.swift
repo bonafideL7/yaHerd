@@ -21,6 +21,8 @@ enum DashboardMapper {
             id: animal.publicID,
             displayTagNumber: animal.displayTagNumber,
             displayTagColorID: animal.displayTagColorID,
+            damDisplayTagNumber: animal.damAnimal?.displayTagNumber,
+            damDisplayTagColorID: animal.damAnimal?.displayTagColorID,
             sex: animal.sex ?? .unknown,
             status: animal.status,
             isArchived: animal.isArchived,

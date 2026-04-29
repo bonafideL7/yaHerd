@@ -28,6 +28,8 @@ struct DashboardAnimalItem: Identifiable, Hashable {
     let id: UUID
     let displayTagNumber: String
     let displayTagColorID: UUID?
+    let damDisplayTagNumber: String?
+    let damDisplayTagColorID: UUID?
     let sex: Sex
     let pastureID: UUID?
     let pastureName: String?

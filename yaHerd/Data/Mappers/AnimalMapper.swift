@@ -7,6 +7,8 @@ struct AnimalMapper {
             name: animal.name,
             displayTagNumber: animal.displayTagNumber,
             displayTagColorID: animal.displayTagColorID,
+            damDisplayTagNumber: animal.damAnimal?.displayTagNumber,
+            damDisplayTagColorID: animal.damAnimal?.displayTagColorID,
             sex: animal.sex ?? .unknown,
             animalType: animal.animalType,
             birthDate: animal.birthDate,

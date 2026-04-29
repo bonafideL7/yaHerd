@@ -56,12 +56,26 @@ struct AnimalTagView: View {
                 .headline.monospacedDigit().weight(.bold)
             }
         }
+
+        var damFont: Font {
+            switch self {
+            case .compact:
+                .caption2.monospacedDigit().weight(.semibold)
+            case .regular:
+                .caption.monospacedDigit().weight(.semibold)
+            case .prominent:
+                .subheadline.monospacedDigit().weight(.semibold)
+            }
+        }
     }
 
     let tagNumber: String
     let color: Color
     let colorName: String
     var size: Size = .regular
+    var damTagNumber: String? = nil
+    var damTagColor: Color? = nil
+    var damTagColorName: String? = nil
 
     private var normalizedTagText: String {
         let trimmed = tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -73,7 +87,33 @@ struct AnimalTagView: View {
         return trimmed.isEmpty ? "White" : trimmed
     }
 
+    private var normalizedDamTagText: String? {
+        guard normalizedTagText == "UT" else { return nil }
+        let trimmed = damTagNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var normalizedDamColorName: String {
+        let trimmed = damTagColorName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "White" : trimmed
+    }
+
+    private var resolvedDamColor: Color {
+        damTagColor ?? .secondary
+    }
+
     var body: some View {
+        HStack(spacing: 6) {
+            baseTagPill
+
+            if let normalizedDamTagText {
+                damTagPill(normalizedDamTagText)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var baseTagPill: some View {
         HStack(spacing: size.spacing) {
             TagColorTagIcon(
                 color: color,
@@ -93,7 +133,30 @@ struct AnimalTagView: View {
             Capsule()
                 .stroke(color.opacity(0.35), lineWidth: 1)
         )
-        .accessibilityElement(children: .combine)
         .accessibilityLabel("Animal tag \(normalizedColorName) \(normalizedTagText)")
+    }
+
+    private func damTagPill(_ tagText: String) -> some View {
+        HStack(spacing: 4) {
+            
+            TagColorTagIcon(
+                color: resolvedDamColor,
+                accessibilityLabel: "Dam tag color: \(normalizedDamColorName)",
+                size: max(size.iconSize - 3, 10)
+            )
+
+            Text(tagText)
+                .font(size.damFont)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, max(size.horizontalPadding - 2, 6))
+        .padding(.vertical, max(size.verticalPadding - 1, 3))
+        .background(.thinMaterial, in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(resolvedDamColor.opacity(0.28), lineWidth: 1)
+        )
+        .accessibilityLabel("Dam tag \(normalizedDamColorName) \(tagText)")
     }
 }

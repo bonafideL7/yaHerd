@@ -10,6 +10,8 @@ struct DashboardAnimalRecord: Identifiable, Hashable {
     let id: UUID
     let displayTagNumber: String
     let displayTagColorID: UUID?
+    let damDisplayTagNumber: String?
+    let damDisplayTagColorID: UUID?
     let sex: Sex
     let status: AnimalStatus
     let isArchived: Bool
