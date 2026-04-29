@@ -33,9 +33,9 @@ struct AnimalMapper {
             pastureID: animal.pasture?.publicID,
             pastureName: animal.pasture?.name,
             sireID: animal.sireAnimal?.publicID,
-            sire: animal.sireAnimal?.displayTagNumber,
+            sire: animal.sireAnimal.map(parentDisplayName),
             damID: animal.damAnimal?.publicID,
-            dam: animal.damAnimal?.displayTagNumber,
+            dam: animal.damAnimal.map(parentDisplayName),
             distinguishingFeatures: animal.distinguishingFeatures,
             saleDate: animal.saleDate,
             salePrice: animal.salePrice,
@@ -63,6 +63,7 @@ struct AnimalMapper {
     static func makeParentOption(from animal: Animal) -> AnimalParentOption {
         AnimalParentOption(
             id: animal.publicID,
+            name: animal.name,
             displayTagNumber: animal.displayTagNumber,
             displayTagColorID: animal.displayTagColorID,
             sex: animal.sex ?? .unknown,
@@ -86,4 +87,20 @@ struct AnimalMapper {
         animal.timelineEvents
     }
 
+    private static func parentDisplayName(for animal: Animal) -> String {
+        let trimmedTag = animal.displayTagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedTag.isEmpty { return trimmedTag }
+
+        let trimmedName = animal.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedName.isEmpty { return trimmedName }
+
+        switch animal.sex ?? .unknown {
+        case .female:
+            return "Untagged dam"
+        case .male:
+            return "Untagged sire"
+        case .unknown:
+            return "Untagged animal"
+        }
+    }
 }

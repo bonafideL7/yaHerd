@@ -26,6 +26,8 @@ final class AnimalParentPickerViewModel {
                 guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return true }
                 let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
                 return animal.displayTagNumber.localizedCaseInsensitiveContains(query)
+                    || animal.displayName.localizedCaseInsensitiveContains(query)
+                    || animal.name.localizedCaseInsensitiveContains(query)
                     || formattedTag(animal).localizedCaseInsensitiveContains(query)
             }
             .filter { animal in

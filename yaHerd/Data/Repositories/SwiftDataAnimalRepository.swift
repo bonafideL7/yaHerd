@@ -46,10 +46,10 @@ struct SwiftDataAnimalRepository: AnimalRepository {
                 guard let excludedAnimalID else { return true }
                 return animal.publicID != excludedAnimalID
             }
-            .sorted { lhs, rhs in
-                lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
-            }
             .map(AnimalMapper.makeParentOption)
+            .sorted { lhs, rhs in
+                lhs.displayName.localizedStandardCompare(rhs.displayName) == .orderedAscending
+            }
     }
 
     func fetchOffspringDraftSeed(forDamID damID: UUID) throws -> OffspringDraftSeed? {
@@ -60,11 +60,11 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         let inferredSire = try inferSingleSire(inSamePastureAs: damAnimal, excludingAnimalID: damID)
         return OffspringDraftSeed(
             damID: damAnimal.publicID,
-            damDisplayName: damAnimal.displayTagNumber,
+            damDisplayName: AnimalMapper.makeParentOption(from: damAnimal).displayName,
             pastureID: damAnimal.pasture?.publicID,
             pastureName: damAnimal.pasture?.name,
             inferredSireID: inferredSire?.publicID,
-            inferredSireDisplayName: inferredSire?.displayTagNumber,
+            inferredSireDisplayName: inferredSire.map { AnimalMapper.makeParentOption(from: $0).displayName },
             defaultBirthDate: Calendar.current.startOfDay(for: .now)
         )
     }

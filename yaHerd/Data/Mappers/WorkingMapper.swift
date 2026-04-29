@@ -81,6 +81,7 @@ enum WorkingMapper {
             sire: check.sireAnimal.map { sire in
                 AnimalParentOption(
                     id: sire.publicID,
+                    name: sire.name,
                     displayTagNumber: sire.displayTagNumber,
                     displayTagColorID: sire.displayTagColorID,
                     sex: sire.sex ?? .unknown,

@@ -274,7 +274,7 @@ private struct AnimalParentPickerSheetModifier: ViewModifier {
                     suggestedSexes: [.male]
                 ) { picked in
                     sireID = picked.id
-                    sire = picked.displayTagNumber
+                    sire = picked.displayName
                     activePicker = nil
                 }
             case .dam:
@@ -284,7 +284,7 @@ private struct AnimalParentPickerSheetModifier: ViewModifier {
                     suggestedSexes: [.female]
                 ) { picked in
                     damID = picked.id
-                    dam = picked.displayTagNumber
+                    dam = picked.displayName
                     activePicker = nil
                 }
             }

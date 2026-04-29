@@ -57,6 +57,12 @@ struct AnimalParentPickerView: View {
                                             color: def.color,
                                             colorName: def.name
                                         )
+                                        if animal.displayTagNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                            Text(animal.displayName)
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(.primary)
+                                        }
+
                                         Text(animal.sex.label)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
@@ -75,7 +81,7 @@ struct AnimalParentPickerView: View {
                     get: { viewModel.searchText },
                     set: { viewModel.searchText = $0 }
                 ),
-                prompt: "Search tag"
+                prompt: "Search tag or name"
             )
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
