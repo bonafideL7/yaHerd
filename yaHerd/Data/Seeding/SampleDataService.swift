@@ -35,6 +35,7 @@ struct SampleDataService {
         context.insert(northeast)
         context.insert(southeast)
         context.insert(lower)
+        context.insert(wallys)
         context.insert(holding)
         
         // MARK: - Animals (Matthew and Heather's herd)
