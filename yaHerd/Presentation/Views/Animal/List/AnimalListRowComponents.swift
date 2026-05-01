@@ -38,18 +38,63 @@ struct AnimalListRowContent: View {
                     AnimalListLocationBadges(animal: animal)
                 }
 
-                HStack {
-                    AnimalListInfoPill(title: animal.age, systemImage: "clock")
-                    AnimalListInfoPill(
-                        title: animal.birthDate.formatted(
-                            .dateTime.year(.twoDigits).month(.twoDigits).day(.twoDigits)
-                        ),
-                        systemImage: "calendar"
-                    )
-                }
+                AnimalListAgeAndBirthDatePills(animal: animal)
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
+    }
+}
+
+struct AnimalListAgeAndBirthDatePills: View {
+    let animal: AnimalSummary
+
+    private var birthDateText: String {
+        animal.birthDate.formatted(.dateTime.year(.twoDigits).month(.twoDigits).day(.twoDigits))
+    }
+
+    private var compactBirthDateText: String {
+        animal.birthDate.formatted(.dateTime.month(.defaultDigits).day(.defaultDigits))
+    }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            AnimalListCombinedAgeBirthDatePill(
+                ageText: animal.age,
+                birthDateText: birthDateText
+            )
+
+            AnimalListCombinedAgeBirthDatePill(
+                ageText: animal.age,
+                birthDateText: compactBirthDateText
+            )
+
+            AnimalListInfoPill(title: animal.age, systemImage: "calendar")
+        }
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+struct AnimalListCombinedAgeBirthDatePill: View {
+    let ageText: String
+    let birthDateText: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "calendar")
+
+            Text(ageText)
+
+            Text("•")
+                .font(.caption2)
+
+            Text(birthDateText)
+        }
+        .font(.callout)
+        .foregroundStyle(.fill)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 5)
+        .background(.thinMaterial, in: Capsule())
     }
 }
 
