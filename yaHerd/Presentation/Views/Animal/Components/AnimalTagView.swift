@@ -69,6 +69,11 @@ struct AnimalTagView: View {
         }
     }
 
+    enum DamTagVisibility {
+        case whenUntagged
+        case always
+    }
+
     let tagNumber: String
     let color: Color
     let colorName: String
@@ -76,6 +81,7 @@ struct AnimalTagView: View {
     var damTagNumber: String? = nil
     var damTagColor: Color? = nil
     var damTagColorName: String? = nil
+    var damTagVisibility: DamTagVisibility = .whenUntagged
 
     private var normalizedTagText: String {
         let trimmed = tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -88,7 +94,13 @@ struct AnimalTagView: View {
     }
 
     private var normalizedDamTagText: String? {
-        guard normalizedTagText == "UT" else { return nil }
+        switch damTagVisibility {
+        case .whenUntagged:
+            guard normalizedTagText == "UT" else { return nil }
+        case .always:
+            break
+        }
+
         let trimmed = damTagNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
     }

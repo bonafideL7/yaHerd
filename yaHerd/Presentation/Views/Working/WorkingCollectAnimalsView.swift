@@ -51,7 +51,8 @@ struct WorkingCollectAnimalsView: View {
                                 colorName: def.name,
                                 damTagNumber: animal.damDisplayTagNumber,
                                 damTagColor: damDef.color,
-                                damTagColorName: damDef.name
+                                damTagColorName: damDef.name,
+                                damTagVisibility: animal.animalType == .calf ? .always : .whenUntagged
                             )
                             Text(animal.sex.label)
                                 .font(.caption)

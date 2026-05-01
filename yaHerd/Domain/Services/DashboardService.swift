@@ -109,6 +109,7 @@ struct DashboardService {
                     damDisplayTagNumber: animal.damDisplayTagNumber,
                     damDisplayTagColorID: animal.damDisplayTagColorID,
                     sex: animal.sex,
+                    animalType: animal.animalType,
                     pastureID: animal.pastureID,
                     pastureName: animal.pastureName,
                     location: animal.location

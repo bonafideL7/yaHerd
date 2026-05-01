@@ -91,7 +91,8 @@ struct DashboardAnimalListView: View {
                     colorName: definition.name,
                     damTagNumber: animal.damDisplayTagNumber,
                     damTagColor: damDefinition.color,
-                    damTagColorName: damDefinition.name
+                    damTagColorName: damDefinition.name,
+                    damTagVisibility: animal.animalType == .calf ? .always : .whenUntagged
                 )
 
                 HStack(spacing: 6) {

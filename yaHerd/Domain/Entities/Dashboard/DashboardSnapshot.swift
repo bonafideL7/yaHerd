@@ -31,6 +31,7 @@ struct DashboardAnimalItem: Identifiable, Hashable {
     let damDisplayTagNumber: String?
     let damDisplayTagColorID: UUID?
     let sex: Sex
+    let animalType: AnimalType
     let pastureID: UUID?
     let pastureName: String?
     let location: AnimalLocation
