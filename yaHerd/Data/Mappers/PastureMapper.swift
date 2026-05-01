@@ -34,6 +34,7 @@ enum PastureMapper {
             damDisplayTagColorID: animal.damAnimal?.displayTagColorID,
             sex: animal.sex ?? .unknown,
             animalType: animal.animalType,
+            firstDistinguishingFeature: animal.distinguishingFeatures.firstOrderedDistinguishingFeatureDescription,
             birthDate: animal.birthDate,
             status: animal.status,
             isArchived: animal.isArchived,

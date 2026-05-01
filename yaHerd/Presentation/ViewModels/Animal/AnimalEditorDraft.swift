@@ -103,13 +103,16 @@ struct AnimalEditorDraft {
 
     var cleanedDistinguishingFeatures: [DistinguishingFeature] {
         distinguishingFeatures
-            .map {
+            .orderedDistinguishingFeatures
+            .map { feature in
                 DistinguishingFeature(
-                    id: $0.id,
-                    description: $0.description.trimmingCharacters(in: .whitespacesAndNewlines)
+                    id: feature.id,
+                    description: feature.description.trimmingCharacters(in: .whitespacesAndNewlines),
+                    order: feature.order
                 )
             }
             .filter { !$0.description.isEmpty }
+            .normalizedDistinguishingFeatureOrder
     }
 
     func parsedSalePrice() throws -> Double? {

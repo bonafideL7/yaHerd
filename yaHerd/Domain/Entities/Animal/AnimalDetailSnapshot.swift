@@ -41,6 +41,7 @@ struct AnimalDetailSnapshot: Identifiable, Hashable {
             damDisplayTagColorID: nil,
             sex: sex,
             animalType: animalType,
+            firstDistinguishingFeature: distinguishingFeatures.firstOrderedDistinguishingFeatureDescription,
             birthDate: birthDate,
             status: status,
             isArchived: isArchived,

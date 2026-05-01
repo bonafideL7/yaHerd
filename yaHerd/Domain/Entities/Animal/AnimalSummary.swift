@@ -9,12 +9,21 @@ struct AnimalSummary: Identifiable, Hashable {
     let damDisplayTagColorID: UUID?
     let sex: Sex
     let animalType: AnimalType
+    let firstDistinguishingFeature: String?
     let birthDate: Date
     let status: AnimalStatus
     let isArchived: Bool
     let pastureID: UUID?
     let pastureName: String?
     let location: AnimalLocation
+
+    var typeAndFeatureLabel: String {
+        guard let firstDistinguishingFeature, !firstDistinguishingFeature.isEmpty else {
+            return animalType.label
+        }
+
+        return "\(animalType.label) • \(firstDistinguishingFeature)"
+    }
 
     var age: String {
         let calendar = Calendar.current

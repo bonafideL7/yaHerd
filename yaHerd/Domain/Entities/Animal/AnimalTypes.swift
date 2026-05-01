@@ -67,10 +67,44 @@ enum AnimalLocation: String, Codable, CaseIterable {
 struct DistinguishingFeature: Codable, Hashable, Identifiable {
     var id: UUID
     var description: String
+    var order: Int
 
-    init(id: UUID = UUID(), description: String) {
+    init(id: UUID = UUID(), description: String, order: Int) {
         self.id = id
         self.description = description
+        self.order = order
+    }
+}
+
+extension Collection where Element == DistinguishingFeature {
+    var orderedDistinguishingFeatures: [DistinguishingFeature] {
+        enumerated()
+            .sorted { lhs, rhs in
+                if lhs.element.order != rhs.element.order {
+                    return lhs.element.order < rhs.element.order
+                }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
+    }
+
+    var normalizedDistinguishingFeatureOrder: [DistinguishingFeature] {
+        orderedDistinguishingFeatures
+            .enumerated()
+            .map { index, feature in
+                DistinguishingFeature(
+                    id: feature.id,
+                    description: feature.description,
+                    order: index
+                )
+            }
+    }
+
+    var firstOrderedDistinguishingFeatureDescription: String? {
+        orderedDistinguishingFeatures
+            .lazy
+            .map { $0.description.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
     }
 }
 

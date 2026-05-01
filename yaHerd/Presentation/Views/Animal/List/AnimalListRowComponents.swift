@@ -27,7 +27,7 @@ struct AnimalListRowContent: View {
                 if !animal.name.isEmpty {
                     AnimalListInfoPill(title: animal.name, systemImage: "")
                 } else {
-                    AnimalListInfoPill(title: animal.animalType.label, systemImage: "")
+                    AnimalListTypeAndFeaturePill(animal: animal)
                 }
             }
 
@@ -42,6 +42,33 @@ struct AnimalListRowContent: View {
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
+    }
+}
+
+struct AnimalListTypeAndFeaturePill: View {
+    let animal: AnimalSummary
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(animal.animalType.label)
+                .font(.callout)
+                .foregroundStyle(Color.accentColor)
+
+            if let feature = animal.firstDistinguishingFeature, !feature.isEmpty {
+                Text("•")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                Text(feature)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .lineLimit(1)
+        .truncationMode(.tail)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 5)
+        .background(.thinMaterial, in: Capsule())
     }
 }
 

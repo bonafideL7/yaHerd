@@ -249,7 +249,7 @@ struct AnimalDetailDistinguishingFeaturesSection: View {
     var body: some View {
         if !detail.distinguishingFeatures.isEmpty {
             Section("Distinguishing Features") {
-                ForEach(detail.distinguishingFeatures) { feature in
+                ForEach(detail.distinguishingFeatures.orderedDistinguishingFeatures) { feature in
                     Text(feature.description)
                 }
             }

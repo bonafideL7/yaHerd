@@ -55,7 +55,9 @@ struct SampleLargeDataService {
                 causeOfDeath: seed.status == .dead ? seed.causeOfDeath : nil,
                 pasture: pasturesByName[seed.pastureName],
                 sex: seed.sex,
-                distinguishingFeatures: seed.features.map { DistinguishingFeature(description: $0) }
+                distinguishingFeatures: seed.features.enumerated().map { index, feature in
+                    DistinguishingFeature(description: feature, order: index)
+                }
             )
             animal.location = .pasture
             context.insert(animal)

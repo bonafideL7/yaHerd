@@ -36,7 +36,11 @@ struct yaHerdApp: App {
         ])
 
         do {
-            let container = try ModelContainer(for: schema)
+            // This app is still pre-release. Use a new persistent store for the
+            // required distinguishing-feature order schema instead of attempting
+            // to migrate old local development data that omitted `order`.
+            let configuration = ModelConfiguration("yaHerdRequiredOrderStore", schema: schema)
+            let container = try ModelContainer(for: schema, configurations: [configuration])
             self.sharedModelContainer = container
             self.dependencies = AppDependencies(context: container.mainContext)
         } catch {

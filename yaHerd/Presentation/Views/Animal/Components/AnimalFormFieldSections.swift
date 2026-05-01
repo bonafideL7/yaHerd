@@ -6,25 +6,73 @@ import SwiftUI
 
 struct DistinguishingFeaturesSection: View {
     @Binding var features: [DistinguishingFeature]
-    
+
     var body: some View {
         Section("Distinguishing Features") {
-            ForEach($features) { $feature in
-                TextField("Feature", text: $feature.description)
+            ForEach(features.indices, id: \.self) { index in
+                HStack(spacing: 8) {
+                    TextField("Feature", text: $features[index].description)
+
+                    if features.count > 1 {
+                        Menu {
+                            Button("Move Up", systemImage: "chevron.up") {
+                                moveFeature(from: index, to: index - 1)
+                            }
+                            .disabled(index == features.startIndex)
+
+                            Button("Move Down", systemImage: "chevron.down") {
+                                moveFeature(from: index, to: index + 1)
+                            }
+                            .disabled(index == features.index(before: features.endIndex))
+                        } label: {
+                            Image(systemName: "arrow.up.arrow.down")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Change feature order")
+                    }
+                }
             }
             .onDelete { offsets in
                 features.remove(atOffsets: offsets)
+                normalizeFeatureOrder()
+            }
+            .onMove { source, destination in
+                features.move(fromOffsets: source, toOffset: destination)
+                normalizeFeatureOrder()
             }
 
             Button {
-                features.append(DistinguishingFeature(description: ""))
-            }label: {
+                features.append(DistinguishingFeature(description: "", order: features.count))
+                normalizeFeatureOrder()
+            } label: {
                 HStack {
                     Text("Note Distinguishing Feature(s)")
                     Spacer()
                     Image(systemName: "plus.circle.fill")
                 }
             }
+        }
+        .onAppear {
+            features = features.orderedDistinguishingFeatures
+            normalizeFeatureOrder()
+        }
+    }
+
+    private func moveFeature(from source: Int, to destination: Int) {
+        guard features.indices.contains(source), features.indices.contains(destination) else { return }
+        let feature = features.remove(at: source)
+        features.insert(feature, at: destination)
+        normalizeFeatureOrder()
+    }
+
+    private func normalizeFeatureOrder() {
+        features = features.enumerated().map { index, feature in
+            DistinguishingFeature(
+                id: feature.id,
+                description: feature.description,
+                order: index
+            )
         }
     }
 }
