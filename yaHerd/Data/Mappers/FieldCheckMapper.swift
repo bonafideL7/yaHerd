@@ -11,6 +11,7 @@ enum FieldCheckMapper {
             damDisplayTagColorID: check.animal?.damAnimal?.displayTagColorID,
             animalName: check.animal?.name ?? check.animalName,
             animalSex: check.animal?.sex ?? check.animalSex,
+            animalType: check.animal?.animalType ?? fallbackAnimalType(for: check.animalSex),
             wasExpectedAtStart: check.wasExpectedAtStart,
             wasCounted: check.wasCounted,
             needsAttention: check.needsAttention,
@@ -45,8 +46,11 @@ enum FieldCheckMapper {
             pastureID: session.pasture?.publicID,
             pastureName: session.pasture?.name,
             expectedHeadCountSnapshot: session.expectedHeadCountSnapshot,
-            quickTaggedCount: session.quickTaggedCount,
-            quickUntaggedCount: session.quickUntaggedCount,
+            quickCowCount: session.quickCowCount,
+            quickHeiferCount: session.quickHeiferCount,
+            quickCalfCount: session.quickCalfCount,
+            quickBullCount: session.quickBullCount,
+            quickSteerCount: session.quickSteerCount,
             animalChecks: animalChecks,
             openFindingsCount: openFindingsCount
         )
@@ -61,8 +65,11 @@ enum FieldCheckMapper {
             pastureID: session.pasture?.publicID,
             pastureName: session.pasture?.name,
             expectedHeadCountSnapshot: session.expectedHeadCountSnapshot,
-            quickTaggedCount: session.quickTaggedCount,
-            quickUntaggedCount: session.quickUntaggedCount,
+            quickCowCount: session.quickCowCount,
+            quickHeiferCount: session.quickHeiferCount,
+            quickCalfCount: session.quickCalfCount,
+            quickBullCount: session.quickBullCount,
+            quickSteerCount: session.quickSteerCount,
             animalChecks: session.animalChecks.map(makeAnimalCheckSnapshot),
             findings: session.findings.map(makeFindingSnapshot)
         )
@@ -70,6 +77,17 @@ enum FieldCheckMapper {
 }
 
 private extension FieldCheckMapper {
+    static func fallbackAnimalType(for sex: Sex) -> AnimalType {
+        switch sex {
+        case .female:
+            return .cow
+        case .male:
+            return .bull
+        case .unknown:
+            return .bull
+        }
+    }
+
     static func trimmed(_ value: String?) -> String? {
         guard let value else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)

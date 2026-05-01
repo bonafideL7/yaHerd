@@ -15,6 +15,7 @@ struct FieldCheckAnimalCheckSnapshot: Identifiable, Hashable {
     let damDisplayTagColorID: UUID?
     let animalName: String
     let animalSex: Sex
+    let animalType: AnimalType
     let wasExpectedAtStart: Bool
     let wasCounted: Bool
     let needsAttention: Bool
@@ -42,8 +43,11 @@ struct FieldCheckSessionSummary: Identifiable, Hashable {
     let pastureID: UUID?
     let pastureName: String?
     let expectedHeadCountSnapshot: Int
-    let quickTaggedCount: Int
-    let quickUntaggedCount: Int
+    let quickCowCount: Int
+    let quickHeiferCount: Int
+    let quickCalfCount: Int
+    let quickBullCount: Int
+    let quickSteerCount: Int
     let animalChecks: [FieldCheckAnimalCheckSnapshot]
     let openFindingsCount: Int
 
@@ -61,7 +65,17 @@ struct FieldCheckSessionSummary: Identifiable, Hashable {
     }
 
     var totalSeen: Int {
-        individuallyVerifiedCount + max(quickTaggedCount, 0) + max(quickUntaggedCount, 0)
+        individuallyVerifiedCount + quickAnimalTypeCounts.values.reduce(0, +)
+    }
+
+    var quickAnimalTypeCounts: [AnimalType: Int] {
+        [
+            .cow: max(quickCowCount, 0),
+            .heifer: max(quickHeiferCount, 0),
+            .calf: max(quickCalfCount, 0),
+            .bull: max(quickBullCount, 0),
+            .steer: max(quickSteerCount, 0)
+        ]
     }
 }
 
@@ -73,8 +87,11 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
     let pastureID: UUID?
     let pastureName: String?
     let expectedHeadCountSnapshot: Int
-    let quickTaggedCount: Int
-    let quickUntaggedCount: Int
+    let quickCowCount: Int
+    let quickHeiferCount: Int
+    let quickCalfCount: Int
+    let quickBullCount: Int
+    let quickSteerCount: Int
     let animalChecks: [FieldCheckAnimalCheckSnapshot]
     let findings: [FieldCheckFindingSnapshot]
 
@@ -92,7 +109,17 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
     }
 
     var totalSeen: Int {
-        individuallyVerifiedCount + max(quickTaggedCount, 0) + max(quickUntaggedCount, 0)
+        individuallyVerifiedCount + quickAnimalTypeCounts.values.reduce(0, +)
+    }
+
+    var quickAnimalTypeCounts: [AnimalType: Int] {
+        [
+            .cow: max(quickCowCount, 0),
+            .heifer: max(quickHeiferCount, 0),
+            .calf: max(quickCalfCount, 0),
+            .bull: max(quickBullCount, 0),
+            .steer: max(quickSteerCount, 0)
+        ]
     }
 
     var countVariance: Int {
