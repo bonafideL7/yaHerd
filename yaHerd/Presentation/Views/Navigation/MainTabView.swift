@@ -6,16 +6,19 @@ import UIKit
 struct MainTabView: View {
     @EnvironmentObject private var nav: NavigationCoordinator
     @EnvironmentObject private var dependencies: AppDependencies
+    @AppStorage("isDashboardEnabled") private var isDashboardEnabled = true
 
     var body: some View {
         TabView {
-//            NavigationStack(path: $nav.globalPath) {
-//                DashboardView()
-//                    .navigationDestination(for: DashboardRoute.self, destination: dashboardDestination)
-//            }
-//            .tabItem {
-//                Label("Dashboard", systemImage: "rectangle.3.group")
-//            }
+            if isDashboardEnabled {
+                NavigationStack(path: $nav.globalPath) {
+                    DashboardView()
+                        .navigationDestination(for: DashboardRoute.self, destination: dashboardDestination)
+                }
+                .tabItem {
+                    Label("Dashboard", systemImage: "rectangle.3.group")
+                }
+            }
 
             NavigationStack {
                 AnimalListView()
@@ -38,6 +41,11 @@ struct MainTabView: View {
             .tabItem {
                 Label("Pastures", systemImage: "leaf")
             }
+
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gearshape")
+                }
         }
     }
 

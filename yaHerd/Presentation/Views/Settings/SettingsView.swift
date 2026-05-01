@@ -9,6 +9,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @AppStorage("isDashboardEnabled") private var isDashboardEnabled = true
     @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
     @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
     @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
@@ -22,6 +23,12 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section("App") {
+                    Toggle("Show Dashboard", isOn: $isDashboardEnabled)
+
+                    Text("When off, the Dashboard tab is hidden.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
                     NavigationLink("About") {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("yaherd")
