@@ -48,8 +48,6 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             completedAt: nil,
             notes: input.notes.trimmingCharacters(in: .whitespacesAndNewlines),
             expectedHeadCountSnapshot: rosterAnimals.count,
-            quickTaggedCount: 0,
-            quickUntaggedCount: 0,
             pastureID: pasture.publicID,
             pasture: pasture
         )
@@ -72,12 +70,16 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         return session.publicID
     }
 
-    func updateQuickCounts(sessionID: UUID, quickTaggedCount: Int, quickUntaggedCount: Int) throws {
+    func updateQuickAnimalTypeCounts(sessionID: UUID, counts: [AnimalType: Int]) throws {
         guard let session = try fetchSession(id: sessionID) else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
-        session.quickTaggedCount = max(quickTaggedCount, 0)
-        session.quickUntaggedCount = max(quickUntaggedCount, 0)
+
+        session.quickCowCount = max(counts[.cow, default: 0], 0)
+        session.quickHeiferCount = max(counts[.heifer, default: 0], 0)
+        session.quickCalfCount = max(counts[.calf, default: 0], 0)
+        session.quickBullCount = max(counts[.bull, default: 0], 0)
+        session.quickSteerCount = max(counts[.steer, default: 0], 0)
         try context.save()
     }
 

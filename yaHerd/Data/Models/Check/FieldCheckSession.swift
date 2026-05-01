@@ -8,8 +8,11 @@ final class FieldCheckSession {
     var completedAt: Date?
     var notes: String
     var expectedHeadCountSnapshot: Int
-    var quickTaggedCount: Int
-    var quickUntaggedCount: Int
+    var quickCowCount: Int = 0
+    var quickHeiferCount: Int = 0
+    var quickCalfCount: Int = 0
+    var quickBullCount: Int = 0
+    var quickSteerCount: Int = 0
 
     @Relationship(deleteRule: .nullify)
     var pasture: Pasture?
@@ -27,8 +30,11 @@ final class FieldCheckSession {
         completedAt: Date? = nil,
         notes: String = "",
         expectedHeadCountSnapshot: Int = 0,
-        quickTaggedCount: Int = 0,
-        quickUntaggedCount: Int = 0,
+        quickCowCount: Int = 0,
+        quickHeiferCount: Int = 0,
+        quickCalfCount: Int = 0,
+        quickBullCount: Int = 0,
+        quickSteerCount: Int = 0,
         pastureID: UUID? = nil,
         pasture: Pasture? = nil
     ) {
@@ -37,8 +43,11 @@ final class FieldCheckSession {
         self.completedAt = completedAt
         self.notes = notes
         self.expectedHeadCountSnapshot = expectedHeadCountSnapshot
-        self.quickTaggedCount = quickTaggedCount
-        self.quickUntaggedCount = quickUntaggedCount
+        self.quickCowCount = quickCowCount
+        self.quickHeiferCount = quickHeiferCount
+        self.quickCalfCount = quickCalfCount
+        self.quickBullCount = quickBullCount
+        self.quickSteerCount = quickSteerCount
         self.pastureID = pastureID
         self.pasture = pasture
     }

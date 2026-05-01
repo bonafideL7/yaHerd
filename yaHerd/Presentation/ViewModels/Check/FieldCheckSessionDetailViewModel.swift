@@ -49,13 +49,9 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func updateQuickCounts(sessionID: UUID, quickTaggedCount: Int, quickUntaggedCount: Int, using repository: any FieldCheckRepository) {
+    func updateQuickAnimalTypeCounts(sessionID: UUID, counts: [AnimalType: Int], using repository: any FieldCheckRepository) {
         do {
-            try repository.updateQuickCounts(
-                sessionID: sessionID,
-                quickTaggedCount: quickTaggedCount,
-                quickUntaggedCount: quickUntaggedCount
-            )
+            try repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: counts)
             refresh(sessionID: sessionID, using: repository)
         } catch {
             errorMessage = error.localizedDescription

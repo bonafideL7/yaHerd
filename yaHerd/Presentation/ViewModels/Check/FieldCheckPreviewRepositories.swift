@@ -6,7 +6,7 @@ struct EmptyFieldCheckRepository: FieldCheckRepository {
     func fetchSessionDetail(id: UUID) throws -> FieldCheckSessionDetailSnapshot? { nil }
     func fetchOpenFindings(limit: Int) throws -> [FieldCheckFindingSnapshot] { [] }
     func createSession(input: FieldCheckSessionStartInput) throws -> UUID { UUID() }
-    func updateQuickCounts(sessionID: UUID, quickTaggedCount: Int, quickUntaggedCount: Int) throws {}
+    func updateQuickAnimalTypeCounts(sessionID: UUID, counts: [AnimalType: Int]) throws {}
     func updateNotes(sessionID: UUID, notes: String) throws {}
     func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool) throws {}
     func setAnimalCheckNeedsAttention(sessionID: UUID, animalCheckID: UUID, needsAttention: Bool) throws {}

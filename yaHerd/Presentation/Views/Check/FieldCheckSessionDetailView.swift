@@ -258,12 +258,8 @@ struct FieldCheckSessionDetailView: View {
                 Text("\(detail.individuallyVerifiedCount)")
             }
             
-            LabeledContent("Quick Tagged") {
-                Text("\(detail.quickTaggedCount)")
-            }
-            
-            LabeledContent("Quick Untagged") {
-                Text("\(detail.quickUntaggedCount)")
+            LabeledContent("Quick Count") {
+                Text("\(detail.quickAnimalTypeCounts.values.reduce(0, +))")
             }
             
             LabeledContent("Variance") {
@@ -328,34 +324,27 @@ struct FieldCheckSessionDetailView: View {
         } header: {
             Text("Roster")
         } footer: {
-            Text("Each animal can be marked counted once, which prevents accidental double counting. Use quick counts for tagged or untagged animals you do not verify individually.")
+            Text("Each animal can be marked counted once, which prevents accidental double counting.")
         }
     }
     
     @ViewBuilder
     private func quickCountSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section {
-            Stepper(
-                value: quickTaggedBinding(detail),
-                in: 0...10_000
-            ) {
-                LabeledContent("Tagged Quick Count") {
-                    Text("\(detail.quickTaggedCount)")
-                }
-            }
-            
-            Stepper(
-                value: quickUntaggedBinding(detail),
-                in: 0...10_000
-            ) {
-                LabeledContent("Untagged Quick Count") {
-                    Text("\(detail.quickUntaggedCount)")
-                }
+            FieldCheckAnimalQuickCountCounter(
+                remainingRosterChecks: remainingRosterChecks(for: detail),
+                animalTypeCounts: quickAnimalTypeCountsBinding(detail)
+            )
+
+            LabeledContent("Breakdown") {
+                Text(quickTypeSummary(for: detail))
+                    .multilineTextAlignment(.trailing)
+                    .foregroundStyle(.secondary)
             }
         } header: {
             Text("Quick Count")
         } footer: {
-            Text("Use these totals for animals seen without individual roster verification.")
+            Text("Quick counts use the current remaining roster by animal type.")
         }
     }
     
@@ -444,36 +433,37 @@ struct FieldCheckSessionDetailView: View {
         }
     }
     
-    private func quickTaggedBinding(_ detail: FieldCheckSessionDetailSnapshot) -> Binding<Int> {
+    private func quickAnimalTypeCountsBinding(_ detail: FieldCheckSessionDetailSnapshot) -> Binding<[AnimalType: Int]> {
         Binding(
-            get: { detail.quickTaggedCount },
+            get: { detail.quickAnimalTypeCounts },
             set: { newValue in
                 guard let currentSessionID else { return }
-                model.updateQuickCounts(
+                model.updateQuickAnimalTypeCounts(
                     sessionID: currentSessionID,
-                    quickTaggedCount: newValue,
-                    quickUntaggedCount: detail.quickUntaggedCount,
+                    counts: newValue,
                     using: repository
                 )
             }
         )
     }
-    
-    private func quickUntaggedBinding(_ detail: FieldCheckSessionDetailSnapshot) -> Binding<Int> {
-        Binding(
-            get: { detail.quickUntaggedCount },
-            set: { newValue in
-                guard let currentSessionID else { return }
-                model.updateQuickCounts(
-                    sessionID: currentSessionID,
-                    quickTaggedCount: detail.quickTaggedCount,
-                    quickUntaggedCount: newValue,
-                    using: repository
-                )
-            }
-        )
+
+    private func remainingRosterChecks(for detail: FieldCheckSessionDetailSnapshot) -> [FieldCheckAnimalCheckSnapshot] {
+        detail.animalChecks.filter { check in
+            check.wasExpectedAtStart && !check.wasCounted && !check.isMissing
+        }
     }
-    
+
+    private func quickTypeSummary(for detail: FieldCheckSessionDetailSnapshot) -> String {
+        let counts = detail.quickAnimalTypeCounts
+        let parts = AnimalType.allCases.compactMap { animalType -> String? in
+            let count = counts[animalType, default: 0]
+            guard count > 0 else { return nil }
+            return "\(animalType.label) \(count)"
+        }
+
+        return parts.isEmpty ? "None" : parts.joined(separator: " • ")
+    }
+
     private func startSession() {
         do {
             let sessionID = try setupModel.createSession(
