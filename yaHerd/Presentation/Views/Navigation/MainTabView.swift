@@ -6,7 +6,7 @@ import UIKit
 struct MainTabView: View {
     @EnvironmentObject private var nav: NavigationCoordinator
     @EnvironmentObject private var dependencies: AppDependencies
-    @AppStorage("isDashboardEnabled") private var isDashboardEnabled = true
+    @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
 
     var body: some View {
         TabView {
@@ -42,9 +42,9 @@ struct MainTabView: View {
                 Label("Pastures", systemImage: "leaf")
             }
 
-            SettingsView()
+            ManagementView()
                 .tabItem {
-                    Label("Settings", systemImage: "gearshape")
+                    Label("Manage", systemImage: "slider.horizontal.3")
                 }
         }
     }

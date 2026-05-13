@@ -31,7 +31,7 @@ enum FieldCheckMapper {
             animalDisplayTagNumber: trimmed(finding.animal?.displayTagNumber) ?? trimmed(finding.animal?.name),
             animalDisplayTagColorID: finding.animal?.displayTagColorID,
             pastureName: finding.session?.pasture?.name,
-            sessionID: finding.session?.publicID ?? UUID()
+            sessionID: finding.session?.publicID ?? finding.publicID
         )
     }
 
