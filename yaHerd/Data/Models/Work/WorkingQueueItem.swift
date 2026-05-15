@@ -8,7 +8,7 @@ import Foundation
 
 @Model
 final class WorkingQueueItem {
-    @Attribute(.unique) var publicID: UUID
+    var publicID: UUID
     var queueOrder: Int
     var status: WorkingQueueStatus
     var completedAt: Date?

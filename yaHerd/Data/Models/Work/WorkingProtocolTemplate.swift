@@ -8,8 +8,7 @@ import Foundation
 
 @Model
 final class WorkingProtocolTemplate {
-    @Attribute(.unique) var publicID: UUID
-    @Attribute(.unique)
+    var publicID: UUID
     var name: String
     var items: [WorkingProtocolItem]
 

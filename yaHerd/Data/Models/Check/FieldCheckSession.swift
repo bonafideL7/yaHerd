@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class FieldCheckSession {
-    @Attribute(.unique) var publicID: UUID
+    var publicID: UUID
     var startedAt: Date
     var completedAt: Date?
     var notes: String
@@ -56,7 +56,7 @@ final class FieldCheckSession {
 
 @Model
 final class FieldCheckAnimalCheck {
-    @Attribute(.unique) var publicID: UUID
+    var publicID: UUID
     var rosterTagNumber: String
     var rosterTagColorID: UUID?
     var animalName: String
@@ -127,7 +127,7 @@ final class FieldCheckAnimalCheck {
 
 @Model
 final class FieldCheckFinding {
-    @Attribute(.unique) var publicID: UUID
+    var publicID: UUID
     var recordedAt: Date
     var typeRawValue: String
     var severityRawValue: String
