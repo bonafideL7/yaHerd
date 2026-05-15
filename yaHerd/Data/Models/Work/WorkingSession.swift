@@ -10,7 +10,7 @@ import Foundation
 /// for a collected lot of animals.
 @Model
 final class WorkingSession {
-    @Attribute(.unique) var publicID: UUID
+    var publicID: UUID
     var date: Date
     var status: WorkingSessionStatus
 

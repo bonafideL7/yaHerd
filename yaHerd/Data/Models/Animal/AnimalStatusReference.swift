@@ -10,7 +10,7 @@ import SwiftData
 
 @Model
 final class AnimalStatusReference {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var name: String
     var baseStatus: AnimalStatus
     var createdAt: Date

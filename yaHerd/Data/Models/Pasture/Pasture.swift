@@ -3,8 +3,8 @@ import SwiftData
 
 @Model
 final class Pasture {
-    @Attribute(.unique) var publicID: UUID
-    @Attribute(.unique) var name: String
+    var publicID: UUID
+    var name: String
     @Relationship(deleteRule: .nullify, inverse: \Animal.pasture)
     
     var animals: [Animal] = []

@@ -11,7 +11,7 @@ import Foundation
 
 @Model
 final class PastureGroup {
-    @Attribute(.unique) var name: String
+    var name: String
     
     var grazeDays: Int
     var restDays: Int

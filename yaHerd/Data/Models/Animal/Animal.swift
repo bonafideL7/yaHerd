@@ -9,7 +9,7 @@ import Foundation
 
 @Model
 final class Animal {
-    @Attribute(.unique) var publicID: UUID
+    var publicID: UUID
     var name: String
     var tagNumber: String
     var tagColorID: UUID?
