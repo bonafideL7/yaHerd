@@ -27,7 +27,7 @@ final class WorkingQueueItem {
     var animal: Animal?
 
     @Relationship(inverse: \WorkingSession.queueItems)
-    var session: WorkingSession
+    var session: WorkingSession?
 
     init(
         publicID: UUID = UUID(),

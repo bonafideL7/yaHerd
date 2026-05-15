@@ -297,7 +297,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
             item.publicID == id
         })
         guard let item = try context.fetch(descriptor).first,
-              item.session.publicID == sessionID else {
+              item.session?.publicID == sessionID else {
             throw WorkingRepositoryError.queueItemNotFound
         }
         return item
@@ -376,7 +376,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         let sid = session.persistentModelID
         let aid = animal.persistentModelID
         return try context.fetch(FetchDescriptor<PregnancyCheck>()).filter {
-            $0.workingSession?.persistentModelID == sid && $0.animal.persistentModelID == aid
+            $0.workingSession?.persistentModelID == sid && $0.animal?.persistentModelID == aid
         }
     }
 
@@ -384,7 +384,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         let sid = session.persistentModelID
         let aid = animal.persistentModelID
         return try context.fetch(FetchDescriptor<HealthRecord>()).filter {
-            $0.workingSession?.persistentModelID == sid && $0.animal.persistentModelID == aid
+            $0.workingSession?.persistentModelID == sid && $0.animal?.persistentModelID == aid
         }
     }
 
@@ -399,7 +399,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
     private func deletePregnancyChecks(session: WorkingSession, animal: Animal) throws {
         let sid = session.persistentModelID
         let aid = animal.persistentModelID
-        for check in try context.fetch(FetchDescriptor<PregnancyCheck>()) where check.workingSession?.persistentModelID == sid && check.animal.persistentModelID == aid {
+        for check in try context.fetch(FetchDescriptor<PregnancyCheck>()) where check.workingSession?.persistentModelID == sid && check.animal?.persistentModelID == aid {
             context.delete(check)
         }
     }
@@ -407,7 +407,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
     private func deleteHealthRecords(session: WorkingSession, animal: Animal, treatment: String? = nil) throws {
         let sid = session.persistentModelID
         let aid = animal.persistentModelID
-        for record in try context.fetch(FetchDescriptor<HealthRecord>()) where record.workingSession?.persistentModelID == sid && record.animal.persistentModelID == aid {
+        for record in try context.fetch(FetchDescriptor<HealthRecord>()) where record.workingSession?.persistentModelID == sid && record.animal?.persistentModelID == aid {
             if let treatment, record.treatment != treatment { continue }
             context.delete(record)
         }
