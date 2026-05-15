@@ -39,12 +39,18 @@ struct SwiftDataPastureRepository: PastureRepository {
     }
 
     func create(input: PastureInput) throws -> PastureDetailSnapshot {
+        let normalizedName = input.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if try nameExists(normalizedName, excluding: nil) {
+            throw PastureValidationError.duplicateName(normalizedName)
+        }
+
         let pasture = Pasture(
-            name: input.name,
+            name: normalizedName,
             acreage: input.acreage,
             usableAcreage: input.usableAcreage,
             targetAcresPerHead: input.targetAcresPerHead
         )
+        try ensureUniquePasturePublicID(pasture)
         context.insert(pasture)
         try context.save()
         return PastureMapper.makeDetail(from: pasture)
@@ -55,7 +61,12 @@ struct SwiftDataPastureRepository: PastureRepository {
             throw PastureValidationError.pastureNotFound
         }
 
-        pasture.name = input.name
+        let normalizedName = input.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if try nameExists(normalizedName, excluding: id) {
+            throw PastureValidationError.duplicateName(normalizedName)
+        }
+
+        pasture.name = normalizedName
         pasture.acreage = input.acreage
         pasture.usableAcreage = input.usableAcreage
         pasture.targetAcresPerHead = input.targetAcresPerHead
@@ -65,7 +76,12 @@ struct SwiftDataPastureRepository: PastureRepository {
     }
 
     func createGroup(input: PastureGroupInput) throws {
-        let group = PastureGroup(name: input.name, grazeDays: input.grazeDays, restDays: input.restDays)
+        let normalizedName = input.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if try groupNameExists(normalizedName) {
+            throw PastureValidationError.duplicateName(normalizedName)
+        }
+
+        let group = PastureGroup(name: normalizedName, grazeDays: input.grazeDays, restDays: input.restDays)
         context.insert(group)
         try context.save()
     }
@@ -104,5 +120,20 @@ struct SwiftDataPastureRepository: PastureRepository {
             }
         )
         return try context.fetch(descriptor).first
+    }
+
+    private func ensureUniquePasturePublicID(_ pasture: Pasture) throws {
+        let existingIDs = Set(try context.fetch(FetchDescriptor<Pasture>()).map(\.publicID))
+        while existingIDs.contains(pasture.publicID) {
+            pasture.publicID = UUID()
+        }
+    }
+
+    private func groupNameExists(_ name: String) throws -> Bool {
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let descriptor = FetchDescriptor<PastureGroup>()
+        return try context.fetch(descriptor).contains { group in
+            group.name.caseInsensitiveCompare(normalizedName) == .orderedSame
+        }
     }
 }

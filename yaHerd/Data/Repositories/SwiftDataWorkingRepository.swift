@@ -63,6 +63,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
             protocolName: protocolName,
             protocolItems: protocolItems
         )
+        try ensureUniqueSessionPublicID(session)
         context.insert(session)
         try context.save()
         return session.publicID
@@ -90,6 +91,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
                 animal: animal,
                 session: session
             )
+            try ensureUniqueQueueItemPublicID(item)
             context.insert(item)
             session.queueItems.append(item)
             order += 1
@@ -248,7 +250,13 @@ struct SwiftDataWorkingRepository: WorkingRepository {
     }
 
     func createTemplate(name: String, items: [WorkingProtocolItem]) throws -> UUID {
-        let template = WorkingProtocolTemplate(name: name, items: items)
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if try templateNameExists(normalizedName, excluding: nil) {
+            throw WorkingRepositoryError.duplicateTemplateName(normalizedName)
+        }
+
+        let template = WorkingProtocolTemplate(name: normalizedName, items: items)
+        try ensureUniqueTemplatePublicID(template)
         context.insert(template)
         try context.save()
         return template.publicID
@@ -256,7 +264,12 @@ struct SwiftDataWorkingRepository: WorkingRepository {
 
     func updateTemplate(id: UUID, name: String, items: [WorkingProtocolItem]) throws {
         let template = try fetchTemplate(id: id)
-        template.name = name
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if try templateNameExists(normalizedName, excluding: id) {
+            throw WorkingRepositoryError.duplicateTemplateName(normalizedName)
+        }
+
+        template.name = normalizedName
         template.items = items
         try context.save()
     }
@@ -298,6 +311,38 @@ struct SwiftDataWorkingRepository: WorkingRepository {
             throw WorkingRepositoryError.templateNotFound
         }
         return template
+    }
+
+    private func ensureUniqueSessionPublicID(_ session: WorkingSession) throws {
+        let existingIDs = Set(try context.fetch(FetchDescriptor<WorkingSession>()).map(\.publicID))
+        while existingIDs.contains(session.publicID) {
+            session.publicID = UUID()
+        }
+    }
+
+    private func ensureUniqueQueueItemPublicID(_ item: WorkingQueueItem) throws {
+        let existingIDs = Set(try context.fetch(FetchDescriptor<WorkingQueueItem>()).map(\.publicID))
+        while existingIDs.contains(item.publicID) {
+            item.publicID = UUID()
+        }
+    }
+
+    private func ensureUniqueTemplatePublicID(_ template: WorkingProtocolTemplate) throws {
+        let existingIDs = Set(try context.fetch(FetchDescriptor<WorkingProtocolTemplate>()).map(\.publicID))
+        while existingIDs.contains(template.publicID) {
+            template.publicID = UUID()
+        }
+    }
+
+    private func templateNameExists(_ name: String, excluding id: UUID?) throws -> Bool {
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let descriptor = FetchDescriptor<WorkingProtocolTemplate>()
+        return try context.fetch(descriptor).contains { template in
+            if let id, template.publicID == id {
+                return false
+            }
+            return template.name.caseInsensitiveCompare(normalizedName) == .orderedSame
+        }
     }
 
     private func fetchAnimals(ids: [UUID]) throws -> [Animal] {
