@@ -51,6 +51,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             pastureID: pasture.publicID,
             pasture: pasture
         )
+        try ensureUniqueSessionPublicID(session)
         context.insert(session)
 
         for animal in rosterAnimals {
@@ -63,6 +64,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
                 animal: animal,
                 session: session
             )
+            try ensureUniqueAnimalCheckPublicID(check)
             context.insert(check)
         }
 
@@ -133,6 +135,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             animal: try fetchAnimal(id: input.animalID),
             session: session
         )
+        try ensureUniqueFindingPublicID(finding)
         context.insert(finding)
         try context.save()
     }
@@ -163,6 +166,27 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         }
         session.completedAt = nil
         try context.save()
+    }
+
+    private func ensureUniqueSessionPublicID(_ session: FieldCheckSession) throws {
+        let existingIDs = Set(try context.fetch(FetchDescriptor<FieldCheckSession>()).map(\.publicID))
+        while existingIDs.contains(session.publicID) {
+            session.publicID = UUID()
+        }
+    }
+
+    private func ensureUniqueAnimalCheckPublicID(_ check: FieldCheckAnimalCheck) throws {
+        let existingIDs = Set(try context.fetch(FetchDescriptor<FieldCheckAnimalCheck>()).map(\.publicID))
+        while existingIDs.contains(check.publicID) {
+            check.publicID = UUID()
+        }
+    }
+
+    private func ensureUniqueFindingPublicID(_ finding: FieldCheckFinding) throws {
+        let existingIDs = Set(try context.fetch(FetchDescriptor<FieldCheckFinding>()).map(\.publicID))
+        while existingIDs.contains(finding.publicID) {
+            finding.publicID = UUID()
+        }
     }
 
     private func fetchSession(id: UUID) throws -> FieldCheckSession? {

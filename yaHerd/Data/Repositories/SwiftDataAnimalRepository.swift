@@ -94,9 +94,11 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             distinguishingFeatures: input.distinguishingFeatures
         )
 
+        try ensureUniqueAnimalPublicID(animal)
         context.insert(animal)
         if !animal.tagNumber.isEmpty {
-            _ = animal.ensurePrimaryTagRecord()
+            let tag = animal.ensurePrimaryTagRecord()
+            try ensureUniqueAnimalTagPublicID(tag)
         }
         try context.save()
         return try makeDetail(from: animal)
@@ -126,6 +128,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             animal.tagColorID = input.tagColorID
         } else {
             animal.updatePrimaryTag(number: input.tagNumber, colorID: input.tagColorID)
+            try ensureUniqueAnimalTagPublicIDs(for: animal)
         }
 
         if animal.pasture?.publicID != pasture?.publicID {
@@ -204,7 +207,8 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         guard let animal = try fetchAnimal(id: animalID) else {
             throw AnimalValidationError.animalNotFound
         }
-        _ = animal.addTag(number: input.number, colorID: input.colorID, isPrimary: input.isPrimary)
+        let tag = animal.addTag(number: input.number, colorID: input.colorID, isPrimary: input.isPrimary)
+        try ensureUniqueAnimalTagPublicID(tag)
         try context.save()
         return try makeDetail(from: animal)
     }
@@ -217,6 +221,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             throw AnimalValidationError.animalTagNotFound
         }
         animal.updateTag(tag, number: input.number, colorID: input.colorID, isPrimary: input.isPrimary)
+        try ensureUniqueAnimalTagPublicID(tag)
         try context.save()
         return try makeDetail(from: animal)
     }
@@ -273,6 +278,27 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         context.insert(check)
         try context.save()
         return try makeDetail(from: animal)
+    }
+
+    private func ensureUniqueAnimalPublicID(_ animal: Animal) throws {
+        var existingIDs = Set(try context.fetch(FetchDescriptor<Animal>()).map(\.publicID))
+        while existingIDs.contains(animal.publicID) {
+            animal.publicID = UUID()
+        }
+    }
+
+    private func ensureUniqueAnimalTagPublicIDs(for animal: Animal) throws {
+        for tag in animal.tags {
+            try ensureUniqueAnimalTagPublicID(tag)
+        }
+    }
+
+    private func ensureUniqueAnimalTagPublicID(_ tag: AnimalTag) throws {
+        let existingTags = try context.fetch(FetchDescriptor<AnimalTag>())
+        var existingIDs = Set(existingTags.filter { $0 !== tag }.map(\.publicID))
+        while existingIDs.contains(tag.publicID) {
+            tag.publicID = UUID()
+        }
     }
 
     private func updateArchiveState(ids: [UUID], isArchived: Bool) throws {
