@@ -18,10 +18,10 @@ final class FieldCheckSession {
     var pasture: Pasture?
     var pastureID: UUID?
     
-    @Relationship(deleteRule: .cascade)
+    @Relationship(deleteRule: .cascade, inverse: \FieldCheckAnimalCheck.session)
     var animalCheckStorage: [FieldCheckAnimalCheck]?
 
-    @Relationship(deleteRule: .cascade)
+    @Relationship(deleteRule: .cascade, inverse: \FieldCheckFinding.session)
     var findingStorage: [FieldCheckFinding]?
 
     var animalChecks: [FieldCheckAnimalCheck] {
@@ -80,7 +80,7 @@ final class FieldCheckAnimalCheck {
     @Relationship(deleteRule: .nullify)
     var animal: Animal?
 
-    @Relationship(inverse: \FieldCheckSession.animalCheckStorage)
+    @Relationship(deleteRule: .nullify)
     var session: FieldCheckSession?
 
     init(
@@ -147,7 +147,7 @@ final class FieldCheckFinding {
     @Relationship(deleteRule: .nullify)
     var animal: Animal?
 
-    @Relationship(inverse: \FieldCheckSession.findingStorage)
+    @Relationship(deleteRule: .nullify)
     var session: FieldCheckSession?
 
     init(

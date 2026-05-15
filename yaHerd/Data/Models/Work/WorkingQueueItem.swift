@@ -26,7 +26,7 @@ final class WorkingQueueItem {
     @Relationship(deleteRule: .nullify)
     var animal: Animal?
 
-    @Relationship(inverse: \WorkingSession.queueItemStorage)
+    @Relationship(deleteRule: .nullify)
     var session: WorkingSession?
 
     init(

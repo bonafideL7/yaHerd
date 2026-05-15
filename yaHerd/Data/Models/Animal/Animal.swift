@@ -28,16 +28,22 @@ final class Animal {
     var locationRaw: AnimalLocation? = AnimalLocation.pasture
     var distinguishingFeatures: [DistinguishingFeature] = []
 
-    @Relationship(deleteRule: .cascade) var healthRecordStorage: [HealthRecord]?
-    @Relationship(deleteRule: .cascade) var pregnancyCheckStorage: [PregnancyCheck]?
-    @Relationship(deleteRule: .cascade) var movementRecordStorage: [MovementRecord]?
-    @Relationship(deleteRule: .cascade) var statusRecordStorage: [StatusRecord]?
+    @Relationship(deleteRule: .cascade, inverse: \HealthRecord.animal) var healthRecordStorage: [HealthRecord]?
+    @Relationship(deleteRule: .cascade, inverse: \PregnancyCheck.animal) var pregnancyCheckStorage: [PregnancyCheck]?
+    @Relationship(deleteRule: .cascade, inverse: \MovementRecord.animal) var movementRecordStorage: [MovementRecord]?
+    @Relationship(deleteRule: .cascade, inverse: \StatusRecord.animal) var statusRecordStorage: [StatusRecord]?
     @Relationship(deleteRule: .nullify) var activeWorkingSession: WorkingSession?
     @Relationship(deleteRule: .nullify) var sireAnimal: Animal?
     @Relationship(deleteRule: .nullify) var damAnimal: Animal?
-    @Relationship(inverse: \Animal.damAnimal) var maternalOffspringStorage: [Animal]?
-    @Relationship var pasture: Pasture?
+    @Relationship(deleteRule: .nullify, inverse: \Animal.damAnimal) var maternalOffspringStorage: [Animal]?
+    @Relationship(deleteRule: .nullify) var pasture: Pasture?
     @Relationship(deleteRule: .cascade, inverse: \AnimalTag.animal) var tagStorage: [AnimalTag]?
+    @Relationship(deleteRule: .nullify, inverse: \Animal.sireAnimal) var paternalOffspringStorage: [Animal]?
+    @Relationship(deleteRule: .nullify, inverse: \WorkingQueueItem.animal) var workingQueueItemStorage: [WorkingQueueItem]?
+    @Relationship(deleteRule: .nullify, inverse: \WorkingTreatmentRecord.animal) var workingTreatmentRecordStorage: [WorkingTreatmentRecord]?
+    @Relationship(deleteRule: .nullify, inverse: \FieldCheckAnimalCheck.animal) var fieldCheckAnimalCheckStorage: [FieldCheckAnimalCheck]?
+    @Relationship(deleteRule: .nullify, inverse: \FieldCheckFinding.animal) var fieldCheckFindingStorage: [FieldCheckFinding]?
+    @Relationship(deleteRule: .nullify, inverse: \PregnancyCheck.sireAnimal) var siredPregnancyCheckStorage: [PregnancyCheck]?
 
     var healthRecords: [HealthRecord] {
         get { healthRecordStorage ?? [] }

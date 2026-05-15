@@ -16,7 +16,21 @@ final class Pasture {
     var usableAcreage: Double?
     var targetAcresPerHead: Double?
     var lastGrazedDate: Date?
+
+    @Relationship(deleteRule: .nullify)
     var group: PastureGroup?
+
+    @Relationship(deleteRule: .nullify, inverse: \WorkingSession.sourcePasture)
+    var sourceWorkingSessionStorage: [WorkingSession]?
+
+    @Relationship(deleteRule: .nullify, inverse: \WorkingQueueItem.collectedFromPasture)
+    var collectedWorkingQueueItemStorage: [WorkingQueueItem]?
+
+    @Relationship(deleteRule: .nullify, inverse: \WorkingQueueItem.destinationPasture)
+    var destinationWorkingQueueItemStorage: [WorkingQueueItem]?
+
+    @Relationship(deleteRule: .nullify, inverse: \FieldCheckSession.pasture)
+    var fieldCheckSessionStorage: [FieldCheckSession]?
 
     init(
         publicID: UUID = UUID(),

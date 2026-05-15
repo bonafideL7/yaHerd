@@ -11,6 +11,7 @@ final class AnimalTag {
     var assignedAt: Date
     var removedAt: Date?
 
+    @Relationship(deleteRule: .nullify)
     var animal: Animal?
 
     init(
