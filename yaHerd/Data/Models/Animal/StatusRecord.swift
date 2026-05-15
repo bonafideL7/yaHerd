@@ -17,7 +17,7 @@ final class StatusRecord {
     var oldStatusReferenceID: UUID?
     var newStatusReferenceID: UUID?
 
-    @Relationship(inverse: \Animal.statusRecordStorage) var animal: Animal?
+    @Relationship(deleteRule: .nullify) var animal: Animal?
 
     init(
         date: Date,

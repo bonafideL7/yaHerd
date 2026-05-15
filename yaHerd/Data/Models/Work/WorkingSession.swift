@@ -28,8 +28,20 @@ final class WorkingSession {
     var currentQueueIndex: Int
     var notes: String?
 
-    @Relationship(deleteRule: .cascade)
+    @Relationship(deleteRule: .cascade, inverse: \WorkingQueueItem.session)
     var queueItemStorage: [WorkingQueueItem]?
+
+    @Relationship(deleteRule: .nullify, inverse: \Animal.activeWorkingSession)
+    var activeAnimalStorage: [Animal]?
+
+    @Relationship(deleteRule: .nullify, inverse: \HealthRecord.workingSession)
+    var healthRecordStorage: [HealthRecord]?
+
+    @Relationship(deleteRule: .nullify, inverse: \PregnancyCheck.workingSession)
+    var pregnancyCheckStorage: [PregnancyCheck]?
+
+    @Relationship(deleteRule: .nullify, inverse: \WorkingTreatmentRecord.session)
+    var treatmentRecordStorage: [WorkingTreatmentRecord]?
 
     var queueItems: [WorkingQueueItem] {
         get { queueItemStorage ?? [] }
