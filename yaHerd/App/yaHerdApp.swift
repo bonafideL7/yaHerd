@@ -51,7 +51,7 @@ struct yaHerdApp: App {
         .modelContainer(sharedModelContainer)
     }
 
-    private static func makeSchema() -> Schema {
+    static func makeSchema() -> Schema {
         Schema([
             Animal.self,
             AnimalTag.self,

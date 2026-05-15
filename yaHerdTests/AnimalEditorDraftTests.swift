@@ -31,6 +31,7 @@ final class AnimalEditorDraftTests: XCTestCase {
             displayTagNumber: "12",
             displayTagColorID: nil,
             sex: .female,
+            animalType: .cow,
             birthDate: .distantPast,
             status: status,
             pastureID: nil,
@@ -52,7 +53,8 @@ final class AnimalEditorDraftTests: XCTestCase {
             archiveReason: nil,
             activeTags: [],
             inactiveTags: [],
-            location: .pasture
+            location: .pasture,
+            maternalOffspring: []
         )
     }
 }
