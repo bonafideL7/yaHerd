@@ -6,8 +6,12 @@ final class Pasture {
     var publicID: UUID
     var name: String
     @Relationship(deleteRule: .nullify, inverse: \Animal.pasture)
-    
-    var animals: [Animal] = []
+    var animalStorage: [Animal]?
+
+    var animals: [Animal] {
+        get { animalStorage ?? [] }
+        set { animalStorage = newValue }
+    }
     var acreage: Double?
     var usableAcreage: Double?
     var targetAcresPerHead: Double?

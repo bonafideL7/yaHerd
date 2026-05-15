@@ -28,7 +28,7 @@ final class PregnancyCheck {
     @Relationship(deleteRule: .nullify)
     var workingSession: WorkingSession?
 
-    @Relationship(inverse: \Animal.pregnancyChecks) var animal: Animal?
+    @Relationship(inverse: \Animal.pregnancyCheckStorage) var animal: Animal?
 
     init(
         date: Date,

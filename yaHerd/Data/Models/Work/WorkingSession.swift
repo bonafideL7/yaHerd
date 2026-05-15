@@ -29,7 +29,12 @@ final class WorkingSession {
     var notes: String?
 
     @Relationship(deleteRule: .cascade)
-    var queueItems: [WorkingQueueItem] = []
+    var queueItemStorage: [WorkingQueueItem]?
+
+    var queueItems: [WorkingQueueItem] {
+        get { queueItemStorage ?? [] }
+        set { queueItemStorage = newValue }
+    }
 
     init(
         publicID: UUID = UUID(),
