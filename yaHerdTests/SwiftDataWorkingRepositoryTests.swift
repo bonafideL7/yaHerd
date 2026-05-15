@@ -9,7 +9,7 @@ final class SwiftDataWorkingRepositoryTests: XCTestCase {
         let repository = SwiftDataWorkingRepository(context: context)
 
         let pasture = Pasture(name: "North")
-        let animal = Animal(name: "Cow 12", tagNumber: "12", sex: .female, birthDate: .distantPast, status: .active)
+        let animal = Animal(name: "Cow 12", tagNumber: "12", birthDate: .distantPast, status: .active, sex: .female)
         animal.pasture = pasture
         context.insert(pasture)
         context.insert(animal)
@@ -29,7 +29,7 @@ final class SwiftDataWorkingRepositoryTests: XCTestCase {
         let repository = SwiftDataWorkingRepository(context: context)
 
         let pasture = Pasture(name: "North")
-        let animal = Animal(name: "Cow 12", tagNumber: "12", sex: .female, birthDate: .distantPast, status: .active)
+        let animal = Animal(name: "Cow 12", tagNumber: "12", birthDate: .distantPast, status: .active, sex: .female)
         animal.pasture = pasture
         context.insert(pasture)
         context.insert(animal)
@@ -50,7 +50,7 @@ final class SwiftDataWorkingRepositoryTests: XCTestCase {
         let repository = SwiftDataWorkingRepository(context: context)
 
         let pasture = Pasture(name: "North")
-        let animal = Animal(name: "Cow 12", tagNumber: "12", sex: .female, birthDate: .distantPast, status: .active)
+        let animal = Animal(name: "Cow 12", tagNumber: "12", birthDate: .distantPast, status: .active, sex: .female)
         animal.pasture = pasture
         context.insert(pasture)
         context.insert(animal)

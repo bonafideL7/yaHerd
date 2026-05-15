@@ -3,8 +3,16 @@ import XCTest
 
 final class DashboardMapperTests: XCTestCase {
     func testMakeAnimalRecordPreservesUnknownSexAndCalculatesExpectedCalvingDate() {
-        let animal = Animal(name: "Cow 12", tagNumber: "12", sex: nil, birthDate: .distantPast, status: .active)
+        let animal = Animal(
+            name: "Cow 12",
+            tagNumber: "12",
+            birthDate: .distantPast,
+            status: .active,
+            sex: nil
+        )
+        
         let pregnancyCheckDate = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        
         let check = PregnancyCheck(
             date: pregnancyCheckDate,
             result: .pregnant,
@@ -15,13 +23,17 @@ final class DashboardMapperTests: XCTestCase {
             workingSession: nil,
             animal: animal
         )
+        
         animal.pregnancyChecks = [check]
-
+        
         let record = DashboardMapper.makeAnimalRecord(from: animal)
-
-        XCTAssertEqual(record.sex, .unknown)
-        XCTAssertEqual(record.lastPregnancyStatus, .pregnant)
-        XCTAssertEqual(record.expectedCalvingDate, Calendar.current.date(byAdding: .day, value: 283, to: pregnancyCheckDate))
+        
+        XCTAssertEqual(record.sex, Sex.unknown)
+        XCTAssertEqual(record.lastPregnancyStatus, DashboardPregnancyStatus.pregnant)
+        XCTAssertEqual(
+            record.expectedCalvingDate,
+            Calendar.current.date(byAdding: .day, value: 283, to: pregnancyCheckDate)
+        )
     }
 
     func testMakeWorkingSessionRecordUsesStablePublicIDString() {
