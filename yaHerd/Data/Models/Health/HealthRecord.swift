@@ -16,7 +16,7 @@ final class HealthRecord {
     var notes: String?
 
     @Relationship(deleteRule: .nullify) var workingSession: WorkingSession?
-    @Relationship(inverse: \Animal.healthRecords) var animal: Animal?
+    @Relationship(inverse: \Animal.healthRecordStorage) var animal: Animal?
 
     init(
         date: Date,

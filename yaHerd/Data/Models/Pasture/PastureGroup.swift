@@ -20,7 +20,12 @@ final class PastureGroup {
         deleteRule: .nullify,
         inverse: \Pasture.group
     )
-    var pastures: [Pasture] = []
+    var pastureStorage: [Pasture]?
+
+    var pastures: [Pasture] {
+        get { pastureStorage ?? [] }
+        set { pastureStorage = newValue }
+    }
 
     init(name: String, grazeDays: Int = 7, restDays: Int = 21) {
         self.name = name

@@ -28,16 +28,46 @@ final class Animal {
     var locationRaw: AnimalLocation? = AnimalLocation.pasture
     var distinguishingFeatures: [DistinguishingFeature] = []
 
-    @Relationship(deleteRule: .cascade) var healthRecords: [HealthRecord] = []
-    @Relationship(deleteRule: .cascade) var pregnancyChecks: [PregnancyCheck] = []
-    @Relationship(deleteRule: .cascade) var movementRecords: [MovementRecord] = []
-    @Relationship(deleteRule: .cascade) var statusRecords: [StatusRecord] = []
+    @Relationship(deleteRule: .cascade) var healthRecordStorage: [HealthRecord]?
+    @Relationship(deleteRule: .cascade) var pregnancyCheckStorage: [PregnancyCheck]?
+    @Relationship(deleteRule: .cascade) var movementRecordStorage: [MovementRecord]?
+    @Relationship(deleteRule: .cascade) var statusRecordStorage: [StatusRecord]?
     @Relationship(deleteRule: .nullify) var activeWorkingSession: WorkingSession?
     @Relationship(deleteRule: .nullify) var sireAnimal: Animal?
     @Relationship(deleteRule: .nullify) var damAnimal: Animal?
-    @Relationship(inverse: \Animal.damAnimal) var maternalOffspring: [Animal] = []
+    @Relationship(inverse: \Animal.damAnimal) var maternalOffspringStorage: [Animal]?
     @Relationship var pasture: Pasture?
-    @Relationship(deleteRule: .cascade, inverse: \AnimalTag.animal) var tags: [AnimalTag] = []
+    @Relationship(deleteRule: .cascade, inverse: \AnimalTag.animal) var tagStorage: [AnimalTag]?
+
+    var healthRecords: [HealthRecord] {
+        get { healthRecordStorage ?? [] }
+        set { healthRecordStorage = newValue }
+    }
+
+    var pregnancyChecks: [PregnancyCheck] {
+        get { pregnancyCheckStorage ?? [] }
+        set { pregnancyCheckStorage = newValue }
+    }
+
+    var movementRecords: [MovementRecord] {
+        get { movementRecordStorage ?? [] }
+        set { movementRecordStorage = newValue }
+    }
+
+    var statusRecords: [StatusRecord] {
+        get { statusRecordStorage ?? [] }
+        set { statusRecordStorage = newValue }
+    }
+
+    var maternalOffspring: [Animal] {
+        get { maternalOffspringStorage ?? [] }
+        set { maternalOffspringStorage = newValue }
+    }
+
+    var tags: [AnimalTag] {
+        get { tagStorage ?? [] }
+        set { tagStorage = newValue }
+    }
 
     var location: AnimalLocation {
         get { locationRaw ?? .pasture }
