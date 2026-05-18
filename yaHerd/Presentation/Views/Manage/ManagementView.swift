@@ -9,7 +9,7 @@ struct ManagementView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Setup") {
+                Section("Setup") {                    
                     NavigationLink {
                         DashboardRulesView()
                     } label: {
@@ -40,7 +40,17 @@ struct ManagementView: View {
                         )
                     }
                 }
-
+                
+                NavigationLink {
+                    SyncSettingsView()
+                } label: {
+                    ManagementRow(
+                        title: "Sync",
+                        subtitle: "View storage mode and iCloud sync status.",
+                        systemImage: "icloud"
+                    )
+                }
+                
                 Section("About") {
                     NavigationLink {
                         AboutYaHerdView()
