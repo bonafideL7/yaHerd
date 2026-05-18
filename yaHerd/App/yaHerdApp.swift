@@ -18,25 +18,41 @@ struct yaHerdApp: App {
 
     init() {
         let schema = Self.makeSchema()
-
+        let preferences = AppPreferences()
+        let syncMode = preferences.syncMode
+        
         do {
-            // This app is still pre-release. Use a new persistent store for the
-            // required distinguishing-feature order schema instead of attempting
-            // to migrate old local development data that omitted `order`.
-            let configuration = ModelConfiguration("yaHerdRequiredOrderStore", schema: schema)
-            let container = try ModelContainer(for: schema, configurations: [configuration])
+            let container = try ModelContainerFactory.makeContainer(
+                schema: schema,
+                syncMode: syncMode
+            )
+            
             self.sharedModelContainer = container
             self.dependencies = AppDependencies(context: container.mainContext)
             self.startupStorageError = nil
         } catch {
+            let primaryError = error
+            
             do {
-                let fallbackConfiguration = ModelConfiguration("yaHerdRecoveryStore", schema: schema, isStoredInMemoryOnly: true)
-                let fallbackContainer = try ModelContainer(for: schema, configurations: [fallbackConfiguration])
+                let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer(
+                    schema: schema
+                )
+                
                 self.sharedModelContainer = fallbackContainer
                 self.dependencies = AppDependencies(context: fallbackContainer.mainContext)
-                self.startupStorageError = "Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved. Original error: \(error.localizedDescription)"
+                self.startupStorageError = """
+            Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved. Original error: \(primaryError.localizedDescription)
+            """
             } catch {
-                preconditionFailure("Failed to create fallback model container: \(error)")
+                fatalError("""
+            Failed to create SwiftData containers.
+            
+            Primary container error:
+            \(primaryError)
+            
+            Fallback container error:
+            \(error)
+            """)
             }
         }
     }
@@ -72,7 +88,6 @@ struct yaHerdApp: App {
         ])
     }
 }
-
 
 private struct RootAppView: View {
     let storageError: String?
