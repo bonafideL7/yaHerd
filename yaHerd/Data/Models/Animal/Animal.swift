@@ -9,20 +9,20 @@ import Foundation
 
 @Model
 final class Animal {
-    var publicID: UUID
-    var name: String
-    var tagNumber: String
+    var publicID: UUID = UUID()
+    var name: String = ""
+    var tagNumber: String = ""
     var tagColorID: UUID?
     var sex: Sex?
-    var birthDate: Date
-    var status: AnimalStatus
+    var birthDate: Date = Date.now
+    var status: AnimalStatus = AnimalStatus.active
     var saleDate: Date?
     var salePrice: Double?
     var reasonSold: String?
     var deathDate: Date?
     var causeOfDeath: String?
     var statusReferenceID: UUID?
-    var isSoftDeleted: Bool
+    var isSoftDeleted: Bool = false
     var softDeletedAt: Date?
     var softDeleteReason: String?
     var locationRaw: AnimalLocation? = AnimalLocation.pasture
@@ -173,7 +173,7 @@ final class Animal {
         return tag
     }
 
-    func addTag(number: String, colorID: UUID?, isPrimary: Bool, assignedAt: Date = .now) -> AnimalTag {
+    func addTag(number: String, colorID: UUID?, isPrimary: Bool, assignedAt: Date = Date.now) -> AnimalTag {
         let trimmedNumber = number.trimmingCharacters(in: .whitespacesAndNewlines)
         let shouldBePrimary = isPrimary || activeTags.isEmpty
 
@@ -246,7 +246,7 @@ final class Animal {
         syncPrimaryTagFieldsFromTags()
     }
 
-    func retireTag(_ tag: AnimalTag, on date: Date = .now) {
+    func retireTag(_ tag: AnimalTag, on date: Date = Date.now) {
         tag.isActive = false
         tag.isPrimary = false
         tag.removedAt = date
@@ -260,7 +260,7 @@ final class Animal {
         syncPrimaryTagFieldsFromTags()
     }
 
-    func applyStatus(_ newStatus: AnimalStatus, effectiveDate: Date = .now) {
+    func applyStatus(_ newStatus: AnimalStatus, effectiveDate: Date = Date.now) {
         status = newStatus
 
         switch newStatus {
@@ -285,7 +285,7 @@ final class Animal {
         }
     }
 
-    func archive(reason: String? = nil, at date: Date = .now) {
+    func archive(reason: String? = nil, at date: Date = Date.now) {
         isSoftDeleted = true
         softDeletedAt = date
         softDeleteReason = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -297,7 +297,7 @@ final class Animal {
         softDeleteReason = nil
     }
 
-    func softDelete(reason: String? = nil, at date: Date = .now) {
+    func softDelete(reason: String? = nil, at date: Date = Date.now) {
         archive(reason: reason, at: date)
     }
 
@@ -397,7 +397,7 @@ final class Animal {
         tagNumber: String,
         tagColorID: UUID? = nil,
         birthDate: Date,
-        status: AnimalStatus = .active,
+        status: AnimalStatus = AnimalStatus.active,
         saleDate: Date? = nil,
         salePrice: Double? = nil,
         reasonSold: String? = nil,

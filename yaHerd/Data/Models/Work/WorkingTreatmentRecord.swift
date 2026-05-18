@@ -9,9 +9,9 @@ import Foundation
 /// Stores per-animal protocol completion for a working session.
 @Model
 final class WorkingTreatmentRecord {
-    var date: Date
-    var itemName: String
-    var given: Bool
+    var date: Date = Date.now
+    var itemName: String = ""
+    var given: Bool = false
     var quantity: Double?
 
     @Relationship(deleteRule: .nullify)
@@ -21,7 +21,7 @@ final class WorkingTreatmentRecord {
     var session: WorkingSession?
 
     init(
-        date: Date = .now,
+        date: Date = Date.now,
         itemName: String,
         given: Bool,
         quantity: Double? = nil,

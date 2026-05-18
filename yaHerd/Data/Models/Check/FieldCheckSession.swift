@@ -3,11 +3,11 @@ import SwiftData
 
 @Model
 final class FieldCheckSession {
-    var publicID: UUID
-    var startedAt: Date
+    var publicID: UUID = UUID()
+    var startedAt: Date = Date.now
     var completedAt: Date?
-    var notes: String
-    var expectedHeadCountSnapshot: Int
+    var notes: String = ""
+    var expectedHeadCountSnapshot: Int = 0
     var quickCowCount: Int = 0
     var quickHeiferCount: Int = 0
     var quickCalfCount: Int = 0
@@ -36,7 +36,7 @@ final class FieldCheckSession {
 
     init(
         publicID: UUID = UUID(),
-        startedAt: Date = .now,
+        startedAt: Date = Date.now,
         completedAt: Date? = nil,
         notes: String = "",
         expectedHeadCountSnapshot: Int = 0,
@@ -66,16 +66,16 @@ final class FieldCheckSession {
 
 @Model
 final class FieldCheckAnimalCheck {
-    var publicID: UUID
-    var rosterTagNumber: String
+    var publicID: UUID = UUID()
+    var rosterTagNumber: String = ""
     var rosterTagColorID: UUID?
-    var animalName: String
-    var animalSexRawValue: String
-    var wasExpectedAtStart: Bool
+    var animalName: String = ""
+    var animalSexRawValue: String = Sex.unknown.rawValue
+    var wasExpectedAtStart: Bool = true
     var countedAt: Date?
     var missingConfirmedAt: Date?
-    var needsAttention: Bool
-    var note: String
+    var needsAttention: Bool = false
+    var note: String = ""
 
     @Relationship(deleteRule: .nullify)
     var animal: Animal?
@@ -137,12 +137,12 @@ final class FieldCheckAnimalCheck {
 
 @Model
 final class FieldCheckFinding {
-    var publicID: UUID
-    var recordedAt: Date
-    var typeRawValue: String
-    var severityRawValue: String
-    var statusRawValue: String
-    var note: String
+    var publicID: UUID = UUID()
+    var recordedAt: Date = Date.now
+    var typeRawValue: String = FieldCheckFindingType.generalObservation.rawValue
+    var severityRawValue: String = FieldCheckFindingSeverity.warning.rawValue
+    var statusRawValue: String = FieldCheckFindingStatus.open.rawValue
+    var note: String = ""
 
     @Relationship(deleteRule: .nullify)
     var animal: Animal?
@@ -152,7 +152,7 @@ final class FieldCheckFinding {
 
     init(
         publicID: UUID = UUID(),
-        recordedAt: Date = .now,
+        recordedAt: Date = Date.now,
         type: FieldCheckFindingType,
         severity: FieldCheckFindingSeverity,
         status: FieldCheckFindingStatus = .open,

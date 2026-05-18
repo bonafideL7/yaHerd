@@ -8,9 +8,9 @@ import Foundation
 
 @Model
 final class WorkingProtocolTemplate {
-    var publicID: UUID
-    var name: String
-    var items: [WorkingProtocolItem]
+    var publicID: UUID = UUID()
+    var name: String = ""
+    var items: [WorkingProtocolItem] = []
 
     init(publicID: UUID = UUID(), name: String, items: [WorkingProtocolItem]) {
         self.publicID = publicID

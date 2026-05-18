@@ -32,6 +32,55 @@ struct yaHerdApp: App {
             self.startupStorageError = nil
         } catch {
             let primaryError = error
+
+            if syncMode == .iCloud {
+                preferences.syncMode = .localOnly
+
+                do {
+                    let localContainer = try ModelContainerFactory.makeContainer(
+                        schema: schema,
+                        syncMode: .localOnly
+                    )
+
+                    self.sharedModelContainer = localContainer
+                    self.dependencies = AppDependencies(context: localContainer.mainContext)
+                    self.startupStorageError = """
+                    iCloud Sync could not be enabled, so yaHerd returned to Local Only mode. Your local data is still on this device. Original error: \(primaryError.localizedDescription)
+                    """
+                    return
+                } catch {
+                    let localRecoveryError = error
+
+                    do {
+                        let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer(
+                            schema: schema
+                        )
+
+                        self.sharedModelContainer = fallbackContainer
+                        self.dependencies = AppDependencies(context: fallbackContainer.mainContext)
+                        self.startupStorageError = """
+                        Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved.
+
+                        iCloud container error: \(primaryError.localizedDescription)
+                        Local recovery error: \(localRecoveryError.localizedDescription)
+                        """
+                        return
+                    } catch {
+                        fatalError("""
+                        Failed to create SwiftData containers.
+
+                        iCloud container error:
+                        \(primaryError)
+
+                        Local recovery error:
+                        \(localRecoveryError)
+
+                        Fallback container error:
+                        \(error)
+                        """)
+                    }
+                }
+            }
             
             do {
                 let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer(
@@ -41,22 +90,21 @@ struct yaHerdApp: App {
                 self.sharedModelContainer = fallbackContainer
                 self.dependencies = AppDependencies(context: fallbackContainer.mainContext)
                 self.startupStorageError = """
-            Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved. Original error: \(primaryError.localizedDescription)
-            """
+                Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved. Original error: \(primaryError.localizedDescription)
+                """
             } catch {
                 fatalError("""
-            Failed to create SwiftData containers.
-            
-            Primary container error:
-            \(primaryError)
-            
-            Fallback container error:
-            \(error)
-            """)
+                Failed to create SwiftData containers.
+                
+                Primary container error:
+                \(primaryError)
+                
+                Fallback container error:
+                \(error)
+                """)
             }
         }
     }
-
     var body: some Scene {
         WindowGroup {
             RootAppView(storageError: startupStorageError)

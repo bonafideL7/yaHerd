@@ -3,12 +3,12 @@ import SwiftData
 
 @Model
 final class AnimalTag {
-    var publicID: UUID
-    var number: String
+    var publicID: UUID = UUID()
+    var number: String = ""
     var colorID: UUID?
-    var isPrimary: Bool
-    var isActive: Bool
-    var assignedAt: Date
+    var isPrimary: Bool = false
+    var isActive: Bool = true
+    var assignedAt: Date = Date.now
     var removedAt: Date?
 
     @Relationship(deleteRule: .nullify)
@@ -20,7 +20,7 @@ final class AnimalTag {
         colorID: UUID? = nil,
         isPrimary: Bool = false,
         isActive: Bool = true,
-        assignedAt: Date = .now,
+        assignedAt: Date = Date.now,
         removedAt: Date? = nil,
         animal: Animal? = nil
     ) {

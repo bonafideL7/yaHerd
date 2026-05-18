@@ -11,10 +11,10 @@ import Foundation
 
 @Model
 final class PastureGroup {
-    var name: String
+    var name: String = ""
     
-    var grazeDays: Int
-    var restDays: Int
+    var grazeDays: Int = 7
+    var restDays: Int = 21
 
     @Relationship(
         deleteRule: .nullify,

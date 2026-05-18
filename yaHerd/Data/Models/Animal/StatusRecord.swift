@@ -11,9 +11,9 @@ import Foundation
 
 @Model
 final class StatusRecord {
-    var date: Date
-    var oldStatus: AnimalStatus
-    var newStatus: AnimalStatus
+    var date: Date = Date.now
+    var oldStatus: AnimalStatus = AnimalStatus.active
+    var newStatus: AnimalStatus = AnimalStatus.active
     var oldStatusReferenceID: UUID?
     var newStatusReferenceID: UUID?
 
