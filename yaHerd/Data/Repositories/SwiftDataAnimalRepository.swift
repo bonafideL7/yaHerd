@@ -281,7 +281,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
     }
 
     private func ensureUniqueAnimalPublicID(_ animal: Animal) throws {
-        var existingIDs = Set(try context.fetch(FetchDescriptor<Animal>()).map(\.publicID))
+        let existingIDs = Set(try context.fetch(FetchDescriptor<Animal>()).map(\.publicID))
         while existingIDs.contains(animal.publicID) {
             animal.publicID = UUID()
         }
@@ -295,7 +295,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
 
     private func ensureUniqueAnimalTagPublicID(_ tag: AnimalTag) throws {
         let existingTags = try context.fetch(FetchDescriptor<AnimalTag>())
-        var existingIDs = Set(existingTags.filter { $0 !== tag }.map(\.publicID))
+        let existingIDs = Set(existingTags.filter { $0 !== tag }.map(\.publicID))
         while existingIDs.contains(tag.publicID) {
             tag.publicID = UUID()
         }

@@ -3,8 +3,8 @@ import SwiftData
 
 @Model
 final class Pasture {
-    var publicID: UUID
-    var name: String
+    var publicID: UUID = UUID()
+    var name: String = ""
     @Relationship(deleteRule: .nullify, inverse: \Animal.pasture)
     var animalStorage: [Animal]?
 

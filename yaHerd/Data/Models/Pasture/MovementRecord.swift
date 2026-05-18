@@ -11,7 +11,7 @@ import Foundation
 
 @Model
 final class MovementRecord {
-    var date: Date
+    var date: Date = Date.now
     var fromPasture: String?
     var toPasture: String?
 

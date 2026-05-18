@@ -11,8 +11,8 @@ import Foundation
 
 @Model
 final class HealthRecord {
-    var date: Date
-    var treatment: String
+    var date: Date = Date.now
+    var treatment: String = ""
     var notes: String?
 
     @Relationship(deleteRule: .nullify) var workingSession: WorkingSession?

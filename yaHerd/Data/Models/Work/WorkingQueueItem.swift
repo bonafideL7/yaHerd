@@ -8,9 +8,9 @@ import Foundation
 
 @Model
 final class WorkingQueueItem {
-    var publicID: UUID
-    var queueOrder: Int
-    var status: WorkingQueueStatus
+    var publicID: UUID = UUID()
+    var queueOrder: Int = 0
+    var status: WorkingQueueStatus = WorkingQueueStatus.queued
     var completedAt: Date?
 
     /// Where this animal was collected from (for future multi-source sessions).
@@ -32,7 +32,7 @@ final class WorkingQueueItem {
     init(
         publicID: UUID = UUID(),
         queueOrder: Int,
-        status: WorkingQueueStatus = .queued,
+        status: WorkingQueueStatus = WorkingQueueStatus.queued,
         collectedFromPasture: Pasture? = nil,
         destinationPasture: Pasture? = nil,
         workNotes: String? = nil,

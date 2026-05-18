@@ -6,6 +6,8 @@
 import SwiftUI
 
 struct EnableICloudSyncView: View {
+    @Environment(\.scenePhase) private var scenePhase
+
     private let checker: ICloudAvailabilityChecking
     private let preferences: AppPreferencesProviding
     private let settingsOpener: SystemSettingsOpening
@@ -14,6 +16,7 @@ struct EnableICloudSyncView: View {
     @State private var iCloudStatus: ICloudAccountStatus?
     @State private var statusMessage: String?
     @State private var didEnableSync = false
+    @State private var showsRestartInstructions = false
 
     init(
         checker: ICloudAvailabilityChecking = ICloudAvailabilityChecker(),
@@ -52,20 +55,18 @@ struct EnableICloudSyncView: View {
                 )
             }
 
-            Section {
-                Button {
-                    checkICloudAvailability()
-                } label: {
-                    if isChecking {
+            Section("iCloud Status") {
+                if isChecking {
+                    HStack {
                         ProgressView()
-                    } else {
-                        Text("Check iCloud Availability")
+                        Text("Checking iCloud availability…")
                     }
-                }
-                .disabled(isChecking || didEnableSync)
-
-                if let statusMessage {
+                } else if let statusMessage {
                     Text(statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("iCloud status will be checked automatically.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -75,30 +76,51 @@ struct EnableICloudSyncView: View {
                 iCloudHelpSection(for: unavailableReason)
             }
 
-            if canEnableSync && !didEnableSync {
+            if !didEnableSync {
                 Section {
                     Button("Enable iCloud Sync") {
                         enableSync()
                     }
+                    .disabled(!canEnableSync || isChecking)
 
-                    Text("This changes the app preference to use iCloud mirroring on next launch. Your existing local data remains local and will be mirrored by SwiftData/CloudKit after restart.")
+                    Text(enableSyncExplanation)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
             if didEnableSync {
-                Section("Next Step") {
+                Section("Restart Required") {
                     Label("iCloud Sync will be enabled after restart", systemImage: "checkmark.circle")
                         .foregroundStyle(.green)
 
-                    Text("Close and reopen yaHerd. After restart, changes continue saving locally and sync through iCloud when available.")
+                    Text("iOS does not allow apps to restart themselves. Close yaHerd from the app switcher, then open it again.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    Button {
+                        showsRestartInstructions.toggle()
+                    } label: {
+                        Label(showsRestartInstructions ? "Hide Restart Steps" : "Show Restart Steps", systemImage: "arrow.clockwise")
+                    }
+
+                    if showsRestartInstructions {
+                        RestartInstructionList()
+                    }
                 }
             }
         }
         .navigationTitle("Enable iCloud Sync")
+        .task {
+            await refreshICloudAvailability()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active, !didEnableSync else { return }
+
+            Task {
+                await refreshICloudAvailability()
+            }
+        }
     }
 
     private var canEnableSync: Bool {
@@ -115,6 +137,18 @@ struct EnableICloudSyncView: View {
         }
 
         return reason
+    }
+
+    private var enableSyncExplanation: String {
+        if canEnableSync {
+            return "This saves the iCloud Sync preference for next launch. If SwiftData cannot open the CloudKit-backed store after restart, yaHerd will automatically return to Local Only mode instead of crashing."
+        }
+
+        if isChecking {
+            return "yaHerd is checking iCloud availability before sync can be enabled."
+        }
+
+        return "Enable iCloud Sync becomes available after yaHerd confirms this device can use iCloud."
     }
 
     @ViewBuilder
@@ -136,7 +170,7 @@ struct EnableICloudSyncView: View {
                     Text("1. Tap Sign in to iPhone, or tap your Apple Account at the top.")
                     Text("2. Sign in with your Apple Account.")
                     Text("3. Open iCloud settings and make sure iCloud Drive is enabled.")
-                    Text("4. Return to yaHerd and check iCloud availability again.")
+                    Text("4. Return to yaHerd. Availability will be checked again automatically.")
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -168,41 +202,53 @@ struct EnableICloudSyncView: View {
                     Label("Open Settings", systemImage: "gear")
                 }
 
-                Text("Confirm the device is signed in to iCloud, iCloud Drive is enabled, and the device has a network connection. Then return to yaHerd and check again.")
+                Text("Confirm the device is signed in to iCloud, iCloud Drive is enabled, and the device has a network connection. Then return to yaHerd; availability will be checked again automatically.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
     }
 
-    private func checkICloudAvailability() {
+    @MainActor
+    private func refreshICloudAvailability() async {
+        guard !isChecking else { return }
+
         isChecking = true
         iCloudStatus = nil
         statusMessage = nil
 
-        Task {
-            let result = await checker.checkAvailability()
+        let result = await checker.checkAvailability()
+        iCloudStatus = result
 
-            await MainActor.run {
-                iCloudStatus = result
+        switch result {
+        case .available:
+            statusMessage = "iCloud is available. You can enable sync."
 
-                switch result {
-                case .available:
-                    statusMessage = "iCloud is available. You can enable sync."
-
-                case .unavailable(let reason):
-                    statusMessage = reason.message
-                }
-
-                isChecking = false
-            }
+        case .unavailable(let reason):
+            statusMessage = reason.message
         }
+
+        isChecking = false
     }
 
     private func enableSync() {
         preferences.syncMode = .iCloud
         didEnableSync = true
-        statusMessage = "iCloud Sync preference saved. Restart yaHerd to apply it."
+        statusMessage = "iCloud Sync preference saved. Restart yaHerd to apply it. If the CloudKit-backed store cannot open, yaHerd will return to Local Only mode and show a message."
+    }
+}
+
+private struct RestartInstructionList: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("1. Swipe up from the bottom of the screen and pause to open the app switcher. On devices with a Home button, double-click the Home button.")
+            Text("2. Swipe up on yaHerd to close it.")
+            Text("3. Open yaHerd again from the Home Screen or App Library.")
+            Text("4. Go to Manage > Sync and confirm iCloud Sync is enabled.")
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.vertical, 4)
     }
 }
 

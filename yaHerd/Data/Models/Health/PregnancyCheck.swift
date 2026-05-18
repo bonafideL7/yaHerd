@@ -11,8 +11,8 @@ import Foundation
 
 @Model
 final class PregnancyCheck {
-    var date: Date
-    var result: PregnancyResult
+    var date: Date = Date.now
+    var result: PregnancyResult = PregnancyResult.unknown
     var technician: String?
 
     /// Optional estimated days pregnant (if known).
