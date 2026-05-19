@@ -27,6 +27,12 @@ struct yaHerdApp: App {
                 syncMode: syncMode
             )
             
+            AppLaunchDiagnostics.record(
+                requestedSyncMode: syncMode,
+                actualStorageMode: syncMode == .iCloud ? .iCloud : .localOnly,
+                cloudKitOpened: syncMode == .iCloud
+            )
+
             self.sharedModelContainer = container
             self.dependencies = AppDependencies(context: container.mainContext)
             self.startupStorageError = nil
@@ -42,11 +48,20 @@ struct yaHerdApp: App {
                         syncMode: .localOnly
                     )
 
-                    self.sharedModelContainer = localContainer
-                    self.dependencies = AppDependencies(context: localContainer.mainContext)
-                    self.startupStorageError = """
+                    let startupMessage = """
                     iCloud Sync could not be enabled, so yaHerd returned to Local Only mode. Your local data is still on this device. Original error: \(primaryError.localizedDescription)
                     """
+
+                    AppLaunchDiagnostics.record(
+                        requestedSyncMode: syncMode,
+                        actualStorageMode: .localOnly,
+                        cloudKitOpened: false,
+                        startupError: startupMessage
+                    )
+
+                    self.sharedModelContainer = localContainer
+                    self.dependencies = AppDependencies(context: localContainer.mainContext)
+                    self.startupStorageError = startupMessage
                     return
                 } catch {
                     let localRecoveryError = error
@@ -56,14 +71,23 @@ struct yaHerdApp: App {
                             schema: schema
                         )
 
-                        self.sharedModelContainer = fallbackContainer
-                        self.dependencies = AppDependencies(context: fallbackContainer.mainContext)
-                        self.startupStorageError = """
+                        let startupMessage = """
                         Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved.
 
                         iCloud container error: \(primaryError.localizedDescription)
                         Local recovery error: \(localRecoveryError.localizedDescription)
                         """
+
+                        AppLaunchDiagnostics.record(
+                            requestedSyncMode: syncMode,
+                            actualStorageMode: .recovery,
+                            cloudKitOpened: false,
+                            startupError: startupMessage
+                        )
+
+                        self.sharedModelContainer = fallbackContainer
+                        self.dependencies = AppDependencies(context: fallbackContainer.mainContext)
+                        self.startupStorageError = startupMessage
                         return
                     } catch {
                         fatalError("""
@@ -87,11 +111,20 @@ struct yaHerdApp: App {
                     schema: schema
                 )
                 
-                self.sharedModelContainer = fallbackContainer
-                self.dependencies = AppDependencies(context: fallbackContainer.mainContext)
-                self.startupStorageError = """
+                let startupMessage = """
                 Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved. Original error: \(primaryError.localizedDescription)
                 """
+
+                AppLaunchDiagnostics.record(
+                    requestedSyncMode: syncMode,
+                    actualStorageMode: .recovery,
+                    cloudKitOpened: false,
+                    startupError: startupMessage
+                )
+
+                self.sharedModelContainer = fallbackContainer
+                self.dependencies = AppDependencies(context: fallbackContainer.mainContext)
+                self.startupStorageError = startupMessage
             } catch {
                 fatalError("""
                 Failed to create SwiftData containers.
