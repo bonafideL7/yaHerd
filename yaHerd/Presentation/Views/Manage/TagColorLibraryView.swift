@@ -46,8 +46,18 @@ struct TagColorLibraryView: View {
                 EditButton()
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showingAdd = true
+                Menu {
+                    Button {
+                        showingAdd = true
+                    } label: {
+                        Label("Add Color", systemImage: "plus")
+                    }
+
+                    Button {
+                        tagColorLibrary.restoreDefaultColors()
+                    } label: {
+                        Label("Restore Default Colors", systemImage: "arrow.clockwise")
+                    }
                 } label: {
                     Image(systemName: "plus")
                 }
