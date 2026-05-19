@@ -64,6 +64,7 @@ final class SyncDataResetService: SyncDataResetting {
         deletedCount += try deleteAll(PregnancyCheck.self)
         deletedCount += try deleteAll(HealthRecord.self)
         deletedCount += try deleteAll(AnimalTag.self)
+        deletedCount += try deleteAll(TagColorDefinition.self)
         deletedCount += try deleteAll(AnimalStatusReference.self)
         deletedCount += try deleteAll(Animal.self)
         deletedCount += try deleteAll(Pasture.self)

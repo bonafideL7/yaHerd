@@ -22,8 +22,7 @@ struct SampleLargeDataService {
             return
         }
         
-        let tagColorStore = TagColorLibraryStore()
-        let colorIDs = Dictionary(uniqueKeysWithValues: tagColorStore.colors.map { ($0.name, $0.id) })
+        let colorIDs = SampleDataService.tagColorIDsByName(context: context)
         
         let pastureNames = [
             "NW Pasture",

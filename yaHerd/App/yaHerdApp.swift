@@ -10,8 +10,9 @@ import SwiftData
 
 @main
 struct yaHerdApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var nav = NavigationCoordinator()
-    @StateObject private var tagColorLibrary = TagColorLibraryStore()
+    @StateObject private var tagColorLibrary: TagColorLibraryStore
     private let sharedModelContainer: ModelContainer
     private let dependencies: AppDependencies
     private let startupStorageError: String?
@@ -35,6 +36,7 @@ struct yaHerdApp: App {
 
             self.sharedModelContainer = container
             self.dependencies = AppDependencies(context: container.mainContext)
+            self._tagColorLibrary = StateObject(wrappedValue: TagColorLibraryStore(context: container.mainContext, syncMode: syncMode))
             self.startupStorageError = nil
         } catch {
             let primaryError = error
@@ -61,6 +63,7 @@ struct yaHerdApp: App {
 
                     self.sharedModelContainer = localContainer
                     self.dependencies = AppDependencies(context: localContainer.mainContext)
+                    self._tagColorLibrary = StateObject(wrappedValue: TagColorLibraryStore(context: localContainer.mainContext, syncMode: .localOnly))
                     self.startupStorageError = startupMessage
                     return
                 } catch {
@@ -87,6 +90,7 @@ struct yaHerdApp: App {
 
                         self.sharedModelContainer = fallbackContainer
                         self.dependencies = AppDependencies(context: fallbackContainer.mainContext)
+                        self._tagColorLibrary = StateObject(wrappedValue: TagColorLibraryStore(context: fallbackContainer.mainContext, syncMode: .localOnly))
                         self.startupStorageError = startupMessage
                         return
                     } catch {
@@ -124,6 +128,7 @@ struct yaHerdApp: App {
 
                 self.sharedModelContainer = fallbackContainer
                 self.dependencies = AppDependencies(context: fallbackContainer.mainContext)
+                self._tagColorLibrary = StateObject(wrappedValue: TagColorLibraryStore(context: fallbackContainer.mainContext, syncMode: .localOnly))
                 self.startupStorageError = startupMessage
             } catch {
                 fatalError("""
@@ -144,6 +149,11 @@ struct yaHerdApp: App {
                 .environmentObject(nav)
                 .environmentObject(tagColorLibrary)
                 .environmentObject(dependencies)
+                .onChange(of: scenePhase) { _, newPhase in
+                    if newPhase == .active {
+                        tagColorLibrary.refresh()
+                    }
+                }
         }
         .modelContainer(sharedModelContainer)
     }
@@ -152,6 +162,7 @@ struct yaHerdApp: App {
         Schema([
             Animal.self,
             AnimalTag.self,
+            TagColorDefinition.self,
             AnimalStatusReference.self,
             Pasture.self,
             PastureGroup.self,

@@ -1,10 +1,10 @@
 import SwiftData
 import Foundation
-import SwiftUI
 
 struct SampleDataService {
     
     static func seedDefaultsIfNeeded(context: ModelContext) {
+        _ = tagColorIDsByName(context: context)
         seedProtocolTemplatesIfNeeded(context: context)
     }
 
@@ -18,8 +18,7 @@ struct SampleDataService {
         
         // Resolve the default "Green" tag color id from the library store.
         // TagColorDefinition IDs are generated when the library is first seeded, so we look them up by name.
-        let tagColorStore = TagColorLibraryStore()
-        let greenTagColorID = tagColorStore.colors.first(where: { $0.name == "Green" })?.id
+        let greenTagColorID = tagColorIDsByName(context: context)["Green"]
         
         // MARK: - Pastures
         let northwest = Pasture(name: "NW Pasture", acreage: 35, usableAcreage: 25, targetAcresPerHead: 3)
@@ -243,5 +242,33 @@ struct SampleDataService {
     
     private static func makeDate(_ year: Int, _ month: Int, _ day: Int) -> Date {
         Calendar.current.date(from: DateComponents(year: year, month: month, day: day)) ?? .now
+    }
+}
+
+extension SampleDataService {
+    static func tagColorIDsByName(context: ModelContext) -> [String: UUID] {
+        var existingColors = (try? context.fetch(FetchDescriptor<TagColorDefinition>())) ?? []
+
+        for defaultColor in TagColorLibraryStore.seedDefaultColors() {
+            let defaultKey = TagColorLibraryStore.normalizedNameKey(defaultColor.name)
+            let alreadyExists = existingColors.contains {
+                TagColorLibraryStore.normalizedNameKey($0.name) == defaultKey
+            }
+
+            if !alreadyExists {
+                context.insert(defaultColor)
+                existingColors.append(defaultColor)
+            }
+        }
+
+        try? context.save()
+
+        let refreshedColors = (try? context.fetch(FetchDescriptor<TagColorDefinition>())) ?? existingColors
+        var colorIDs: [String: UUID] = [:]
+        for color in refreshedColors {
+            colorIDs[color.name] = color.id
+        }
+
+        return colorIDs
     }
 }
