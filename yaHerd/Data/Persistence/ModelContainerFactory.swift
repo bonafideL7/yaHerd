@@ -6,7 +6,8 @@
 import SwiftData
 
 enum ModelContainerFactory {
-    private static let storeName = "yaHerdStore"
+    static let storeName = "yaHerdStore"
+    static let cloudKitContainerIdentifier = "iCloud.ltd.yaherd"
 
     static func makeContainer(
         schema: Schema,

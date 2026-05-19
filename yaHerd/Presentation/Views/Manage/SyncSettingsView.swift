@@ -46,6 +46,18 @@ struct SyncSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            Section("Diagnostics") {
+                NavigationLink {
+                    SyncDiagnosticsView()
+                } label: {
+                    Label("Sync Diagnostics", systemImage: "stethoscope")
+                }
+
+                Text("Use this when sync is not behaving the same on every install.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .navigationTitle("Sync")
         .onAppear {
