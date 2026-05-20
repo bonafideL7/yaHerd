@@ -41,7 +41,7 @@ struct SyncSettingsView: View {
                     Label("iCloud Sync Enabled", systemImage: "checkmark.icloud")
                         .foregroundStyle(.green)
 
-                    Text("Changes are saved locally first and sync through iCloud when the device is online and iCloud is available.")
+                    Text("Changes are saved locally first and sync through iCloud when the device is online and iCloud is available. App settings also sync through iCloud, and iCloud settings override this device when sync is enabled.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
