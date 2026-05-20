@@ -115,7 +115,7 @@ struct SyncDiagnosticsView: View {
                 }
                 .disabled(isDeletingSyncData)
 
-                Text("Deletes local yaHerd data in the active store, deletes yaHerd CloudKit private database zones in the active environment, switches Sync Mode back to Local Only, and requires an app restart. Use only when you intentionally want to reset sync data.")
+                Text("Deletes yaHerd CloudKit private database zones in the active environment only. Local data on this device is not deleted. Sync Mode switches back to Local Only and an app restart is required.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -154,7 +154,7 @@ struct SyncDiagnosticsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This is for development testing. It deletes yaHerd data from this install and attempts to delete yaHerd CloudKit private database zones. Restart yaHerd afterward.")
+            Text("This is for development testing. It deletes yaHerd CloudKit private database zones only. Local data on this device is not deleted. Restart yaHerd afterward.")
         }
     }
 
@@ -164,11 +164,11 @@ struct SyncDiagnosticsView: View {
 
         Task {
             do {
-                let resetService = SyncDataResetService(modelContext: modelContext, preferences: preferences)
-                let summary = try await resetService.deleteAllSyncData()
+                let resetService = SyncDataResetService(preferences: preferences)
+                let summary = try await resetService.deleteICloudSyncData()
 
                 await MainActor.run {
-                    resetResultMessage = "Deleted \(summary.deletedLocalObjectCount.formatted()) local objects and \(summary.deletedCloudKitZoneCount.formatted()) CloudKit zones. Force quit and reopen yaHerd. Sync Mode is now Local Only."
+                    resetResultMessage = "Deleted \(summary.deletedCloudKitZoneCount.formatted()) CloudKit zones. Local data was not deleted. Force quit and reopen yaHerd. Sync Mode is now Local Only."
                     isDeletingSyncData = false
                 }
 

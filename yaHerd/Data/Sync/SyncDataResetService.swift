@@ -5,82 +5,39 @@
 
 import CloudKit
 import Foundation
-import SwiftData
 
 struct SyncDataResetSummary: Equatable {
-    let deletedLocalObjectCount: Int
     let deletedCloudKitRecordCount: Int
     let deletedCloudKitZoneCount: Int
 }
 
 protocol SyncDataResetting {
-    @MainActor
-    func deleteAllSyncData() async throws -> SyncDataResetSummary
+    func deleteICloudSyncData() async throws -> SyncDataResetSummary
 }
 
 final class SyncDataResetService: SyncDataResetting {
-    private let modelContext: ModelContext
     private let preferences: AppPreferencesProviding
     private let cloudKitContainerIdentifier: String
 
-    @MainActor
     init(
-        modelContext: ModelContext,
         preferences: AppPreferencesProviding = AppPreferences(),
         cloudKitContainerIdentifier: String = ModelContainerFactory.cloudKitContainerIdentifier
     ) {
-        self.modelContext = modelContext
         self.preferences = preferences
         self.cloudKitContainerIdentifier = cloudKitContainerIdentifier
     }
 
-    @MainActor
-    func deleteAllSyncData() async throws -> SyncDataResetSummary {
-        let deletedLocalObjectCount = try deleteLocalSwiftDataObjects()
+    func deleteICloudSyncData() async throws -> SyncDataResetSummary {
         let cloudKitSummary = try await deletePrivateCloudKitData()
 
-        preferences.syncMode = .localOnly
+        await MainActor.run {
+            preferences.syncMode = .localOnly
+        }
 
         return SyncDataResetSummary(
-            deletedLocalObjectCount: deletedLocalObjectCount,
             deletedCloudKitRecordCount: cloudKitSummary.deletedRecordCount,
             deletedCloudKitZoneCount: cloudKitSummary.deletedZoneCount
         )
-    }
-
-    @MainActor
-    private func deleteLocalSwiftDataObjects() throws -> Int {
-        var deletedCount = 0
-
-        deletedCount += try deleteAll(FieldCheckFinding.self)
-        deletedCount += try deleteAll(FieldCheckAnimalCheck.self)
-        deletedCount += try deleteAll(FieldCheckSession.self)
-        deletedCount += try deleteAll(WorkingTreatmentRecord.self)
-        deletedCount += try deleteAll(WorkingQueueItem.self)
-        deletedCount += try deleteAll(WorkingSession.self)
-        deletedCount += try deleteAll(WorkingProtocolTemplate.self)
-        deletedCount += try deleteAll(StatusRecord.self)
-        deletedCount += try deleteAll(MovementRecord.self)
-        deletedCount += try deleteAll(PregnancyCheck.self)
-        deletedCount += try deleteAll(HealthRecord.self)
-        deletedCount += try deleteAll(AnimalTag.self)
-        deletedCount += try deleteAll(TagColorDefinition.self)
-        deletedCount += try deleteAll(AnimalStatusReference.self)
-        deletedCount += try deleteAll(Animal.self)
-        deletedCount += try deleteAll(Pasture.self)
-        deletedCount += try deleteAll(PastureGroup.self)
-
-        try modelContext.save()
-        return deletedCount
-    }
-
-    @MainActor
-    private func deleteAll<T: PersistentModel>(_ modelType: T.Type) throws -> Int {
-        let objects = try modelContext.fetch(FetchDescriptor<T>())
-        for object in objects {
-            modelContext.delete(object)
-        }
-        return objects.count
     }
 
     private func deletePrivateCloudKitData() async throws -> CloudKitDeleteSummary {
@@ -133,22 +90,4 @@ final class SyncDataResetService: SyncDataResetting {
 private struct CloudKitDeleteSummary: Equatable {
     let deletedRecordCount: Int
     let deletedZoneCount: Int
-}
-
-private extension Array {
-    func chunked(into size: Int) -> [[Element]] {
-        guard size > 0 else { return [self] }
-
-        var chunks: [[Element]] = []
-        chunks.reserveCapacity((count / size) + 1)
-
-        var startIndex = 0
-        while startIndex < count {
-            let endIndex = Swift.min(startIndex + size, count)
-            chunks.append(Array(self[startIndex..<endIndex]))
-            startIndex = endIndex
-        }
-
-        return chunks
-    }
 }
