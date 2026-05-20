@@ -34,7 +34,7 @@ struct EnableICloudSyncView: View {
                 Label("iCloud Sync", systemImage: "icloud")
                     .font(.headline)
 
-                Text("yaHerd can mirror your local SwiftData store through iCloud so the same herd data is available on your Apple devices.")
+                Text("yaHerd can mirror your local SwiftData store and app settings through iCloud so the same herd data and preferences are available on your Apple devices.")
                     .foregroundStyle(.secondary)
             }
 
@@ -51,7 +51,7 @@ struct EnableICloudSyncView: View {
 
                 InfoRow(
                     title: "Restart required",
-                    message: "After enabling sync, restart yaHerd so the app can reopen the store with iCloud mirroring enabled."
+                    message: "After enabling sync, restart yaHerd so the app can reopen the store with iCloud mirroring enabled and apply iCloud-backed app settings."
                 )
             }
 
@@ -233,8 +233,9 @@ struct EnableICloudSyncView: View {
 
     private func enableSync() {
         preferences.syncMode = .iCloud
+        AppSettingsSynchronizer.shared.startIfNeeded(syncMode: .iCloud)
         didEnableSync = true
-        statusMessage = "iCloud Sync preference saved. Restart yaHerd to apply it. If the CloudKit-backed store cannot open, yaHerd will return to Local Only mode and show a message."
+        statusMessage = "iCloud Sync preference saved. App settings are syncing now. Restart yaHerd to reopen the CloudKit-backed data store. If the CloudKit-backed store cannot open, yaHerd will return to Local Only mode and show a message."
     }
 }
 

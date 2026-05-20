@@ -16,11 +16,13 @@ struct yaHerdApp: App {
     private let sharedModelContainer: ModelContainer
     private let dependencies: AppDependencies
     private let startupStorageError: String?
+    private let appSettingsSynchronizer: AppSettingsSynchronizer
 
     init() {
         let schema = Self.makeSchema()
         let preferences = AppPreferences()
         let syncMode = preferences.syncMode
+        let appSettingsSynchronizer = AppSettingsSynchronizer.shared
         
         do {
             let container = try ModelContainerFactory.makeContainer(
@@ -34,6 +36,8 @@ struct yaHerdApp: App {
                 cloudKitOpened: syncMode == .iCloud
             )
 
+            appSettingsSynchronizer.startIfNeeded(syncMode: syncMode)
+            self.appSettingsSynchronizer = appSettingsSynchronizer
             self.sharedModelContainer = container
             self.dependencies = AppDependencies(context: container.mainContext)
             self._tagColorLibrary = StateObject(wrappedValue: TagColorLibraryStore(context: container.mainContext, syncMode: syncMode))
@@ -61,6 +65,7 @@ struct yaHerdApp: App {
                         startupError: startupMessage
                     )
 
+                    self.appSettingsSynchronizer = appSettingsSynchronizer
                     self.sharedModelContainer = localContainer
                     self.dependencies = AppDependencies(context: localContainer.mainContext)
                     self._tagColorLibrary = StateObject(wrappedValue: TagColorLibraryStore(context: localContainer.mainContext, syncMode: .localOnly))
@@ -88,6 +93,7 @@ struct yaHerdApp: App {
                             startupError: startupMessage
                         )
 
+                        self.appSettingsSynchronizer = appSettingsSynchronizer
                         self.sharedModelContainer = fallbackContainer
                         self.dependencies = AppDependencies(context: fallbackContainer.mainContext)
                         self._tagColorLibrary = StateObject(wrappedValue: TagColorLibraryStore(context: fallbackContainer.mainContext, syncMode: .localOnly))
@@ -126,6 +132,7 @@ struct yaHerdApp: App {
                     startupError: startupMessage
                 )
 
+                self.appSettingsSynchronizer = appSettingsSynchronizer
                 self.sharedModelContainer = fallbackContainer
                 self.dependencies = AppDependencies(context: fallbackContainer.mainContext)
                 self._tagColorLibrary = StateObject(wrappedValue: TagColorLibraryStore(context: fallbackContainer.mainContext, syncMode: .localOnly))
@@ -151,6 +158,7 @@ struct yaHerdApp: App {
                 .environmentObject(dependencies)
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .active {
+                        appSettingsSynchronizer.refreshFromICloudIfStarted()
                         tagColorLibrary.refresh()
                     }
                 }
