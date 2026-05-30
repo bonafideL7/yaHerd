@@ -3,25 +3,47 @@ import SwiftUI
 import UIKit
 #endif
 
+private enum MainTab: Hashable {
+    case home
+    case dashboard
+    case animals
+    case pastures
+}
+
 struct MainTabView: View {
     @EnvironmentObject private var nav: NavigationCoordinator
     @EnvironmentObject private var dependencies: AppDependencies
     @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
 
+    @State private var selectedTab: MainTab = .home
+    @State private var isShowingManagement = false
+
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
+            NavigationStack {
+                HomeView()
+                    .appManagementToolbar(isPresented: $isShowingManagement)
+            }
+            .tabItem {
+                Label("Home", systemImage: "house")
+            }
+            .tag(MainTab.home)
+
             if isDashboardEnabled {
                 NavigationStack(path: $nav.globalPath) {
                     DashboardView()
                         .navigationDestination(for: DashboardRoute.self, destination: dashboardDestination)
+                        .appManagementToolbar(isPresented: $isShowingManagement)
                 }
                 .tabItem {
                     Label("Dashboard", systemImage: "rectangle.3.group")
                 }
+                .tag(MainTab.dashboard)
             }
 
             NavigationStack {
                 AnimalListView()
+                    .appManagementToolbar(isPresented: $isShowingManagement)
             }
             .tabItem {
                 Label {
@@ -34,18 +56,25 @@ struct MainTabView: View {
                     }
                 }
             }
+            .tag(MainTab.animals)
 
             NavigationStack {
                 PastureListView(repository: dependencies.pastureRepository)
+                    .appManagementToolbar(isPresented: $isShowingManagement)
             }
             .tabItem {
                 Label("Pastures", systemImage: "leaf")
             }
-
-            ManagementView()
-                .tabItem {
-                    Label("Manage", systemImage: "slider.horizontal.3")
-                }
+            .tag(MainTab.pastures)
+        }
+        .yaherdTabBarMinimizeBehavior()
+        .sheet(isPresented: $isShowingManagement) {
+            ManagementSheetView()
+        }
+        .onChange(of: isDashboardEnabled) { _, isEnabled in
+            if !isEnabled && selectedTab == .dashboard {
+                selectedTab = .home
+            }
         }
     }
 
@@ -60,6 +89,47 @@ struct MainTabView: View {
             DashboardAnimalListView(kind: kind, repository: dependencies.dashboardRepository)
         case .pastureList:
             DashboardPastureListView(repository: dependencies.dashboardRepository)
+        }
+    }
+}
+
+private struct ManagementSheetView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ManagementView()
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") {
+                            dismiss()
+                        }
+                    }
+                }
+        }
+    }
+}
+
+private extension View {
+    func appManagementToolbar(isPresented: Binding<Bool>) -> some View {
+        toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isPresented.wrappedValue = true
+                } label: {
+                    Label("Manage", systemImage: "slider.horizontal.3")
+                }
+                .accessibilityLabel("Manage")
+            }
+        }
+    }
+
+    @ViewBuilder
+    func yaherdTabBarMinimizeBehavior() -> some View {
+        if #available(iOS 26.0, *) {
+            self.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            self
         }
     }
 }

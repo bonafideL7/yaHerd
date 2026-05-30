@@ -12,6 +12,7 @@ struct AnimalListFloatingControlBar: View {
     let filterChipCount: Int
     let hasAnyActiveCriteria: Bool
     let chips: [AnimalListFilterChip]
+    let showsSearchControl: Bool
     let onShowFilters: () -> Void
     let onClearAllCriteria: () -> Void
     @FocusState.Binding var isSearchFieldFocused: Bool
@@ -62,14 +63,16 @@ struct AnimalListFloatingControlBar: View {
                     }
                     .buttonStyle(.plain)
 
-                    Button {
-                        withAnimation(.snappy) {
-                            isSearching = true
+                    if showsSearchControl {
+                        Button {
+                            withAnimation(.snappy) {
+                                isSearching = true
+                            }
+                        } label: {
+                            AnimalListFloatingIconControlLabel(systemImage: "magnifyingglass")
                         }
-                    } label: {
-                        AnimalListFloatingIconControlLabel(systemImage: "magnifyingglass")
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
 

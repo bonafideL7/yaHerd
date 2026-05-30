@@ -57,6 +57,9 @@ struct DashboardView: View {
         viewModel.snapshot?.activeSession
     }
 
+    private let showsDashboardSearch = false
+    private let showsLocalTopRightActions = false
+
     var body: some View {
         List {
             if !searchResults.isEmpty {
@@ -153,29 +156,31 @@ struct DashboardView: View {
             }
         }
         .navigationTitle("Dashboard")
-        .searchable(text: $searchText, prompt: "Search tag…")
+        .dashboardSearchable(isEnabled: showsDashboardSearch, searchText: $searchText)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button {
-                        viewModel.isPresentingAddAnimal = true
-                    } label: {
-                        Label("Add Animal", systemImage: "plus")
-                    }
+            if showsLocalTopRightActions {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button {
+                            viewModel.isPresentingAddAnimal = true
+                        } label: {
+                            Label("Add Animal", systemImage: "plus")
+                        }
 
-                    Button {
-                        viewModel.isPresentingAddPasture = true
-                    } label: {
-                        Label("Add Pasture", systemImage: "leaf")
-                    }
+                        Button {
+                            viewModel.isPresentingAddPasture = true
+                        } label: {
+                            Label("Add Pasture", systemImage: "leaf")
+                        }
 
-                    Button {
-                        viewModel.isPresentingNewWorkingSession = true
+                        Button {
+                            viewModel.isPresentingNewWorkingSession = true
+                        } label: {
+                            Label("New Working Session", systemImage: "wrench")
+                        }
                     } label: {
-                        Label("New Working Session", systemImage: "wrench")
+                        Image(systemName: "plus")
                     }
-                } label: {
-                    Image(systemName: "plus")
                 }
             }
         }
@@ -311,3 +316,15 @@ struct DashboardView: View {
     }
 }
 
+
+
+private extension View {
+    @ViewBuilder
+    func dashboardSearchable(isEnabled: Bool, searchText: Binding<String>) -> some View {
+        if isEnabled {
+            self.searchable(text: searchText, prompt: "Search tag…")
+        } else {
+            self
+        }
+    }
+}
