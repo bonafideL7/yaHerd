@@ -7,64 +7,62 @@ import SwiftUI
 
 struct ManagementView: View {
     var body: some View {
-        NavigationStack {
-            List {
-                Section("Setup") {                    
-                    NavigationLink {
-                        DashboardRulesView()
-                    } label: {
-                        ManagementRow(
-                            title: "Dashboard",
-                            subtitle: "Configure overdue alerts and pasture warning thresholds.",
-                            systemImage: "gauge.with.dots.needle.67percent"
-                        )
-                    }
-                    
-                    NavigationLink {
-                        HerdSetupView()
-                    } label: {
-                        ManagementRow(
-                            title: "Herd",
-                            subtitle: "Manage tag colors used across animal records.",
-                            systemImage: "tag"
-                        )
-                    }
-
-                    NavigationLink {
-                        PastureDefaultsView()
-                    } label: {
-                        ManagementRow(
-                            title: "Pasture",
-                            subtitle: "Set default stocking and usable acreage assumptions.",
-                            systemImage: "leaf"
-                        )
-                    }
-                }
-                
+        List {
+            Section("Setup") {                    
                 NavigationLink {
-                    SyncSettingsView()
+                    DashboardRulesView()
                 } label: {
                     ManagementRow(
-                        title: "Sync",
-                        subtitle: "View storage mode and iCloud sync status.",
-                        systemImage: "icloud"
+                        title: "Dashboard",
+                        subtitle: "Configure overdue alerts and pasture warning thresholds.",
+                        systemImage: "gauge.with.dots.needle.67percent"
                     )
                 }
                 
-                Section("About") {
-                    NavigationLink {
-                        AboutYaHerdView()
-                    } label: {
-                        ManagementRow(
-                            title: "About yaHerd",
-                            subtitle: "App information and platform details.",
-                            systemImage: "info.circle"
-                        )
-                    }
+                NavigationLink {
+                    HerdSetupView()
+                } label: {
+                    ManagementRow(
+                        title: "Herd",
+                        subtitle: "Manage tag colors used across animal records.",
+                        systemImage: "tag"
+                    )
+                }
+
+                NavigationLink {
+                    PastureDefaultsView()
+                } label: {
+                    ManagementRow(
+                        title: "Pasture",
+                        subtitle: "Set default stocking and usable acreage assumptions.",
+                        systemImage: "leaf"
+                    )
                 }
             }
-            .navigationTitle("Manage")
+            
+            NavigationLink {
+                SyncSettingsView()
+            } label: {
+                ManagementRow(
+                    title: "Sync",
+                    subtitle: "View storage mode and iCloud sync status.",
+                    systemImage: "icloud"
+                )
+            }
+            
+            Section("About") {
+                NavigationLink {
+                    AboutYaHerdView()
+                } label: {
+                    ManagementRow(
+                        title: "About yaHerd",
+                        subtitle: "App information and platform details.",
+                        systemImage: "info.circle"
+                    )
+                }
+            }
         }
+        .navigationTitle("Manage")
     }
 }
 

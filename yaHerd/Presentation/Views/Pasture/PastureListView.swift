@@ -6,6 +6,7 @@ struct PastureListView: View {
     @State private var showingFieldChecks = false
 
     private let repository: any PastureRepository
+    private let showsLocalTopRightActions = false
 
     init(repository: any PastureRepository) {
         self.repository = repository
@@ -45,29 +46,31 @@ struct PastureListView: View {
             FieldChecksView()
         }
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Menu {
-                    Button {
-                        showingStartPastureCheck = true
+            if showsLocalTopRightActions {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Menu {
+                        Button {
+                            showingStartPastureCheck = true
+                        } label: {
+                            Label("Start Pasture Check", systemImage: "plus.circle")
+                        }
+
+                        Button {
+                            showingFieldChecks = true
+                        } label: {
+                            Label("View Pasture Checks", systemImage: "checklist")
+                        }
                     } label: {
-                        Label("Start Pasture Check", systemImage: "plus.circle")
+                        Label("Pasture Checks", systemImage: "checklist")
                     }
 
                     Button {
-                        showingFieldChecks = true
+                        model.isPresentingAddPasture = true
                     } label: {
-                        Label("View Pasture Checks", systemImage: "checklist")
+                        Image(systemName: "plus")
                     }
-                } label: {
-                    Label("Pasture Checks", systemImage: "checklist")
+                    .accessibilityLabel("Add Pasture")
                 }
-
-                Button {
-                    model.isPresentingAddPasture = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .accessibilityLabel("Add Pasture")
             }
         }
         .sheet(isPresented: $model.isPresentingAddPasture) {

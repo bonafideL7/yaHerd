@@ -30,6 +30,9 @@ struct AnimalListView: View {
     @State private var selectedAnimalIDs: Set<UUID> = []
     @State private var showingPasturePicker = false
 
+    private let showsLocalTopRightActions = false
+    private let showsSearchControls = false
+
     private var repository: any AnimalRepository { dependencies.animalRepository }
 
     private var filteredAndSortedAnimals: [AnimalSummary] {
@@ -94,11 +97,13 @@ struct AnimalListView: View {
                 }
             }
 
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button { showingAdd = true } label: {
-                    Image(systemName: "plus")
+            if showsLocalTopRightActions {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button { showingAdd = true } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Add Animal")
                 }
-                .accessibilityLabel("Add Animal")
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomOverlay }
@@ -185,6 +190,7 @@ struct AnimalListView: View {
             filterChipCount: currentFilterChips.count,
             hasAnyActiveCriteria: hasAnyActiveCriteria,
             chips: currentFilterChips,
+            showsSearchControl: showsSearchControls,
             onShowFilters: { showingFilters = true },
             onClearAllCriteria: clearAllCriteria,
             isSearchFieldFocused: $isSearchFieldFocused
