@@ -42,7 +42,6 @@ struct MainTabView: View {
 
             NavigationStack {
                 HerdView()
-                    .appManagementToolbar(isPresented: $isShowingManagement)
             }
             .tabItem {
                 Label {

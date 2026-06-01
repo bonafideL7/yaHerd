@@ -9,6 +9,9 @@ struct HerdView: View {
     @EnvironmentObject private var dependencies: AppDependencies
 
     @State private var mode: HerdViewMode = .animals
+    @State private var isManagingPastures = false
+    @State private var isPresentingAddPasture = false
+    @State private var pastureReloadID = UUID()
 
     var body: some View {
         Group {
@@ -16,19 +19,48 @@ struct HerdView: View {
             case .animals:
                 AnimalListView()
             case .pastures:
-                PastureTileListView(repository: dependencies.pastureRepository)
+                PastureTileListView(
+                    repository: dependencies.pastureRepository,
+                    isManaging: $isManagingPastures,
+                    reloadID: pastureReloadID
+                )
             }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    withAnimation(.snappy) {
-                        mode = mode == .animals ? .pastures : .animals
+                if mode == .pastures && isManagingPastures {
+                    Button {
+                        isPresentingAddPasture = true
+                    } label: {
+                        Label("Add Pasture", systemImage: "plus")
                     }
-                } label: {
-                    Label(switchButtonTitle, systemImage: switchButtonSystemImage)
+                    .accessibilityLabel("Add Pasture")
+                } else {
+                    Button {
+                        switchMode()
+                    } label: {
+                        Label(switchButtonTitle, systemImage: switchButtonSystemImage)
+                    }
+                    .accessibilityLabel(switchButtonTitle)
                 }
-                .accessibilityLabel(switchButtonTitle)
+            }
+        }
+        .sheet(isPresented: $isPresentingAddPasture) {
+            AddPastureView {
+                pastureReloadID = UUID()
+            }
+            .environmentObject(dependencies)
+        }
+    }
+
+    private func switchMode() {
+        withAnimation(.snappy) {
+            switch mode {
+            case .animals:
+                mode = .pastures
+            case .pastures:
+                isManagingPastures = false
+                mode = .animals
             }
         }
     }
@@ -45,9 +77,9 @@ struct HerdView: View {
     private var switchButtonSystemImage: String {
         switch mode {
         case .animals:
-            return "square.grid.2x2"
+            return "leaf"
         case .pastures:
-            return "list.bullet"
+            return "tag"
         }
     }
 }
