@@ -9,7 +9,6 @@ protocol PastureRepository {
     func create(input: PastureInput) throws -> PastureDetailSnapshot
     @discardableResult
     func update(id: UUID, input: PastureInput) throws -> PastureDetailSnapshot
-    func delete(ids: [UUID]) throws
     func createGroup(input: PastureGroupInput) throws
 }
 

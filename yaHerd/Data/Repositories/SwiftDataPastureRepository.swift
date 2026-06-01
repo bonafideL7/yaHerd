@@ -16,7 +16,6 @@ struct SwiftDataPastureRepository: PastureRepository {
         return nil
     }
 
-
     func fetchResidentAnimals(pastureID: UUID) throws -> [AnimalSummary] {
         guard let pasture = try fetchModel(id: pastureID) else { return [] }
         return pasture.animals
@@ -83,33 +82,6 @@ struct SwiftDataPastureRepository: PastureRepository {
 
         let group = PastureGroup(name: normalizedName, grazeDays: input.grazeDays, restDays: input.restDays)
         context.insert(group)
-        try context.save()
-    }
-
-    func delete(ids: [UUID]) throws {
-        guard !ids.isEmpty else { return }
-        
-        let identifierSet = Set(ids)
-        
-        let pastureDescriptor = FetchDescriptor<Pasture>()
-        let pasturesToDelete = try context.fetch(pastureDescriptor)
-            .filter { identifierSet.contains($0.publicID) }
-        
-        let sessionDescriptor = FetchDescriptor<FieldCheckSession>()
-        let sessionsToDelete = try context.fetch(sessionDescriptor)
-            .filter { session in
-                guard let pastureID = session.pastureID else { return false }
-                return identifierSet.contains(pastureID)
-            }
-        
-        for session in sessionsToDelete {
-            context.delete(session)
-        }
-        
-        for pasture in pasturesToDelete {
-            context.delete(pasture)
-        }
-        
         try context.save()
     }
 

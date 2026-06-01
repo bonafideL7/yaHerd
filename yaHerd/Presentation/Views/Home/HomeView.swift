@@ -16,7 +16,7 @@ struct HomeView: View {
                         Text("yaHerd")
                             .font(.title2.weight(.semibold))
 
-                        Text("Use the tabs below to move between herd records and pastures. Management settings are now available from the top-right button.")
+                        Text("Use the tabs below to move between Home and herd records. Open pasture tiles from the YaHerd screen. Management settings are available from the top-right button.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -26,7 +26,7 @@ struct HomeView: View {
 
             Section("Navigation") {
                 Label("YaHerd contains animal records.", systemImage: "tag")
-                Label("Pastures contains pasture records.", systemImage: "leaf")
+                Label("Use the YaHerd screen button to switch between animal records and pasture tiles.", systemImage: "square.grid.2x2")
                 Label("Manage is available from the top-right button.", systemImage: "slider.horizontal.3")
             }
         }

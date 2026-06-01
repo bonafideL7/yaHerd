@@ -7,7 +7,6 @@ private enum MainTab: Hashable {
     case home
     case dashboard
     case animals
-    case pastures
 }
 
 struct MainTabView: View {
@@ -42,7 +41,7 @@ struct MainTabView: View {
             }
 
             NavigationStack {
-                AnimalListView()
+                HerdView()
                     .appManagementToolbar(isPresented: $isShowingManagement)
             }
             .tabItem {
@@ -57,15 +56,6 @@ struct MainTabView: View {
                 }
             }
             .tag(MainTab.animals)
-
-            NavigationStack {
-                PastureListView(repository: dependencies.pastureRepository)
-                    .appManagementToolbar(isPresented: $isShowingManagement)
-            }
-            .tabItem {
-                Label("Pastures", systemImage: "leaf")
-            }
-            .tag(MainTab.pastures)
         }
         .yaherdTabBarMinimizeBehavior()
         .sheet(isPresented: $isShowingManagement) {
