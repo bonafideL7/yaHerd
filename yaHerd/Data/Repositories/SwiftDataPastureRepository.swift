@@ -5,7 +5,12 @@ struct SwiftDataPastureRepository: PastureRepository {
     let context: ModelContext
 
     func fetchPastures() throws -> [PastureSummary] {
-        let descriptor = FetchDescriptor<Pasture>(sortBy: [SortDescriptor(\Pasture.name)])
+        let descriptor = FetchDescriptor<Pasture>(
+            sortBy: [
+                SortDescriptor(\Pasture.sortOrder),
+                SortDescriptor(\Pasture.name)
+            ]
+        )
         return try context.fetch(descriptor).map(PastureMapper.makeSummary)
     }
 
@@ -47,7 +52,8 @@ struct SwiftDataPastureRepository: PastureRepository {
             name: normalizedName,
             acreage: input.acreage,
             usableAcreage: input.usableAcreage,
-            targetAcresPerHead: input.targetAcresPerHead
+            targetAcresPerHead: input.targetAcresPerHead,
+            sortOrder: try nextSortOrder()
         )
         try ensureUniquePasturePublicID(pasture)
         context.insert(pasture)
@@ -72,6 +78,53 @@ struct SwiftDataPastureRepository: PastureRepository {
         try context.save()
 
         return PastureMapper.makeDetail(from: pasture)
+    }
+
+    func reorder(ids: [UUID]) throws {
+        let pastures = try context.fetch(FetchDescriptor<Pasture>())
+        let requestedIDs = Set(ids)
+
+        for (index, id) in ids.enumerated() {
+            guard let pasture = pastures.first(where: { $0.publicID == id }) else { continue }
+            pasture.sortOrder = index
+        }
+
+        let remainingPastures = pastures
+            .filter { !requestedIDs.contains($0.publicID) }
+            .sorted(by: pastureSortComparison)
+
+        for (offset, pasture) in remainingPastures.enumerated() {
+            pasture.sortOrder = ids.count + offset
+        }
+
+        try context.save()
+    }
+
+    func delete(ids: [UUID]) throws {
+        guard !ids.isEmpty else { return }
+
+        let identifierSet = Set(ids)
+
+        let pastureDescriptor = FetchDescriptor<Pasture>()
+        let pasturesToDelete = try context.fetch(pastureDescriptor)
+            .filter { identifierSet.contains($0.publicID) }
+
+        let sessionDescriptor = FetchDescriptor<FieldCheckSession>()
+        let sessionsToDelete = try context.fetch(sessionDescriptor)
+            .filter { session in
+                guard let pastureID = session.pastureID else { return false }
+                return identifierSet.contains(pastureID)
+            }
+
+        for session in sessionsToDelete {
+            context.delete(session)
+        }
+
+        for pasture in pasturesToDelete {
+            context.delete(pasture)
+        }
+
+        try context.save()
     }
 
     func createGroup(input: PastureGroupInput) throws {
@@ -99,6 +152,18 @@ struct SwiftDataPastureRepository: PastureRepository {
         while existingIDs.contains(pasture.publicID) {
             pasture.publicID = UUID()
         }
+    }
+
+    private func nextSortOrder() throws -> Int {
+        let pastures = try context.fetch(FetchDescriptor<Pasture>())
+        return (pastures.map(\.sortOrder).max() ?? -1) + 1
+    }
+
+    private func pastureSortComparison(_ lhs: Pasture, _ rhs: Pasture) -> Bool {
+        if lhs.sortOrder != rhs.sortOrder {
+            return lhs.sortOrder < rhs.sortOrder
+        }
+        return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
     }
 
     private func groupNameExists(_ name: String) throws -> Bool {
