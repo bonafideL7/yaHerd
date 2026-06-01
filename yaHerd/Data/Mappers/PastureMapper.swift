@@ -8,7 +8,8 @@ enum PastureMapper {
             acreage: pasture.acreage,
             usableAcreage: pasture.usableAcreage,
             targetAcresPerHead: pasture.targetAcresPerHead,
-            activeAnimalCount: pasture.animals.filter(\.isActiveInHerd).count
+            activeAnimalCount: pasture.animals.filter(\.isActiveInHerd).count,
+            sortOrder: pasture.sortOrder
         )
     }
 

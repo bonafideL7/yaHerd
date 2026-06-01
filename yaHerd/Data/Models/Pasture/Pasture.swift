@@ -5,6 +5,7 @@ import SwiftData
 final class Pasture {
     var publicID: UUID = UUID()
     var name: String = ""
+    var sortOrder: Int = 0
     @Relationship(deleteRule: .nullify, inverse: \Animal.pasture)
     var animalStorage: [Animal]?
 
@@ -37,12 +38,14 @@ final class Pasture {
         name: String,
         acreage: Double? = nil,
         usableAcreage: Double? = nil,
-        targetAcresPerHead: Double? = nil
+        targetAcresPerHead: Double? = nil,
+        sortOrder: Int = 0
     ) {
         self.publicID = publicID
         self.name = name
         self.acreage = acreage
         self.usableAcreage = usableAcreage
         self.targetAcresPerHead = targetAcresPerHead
+        self.sortOrder = sortOrder
     }
 }

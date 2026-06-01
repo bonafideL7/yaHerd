@@ -7,6 +7,7 @@ struct PastureSummary: Identifiable, Hashable {
     let usableAcreage: Double?
     let targetAcresPerHead: Double?
     let activeAnimalCount: Int
+    let sortOrder: Int
 
     var metrics: PastureMetrics {
         PastureMetrics(
