@@ -4,20 +4,29 @@ struct PastureTileListView: View {
     @State private var model = PastureTileListViewModel()
     @State private var selectedPasture: PastureSummary?
 
+    @Binding private var isManaging: Bool
+
     private let repository: any PastureRepository
+    private let reloadID: UUID
     private let columns = [
         GridItem(.adaptive(minimum: 150), spacing: 16)
     ]
 
-    init(repository: any PastureRepository) {
+    init(
+        repository: any PastureRepository,
+        isManaging: Binding<Bool>,
+        reloadID: UUID
+    ) {
         self.repository = repository
+        self._isManaging = isManaging
+        self.reloadID = reloadID
     }
 
     var body: some View {
         Group {
             if model.items.isEmpty {
                 emptyState
-            } else if model.isManaging {
+            } else if isManaging {
                 manageList
             } else {
                 tileGrid
@@ -29,15 +38,14 @@ struct PastureTileListView: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button(model.isManaging ? "Done" : "Manage") {
+                Button(isManaging ? "Done" : "Manage") {
                     withAnimation(.snappy) {
-                        model.toggleManageMode()
+                        isManaging.toggle()
                     }
                 }
-                .disabled(!model.isManaging && model.items.isEmpty)
             }
         }
-        .task {
+        .task(id: reloadID) {
             model.load(using: repository)
         }
         .alert("Can’t Complete Request", isPresented: errorBinding) {
@@ -64,7 +72,7 @@ struct PastureTileListView: View {
                     }
                     .onLongPressGesture {
                         withAnimation(.snappy) {
-                            model.enterManageMode()
+                            isManaging = true
                         }
                     }
                 }

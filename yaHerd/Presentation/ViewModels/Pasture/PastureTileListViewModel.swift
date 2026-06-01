@@ -6,7 +6,6 @@ import Observation
 final class PastureTileListViewModel {
     private(set) var items: [PastureSummary] = []
     var errorMessage: String?
-    var isManaging = false
 
     func load(using repository: any PastureRepository) {
         do {
@@ -16,13 +15,6 @@ final class PastureTileListViewModel {
         }
     }
 
-    func enterManageMode() {
-        isManaging = true
-    }
-
-    func toggleManageMode() {
-        isManaging.toggle()
-    }
 
     func movePastures(from source: IndexSet, to destination: Int, using repository: any PastureRepository) {
         let originalItems = items
