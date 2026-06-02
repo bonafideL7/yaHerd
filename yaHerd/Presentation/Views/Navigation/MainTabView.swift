@@ -7,6 +7,7 @@ private enum MainTab: Hashable {
     case home
     case dashboard
     case animals
+    case search
 }
 
 struct MainTabView: View {
@@ -16,47 +17,127 @@ struct MainTabView: View {
 
     @State private var selectedTab: MainTab = .home
     @State private var isShowingManagement = false
+    @State private var animalSearchText = ""
+    @State private var herdMode: HerdViewMode = .animals
+    @State private var animalSortOrder: AnimalSortOrder = .tagAscending
+    @State private var animalFilter = AnimalFilter()
+    @State private var animalShowRemovedStatuses = false
+    @State private var animalShowArchivedRecords = false
+    @State private var animalShowingFilters = false
+    @FocusState private var animalSearchFieldIsFocused: Bool
+
+    private var animalSearchIsActive: Binding<Bool> {
+        Binding {
+            selectedTab == .search || hasAnimalSearchText
+        } set: { newValue in
+            if newValue {
+                selectedTab = .search
+            } else {
+                dismissAnimalSearch(clearText: true)
+            }
+        }
+    }
+
+    private var hasAnimalSearchText: Bool {
+        !animalSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var animalFiltersAreActive: Bool {
+        animalFilter.isActive || animalShowRemovedStatuses || animalShowArchivedRecords
+    }
+
+    private var animalHasAnyActiveCriteria: Bool {
+        hasAnimalSearchText || animalFiltersAreActive
+    }
+
+    private var activeAnimalCriteriaCount: Int {
+        var count = hasAnimalSearchText ? 1 : 0
+
+        if animalShowRemovedStatuses { count += 1 }
+        if animalShowArchivedRecords { count += 1 }
+        if animalFilter.sex != nil { count += 1 }
+        if animalFilter.animalType != nil { count += 1 }
+        if animalFilter.status != nil { count += 1 }
+
+        switch animalFilter.pasture {
+        case .any:
+            break
+        case .noPasture, .pasture(_):
+            count += 1
+        }
+
+        return count
+    }
+
+    private var activeAnimalFilterCount: Int {
+        activeAnimalCriteriaCount - (hasAnimalSearchText ? 1 : 0)
+    }
+
+    private var shouldShowAnimalBottomAccessory: Bool {
+        herdMode == .animals && (selectedTab == .animals || selectedTab == .search)
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            NavigationStack {
-                HomeView()
-                    .appManagementToolbar(isPresented: $isShowingManagement)
-            }
-            .tabItem {
-                Label("Home", systemImage: "house")
-            }
-            .tag(MainTab.home)
-
-            if isDashboardEnabled {
-                NavigationStack(path: $nav.globalPath) {
-                    DashboardView()
-                        .navigationDestination(for: DashboardRoute.self, destination: dashboardDestination)
+            Tab("Home", systemImage: "house", value: MainTab.home) {
+                NavigationStack {
+                    HomeView()
                         .appManagementToolbar(isPresented: $isShowingManagement)
                 }
-                .tabItem {
-                    Label("Dashboard", systemImage: "rectangle.3.group")
-                }
-                .tag(MainTab.dashboard)
             }
 
-            NavigationStack {
-                HerdView()
-            }
-            .tabItem {
-                Label {
-                    Text("YaHerd")
-                } icon: {
-                    if let base = UIImage(named: "Cow") {
-                        let icon = base.scaled(to: CGSize(width: 32, height: 32))
-                        Image(uiImage: icon)
-                            .renderingMode(.template)
+            if isDashboardEnabled {
+                Tab("Dashboard", systemImage: "rectangle.3.group", value: MainTab.dashboard) {
+                    NavigationStack(path: $nav.globalPath) {
+                        DashboardView()
+                            .navigationDestination(for: DashboardRoute.self, destination: dashboardDestination)
+                            .appManagementToolbar(isPresented: $isShowingManagement)
                     }
                 }
             }
-            .tag(MainTab.animals)
+
+            Tab(value: MainTab.animals) {
+                NavigationStack {
+                    herdContent
+                }
+            } label: {
+                Label {
+                    Text("YaHerd")
+                } icon: {
+                    yaherdTabIcon
+                }
+            }
+
+            if #available(iOS 26.0, *) {
+                Tab("Search", systemImage: "magnifyingglass", value: MainTab.search, role: .search) {
+                    NavigationStack {
+                        herdContent
+                    }
+                    .searchable(
+                        text: $animalSearchText,
+                        prompt: "Search tag, color, or name"
+                    )
+                    .searchFocused($animalSearchFieldIsFocused)
+                    .simultaneousGesture(searchFocusDismissGesture)
+                }
+            } else {
+                Tab("Search", systemImage: "magnifyingglass", value: MainTab.search) {
+                    NavigationStack {
+                        herdContent
+                    }
+                    .searchable(
+                        text: $animalSearchText,
+                        prompt: "Search tag, color, or name"
+                    )
+                    .searchFocused($animalSearchFieldIsFocused)
+                    .simultaneousGesture(searchFocusDismissGesture)
+                }
+            }
         }
         .yaherdTabBarMinimizeBehavior()
+        .yaherdTabViewBottomAccessory(isVisible: shouldShowAnimalBottomAccessory) {
+            animalBottomAccessory
+        }
         .sheet(isPresented: $isShowingManagement) {
             ManagementSheetView()
         }
@@ -65,6 +146,90 @@ struct MainTabView: View {
                 selectedTab = .home
             }
         }
+        .onChange(of: selectedTab) { oldValue, newValue in
+            if newValue == .search {
+                herdMode = .animals
+                DispatchQueue.main.async {
+                    animalSearchFieldIsFocused = false
+                }
+            }
+
+            if oldValue == .search && newValue != .search {
+                animalSearchFieldIsFocused = false
+            }
+        }
+    }
+
+    private var herdContent: some View {
+        HerdView(
+            searchText: $animalSearchText,
+            isSearchPresented: animalSearchIsActive,
+            mode: $herdMode,
+            sortOrder: $animalSortOrder,
+            filter: $animalFilter,
+            showRemovedStatuses: $animalShowRemovedStatuses,
+            showArchivedRecords: $animalShowArchivedRecords,
+            showingFilters: $animalShowingFilters,
+            usesShellBottomAccessory: true
+        )
+    }
+
+    @ViewBuilder
+    private var yaherdTabIcon: some View {
+        #if canImport(UIKit)
+        if let base = UIImage(named: "Cow") {
+            let icon = base.scaled(to: CGSize(width: 32, height: 32))
+            Image(uiImage: icon)
+                .renderingMode(.template)
+        } else {
+            Image(systemName: "tag")
+        }
+        #else
+        Image(systemName: "tag")
+        #endif
+    }
+
+    private var animalBottomAccessory: some View {
+        AnimalListTabAccessoryControls(
+            sortOrder: $animalSortOrder,
+            filtersAreActive: animalFiltersAreActive,
+            activeFilterCount: activeAnimalFilterCount,
+            hasAnyActiveCriteria: animalHasAnyActiveCriteria,
+            onShowFilters: { animalShowingFilters = true },
+            onClearAllCriteria: clearAnimalCriteria
+        )
+    }
+
+
+    private var searchFocusDismissGesture: some Gesture {
+        DragGesture(minimumDistance: 24, coordinateSpace: .local)
+            .onEnded { value in
+                guard selectedTab == .search, animalSearchFieldIsFocused else { return }
+
+                let verticalDrag = value.translation.height
+                let horizontalDrag = abs(value.translation.width)
+
+                if verticalDrag > 28 && verticalDrag > horizontalDrag {
+                    animalSearchFieldIsFocused = false
+                }
+            }
+    }
+
+    private func dismissAnimalSearch(clearText: Bool) {
+        if clearText {
+            clearAnimalCriteria()
+        }
+
+        if selectedTab == .search {
+            selectedTab = .animals
+        }
+    }
+
+    private func clearAnimalCriteria() {
+        animalSearchText = ""
+        animalFilter = AnimalFilter()
+        animalShowRemovedStatuses = false
+        animalShowArchivedRecords = false
     }
 
     @ViewBuilder
@@ -119,6 +284,34 @@ private extension View {
             self.tabBarMinimizeBehavior(.onScrollDown)
         } else {
             self
+        }
+    }
+
+    @ViewBuilder
+    func yaherdTabViewBottomAccessory<Accessory: View>(
+        isVisible: Bool,
+        @ViewBuilder accessory: () -> Accessory
+    ) -> some View {
+        if #available(iOS 26.1, *) {
+            self.tabViewBottomAccessory(isEnabled: isVisible) {
+                accessory()
+            }
+        } else if #available(iOS 26.0, *) {
+            if isVisible {
+                self.tabViewBottomAccessory {
+                    accessory()
+                }
+            } else {
+                self
+            }
+        } else {
+            self.safeAreaInset(edge: .bottom, spacing: 0) {
+                if isVisible {
+                    accessory()
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 10)
+                }
+            }
         }
     }
 }

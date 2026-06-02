@@ -13,6 +13,7 @@ struct AnimalListFloatingControlBar: View {
     let hasAnyActiveCriteria: Bool
     let chips: [AnimalListFilterChip]
     let showsSearchControl: Bool
+    let usesExternalSearchField: Bool
     let onShowFilters: () -> Void
     let onClearAllCriteria: () -> Void
     @FocusState.Binding var isSearchFieldFocused: Bool
@@ -20,7 +21,7 @@ struct AnimalListFloatingControlBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                if isSearching {
+                if isSearching && !usesExternalSearchField {
                     AnimalListBottomSearchField(
                         searchText: $searchText,
                         isSearchFieldFocused: $isSearchFieldFocused
@@ -76,7 +77,7 @@ struct AnimalListFloatingControlBar: View {
                 }
             }
 
-            if !isSearching && !chips.isEmpty {
+            if (!isSearching || usesExternalSearchField) && hasAnyActiveCriteria {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         if hasAnyActiveCriteria {
@@ -122,7 +123,7 @@ struct AnimalListFloatingControlBar: View {
         }
         .shadow(radius: 10, y: 4)
         .onChange(of: isSearching) { _, newValue in
-            if newValue { isSearchFieldFocused = true }
+            if newValue && !usesExternalSearchField { isSearchFieldFocused = true }
         }
     }
 }
@@ -228,4 +229,108 @@ struct AnimalListFilterChip: Identifiable {
     let id = UUID()
     let title: String
     let remove: () -> Void
+}
+
+struct AnimalListTabAccessoryControls: View {
+    @Binding var sortOrder: AnimalSortOrder
+    let filtersAreActive: Bool
+    let activeFilterCount: Int
+    let hasAnyActiveCriteria: Bool
+    let onShowFilters: () -> Void
+    let onClearAllCriteria: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Menu {
+                Picker("Sort", selection: $sortOrder) {
+                    ForEach(AnimalSortOrder.allCases, id: \.self) { option in
+                        Label(option.label, systemImage: option.icon)
+                            .tag(option)
+                    }
+                }
+            } label: {
+                AnimalListTabAccessoryActionLabel(
+                    title: "Sort",
+                    detail: sortOrder.label,
+                    systemImage: "arrow.up.arrow.down"
+                )
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Divider()
+                .frame(height: 32)
+
+            Button(action: onShowFilters) {
+                AnimalListTabAccessoryActionLabel(
+                    title: "Filter",
+                    detail: filterDetail,
+                    systemImage: filtersAreActive
+                    ? "line.3.horizontal.decrease.circle.fill"
+                    : "line.3.horizontal.decrease.circle"
+                )
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if hasAnyActiveCriteria {
+                Divider()
+                    .frame(height: 32)
+                    .transition(.opacity)
+
+                Button(action: onClearAllCriteria) {
+                    Label("Clear", systemImage: "xmark.circle.fill")
+                        .font(.footnote.weight(.semibold))
+                        .lineLimit(1)
+                        .labelStyle(.titleAndIcon)
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                        .accessibilityLabel("Clear search and filters")
+                }
+                .buttonStyle(.plain)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.snappy, value: hasAnyActiveCriteria)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var filterDetail: String {
+        if filtersAreActive {
+            return "\(max(activeFilterCount, 1)) active"
+        }
+
+        return "All animals"
+    }
+}
+
+private struct AnimalListTabAccessoryActionLabel: View {
+    let title: String
+    let detail: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: systemImage)
+                .font(.subheadline.weight(.semibold))
+                .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                Text(detail)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
 }

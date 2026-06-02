@@ -17,52 +17,200 @@ struct AnimalListView: View {
     @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
 
     @State private var viewModel = AnimalListViewModel()
-    @State private var searchText = ""
+    @State private var internalSearchText = ""
     @State private var sortOrder: AnimalSortOrder = .tagAscending
     @State private var showingAdd = false
     @State private var showingFilters = false
     @State private var filter = AnimalFilter()
     @State private var showRemovedStatuses = false
     @State private var showArchivedRecords = false
-    @State private var isSearching = false
+    @State private var internalIsSearching = false
     @FocusState private var isSearchFieldFocused: Bool
     @State private var batchMode = false
     @State private var selectedAnimalIDs: Set<UUID> = []
     @State private var showingPasturePicker = false
 
     private let showsLocalTopRightActions = false
-    private let showsSearchControls = false
+    private let externalSearchText: Binding<String>?
+    private let externalIsSearching: Binding<Bool>?
+    private let externalSortOrder: Binding<AnimalSortOrder>?
+    private let externalFilter: Binding<AnimalFilter>?
+    private let externalShowRemovedStatuses: Binding<Bool>?
+    private let externalShowArchivedRecords: Binding<Bool>?
+    private let externalShowingFilters: Binding<Bool>?
+    private let showsSearchControls: Bool
+    private let usesExternalSearchField: Bool
+    private let hidesControlsUntilSearch: Bool
+    private let usesShellBottomAccessory: Bool
+
+    init(
+        searchText: Binding<String>? = nil,
+        isSearching: Binding<Bool>? = nil,
+        sortOrder: Binding<AnimalSortOrder>? = nil,
+        filter: Binding<AnimalFilter>? = nil,
+        showRemovedStatuses: Binding<Bool>? = nil,
+        showArchivedRecords: Binding<Bool>? = nil,
+        showingFilters: Binding<Bool>? = nil,
+        usesExternalSearchField: Bool = false,
+        hidesControlsUntilSearch: Bool = false,
+        showsSearchControls: Bool = false,
+        usesShellBottomAccessory: Bool = false
+    ) {
+        self.externalSearchText = searchText
+        self.externalIsSearching = isSearching
+        self.externalSortOrder = sortOrder
+        self.externalFilter = filter
+        self.externalShowRemovedStatuses = showRemovedStatuses
+        self.externalShowArchivedRecords = showArchivedRecords
+        self.externalShowingFilters = showingFilters
+        self.usesExternalSearchField = usesExternalSearchField
+        self.hidesControlsUntilSearch = hidesControlsUntilSearch
+        self.showsSearchControls = showsSearchControls
+        self.usesShellBottomAccessory = usesShellBottomAccessory
+    }
+
+    private var searchTextBinding: Binding<String> {
+        Binding {
+            externalSearchText?.wrappedValue ?? internalSearchText
+        } set: { newValue in
+            if let externalSearchText {
+                externalSearchText.wrappedValue = newValue
+            } else {
+                internalSearchText = newValue
+            }
+        }
+    }
+
+    private var isSearchingBinding: Binding<Bool> {
+        Binding {
+            externalIsSearching?.wrappedValue ?? internalIsSearching
+        } set: { newValue in
+            if let externalIsSearching {
+                externalIsSearching.wrappedValue = newValue
+            } else {
+                internalIsSearching = newValue
+            }
+        }
+    }
+
+    private var sortOrderBinding: Binding<AnimalSortOrder> {
+        Binding {
+            externalSortOrder?.wrappedValue ?? sortOrder
+        } set: { newValue in
+            if let externalSortOrder {
+                externalSortOrder.wrappedValue = newValue
+            } else {
+                sortOrder = newValue
+            }
+        }
+    }
+
+    private var filterBinding: Binding<AnimalFilter> {
+        Binding {
+            externalFilter?.wrappedValue ?? filter
+        } set: { newValue in
+            if let externalFilter {
+                externalFilter.wrappedValue = newValue
+            } else {
+                filter = newValue
+            }
+        }
+    }
+
+    private var showRemovedStatusesBinding: Binding<Bool> {
+        Binding {
+            externalShowRemovedStatuses?.wrappedValue ?? showRemovedStatuses
+        } set: { newValue in
+            if let externalShowRemovedStatuses {
+                externalShowRemovedStatuses.wrappedValue = newValue
+            } else {
+                showRemovedStatuses = newValue
+            }
+        }
+    }
+
+    private var showArchivedRecordsBinding: Binding<Bool> {
+        Binding {
+            externalShowArchivedRecords?.wrappedValue ?? showArchivedRecords
+        } set: { newValue in
+            if let externalShowArchivedRecords {
+                externalShowArchivedRecords.wrappedValue = newValue
+            } else {
+                showArchivedRecords = newValue
+            }
+        }
+    }
+
+    private var showingFiltersBinding: Binding<Bool> {
+        Binding {
+            externalShowingFilters?.wrappedValue ?? showingFilters
+        } set: { newValue in
+            if let externalShowingFilters {
+                externalShowingFilters.wrappedValue = newValue
+            } else {
+                showingFilters = newValue
+            }
+        }
+    }
+
+    private var searchTextValue: String {
+        searchTextBinding.wrappedValue
+    }
+
+    private var isSearchModeActive: Bool {
+        isSearchingBinding.wrappedValue
+    }
+
+    private var sortOrderValue: AnimalSortOrder {
+        sortOrderBinding.wrappedValue
+    }
+
+    private var filterValue: AnimalFilter {
+        filterBinding.wrappedValue
+    }
+
+    private var showRemovedStatusesValue: Bool {
+        showRemovedStatusesBinding.wrappedValue
+    }
+
+    private var showArchivedRecordsValue: Bool {
+        showArchivedRecordsBinding.wrappedValue
+    }
+
+    private var filtersAreActive: Bool {
+        filterValue.isActive || showRemovedStatusesValue || showArchivedRecordsValue
+    }
 
     private var repository: any AnimalRepository { dependencies.animalRepository }
 
     private var filteredAndSortedAnimals: [AnimalSummary] {
         AnimalListDerivations.filteredAndSortedAnimals(
             items: viewModel.items,
-            searchText: searchText,
-            sortOrder: sortOrder,
-            filter: filter,
-            showRemovedStatuses: showRemovedStatuses,
-            showArchivedRecords: showArchivedRecords
+            searchText: searchTextValue,
+            sortOrder: sortOrderValue,
+            filter: filterValue,
+            showRemovedStatuses: showRemovedStatusesValue,
+            showArchivedRecords: showArchivedRecordsValue
         ) { tagNumber, colorID in
             tagColorLibrary.formattedTag(tagNumber: tagNumber, colorID: colorID)
         }
     }
 
     private var groupedAnimals: [AnimalSection] {
-        AnimalListDerivations.groupedAnimals(filteredAndSortedAnimals, sortOrder: sortOrder)
+        AnimalListDerivations.groupedAnimals(filteredAndSortedAnimals, sortOrder: sortOrderValue)
     }
 
     private var shouldUseSections: Bool {
-        AnimalListDerivations.shouldUseSections(for: sortOrder)
+        AnimalListDerivations.shouldUseSections(for: sortOrderValue)
     }
 
     private var emptyStateConfiguration: AnimalListEmptyStateConfiguration {
         AnimalListDerivations.emptyStateConfiguration(
             items: viewModel.items,
-            searchText: searchText,
-            filter: filter,
-            showRemovedStatuses: showRemovedStatuses,
-            showArchivedRecords: showArchivedRecords
+            searchText: searchTextValue,
+            filter: filterValue,
+            showRemovedStatuses: showRemovedStatusesValue,
+            showArchivedRecords: showArchivedRecordsValue
         )
     }
 
@@ -108,11 +256,11 @@ struct AnimalListView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomOverlay }
         .sheet(isPresented: $showingAdd, onDismiss: reload) { AddAnimalView() }
-        .sheet(isPresented: $showingFilters) {
+        .sheet(isPresented: showingFiltersBinding) {
             AnimalFilterView(
-                filter: $filter,
-                showRemovedStatuses: $showRemovedStatuses,
-                showArchivedRecords: $showArchivedRecords,
+                filter: filterBinding,
+                showRemovedStatuses: showRemovedStatusesBinding,
+                showArchivedRecords: showArchivedRecordsBinding,
                 pastureOptions: viewModel.pastureOptions
             )
         }
@@ -124,6 +272,7 @@ struct AnimalListView: View {
             }
         }
         .onAppear(perform: reload)
+        .scrollDismissesKeyboard(.interactively)
         .animation(.snappy, value: batchMode)
         .animation(.snappy, value: selectedAnimalIDs.count)
         .animation(.snappy, value: currentFilterChips.count)
@@ -145,11 +294,11 @@ struct AnimalListView: View {
         AnimalListEmptyStateView(
             configuration: emptyStateConfiguration,
             hasItems: !viewModel.items.isEmpty,
-            filtersAreActive: filter.isActive || showRemovedStatuses || showArchivedRecords,
+            filtersAreActive: filtersAreActive,
             hasHiddenOffHerdAnimals: hasHiddenOffHerdAnimals,
             hasHiddenArchivedRecords: hasHiddenArchivedRecords,
-            showRemovedStatuses: showRemovedStatuses,
-            showArchivedRecords: showArchivedRecords,
+            showRemovedStatuses: showRemovedStatusesValue,
+            showArchivedRecords: showArchivedRecordsValue,
             colorScheme: colorScheme,
             onAddAnimal: { showingAdd = true },
             onAddSampleData: {
@@ -161,37 +310,48 @@ struct AnimalListView: View {
                 reload()
             },
             onClearFilters: clearAllFilters,
-            onShowInactive: { showRemovedStatuses = true },
-            onShowArchivedRecords: { showArchivedRecords = true }
+            onShowInactive: { showRemovedStatusesBinding.wrappedValue = true },
+            onShowArchivedRecords: { showArchivedRecordsBinding.wrappedValue = true }
         )
     }
 
+    @ViewBuilder
     private var bottomOverlay: some View {
-        VStack(spacing: 10) {
-            if batchMode {
+        if batchMode {
+            VStack(spacing: 10) {
                 batchActionBar
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else {
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 10)
+        } else if shouldShowFloatingControlBar {
+            VStack(spacing: 10) {
                 floatingControlBar
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 10)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 10)
+    }
+
+    private var shouldShowFloatingControlBar: Bool {
+        !usesShellBottomAccessory && (!hidesControlsUntilSearch || isSearchModeActive || hasAnyActiveCriteria)
     }
 
     private var floatingControlBar: some View {
         AnimalListFloatingControlBar(
-            isSearching: $isSearching,
-            searchText: $searchText,
-            sortOrder: $sortOrder,
-            filtersAreActive: filter.isActive || showRemovedStatuses || showArchivedRecords,
+            isSearching: isSearchingBinding,
+            searchText: searchTextBinding,
+            sortOrder: sortOrderBinding,
+            filtersAreActive: filtersAreActive,
             filterChipCount: currentFilterChips.count,
             hasAnyActiveCriteria: hasAnyActiveCriteria,
             chips: currentFilterChips,
             showsSearchControl: showsSearchControls,
-            onShowFilters: { showingFilters = true },
+            usesExternalSearchField: usesExternalSearchField,
+            onShowFilters: { showingFiltersBinding.wrappedValue = true },
             onClearAllCriteria: clearAllCriteria,
             isSearchFieldFocused: $isSearchFieldFocused
         )
@@ -215,34 +375,54 @@ struct AnimalListView: View {
     private var currentFilterChips: [AnimalListFilterChip] {
         var chips: [AnimalListFilterChip] = []
 
-        if showRemovedStatuses {
-            chips.append(.init(title: "Off-Herd Visible") { showRemovedStatuses = false })
+        if showRemovedStatusesValue {
+            chips.append(.init(title: "Off-Herd Visible") { showRemovedStatusesBinding.wrappedValue = false })
         }
 
-        if showArchivedRecords {
-            chips.append(.init(title: "Archived Visible") { showArchivedRecords = false })
+        if showArchivedRecordsValue {
+            chips.append(.init(title: "Archived Visible") { showArchivedRecordsBinding.wrappedValue = false })
         }
 
-        if let sex = filter.sex {
-            chips.append(.init(title: sex.label) { filter.sex = nil })
+        if let sex = filterValue.sex {
+            chips.append(.init(title: sex.label) {
+                var updatedFilter = filterValue
+                updatedFilter.sex = nil
+                filterBinding.wrappedValue = updatedFilter
+            })
         }
 
-        if let animalType = filter.animalType {
-            chips.append(.init(title: animalType.label) { filter.animalType = nil })
+        if let animalType = filterValue.animalType {
+            chips.append(.init(title: animalType.label) {
+                var updatedFilter = filterValue
+                updatedFilter.animalType = nil
+                filterBinding.wrappedValue = updatedFilter
+            })
         }
 
-        if let status = filter.status {
-            chips.append(.init(title: status.label) { filter.status = nil })
+        if let status = filterValue.status {
+            chips.append(.init(title: status.label) {
+                var updatedFilter = filterValue
+                updatedFilter.status = nil
+                filterBinding.wrappedValue = updatedFilter
+            })
         }
 
-        switch filter.pasture {
+        switch filterValue.pasture {
         case .any:
             break
         case .noPasture:
-            chips.append(.init(title: "No Pasture") { filter.pasture = .any })
+            chips.append(.init(title: "No Pasture") {
+                var updatedFilter = filterValue
+                updatedFilter.pasture = .any
+                filterBinding.wrappedValue = updatedFilter
+            })
         case let .pasture(pastureID):
             if let pastureName = viewModel.pastureName(for: pastureID) {
-                chips.append(.init(title: pastureName) { filter.pasture = .any })
+                chips.append(.init(title: pastureName) {
+                    var updatedFilter = filterValue
+                    updatedFilter.pasture = .any
+                    filterBinding.wrappedValue = updatedFilter
+                })
             }
         }
 
@@ -250,10 +430,10 @@ struct AnimalListView: View {
     }
 
     private var hasAnyActiveCriteria: Bool {
-        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        || filter.isActive
-        || showRemovedStatuses
-        || showArchivedRecords
+        !searchTextValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        || filterValue.isActive
+        || showRemovedStatusesValue
+        || showArchivedRecordsValue
     }
 
     private func reload() {
@@ -271,14 +451,14 @@ struct AnimalListView: View {
     }
 
     private func clearAllCriteria() {
-        searchText = ""
+        searchTextBinding.wrappedValue = ""
         clearAllFilters()
     }
 
     private func clearAllFilters() {
-        filter = AnimalFilter()
-        showRemovedStatuses = false
-        showArchivedRecords = false
+        filterBinding.wrappedValue = AnimalFilter()
+        showRemovedStatusesBinding.wrappedValue = false
+        showArchivedRecordsBinding.wrappedValue = false
     }
 
     private func performPrimarySwipeAction(for animal: AnimalSummary) {
