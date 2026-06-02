@@ -25,6 +25,7 @@ struct AnimalListContentList: View {
         .environment(\.editMode, .constant(batchMode ? .active : .inactive))
         .listStyle(.insetGrouped)
         .scrollContentBackground(.automatic)
+        .scrollDismissesKeyboard(.interactively)
     }
 
     @ViewBuilder
