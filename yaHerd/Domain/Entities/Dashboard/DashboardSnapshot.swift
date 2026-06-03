@@ -21,7 +21,13 @@ struct DashboardOverview: Equatable {
     let activeAnimalCount: Int
     let workingPenCount: Int
     let unassignedAnimalCount: Int
+    let overduePregnancyCheckCount: Int
+    let overdueTreatmentCount: Int
+    let calvingWatchCount: Int
     let pastureCount: Int
+    let overstockedPastureCount: Int
+    let underutilizedPastureCount: Int
+    let rotationReadyPastureCount: Int
 }
 
 struct DashboardAnimalItem: Identifiable, Hashable {
@@ -43,6 +49,7 @@ struct DashboardPastureItem: Identifiable, Hashable {
     let activeAnimalCount: Int
     let metrics: PastureMetrics
     let lastGrazedDate: Date?
+    let restDays: Int?
 
     var acres: Double {
         metrics.acres
@@ -58,5 +65,15 @@ struct DashboardPastureItem: Identifiable, Hashable {
 
     var isUnderutilized: Bool {
         metrics.isUnderutilized
+    }
+
+    var isRestedForRotation: Bool {
+        GrazingRotationService.isPastureRested(lastGrazedDate: lastGrazedDate, restDays: restDays)
+    }
+
+    var isRotationReady: Bool {
+        guard isRestedForRotation, !isOverstocked else { return false }
+        guard let utilizationPercent = metrics.utilizationPercent else { return activeAnimalCount == 0 }
+        return utilizationPercent < 0.80
     }
 }

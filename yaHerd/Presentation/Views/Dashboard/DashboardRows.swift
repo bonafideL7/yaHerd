@@ -110,6 +110,10 @@ struct DashboardPastureRow: View {
                     Label("Over", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(.red)
+                } else if pasture.isRotationReady {
+                    Label("Ready", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.caption)
+                        .foregroundStyle(.green)
                 } else if pasture.isUnderutilized {
                     Label("Low", systemImage: "arrow.down.right")
                         .font(.caption)
@@ -130,7 +134,7 @@ struct DashboardPastureRow: View {
             .foregroundStyle(.secondary)
 
             if let capacity = pasture.capacityHead, capacity > 0 {
-                ProgressView(value: Double(pasture.activeAnimalCount), total: capacity)
+                ProgressView(value: min(max(Double(pasture.activeAnimalCount), 0), capacity), total: capacity)
             }
         }
     }

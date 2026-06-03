@@ -68,6 +68,18 @@ struct FieldCheckSessionSummary: Identifiable, Hashable {
         individuallyVerifiedCount + quickAnimalTypeCounts.values.reduce(0, +)
     }
 
+    var flaggedAnimalCount: Int {
+        animalChecks.filter(\.needsAttention).count
+    }
+
+    var missingAnimalCount: Int {
+        animalChecks.filter(\.isMissing).count
+    }
+
+    var remainingExpectedCount: Int {
+        max(expectedHeadCountSnapshot - totalSeen, 0)
+    }
+
     var quickAnimalTypeCounts: [AnimalType: Int] {
         [
             .cow: max(quickCowCount, 0),
@@ -112,6 +124,18 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
         individuallyVerifiedCount + quickAnimalTypeCounts.values.reduce(0, +)
     }
 
+    var flaggedAnimalCount: Int {
+        animalChecks.filter(\.needsAttention).count
+    }
+
+    var missingAnimalCount: Int {
+        animalChecks.filter(\.isMissing).count
+    }
+
+    var remainingExpectedCount: Int {
+        max(expectedHeadCountSnapshot - totalSeen, 0)
+    }
+
     var quickAnimalTypeCounts: [AnimalType: Int] {
         [
             .cow: max(quickCowCount, 0),
@@ -126,16 +150,8 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
         totalSeen - expectedHeadCountSnapshot
     }
 
-    var remainingExpectedCount: Int {
-        max(expectedHeadCountSnapshot - totalSeen, 0)
-    }
-
     var openFindingsCount: Int {
         findings.filter { $0.status != .resolved }.count
-    }
-
-    var missingAnimalCount: Int {
-        animalChecks.filter(\.isMissing).count
     }
 }
 

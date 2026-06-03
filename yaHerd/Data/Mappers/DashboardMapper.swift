@@ -45,7 +45,8 @@ enum DashboardMapper {
             usableAcreage: pasture.usableAcreage,
             targetAcresPerHead: pasture.targetAcresPerHead,
             activeAnimalCount: pasture.animals.filter { $0.isActiveInHerd }.count,
-            lastGrazedDate: pasture.lastGrazedDate
+            lastGrazedDate: pasture.lastGrazedDate,
+            restDays: pasture.group?.restDays
         )
     }
 

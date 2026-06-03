@@ -16,7 +16,12 @@ struct MainTabView: View {
     @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
 
     @State private var selectedTab: MainTab = .home
+    @State private var homePath: [DashboardRoute] = []
     @State private var isShowingManagement = false
+    @State private var isPresentingAddAnimal = false
+    @State private var isPresentingAddPasture = false
+    @State private var isPresentingNewWorkingSession = false
+    @State private var isStartingFieldCheck = false
     @State private var animalSearchText = ""
     @State private var herdMode: HerdViewMode = .animals
     @State private var animalSortOrder: AnimalSortOrder = .tagAscending
@@ -80,9 +85,14 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             Tab("Home", systemImage: "house", value: MainTab.home) {
-                NavigationStack {
-                    HomeView()
-                        .appManagementToolbar(isPresented: $isShowingManagement)
+                NavigationStack(path: $homePath) {
+                    HomeView(
+                        isPresentingAddAnimal: $isPresentingAddAnimal,
+                        isPresentingAddPasture: $isPresentingAddPasture,
+                        isPresentingNewWorkingSession: $isPresentingNewWorkingSession,
+                        isStartingFieldCheck: $isStartingFieldCheck
+                    )
+                    .appManagementToolbar(isPresented: $isShowingManagement)
                 }
             }
 
@@ -189,15 +199,27 @@ struct MainTabView: View {
         #endif
     }
 
+    @ViewBuilder
     private var animalBottomAccessory: some View {
-        AnimalListTabAccessoryControls(
-            sortOrder: $animalSortOrder,
-            filtersAreActive: animalFiltersAreActive,
-            activeFilterCount: activeAnimalFilterCount,
-            hasAnyActiveCriteria: animalHasAnyActiveCriteria,
-            onShowFilters: { animalShowingFilters = true },
-            onClearAllCriteria: clearAnimalCriteria
-        )
+        if #available(iOS 26.0, *) {
+            AnimalListAdaptiveTabAccessoryControls(
+                sortOrder: $animalSortOrder,
+                filtersAreActive: animalFiltersAreActive,
+                activeFilterCount: activeAnimalFilterCount,
+                hasAnyActiveCriteria: animalHasAnyActiveCriteria,
+                onShowFilters: { animalShowingFilters = true },
+                onClearAllCriteria: clearAnimalCriteria
+            )
+        } else {
+            AnimalListTabAccessoryControls(
+                sortOrder: $animalSortOrder,
+                filtersAreActive: animalFiltersAreActive,
+                activeFilterCount: activeAnimalFilterCount,
+                hasAnyActiveCriteria: animalHasAnyActiveCriteria,
+                onShowFilters: { animalShowingFilters = true },
+                onClearAllCriteria: clearAnimalCriteria
+            )
+        }
     }
 
 

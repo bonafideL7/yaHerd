@@ -121,7 +121,7 @@ private struct HerdSetupView: View {
     }
 }
 
-private struct DashboardRulesView: View {
+struct DashboardRulesView: View {
     @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
     @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
     @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
@@ -156,7 +156,7 @@ private struct DashboardRulesView: View {
     }
 }
 
-private struct PastureDefaultsView: View {
+struct PastureDefaultsView: View {
     @AppStorage("targetAcresPerHeadDefault") private var targetAcresPerHeadDefault = 3.0
     @AppStorage("usableAcreagePercentDefault") private var usableAcreagePercentDefault = 100
 
