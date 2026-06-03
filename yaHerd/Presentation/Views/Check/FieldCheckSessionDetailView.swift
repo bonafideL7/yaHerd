@@ -18,11 +18,39 @@ struct FieldCheckSessionDetailView: View {
     
     private let suggestedPastureID: UUID?
     
-    init(sessionID: UUID, opensFindings: Bool = false) {
+    init(
+        sessionID: UUID,
+        opensFindings: Bool = false,
+        opensFlaggedRoster: Bool = false,
+        opensRemainingRoster: Bool = false,
+        opensMissingRoster: Bool = false
+    ) {
         self.suggestedPastureID = nil
         _currentSessionID = State(initialValue: sessionID)
         _selectedPastureID = State(initialValue: nil)
-        _selectedPane = State(initialValue: opensFindings ? .findings : .summary)
+
+        let initialPane: FieldCheckSessionPane
+        if opensFindings {
+            initialPane = .findings
+        } else if opensFlaggedRoster || opensRemainingRoster || opensMissingRoster {
+            initialPane = .roster
+        } else {
+            initialPane = .summary
+        }
+
+        let initialRosterFilter: FieldCheckRosterFilter
+        if opensFlaggedRoster {
+            initialRosterFilter = .flagged
+        } else if opensMissingRoster {
+            initialRosterFilter = .missing
+        } else if opensRemainingRoster {
+            initialRosterFilter = .remaining
+        } else {
+            initialRosterFilter = .all
+        }
+
+        _selectedPane = State(initialValue: initialPane)
+        _rosterFilter = State(initialValue: initialRosterFilter)
     }
     
     init(suggestedPastureID: UUID? = nil) {
@@ -54,6 +82,8 @@ struct FieldCheckSessionDetailView: View {
                     return !check.wasCounted && !check.isMissing
                 case .flagged:
                     return check.needsAttention
+                case .missing:
+                    return check.isMissing
                 }
             }
         
@@ -1024,6 +1054,7 @@ private enum FieldCheckRosterFilter: String, CaseIterable, Identifiable {
     case all
     case remaining
     case flagged
+    case missing
     
     var id: String { rawValue }
     
@@ -1035,6 +1066,8 @@ private enum FieldCheckRosterFilter: String, CaseIterable, Identifiable {
             return "Remaining"
         case .flagged:
             return "Flagged"
+        case .missing:
+            return "Missing"
         }
     }
 }

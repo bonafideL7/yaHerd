@@ -26,7 +26,7 @@ final class FieldChecksViewModel {
 
         do {
             sessions = try LoadFieldChecksUseCase(repository: repository).execute()
-            openFindings = try repository.fetchOpenFindings(limit: 10)
+            openFindings = try repository.fetchOpenFindings(limit: 0)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

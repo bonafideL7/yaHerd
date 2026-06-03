@@ -8,6 +8,7 @@ struct DashboardMetric: Identifiable {
     let id: String
     let title: String
     let value: Int
+    let tint: Color
     var iconSystem: String? = nil
     var iconLucide: String? = nil
     var destination: DashboardNavigationTarget?
@@ -15,6 +16,7 @@ struct DashboardMetric: Identifiable {
     init(
         title: String,
         value: Int,
+        tint: Color,
         iconSystem: String? = nil,
         iconLucide: String? = nil,
         destination: DashboardNavigationTarget? = nil
@@ -22,6 +24,7 @@ struct DashboardMetric: Identifiable {
         self.id = title
         self.title = title
         self.value = value
+        self.tint = tint
         self.iconSystem = iconSystem
         self.iconLucide = iconLucide
         self.destination = destination
@@ -47,6 +50,7 @@ struct DashboardMetricsGrid: View {
                         cell(item)
                             .frame(maxWidth: .infinity)
                     }
+
                     if row.count == 1 {
                         Spacer(minLength: 0)
                             .frame(maxWidth: .infinity)
@@ -54,7 +58,6 @@ struct DashboardMetricsGrid: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
     }
 
     @ViewBuilder
@@ -76,29 +79,46 @@ private struct DashboardMetricCard: View {
     let item: DashboardMetric
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                if let lucide = item.iconLucide, let base = UIImage(lucideId: lucide) {
-                    Image(uiImage: base.scaled(to: CGSize(width: 22, height: 22)))
-                        .renderingMode(.template)
-                } else if let system = item.iconSystem {
-                    Image(systemName: system)
-                }
-                Spacer()
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                icon
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(item.tint))
+
+                Spacer(minLength: 8)
+
+                Text(item.value.formatted())
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(.primary)
+                    .monospacedDigit()
             }
 
             Text(item.title)
-                .font(.caption)
+                .font(.headline)
                 .foregroundStyle(.secondary)
-
-            Text("\(item.value)")
-                .font(.title2.weight(.semibold))
+                .lineLimit(1)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 86, alignment: .leading)
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.thinMaterial)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
         )
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        if let lucide = item.iconLucide, let base = UIImage(lucideId: lucide) {
+            Image(uiImage: base.scaled(to: CGSize(width: 18, height: 18)))
+                .renderingMode(.template)
+        } else if let system = item.iconSystem {
+            Image(systemName: system)
+                .font(.headline)
+        } else {
+            Image(systemName: "circle.fill")
+                .font(.headline)
+        }
     }
 }

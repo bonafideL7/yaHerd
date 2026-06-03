@@ -13,6 +13,7 @@ enum DashboardAnimalListKind: String, Hashable {
     case unassigned
     case overduePregChecks
     case overdueTreatments
+    case calvingWatch
 
     var title: String {
         switch self {
@@ -26,6 +27,8 @@ enum DashboardAnimalListKind: String, Hashable {
             return "Overdue Pregnancy Checks"
         case .overdueTreatments:
             return "Overdue Treatments"
+        case .calvingWatch:
+            return "Calving Watch"
         }
     }
 }
@@ -34,6 +37,7 @@ enum DashboardPastureFilter: CaseIterable, Hashable {
     case all
     case overstocked
     case underutilized
+    case rotationReady
 
     var label: String {
         switch self {
@@ -43,6 +47,8 @@ enum DashboardPastureFilter: CaseIterable, Hashable {
             return "Over"
         case .underutilized:
             return "Low"
+        case .rotationReady:
+            return "Ready"
         }
     }
 }

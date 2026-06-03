@@ -37,6 +37,7 @@ struct DashboardPastureRecord: Identifiable, Hashable {
     let targetAcresPerHead: Double?
     let activeAnimalCount: Int
     let lastGrazedDate: Date?
+    let restDays: Int?
 
     var metrics: PastureMetrics {
         PastureMetrics(
