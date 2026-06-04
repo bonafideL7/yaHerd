@@ -18,7 +18,16 @@ struct AnimalListEmptyStateView: View {
 
     var body: some View {
         ContentUnavailableView {
-            Label(configuration.title, systemImage: configuration.systemImage)
+            Label {
+                Text(configuration.title)
+            } icon: {
+                if configuration.systemImage == "Cow" {
+                    Image("Cow")
+                        .renderingMode(.template)
+                } else {
+                    Image(systemName: configuration.systemImage)
+                }
+            }
         } description: {
             Text(configuration.description)
         } actions: {

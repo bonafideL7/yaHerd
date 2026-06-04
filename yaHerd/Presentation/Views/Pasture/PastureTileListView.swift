@@ -1,25 +1,25 @@
 import SwiftUI
 
 struct PastureTileListView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     @State private var model = PastureTileListViewModel()
     @State private var selectedPasture: PastureSummary?
+    @State private var isPresentingAddPasture = false
 
     @Binding private var isManaging: Bool
 
     private let repository: any PastureRepository
-    private let reloadID: UUID
     private let columns = [
         GridItem(.adaptive(minimum: 150), spacing: 16)
     ]
 
     init(
         repository: any PastureRepository,
-        isManaging: Binding<Bool>,
-        reloadID: UUID
+        isManaging: Binding<Bool>
     ) {
         self.repository = repository
         self._isManaging = isManaging
-        self.reloadID = reloadID
     }
 
     var body: some View {
@@ -32,20 +32,30 @@ struct PastureTileListView: View {
                 tileGrid
             }
         }
-        .navigationTitle("Pastures")
         .navigationDestination(item: $selectedPasture) { pasture in
             PastureDetailView(pastureID: pasture.id)
         }
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button(isManaging ? "Done" : "Manage") {
-                    withAnimation(.snappy) {
-                        isManaging.toggle()
-                    }
-                }
+            ToolbarItem(placement: .topBarTrailing) {
+                pastureToolbarAction
             }
         }
-        .task(id: reloadID) {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear
+                .frame(height: 88)
+                .allowsHitTesting(false)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            addPastureButton
+                .padding(.trailing, 24)
+                .padding(.bottom, 24)
+        }
+        .sheet(isPresented: $isPresentingAddPasture) {
+            AddPastureView {
+                model.load(using: repository)
+            }
+        }
+        .task {
             model.load(using: repository)
         }
         .alert("Can’t Complete Request", isPresented: errorBinding) {
@@ -56,11 +66,78 @@ struct PastureTileListView: View {
     }
 
     private var emptyState: some View {
-        ContentUnavailableView(
-            "No pastures",
-            systemImage: "leaf",
-            description: Text("Add a pasture to start tracking acreage and stocking.")
-        )
+        ContentUnavailableView {
+            Label("No pastures", systemImage: "leaf")
+        } description: {
+            Text("Add a pasture to start tracking acreage and stocking.")
+        } actions: {
+            Button("Add Pasture") {
+                isPresentingAddPasture = true
+            }
+            .buttonStyle(.borderedProminent)
+            .foregroundStyle(colorScheme == .dark ? .black : .white)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var addPastureButton: some View {
+        Button {
+            isPresentingAddPasture = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.title2.weight(.semibold))
+                .frame(width: 58, height: 58)
+                .background(Circle().fill(Color.accentColor))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.16), radius: 16, y: 8)
+        }
+        .accessibilityLabel("Add Pasture")
+    }
+
+    @ViewBuilder
+    private var pastureToolbarAction: some View {
+        if isManaging {
+            Button {
+                toggleManageMode()
+            } label: {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 17, weight: .semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.circle)
+            .accessibilityLabel("Done Managing")
+        } else {
+            Menu {
+                Button {
+                    toggleManageMode()
+                } label: {
+                    Label("Manage Pastures", systemImage: "line.3.horizontal.decrease.circle")
+                }
+
+                Divider()
+
+                NavigationLink {
+                    FieldChecksView(mode: .all)
+                } label: {
+                    Label("Pasture Checks", systemImage: "checklist")
+                }
+
+                NavigationLink {
+                    WorkingSessionsView()
+                } label: {
+                    Label("Working Sessions", systemImage: "wrench.and.screwdriver")
+                }
+            } label: {
+                toolbarMenuLabel
+            }
+            .accessibilityLabel("Pasture list actions")
+        }
+    }
+
+    private var toolbarMenuLabel: some View {
+        Image(systemName: "ellipsis")
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(.primary)
     }
 
     private var tileGrid: some View {
@@ -95,6 +172,12 @@ struct PastureTileListView: View {
         }
         .environment(\.editMode, .constant(.active))
         .listStyle(.insetGrouped)
+    }
+
+    private func toggleManageMode() {
+        withAnimation(.snappy) {
+            isManaging.toggle()
+        }
     }
 
     private var errorBinding: Binding<Bool> {

@@ -30,7 +30,6 @@ struct AnimalListView: View {
     @State private var selectedAnimalIDs: Set<UUID> = []
     @State private var showingPasturePicker = false
 
-    private let showsLocalTopRightActions = false
     private let externalSearchText: Binding<String>?
     private let externalIsSearching: Binding<Bool>?
     private let externalSortOrder: Binding<AnimalSortOrder>?
@@ -230,31 +229,20 @@ struct AnimalListView: View {
                 herdList
             }
         }
-        .navigationTitle("YaHerd")
-        .navigationBarTitleDisplayMode(.large)
         .navigationDestination(for: UUID.self) { AnimalDetailView(animalID: $0) }
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button(batchMode ? "Done" : "Select") {
-                    withAnimation(.snappy) {
-                        batchMode.toggle()
-                        if !batchMode {
-                            selectedAnimalIDs.removeAll()
-                        }
-                    }
-                }
-            }
-
-            if showsLocalTopRightActions {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button { showingAdd = true } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("Add Animal")
-                }
+            ToolbarItem(placement: .topBarTrailing) {
+                animalToolbarAction
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomOverlay }
+        .overlay(alignment: .bottomTrailing) {
+            if !batchMode {
+                addAnimalButton
+                    .padding(.trailing, 24)
+                    .padding(.bottom, floatingAddButtonBottomPadding)
+            }
+        }
         .sheet(isPresented: $showingAdd, onDismiss: reload) { AddAnimalView() }
         .sheet(isPresented: showingFiltersBinding) {
             AnimalFilterView(
@@ -288,6 +276,70 @@ struct AnimalListView: View {
             onPrimarySwipeAction: performPrimarySwipeAction,
             onRestoreArchivedRecord: restoreArchivedRecord
         )
+    }
+
+    private var addAnimalButton: some View {
+        Button {
+            showingAdd = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.title2.weight(.semibold))
+                .frame(width: 58, height: 58)
+                .background(Circle().fill(Color.accentColor))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.16), radius: 16, y: 8)
+        }
+        .accessibilityLabel("Add Animal")
+    }
+
+    @ViewBuilder
+    private var animalToolbarAction: some View {
+        if batchMode {
+            Button {
+                toggleBatchMode()
+            } label: {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 17, weight: .semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.circle)
+            .accessibilityLabel("Done Selecting")
+        } else {
+            Menu {
+                Button {
+                    toggleBatchMode()
+                } label: {
+                    Label("Select Animals", systemImage: "checklist")
+                }
+
+                Divider()
+
+                NavigationLink {
+                    FieldChecksView(mode: .all)
+                } label: {
+                    Label("Pasture Checks", systemImage: "checklist")
+                }
+
+                NavigationLink {
+                    WorkingSessionsView()
+                } label: {
+                    Label("Working Sessions", systemImage: "wrench.and.screwdriver")
+                }
+            } label: {
+                toolbarMenuLabel
+            }
+            .accessibilityLabel("Animal list actions")
+        }
+    }
+
+    private var toolbarMenuLabel: some View {
+        Image(systemName: "ellipsis")
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(.primary)
+    }
+
+    private var floatingAddButtonBottomPadding: CGFloat {
+        shouldShowFloatingControlBar ? 106 : 24
     }
 
     private var emptyStateView: some View {
@@ -333,6 +385,10 @@ struct AnimalListView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
             .padding(.bottom, 10)
+        } else {
+            Color.clear
+                .frame(height: 88)
+                .allowsHitTesting(false)
         }
     }
 
@@ -438,6 +494,15 @@ struct AnimalListView: View {
 
     private func reload() {
         viewModel.load(using: repository)
+    }
+
+    private func toggleBatchMode() {
+        withAnimation(.snappy) {
+            batchMode.toggle()
+            if !batchMode {
+                selectedAnimalIDs.removeAll()
+            }
+        }
     }
 
     private func toggleSelectAllVisible() {

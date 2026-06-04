@@ -177,7 +177,7 @@ enum AnimalListDerivations {
             return .init(
                 title: "No Animals Yet",
                 description: "Add your first animal to start building the herd.",
-                systemImage: "pawprint"
+                systemImage: "Cow"
             )
         }
 
