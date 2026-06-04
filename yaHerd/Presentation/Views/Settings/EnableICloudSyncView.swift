@@ -245,7 +245,7 @@ private struct RestartInstructionList: View {
             Text("1. Swipe up from the bottom of the screen and pause to open the app switcher. On devices with a Home button, double-click the Home button.")
             Text("2. Swipe up on yaHerd to close it.")
             Text("3. Open yaHerd again from the Home Screen or App Library.")
-            Text("4. Go to Manage > Sync and confirm iCloud Sync is enabled.")
+            Text("4. Go to Settings > Sync and confirm iCloud Sync is enabled.")
         }
         .font(.caption)
         .foregroundStyle(.secondary)

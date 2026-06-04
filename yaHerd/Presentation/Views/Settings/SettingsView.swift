@@ -1,18 +1,18 @@
 //
-//  ManagementView.swift
+//  SettingsView.swift
 //  yaHerd
 //
 
 import SwiftUI
 
-struct ManagementView: View {
+struct SettingsView: View {
     var body: some View {
         List {
             Section("Setup") {                    
                 NavigationLink {
                     DashboardRulesView()
                 } label: {
-                    ManagementRow(
+                    SettingsRow(
                         title: "Dashboard",
                         subtitle: "Configure overdue alerts and pasture warning thresholds.",
                         systemImage: "gauge.with.dots.needle.67percent"
@@ -22,9 +22,9 @@ struct ManagementView: View {
                 NavigationLink {
                     HerdSetupView()
                 } label: {
-                    ManagementRow(
+                    SettingsRow(
                         title: "Herd",
-                        subtitle: "Manage tag colors used across animal records.",
+                        subtitle: "Configure tag colors used across animal records.",
                         systemImage: "tag"
                     )
                 }
@@ -32,7 +32,7 @@ struct ManagementView: View {
                 NavigationLink {
                     PastureDefaultsView()
                 } label: {
-                    ManagementRow(
+                    SettingsRow(
                         title: "Pasture",
                         subtitle: "Set default stocking and usable acreage assumptions.",
                         systemImage: "leaf"
@@ -43,7 +43,7 @@ struct ManagementView: View {
             NavigationLink {
                 SyncSettingsView()
             } label: {
-                ManagementRow(
+                SettingsRow(
                     title: "Sync",
                     subtitle: "View storage mode and iCloud sync status.",
                     systemImage: "icloud"
@@ -54,7 +54,7 @@ struct ManagementView: View {
                 NavigationLink {
                     AboutYaHerdView()
                 } label: {
-                    ManagementRow(
+                    SettingsRow(
                         title: "About yaHerd",
                         subtitle: "App information and platform details.",
                         systemImage: "info.circle"
@@ -62,11 +62,11 @@ struct ManagementView: View {
                 }
             }
         }
-        .navigationTitle("Manage")
+        .navigationTitle("Settings")
     }
 }
 
-private struct ManagementRow: View {
+private struct SettingsRow: View {
     let title: String
     let subtitle: String
     let systemImage: String
