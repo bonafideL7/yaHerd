@@ -13,8 +13,6 @@ struct HerdView: View {
 
     @Binding private var mode: HerdViewMode
     @State private var isManagingPastures = false
-    @State private var isPresentingAddPasture = false
-    @State private var pastureReloadID = UUID()
 
     private let sortOrder: Binding<AnimalSortOrder>?
     private let filter: Binding<AnimalFilter>?
@@ -64,35 +62,19 @@ struct HerdView: View {
             case .pastures:
                 PastureTileListView(
                     repository: dependencies.pastureRepository,
-                    isManaging: $isManagingPastures,
-                    reloadID: pastureReloadID
+                    isManaging: $isManagingPastures
                 )
             }
         }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                if mode == .pastures && isManagingPastures {
-                    Button {
-                        isPresentingAddPasture = true
-                    } label: {
-                        Label("Add Pasture", systemImage: "plus")
-                    }
-                    .accessibilityLabel("Add Pasture")
-                } else {
-                    Button {
-                        switchMode()
-                    } label: {
-                        Label(switchButtonTitle, systemImage: switchButtonSystemImage)
-                    }
-                    .accessibilityLabel(switchButtonTitle)
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    switchMode()
+                } label: {
+                    Label(switchButtonTitle, systemImage: switchButtonSystemImage)
                 }
+                .accessibilityLabel(switchButtonAccessibilityLabel)
             }
-        }
-        .sheet(isPresented: $isPresentingAddPasture) {
-            AddPastureView {
-                pastureReloadID = UUID()
-            }
-            .environmentObject(dependencies)
         }
     }
 
@@ -109,6 +91,15 @@ struct HerdView: View {
     }
 
     private var switchButtonTitle: String {
+        switch mode {
+        case .animals:
+            return "Pastures"
+        case .pastures:
+            return "Animals"
+        }
+    }
+
+    private var switchButtonAccessibilityLabel: String {
         switch mode {
         case .animals:
             return "Show Pastures"
