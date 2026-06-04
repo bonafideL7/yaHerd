@@ -23,17 +23,20 @@ struct HomeView: View {
     @Binding private var isPresentingAddPasture: Bool
     @Binding private var isPresentingNewWorkingSession: Bool
     @Binding private var isStartingFieldCheck: Bool
+    private let onShowSettings: () -> Void
 
     init(
         isPresentingAddAnimal: Binding<Bool>,
         isPresentingAddPasture: Binding<Bool>,
         isPresentingNewWorkingSession: Binding<Bool>,
-        isStartingFieldCheck: Binding<Bool>
+        isStartingFieldCheck: Binding<Bool>,
+        onShowSettings: @escaping () -> Void = {}
     ) {
         self._isPresentingAddAnimal = isPresentingAddAnimal
         self._isPresentingAddPasture = isPresentingAddPasture
         self._isPresentingNewWorkingSession = isPresentingNewWorkingSession
         self._isStartingFieldCheck = isStartingFieldCheck
+        self.onShowSettings = onShowSettings
     }
 
     private var repository: any DashboardRepository {
@@ -139,6 +142,7 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                podcastsStyleHeader
                 setupSuggestionsSection
                 homeSummaryCardsSection
                 continueSection
@@ -198,6 +202,38 @@ struct HomeView: View {
         } message: {
             Text(homeErrorMessage ?? "Unknown error")
         }
+    }
+
+    private var podcastsStyleHeader: some View {
+        HStack(alignment: .center, spacing: 16) {
+            Text("Home")
+                .font(.largeTitle.weight(.bold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+
+            Spacer(minLength: 16)
+
+            Menu {
+                Button {
+                    onShowSettings()
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
+            } label: {
+                settingsMenuLabel
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("More actions")
+        }
+    }
+
+    private var settingsMenuLabel: some View {
+        Image(systemName: "ellipsis")
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(.primary)
+            .frame(width: 46, height: 46)
+            .background(Circle().fill(.regularMaterial))
     }
 
     private var addMenu: some View {

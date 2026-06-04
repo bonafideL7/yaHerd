@@ -17,6 +17,11 @@ struct DashboardView: View {
     @State private var fieldChecksModel = FieldChecksViewModel()
     @State private var isOverviewExpanded = true
     @State private var isStartingFieldCheck = false
+    private let onShowSettings: () -> Void
+
+    init(onShowSettings: @escaping () -> Void = {}) {
+        self.onShowSettings = onShowSettings
+    }
 
     private var repository: any DashboardRepository {
         dependencies.dashboardRepository
@@ -233,6 +238,7 @@ struct DashboardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                podcastsStyleHeader
                 overviewSection
                 alertsSection
                 herdCompositionSection
@@ -252,7 +258,6 @@ struct DashboardView: View {
                 .padding(.trailing, 24)
                 .padding(.bottom, 24)
         }
-        .navigationTitle("Dashboard")
         .navigationDestination(isPresented: $isStartingFieldCheck) {
             FieldCheckSessionDetailView()
         }
@@ -294,6 +299,38 @@ struct DashboardView: View {
         } message: {
             Text(dashboardErrorMessage ?? "Unknown error")
         }
+    }
+
+    private var podcastsStyleHeader: some View {
+        HStack(alignment: .center, spacing: 16) {
+            Text("Dashboard")
+                .font(.largeTitle.weight(.bold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+
+            Spacer(minLength: 16)
+
+            Menu {
+                Button {
+                    onShowSettings()
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
+            } label: {
+                settingsMenuLabel
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("More actions")
+        }
+    }
+
+    private var settingsMenuLabel: some View {
+        Image(systemName: "ellipsis")
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(.primary)
+            .frame(width: 46, height: 46)
+            .background(Circle().fill(.regularMaterial))
     }
 
     private var addMenu: some View {

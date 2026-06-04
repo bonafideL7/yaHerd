@@ -17,7 +17,7 @@ struct MainTabView: View {
 
     @State private var selectedTab: MainTab = .home
     @State private var homePath: [DashboardRoute] = []
-    @State private var isShowingManagement = false
+    @State private var isShowingSettings = false
     @State private var isPresentingAddAnimal = false
     @State private var isPresentingAddPasture = false
     @State private var isPresentingNewWorkingSession = false
@@ -90,18 +90,17 @@ struct MainTabView: View {
                         isPresentingAddAnimal: $isPresentingAddAnimal,
                         isPresentingAddPasture: $isPresentingAddPasture,
                         isPresentingNewWorkingSession: $isPresentingNewWorkingSession,
-                        isStartingFieldCheck: $isStartingFieldCheck
+                        isStartingFieldCheck: $isStartingFieldCheck,
+                        onShowSettings: { isShowingSettings = true }
                     )
-                    .appManagementToolbar(isPresented: $isShowingManagement)
                 }
             }
 
             if isDashboardEnabled {
                 Tab("Dashboard", systemImage: "rectangle.3.group", value: MainTab.dashboard) {
                     NavigationStack(path: $nav.globalPath) {
-                        DashboardView()
+                        DashboardView(onShowSettings: { isShowingSettings = true })
                             .navigationDestination(for: DashboardRoute.self, destination: dashboardDestination)
-                            .appManagementToolbar(isPresented: $isShowingManagement)
                     }
                 }
             }
@@ -148,8 +147,8 @@ struct MainTabView: View {
         .yaherdTabViewBottomAccessory(isVisible: shouldShowAnimalBottomAccessory) {
             animalBottomAccessory
         }
-        .sheet(isPresented: $isShowingManagement) {
-            ManagementSheetView()
+        .sheet(isPresented: $isShowingSettings) {
+            SettingsSheetView()
         }
         .onChange(of: isDashboardEnabled) { _, isEnabled in
             if !isEnabled && selectedTab == .dashboard {
@@ -269,12 +268,12 @@ struct MainTabView: View {
     }
 }
 
-private struct ManagementSheetView: View {
+private struct SettingsSheetView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            ManagementView()
+            SettingsView()
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") {
@@ -287,17 +286,27 @@ private struct ManagementSheetView: View {
 }
 
 private extension View {
-    func appManagementToolbar(isPresented: Binding<Bool>) -> some View {
+    func appSettingsToolbar(isPresented: Binding<Bool>) -> some View {
         toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    isPresented.wrappedValue = true
+                Menu {
+                    Button {
+                        isPresented.wrappedValue = true
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
                 } label: {
-                    Label("Manage", systemImage: "slider.horizontal.3")
+                    toolbarMenuLabel
                 }
-                .accessibilityLabel("Manage")
+                .accessibilityLabel("More actions")
             }
         }
+    }
+
+    private var toolbarMenuLabel: some View {
+        Image(systemName: "ellipsis")
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(.primary)
     }
 
     @ViewBuilder
