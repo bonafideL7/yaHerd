@@ -142,7 +142,6 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                podcastsStyleHeader
                 setupSuggestionsSection
                 homeSummaryCardsSection
                 continueSection
@@ -201,30 +200,6 @@ struct HomeView: View {
             }
         } message: {
             Text(homeErrorMessage ?? "Unknown error")
-        }
-    }
-
-    private var podcastsStyleHeader: some View {
-        HStack(alignment: .center, spacing: 16) {
-            Text("Home")
-                .font(.largeTitle.weight(.bold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-
-            Spacer(minLength: 16)
-
-            Menu {
-                Button {
-                    onShowSettings()
-                } label: {
-                    Label("Settings", systemImage: "gearshape")
-                }
-            } label: {
-                settingsMenuLabel
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("More actions")
         }
     }
 

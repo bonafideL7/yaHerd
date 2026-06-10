@@ -93,6 +93,7 @@ struct MainTabView: View {
                         isStartingFieldCheck: $isStartingFieldCheck,
                         onShowSettings: { isShowingSettings = true }
                     )
+                    .yaherdInlineLargeNavigationTitle("Home")
                 }
             }
 
@@ -100,11 +101,11 @@ struct MainTabView: View {
                 Tab("Dashboard", systemImage: "rectangle.3.group", value: MainTab.dashboard) {
                     NavigationStack(path: $nav.globalPath) {
                         DashboardView(onShowSettings: { isShowingSettings = true })
+                            .yaherdInlineLargeNavigationTitle("Dashboard")
                             .navigationDestination(for: DashboardRoute.self, destination: dashboardDestination)
                     }
                 }
             }
-
             Tab(value: MainTab.animals) {
                 NavigationStack {
                     herdContent
@@ -252,7 +253,7 @@ struct MainTabView: View {
         animalShowRemovedStatuses = false
         animalShowArchivedRecords = false
     }
-
+    
     @ViewBuilder
     private func dashboardDestination(for route: DashboardRoute) -> some View {
         switch route {
@@ -343,6 +344,19 @@ private extension View {
                         .padding(.bottom, 10)
                 }
             }
+        }
+    }
+    
+    @ViewBuilder
+    func yaherdInlineLargeNavigationTitle(_ title: String) -> some View {
+        if #available(iOS 26.0, *) {
+            self
+                .navigationTitle(title)
+                .toolbarTitleDisplayMode(.inlineLarge)
+        } else {
+            self
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.large)
         }
     }
 }

@@ -238,7 +238,6 @@ struct DashboardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                podcastsStyleHeader
                 overviewSection
                 alertsSection
                 herdCompositionSection
@@ -298,30 +297,6 @@ struct DashboardView: View {
             }
         } message: {
             Text(dashboardErrorMessage ?? "Unknown error")
-        }
-    }
-
-    private var podcastsStyleHeader: some View {
-        HStack(alignment: .center, spacing: 16) {
-            Text("Dashboard")
-                .font(.largeTitle.weight(.bold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-
-            Spacer(minLength: 16)
-
-            Menu {
-                Button {
-                    onShowSettings()
-                } label: {
-                    Label("Settings", systemImage: "gearshape")
-                }
-            } label: {
-                settingsMenuLabel
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("More actions")
         }
     }
 
