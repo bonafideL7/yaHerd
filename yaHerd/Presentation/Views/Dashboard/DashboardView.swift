@@ -17,11 +17,6 @@ struct DashboardView: View {
     @State private var fieldChecksModel = FieldChecksViewModel()
     @State private var isOverviewExpanded = true
     @State private var isStartingFieldCheck = false
-    private let onShowSettings: () -> Void
-
-    init(onShowSettings: @escaping () -> Void = {}) {
-        self.onShowSettings = onShowSettings
-    }
 
     private var repository: any DashboardRepository {
         dependencies.dashboardRepository
@@ -298,14 +293,6 @@ struct DashboardView: View {
         } message: {
             Text(dashboardErrorMessage ?? "Unknown error")
         }
-    }
-
-    private var settingsMenuLabel: some View {
-        Image(systemName: "ellipsis")
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(.primary)
-            .frame(width: 46, height: 46)
-            .background(Circle().fill(.regularMaterial))
     }
 
     private var addMenu: some View {

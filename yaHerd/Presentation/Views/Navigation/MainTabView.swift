@@ -14,7 +14,7 @@ struct MainTabView: View {
     @EnvironmentObject private var nav: NavigationCoordinator
     @EnvironmentObject private var dependencies: AppDependencies
     @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
-
+    
     @State private var selectedTab: MainTab = .home
     @State private var homePath: [DashboardRoute] = []
     @State private var isShowingSettings = false
@@ -30,7 +30,7 @@ struct MainTabView: View {
     @State private var animalShowArchivedRecords = false
     @State private var animalShowingFilters = false
     @FocusState private var animalSearchFieldIsFocused: Bool
-
+    
     private var animalSearchIsActive: Binding<Bool> {
         Binding {
             selectedTab == .search || hasAnimalSearchText
@@ -42,46 +42,46 @@ struct MainTabView: View {
             }
         }
     }
-
+    
     private var hasAnimalSearchText: Bool {
         !animalSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
-
+    
     private var animalFiltersAreActive: Bool {
         animalFilter.isActive || animalShowRemovedStatuses || animalShowArchivedRecords
     }
-
+    
     private var animalHasAnyActiveCriteria: Bool {
         hasAnimalSearchText || animalFiltersAreActive
     }
-
+    
     private var activeAnimalCriteriaCount: Int {
         var count = hasAnimalSearchText ? 1 : 0
-
+        
         if animalShowRemovedStatuses { count += 1 }
         if animalShowArchivedRecords { count += 1 }
         if animalFilter.sex != nil { count += 1 }
         if animalFilter.animalType != nil { count += 1 }
         if animalFilter.status != nil { count += 1 }
-
+        
         switch animalFilter.pasture {
         case .any:
             break
         case .noPasture, .pasture(_):
             count += 1
         }
-
+        
         return count
     }
-
+    
     private var activeAnimalFilterCount: Int {
         activeAnimalCriteriaCount - (hasAnimalSearchText ? 1 : 0)
     }
-
+    
     private var shouldShowAnimalBottomAccessory: Bool {
         herdMode == .animals && (selectedTab == .animals || selectedTab == .search)
     }
-
+    
     var body: some View {
         TabView(selection: $selectedTab) {
             Tab("Home", systemImage: "house", value: MainTab.home) {
@@ -90,22 +90,24 @@ struct MainTabView: View {
                         isPresentingAddAnimal: $isPresentingAddAnimal,
                         isPresentingAddPasture: $isPresentingAddPasture,
                         isPresentingNewWorkingSession: $isPresentingNewWorkingSession,
-                        isStartingFieldCheck: $isStartingFieldCheck,
-                        onShowSettings: { isShowingSettings = true }
+                        isStartingFieldCheck: $isStartingFieldCheck
                     )
                     .yaherdInlineLargeNavigationTitle("Home")
+                    .appSettingsToolbar(isPresented: $isShowingSettings)
                 }
             }
-
+            
             if isDashboardEnabled {
                 Tab("Dashboard", systemImage: "rectangle.3.group", value: MainTab.dashboard) {
                     NavigationStack(path: $nav.globalPath) {
-                        DashboardView(onShowSettings: { isShowingSettings = true })
+                        DashboardView()
                             .yaherdInlineLargeNavigationTitle("Dashboard")
+                            .appSettingsToolbar(isPresented: $isShowingSettings)
                             .navigationDestination(for: DashboardRoute.self, destination: dashboardDestination)
                     }
                 }
             }
+            
             Tab(value: MainTab.animals) {
                 NavigationStack {
                     herdContent
@@ -117,7 +119,7 @@ struct MainTabView: View {
                     yaherdTabIcon
                 }
             }
-
+            
             if #available(iOS 26.0, *) {
                 Tab("Search", systemImage: "magnifyingglass", value: MainTab.search, role: .search) {
                     NavigationStack {
@@ -163,13 +165,13 @@ struct MainTabView: View {
                     animalSearchFieldIsFocused = false
                 }
             }
-
+            
             if oldValue == .search && newValue != .search {
                 animalSearchFieldIsFocused = false
             }
         }
     }
-
+    
     private var herdContent: some View {
         HerdView(
             searchText: $animalSearchText,
@@ -183,10 +185,10 @@ struct MainTabView: View {
             usesShellBottomAccessory: true
         )
     }
-
+    
     @ViewBuilder
     private var yaherdTabIcon: some View {
-        #if canImport(UIKit)
+#if canImport(UIKit)
         if let base = UIImage(named: "Cow") {
             let icon = base.scaled(to: CGSize(width: 32, height: 32))
             Image(uiImage: icon)
@@ -194,11 +196,11 @@ struct MainTabView: View {
         } else {
             Image(systemName: "tag")
         }
-        #else
+#else
         Image(systemName: "tag")
-        #endif
+#endif
     }
-
+    
     @ViewBuilder
     private var animalBottomAccessory: some View {
         if #available(iOS 26.0, *) {
@@ -221,32 +223,31 @@ struct MainTabView: View {
             )
         }
     }
-
-
+    
     private var searchFocusDismissGesture: some Gesture {
         DragGesture(minimumDistance: 24, coordinateSpace: .local)
             .onEnded { value in
                 guard selectedTab == .search, animalSearchFieldIsFocused else { return }
-
+                
                 let verticalDrag = value.translation.height
                 let horizontalDrag = abs(value.translation.width)
-
+                
                 if verticalDrag > 28 && verticalDrag > horizontalDrag {
                     animalSearchFieldIsFocused = false
                 }
             }
     }
-
+    
     private func dismissAnimalSearch(clearText: Bool) {
         if clearText {
             clearAnimalCriteria()
         }
-
+        
         if selectedTab == .search {
             selectedTab = .animals
         }
     }
-
+    
     private func clearAnimalCriteria() {
         animalSearchText = ""
         animalFilter = AnimalFilter()
@@ -271,10 +272,11 @@ struct MainTabView: View {
 
 private struct SettingsSheetView: View {
     @Environment(\.dismiss) private var dismiss
-
+    
     var body: some View {
         NavigationStack {
             SettingsView()
+                .navigationTitle("Settings")
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") {
@@ -303,13 +305,26 @@ private extension View {
             }
         }
     }
-
+    
     private var toolbarMenuLabel: some View {
         Image(systemName: "ellipsis")
             .font(.system(size: 17, weight: .semibold))
             .foregroundStyle(.primary)
     }
-
+    
+    @ViewBuilder
+    func yaherdInlineLargeNavigationTitle(_ title: String) -> some View {
+        if #available(iOS 26.0, *) {
+            self
+                .navigationTitle(title)
+                .toolbarTitleDisplayMode(.inlineLarge)
+        } else {
+            self
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.large)
+        }
+    }
+    
     @ViewBuilder
     func yaherdTabBarMinimizeBehavior() -> some View {
         if #available(iOS 26.0, *) {
@@ -318,7 +333,7 @@ private extension View {
             self
         }
     }
-
+    
     @ViewBuilder
     func yaherdTabViewBottomAccessory<Accessory: View>(
         isVisible: Bool,
@@ -344,19 +359,6 @@ private extension View {
                         .padding(.bottom, 10)
                 }
             }
-        }
-    }
-    
-    @ViewBuilder
-    func yaherdInlineLargeNavigationTitle(_ title: String) -> some View {
-        if #available(iOS 26.0, *) {
-            self
-                .navigationTitle(title)
-                .toolbarTitleDisplayMode(.inlineLarge)
-        } else {
-            self
-                .navigationTitle(title)
-                .navigationBarTitleDisplayMode(.large)
         }
     }
 }

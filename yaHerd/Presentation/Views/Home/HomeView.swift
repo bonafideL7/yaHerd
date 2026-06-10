@@ -23,20 +23,17 @@ struct HomeView: View {
     @Binding private var isPresentingAddPasture: Bool
     @Binding private var isPresentingNewWorkingSession: Bool
     @Binding private var isStartingFieldCheck: Bool
-    private let onShowSettings: () -> Void
 
     init(
         isPresentingAddAnimal: Binding<Bool>,
         isPresentingAddPasture: Binding<Bool>,
         isPresentingNewWorkingSession: Binding<Bool>,
-        isStartingFieldCheck: Binding<Bool>,
-        onShowSettings: @escaping () -> Void = {}
+        isStartingFieldCheck: Binding<Bool>
     ) {
         self._isPresentingAddAnimal = isPresentingAddAnimal
         self._isPresentingAddPasture = isPresentingAddPasture
         self._isPresentingNewWorkingSession = isPresentingNewWorkingSession
         self._isStartingFieldCheck = isStartingFieldCheck
-        self.onShowSettings = onShowSettings
     }
 
     private var repository: any DashboardRepository {
@@ -201,14 +198,6 @@ struct HomeView: View {
         } message: {
             Text(homeErrorMessage ?? "Unknown error")
         }
-    }
-
-    private var settingsMenuLabel: some View {
-        Image(systemName: "ellipsis")
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(.primary)
-            .frame(width: 46, height: 46)
-            .background(Circle().fill(.regularMaterial))
     }
 
     private var addMenu: some View {
