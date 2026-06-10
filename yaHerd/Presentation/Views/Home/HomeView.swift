@@ -23,20 +23,17 @@ struct HomeView: View {
     @Binding private var isPresentingAddPasture: Bool
     @Binding private var isPresentingNewWorkingSession: Bool
     @Binding private var isStartingFieldCheck: Bool
-    private let onShowSettings: () -> Void
 
     init(
         isPresentingAddAnimal: Binding<Bool>,
         isPresentingAddPasture: Binding<Bool>,
         isPresentingNewWorkingSession: Binding<Bool>,
-        isStartingFieldCheck: Binding<Bool>,
-        onShowSettings: @escaping () -> Void = {}
+        isStartingFieldCheck: Binding<Bool>
     ) {
         self._isPresentingAddAnimal = isPresentingAddAnimal
         self._isPresentingAddPasture = isPresentingAddPasture
         self._isPresentingNewWorkingSession = isPresentingNewWorkingSession
         self._isStartingFieldCheck = isStartingFieldCheck
-        self.onShowSettings = onShowSettings
     }
 
     private var repository: any DashboardRepository {
@@ -142,7 +139,6 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                podcastsStyleHeader
                 setupSuggestionsSection
                 homeSummaryCardsSection
                 continueSection
@@ -202,38 +198,6 @@ struct HomeView: View {
         } message: {
             Text(homeErrorMessage ?? "Unknown error")
         }
-    }
-
-    private var podcastsStyleHeader: some View {
-        HStack(alignment: .center, spacing: 16) {
-            Text("Home")
-                .font(.largeTitle.weight(.bold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-
-            Spacer(minLength: 16)
-
-            Menu {
-                Button {
-                    onShowSettings()
-                } label: {
-                    Label("Settings", systemImage: "gearshape")
-                }
-            } label: {
-                settingsMenuLabel
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("More actions")
-        }
-    }
-
-    private var settingsMenuLabel: some View {
-        Image(systemName: "ellipsis")
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(.primary)
-            .frame(width: 46, height: 46)
-            .background(Circle().fill(.regularMaterial))
     }
 
     private var addMenu: some View {
@@ -1238,13 +1202,13 @@ struct HomeView: View {
     @ViewBuilder
     private var setupSuggestionsSection: some View {
         if hasSetupSuggestionRows {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 0) {
                 Button {
                     withAnimation(.snappy) {
                         isSetupSuggestionsExpanded.toggle()
                     }
                 } label: {
-                    HStack(alignment: .firstTextBaseline) {
+                    HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Setup Suggestions")
                                 .font(.title2.weight(.bold))
@@ -1255,29 +1219,68 @@ struct HomeView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        Spacer()
+                        Spacer(minLength: 12)
 
                         Image(systemName: isSetupSuggestionsExpanded ? "chevron.up" : "chevron.down")
                             .font(.headline.weight(.semibold))
-                            .foregroundStyle(Color.tertiary)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 34, height: 34)
+                            .modifier(HomeGlassControlBackground(cornerRadius: 17, tint: .accentColor))
                     }
-                    .padding(.horizontal, 2)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .contentShape(RoundedRectangle(cornerRadius: HomeSuggestionLayout.sectionCornerRadius, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Setup Suggestions")
+                .accessibilityValue(isSetupSuggestionsExpanded ? "Expanded, \(setupSuggestionsSummaryText)" : "Collapsed, \(setupSuggestionsSummaryText)")
+                .accessibilityHint(isSetupSuggestionsExpanded ? "Double tap to collapse" : "Double tap to expand")
 
                 if isSetupSuggestionsExpanded {
-                    VStack(spacing: 0) {
-                        setupSuggestionRows
-                    }
-                    .background(
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(Color(.secondarySystemGroupedBackground))
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    setupSuggestionsCarousel
+                        .padding(.top, 2)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
+            .padding(.bottom, isSetupSuggestionsExpanded ? 8 : 0)
+            .modifier(HomeGlassCardBackground(cornerRadius: HomeSuggestionLayout.sectionCornerRadius, tint: .accentColor))
+            .clipShape(RoundedRectangle(cornerRadius: HomeSuggestionLayout.sectionCornerRadius, style: .continuous))
         }
+    }
+
+    private var setupSuggestionsCarousel: some View {
+        GeometryReader { proxy in
+            let cardWidth = HomeSuggestionLayout.cardWidth(for: proxy.size.width)
+
+#if compiler(>=6.2)
+            if #available(iOS 26.0, *) {
+                GlassEffectContainer(spacing: HomeSuggestionLayout.cardSpacing) {
+                    setupSuggestionsPeekCarousel(cardWidth: cardWidth)
+                }
+            } else {
+                setupSuggestionsPeekCarousel(cardWidth: cardWidth)
+            }
+#else
+            setupSuggestionsPeekCarousel(cardWidth: cardWidth)
+#endif
+        }
+        .frame(height: HomeSuggestionLayout.carouselHeight)
+    }
+
+    private func setupSuggestionsPeekCarousel(cardWidth: CGFloat) -> some View {
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: HomeSuggestionLayout.cardSpacing) {
+                ForEach(visibleSetupSuggestionIDs, id: \.self) { id in
+                    setupSuggestionRow(for: id, cardWidth: cardWidth)
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .scrollIndicators(.hidden)
+        .scrollTargetBehavior(.viewAligned)
+        .contentMargins(.horizontal, HomeSuggestionLayout.carouselHorizontalPadding, for: .scrollContent)
+        .contentMargins(.vertical, HomeSuggestionLayout.carouselVerticalPadding, for: .scrollContent)
+        .accessibilityHint(Text(visibleSetupSuggestionIDs.count > 1 ? "Swipe left or right for more setup suggestions." : ""))
     }
 
     private var setupSuggestionsSummaryText: String {
@@ -1286,86 +1289,82 @@ struct HomeView: View {
     }
 
     @ViewBuilder
-    private var setupSuggestionRows: some View {
-        if visibleSetupSuggestionIDs.contains(.addFirstPasture) {
+    private func setupSuggestionRow(for id: HomeSetupSuggestionID, cardWidth: CGFloat) -> some View {
+        switch id {
+        case .addFirstPasture:
             HomeSuggestionButtonRow(
                 title: "Add your first pasture",
                 subtitle: "Pasture checks, stocking status, and rotation work need at least one pasture.",
                 systemImage: "leaf.fill",
                 tint: .green,
                 actionTitle: "Add",
+                cardWidth: cardWidth,
                 onAction: { isPresentingAddPasture = true },
                 onDismiss: { dismissSetupSuggestion(.addFirstPasture) }
             )
-        }
-
-        if visibleSetupSuggestionIDs.contains(.addFirstAnimal) {
+        case .addFirstAnimal:
             HomeSuggestionButtonRow(
                 title: "Add your first animal",
                 subtitle: "Create the first herd record so field checks and working sessions have something to use.",
                 systemImage: "tag.fill",
                 tint: .blue,
                 actionTitle: "Add",
+                cardWidth: cardWidth,
                 onAction: { isPresentingAddAnimal = true },
                 onDismiss: { dismissSetupSuggestion(.addFirstAnimal) }
             )
-        }
-
-        if visibleSetupSuggestionIDs.contains(.startFirstPastureCheck) {
+        case .startFirstPastureCheck:
             HomeSuggestionButtonRow(
                 title: "Start your first pasture check",
                 subtitle: "Build check history for pasture rosters, missing animals, and field findings.",
                 systemImage: "checklist",
                 tint: .purple,
                 actionTitle: "Start",
+                cardWidth: cardWidth,
                 onAction: { isStartingFieldCheck = true },
                 onDismiss: { dismissSetupSuggestion(.startFirstPastureCheck) }
             )
-        }
-
-        if visibleSetupSuggestionIDs.contains(.createWorkingProtocol) {
+        case .createWorkingProtocol:
             HomeSuggestionNavigationRow(
                 title: "Create a working protocol",
                 subtitle: "Set up reusable treatment or processing steps before the first working session.",
                 systemImage: "list.clipboard.fill",
                 tint: .orange,
                 actionTitle: "Open",
+                cardWidth: cardWidth,
                 destination: { ProtocolTemplatesView() },
                 onDismiss: { dismissSetupSuggestion(.createWorkingProtocol) }
             )
-        }
-
-        if visibleSetupSuggestionIDs.contains(.enableDashboard) {
+        case .enableDashboard:
             HomeSuggestionNavigationRow(
                 title: "Enable the Dashboard tab",
                 subtitle: "Turn on herd-level summaries when you want a status screen separate from Home.",
                 systemImage: "rectangle.3.group.fill",
                 tint: .blue,
                 actionTitle: "Open",
+                cardWidth: cardWidth,
                 destination: { DashboardRulesView() },
                 onDismiss: { dismissSetupSuggestion(.enableDashboard) }
             )
-        }
-
-        if visibleSetupSuggestionIDs.contains(.customizeTagColors) {
+        case .customizeTagColors:
             HomeSuggestionNavigationRow(
                 title: "Customize tag colors",
                 subtitle: "Add ranch-specific colors or prefixes for faster field identification.",
                 systemImage: "tag.fill",
                 tint: .yellow,
                 actionTitle: "Open",
+                cardWidth: cardWidth,
                 destination: { TagColorLibraryView() },
                 onDismiss: { dismissSetupSuggestion(.customizeTagColors) }
             )
-        }
-
-        if visibleSetupSuggestionIDs.contains(.completePastureStockingData) {
+        case .completePastureStockingData:
             HomeSuggestionNavigationRow(
                 title: "Complete pasture stocking data",
                 subtitle: "Add acreage and target acres/head so capacity and rotation guidance is useful.",
                 systemImage: "ruler.fill",
                 tint: .brown,
                 actionTitle: "Open",
+                cardWidth: cardWidth,
                 destination: {
                     HomePastureListView(
                         title: "Missing Stocking Data",
@@ -1375,15 +1374,14 @@ struct HomeView: View {
                 },
                 onDismiss: { dismissSetupSuggestion(.completePastureStockingData) }
             )
-        }
-
-        if visibleSetupSuggestionIDs.contains(.reviewSyncSetup) {
+        case .reviewSyncSetup:
             HomeSuggestionNavigationRow(
                 title: "Set up sync",
                 subtitle: "Data is currently stored on this device only.",
                 systemImage: "icloud.slash.fill",
                 tint: .cyan,
                 actionTitle: "Open",
+                cardWidth: cardWidth,
                 destination: { SyncSettingsView() },
                 onDismiss: { dismissSetupSuggestion(.reviewSyncSetup) }
             )
@@ -1462,7 +1460,7 @@ struct HomeView: View {
     }
 }
 
-private enum HomeSetupSuggestionID: String {
+private enum HomeSetupSuggestionID: String, CaseIterable, Hashable {
     case addFirstPasture
     case addFirstAnimal
     case startFirstPastureCheck
@@ -1884,12 +1882,34 @@ private struct HomeStatusRow: View {
     }
 }
 
+private enum HomeSuggestionLayout {
+    static let sectionCornerRadius: CGFloat = 32
+    static let cardSpacing: CGFloat = 12
+    static let cardHeight: CGFloat = 140
+    static let carouselHeight: CGFloat = 152
+    static let carouselHorizontalPadding: CGFloat = 12
+    static let carouselVerticalPadding: CGFloat = 6
+    static let cardCornerRadius: CGFloat = 24
+    static let minimumCardWidth: CGFloat = 280
+    static let maximumCardWidth: CGFloat = 360
+    static let nextCardPeekWidth: CGFloat = 44
+
+    static func cardWidth(for containerWidth: CGFloat) -> CGFloat {
+        let availableWidth = max(containerWidth - (carouselHorizontalPadding * 2), 0)
+        let widthWithPeek = availableWidth - cardSpacing - nextCardPeekWidth
+        let cappedWidth = min(max(widthWithPeek, minimumCardWidth), maximumCardWidth)
+
+        return min(cappedWidth, availableWidth)
+    }
+}
+
 private struct HomeSuggestionButtonRow: View {
     let title: String
     let subtitle: String
     let systemImage: String
     let tint: Color
     let actionTitle: String
+    let cardWidth: CGFloat
     let onAction: () -> Void
     let onDismiss: () -> Void
 
@@ -1899,15 +1919,13 @@ private struct HomeSuggestionButtonRow: View {
             subtitle: subtitle,
             systemImage: systemImage,
             tint: tint,
+            cardWidth: cardWidth,
             onDismiss: onDismiss
         ) {
             Button(action: onAction) {
                 HomeSuggestionActionLabel(title: actionTitle)
             }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .controlSize(.regular)
-            .tint(tint)
+            .modifier(HomeSuggestionActionButtonStyle(tint: tint))
             .accessibilityLabel(actionTitle)
         }
     }
@@ -1919,6 +1937,7 @@ private struct HomeSuggestionNavigationRow<Destination: View>: View {
     let systemImage: String
     let tint: Color
     let actionTitle: String
+    let cardWidth: CGFloat
     let destination: Destination
     let onDismiss: () -> Void
 
@@ -1928,6 +1947,7 @@ private struct HomeSuggestionNavigationRow<Destination: View>: View {
         systemImage: String,
         tint: Color,
         actionTitle: String,
+        cardWidth: CGFloat,
         @ViewBuilder destination: () -> Destination,
         onDismiss: @escaping () -> Void
     ) {
@@ -1936,6 +1956,7 @@ private struct HomeSuggestionNavigationRow<Destination: View>: View {
         self.systemImage = systemImage
         self.tint = tint
         self.actionTitle = actionTitle
+        self.cardWidth = cardWidth
         self.destination = destination()
         self.onDismiss = onDismiss
     }
@@ -1946,6 +1967,7 @@ private struct HomeSuggestionNavigationRow<Destination: View>: View {
             subtitle: subtitle,
             systemImage: systemImage,
             tint: tint,
+            cardWidth: cardWidth,
             onDismiss: onDismiss
         ) {
             NavigationLink {
@@ -1953,10 +1975,7 @@ private struct HomeSuggestionNavigationRow<Destination: View>: View {
             } label: {
                 HomeSuggestionActionLabel(title: actionTitle)
             }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .controlSize(.regular)
-            .tint(tint)
+            .modifier(HomeSuggestionActionButtonStyle(tint: tint))
             .accessibilityLabel(actionTitle)
         }
     }
@@ -1967,6 +1986,7 @@ private struct HomeSuggestionCard<Action: View>: View {
     let subtitle: String
     let systemImage: String
     let tint: Color
+    let cardWidth: CGFloat
     let onDismiss: () -> Void
     let action: Action
 
@@ -1975,6 +1995,7 @@ private struct HomeSuggestionCard<Action: View>: View {
         subtitle: String,
         systemImage: String,
         tint: Color,
+        cardWidth: CGFloat,
         onDismiss: @escaping () -> Void,
         @ViewBuilder action: () -> Action
     ) {
@@ -1982,56 +2003,57 @@ private struct HomeSuggestionCard<Action: View>: View {
         self.subtitle = subtitle
         self.systemImage = systemImage
         self.tint = tint
+        self.cardWidth = cardWidth
         self.onDismiss = onDismiss
         self.action = action()
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
                 HomeSuggestionIcon(systemImage: systemImage, tint: tint)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.headline)
+                        .font(.headline.weight(.semibold))
                         .foregroundStyle(.primary)
+                        .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text(subtitle)
-                        .font(.subheadline)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Spacer(minLength: 8)
+                Spacer(minLength: 6)
 
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.secondary)
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color(.quaternarySystemFill)))
+                        .frame(width: 28, height: 28)
+                        .modifier(HomeGlassControlBackground(cornerRadius: 14, tint: tint))
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Delete \(title) suggestion")
             }
 
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 action
 
                 Spacer(minLength: 0)
             }
-            .padding(.leading, 46)
+            .padding(.leading, 44)
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.tertiarySystemGroupedBackground))
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.top, 12)
+        .padding(.bottom, 9)
+        .frame(width: cardWidth, height: HomeSuggestionLayout.cardHeight, alignment: .topLeading)
+        .modifier(HomeGlassCardBackground(cornerRadius: HomeSuggestionLayout.cardCornerRadius, tint: tint))
+        .contentShape(RoundedRectangle(cornerRadius: HomeSuggestionLayout.cardCornerRadius, style: .continuous))
     }
 }
 
@@ -2045,6 +2067,7 @@ private struct HomeSuggestionIcon: View {
             .foregroundStyle(.white)
             .frame(width: 34, height: 34)
             .background(Circle().fill(tint))
+            .shadow(color: tint.opacity(0.25), radius: 8, y: 4)
             .accessibilityHidden(true)
     }
 }
@@ -2053,14 +2076,98 @@ private struct HomeSuggestionActionLabel: View {
     let title: String
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(.caption.weight(.semibold))
 
             Image(systemName: "arrow.right")
-                .font(.caption.weight(.bold))
+                .font(.caption2.weight(.bold))
         }
         .padding(.horizontal, 4)
+        .padding(.vertical, 1)
+        .frame(minWidth: 74)
+    }
+}
+
+private struct HomeSuggestionActionButtonStyle: ViewModifier {
+    let tint: Color
+
+    func body(content: Content) -> some View {
+#if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            content
+                .buttonStyle(.glassProminent)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+                .tint(tint)
+        } else {
+            legacyStyle(content)
+        }
+#else
+        legacyStyle(content)
+#endif
+    }
+
+    private func legacyStyle(_ content: Content) -> some View {
+        content
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .controlSize(.small)
+            .tint(tint)
+    }
+}
+
+private struct HomeGlassCardBackground: ViewModifier {
+    let cornerRadius: CGFloat
+    let tint: Color
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+#if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            content
+                .glassEffect(.regular.tint(tint.opacity(0.10)), in: shape)
+                .overlay(shape.strokeBorder(.white.opacity(0.18), lineWidth: 0.75))
+        } else {
+            fallback(content, shape: shape)
+        }
+#else
+        fallback(content, shape: shape)
+#endif
+    }
+
+    private func fallback(_ content: Content, shape: RoundedRectangle) -> some View {
+        content
+            .background(.thinMaterial, in: shape)
+            .overlay(shape.strokeBorder(tint.opacity(0.14), lineWidth: 0.75))
+            .shadow(color: .black.opacity(0.06), radius: 14, y: 8)
+    }
+}
+
+private struct HomeGlassControlBackground: ViewModifier {
+    let cornerRadius: CGFloat
+    let tint: Color
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+#if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            content
+                .glassEffect(.regular.tint(tint.opacity(0.08)).interactive(), in: shape)
+        } else {
+            fallback(content, shape: shape)
+        }
+#else
+        fallback(content, shape: shape)
+#endif
+    }
+
+    private func fallback(_ content: Content, shape: RoundedRectangle) -> some View {
+        content
+            .background(.thinMaterial, in: shape)
+            .overlay(shape.strokeBorder(tint.opacity(0.12), lineWidth: 0.5))
     }
 }
 
