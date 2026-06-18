@@ -59,6 +59,23 @@ struct TagColorEditorView: View {
                             .font(.headline)
                     }
                 }
+
+                if let existing {
+                    Section {
+                        if existing.isDefault {
+                            Label("Default tag color", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Button {
+                                tagColorLibrary.setDefaultColor(id: existing.id)
+                            } label: {
+                                Label("Set as Default Tag Color", systemImage: "checkmark.circle")
+                            }
+                        }
+                    } footer: {
+                        Text("New tags use the default color unless another color is selected.")
+                    }
+                }
             }
             .navigationTitle(existing == nil ? "Add Color" : "Edit Color")
             .toolbar {

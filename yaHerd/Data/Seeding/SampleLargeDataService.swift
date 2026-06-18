@@ -24,21 +24,28 @@ struct SampleLargeDataService {
         
         let colorIDs = SampleDataService.tagColorIDsByName(context: context)
         
-        let pastureNames = [
-            "NW Pasture",
-            "SW Pasture",
-            "Wally's Pasture",
-            "LF Pasture",
-            "NE Pasture",
-            "SE Pasture",
-            "Holding Pasture"
+        // Match acreage defaults from SampleDataService.
+        // Large-seed pasture names differ slightly for Wally's, Lower, and Holding.
+        let pastureSeeds: [(name: String, acreage: Double, usableAcreage: Double, targetAcresPerHead: Double)] = [
+            ("NW Pasture", 35, 25, 3),
+            ("SW Pasture", 80, 65, 3),
+            ("Wally's Pasture", 48, 40, 3),
+            ("LF Pasture", 65, 50, 3),
+            ("NE Pasture", 30, 25, 3),
+            ("SE Pasture", 35, 20, 3),
+            ("Holding Pasture", 7, 5, 3)
         ]
         
         var pasturesByName: [String: Pasture] = [:]
-        for pastureName in pastureNames {
-            let pasture = Pasture(name: pastureName)
+        for seed in pastureSeeds {
+            let pasture = Pasture(
+                name: seed.name,
+                acreage: seed.acreage,
+                usableAcreage: seed.usableAcreage,
+                targetAcresPerHead: seed.targetAcresPerHead
+            )
             context.insert(pasture)
-            pasturesByName[pastureName] = pasture
+            pasturesByName[seed.name] = pasture
         }
         
         var animalsByKey: [String: Animal] = [:]

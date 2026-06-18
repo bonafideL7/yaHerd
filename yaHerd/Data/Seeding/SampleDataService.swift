@@ -261,6 +261,15 @@ extension SampleDataService {
             }
         }
 
+        if !existingColors.contains(where: { $0.isDefault }) {
+            let whiteKey = TagColorLibraryStore.normalizedNameKey("White")
+            let fallbackDefault = existingColors.first {
+                TagColorLibraryStore.normalizedNameKey($0.name) == whiteKey
+            } ?? existingColors.first
+
+            fallbackDefault?.setDefault(true)
+        }
+
         try? context.save()
 
         let refreshedColors = (try? context.fetch(FetchDescriptor<TagColorDefinition>())) ?? existingColors

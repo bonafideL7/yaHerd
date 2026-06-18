@@ -35,9 +35,22 @@ final class TagColorLibraryStore: ObservableObject {
     }
 
     var defaultColor: TagColorDefinition {
-        colors.first(where: { $0.name.caseInsensitiveCompare("White") == .orderedSame })
+        colors.first(where: { $0.isDefault })
+            ?? colors.first(where: { Self.normalizedNameKey($0.name) == Self.normalizedNameKey("White") })
             ?? colors.first
             ?? TagColorDefinition(name: "White", rgba: RGBAColor(r: 1, g: 1, b: 1))
+    }
+
+    var defaultColorID: UUID? {
+        definition(for: defaultColor.id)?.id ?? colors.first?.id
+    }
+
+    func resolvedColorID(_ id: UUID?) -> UUID? {
+        if let id, definition(for: id) != nil {
+            return id
+        }
+
+        return defaultColorID
     }
 
     func definition(for id: UUID?) -> TagColorDefinition? {
@@ -73,15 +86,22 @@ final class TagColorLibraryStore: ObservableObject {
             let cleanedPrefix = Self.normalizedPrefix(def.prefix, fallbackName: cleanedName)
             let existingByID = try persistedColor(id: def.id)
             let existingByName = try persistedColor(name: cleanedName)
+            let shouldBecomeDefault = def.isDefault || existingByID?.isDefault == true
 
             if let existingByName, existingByName.id != def.id {
                 existingByName.update(name: cleanedName, prefix: cleanedPrefix, rgba: def.rgba)
+                if shouldBecomeDefault {
+                    existingByName.setDefault(true)
+                }
                 try remapTagColorIDs([def.id: existingByName.id])
                 if let existingByID {
                     context.delete(existingByID)
                 }
             } else if let existingByID {
                 existingByID.update(name: cleanedName, prefix: cleanedPrefix, rgba: def.rgba)
+                if shouldBecomeDefault {
+                    existingByID.setDefault(true)
+                }
             } else {
                 def.name = cleanedName
                 def.prefix = cleanedPrefix
@@ -92,8 +112,27 @@ final class TagColorLibraryStore: ObservableObject {
             }
 
             saveAndReload()
+
+            if def.isDefault, let color = try? persistedColor(name: cleanedName) {
+                setDefaultColor(id: color.id)
+            }
         } catch {
             assertionFailure("Failed to upsert tag color: \(error)")
+        }
+    }
+
+    func setDefaultColor(id: UUID) {
+        do {
+            let persistedColors = try fetchPersistedColors()
+            guard persistedColors.contains(where: { $0.id == id }) else { return }
+
+            for color in persistedColors {
+                color.setDefault(color.id == id)
+            }
+
+            saveAndReload()
+        } catch {
+            assertionFailure("Failed to set default tag color: \(error)")
         }
     }
 
@@ -106,6 +145,7 @@ final class TagColorLibraryStore: ObservableObject {
                 }
             }
 
+            try ensureDefaultColorExists()
             saveAndReload()
         } catch {
             assertionFailure("Failed to delete tag color: \(error)")
@@ -131,6 +171,9 @@ final class TagColorLibraryStore: ObservableObject {
 
     func restoreDefaultColors() {
         do {
+            try removeRetiredDefaultColors()
+            let existingDefaultID = try fetchPersistedColors().first(where: { $0.isDefault })?.id
+
             for defaultColor in Self.seedDefaultColors() {
                 if let existingByName = try persistedColor(name: defaultColor.name) {
                     existingByName.update(
@@ -139,10 +182,14 @@ final class TagColorLibraryStore: ObservableObject {
                         rgba: defaultColor.rgba
                     )
                 } else {
+                    if existingDefaultID != nil {
+                        defaultColor.isDefault = false
+                    }
                     context.insert(defaultColor)
                 }
             }
 
+            try ensureDefaultColorExists()
             saveAndReload()
         } catch {
             assertionFailure("Failed to restore default tag colors: \(error)")
@@ -153,17 +200,20 @@ final class TagColorLibraryStore: ObservableObject {
 
     private func load() {
         do {
-            var persistedColors = try fetchPersistedColors()
+            let persistedColors = try fetchPersistedColors()
 
             if persistedColors.isEmpty {
                 let colorsToSeed = legacyColorsFromUserDefaults() ?? Self.seedDefaultColors()
                 seed(colorsToSeed)
                 try context.save()
                 UserDefaults.standard.removeObject(forKey: legacyStorageKey)
-                persistedColors = try fetchPersistedColors()
             }
 
-            try reconcileColorNames(in: persistedColors)
+            try removeRetiredDefaultColors()
+            let currentColors = try fetchPersistedColors()
+            try reconcileColorNames(in: currentColors)
+            try ensureDefaultColorExists()
+            try applyDefaultColorToMissingTagRecords()
             colors = try fetchPersistedColors()
         } catch {
             colors = []
@@ -195,6 +245,9 @@ final class TagColorLibraryStore: ObservableObject {
             let winner = canonicalColor(from: group)
 
             for duplicate in group where duplicate !== winner {
+                if duplicate.isDefault {
+                    winner.setDefault(true)
+                }
                 idRemaps[duplicate.id] = winner.id
                 context.delete(duplicate)
                 didChange = true
@@ -212,6 +265,10 @@ final class TagColorLibraryStore: ObservableObject {
     }
 
     private func canonicalColor(from colors: [TagColorDefinition]) -> TagColorDefinition {
+        if let defaultColor = colors.filter(\.isDefault).sorted(by: Self.defaultSort).first {
+            return defaultColor
+        }
+
         if syncMode == .iCloud {
             // If a synced/user record and a local seeded default have the same name, keep the
             // synced/user record and delete the local default copy. This prevents default-color
@@ -230,6 +287,91 @@ final class TagColorLibraryStore: ObservableObject {
             if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
             return $0.updatedAt < $1.updatedAt
         }.first ?? colors[0]
+    }
+
+    private func ensureDefaultColorExists() throws {
+        let persistedColors = try fetchPersistedColors()
+        guard !persistedColors.isEmpty else { return }
+
+        let currentDefaults = persistedColors.filter(\.isDefault)
+        let selectedDefault = currentDefaults.sorted(by: Self.defaultSort).first
+            ?? persistedColors.first(where: { Self.normalizedNameKey($0.name) == Self.normalizedNameKey("White") })
+            ?? persistedColors.first!
+
+        var didChange = false
+        for color in persistedColors {
+            let shouldBeDefault = color.id == selectedDefault.id
+            if color.isDefault != shouldBeDefault {
+                color.setDefault(shouldBeDefault)
+                didChange = true
+            }
+        }
+
+        if didChange {
+            try context.save()
+        }
+    }
+
+    private func applyDefaultColorToMissingTagRecords() throws {
+        guard let defaultColorID = try currentDefaultColorID() else { return }
+        var didChange = false
+
+        let animals = try context.fetch(FetchDescriptor<Animal>())
+        for animal in animals where animal.tagColorID == nil {
+            let tagNumber = animal.tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !tagNumber.isEmpty {
+                animal.tagColorID = defaultColorID
+                didChange = true
+            }
+        }
+
+        let tags = try context.fetch(FetchDescriptor<AnimalTag>())
+        for tag in tags where tag.colorID == nil {
+            if !tag.normalizedNumber.isEmpty {
+                tag.colorID = defaultColorID
+                didChange = true
+            }
+        }
+
+        let fieldCheckAnimalChecks = try context.fetch(FetchDescriptor<FieldCheckAnimalCheck>())
+        for check in fieldCheckAnimalChecks where check.rosterTagColorID == nil {
+            let tagNumber = check.rosterTagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !tagNumber.isEmpty {
+                check.rosterTagColorID = defaultColorID
+                didChange = true
+            }
+        }
+
+        if didChange {
+            try context.save()
+        }
+    }
+
+    private func removeRetiredDefaultColors() throws {
+        let persistedColors = try fetchPersistedColors()
+        var didChange = false
+
+        for color in persistedColors where Self.retiredDefaultColorIDs.contains(color.id) {
+            context.delete(color)
+            didChange = true
+        }
+
+        if didChange {
+            try context.save()
+        }
+    }
+
+    private func currentDefaultColorID() throws -> UUID? {
+        let persistedColors = try fetchPersistedColors()
+        return persistedColors.first(where: { $0.isDefault })?.id
+            ?? persistedColors.first(where: { Self.normalizedNameKey($0.name) == Self.normalizedNameKey("White") })?.id
+            ?? persistedColors.first?.id
+    }
+
+    nonisolated private static func defaultSort(_ lhs: TagColorDefinition, _ rhs: TagColorDefinition) -> Bool {
+        if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
+        if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
+        return lhs.sortOrder < rhs.sortOrder
     }
 
     private func remapTagColorIDs(_ remaps: [UUID: UUID]) throws {
@@ -280,7 +422,10 @@ final class TagColorLibraryStore: ObservableObject {
     private func saveAndReload() {
         do {
             try context.save()
+            try removeRetiredDefaultColors()
             try reconcileColorNames(in: fetchPersistedColors())
+            try ensureDefaultColorExists()
+            try applyDefaultColorToMissingTagRecords()
             colors = try fetchPersistedColors()
         } catch {
             assertionFailure("Failed to save tag colors: \(error)")
@@ -319,7 +464,8 @@ final class TagColorLibraryStore: ObservableObject {
                 name: legacy.name,
                 prefix: legacy.prefix,
                 rgba: legacy.rgba,
-                sortOrder: index
+                sortOrder: index,
+                isDefault: legacy.isDefault ?? false
             )
         }
     }
@@ -359,13 +505,16 @@ final class TagColorLibraryStore: ObservableObject {
     nonisolated static var defaultColorIDs: Set<UUID> { [
         UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D01")!,
         UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D02")!,
-        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D03")!,
         UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D04")!,
         UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D05")!,
         UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D06")!,
         UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D07")!,
         UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D08")!,
-        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D09")!,
+        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D09")!
+    ] }
+
+    nonisolated private static var retiredDefaultColorIDs: Set<UUID> { [
+        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D03")!,
         UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D0A")!,
         UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D0B")!
     ] }
@@ -374,16 +523,13 @@ final class TagColorLibraryStore: ObservableObject {
         // Stable IDs keep sample/default records predictable, but names are the real uniqueness rule.
         return [
             TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D01")!, name: "Yellow", rgba: RGBAColor(r: 1, g: 1, b: 0), sortOrder: 0),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D02")!, name: "White",  rgba: RGBAColor(r: 1, g: 1, b: 1), sortOrder: 1),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D03")!, name: "Black",  rgba: RGBAColor(r: 0, g: 0, b: 0), sortOrder: 2),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D04")!, name: "Red",    rgba: RGBAColor(r: 1, g: 0, b: 0), sortOrder: 3),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D05")!, name: "Orange", rgba: RGBAColor(r: 1, g: 0.5, b: 0), sortOrder: 4),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D06")!, name: "Green",  rgba: RGBAColor(r: 0, g: 0.7, b: 0.2), sortOrder: 5),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D07")!, name: "Blue",   rgba: RGBAColor(r: 0, g: 0.48, b: 1), sortOrder: 6),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D08")!, name: "Purple", rgba: RGBAColor(r: 0.6, g: 0.4, b: 1), sortOrder: 7),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D09")!, name: "Pink",   rgba: RGBAColor(r: 1, g: 0.2, b: 0.6), sortOrder: 8),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D0A")!, name: "Brown",  rgba: RGBAColor(r: 0.55, g: 0.27, b: 0.07), sortOrder: 9),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D0B")!, name: "Gray",   rgba: RGBAColor(r: 0.6, g: 0.6, b: 0.6), sortOrder: 10)
+            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D02")!, name: "White",  rgba: RGBAColor(r: 1, g: 1, b: 1), sortOrder: 1, isDefault: true),
+            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D04")!, name: "Red",    rgba: RGBAColor(r: 1, g: 0, b: 0), sortOrder: 2),
+            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D05")!, name: "Orange", rgba: RGBAColor(r: 1, g: 0.5, b: 0), sortOrder: 3),
+            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D06")!, name: "Green",  rgba: RGBAColor(r: 0, g: 0.7, b: 0.2), sortOrder: 4),
+            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D07")!, name: "Blue",   rgba: RGBAColor(r: 0, g: 0.48, b: 1), sortOrder: 5),
+            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D08")!, name: "Purple", rgba: RGBAColor(r: 0.6, g: 0.4, b: 1), sortOrder: 6),
+            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D09")!, name: "Pink",   rgba: RGBAColor(r: 1, g: 0.2, b: 0.6), sortOrder: 7)
         ]
     }
 }
@@ -393,6 +539,7 @@ private struct LegacyTagColorDefinition: Decodable {
     var name: String
     var prefix: String
     var rgba: RGBAColor
+    var isDefault: Bool?
 }
 
 extension Color {

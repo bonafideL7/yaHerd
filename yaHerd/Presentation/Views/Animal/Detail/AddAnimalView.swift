@@ -10,6 +10,7 @@ import SwiftUI
 struct AddAnimalView: View {
     private let title: String
     @EnvironmentObject private var dependencies: AppDependencies
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.dismiss) private var dismiss
 
     @State private var form: AnimalFormViewModel
@@ -128,7 +129,7 @@ struct AddAnimalView: View {
 
     private func validateAndSave() {
         do {
-            let input = try form.makeInput()
+            let input = try form.makeInput(defaultTagColorID: tagColorLibrary.defaultColorID)
             let created = try CreateAnimalUseCase(repository: repository).execute(input: input)
 
             for tag in pendingTags where !tag.isPrimary {
@@ -136,7 +137,7 @@ struct AddAnimalView: View {
                     animalID: created.id,
                     input: AnimalTagInput(
                         number: tag.normalizedNumber,
-                        colorID: tag.colorID,
+                        colorID: tagColorLibrary.resolvedColorID(tag.colorID),
                         isPrimary: false
                     )
                 )
@@ -152,6 +153,7 @@ struct AddAnimalView: View {
     private func addPendingTag(number: String, colorID: UUID?, isPrimary: Bool) {
         let normalizedNumber = number.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedNumber.isEmpty else { return }
+        let resolvedColorID = tagColorLibrary.resolvedColorID(colorID)
 
         let shouldBePrimary = isPrimary || pendingTags.isEmpty
 
@@ -173,7 +175,7 @@ struct AddAnimalView: View {
             AnimalTagSnapshot(
                 id: UUID(),
                 number: normalizedNumber,
-                colorID: colorID,
+                colorID: resolvedColorID,
                 isPrimary: shouldBePrimary,
                 isActive: true,
                 assignedAt: .now,
@@ -189,6 +191,7 @@ struct AddAnimalView: View {
     private func updatePendingTag(tagID: UUID, number: String, colorID: UUID?, isPrimary: Bool) {
         let normalizedNumber = number.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedNumber.isEmpty else { return }
+        let resolvedColorID = tagColorLibrary.resolvedColorID(colorID)
 
         let shouldBePrimary = isPrimary || pendingTags.filter({ $0.id != tagID }).isEmpty
 
@@ -196,7 +199,7 @@ struct AddAnimalView: View {
             AnimalTagSnapshot(
                 id: tag.id,
                 number: tag.id == tagID ? normalizedNumber : tag.number,
-                colorID: tag.id == tagID ? colorID : tag.colorID,
+                colorID: tag.id == tagID ? resolvedColorID : tag.colorID,
                 isPrimary: tag.id == tagID ? shouldBePrimary : (shouldBePrimary ? false : tag.isPrimary),
                 isActive: tag.isActive,
                 assignedAt: tag.assignedAt,
@@ -210,7 +213,7 @@ struct AddAnimalView: View {
     private func syncPendingPrimaryTagToDraft() {
         if let primary = pendingTags.first(where: { $0.isPrimary }) {
             form.draft.tagNumber = primary.normalizedNumber
-            form.draft.tagColorID = primary.colorID
+            form.draft.tagColorID = tagColorLibrary.resolvedColorID(primary.colorID)
         } else {
             form.draft.tagNumber = ""
             form.draft.tagColorID = nil

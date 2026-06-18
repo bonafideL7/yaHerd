@@ -106,10 +106,8 @@ enum AnimalListDerivations {
             break
         case .missingPasture:
             result = result.filter { $0.isActiveInVisibleHerd && isNoPasture($0) }
-        case .missingTagNumber:
+        case .missingTag:
             result = result.filter { $0.isActiveInVisibleHerd && $0.displayTagNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        case .missingTagColor:
-            result = result.filter { $0.isActiveInVisibleHerd && $0.displayTagColorID == nil }
         case .unknownSex:
             result = result.filter { $0.isActiveInVisibleHerd && $0.sex == .unknown }
         case .archivedActive:

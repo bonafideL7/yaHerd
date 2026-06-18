@@ -22,6 +22,7 @@ final class TagColorDefinition: Identifiable {
     var alpha: Double = 1
     var sortOrder: Int = 0
     var isHidden: Bool = false
+    var isDefault: Bool = false
     var createdAt: Date = Date.now
     var updatedAt: Date = Date.now
 
@@ -32,6 +33,7 @@ final class TagColorDefinition: Identifiable {
         rgba: RGBAColor,
         sortOrder: Int = 0,
         isHidden: Bool = false,
+        isDefault: Bool = false,
         createdAt: Date = Date.now,
         updatedAt: Date = Date.now
     ) {
@@ -51,6 +53,7 @@ final class TagColorDefinition: Identifiable {
         self.alpha = rgba.a
         self.sortOrder = sortOrder
         self.isHidden = isHidden
+        self.isDefault = isDefault
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -73,6 +76,12 @@ final class TagColorDefinition: Identifiable {
         self.prefix = prefix
         self.rgba = rgba
         self.isHidden = false
+        self.updatedAt = .now
+    }
+
+    func setDefault(_ isDefault: Bool) {
+        guard self.isDefault != isDefault else { return }
+        self.isDefault = isDefault
         self.updatedAt = .now
     }
 

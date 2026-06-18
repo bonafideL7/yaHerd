@@ -18,6 +18,14 @@ struct AnimalTagEditView: View {
     private let onSave: (String, UUID?, Bool) -> Void
     
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 5)
+
+    private var previewColorDefinition: TagColorDefinition {
+        tagColorLibrary.resolvedDefinition(tagColorID: colorID)
+    }
+
+    private var previewTagNumber: String {
+        number.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
     
     init(
         initialNumber: String = "",
@@ -41,16 +49,18 @@ struct AnimalTagEditView: View {
         NavigationStack {
             Form {
                 Section("Tag Number") {
-                    TextField("Number", text: $number)
-                        .keyboardType(.numberPad)
+                    TextField("Number or ID", text: $number)
+                        .keyboardType(.numbersAndPunctuation)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
                         .font(.title2)
                 }
                 
-                Section("Color") {
+                Section {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(tagColorLibrary.colors) { def in
-                            let isSelected = def.id == colorID
-                            
+                            let isSelected = def.id == tagColorLibrary.resolvedColorID(colorID)
+
                             Circle()
                                 .fill(def.color)
                                 .frame(height: 44)
@@ -60,17 +70,21 @@ struct AnimalTagEditView: View {
                                             .strokeBorder(.primary, lineWidth: 3)
                                     }
                                 }
-                                .onTapGesture {
-                                    colorID = def.id
-                                }
+                            .contentShape(Rectangle())
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("\(def.name) tag color")
+                            .accessibilityValue(isSelected ? "Selected" : "")
+                            .onTapGesture {
+                                colorID = def.id
+                            }
                         }
                     }
                     .padding(.vertical, 4)
-                    
-                    Button("Clear Color") {
-                        colorID = nil
+                    .onAppear {
+                        colorID = tagColorLibrary.resolvedColorID(colorID)
                     }
-                    .foregroundStyle(.secondary)
+                } header: {
+                    Text("Color")
                 }
                 
                 if showsPrimaryToggle {
@@ -81,15 +95,27 @@ struct AnimalTagEditView: View {
                     }
                 }
             }
-            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+                ToolbarItem(placement: .principal) {
+                    AnimalTagView(
+                        tagNumber: previewTagNumber,
+                        color: previewColorDefinition.color,
+                        colorName: previewColorDefinition.name,
+                        size: .regular
+                    )
+                    .accessibilityLabel("\(title) preview")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(saveButtonTitle) {
-                        onSave(number.trimmingCharacters(in: .whitespacesAndNewlines), colorID, isPrimary)
+                        onSave(
+                            number.trimmingCharacters(in: .whitespacesAndNewlines),
+                            tagColorLibrary.resolvedColorID(colorID),
+                            isPrimary
+                        )
                         dismiss()
                     }
                 }
@@ -414,7 +440,7 @@ struct PendingAnimalTagManagementSection: View {
     private func syncPrimaryTag() {
         if let primary = pendingTags.first(where: { $0.isPrimary }) {
             tagNumber = primary.normalizedNumber
-            tagColorID = primary.colorID
+            tagColorID = tagColorLibrary.resolvedColorID(primary.colorID)
         } else {
             tagNumber = ""
             tagColorID = nil

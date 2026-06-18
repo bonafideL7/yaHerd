@@ -70,8 +70,7 @@ enum AnimalCareFilter: CaseIterable, Hashable {
 enum AnimalRecordIssueFilter: CaseIterable, Hashable {
     case any
     case missingPasture
-    case missingTagNumber
-    case missingTagColor
+    case missingTag
     case unknownSex
     case archivedActive
 
@@ -85,10 +84,8 @@ enum AnimalRecordIssueFilter: CaseIterable, Hashable {
             return "Any Record State"
         case .missingPasture:
             return "Missing Pasture"
-        case .missingTagNumber:
-            return "Missing Tag Number"
-        case .missingTagColor:
-            return "Missing Tag Color"
+        case .missingTag:
+            return "Missing Tags"
         case .unknownSex:
             return "Unknown Sex"
         case .archivedActive:

@@ -325,17 +325,12 @@ struct HomeView: View {
         }
     }
 
-    private var missingTagNumberAnimals: [DashboardAnimalRecord] {
+    private var missingTagAnimals: [DashboardAnimalRecord] {
         activeAnimalRecords.filter { animal in
             animal.displayTagNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 
-    private var missingTagColorAnimals: [DashboardAnimalRecord] {
-        activeAnimalRecords.filter { animal in
-            animal.displayTagColorID == nil
-        }
-    }
 
     private var unknownSexAnimals: [DashboardAnimalRecord] {
         activeAnimalRecords.filter { animal in
@@ -365,7 +360,7 @@ struct HomeView: View {
     }
 
     private var recordsCleanupCardCount: Int {
-        let animalIdentityIssues = missingTagNumberAnimals.count + missingTagColorAnimals.count + unknownSexAnimals.count
+        let animalIdentityIssues = missingTagAnimals.count + unknownSexAnimals.count
         return unassignedAnimalRecords.count + animalIdentityIssues + archivedActiveRecords.count
     }
 
@@ -420,8 +415,7 @@ struct HomeView: View {
 
     private var hasRecordsCleanupRows: Bool {
         !unassignedAnimalRecords.isEmpty
-        || !missingTagNumberAnimals.isEmpty
-        || !missingTagColorAnimals.isEmpty
+        || !missingTagAnimals.isEmpty
         || !unknownSexAnimals.isEmpty
         || !archivedActiveRecords.isEmpty
     }
@@ -615,16 +609,9 @@ struct HomeView: View {
                 HomeSummaryCardView(card: card)
             }
             .buttonStyle(.plain)
-        } else if !missingTagNumberAnimals.isEmpty {
+        } else if !missingTagAnimals.isEmpty {
             Button {
-                openAnimalList(.missingTagNumber)
-            } label: {
-                HomeSummaryCardView(card: card)
-            }
-            .buttonStyle(.plain)
-        } else if !missingTagColorAnimals.isEmpty {
-            Button {
-                openAnimalList(.missingTagColor)
+                openAnimalList(.missingTags)
             } label: {
                 HomeSummaryCardView(card: card)
             }
@@ -1061,32 +1048,16 @@ struct HomeView: View {
             .buttonStyle(.plain)
         }
 
-        if !missingTagNumberAnimals.isEmpty {
+        if !missingTagAnimals.isEmpty {
             Button {
-                openAnimalList(.missingTagNumber)
+                openAnimalList(.missingTags)
             } label: {
                 HomeListRow(
-                    title: "Animals missing tag numbers",
+                    title: "Animals missing tags",
                     subtitle: "These records are harder to find during checks and working sessions.",
                     systemImage: "tag.slash.fill",
                     tint: .red,
-                    count: missingTagNumberAnimals.count,
-                    showsChevron: true
-                )
-            }
-            .buttonStyle(.plain)
-        }
-
-        if !missingTagColorAnimals.isEmpty {
-            Button {
-                openAnimalList(.missingTagColor)
-            } label: {
-                HomeListRow(
-                    title: "Animals missing tag color",
-                    subtitle: "Add color data so field identification matches the physical tag.",
-                    systemImage: "paintpalette.fill",
-                    tint: .purple,
-                    count: missingTagColorAnimals.count,
+                    count: missingTagAnimals.count,
                     showsChevron: true
                 )
             }

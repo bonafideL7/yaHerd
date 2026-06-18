@@ -159,7 +159,7 @@ struct AnimalDetailView: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        viewModel.save(animalID: animalID, using: repository)
+                        viewModel.save(animalID: animalID, defaultTagColorID: tagColorLibrary.defaultColorID, using: repository)
                     }
                     .disabled(!canSaveChanges)
                 }

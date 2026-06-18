@@ -41,14 +41,17 @@ final class AnimalFormViewModel {
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    func makeInput() throws -> AnimalInput {
+    func makeInput(defaultTagColorID: UUID? = nil) throws -> AnimalInput {
         try draft.validate()
         let salePrice = try draft.parsedSalePrice()
+        let resolvedTagColorID = draft.normalizedTagNumber.isEmpty
+            ? draft.tagColorID
+            : (draft.tagColorID ?? defaultTagColorID)
 
         return AnimalInput(
             name: draft.normalizedName,
             tagNumber: draft.normalizedTagNumber,
-            tagColorID: draft.tagColorID,
+            tagColorID: resolvedTagColorID,
             sex: draft.sex,
             birthDate: draft.birthDate,
             status: draft.status,

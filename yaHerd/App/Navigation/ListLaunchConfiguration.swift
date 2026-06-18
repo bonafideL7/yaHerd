@@ -19,12 +19,8 @@ struct AnimalListLaunchConfiguration: Hashable {
         filter: AnimalFilter(recordIssue: .missingPasture)
     )
 
-    static let missingTagNumber = AnimalListLaunchConfiguration(
-        filter: AnimalFilter(recordIssue: .missingTagNumber)
-    )
-
-    static let missingTagColor = AnimalListLaunchConfiguration(
-        filter: AnimalFilter(recordIssue: .missingTagColor)
+    static let missingTags = AnimalListLaunchConfiguration(
+        filter: AnimalFilter(recordIssue: .missingTag)
     )
 
     static let unknownSex = AnimalListLaunchConfiguration(

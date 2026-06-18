@@ -57,11 +57,11 @@ final class AnimalDetailViewModel {
         isEditing = false
     }
 
-    func save(animalID: UUID, using repository: any AnimalRepository) {
+    func save(animalID: UUID, defaultTagColorID: UUID?, using repository: any AnimalRepository) {
         guard detail != nil else { return }
 
         do {
-            let input = try form.makeInput()
+            let input = try form.makeInput(defaultTagColorID: defaultTagColorID)
             var updated = try UpdateAnimalUseCase(repository: repository).execute(id: animalID, input: input)
 
             let desiredTags = draftTags
@@ -76,7 +76,11 @@ final class AnimalDetailViewModel {
                 updated = try UpdateAnimalTagUseCase(repository: repository).execute(
                     animalID: animalID,
                     tagID: tag.id,
-                    input: AnimalTagInput(number: tag.normalizedNumber, colorID: tag.colorID, isPrimary: false)
+                    input: AnimalTagInput(
+                        number: tag.normalizedNumber,
+                        colorID: resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID),
+                        isPrimary: false
+                    )
                 )
             }
 
@@ -84,7 +88,11 @@ final class AnimalDetailViewModel {
                 updated = try UpdateAnimalTagUseCase(repository: repository).execute(
                     animalID: animalID,
                     tagID: tag.id,
-                    input: AnimalTagInput(number: tag.normalizedNumber, colorID: tag.colorID, isPrimary: false)
+                    input: AnimalTagInput(
+                        number: tag.normalizedNumber,
+                        colorID: resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID),
+                        isPrimary: false
+                    )
                 )
             }
 
@@ -92,7 +100,11 @@ final class AnimalDetailViewModel {
                 updated = try UpdateAnimalTagUseCase(repository: repository).execute(
                     animalID: animalID,
                     tagID: tag.id,
-                    input: AnimalTagInput(number: tag.normalizedNumber, colorID: tag.colorID, isPrimary: true)
+                    input: AnimalTagInput(
+                        number: tag.normalizedNumber,
+                        colorID: resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID),
+                        isPrimary: true
+                    )
                 )
             }
 
@@ -105,7 +117,11 @@ final class AnimalDetailViewModel {
             for tag in newActiveTags.filter({ !$0.isPrimary }) {
                 updated = try AddAnimalTagUseCase(repository: repository).execute(
                     animalID: animalID,
-                    input: AnimalTagInput(number: tag.normalizedNumber, colorID: tag.colorID, isPrimary: false)
+                    input: AnimalTagInput(
+                        number: tag.normalizedNumber,
+                        colorID: resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID),
+                        isPrimary: false
+                    )
                 )
             }
 
@@ -115,13 +131,17 @@ final class AnimalDetailViewModel {
                     existing.isActive
                         && existing.isPrimary
                         && existing.normalizedNumber == tag.normalizedNumber
-                        && existing.colorID == tag.colorID
+                        && existing.colorID == resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID)
                 }
 
                 if !alreadyRepresented {
                     updated = try AddAnimalTagUseCase(repository: repository).execute(
                         animalID: animalID,
-                        input: AnimalTagInput(number: tag.normalizedNumber, colorID: tag.colorID, isPrimary: true)
+                        input: AnimalTagInput(
+                            number: tag.normalizedNumber,
+                            colorID: resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID),
+                            isPrimary: true
+                        )
                     )
                 }
             }
@@ -290,6 +310,10 @@ final class AnimalDetailViewModel {
             form.draft.tagNumber = ""
             form.draft.tagColorID = nil
         }
+    }
+
+    private func resolvedTagColorID(for tag: AnimalTagSnapshot, defaultTagColorID: UUID?) -> UUID? {
+        tag.normalizedNumber.isEmpty ? tag.colorID : (tag.colorID ?? defaultTagColorID)
     }
 
     var canAddOffspring: Bool {

@@ -22,7 +22,17 @@ struct TagColorLibraryView: View {
                             TagColorTagIcon(color: def.color, accessibilityLabel: "Tag color: \(def.name)")
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(def.name)
+                                HStack(spacing: 6) {
+                                    Text(def.name)
+
+                                    if def.isDefault {
+                                        Label("Default", systemImage: "checkmark.circle.fill")
+                                            .labelStyle(.titleAndIcon)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+
                                 Text(def.prefix)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -35,9 +45,36 @@ struct TagColorLibraryView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        if !def.isDefault {
+                            Button {
+                                tagColorLibrary.setDefaultColor(id: def.id)
+                            } label: {
+                                Label("Set Default", systemImage: "checkmark.circle")
+                            }
+                            .tint(.blue)
+                        }
+                    }
+                    .contextMenu {
+                        if !def.isDefault {
+                            Button {
+                                tagColorLibrary.setDefaultColor(id: def.id)
+                            } label: {
+                                Label("Set as Default", systemImage: "checkmark.circle")
+                            }
+                        }
+
+                        Button {
+                            editingColor = def
+                        } label: {
+                            Label("Edit Color", systemImage: "pencil")
+                        }
+                    }
                 }
                 .onDelete(perform: tagColorLibrary.delete)
                 .onMove(perform: tagColorLibrary.move)
+            } footer: {
+                Text("The default color is used for new tags and for legacy tags that do not have a stored color.")
             }
         }
         .navigationTitle("Tag Colors")
