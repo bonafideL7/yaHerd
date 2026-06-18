@@ -26,6 +26,7 @@ struct MainTabView: View {
     @State private var herdMode: HerdViewMode = .animals
     @State private var animalSortOrder: AnimalSortOrder = .tagAscending
     @State private var animalFilter = AnimalFilter()
+    @State private var pastureFilter = PastureListFilter.all
     @State private var animalShowRemovedStatuses = false
     @State private var animalShowArchivedRecords = false
     @State private var animalShowingFilters = false
@@ -70,6 +71,10 @@ struct MainTabView: View {
         case .noPasture, .pasture(_):
             count += 1
         }
+
+        if animalFilter.location.isActive { count += 1 }
+        if animalFilter.care.isActive { count += 1 }
+        if animalFilter.recordIssue.isActive { count += 1 }
         
         return count
     }
@@ -90,7 +95,9 @@ struct MainTabView: View {
                         isPresentingAddAnimal: $isPresentingAddAnimal,
                         isPresentingAddPasture: $isPresentingAddPasture,
                         isPresentingNewWorkingSession: $isPresentingNewWorkingSession,
-                        isStartingFieldCheck: $isStartingFieldCheck
+                        isStartingFieldCheck: $isStartingFieldCheck,
+                        openAnimalList: openAnimalList,
+                        openPastureList: openPastureList
                     )
                     .yaherdInlineLargeNavigationTitle("Home")
                     .appSettingsToolbar(isPresented: $isShowingSettings)
@@ -100,7 +107,10 @@ struct MainTabView: View {
             if isDashboardEnabled {
                 Tab("Dashboard", systemImage: "rectangle.3.group", value: MainTab.dashboard) {
                     NavigationStack(path: $nav.globalPath) {
-                        DashboardView()
+                        DashboardView(
+                            openAnimalList: openAnimalList,
+                            openPastureList: openPastureList
+                        )
                             .yaherdInlineLargeNavigationTitle("Dashboard")
                             .appSettingsToolbar(isPresented: $isShowingSettings)
                             .navigationDestination(for: DashboardRoute.self, destination: dashboardDestination)
@@ -182,6 +192,7 @@ struct MainTabView: View {
             showRemovedStatuses: $animalShowRemovedStatuses,
             showArchivedRecords: $animalShowArchivedRecords,
             showingFilters: $animalShowingFilters,
+            pastureFilter: $pastureFilter,
             usesShellBottomAccessory: true
         )
     }
@@ -253,6 +264,27 @@ struct MainTabView: View {
         animalFilter = AnimalFilter()
         animalShowRemovedStatuses = false
         animalShowArchivedRecords = false
+    }
+
+    private func openAnimalList(_ configuration: AnimalListLaunchConfiguration) {
+        nav.reset()
+        homePath.removeAll()
+        selectedTab = .animals
+        herdMode = .animals
+        animalSearchText = configuration.searchText
+        animalSortOrder = configuration.sortOrder
+        animalFilter = configuration.filter
+        animalShowRemovedStatuses = configuration.showRemovedStatuses
+        animalShowArchivedRecords = configuration.showArchivedRecords
+        animalShowingFilters = false
+    }
+
+    private func openPastureList(_ configuration: PastureListLaunchConfiguration) {
+        nav.reset()
+        homePath.removeAll()
+        selectedTab = .animals
+        herdMode = .pastures
+        pastureFilter = configuration.filter
     }
     
     @ViewBuilder

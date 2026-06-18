@@ -18,6 +18,17 @@ struct DashboardView: View {
     @State private var isOverviewExpanded = true
     @State private var isStartingFieldCheck = false
 
+    private let openAnimalList: (AnimalListLaunchConfiguration) -> Void
+    private let openPastureList: (PastureListLaunchConfiguration) -> Void
+
+    init(
+        openAnimalList: @escaping (AnimalListLaunchConfiguration) -> Void = { _ in },
+        openPastureList: @escaping (PastureListLaunchConfiguration) -> Void = { _ in }
+    ) {
+        self.openAnimalList = openAnimalList
+        self.openPastureList = openPastureList
+    }
+
     private var repository: any DashboardRepository {
         dependencies.dashboardRepository
     }
@@ -403,23 +414,27 @@ struct DashboardView: View {
             if snapshot == nil {
                 DashboardLoadingRow(title: "Loading herd composition…")
             } else {
-                DashboardStatusRow(
+                animalListButton(AnimalListLaunchConfiguration(sortOrder: .animalType)) {
+                    DashboardStatusRow(
                     title: "Animal type mix",
                     subtitle: herdMixText,
                     systemImage: "pawprint.fill",
                     tint: .blue,
                     trailingText: (overview?.activeAnimalCount ?? 0).formatted(),
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
 
-                DashboardStatusRow(
+                animalListButton(AnimalListLaunchConfiguration(sortOrder: .sex)) {
+                    DashboardStatusRow(
                     title: "Sex mix",
                     subtitle: sexMixText,
                     systemImage: "person.2.fill",
                     tint: .indigo,
                     trailingText: nil,
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
             }
         }
     }
@@ -430,23 +445,27 @@ struct DashboardView: View {
             if snapshot == nil {
                 DashboardLoadingRow(title: "Loading location status…")
             } else {
-                DashboardStatusRow(
+                animalListButton(unassignedAnimalCount > 0 ? .missingPasture : AnimalListLaunchConfiguration(sortOrder: .pasture)) {
+                    DashboardStatusRow(
                     title: "Pasture assignment",
                     subtitle: "\(pastureAssignedAnimalCount.formatted()) assigned · \(workingPenAnimalCount.formatted()) in working pen · \(unassignedAnimalCount.formatted()) unassigned",
                     systemImage: "mappin.and.ellipse",
                     tint: unassignedAnimalCount > 0 ? .orange : .green,
                     trailingText: pastureAssignmentRateText,
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
 
-                DashboardStatusRow(
+                animalListButton(.workingPen) {
+                    DashboardStatusRow(
                     title: "Working pen",
                     subtitle: workingPenStatusSubtitle,
                     systemImage: "wrench.adjustable.fill",
                     tint: workingPenAnimalCount > 0 ? .orange : .gray,
                     trailingText: workingPenAnimalCount.formatted(),
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
             }
         }
     }
@@ -457,32 +476,38 @@ struct DashboardView: View {
             if snapshot == nil {
                 DashboardLoadingRow(title: "Loading care status…")
             } else {
-                DashboardStatusRow(
+                animalListButton(.calvingWatch) {
+                    DashboardStatusRow(
                     title: "Calving watch",
                     subtitle: "Pregnant animals currently inside the watch window.",
                     systemImage: "figure.2.and.child.holdinghands",
                     tint: (overview?.calvingWatchCount ?? 0) > 0 ? .pink : .gray,
                     trailingText: (overview?.calvingWatchCount ?? 0).formatted(),
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
 
-                DashboardStatusRow(
+                animalListButton(.overduePregnancyChecks) {
+                    DashboardStatusRow(
                     title: "Pregnancy check status",
                     subtitle: "Threshold: \(configuration.pregnancyCheckIntervalDays) days since last check.",
                     systemImage: "stethoscope",
                     tint: (overview?.overduePregnancyCheckCount ?? 0) > 0 ? .orange : .green,
                     trailingText: (overview?.overduePregnancyCheckCount ?? 0).formatted(),
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
 
-                DashboardStatusRow(
+                animalListButton(.overdueTreatments) {
+                    DashboardStatusRow(
                     title: "Treatment status",
                     subtitle: "Threshold: \(configuration.treatmentIntervalDays) days since last treatment.",
                     systemImage: "pills.fill",
                     tint: (overview?.overdueTreatmentCount ?? 0) > 0 ? .red : .green,
                     trailingText: (overview?.overdueTreatmentCount ?? 0).formatted(),
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
             }
         }
     }
@@ -502,50 +527,60 @@ struct DashboardView: View {
                     showsChevron: false
                 )
             } else {
-                DashboardStatusRow(
+                pastureListButton(.all) {
+                    DashboardStatusRow(
                     title: "Average utilization",
                     subtitle: "Based on \(pasturesWithUtilizationCount.formatted()) of \(pastures.count.formatted()) pastures with usable stocking data.",
                     systemImage: "gauge.with.dots.needle.67percent",
                     tint: .blue,
                     trailingText: averageUtilizationText,
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
 
-                DashboardStatusRow(
+                pastureListButton(.missingStockingData) {
+                    DashboardStatusRow(
                     title: "Capacity data coverage",
                     subtitle: "\(pasturesWithCapacityCount.formatted()) pastures have calculated or configured capacity.",
                     systemImage: "ruler.fill",
                     tint: pasturesMissingStockingData.isEmpty ? .green : .brown,
                     trailingText: "\(pasturesMissingStockingData.count.formatted()) missing",
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
 
-                DashboardStatusRow(
+                pastureListButton(.overstocked) {
+                    DashboardStatusRow(
                     title: "Over capacity",
                     subtitle: "Pastures currently above configured carrying capacity.",
                     systemImage: "exclamationmark.triangle.fill",
                     tint: overstockedPastures.isEmpty ? .green : .red,
                     trailingText: overstockedPastures.count.formatted(),
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
 
-                DashboardStatusRow(
+                pastureListButton(.rotationReady) {
+                    DashboardStatusRow(
                     title: "Rotation-ready status",
                     subtitle: "Rested pastures below the upper utilization threshold.",
                     systemImage: "arrow.triangle.2.circlepath.circle.fill",
                     tint: rotationReadyPastures.isEmpty ? .gray : .green,
                     trailingText: rotationReadyPastures.count.formatted(),
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
 
-                DashboardStatusRow(
+                pastureListButton(.underutilized) {
+                    DashboardStatusRow(
                     title: "Low-use status",
                     subtitle: "Underutilized pastures below the lower utilization threshold.",
                     systemImage: "tray.and.arrow.down.fill",
                     tint: underutilizedPastures.isEmpty ? .gray : .teal,
                     trailingText: underutilizedPastures.count.formatted(),
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
             }
         }
     }
@@ -556,50 +591,75 @@ struct DashboardView: View {
             if !fieldChecksModel.hasLoaded {
                 DashboardLoadingRow(title: "Loading pasture-check status…")
             } else {
-                DashboardStatusRow(
+                NavigationLink {
+                    FieldChecksView(mode: .inProgress)
+                } label: {
+                    DashboardStatusRow(
                     title: "Checks in progress",
                     subtitle: activeFieldChecks.isEmpty ? "No pasture checks are currently open." : "Open pasture checks are part of the current field-check snapshot.",
                     systemImage: "checklist",
                     tint: activeFieldChecks.isEmpty ? .green : .purple,
                     trailingText: activeFieldChecks.count.formatted(),
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
+                .buttonStyle(.plain)
 
-                DashboardStatusRow(
+                NavigationLink {
+                    FieldChecksView(mode: .openFindings)
+                } label: {
+                    DashboardStatusRow(
                     title: "Finding alerts",
                     subtitle: "Unresolved fence, water, health, missing-animal, or other field notes.",
                     systemImage: "exclamationmark.bubble.fill",
                     tint: openFindingCount > 0 ? .red : .green,
                     trailingText: openFindingCount.formatted(),
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
+                .buttonStyle(.plain)
 
-                DashboardStatusRow(
+                NavigationLink {
+                    FieldChecksView(mode: .flaggedAnimals)
+                } label: {
+                    DashboardStatusRow(
                     title: "Flagged animal count",
                     subtitle: "Animals marked for attention during pasture checks.",
                     systemImage: "flag.fill",
                     tint: flaggedCheckAnimalCount > 0 ? .orange : .gray,
                     trailingText: flaggedCheckAnimalCount.formatted(),
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
+                .buttonStyle(.plain)
 
-                DashboardStatusRow(
+                NavigationLink {
+                    FieldChecksView(mode: .missingAnimals)
+                } label: {
+                    DashboardStatusRow(
                     title: "Missing animal count",
                     subtitle: "Animals marked missing from expected pasture check rosters.",
                     systemImage: "questionmark.app.fill",
                     tint: missingCheckAnimalCount > 0 ? .brown : .gray,
                     trailingText: missingCheckAnimalCount.formatted(),
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
+                .buttonStyle(.plain)
 
-                DashboardStatusRow(
+                NavigationLink {
+                    FieldChecksView(mode: .all)
+                } label: {
+                    DashboardStatusRow(
                     title: "Completed checks, 30 days",
                     subtitle: latestCompletedCheckDescription,
                     systemImage: "calendar.badge.checkmark",
                     tint: completedChecksLast30Days > 0 ? .blue : .gray,
                     trailingText: completedChecksLast30Days.formatted(),
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -620,24 +680,31 @@ struct DashboardView: View {
                 )
             } else {
                 if let session = activeSessionSummary {
+                    NavigationLink {
+                    WorkingSessionsView()
+                } label: {
                     DashboardStatusRow(
                         title: "Active working session",
                         subtitle: activeSessionDescription(session),
                         systemImage: "wrench.and.screwdriver.fill",
                         tint: .orange,
                         trailingText: "\(session.completedQueueItems)/\(session.totalQueueItems)",
-                        showsChevron: false
+                        showsChevron: true
                     )
                 }
+                .buttonStyle(.plain)
+                }
 
-                DashboardStatusRow(
+                animalListButton(.workingPen) {
+                    DashboardStatusRow(
                     title: "Working pen population",
                     subtitle: "Animals staged away from pasture for current or pending work.",
                     systemImage: "wrench.adjustable.fill",
                     tint: workingPenAnimalCount > 0 ? .orange : .green,
                     trailingText: workingPenAnimalCount.formatted(),
-                    showsChevron: false
+                    showsChevron: true
                 )
+                }
             }
         }
     }
@@ -735,6 +802,30 @@ struct DashboardView: View {
         viewModel.errorMessage ?? fieldChecksModel.errorMessage
     }
 
+    private func animalListButton<Label: View>(
+        _ configuration: AnimalListLaunchConfiguration,
+        @ViewBuilder label: () -> Label
+    ) -> some View {
+        Button {
+            openAnimalList(configuration)
+        } label: {
+            label()
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func pastureListButton<Label: View>(
+        _ configuration: PastureListLaunchConfiguration,
+        @ViewBuilder label: () -> Label
+    ) -> some View {
+        Button {
+            openPastureList(configuration)
+        } label: {
+            label()
+        }
+        .buttonStyle(.plain)
+    }
+
     private var errorBinding: Binding<Bool> {
         Binding(
             get: { dashboardErrorMessage != nil },
@@ -750,10 +841,27 @@ struct DashboardView: View {
     @ViewBuilder
     private func alertRow(_ alert: DashboardAlert) -> some View {
         if let destination = alert.destination {
-            NavigationLink(value: route(for: destination)) {
-                DashboardAlertStatusRow(alert: alert, colorForSeverity: color)
+            switch destination {
+            case .animal, .pasture:
+                NavigationLink(value: route(for: destination)) {
+                    DashboardAlertStatusRow(alert: alert, colorForSeverity: color)
+                }
+                .buttonStyle(.plain)
+            case .animalList(let kind):
+                Button {
+                    openAnimalList(.dashboard(kind))
+                } label: {
+                    DashboardAlertStatusRow(alert: alert, colorForSeverity: color)
+                }
+                .buttonStyle(.plain)
+            case .pastureList:
+                Button {
+                    openPastureList(.all)
+                } label: {
+                    DashboardAlertStatusRow(alert: alert, colorForSeverity: color)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         } else {
             DashboardAlertStatusRow(alert: alert, colorForSeverity: color)
         }
@@ -774,7 +882,16 @@ struct DashboardView: View {
     }
 
     private func navigate(_ destination: DashboardNavigationTarget) {
-        nav.push(route(for: destination))
+        switch destination {
+        case .animal(let id):
+            nav.push(DashboardRoute.animal(id))
+        case .pasture(let id):
+            nav.push(DashboardRoute.pasture(id))
+        case .animalList(let kind):
+            openAnimalList(.dashboard(kind))
+        case .pastureList:
+            openPastureList(.all)
+        }
     }
 
     private func route(for destination: DashboardNavigationTarget) -> DashboardRoute {
@@ -944,63 +1061,5 @@ private struct DashboardLoadingRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 18)
-    }
-}
-
-private struct DashboardFilteredPastureListView: View {
-    let title: String
-    let emptyMessage: String
-    let pastures: [DashboardPastureItem]
-
-    var body: some View {
-        List {
-            if pastures.isEmpty {
-                Text(emptyMessage)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(pastures) { pasture in
-                    NavigationLink(value: DashboardRoute.pasture(pasture.id)) {
-                        pastureRow(pasture)
-                    }
-                }
-            }
-        }
-        .navigationTitle(title)
-    }
-
-    private func pastureRow(_ pasture: DashboardPastureItem) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(pasture.name)
-                    .font(.headline)
-
-                Spacer()
-
-                Label("Incomplete", systemImage: "ruler")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.orange)
-            }
-
-            HStack(spacing: 8) {
-                Text("\(pasture.activeAnimalCount) head")
-
-                if pasture.acres > 0 {
-                    Text("• \(pasture.acres.formatted(.number.precision(.fractionLength(0...1)))) ac")
-                } else {
-                    Text("• missing acres")
-                        .foregroundStyle(.orange)
-                }
-
-                if let capacity = pasture.capacityHead {
-                    Text("• cap \(Int(capacity))")
-                } else {
-                    Text("• missing capacity")
-                        .foregroundStyle(.orange)
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 4)
     }
 }

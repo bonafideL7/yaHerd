@@ -2,7 +2,21 @@ import Foundation
 
 struct AnimalMapper {
     static func makeSummary(from animal: Animal) -> AnimalSummary {
-        AnimalSummary(
+        let latestPregnancyCheck = animal.pregnancyChecks.max { lhs, rhs in
+            lhs.date < rhs.date
+        }
+        let latestHealthRecord = animal.healthRecords.max { lhs, rhs in
+            lhs.date < rhs.date
+        }
+        let expectedCalvingDate: Date? = {
+            guard let latestPregnancyCheck else { return nil }
+            if let dueDate = latestPregnancyCheck.dueDate {
+                return dueDate
+            }
+            return Calendar.current.date(byAdding: .day, value: 283, to: latestPregnancyCheck.date)
+        }()
+
+        return AnimalSummary(
             id: animal.publicID,
             name: animal.name,
             displayTagNumber: animal.displayTagNumber,
@@ -17,7 +31,11 @@ struct AnimalMapper {
             isArchived: animal.isArchived,
             pastureID: animal.pasture?.publicID,
             pastureName: animal.pasture?.name,
-            location: animal.location
+            location: animal.location,
+            lastPregnancyCheckDate: latestPregnancyCheck?.date,
+            lastPregnancyStatus: DashboardMapper.pregnancyStatus(from: latestPregnancyCheck?.result),
+            expectedCalvingDate: latestPregnancyCheck?.result == .pregnant ? expectedCalvingDate : nil,
+            lastTreatmentDate: latestHealthRecord?.date
         )
     }
 

@@ -24,16 +24,23 @@ struct HomeView: View {
     @Binding private var isPresentingNewWorkingSession: Bool
     @Binding private var isStartingFieldCheck: Bool
 
+    private let openAnimalList: (AnimalListLaunchConfiguration) -> Void
+    private let openPastureList: (PastureListLaunchConfiguration) -> Void
+
     init(
         isPresentingAddAnimal: Binding<Bool>,
         isPresentingAddPasture: Binding<Bool>,
         isPresentingNewWorkingSession: Binding<Bool>,
-        isStartingFieldCheck: Binding<Bool>
+        isStartingFieldCheck: Binding<Bool>,
+        openAnimalList: @escaping (AnimalListLaunchConfiguration) -> Void = { _ in },
+        openPastureList: @escaping (PastureListLaunchConfiguration) -> Void = { _ in }
     ) {
         self._isPresentingAddAnimal = isPresentingAddAnimal
         self._isPresentingAddPasture = isPresentingAddPasture
         self._isPresentingNewWorkingSession = isPresentingNewWorkingSession
         self._isStartingFieldCheck = isStartingFieldCheck
+        self.openAnimalList = openAnimalList
+        self.openPastureList = openPastureList
     }
 
     private var repository: any DashboardRepository {
@@ -502,12 +509,8 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
         } else if workingPenCount > 0 {
-            NavigationLink {
-                HomeAnimalRecordListView(
-                    title: "Working Pen",
-                    emptyMessage: "No animals are currently staged in the working pen.",
-                    animals: workingPenAnimalRecords
-                )
+            Button {
+                openAnimalList(.workingPen)
             } label: {
                 HomeSummaryCardView(card: card)
             }
@@ -558,51 +561,37 @@ struct HomeView: View {
         )
 
         if !overstockedPastures.isEmpty {
-            NavigationLink {
-                HomePastureListView(
-                    title: "Pastures Needing Relief",
-                    emptyMessage: "No pastures are above configured capacity.",
-                    pastures: overstockedPastures
-                )
+            Button {
+                openPastureList(.overstocked)
             } label: {
                 HomeSummaryCardView(card: card)
             }
             .buttonStyle(.plain)
         } else if !rotationReadyPastures.isEmpty {
-            NavigationLink {
-                HomePastureListView(
-                    title: "Ready to Receive",
-                    emptyMessage: "No pastures are rotation-ready.",
-                    pastures: rotationReadyPastures
-                )
+            Button {
+                openPastureList(.rotationReady)
             } label: {
                 HomeSummaryCardView(card: card)
             }
             .buttonStyle(.plain)
         } else if !underutilizedPastures.isEmpty {
-            NavigationLink {
-                HomePastureListView(
-                    title: "Low-Use Pastures",
-                    emptyMessage: "No pastures are currently underutilized.",
-                    pastures: underutilizedPastures
-                )
+            Button {
+                openPastureList(.underutilized)
             } label: {
                 HomeSummaryCardView(card: card)
             }
             .buttonStyle(.plain)
         } else if !pasturesMissingStockingData.isEmpty {
-            NavigationLink {
-                HomePastureListView(
-                    title: "Missing Stocking Data",
-                    emptyMessage: "All pastures have stocking data.",
-                    pastures: pasturesMissingStockingData
-                )
+            Button {
+                openPastureList(.missingStockingData)
             } label: {
                 HomeSummaryCardView(card: card)
             }
             .buttonStyle(.plain)
         } else {
-            NavigationLink(value: DashboardRoute.pastureList) {
+            Button {
+                openPastureList(.all)
+            } label: {
                 HomeSummaryCardView(card: card)
             }
             .buttonStyle(.plain)
@@ -620,62 +609,44 @@ struct HomeView: View {
         )
 
         if !unassignedAnimalRecords.isEmpty {
-            NavigationLink {
-                HomeAnimalRecordListView(
-                    title: "Animals Missing Pasture",
-                    emptyMessage: "No active pasture animals are missing pasture assignment.",
-                    animals: unassignedAnimalRecords
-                )
+            Button {
+                openAnimalList(.missingPasture)
             } label: {
                 HomeSummaryCardView(card: card)
             }
             .buttonStyle(.plain)
         } else if !missingTagNumberAnimals.isEmpty {
-            NavigationLink {
-                HomeAnimalRecordListView(
-                    title: "Animals Missing Tags",
-                    emptyMessage: "No active animals are missing tag numbers.",
-                    animals: missingTagNumberAnimals
-                )
+            Button {
+                openAnimalList(.missingTagNumber)
             } label: {
                 HomeSummaryCardView(card: card)
             }
             .buttonStyle(.plain)
         } else if !missingTagColorAnimals.isEmpty {
-            NavigationLink {
-                HomeAnimalRecordListView(
-                    title: "Animals Missing Tag Color",
-                    emptyMessage: "No active animals are missing tag color.",
-                    animals: missingTagColorAnimals
-                )
+            Button {
+                openAnimalList(.missingTagColor)
             } label: {
                 HomeSummaryCardView(card: card)
             }
             .buttonStyle(.plain)
         } else if !unknownSexAnimals.isEmpty {
-            NavigationLink {
-                HomeAnimalRecordListView(
-                    title: "Animals With Unknown Sex",
-                    emptyMessage: "No active animals have unknown sex.",
-                    animals: unknownSexAnimals
-                )
+            Button {
+                openAnimalList(.unknownSex)
             } label: {
                 HomeSummaryCardView(card: card)
             }
             .buttonStyle(.plain)
         } else if !archivedActiveRecords.isEmpty {
-            NavigationLink {
-                HomeAnimalRecordListView(
-                    title: "Archived Active Records",
-                    emptyMessage: "No archived records are still marked active.",
-                    animals: archivedActiveRecords
-                )
+            Button {
+                openAnimalList(.archivedActive)
             } label: {
                 HomeSummaryCardView(card: card)
             }
             .buttonStyle(.plain)
         } else {
-            NavigationLink(value: DashboardRoute.animalList(.active)) {
+            Button {
+                openAnimalList(.active)
+            } label: {
                 HomeSummaryCardView(card: card)
             }
             .buttonStyle(.plain)
@@ -714,13 +685,9 @@ struct HomeView: View {
                 }
                 .buttonStyle(.plain)
             } else if workingPenCount > 0 {
-                NavigationLink {
-                    HomeAnimalRecordListView(
-                        title: "Working Pen",
-                        emptyMessage: "No animals are currently staged in the working pen.",
-                        animals: workingPenAnimalRecords
-                    )
-                } label: {
+                Button {
+                openAnimalList(.workingPen)
+            } label: {
                     HomePrimaryActionRow(
                         title: "Clear the working pen",
                         subtitle: "\(workingPenCount) animals are still staged for work.",
@@ -937,13 +904,9 @@ struct HomeView: View {
                 }
 
                 if shouldShowWorkingPenAnimalsRow {
-                    NavigationLink {
-                        HomeAnimalRecordListView(
-                            title: "Working Pen",
-                            emptyMessage: "No animals are currently staged in the working pen.",
-                            animals: workingPenAnimalRecords
-                        )
-                    } label: {
+                    Button {
+                openAnimalList(.workingPen)
+            } label: {
                         HomeListRow(
                             title: "Animals staged in working pen",
                             subtitle: "Open the pre-filtered list before moving or clearing them.",
@@ -1003,12 +966,8 @@ struct HomeView: View {
     @ViewBuilder
     private var pastureOperationRows: some View {
         if !overstockedPastures.isEmpty {
-            NavigationLink {
-                HomePastureListView(
-                    title: "Pastures Needing Relief",
-                    emptyMessage: "No pastures are above configured capacity.",
-                    pastures: overstockedPastures
-                )
+            Button {
+                openPastureList(.overstocked)
             } label: {
                 HomeListRow(
                     title: "Pastures needing relief",
@@ -1023,12 +982,8 @@ struct HomeView: View {
         }
 
         if !rotationReadyPastures.isEmpty {
-            NavigationLink {
-                HomePastureListView(
-                    title: "Ready to Receive",
-                    emptyMessage: "No pastures are rotation-ready.",
-                    pastures: rotationReadyPastures
-                )
+            Button {
+                openPastureList(.rotationReady)
             } label: {
                 HomeListRow(
                     title: "Pastures ready to receive animals",
@@ -1043,12 +998,8 @@ struct HomeView: View {
         }
 
         if !underutilizedPastures.isEmpty {
-            NavigationLink {
-                HomePastureListView(
-                    title: "Low-Use Pastures",
-                    emptyMessage: "No pastures are currently underutilized.",
-                    pastures: underutilizedPastures
-                )
+            Button {
+                openPastureList(.underutilized)
             } label: {
                 HomeListRow(
                     title: "Potential receiving pastures",
@@ -1063,12 +1014,8 @@ struct HomeView: View {
         }
 
         if !pasturesMissingStockingData.isEmpty {
-            NavigationLink {
-                HomePastureListView(
-                    title: "Missing Stocking Data",
-                    emptyMessage: "All pastures have stocking data.",
-                    pastures: pasturesMissingStockingData
-                )
+            Button {
+                openPastureList(.missingStockingData)
             } label: {
                 HomeListRow(
                     title: "Pastures missing stocking data",
@@ -1099,12 +1046,8 @@ struct HomeView: View {
     @ViewBuilder
     private var recordsCleanupRows: some View {
         if !unassignedAnimalRecords.isEmpty {
-            NavigationLink {
-                HomeAnimalRecordListView(
-                    title: "Animals Missing Pasture",
-                    emptyMessage: "No active pasture animals are missing pasture assignment.",
-                    animals: unassignedAnimalRecords
-                )
+            Button {
+                openAnimalList(.missingPasture)
             } label: {
                 HomeListRow(
                     title: "Animals missing pasture",
@@ -1119,12 +1062,8 @@ struct HomeView: View {
         }
 
         if !missingTagNumberAnimals.isEmpty {
-            NavigationLink {
-                HomeAnimalRecordListView(
-                    title: "Animals Missing Tags",
-                    emptyMessage: "No active animals are missing tag numbers.",
-                    animals: missingTagNumberAnimals
-                )
+            Button {
+                openAnimalList(.missingTagNumber)
             } label: {
                 HomeListRow(
                     title: "Animals missing tag numbers",
@@ -1139,12 +1078,8 @@ struct HomeView: View {
         }
 
         if !missingTagColorAnimals.isEmpty {
-            NavigationLink {
-                HomeAnimalRecordListView(
-                    title: "Animals Missing Tag Color",
-                    emptyMessage: "No active animals are missing tag color.",
-                    animals: missingTagColorAnimals
-                )
+            Button {
+                openAnimalList(.missingTagColor)
             } label: {
                 HomeListRow(
                     title: "Animals missing tag color",
@@ -1159,12 +1094,8 @@ struct HomeView: View {
         }
 
         if !unknownSexAnimals.isEmpty {
-            NavigationLink {
-                HomeAnimalRecordListView(
-                    title: "Animals With Unknown Sex",
-                    emptyMessage: "No active animals have unknown sex.",
-                    animals: unknownSexAnimals
-                )
+            Button {
+                openAnimalList(.unknownSex)
             } label: {
                 HomeListRow(
                     title: "Animals with unknown sex",
@@ -1179,12 +1110,8 @@ struct HomeView: View {
         }
 
         if !archivedActiveRecords.isEmpty {
-            NavigationLink {
-                HomeAnimalRecordListView(
-                    title: "Archived Active Records",
-                    emptyMessage: "No archived records still have active status.",
-                    animals: archivedActiveRecords
-                )
+            Button {
+                openAnimalList(.archivedActive)
             } label: {
                 HomeListRow(
                     title: "Archived records still marked active",
@@ -1358,20 +1285,14 @@ struct HomeView: View {
                 onDismiss: { dismissSetupSuggestion(.customizeTagColors) }
             )
         case .completePastureStockingData:
-            HomeSuggestionNavigationRow(
+            HomeSuggestionButtonRow(
                 title: "Complete pasture stocking data",
                 subtitle: "Add acreage and target acres/head so capacity and rotation guidance is useful.",
                 systemImage: "ruler.fill",
                 tint: .brown,
                 actionTitle: "Open",
                 cardWidth: cardWidth,
-                destination: {
-                    HomePastureListView(
-                        title: "Missing Stocking Data",
-                        emptyMessage: "All pastures have stocking data.",
-                        pastures: pasturesMissingStockingData
-                    )
-                },
+                onAction: { openPastureList(.missingStockingData) },
                 onDismiss: { dismissSetupSuggestion(.completePastureStockingData) }
             )
         case .reviewSyncSetup:
@@ -1524,143 +1445,6 @@ private struct HomePastureCheckDueListView: View {
     }
 }
 
-
-private struct HomeAnimalRecordListView: View {
-    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-
-    let title: String
-    let emptyMessage: String
-    let animals: [DashboardAnimalRecord]
-
-    var body: some View {
-        List {
-            if animals.isEmpty {
-                Text(emptyMessage)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(animals) { animal in
-                    NavigationLink(value: DashboardRoute.animal(animal.id)) {
-                        animalRow(animal)
-                    }
-                }
-            }
-        }
-        .navigationTitle(title)
-    }
-
-    private func animalRow(_ animal: DashboardAnimalRecord) -> some View {
-        HStack(spacing: 12) {
-            let definition = tagColorLibrary.resolvedDefinition(tagColorID: animal.displayTagColorID)
-            let damDefinition = tagColorLibrary.resolvedDefinition(tagColorID: animal.damDisplayTagColorID)
-
-            VStack(alignment: .leading, spacing: 6) {
-                AnimalTagView(
-                    tagNumber: animal.displayTagNumber,
-                    color: definition.color,
-                    colorName: definition.name,
-                    damTagNumber: animal.damDisplayTagNumber,
-                    damTagColor: damDefinition.color,
-                    damTagColorName: damDefinition.name,
-                    damTagVisibility: animal.animalType == .calf ? .always : .whenUntagged
-                )
-
-                HStack(spacing: 6) {
-                    Text(animal.sex.label)
-                    Text("•")
-                    Text(animal.animalType.label)
-
-                    if animal.location == .workingPen {
-                        Text("• Working Pen")
-                    } else if let pastureName = animal.pastureName, !pastureName.isEmpty {
-                        Text("• \(pastureName)")
-                    } else {
-                        Text("• No Pasture")
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-private struct HomePastureListView: View {
-    let title: String
-    let emptyMessage: String
-    let pastures: [DashboardPastureItem]
-
-    var body: some View {
-        List {
-            if pastures.isEmpty {
-                Text(emptyMessage)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(pastures) { pasture in
-                    NavigationLink(value: DashboardRoute.pasture(pasture.id)) {
-                        pastureRow(pasture)
-                    }
-                }
-            }
-        }
-        .navigationTitle(title)
-    }
-
-    private func pastureRow(_ pasture: DashboardPastureItem) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(pasture.name)
-                    .font(.headline)
-
-                Spacer()
-
-                if pasture.isOverstocked {
-                    Label("Needs relief", systemImage: "arrow.up.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.red)
-                } else if pasture.isRotationReady {
-                    Label("Ready", systemImage: "arrow.triangle.2.circlepath")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.green)
-                } else if pasture.isUnderutilized {
-                    Label("Low use", systemImage: "tray.and.arrow.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            HStack(spacing: 8) {
-                Text("\(pasture.activeAnimalCount) head")
-
-                if pasture.acres > 0 {
-                    Text("• \(pasture.acres.formatted(.number.precision(.fractionLength(0...1)))) ac")
-                } else {
-                    Text("• missing acres")
-                        .foregroundStyle(.orange)
-                }
-
-                if let capacity = pasture.capacityHead {
-                    Text("• cap \(Int(capacity))")
-                } else {
-                    Text("• missing capacity")
-                        .foregroundStyle(.orange)
-                }
-
-                if let lastGrazedDate = pasture.lastGrazedDate {
-                    Text("• grazed \(lastGrazedDate.formatted(date: .abbreviated, time: .omitted))")
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            if let capacity = pasture.capacityHead, capacity > 0 {
-                ProgressView(value: min(max(Double(pasture.activeAnimalCount), 0), capacity), total: capacity)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-}
 
 private struct HomeSummaryCard: Identifiable {
     let id: String

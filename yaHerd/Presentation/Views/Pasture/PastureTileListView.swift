@@ -6,20 +6,55 @@ struct PastureTileListView: View {
     @State private var model = PastureTileListViewModel()
     @State private var selectedPasture: PastureSummary?
     @State private var isPresentingAddPasture = false
+    @State private var internalFilter: PastureListFilter = .all
 
     @Binding private var isManaging: Bool
 
     private let repository: any PastureRepository
+    private let externalFilter: Binding<PastureListFilter>?
     private let columns = [
         GridItem(.adaptive(minimum: 150), spacing: 16)
     ]
 
     init(
         repository: any PastureRepository,
-        isManaging: Binding<Bool>
+        isManaging: Binding<Bool>,
+        filter: Binding<PastureListFilter>? = nil
     ) {
         self.repository = repository
         self._isManaging = isManaging
+        self.externalFilter = filter
+    }
+
+    private var filterBinding: Binding<PastureListFilter> {
+        Binding {
+            externalFilter?.wrappedValue ?? internalFilter
+        } set: { newValue in
+            if let externalFilter {
+                externalFilter.wrappedValue = newValue
+            } else {
+                internalFilter = newValue
+            }
+        }
+    }
+
+    private var filterValue: PastureListFilter {
+        filterBinding.wrappedValue
+    }
+
+    private var filteredItems: [PastureSummary] {
+        switch filterValue {
+        case .all:
+            return model.items
+        case .overstocked:
+            return model.items.filter(\.isOverstocked)
+        case .underutilized:
+            return model.items.filter(\.isUnderutilized)
+        case .rotationReady:
+            return model.items.filter(\.isRotationReady)
+        case .missingStockingData:
+            return model.items.filter(\.isMissingStockingData)
+        }
     }
 
     var body: some View {
@@ -28,6 +63,8 @@ struct PastureTileListView: View {
                 emptyState
             } else if isManaging {
                 manageList
+            } else if filteredItems.isEmpty {
+                noMatchesState
             } else {
                 tileGrid
             }
@@ -116,6 +153,22 @@ struct PastureTileListView: View {
 
                 Divider()
 
+                Picker("Filter", selection: filterBinding) {
+                    ForEach(PastureListFilter.allCases, id: \.self) { option in
+                        Text(option.label).tag(option)
+                    }
+                }
+
+                if filterValue != .all {
+                    Button {
+                        filterBinding.wrappedValue = .all
+                    } label: {
+                        Label("Clear Filter", systemImage: "xmark.circle")
+                    }
+                }
+
+                Divider()
+
                 NavigationLink {
                     FieldChecksView(mode: .all)
                 } label: {
@@ -142,20 +195,61 @@ struct PastureTileListView: View {
 
     private var tileGrid: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(model.items) { pasture in
-                    PastureTileCard(pasture: pasture) {
-                        selectedPasture = pasture
-                    }
-                    .onLongPressGesture {
-                        withAnimation(.snappy) {
-                            isManaging = true
+            VStack(alignment: .leading, spacing: 12) {
+                if filterValue != .all {
+                    filterSummaryRow
+                }
+
+                LazyVGrid(columns: columns, spacing: 16) {
+                    ForEach(filteredItems) { pasture in
+                        PastureTileCard(pasture: pasture) {
+                            selectedPasture = pasture
+                        }
+                        .onLongPressGesture {
+                            withAnimation(.snappy) {
+                                isManaging = true
+                            }
                         }
                     }
                 }
             }
             .padding(16)
         }
+    }
+
+    private var noMatchesState: some View {
+        ContentUnavailableView {
+            Label("No Matching Pastures", systemImage: "line.3.horizontal.decrease.circle")
+        } description: {
+            Text("No pastures match the \(filterValue.label.lowercased()) filter.")
+        } actions: {
+            Button("Clear Filter") {
+                filterBinding.wrappedValue = .all
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private var filterSummaryRow: some View {
+        HStack(spacing: 10) {
+            Label(filterValue.label, systemImage: "line.3.horizontal.decrease.circle")
+                .font(.subheadline.weight(.semibold))
+
+            Text("\(filteredItems.count) of \(model.items.count)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Button("Clear") {
+                filterBinding.wrappedValue = .all
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var manageList: some View {

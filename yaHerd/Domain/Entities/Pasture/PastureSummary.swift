@@ -8,6 +8,8 @@ struct PastureSummary: Identifiable, Hashable {
     let targetAcresPerHead: Double?
     let activeAnimalCount: Int
     let sortOrder: Int
+    let lastGrazedDate: Date?
+    let restDays: Int?
 
     var metrics: PastureMetrics {
         PastureMetrics(
@@ -16,5 +18,35 @@ struct PastureSummary: Identifiable, Hashable {
             activeAnimals: activeAnimalCount,
             targetAcresPerHead: targetAcresPerHead
         )
+    }
+
+    var acres: Double {
+        metrics.acres
+    }
+
+    var capacityHead: Double? {
+        metrics.capacityHead
+    }
+
+    var isOverstocked: Bool {
+        metrics.isOverstocked
+    }
+
+    var isUnderutilized: Bool {
+        metrics.isUnderutilized
+    }
+
+    var isMissingStockingData: Bool {
+        acres <= 0 || targetAcresPerHead == nil
+    }
+
+    var isRestedForRotation: Bool {
+        GrazingRotationService.isPastureRested(lastGrazedDate: lastGrazedDate, restDays: restDays)
+    }
+
+    var isRotationReady: Bool {
+        guard isRestedForRotation, !isOverstocked else { return false }
+        guard let utilizationPercent = metrics.utilizationPercent else { return activeAnimalCount == 0 }
+        return utilizationPercent < 0.80
     }
 }

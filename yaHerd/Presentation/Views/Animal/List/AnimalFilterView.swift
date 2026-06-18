@@ -115,6 +115,17 @@ struct AnimalFilterView: View {
                     }
                 }
 
+                Section("Location") {
+                    Picker("Location", selection: Binding(
+                        get: { filter.location },
+                        set: { filter.location = $0 }
+                    )) {
+                        ForEach(AnimalLocationFilter.allCases, id: \.self) { option in
+                            Text(option.label).tag(option)
+                        }
+                    }
+                }
+
                 Section("Pasture") {
                     Picker("Pasture", selection: Binding(
                         get: { filter.pasture },
@@ -126,6 +137,34 @@ struct AnimalFilterView: View {
                         ForEach(pastureOptions) { pasture in
                             Text(pasture.name)
                                 .tag(AnimalPastureFilter.pasture(pasture.id))
+                        }
+                    }
+                }
+
+                Section("Care Status") {
+                    Picker("Care Status", selection: Binding(
+                        get: { filter.care },
+                        set: { filter.care = $0 }
+                    )) {
+                        ForEach(AnimalCareFilter.allCases, id: \.self) { option in
+                            Text(option.label).tag(option)
+                        }
+                    }
+                }
+
+                Section("Record Issues") {
+                    Picker("Record Issues", selection: Binding(
+                        get: { filter.recordIssue },
+                        set: { newValue in
+                            filter.recordIssue = newValue
+                            if newValue == .archivedActive {
+                                filter.status = .active
+                                showArchivedRecords = true
+                            }
+                        }
+                    )) {
+                        ForEach(AnimalRecordIssueFilter.allCases, id: \.self) { option in
+                            Text(option.label).tag(option)
                         }
                     }
                 }

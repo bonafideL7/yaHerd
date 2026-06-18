@@ -20,6 +20,10 @@ enum AnimalListDerivations {
         filter: AnimalFilter,
         showRemovedStatuses: Bool,
         showArchivedRecords: Bool,
+        pregnancyCheckIntervalDays: Int = 180,
+        treatmentIntervalDays: Int = 180,
+        calvingWatchDays: Int = 14,
+        now: Date = .now,
         formatTag: (String, UUID?) -> String
     ) -> [AnimalSummary] {
         var result = items
@@ -60,6 +64,56 @@ enum AnimalListDerivations {
             result = result.filter { isNoPasture($0) }
         case let .pasture(selectedPastureID):
             result = result.filter { $0.pastureID == selectedPastureID }
+        }
+
+        switch filter.location {
+        case .any:
+            break
+        case .pasture:
+            result = result.filter { $0.location == .pasture }
+        case .workingPen:
+            result = result.filter { $0.location == .workingPen }
+        }
+
+        switch filter.care {
+        case .any:
+            break
+        case .overduePregnancyCheck:
+            result = result.filter { animal in
+                guard animal.isActiveInVisibleHerd else { return false }
+                guard let lastPregnancyCheckDate = animal.lastPregnancyCheckDate else { return false }
+                let days = Calendar.current.dateComponents([.day], from: lastPregnancyCheckDate, to: now).day ?? 0
+                return days > pregnancyCheckIntervalDays
+            }
+        case .overdueTreatment:
+            result = result.filter { animal in
+                guard !animal.isArchived else { return false }
+                guard let lastTreatmentDate = animal.lastTreatmentDate else { return false }
+                let days = Calendar.current.dateComponents([.day], from: lastTreatmentDate, to: now).day ?? 0
+                return days > treatmentIntervalDays
+            }
+        case .calvingWatch:
+            let watchEndDate = Calendar.current.date(byAdding: .day, value: calvingWatchDays, to: now) ?? now
+            result = result.filter { animal in
+                animal.isActiveInVisibleHerd
+                && animal.lastPregnancyStatus == .pregnant
+                && (animal.expectedCalvingDate ?? .distantFuture) <= watchEndDate
+            }
+        }
+
+        switch filter.recordIssue {
+        case .any:
+            break
+        case .missingPasture:
+            result = result.filter { $0.isActiveInVisibleHerd && isNoPasture($0) }
+        case .missingTagNumber:
+            result = result.filter { $0.isActiveInVisibleHerd && $0.displayTagNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        case .missingTagColor:
+            result = result.filter { $0.isActiveInVisibleHerd && $0.displayTagColorID == nil }
+        case .unknownSex:
+            result = result.filter { $0.isActiveInVisibleHerd && $0.sex == .unknown }
+        case .archivedActive:
+            result = result.filter { $0.isArchived && $0.status == .active }
         }
 
         switch sortOrder {
@@ -299,5 +353,11 @@ enum AnimalListDerivations {
 
     private static func tagAscending(_ lhs: AnimalSummary, _ rhs: AnimalSummary) -> Bool {
         lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
+    }
+}
+
+private extension AnimalSummary {
+    var isActiveInVisibleHerd: Bool {
+        status == .active && !isArchived
     }
 }

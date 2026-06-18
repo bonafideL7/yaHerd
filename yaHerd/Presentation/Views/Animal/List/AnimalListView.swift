@@ -15,6 +15,8 @@ struct AnimalListView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
+    @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
+    @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
 
     @State private var viewModel = AnimalListViewModel()
     @State private var internalSearchText = ""
@@ -189,7 +191,9 @@ struct AnimalListView: View {
             sortOrder: sortOrderValue,
             filter: filterValue,
             showRemovedStatuses: showRemovedStatusesValue,
-            showArchivedRecords: showArchivedRecordsValue
+            showArchivedRecords: showArchivedRecordsValue,
+            pregnancyCheckIntervalDays: pregCheckIntervalDays,
+            treatmentIntervalDays: treatmentIntervalDays
         ) { tagNumber, colorID in
             tagColorLibrary.formattedTag(tagNumber: tagNumber, colorID: colorID)
         }
@@ -480,6 +484,30 @@ struct AnimalListView: View {
                     filterBinding.wrappedValue = updatedFilter
                 })
             }
+        }
+
+        if filterValue.location.isActive {
+            chips.append(.init(title: filterValue.location.label) {
+                var updatedFilter = filterValue
+                updatedFilter.location = .any
+                filterBinding.wrappedValue = updatedFilter
+            })
+        }
+
+        if filterValue.care.isActive {
+            chips.append(.init(title: filterValue.care.label) {
+                var updatedFilter = filterValue
+                updatedFilter.care = .any
+                filterBinding.wrappedValue = updatedFilter
+            })
+        }
+
+        if filterValue.recordIssue.isActive {
+            chips.append(.init(title: filterValue.recordIssue.label) {
+                var updatedFilter = filterValue
+                updatedFilter.recordIssue = .any
+                filterBinding.wrappedValue = updatedFilter
+            })
         }
 
         return chips
