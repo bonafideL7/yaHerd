@@ -122,10 +122,10 @@ private struct ProtocolTemplateAddView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    ToolbarSaveButton { save() }
                 }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    ToolbarCancelButton { dismiss() }
                 }
             }
             .alert("Can’t Save", isPresented: $showingError) {
@@ -206,10 +206,10 @@ private struct ProtocolTemplateDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") { save() }
+                ToolbarSaveButton { save() }
             }
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
+                ToolbarCancelButton { dismiss() }
             }
         }
         .task {

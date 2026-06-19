@@ -43,19 +43,19 @@ struct PastureDetailView: View {
         .toolbar {
             if model.isEditing {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    ToolbarSaveButton {
                         model.save(pastureID: pastureID, using: repository)
                     }
                 }
 
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    ToolbarCancelButton {
                         model.cancelEditing()
                     }
                 }
             } else {
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Edit") {
+                    ToolbarEditButton {
                         model.beginEditing()
                     }
                     .disabled(model.detail == nil)

@@ -98,7 +98,7 @@ struct AnimalTagEditView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    ToolbarCancelButton { dismiss() }
                 }
                 ToolbarItem(placement: .principal) {
                     AnimalTagView(
@@ -110,7 +110,7 @@ struct AnimalTagEditView: View {
                     .accessibilityLabel("\(title) preview")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(saveButtonTitle) {
+                    ToolbarSaveButton(accessibilityLabel: saveButtonTitle) {
                         onSave(
                             number.trimmingCharacters(in: .whitespacesAndNewlines),
                             tagColorLibrary.resolvedColorID(colorID),

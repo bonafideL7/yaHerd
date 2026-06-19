@@ -185,7 +185,7 @@ struct AnimalFilterView: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    ToolbarDoneButton { dismiss() }
                 }
             }
         }

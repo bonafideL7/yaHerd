@@ -27,18 +27,13 @@ struct AnimalListFloatingControlBar: View {
                         isSearchFieldFocused: $isSearchFieldFocused
                     )
 
-                    Button("Cancel") {
+                    ToolbarCancelButton {
                         searchText = ""
                         isSearchFieldFocused = false
                         withAnimation(.snappy) {
                             isSearching = false
                         }
                     }
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(.thinMaterial, in: Capsule())
-                    .buttonStyle(.plain)
                 } else {
                     Menu {
                         Picker("Sort", selection: $sortOrder) {

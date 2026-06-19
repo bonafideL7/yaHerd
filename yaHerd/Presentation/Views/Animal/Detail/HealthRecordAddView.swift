@@ -30,7 +30,7 @@ struct HealthRecordAddView: View {
             .navigationTitle("Add Health Record")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    ToolbarSaveButton {
                         if model.save(animalID: animalID, using: repository) {
                             dismiss()
                         } else {
@@ -41,7 +41,7 @@ struct HealthRecordAddView: View {
                 }
 
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    ToolbarCancelButton { dismiss() }
                 }
             }
             .alert("Validation Error", isPresented: $showingError) {

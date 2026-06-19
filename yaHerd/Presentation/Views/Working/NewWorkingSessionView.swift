@@ -93,7 +93,7 @@ struct NewWorkingSessionView: View {
                     }
                 }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    ToolbarCancelButton { dismiss() }
                 }
             }
             .sheet(isPresented: $showingPasturePicker) {

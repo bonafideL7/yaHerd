@@ -183,7 +183,7 @@ struct WorkingSessionAnimalEditView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") { save() }
+                ToolbarSaveButton { save() }
                     .disabled(snapshot?.animalID == nil)
             }
         }

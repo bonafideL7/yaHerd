@@ -81,7 +81,7 @@ struct WorkingCollectAnimalsView: View {
                     .disabled(selectedAnimalIDs.isEmpty || session == nil)
                 }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    ToolbarCancelButton { dismiss() }
                 }
             }
             .alert("Can’t Save", isPresented: $showingError) {

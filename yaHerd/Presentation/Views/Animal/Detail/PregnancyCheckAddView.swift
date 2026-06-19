@@ -69,7 +69,7 @@ struct PregnancyCheckAddView: View {
             .navigationTitle("Add Pregnancy Check")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    ToolbarSaveButton {
                         if model.save(animalID: animalID, using: repository) {
                             dismiss()
                         } else {
@@ -79,7 +79,7 @@ struct PregnancyCheckAddView: View {
                 }
 
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    ToolbarCancelButton { dismiss() }
                 }
             }
             .alert("Validation Error", isPresented: $showingError) {

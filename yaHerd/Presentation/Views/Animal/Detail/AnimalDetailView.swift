@@ -152,13 +152,13 @@ struct AnimalDetailView: View {
 
             if viewModel.isEditing {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    ToolbarCancelButton {
                         viewModel.cancelEditing()
                     }
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    ToolbarSaveButton {
                         viewModel.save(animalID: animalID, defaultTagColorID: tagColorLibrary.defaultColorID, using: repository)
                     }
                     .disabled(!canSaveChanges)
@@ -171,7 +171,7 @@ struct AnimalDetailView: View {
                         Image(systemName: "clock.arrow.circlepath")
                     }
 
-                    Button("Edit") {
+                    ToolbarEditButton {
                         viewModel.beginEditing()
                     }
                 }

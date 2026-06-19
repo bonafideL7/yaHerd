@@ -1028,11 +1028,11 @@ private struct FieldCheckFindingEditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
+                ToolbarCancelButton { dismiss() }
             }
             
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") {
+                ToolbarSaveButton {
                     onSave(
                         FieldCheckFindingInput(
                             recordedAt: recordedAt,
