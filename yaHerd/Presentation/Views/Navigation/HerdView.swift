@@ -21,6 +21,7 @@ struct HerdView: View {
     private let showingFilters: Binding<Bool>?
     private let pastureFilter: Binding<PastureListFilter>?
     private let usesShellBottomAccessory: Bool
+    private let onOpenSettings: () -> Void
 
     init(
         searchText: Binding<String> = .constant(""),
@@ -32,7 +33,8 @@ struct HerdView: View {
         showArchivedRecords: Binding<Bool>? = nil,
         showingFilters: Binding<Bool>? = nil,
         pastureFilter: Binding<PastureListFilter>? = nil,
-        usesShellBottomAccessory: Bool = false
+        usesShellBottomAccessory: Bool = false,
+        onOpenSettings: @escaping () -> Void = {}
     ) {
         self._searchText = searchText
         self._isSearchPresented = isSearchPresented
@@ -44,6 +46,7 @@ struct HerdView: View {
         self.showingFilters = showingFilters
         self.pastureFilter = pastureFilter
         self.usesShellBottomAccessory = usesShellBottomAccessory
+        self.onOpenSettings = onOpenSettings
     }
 
     var body: some View {
@@ -60,13 +63,15 @@ struct HerdView: View {
                     showingFilters: showingFilters,
                     usesExternalSearchField: true,
                     hidesControlsUntilSearch: true,
-                    usesShellBottomAccessory: usesShellBottomAccessory
+                    usesShellBottomAccessory: usesShellBottomAccessory,
+                    onOpenSettings: onOpenSettings
                 )
             case .pastures:
                 PastureTileListView(
                     repository: dependencies.pastureRepository,
                     isManaging: $isManagingPastures,
-                    filter: pastureFilter
+                    filter: pastureFilter,
+                    onOpenSettings: onOpenSettings
                 )
             }
         }

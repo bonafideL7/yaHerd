@@ -43,6 +43,7 @@ struct AnimalListView: View {
     private let usesExternalSearchField: Bool
     private let hidesControlsUntilSearch: Bool
     private let usesShellBottomAccessory: Bool
+    private let onOpenSettings: () -> Void
 
     init(
         searchText: Binding<String>? = nil,
@@ -55,7 +56,8 @@ struct AnimalListView: View {
         usesExternalSearchField: Bool = false,
         hidesControlsUntilSearch: Bool = false,
         showsSearchControls: Bool = false,
-        usesShellBottomAccessory: Bool = false
+        usesShellBottomAccessory: Bool = false,
+        onOpenSettings: @escaping () -> Void = {}
     ) {
         self.externalSearchText = searchText
         self.externalIsSearching = isSearching
@@ -68,6 +70,7 @@ struct AnimalListView: View {
         self.hidesControlsUntilSearch = hidesControlsUntilSearch
         self.showsSearchControls = showsSearchControls
         self.usesShellBottomAccessory = usesShellBottomAccessory
+        self.onOpenSettings = onOpenSettings
     }
 
     private var searchTextBinding: Binding<String> {
@@ -328,6 +331,14 @@ struct AnimalListView: View {
                     WorkingSessionsView()
                 } label: {
                     Label("Working Sessions", systemImage: "wrench.and.screwdriver")
+                }
+
+                Divider()
+
+                Button {
+                    onOpenSettings()
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
                 }
             } label: {
                 toolbarMenuLabel
