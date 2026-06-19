@@ -193,7 +193,8 @@ struct MainTabView: View {
             showArchivedRecords: $animalShowArchivedRecords,
             showingFilters: $animalShowingFilters,
             pastureFilter: $pastureFilter,
-            usesShellBottomAccessory: true
+            usesShellBottomAccessory: true,
+            onOpenSettings: { isShowingSettings = true }
         )
     }
     

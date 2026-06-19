@@ -12,6 +12,7 @@ struct PastureTileListView: View {
 
     private let repository: any PastureRepository
     private let externalFilter: Binding<PastureListFilter>?
+    private let onOpenSettings: () -> Void
     private let columns = [
         GridItem(.adaptive(minimum: 150), spacing: 16)
     ]
@@ -19,11 +20,13 @@ struct PastureTileListView: View {
     init(
         repository: any PastureRepository,
         isManaging: Binding<Bool>,
-        filter: Binding<PastureListFilter>? = nil
+        filter: Binding<PastureListFilter>? = nil,
+        onOpenSettings: @escaping () -> Void = {}
     ) {
         self.repository = repository
         self._isManaging = isManaging
         self.externalFilter = filter
+        self.onOpenSettings = onOpenSettings
     }
 
     private var filterBinding: Binding<PastureListFilter> {
@@ -179,6 +182,14 @@ struct PastureTileListView: View {
                     WorkingSessionsView()
                 } label: {
                     Label("Working Sessions", systemImage: "wrench.and.screwdriver")
+                }
+
+                Divider()
+
+                Button {
+                    onOpenSettings()
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
                 }
             } label: {
                 toolbarMenuLabel
