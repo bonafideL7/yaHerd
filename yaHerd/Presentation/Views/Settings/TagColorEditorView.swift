@@ -80,10 +80,10 @@ struct TagColorEditorView: View {
             .navigationTitle(existing == nil ? "Add Color" : "Edit Color")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    ToolbarCancelButton { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    ToolbarSaveButton {
                         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !trimmedName.isEmpty else { return }
 

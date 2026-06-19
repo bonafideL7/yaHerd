@@ -29,14 +29,14 @@ struct AddPastureGroupView: View {
             .navigationTitle("New Pasture Group")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    ToolbarSaveButton {
                         save()
                     }
                     .disabled(name.isEmpty)
                 }
                 
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    ToolbarCancelButton { dismiss() }
                 }
             }
             .alert("Unable to Save", isPresented: $showingError) {

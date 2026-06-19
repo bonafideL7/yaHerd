@@ -64,10 +64,10 @@ struct AddAnimalView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { validateAndSave() }
+                    ToolbarSaveButton { validateAndSave() }
                 }
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: { dismiss() })
+                    ToolbarCancelButton { dismiss() }
                 }
             }
             .alert("Validation Error", isPresented: $showingError) {

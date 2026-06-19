@@ -285,10 +285,9 @@ private struct LargeCounterTapTarget: View {
 
                 Spacer()
 
-                Button("Done") {
+                ToolbarDoneButton {
                     dismiss()
                 }
-                .buttonStyle(.bordered)
             }
 
             Button {

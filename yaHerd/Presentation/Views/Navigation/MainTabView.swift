@@ -312,7 +312,7 @@ private struct SettingsSheetView: View {
                 .navigationTitle("Settings")
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") {
+                        ToolbarDoneButton {
                             dismiss()
                         }
                     }

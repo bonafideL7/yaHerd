@@ -85,7 +85,7 @@ struct AnimalParentPickerView: View {
             )
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    ToolbarCancelButton { dismiss() }
                 }
             }
         }

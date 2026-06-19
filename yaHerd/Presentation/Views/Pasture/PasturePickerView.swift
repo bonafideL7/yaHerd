@@ -45,7 +45,7 @@ struct PasturePickerView: View {
             .navigationTitle("Change Pasture")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    ToolbarSaveButton {
                         if model.moveAnimal(animalID: animalID, using: repository) {
                             dismiss()
                         } else {
@@ -55,7 +55,7 @@ struct PasturePickerView: View {
                 }
 
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    ToolbarCancelButton { dismiss() }
                 }
             }
             .task {

@@ -74,7 +74,7 @@ struct PastureTilePickerView: View {
             .task { load() }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    ToolbarCancelButton { dismiss() }
                 }
             }
         }

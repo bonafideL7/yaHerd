@@ -59,14 +59,14 @@ struct AddPastureView: View {
             .navigationTitle("Add Pasture")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    ToolbarSaveButton {
                         save()
                     }
                     .disabled(!model.canSaveNewPasture)
                 }
 
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    ToolbarCancelButton {
                         dismiss()
                     }
                 }

@@ -73,7 +73,7 @@ struct WorkingFinishSessionView: View {
                 }
 
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    ToolbarCancelButton { dismiss() }
                 }
             }
             .task {

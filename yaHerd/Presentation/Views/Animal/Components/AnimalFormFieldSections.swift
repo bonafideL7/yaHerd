@@ -134,7 +134,7 @@ struct DateFieldRow: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") {
+                        ToolbarDoneButton {
                             isPresentingPicker = false
                         }
                     }
