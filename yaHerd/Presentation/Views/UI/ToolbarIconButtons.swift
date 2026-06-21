@@ -15,21 +15,11 @@ struct ToolbarSaveButton: View {
     }
 
     var body: some View {
-        if #available(iOS 26.0, *) {
-            RoleIconButton(
-                role: .confirm,
-                fallbackSystemImage: "checkmark",
-                accessibilityLabel: accessibilityLabel,
-                action: action
-            )
-        } else {
-            ToolbarCircularIconButton(
-                systemImage: "checkmark",
-                accessibilityLabel: accessibilityLabel,
-                isProminent: true,
-                action: action
-            )
-        }
+        RoleIconButton(
+            role: .confirm,
+            accessibilityLabel: accessibilityLabel,
+            action: action
+        )
     }
 }
 
@@ -43,21 +33,11 @@ struct ToolbarDoneButton: View {
     }
 
     var body: some View {
-        if #available(iOS 26.0, *) {
-            RoleIconButton(
-                role: .confirm,
-                fallbackSystemImage: "checkmark",
-                accessibilityLabel: accessibilityLabel,
-                action: action
-            )
-        } else {
-            ToolbarCircularIconButton(
-                systemImage: "checkmark",
-                accessibilityLabel: accessibilityLabel,
-                isProminent: true,
-                action: action
-            )
-        }
+        RoleIconButton(
+            role: .confirm,
+            accessibilityLabel: accessibilityLabel,
+            action: action
+        )
     }
 }
 
@@ -74,7 +54,6 @@ struct ToolbarCancelButton: View {
     var body: some View {
         RoleIconButton(
             role: .cancel,
-            fallbackSystemImage: "xmark",
             accessibilityLabel: accessibilityLabel,
             action: action
         )
@@ -91,40 +70,23 @@ struct ToolbarCloseButton: View {
     }
 
     var body: some View {
-        if #available(iOS 26.0, *) {
-            Button(role: .close) {
-                action()
-            }
-            .accessibilityLabel(Text(accessibilityLabel))
-        } else {
-            Button(action: action) {
-                Image(systemName: "xmark")
-            }
-            .accessibilityLabel(Text(accessibilityLabel))
-            .modifier(ToolbarCircularButtonModifier(isProminent: false))
+        Button(role: .close) {
+            action()
         }
+        .accessibilityLabel(Text(accessibilityLabel))
     }
 }
 
 private struct RoleIconButton: View {
     let role: ButtonRole
-    let fallbackSystemImage: String
     let accessibilityLabel: String
     let action: () -> Void
 
     var body: some View {
-        if #available(iOS 26.0, *) {
-            Button(role: role) {
-                action()
-            }
-            .accessibilityLabel(Text(accessibilityLabel))
-        } else {
-            Button(action: action) {
-                Image(systemName: fallbackSystemImage)
-            }
-            .accessibilityLabel(Text(accessibilityLabel))
-            .modifier(ToolbarCircularButtonModifier(isProminent: false))
+        Button(role: role) {
+            action()
         }
+        .accessibilityLabel(Text(accessibilityLabel))
     }
 }
 

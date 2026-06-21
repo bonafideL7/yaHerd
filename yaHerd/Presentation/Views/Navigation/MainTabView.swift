@@ -130,30 +130,16 @@ struct MainTabView: View {
                 }
             }
             
-            if #available(iOS 26.0, *) {
-                Tab("Search", systemImage: "magnifyingglass", value: MainTab.search, role: .search) {
-                    NavigationStack {
-                        herdContent
-                    }
-                    .searchable(
-                        text: $animalSearchText,
-                        prompt: "Search tag, color, or name"
-                    )
-                    .searchFocused($animalSearchFieldIsFocused)
-                    .simultaneousGesture(searchFocusDismissGesture)
+            Tab("Search", systemImage: "magnifyingglass", value: MainTab.search, role: .search) {
+                NavigationStack {
+                    herdContent
                 }
-            } else {
-                Tab("Search", systemImage: "magnifyingglass", value: MainTab.search) {
-                    NavigationStack {
-                        herdContent
-                    }
-                    .searchable(
-                        text: $animalSearchText,
-                        prompt: "Search tag, color, or name"
-                    )
-                    .searchFocused($animalSearchFieldIsFocused)
-                    .simultaneousGesture(searchFocusDismissGesture)
-                }
+                .searchable(
+                    text: $animalSearchText,
+                    prompt: "Search tag, color, or name"
+                )
+                .searchFocused($animalSearchFieldIsFocused)
+                .simultaneousGesture(searchFocusDismissGesture)
             }
         }
         .yaherdTabBarMinimizeBehavior()
@@ -213,27 +199,15 @@ struct MainTabView: View {
 #endif
     }
     
-    @ViewBuilder
     private var animalBottomAccessory: some View {
-        if #available(iOS 26.0, *) {
-            AnimalListAdaptiveTabAccessoryControls(
-                sortOrder: $animalSortOrder,
-                filtersAreActive: animalFiltersAreActive,
-                activeFilterCount: activeAnimalFilterCount,
-                hasAnyActiveCriteria: animalHasAnyActiveCriteria,
-                onShowFilters: { animalShowingFilters = true },
-                onClearAllCriteria: clearAnimalCriteria
-            )
-        } else {
-            AnimalListTabAccessoryControls(
-                sortOrder: $animalSortOrder,
-                filtersAreActive: animalFiltersAreActive,
-                activeFilterCount: activeAnimalFilterCount,
-                hasAnyActiveCriteria: animalHasAnyActiveCriteria,
-                onShowFilters: { animalShowingFilters = true },
-                onClearAllCriteria: clearAnimalCriteria
-            )
-        }
+        AnimalListAdaptiveTabAccessoryControls(
+            sortOrder: $animalSortOrder,
+            filtersAreActive: animalFiltersAreActive,
+            activeFilterCount: activeAnimalFilterCount,
+            hasAnyActiveCriteria: animalHasAnyActiveCriteria,
+            onShowFilters: { animalShowingFilters = true },
+            onClearAllCriteria: clearAnimalCriteria
+        )
     }
     
     private var searchFocusDismissGesture: some Gesture {
@@ -345,26 +319,14 @@ private extension View {
             .foregroundStyle(.primary)
     }
     
-    @ViewBuilder
     func yaherdInlineLargeNavigationTitle(_ title: String) -> some View {
-        if #available(iOS 26.0, *) {
-            self
-                .navigationTitle(title)
-                .toolbarTitleDisplayMode(.inlineLarge)
-        } else {
-            self
-                .navigationTitle(title)
-                .navigationBarTitleDisplayMode(.large)
-        }
+        self
+            .navigationTitle(title)
+            .toolbarTitleDisplayMode(.inlineLarge)
     }
     
-    @ViewBuilder
     func yaherdTabBarMinimizeBehavior() -> some View {
-        if #available(iOS 26.0, *) {
-            self.tabBarMinimizeBehavior(.onScrollDown)
-        } else {
-            self
-        }
+        self.tabBarMinimizeBehavior(.onScrollDown)
     }
     
     @ViewBuilder
@@ -372,26 +334,12 @@ private extension View {
         isVisible: Bool,
         @ViewBuilder accessory: () -> Accessory
     ) -> some View {
-        if #available(iOS 26.1, *) {
-            self.tabViewBottomAccessory(isEnabled: isVisible) {
+        if isVisible {
+            self.tabViewBottomAccessory {
                 accessory()
             }
-        } else if #available(iOS 26.0, *) {
-            if isVisible {
-                self.tabViewBottomAccessory {
-                    accessory()
-                }
-            } else {
-                self
-            }
         } else {
-            self.safeAreaInset(edge: .bottom, spacing: 0) {
-                if isVisible {
-                    accessory()
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 10)
-                }
-            }
+            self
         }
     }
 }

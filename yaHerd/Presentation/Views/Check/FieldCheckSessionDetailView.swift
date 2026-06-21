@@ -1100,12 +1100,7 @@ private enum FieldCheckSessionPane: String, CaseIterable, Identifiable {
 }
 
 private extension View {
-    @ViewBuilder
     func applyFieldCheckNavigationSubtitle(_ subtitle: String) -> some View {
-        if #available(iOS 26.0, *) {
-            self.navigationSubtitle(subtitle)
-        } else {
-            self
-        }
+        self.navigationSubtitle(subtitle)
     }
 }

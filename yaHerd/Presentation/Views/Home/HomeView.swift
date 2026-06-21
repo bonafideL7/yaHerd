@@ -1150,17 +1150,9 @@ struct HomeView: View {
         GeometryReader { proxy in
             let cardWidth = HomeSuggestionLayout.cardWidth(for: proxy.size.width)
 
-#if compiler(>=6.2)
-            if #available(iOS 26.0, *) {
-                GlassEffectContainer(spacing: HomeSuggestionLayout.cardSpacing) {
-                    setupSuggestionsPeekCarousel(cardWidth: cardWidth)
-                }
-            } else {
+            GlassEffectContainer(spacing: HomeSuggestionLayout.cardSpacing) {
                 setupSuggestionsPeekCarousel(cardWidth: cardWidth)
             }
-#else
-            setupSuggestionsPeekCarousel(cardWidth: cardWidth)
-#endif
         }
         .frame(height: HomeSuggestionLayout.carouselHeight)
     }
@@ -1848,24 +1840,8 @@ private struct HomeSuggestionActionButtonStyle: ViewModifier {
     let tint: Color
 
     func body(content: Content) -> some View {
-#if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            content
-                .buttonStyle(.glassProminent)
-                .buttonBorderShape(.capsule)
-                .controlSize(.small)
-                .tint(tint)
-        } else {
-            legacyStyle(content)
-        }
-#else
-        legacyStyle(content)
-#endif
-    }
-
-    private func legacyStyle(_ content: Content) -> some View {
         content
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
             .buttonBorderShape(.capsule)
             .controlSize(.small)
             .tint(tint)
@@ -1879,24 +1855,9 @@ private struct HomeGlassCardBackground: ViewModifier {
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
 
-#if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            content
-                .glassEffect(.regular.tint(tint.opacity(0.10)), in: shape)
-                .overlay(shape.strokeBorder(.white.opacity(0.18), lineWidth: 0.75))
-        } else {
-            fallback(content, shape: shape)
-        }
-#else
-        fallback(content, shape: shape)
-#endif
-    }
-
-    private func fallback(_ content: Content, shape: RoundedRectangle) -> some View {
         content
-            .background(.thinMaterial, in: shape)
-            .overlay(shape.strokeBorder(tint.opacity(0.14), lineWidth: 0.75))
-            .shadow(color: .black.opacity(0.06), radius: 14, y: 8)
+            .glassEffect(.regular.tint(tint.opacity(0.10)), in: shape)
+            .overlay(shape.strokeBorder(.white.opacity(0.18), lineWidth: 0.75))
     }
 }
 
@@ -1907,22 +1868,8 @@ private struct HomeGlassControlBackground: ViewModifier {
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
 
-#if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            content
-                .glassEffect(.regular.tint(tint.opacity(0.08)).interactive(), in: shape)
-        } else {
-            fallback(content, shape: shape)
-        }
-#else
-        fallback(content, shape: shape)
-#endif
-    }
-
-    private func fallback(_ content: Content, shape: RoundedRectangle) -> some View {
         content
-            .background(.thinMaterial, in: shape)
-            .overlay(shape.strokeBorder(tint.opacity(0.12), lineWidth: 0.5))
+            .glassEffect(.regular.tint(tint.opacity(0.08)).interactive(), in: shape)
     }
 }
 

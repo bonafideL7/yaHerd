@@ -244,7 +244,6 @@ struct AnimalListFilterChip: Identifiable {
 }
 
 
-@available(iOS 26.0, *)
 struct AnimalListAdaptiveTabAccessoryControls: View {
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
 
