@@ -30,6 +30,7 @@ struct AnimalListView: View {
     @FocusState private var isSearchFieldFocused: Bool
     @State private var batchMode = false
     @State private var selectedAnimalIDs: Set<UUID> = []
+    @State private var collapsedSectionIDs: Set<String> = []
     @State private var showingPasturePicker = false
 
     private let externalSearchText: Binding<String>?
@@ -210,6 +211,15 @@ struct AnimalListView: View {
         AnimalListDerivations.shouldUseSections(for: sortOrderValue)
     }
 
+    private var currentSectionIDs: Set<String> {
+        guard shouldUseSections else { return [] }
+        return Set(groupedAnimals.map(\.id))
+    }
+
+    private var canCollapseSections: Bool {
+        shouldUseSections && !groupedAnimals.isEmpty
+    }
+
     private var emptyStateConfiguration: AnimalListEmptyStateConfiguration {
         AnimalListDerivations.emptyStateConfiguration(
             items: viewModel.items,
@@ -238,7 +248,8 @@ struct AnimalListView: View {
         }
         .navigationDestination(for: UUID.self) { AnimalDetailView(animalID: $0) }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                sortToolbarAuxiliaryButton
                 animalToolbarAction
             }
         }
@@ -280,6 +291,7 @@ struct AnimalListView: View {
             batchMode: batchMode,
             selectedAnimalIDs: $selectedAnimalIDs,
             hardDeleteOnSwipe: hardDeleteOnSwipe,
+            collapsedSectionIDs: $collapsedSectionIDs,
             onPrimarySwipeAction: performPrimarySwipeAction,
             onRestoreArchivedRecord: restoreArchivedRecord
         )
@@ -297,6 +309,29 @@ struct AnimalListView: View {
                 .shadow(color: .black.opacity(0.16), radius: 16, y: 8)
         }
         .accessibilityLabel("Add Animal")
+    }
+
+    @ViewBuilder
+    private var sortToolbarAuxiliaryButton: some View {
+        if sortOrderValue.canReverseDirection && !batchMode {
+            Button {
+                reverseSortDirection()
+            } label: {
+                Image(systemName: sortOrderValue.reverseDirectionIcon)
+                    .font(.system(size: 17, weight: .semibold))
+            }
+            .accessibilityLabel(sortOrderValue.reverseDirectionAccessibilityLabel)
+            .accessibilityHint("Reverses the current animal sort direction")
+        } else if canCollapseSections && !batchMode {
+            Button {
+                collapseAllSections()
+            } label: {
+                Image(systemName: "rectangle.compress.vertical")
+                    .font(.system(size: 17, weight: .semibold))
+            }
+            .accessibilityLabel("Collapse All Sections")
+            .accessibilityHint("Collapses every visible animal group")
+        }
     }
 
     @ViewBuilder
@@ -541,6 +576,18 @@ struct AnimalListView: View {
             if !batchMode {
                 selectedAnimalIDs.removeAll()
             }
+        }
+    }
+
+    private func reverseSortDirection() {
+        withAnimation(.snappy) {
+            sortOrderBinding.wrappedValue = sortOrderValue.reversedDirection
+        }
+    }
+
+    private func collapseAllSections() {
+        withAnimation(.snappy) {
+            collapsedSectionIDs = currentSectionIDs
         }
     }
 

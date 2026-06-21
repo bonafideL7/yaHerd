@@ -36,12 +36,7 @@ struct AnimalListFloatingControlBar: View {
                     }
                 } else {
                     Menu {
-                        Picker("Sort", selection: $sortOrder) {
-                            ForEach(AnimalSortOrder.allCases, id: \.self) { option in
-                                Label(option.label, systemImage: option.icon)
-                                    .tag(option)
-                            }
-                        }
+                        AnimalSortMenuPicker(sortOrder: $sortOrder)
                     } label: {
                         AnimalListFloatingControlLabel(
                             title: sortOrder.label,
@@ -119,6 +114,28 @@ struct AnimalListFloatingControlBar: View {
         .shadow(radius: 10, y: 4)
         .onChange(of: isSearching) { _, newValue in
             if newValue && !usesExternalSearchField { isSearchFieldFocused = true }
+        }
+    }
+}
+
+
+private struct AnimalSortMenuPicker: View {
+    @Binding var sortOrder: AnimalSortOrder
+
+    var body: some View {
+        Picker("Sort", selection: menuSelection) {
+            ForEach(AnimalSortOrder.menuOptions, id: \.self) { option in
+                Label(option.menuLabel, systemImage: option.menuIcon)
+                    .tag(option)
+            }
+        }
+    }
+
+    private var menuSelection: Binding<AnimalSortOrder> {
+        Binding {
+            sortOrder.menuSelection
+        } set: { newValue in
+            sortOrder = newValue.defaultMenuSelection
         }
     }
 }
@@ -272,12 +289,7 @@ struct AnimalListInlineTabAccessoryControls: View {
     var body: some View {
         HStack(spacing: 10) {
             Menu {
-                Picker("Sort", selection: $sortOrder) {
-                    ForEach(AnimalSortOrder.allCases, id: \.self) { option in
-                        Label(option.label, systemImage: option.icon)
-                            .tag(option)
-                    }
-                }
+                AnimalSortMenuPicker(sortOrder: $sortOrder)
             } label: {
                 AnimalListInlineTabAccessoryActionLabel(
                     title: sortOrder.label,
@@ -366,12 +378,7 @@ struct AnimalListTabAccessoryControls: View {
     var body: some View {
         HStack(spacing: 12) {
             Menu {
-                Picker("Sort", selection: $sortOrder) {
-                    ForEach(AnimalSortOrder.allCases, id: \.self) { option in
-                        Label(option.label, systemImage: option.icon)
-                            .tag(option)
-                    }
-                }
+                AnimalSortMenuPicker(sortOrder: $sortOrder)
             } label: {
                 AnimalListTabAccessoryActionLabel(
                     title: "Sort",
