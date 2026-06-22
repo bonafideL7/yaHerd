@@ -49,6 +49,19 @@ The animal list/add/detail flow follows the same layered pattern:
 - `Presentation/Views/Animal/*`
 
 
+## Home reference implementation
+
+Home is separated from Dashboard even though it reuses herd/pasture domain summaries where appropriate:
+
+- `Domain/Entities/Home/*`
+- `Domain/UseCases/Home/*`
+- `Domain/Services/HomeService.swift`
+- `Presentation/ViewModels/Home/*`
+- `Presentation/Views/Home/*`
+
+Home-specific task derivation, setup state, and current-work counts should stay out of `HomeView`. The SwiftUI view should render the `HomeViewModel` snapshot and handle only local navigation and presentation state.
+
+
 ## Check reference implementation
 
 The pasture check flow is separated as:
