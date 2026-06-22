@@ -6,22 +6,6 @@ extension HomeView {
             if snapshot == nil {
                 HomeLoadingRow(title: "Loading work pen…")
             } else {
-                if activeSession == nil {
-                    Button {
-                        isPresentingNewWorkingSession = true
-                    } label: {
-                        HomeListRow(
-                            title: "Start working session",
-                            subtitle: "Collect animals, apply a protocol, and track completion.",
-                            systemImage: "plus.circle.fill",
-                            tint: .blue,
-                            count: nil,
-                            showsChevron: false
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-
                 if shouldShowWorkingPenAnimalsRow {
                     Button {
                         openAnimalList(.workingPen)

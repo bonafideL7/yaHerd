@@ -29,17 +29,9 @@ extension HomeView {
         snapshot?.activeAnimalRecords ?? []
     }
 
-
-
-
     var pastureAssignedAnimalCount: Int {
         snapshot?.pastureAssignedAnimalCount ?? 0
     }
-
-    var pastureCheckDueItems: [HomePastureCheckDueItem] {
-        snapshot?.pastureCheckDueItems ?? []
-    }
-
 
     var activeCheckSessions: [FieldCheckSessionSummary] {
         snapshot?.activeCheckSessions ?? []
@@ -53,6 +45,15 @@ extension HomeView {
         snapshot?.missingCheckAnimalCount ?? 0
     }
 
+    var pastureCheckStartPastures: [DashboardPastureItem] {
+        snapshot?.pastureCheckStartPastures ?? []
+    }
+
+    var pastureCheckActionTitle: String {
+        guard snapshot != nil else { return "Loading pastures" }
+        return pastureCheckStartPastures.isEmpty ? "Add pasture first" : "Choose pasture"
+    }
+
     var workingPenCount: Int {
         snapshot?.workingPenCount ?? 0
     }
@@ -60,7 +61,6 @@ extension HomeView {
     var workingPenAnimalRecords: [DashboardAnimalRecord] {
         snapshot?.workingPenAnimalRecords ?? []
     }
-
 
     var rotationReadyPastures: [DashboardPastureItem] {
         snapshot?.rotationReadyPastures ?? []
@@ -82,38 +82,12 @@ extension HomeView {
         snapshot?.missingTagAnimals ?? []
     }
 
-
     var unknownSexAnimals: [DashboardAnimalRecord] {
         snapshot?.unknownSexAnimals ?? []
     }
 
     var archivedActiveRecords: [DashboardAnimalRecord] {
         snapshot?.archivedActiveRecords ?? []
-    }
-
-    var fieldWorkCardCount: Int {
-        snapshot?.fieldWorkCardCount ?? 0
-    }
-
-    var pastureOperationsCardCount: Int {
-        snapshot?.pastureOperationsCardCount ?? 0
-    }
-
-    var recordsCleanupCardCount: Int {
-        snapshot?.recordsCleanupCardCount ?? 0
-    }
-
-    var continueCardCount: Int {
-        snapshot?.continueCardCount ?? 0
-    }
-
-    var continueCardSubtitle: String {
-        guard let snapshot else { return "Loading current work" }
-        if activeSession != nil { return "Resume session" }
-        if !activeCheckSessions.isEmpty { return "Finish check" }
-        if workingPenCount > 0 { return "Clear pen" }
-        if !snapshot.openFindings.isEmpty { return "Resolve finding" }
-        return "Start work"
     }
 
     var alertSummarySubtitle: String {

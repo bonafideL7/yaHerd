@@ -1,53 +1,53 @@
 import SwiftUI
 
-extension HomePastureCheckDueItem {
-    var lastCheckDescription: String {
-        guard let lastCheckDate else {
-            return "No recorded pasture check."
-        }
-
-        return "Last checked \(lastCheckDate.formatted(date: .abbreviated, time: .omitted))."
-    }
-}
-
-struct HomePastureCheckDueListView: View {
-    let items: [HomePastureCheckDueItem]
+struct HomePastureCheckStartListView: View {
+    let pastures: [DashboardPastureItem]
 
     var body: some View {
-        List {
-            if items.isEmpty {
-                Text("No pasture checks are due.")
-                    .foregroundStyle(.secondary)
+        Group {
+            if pastures.isEmpty {
+                ContentUnavailableView(
+                    "No Pastures",
+                    systemImage: "leaf",
+                    description: Text("Add a pasture before starting a pasture check.")
+                )
             } else {
-                Section("Start Check") {
-                    ForEach(items) { item in
-                        NavigationLink {
-                            FieldCheckSessionDetailView(suggestedPastureID: item.id)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack {
-                                    Text(item.name)
-                                        .font(.headline)
-                                    Spacer()
-                                    Text("\(item.activeAnimalCount) head")
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Text(item.lastCheckDescription)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                List {
+                    Section("Start Check") {
+                        ForEach(pastures) { pasture in
+                            NavigationLink {
+                                FieldCheckSessionDetailView(suggestedPastureID: pasture.id)
+                            } label: {
+                                pastureCheckStartRow(pasture)
                             }
-                            .padding(.vertical, 4)
                         }
                     }
                 }
             }
         }
-        .navigationTitle("Pasture Checks Due")
+        .navigationTitle("Pasture Check")
+    }
+
+    private func pastureCheckStartRow(_ pasture: DashboardPastureItem) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(pasture.name)
+                    .font(.headline)
+
+                Spacer()
+
+                Text(pasture.activeAnimalCount == 1 ? "1 head" : "\(pasture.activeAnimalCount) head")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("Start a check for this pasture.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
     }
 }
-
 
 struct HomeAlertsView: View {
     let alerts: [DashboardAlert]

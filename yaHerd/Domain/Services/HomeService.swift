@@ -2,7 +2,6 @@ import Foundation
 
 struct HomeService {
     private let dashboardService: DashboardService
-    private let pastureCheckIntervalDays = 7
 
     init(dashboardService: DashboardService = DashboardService()) {
         self.dashboardService = dashboardService
@@ -34,12 +33,7 @@ struct HomeService {
             openFindings: openFindings,
             flaggedCheckSessions: flaggedCheckSessions(from: fieldCheckSessions),
             missingCheckSessions: missingCheckSessions(from: fieldCheckSessions),
-            pastureCheckDueItems: pastureCheckDueItems(
-                pastures: dashboardSnapshot.pastures,
-                fieldCheckSessions: fieldCheckSessions,
-                activeCheckSessions: activeCheckSessions,
-                now: now
-            ),
+            pastureCheckStartPastures: dashboardSnapshot.pastures,
             workingPenAnimalRecords: activeAnimalRecords.filter { $0.location == .workingPen },
             rotationReadyPastures: rotationReadyPastures(from: dashboardSnapshot.pastures),
             underutilizedPastures: underutilizedPastures(from: dashboardSnapshot.pastures),
@@ -91,52 +85,6 @@ struct HomeService {
             return !left.isCompleted
         }
         return left.startedAt > right.startedAt
-    }
-
-    private func pastureCheckDueItems(
-        pastures: [DashboardPastureItem],
-        fieldCheckSessions: [FieldCheckSessionSummary],
-        activeCheckSessions: [FieldCheckSessionSummary],
-        now: Date
-    ) -> [HomePastureCheckDueItem] {
-        let activePastureIDs = Set(activeCheckSessions.compactMap(\.pastureID))
-        let latestCheckDateByPastureID = Dictionary(
-            grouping: fieldCheckSessions.compactMap { session -> (UUID, Date)? in
-                guard session.isCompleted, let pastureID = session.pastureID else { return nil }
-                return (pastureID, session.startedAt)
-            },
-            by: { $0.0 }
-        ).mapValues { pairs in
-            pairs.map(\.1).max() ?? .distantPast
-        }
-        let dueBeforeDate = Calendar.current.date(byAdding: .day, value: -pastureCheckIntervalDays, to: now) ?? .distantPast
-
-        return pastures
-            .filter { pasture in
-                !activePastureIDs.contains(pasture.id)
-                    && (latestCheckDateByPastureID[pasture.id] ?? .distantPast) < dueBeforeDate
-            }
-            .map { pasture in
-                HomePastureCheckDueItem(
-                    id: pasture.id,
-                    name: pasture.name,
-                    activeAnimalCount: pasture.activeAnimalCount,
-                    lastCheckDate: latestCheckDateByPastureID[pasture.id]
-                )
-            }
-            .sorted { lhs, rhs in
-                switch (lhs.lastCheckDate, rhs.lastCheckDate) {
-                case (nil, nil):
-                    return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-                case (nil, _):
-                    return true
-                case (_, nil):
-                    return false
-                case let (left?, right?):
-                    if left != right { return left < right }
-                    return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-                }
-            }
     }
 
     private func rotationReadyPastures(from pastures: [DashboardPastureItem]) -> [DashboardPastureItem] {

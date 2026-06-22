@@ -8,7 +8,7 @@ struct HomeSnapshot: Equatable {
     let openFindings: [FieldCheckFindingSnapshot]
     let flaggedCheckSessions: [FieldCheckSessionSummary]
     let missingCheckSessions: [FieldCheckSessionSummary]
-    let pastureCheckDueItems: [HomePastureCheckDueItem]
+    let pastureCheckStartPastures: [DashboardPastureItem]
     let workingPenAnimalRecords: [DashboardAnimalRecord]
     let rotationReadyPastures: [DashboardPastureItem]
     let underutilizedPastures: [DashboardPastureItem]
@@ -38,52 +38,16 @@ struct HomeSnapshot: Equatable {
         activeAnimalRecords.filter { $0.location == .pasture && $0.pastureID != nil }.count
     }
 
-    var fieldWorkCardCount: Int {
-        activeCheckSessions.count
-            + pastureCheckDueItems.count
-            + openFindings.count
-            + flaggedCheckAnimalCount
-            + missingCheckAnimalCount
-    }
-
-    var pastureOperationsCardCount: Int {
-        rotationReadyPastures.count
-            + underutilizedPastures.count
-            + pasturesMissingStockingData.count
-    }
-
-    var recordsCleanupCardCount: Int {
-        unassignedAnimalRecords.count
-            + missingTagAnimals.count
-            + unknownSexAnimals.count
-            + archivedActiveRecords.count
-    }
-
-    var hasCurrentWork: Bool {
-        activeSession != nil
-            || !activeCheckSessions.isEmpty
-            || workingPenCount > 0
-            || !openFindings.isEmpty
-    }
-
-    var continueCardCount: Int {
-        hasCurrentWork ? 1 : 0
-    }
-
     var shouldShowUnfinishedChecksRow: Bool {
-        guard !activeCheckSessions.isEmpty else { return false }
-        return !(activeSession == nil && activeCheckSessions.count == 1)
+        !activeCheckSessions.isEmpty
     }
 
     var shouldShowWorkingPenAnimalsRow: Bool {
-        guard workingPenCount > 0 else { return false }
-        return !(activeSession == nil && activeCheckSessions.isEmpty)
+        workingPenCount > 0
     }
 
     var shouldShowOpenFindingsRow: Bool {
-        let openFindingCount = openFindings.count
-        guard openFindingCount > 0 else { return false }
-        return !(activeSession == nil && activeCheckSessions.isEmpty && workingPenCount == 0 && openFindingCount == 1)
+        !openFindings.isEmpty
     }
 
     var hasFieldWorkRows: Bool {
@@ -91,7 +55,6 @@ struct HomeSnapshot: Equatable {
             || shouldShowOpenFindingsRow
             || flaggedCheckAnimalCount > 0
             || missingCheckAnimalCount > 0
-            || !pastureCheckDueItems.isEmpty
     }
 
     var hasPastureOperationRows: Bool {
@@ -109,9 +72,3 @@ struct HomeSnapshot: Equatable {
 
 }
 
-struct HomePastureCheckDueItem: Identifiable, Hashable {
-    let id: UUID
-    let name: String
-    let activeAnimalCount: Int
-    let lastCheckDate: Date?
-}

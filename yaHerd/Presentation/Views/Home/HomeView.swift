@@ -42,7 +42,6 @@ struct HomeView: View {
                 setupSuggestionsSection
                 homeSummaryCardsSection
                 alertsSection
-                continueSection
                 fieldWorkSection
                 workPenSection
                 pastureOperationsSection
@@ -160,16 +159,4 @@ struct HomeView: View {
         dismissedSetupSuggestionIDsRaw = ids.sorted().joined(separator: ",")
     }
 
-    func activeSessionSummary(_ session: DashboardWorkingSessionSummary) -> String {
-        var components = [
-            session.protocolName,
-            "\(session.completedQueueItems)/\(session.totalQueueItems) complete"
-        ]
-
-        if let sourcePastureName = session.sourcePastureName, !sourcePastureName.isEmpty {
-            components.append(sourcePastureName)
-        }
-
-        return components.joined(separator: " · ")
-    }
 }

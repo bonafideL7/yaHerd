@@ -32,38 +32,6 @@ extension HomeView {
             .buttonStyle(.plain)
         }
 
-        if !pastureCheckDueItems.isEmpty {
-            if pastureCheckDueItems.count == 1, let item = pastureCheckDueItems.first {
-                NavigationLink {
-                    FieldCheckSessionDetailView(suggestedPastureID: item.id)
-                } label: {
-                    HomeListRow(
-                        title: "Check \(item.name)",
-                        subtitle: item.lastCheckDescription,
-                        systemImage: "calendar.badge.exclamationmark",
-                        tint: .purple,
-                        count: item.activeAnimalCount,
-                        showsChevron: true
-                    )
-                }
-                .buttonStyle(.plain)
-            } else {
-                NavigationLink {
-                    HomePastureCheckDueListView(items: pastureCheckDueItems)
-                } label: {
-                    HomeListRow(
-                        title: "Pasture checks due",
-                        subtitle: "Start checks for pastures without a recent completed pass.",
-                        systemImage: "calendar.badge.exclamationmark",
-                        tint: .purple,
-                        count: pastureCheckDueItems.count,
-                        showsChevron: true
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-
         if shouldShowOpenFindingsRow {
             if openFindings.count == 1, let finding = openFindings.first {
                 NavigationLink {
