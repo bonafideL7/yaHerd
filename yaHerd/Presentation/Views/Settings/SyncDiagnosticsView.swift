@@ -116,7 +116,7 @@ struct SyncDiagnosticsView: View {
                 }
                 .disabled(isDeletingSyncData)
 
-                Text("Deletes yaHerd CloudKit private database zones in the active environment only. Local data on this device is not deleted. Sync Mode switches back to Local Only and an app restart is required.")
+                Text("Deletes yaHerd CloudKit herd data zones and synced app settings from iCloud in the active environment. Local data on this device is not deleted. Sync Mode switches back to Local Only and an app restart is required.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -155,7 +155,7 @@ struct SyncDiagnosticsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This is for development testing. It deletes yaHerd CloudKit private database zones only. Local data on this device is not deleted. Restart yaHerd afterward.")
+            Text("This is for development testing. It deletes yaHerd CloudKit herd data zones and synced app settings from iCloud. Local data on this device is not deleted. Restart yaHerd afterward.")
         }
     }
 
@@ -169,7 +169,7 @@ struct SyncDiagnosticsView: View {
                 let summary = try await resetService.deleteICloudSyncData()
 
                 await MainActor.run {
-                    resetResultMessage = "Deleted \(summary.deletedCloudKitZoneCount.formatted()) CloudKit zones. Local data was not deleted. Force quit and reopen yaHerd. Sync Mode is now Local Only."
+                    resetResultMessage = "Deleted \(summary.deletedCloudKitZoneCount.formatted()) CloudKit zones and \(summary.deletedCloudSettingsCount.formatted()) synced settings from iCloud. Local data was not deleted. Force quit and reopen yaHerd. Sync Mode is now Local Only."
                     isDeletingSyncData = false
                 }
 

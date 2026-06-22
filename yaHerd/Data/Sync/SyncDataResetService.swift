@@ -9,6 +9,7 @@ import Foundation
 struct SyncDataResetSummary: Equatable {
     let deletedCloudKitRecordCount: Int
     let deletedCloudKitZoneCount: Int
+    let deletedCloudSettingsCount: Int
 }
 
 protocol SyncDataResetting {
@@ -33,14 +34,15 @@ final class SyncDataResetService: SyncDataResetting {
     func deleteICloudSyncData() async throws -> SyncDataResetSummary {
         let cloudKitSummary = try await deletePrivateCloudKitData()
 
-        await MainActor.run {
+        let deletedCloudSettingsCount = await MainActor.run {
             preferences.syncMode = .localOnly
-            settingsSynchronizer.stop()
+            return settingsSynchronizer.deleteCloudSettings()
         }
 
         return SyncDataResetSummary(
             deletedCloudKitRecordCount: cloudKitSummary.deletedRecordCount,
-            deletedCloudKitZoneCount: cloudKitSummary.deletedZoneCount
+            deletedCloudKitZoneCount: cloudKitSummary.deletedZoneCount,
+            deletedCloudSettingsCount: deletedCloudSettingsCount
         )
     }
 

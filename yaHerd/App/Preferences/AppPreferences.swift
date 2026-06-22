@@ -12,6 +12,7 @@ protocol AppPreferencesProviding: AnyObject {
 protocol AppSettingsSyncing: AnyObject {
     func startIfNeeded(syncMode: SyncMode)
     func stop()
+    func deleteCloudSettings() -> Int
 }
 
 final class AppPreferences: AppPreferencesProviding {
@@ -97,6 +98,22 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
         observerTokens.removeAll()
         isStarted = false
         isApplyingCloudValues = false
+    }
+
+    @discardableResult
+    func deleteCloudSettings() -> Int {
+        stop()
+
+        let cloudValues = cloudStore.dictionaryRepresentation
+        var deletedCount = 0
+
+        for key in keys where cloudValues[key.rawValue] != nil {
+            cloudStore.removeObject(forKey: key.rawValue)
+            deletedCount += 1
+        }
+
+        cloudStore.synchronize()
+        return deletedCount
     }
 
     func applyCloudSettingsToLocalDefaults() {
