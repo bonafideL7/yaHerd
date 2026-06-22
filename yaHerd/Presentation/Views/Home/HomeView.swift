@@ -13,12 +13,7 @@ struct HomeView: View {
     @AppStorage("homeDismissedSetupSuggestionIDs") private var dismissedSetupSuggestionIDsRaw = ""
     @AppStorage("homeSetupSuggestionsExpanded") private var isSetupSuggestionsExpanded = true
 
-    @State private var viewModel = DashboardViewModel()
-    @State private var fieldChecksModel = FieldChecksViewModel()
-    @State private var dashboardRecords: DashboardRecords?
-    @State private var recordsErrorMessage: String?
-    @State private var protocolTemplates: [WorkingProtocolTemplateSummary]?
-    @State private var workingErrorMessage: String?
+    @State private var viewModel = HomeViewModel()
     @Binding private var isPresentingAddAnimal: Bool
     @Binding private var isPresentingAddPasture: Bool
     @Binding private var isPresentingNewWorkingSession: Bool
@@ -43,18 +38,6 @@ struct HomeView: View {
         self.openPastureList = openPastureList
     }
 
-    private var repository: any DashboardRepository {
-        dependencies.dashboardRepository
-    }
-
-    private var fieldCheckRepository: any FieldCheckRepository {
-        dependencies.fieldCheckRepository
-    }
-
-    private var workingRepository: any WorkingRepository {
-        dependencies.workingRepository
-    }
-
     private var configuration: DashboardConfiguration {
         DashboardConfiguration(
             pregnancyCheckIntervalDays: pregCheckIntervalDays,
@@ -73,74 +56,28 @@ struct HomeView: View {
         ].joined(separator: ":")
     }
 
-    private var snapshot: DashboardSnapshot? {
+    private var snapshot: HomeSnapshot? {
         viewModel.snapshot
-    }
-
-    private var overview: DashboardOverview? {
-        snapshot?.overview
     }
 
     private var activeSession: DashboardWorkingSessionSummary? {
         snapshot?.activeSession
     }
 
+    private var openFindings: [FieldCheckFindingSnapshot] {
+        snapshot?.openFindings ?? []
+    }
+
     private var flaggedCheckSessions: [FieldCheckSessionSummary] {
-        fieldChecksModel.sessions
-            .filter { $0.flaggedAnimalCount > 0 }
-            .sorted { left, right in
-                if left.isCompleted != right.isCompleted {
-                    return !left.isCompleted
-                }
-                return left.startedAt > right.startedAt
-            }
+        snapshot?.flaggedCheckSessions ?? []
     }
 
     private var flaggedCheckAnimalCount: Int {
-        flaggedCheckSessions.reduce(0) { $0 + $1.flaggedAnimalCount }
+        snapshot?.flaggedCheckAnimalCount ?? 0
     }
 
     private var pastureCheckDueItems: [HomePastureCheckDueItem] {
-        guard let pastures = snapshot?.pastures else { return [] }
-
-        let activePastureIDs = Set(fieldChecksModel.activeSessions.compactMap(\.pastureID))
-        let latestCheckDateByPastureID = Dictionary(
-            grouping: fieldChecksModel.sessions.compactMap { session -> (UUID, Date)? in
-                guard session.isCompleted, let pastureID = session.pastureID else { return nil }
-                return (pastureID, session.startedAt)
-            },
-            by: { $0.0 }
-        ).mapValues { pairs in
-            pairs.map(\.1).max() ?? .distantPast
-        }
-        let dueBeforeDate = Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .distantPast
-
-        return pastures
-            .filter { pasture in
-                !activePastureIDs.contains(pasture.id)
-                && (latestCheckDateByPastureID[pasture.id] ?? .distantPast) < dueBeforeDate
-            }
-            .map { pasture in
-                HomePastureCheckDueItem(
-                    id: pasture.id,
-                    name: pasture.name,
-                    activeAnimalCount: pasture.activeAnimalCount,
-                    lastCheckDate: latestCheckDateByPastureID[pasture.id]
-                )
-            }
-            .sorted { lhs, rhs in
-                switch (lhs.lastCheckDate, rhs.lastCheckDate) {
-                case (nil, nil):
-                    return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-                case (nil, _):
-                    return true
-                case (_, nil):
-                    return false
-                case let (left?, right?):
-                    if left != right { return left < right }
-                    return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-                }
-            }
+        snapshot?.pastureCheckDueItems ?? []
     }
 
     var body: some View {
@@ -164,7 +101,6 @@ struct HomeView: View {
                 .padding(.trailing, 24)
                 .padding(.bottom, 24)
         }
-        .navigationDestination(for: DashboardRoute.self, destination: routeDestination)
         .navigationDestination(isPresented: $isStartingFieldCheck) {
             FieldCheckSessionDetailView()
         }
@@ -198,9 +134,6 @@ struct HomeView: View {
         .alert("Home Error", isPresented: errorBinding) {
             Button("OK", role: .cancel) {
                 viewModel.errorMessage = nil
-                fieldChecksModel.errorMessage = nil
-                recordsErrorMessage = nil
-                workingErrorMessage = nil
             }
         } message: {
             Text(homeErrorMessage ?? "Unknown error")
@@ -244,180 +177,105 @@ struct HomeView: View {
     }
 
     private var activeCheckSessions: [FieldCheckSessionSummary] {
-        fieldChecksModel.activeSessions.sorted { $0.startedAt > $1.startedAt }
+        snapshot?.activeCheckSessions ?? []
     }
 
     private var missingCheckSessions: [FieldCheckSessionSummary] {
-        fieldChecksModel.sessions
-            .filter { $0.missingAnimalCount > 0 }
-            .sorted { left, right in
-                if left.isCompleted != right.isCompleted {
-                    return !left.isCompleted
-                }
-                return left.startedAt > right.startedAt
-            }
+        snapshot?.missingCheckSessions ?? []
     }
 
     private var missingCheckAnimalCount: Int {
-        missingCheckSessions.reduce(0) { $0 + $1.missingAnimalCount }
+        snapshot?.missingCheckAnimalCount ?? 0
     }
 
     private var workingPenCount: Int {
-        overview?.workingPenCount ?? 0
+        snapshot?.workingPenCount ?? 0
     }
 
     private var workingPenAnimalRecords: [DashboardAnimalRecord] {
-        activeAnimalRecords.filter { $0.location == .workingPen }
+        snapshot?.workingPenAnimalRecords ?? []
     }
 
     private var overstockedPastures: [DashboardPastureItem] {
-        (snapshot?.pastures ?? [])
-            .filter(\.isOverstocked)
-            .sorted { lhs, rhs in
-                let lhsOverage = Double(lhs.activeAnimalCount) - (lhs.capacityHead ?? 0)
-                let rhsOverage = Double(rhs.activeAnimalCount) - (rhs.capacityHead ?? 0)
-                if lhsOverage != rhsOverage { return lhsOverage > rhsOverage }
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-            }
+        snapshot?.overstockedPastures ?? []
     }
 
     private var rotationReadyPastures: [DashboardPastureItem] {
-        (snapshot?.pastures ?? [])
-            .filter(\.isRotationReady)
-            .sorted { lhs, rhs in
-                if lhs.activeAnimalCount != rhs.activeAnimalCount {
-                    return lhs.activeAnimalCount < rhs.activeAnimalCount
-                }
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-            }
+        snapshot?.rotationReadyPastures ?? []
     }
 
     private var underutilizedPastures: [DashboardPastureItem] {
-        (snapshot?.pastures ?? [])
-            .filter(\.isUnderutilized)
-            .sorted { lhs, rhs in
-                let leftUtilization = lhs.metrics.utilizationPercent ?? 0
-                let rightUtilization = rhs.metrics.utilizationPercent ?? 0
-                if leftUtilization != rightUtilization { return leftUtilization < rightUtilization }
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-            }
+        snapshot?.underutilizedPastures ?? []
     }
 
     private var pasturesMissingStockingData: [DashboardPastureItem] {
-        (snapshot?.pastures ?? [])
-            .filter { pasture in
-                pasture.acres <= 0 || pasture.metrics.targetAcresPerHead == nil
-            }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-    }
-
-    private var activeAnimalRecords: [DashboardAnimalRecord] {
-        (dashboardRecords?.animals ?? [])
-            .filter(\.isActiveInHerd)
-            .sorted { lhs, rhs in
-                lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
-            }
+        snapshot?.pasturesMissingStockingData ?? []
     }
 
     private var unassignedAnimalRecords: [DashboardAnimalRecord] {
-        activeAnimalRecords.filter { animal in
-            animal.location == .pasture && animal.pastureID == nil
-        }
+        snapshot?.unassignedAnimalRecords ?? []
     }
 
     private var missingTagAnimals: [DashboardAnimalRecord] {
-        activeAnimalRecords.filter { animal in
-            animal.displayTagNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
+        snapshot?.missingTagAnimals ?? []
     }
 
 
     private var unknownSexAnimals: [DashboardAnimalRecord] {
-        activeAnimalRecords.filter { animal in
-            animal.sex == .unknown
-        }
+        snapshot?.unknownSexAnimals ?? []
     }
 
     private var archivedActiveRecords: [DashboardAnimalRecord] {
-        (dashboardRecords?.animals ?? [])
-            .filter { $0.isArchived && $0.status == .active }
-            .sorted { lhs, rhs in
-                lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
-            }
+        snapshot?.archivedActiveRecords ?? []
     }
 
     private var fieldWorkCardCount: Int {
-        let unfinishedChecks = activeCheckSessions.count
-        let dueChecks = pastureCheckDueItems.count
-        let openFindings = fieldChecksModel.openFindings.count
-        return unfinishedChecks + dueChecks + openFindings + flaggedCheckAnimalCount + missingCheckAnimalCount
+        snapshot?.fieldWorkCardCount ?? 0
     }
 
     private var pastureOperationsCardCount: Int {
-        let capacityTasks = overstockedPastures.count
-        let receivingTasks = rotationReadyPastures.count + underutilizedPastures.count
-        return capacityTasks + receivingTasks + pasturesMissingStockingData.count
+        snapshot?.pastureOperationsCardCount ?? 0
     }
 
     private var recordsCleanupCardCount: Int {
-        let animalIdentityIssues = missingTagAnimals.count + unknownSexAnimals.count
-        return unassignedAnimalRecords.count + animalIdentityIssues + archivedActiveRecords.count
+        snapshot?.recordsCleanupCardCount ?? 0
     }
 
     private var continueCardCount: Int {
-        guard snapshot != nil && fieldChecksModel.hasLoaded else { return 0 }
-        let hasCurrentWork = activeSession != nil
-            || !activeCheckSessions.isEmpty
-            || workingPenCount > 0
-            || !fieldChecksModel.openFindings.isEmpty
-        return hasCurrentWork ? 1 : 0
+        snapshot?.continueCardCount ?? 0
     }
 
     private var continueCardSubtitle: String {
-        guard snapshot != nil && fieldChecksModel.hasLoaded else { return "Loading current work" }
+        guard let snapshot else { return "Loading current work" }
         if activeSession != nil { return "Resume session" }
         if !activeCheckSessions.isEmpty { return "Finish check" }
         if workingPenCount > 0 { return "Clear pen" }
-        if !fieldChecksModel.openFindings.isEmpty { return "Resolve finding" }
+        if !snapshot.openFindings.isEmpty { return "Resolve finding" }
         return "Start work"
     }
 
     private var hasFieldWorkRows: Bool {
-        shouldShowUnfinishedChecksRow
-        || shouldShowOpenFindingsRow
-        || flaggedCheckAnimalCount > 0
-        || missingCheckAnimalCount > 0
-        || !pastureCheckDueItems.isEmpty
+        snapshot?.hasFieldWorkRows ?? false
     }
 
     private var shouldShowUnfinishedChecksRow: Bool {
-        guard !activeCheckSessions.isEmpty else { return false }
-        return !(activeSession == nil && activeCheckSessions.count == 1)
+        snapshot?.shouldShowUnfinishedChecksRow ?? false
     }
 
     private var shouldShowWorkingPenAnimalsRow: Bool {
-        guard workingPenCount > 0 else { return false }
-        return !(activeSession == nil && activeCheckSessions.isEmpty)
+        snapshot?.shouldShowWorkingPenAnimalsRow ?? false
     }
 
     private var shouldShowOpenFindingsRow: Bool {
-        let openFindingCount = fieldChecksModel.openFindings.count
-        guard openFindingCount > 0 else { return false }
-        return !(activeSession == nil && activeCheckSessions.isEmpty && workingPenCount == 0 && openFindingCount == 1)
+        snapshot?.shouldShowOpenFindingsRow ?? false
     }
 
     private var hasPastureOperationRows: Bool {
-        !overstockedPastures.isEmpty
-        || !rotationReadyPastures.isEmpty
-        || !underutilizedPastures.isEmpty
-        || !pasturesMissingStockingData.isEmpty
+        snapshot?.hasPastureOperationRows ?? false
     }
 
     private var hasRecordsCleanupRows: Bool {
-        !unassignedAnimalRecords.isEmpty
-        || !missingTagAnimals.isEmpty
-        || !unknownSexAnimals.isEmpty
-        || !archivedActiveRecords.isEmpty
+        snapshot?.hasRecordsCleanupRows ?? false
     }
 
     private var hasSetupSuggestionRows: Bool {
@@ -425,22 +283,20 @@ struct HomeView: View {
     }
 
     private var visibleSetupSuggestionIDs: [HomeSetupSuggestionID] {
-        guard let dashboardRecords, fieldChecksModel.hasLoaded, let protocolTemplates else { return [] }
+        guard let snapshot else { return [] }
+        return HomeSetupSuggestionPolicy().visibleSuggestionIDs(
+            snapshot: snapshot,
+            context: setupSuggestionContext
+        )
+    }
 
-        var ids: [HomeSetupSuggestionID] = []
-        let hasPastures = !dashboardRecords.pastures.isEmpty
-        let hasActiveAnimals = dashboardRecords.animals.contains { $0.isActiveInHerd }
-
-        if !hasPastures { ids.append(.addFirstPasture) }
-        if !hasActiveAnimals { ids.append(.addFirstAnimal) }
-        if hasPastures && fieldChecksModel.sessions.isEmpty { ids.append(.startFirstPastureCheck) }
-        if protocolTemplates.isEmpty && hasPastures && hasActiveAnimals { ids.append(.createWorkingProtocol) }
-        if !isDashboardEnabled { ids.append(.enableDashboard) }
-        if customTagColorCount == 0 { ids.append(.customizeTagColors) }
-        if !pasturesMissingStockingData.isEmpty { ids.append(.completePastureStockingData) }
-        if syncMode == .localOnly { ids.append(.reviewSyncSetup) }
-
-        return ids.filter { !dismissedSetupSuggestionIDs.contains($0.rawValue) }
+    private var setupSuggestionContext: HomeSetupSuggestionContext {
+        HomeSetupSuggestionContext(
+            isDashboardEnabled: isDashboardEnabled,
+            syncMode: syncMode,
+            customTagColorCount: customTagColorCount,
+            dismissedIDs: dismissedSetupSuggestionIDs
+        )
     }
 
     private var dismissedSetupSuggestionIDs: Set<String> {
@@ -509,7 +365,7 @@ struct HomeView: View {
                 HomeSummaryCardView(card: card)
             }
             .buttonStyle(.plain)
-        } else if let finding = fieldChecksModel.openFindings.first {
+        } else if let finding = openFindings.first {
             NavigationLink {
                 FieldCheckSessionDetailView(sessionID: finding.sessionID, opensFindings: true)
             } label: {
@@ -643,7 +499,7 @@ struct HomeView: View {
     @ViewBuilder
     private var continueSection: some View {
         HomeSection(title: "Continue") {
-            if snapshot == nil || !fieldChecksModel.hasLoaded {
+            if snapshot == nil {
                 HomeLoadingRow(title: "Loading current work…")
             } else if let activeSession {
                 NavigationLink {
@@ -673,8 +529,8 @@ struct HomeView: View {
                 .buttonStyle(.plain)
             } else if workingPenCount > 0 {
                 Button {
-                openAnimalList(.workingPen)
-            } label: {
+                    openAnimalList(.workingPen)
+                } label: {
                     HomePrimaryActionRow(
                         title: "Clear the working pen",
                         subtitle: "\(workingPenCount) animals are still staged for work.",
@@ -684,7 +540,7 @@ struct HomeView: View {
                     )
                 }
                 .buttonStyle(.plain)
-            } else if let finding = fieldChecksModel.openFindings.first {
+            } else if let finding = openFindings.first {
                 NavigationLink {
                     FieldCheckSessionDetailView(sessionID: finding.sessionID, opensFindings: true)
                 } label: {
@@ -710,9 +566,9 @@ struct HomeView: View {
 
     @ViewBuilder
     private var fieldWorkSection: some View {
-        if snapshot == nil || !fieldChecksModel.hasLoaded || hasFieldWorkRows {
+        if snapshot == nil || hasFieldWorkRows {
             HomeSection(title: "Field Work") {
-                if snapshot == nil || !fieldChecksModel.hasLoaded {
+                if snapshot == nil {
                     HomeLoadingRow(title: "Loading field work…")
                 } else {
                     fieldWorkRows
@@ -772,7 +628,7 @@ struct HomeView: View {
         }
 
         if shouldShowOpenFindingsRow {
-            if fieldChecksModel.openFindings.count == 1, let finding = fieldChecksModel.openFindings.first {
+            if openFindings.count == 1, let finding = openFindings.first {
                 NavigationLink {
                     FieldCheckSessionDetailView(sessionID: finding.sessionID, opensFindings: true)
                 } label: {
@@ -795,7 +651,7 @@ struct HomeView: View {
                         subtitle: "Fence, water, health, and missing-animal notes from checks.",
                         systemImage: "exclamationmark.bubble.fill",
                         tint: .red,
-                        count: fieldChecksModel.openFindings.count,
+                        count: openFindings.count,
                         showsChevron: true
                     )
                 }
@@ -892,8 +748,8 @@ struct HomeView: View {
 
                 if shouldShowWorkingPenAnimalsRow {
                     Button {
-                openAnimalList(.workingPen)
-            } label: {
+                        openAnimalList(.workingPen)
+                    } label: {
                         HomeListRow(
                             title: "Animals staged in working pen",
                             subtitle: "Open the pre-filtered list before moving or clearing them.",
@@ -1019,9 +875,9 @@ struct HomeView: View {
 
     @ViewBuilder
     private var recordsCleanupSection: some View {
-        if dashboardRecords == nil || hasRecordsCleanupRows {
+        if snapshot == nil || hasRecordsCleanupRows {
             HomeSection(title: "Records to Clean Up") {
-                if dashboardRecords == nil {
+                if snapshot == nil {
                     HomeLoadingRow(title: "Loading record checks…")
                 } else {
                     recordsCleanupRows
@@ -1273,7 +1129,7 @@ struct HomeView: View {
     }
 
     private var homeErrorMessage: String? {
-        viewModel.errorMessage ?? fieldChecksModel.errorMessage ?? recordsErrorMessage ?? workingErrorMessage
+        viewModel.errorMessage
     }
 
     private var errorBinding: Binding<Bool> {
@@ -1282,31 +1138,18 @@ struct HomeView: View {
             set: { newValue in
                 if !newValue {
                     viewModel.errorMessage = nil
-                    fieldChecksModel.errorMessage = nil
-                    recordsErrorMessage = nil
-                    workingErrorMessage = nil
                 }
             }
         )
     }
 
     private func loadHomeData() {
-        viewModel.load(configuration: configuration, using: repository)
-        fieldChecksModel.load(using: fieldCheckRepository)
-
-        do {
-            dashboardRecords = try repository.fetchDashboardRecords()
-            recordsErrorMessage = nil
-        } catch {
-            recordsErrorMessage = error.localizedDescription
-        }
-
-        do {
-            protocolTemplates = try workingRepository.fetchTemplates()
-            workingErrorMessage = nil
-        } catch {
-            workingErrorMessage = error.localizedDescription
-        }
+        viewModel.load(
+            configuration: configuration,
+            dashboardRepository: dependencies.dashboardRepository,
+            fieldCheckRepository: dependencies.fieldCheckRepository,
+            workingRepository: dependencies.workingRepository
+        )
     }
 
     private func dismissSetupSuggestion(_ id: HomeSetupSuggestionID) {
@@ -1327,40 +1170,9 @@ struct HomeView: View {
 
         return components.joined(separator: " · ")
     }
-
-
-    @ViewBuilder
-    private func routeDestination(for route: DashboardRoute) -> some View {
-        switch route {
-        case .animal(let id):
-            AnimalDetailView(animalID: id)
-        case .pasture(let id):
-            PastureDetailView(pastureID: id)
-        case .animalList(let kind):
-            DashboardAnimalListView(kind: kind, repository: repository)
-        case .pastureList:
-            DashboardPastureListView(repository: repository)
-        }
-    }
 }
 
-private enum HomeSetupSuggestionID: String, CaseIterable, Hashable {
-    case addFirstPasture
-    case addFirstAnimal
-    case startFirstPastureCheck
-    case createWorkingProtocol
-    case enableDashboard
-    case customizeTagColors
-    case completePastureStockingData
-    case reviewSyncSetup
-}
-
-private struct HomePastureCheckDueItem: Identifiable, Hashable {
-    let id: UUID
-    let name: String
-    let activeAnimalCount: Int
-    let lastCheckDate: Date?
-
+private extension HomePastureCheckDueItem {
     var lastCheckDescription: String {
         guard let lastCheckDate else {
             return "No recorded pasture check."

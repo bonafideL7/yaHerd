@@ -16,7 +16,6 @@ struct MainTabView: View {
     @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
     
     @State private var selectedTab: MainTab = .home
-    @State private var homePath: [DashboardRoute] = []
     @State private var isShowingSettings = false
     @State private var isPresentingAddAnimal = false
     @State private var isPresentingAddPasture = false
@@ -90,7 +89,7 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             Tab("Home", systemImage: "house", value: MainTab.home) {
-                NavigationStack(path: $homePath) {
+                NavigationStack {
                     HomeView(
                         isPresentingAddAnimal: $isPresentingAddAnimal,
                         isPresentingAddPasture: $isPresentingAddPasture,
@@ -243,7 +242,6 @@ struct MainTabView: View {
 
     private func openAnimalList(_ configuration: AnimalListLaunchConfiguration) {
         nav.reset()
-        homePath.removeAll()
         selectedTab = .animals
         herdMode = .animals
         animalSearchText = configuration.searchText
@@ -256,7 +254,6 @@ struct MainTabView: View {
 
     private func openPastureList(_ configuration: PastureListLaunchConfiguration) {
         nav.reset()
-        homePath.removeAll()
         selectedTab = .animals
         herdMode = .pastures
         pastureFilter = configuration.filter
