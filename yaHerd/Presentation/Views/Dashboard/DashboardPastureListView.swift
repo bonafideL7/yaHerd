@@ -2,11 +2,6 @@ import SwiftUI
 
 struct DashboardPastureListView: View {
 
-    @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
-    @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
-    @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
-    @AppStorage("pastureCapacity") private var pastureCapacity = 30
-
     @State private var viewModel = DashboardPastureListViewModel()
     @State private var filter: DashboardPastureFilter = .all
 
@@ -17,23 +12,7 @@ struct DashboardPastureListView: View {
         _filter = State(initialValue: initialFilter)
     }
 
-    private var configuration: DashboardConfiguration {
-        DashboardConfiguration(
-            pregnancyCheckIntervalDays: pregCheckIntervalDays,
-            treatmentIntervalDays: treatmentIntervalDays,
-            enablePastureOverstockWarnings: enablePastureOverstockWarnings,
-            fallbackPastureCapacity: pastureCapacity
-        )
-    }
-
-    private var configurationSignature: String {
-        [
-            String(configuration.pregnancyCheckIntervalDays),
-            String(configuration.treatmentIntervalDays),
-            String(configuration.enablePastureOverstockWarnings),
-            String(configuration.fallbackPastureCapacity)
-        ].joined(separator: ":")
-    }
+    private let configuration = DashboardConfiguration()
 
     private var filteredPastures: [DashboardPastureItem] {
         viewModel.filteredItems(filter)
@@ -79,9 +58,6 @@ struct DashboardPastureListView: View {
         .task {
             viewModel.load(configuration: configuration, using: repository)
         }
-        .onChange(of: configurationSignature) { _, _ in
-            viewModel.load(configuration: configuration, using: repository)
-        }
         .onAppear {
             viewModel.load(configuration: configuration, using: repository)
         }
@@ -113,11 +89,7 @@ struct DashboardPastureListView: View {
 
                 Spacer()
 
-                if pasture.isOverstocked {
-                    Label("Over", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                } else if pasture.isRotationReady {
+                if pasture.isRotationReady {
                     Label("Ready", systemImage: "arrow.triangle.2.circlepath")
                         .font(.caption)
                         .foregroundStyle(.green)

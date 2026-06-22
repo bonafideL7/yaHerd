@@ -20,6 +20,6 @@ struct PastureAnalytics {
     var targetAcresPerHead: Double? { metrics.targetAcresPerHead }
     var capacityHead: Double? { metrics.capacityHead }
     var utilizationPercent: Double? { metrics.utilizationPercent }
-    var isOverstocked: Bool { metrics.isOverstocked }
+    var isOverCapacity: Bool { metrics.isOverCapacity }
     var isUnderutilized: Bool { metrics.isUnderutilized }
 }

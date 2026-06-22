@@ -66,12 +66,7 @@ final class HomeServiceTests: XCTestCase {
     }
 
     private var configuration: DashboardConfiguration {
-        DashboardConfiguration(
-            pregnancyCheckIntervalDays: 180,
-            treatmentIntervalDays: 180,
-            enablePastureOverstockWarnings: true,
-            fallbackPastureCapacity: 30
-        )
+        DashboardConfiguration()
     }
 
     private func pasture(id: UUID, name: String, activeAnimalCount: Int) -> DashboardPastureRecord {

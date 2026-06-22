@@ -60,7 +60,7 @@ struct HomeAlertsView: View {
                 ContentUnavailableView(
                     "No Alerts",
                     systemImage: "checkmark.shield.fill",
-                    description: Text("There are no current pasture, care, or record alerts.")
+                    description: Text("There are no current record alerts.")
                 )
             } else {
                 List {

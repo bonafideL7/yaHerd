@@ -4,11 +4,6 @@ import SwiftUI
 struct DashboardView: View {
     @EnvironmentObject private var dependencies: AppDependencies
 
-    @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
-    @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
-    @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
-    @AppStorage("pastureCapacity") private var pastureCapacity = 30
-
     @State private var viewModel = DashboardViewModel()
     @State private var fieldChecksModel = FieldChecksViewModel()
     @State private var selectedPastureName: String?
@@ -21,23 +16,7 @@ struct DashboardView: View {
         dependencies.fieldCheckRepository
     }
 
-    private var configuration: DashboardConfiguration {
-        DashboardConfiguration(
-            pregnancyCheckIntervalDays: pregCheckIntervalDays,
-            treatmentIntervalDays: treatmentIntervalDays,
-            enablePastureOverstockWarnings: enablePastureOverstockWarnings,
-            fallbackPastureCapacity: pastureCapacity
-        )
-    }
-
-    private var configurationSignature: String {
-        [
-            String(configuration.pregnancyCheckIntervalDays),
-            String(configuration.treatmentIntervalDays),
-            String(configuration.enablePastureOverstockWarnings),
-            String(configuration.fallbackPastureCapacity)
-        ].joined(separator: ":")
-    }
+    private let configuration = DashboardConfiguration()
 
     private var snapshot: DashboardSnapshot? {
         viewModel.snapshot
@@ -83,9 +62,6 @@ struct DashboardView: View {
             loadDashboardData()
         }
         .onAppear {
-            loadDashboardData()
-        }
-        .onChange(of: configurationSignature) { _, _ in
             loadDashboardData()
         }
         .alert("Dashboard Error", isPresented: errorBinding) {
@@ -228,7 +204,7 @@ struct DashboardView: View {
                 if let selectedPastureUtilizationValue {
                     DashboardPastureUtilizationSelection(value: selectedPastureUtilizationValue)
                 } else {
-                    Text("The dashed line marks 100% of target stocking. Rows above that line are running over target.")
+                    Text("The dashed line marks 100% of target stocking.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -567,7 +543,6 @@ struct DashboardView: View {
     }
 
     private func pastureStatusLabel(for pasture: DashboardPastureItem) -> String {
-        if pasture.isOverstocked { return "Over" }
         if pasture.isRotationReady { return "Ready" }
         if pasture.isUnderutilized { return "Low" }
         return "Normal"

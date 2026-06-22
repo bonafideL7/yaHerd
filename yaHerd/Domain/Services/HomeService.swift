@@ -30,9 +30,6 @@ struct HomeService {
             activeSession: dashboardSnapshot.activeSession,
             alerts: dashboardSnapshot.alerts,
             activeAnimalRecords: activeAnimalRecords,
-            calvingWatchAnimalRecords: calvingWatchAnimals(in: dashboardRecords, now: now),
-            overduePregnancyCheckAnimalRecords: overduePregnancyCheckAnimals(in: dashboardRecords, configuration: configuration, now: now),
-            overdueTreatmentAnimalRecords: overdueTreatmentAnimals(in: dashboardRecords, configuration: configuration, now: now),
             activeCheckSessions: activeCheckSessions,
             openFindings: openFindings,
             flaggedCheckSessions: flaggedCheckSessions(from: fieldCheckSessions),
@@ -44,7 +41,6 @@ struct HomeService {
                 now: now
             ),
             workingPenAnimalRecords: activeAnimalRecords.filter { $0.location == .workingPen },
-            overstockedPastures: overstockedPastures(from: dashboardSnapshot.pastures),
             rotationReadyPastures: rotationReadyPastures(from: dashboardSnapshot.pastures),
             underutilizedPastures: underutilizedPastures(from: dashboardSnapshot.pastures),
             pasturesMissingStockingData: pasturesMissingStockingData(from: dashboardSnapshot.pastures),
@@ -65,48 +61,6 @@ struct HomeService {
             .sorted { lhs, rhs in
                 lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
             }
-    }
-
-    private func overduePregnancyCheckAnimals(
-        in records: DashboardRecords,
-        configuration: DashboardConfiguration,
-        now: Date
-    ) -> [DashboardAnimalRecord] {
-        sortedActiveAnimalRecords(from: records.animals).filter { animal in
-            guard let lastCheckDate = animal.lastPregnancyCheckDate else { return false }
-            let days = Calendar.current.dateComponents([.day], from: lastCheckDate, to: now).day ?? 0
-            return days > configuration.pregnancyCheckIntervalDays
-        }
-    }
-
-    private func overdueTreatmentAnimals(
-        in records: DashboardRecords,
-        configuration: DashboardConfiguration,
-        now: Date
-    ) -> [DashboardAnimalRecord] {
-        records.animals
-            .filter { animal in
-                guard !animal.isArchived else { return false }
-                guard let lastTreatmentDate = animal.lastTreatmentDate else { return false }
-                let days = Calendar.current.dateComponents([.day], from: lastTreatmentDate, to: now).day ?? 0
-                return days > configuration.treatmentIntervalDays
-            }
-            .sorted { lhs, rhs in
-                lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
-            }
-    }
-
-    private func calvingWatchAnimals(in records: DashboardRecords, now: Date) -> [DashboardAnimalRecord] {
-        let watchEndDate = Calendar.current.date(byAdding: .day, value: 14, to: now) ?? now
-
-        return sortedActiveAnimalRecords(from: records.animals).filter { animal in
-            guard animal.lastPregnancyStatus == .pregnant,
-                  let expectedCalvingDate = animal.expectedCalvingDate else {
-                return false
-            }
-
-            return expectedCalvingDate <= watchEndDate
-        }
     }
 
     private func archivedActiveRecords(from records: [DashboardAnimalRecord]) -> [DashboardAnimalRecord] {
@@ -182,17 +136,6 @@ struct HomeService {
                     if left != right { return left < right }
                     return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
                 }
-            }
-    }
-
-    private func overstockedPastures(from pastures: [DashboardPastureItem]) -> [DashboardPastureItem] {
-        pastures
-            .filter(\.isOverstocked)
-            .sorted { lhs, rhs in
-                let lhsOverage = Double(lhs.activeAnimalCount) - (lhs.capacityHead ?? 0)
-                let rhsOverage = Double(rhs.activeAnimalCount) - (rhs.capacityHead ?? 0)
-                if lhsOverage != rhsOverage { return lhsOverage > rhsOverage }
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
             }
     }
 

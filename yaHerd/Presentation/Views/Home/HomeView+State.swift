@@ -29,17 +29,8 @@ extension HomeView {
         snapshot?.activeAnimalRecords ?? []
     }
 
-    var calvingWatchAnimalRecords: [DashboardAnimalRecord] {
-        snapshot?.calvingWatchAnimalRecords ?? []
-    }
 
-    var overduePregnancyCheckAnimalRecords: [DashboardAnimalRecord] {
-        snapshot?.overduePregnancyCheckAnimalRecords ?? []
-    }
 
-    var overdueTreatmentAnimalRecords: [DashboardAnimalRecord] {
-        snapshot?.overdueTreatmentAnimalRecords ?? []
-    }
 
     var pastureAssignedAnimalCount: Int {
         snapshot?.pastureAssignedAnimalCount ?? 0
@@ -70,9 +61,6 @@ extension HomeView {
         snapshot?.workingPenAnimalRecords ?? []
     }
 
-    var overstockedPastures: [DashboardPastureItem] {
-        snapshot?.overstockedPastures ?? []
-    }
 
     var rotationReadyPastures: [DashboardPastureItem] {
         snapshot?.rotationReadyPastures ?? []

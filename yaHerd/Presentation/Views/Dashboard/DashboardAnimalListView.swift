@@ -3,11 +3,6 @@ import SwiftUI
 struct DashboardAnimalListView: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
-    @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
-    @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
-    @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
-    @AppStorage("pastureCapacity") private var pastureCapacity = 30
-
     @State private var viewModel = DashboardAnimalListViewModel()
 
     let kind: DashboardAnimalListKind
@@ -18,23 +13,7 @@ struct DashboardAnimalListView: View {
         self.repository = repository
     }
 
-    private var configuration: DashboardConfiguration {
-        DashboardConfiguration(
-            pregnancyCheckIntervalDays: pregCheckIntervalDays,
-            treatmentIntervalDays: treatmentIntervalDays,
-            enablePastureOverstockWarnings: enablePastureOverstockWarnings,
-            fallbackPastureCapacity: pastureCapacity
-        )
-    }
-
-    private var configurationSignature: String {
-        [
-            String(configuration.pregnancyCheckIntervalDays),
-            String(configuration.treatmentIntervalDays),
-            String(configuration.enablePastureOverstockWarnings),
-            String(configuration.fallbackPastureCapacity)
-        ].joined(separator: ":")
-    }
+    private let configuration = DashboardConfiguration()
 
     var body: some View {
         List {
@@ -51,9 +30,6 @@ struct DashboardAnimalListView: View {
         }
         .navigationTitle(kind.title)
         .task {
-            viewModel.load(kind: kind, configuration: configuration, using: repository)
-        }
-        .onChange(of: configurationSignature) { _, _ in
             viewModel.load(kind: kind, configuration: configuration, using: repository)
         }
         .onAppear {

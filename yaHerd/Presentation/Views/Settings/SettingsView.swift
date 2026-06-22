@@ -14,7 +14,7 @@ struct SettingsView: View {
                 } label: {
                     SettingsRow(
                         title: "Dashboard",
-                        subtitle: "Configure overdue alerts and pasture warning thresholds.",
+                        subtitle: "Configure dashboard visibility.",
                         systemImage: "gauge.with.dots.needle.67percent"
                     )
                 }
@@ -123,10 +123,6 @@ private struct HerdSetupView: View {
 
 struct DashboardRulesView: View {
     @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
-    @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
-    @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
-    @AppStorage("enablePastureOverstockWarnings") private var enablePastureOverstockWarnings = true
-    @AppStorage("pastureCapacity") private var pastureCapacity = 30
 
     var body: some View {
         Form {
@@ -134,20 +130,6 @@ struct DashboardRulesView: View {
                 Toggle("Show Dashboard", isOn: $isDashboardEnabled)
                 
                 Text("When off, the Dashboard tab is hidden.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            
-            Section("Animal Alerts") {
-                Stepper("Preg check overdue after \(pregCheckIntervalDays) days", value: $pregCheckIntervalDays, in: 30...365)
-                Stepper("Treatment overdue after \(treatmentIntervalDays) days", value: $treatmentIntervalDays, in: 30...365)
-            }
-
-            Section("Pasture Alerts") {
-                Toggle("Warn about pasture overcrowding", isOn: $enablePastureOverstockWarnings)
-                Stepper("Pasture capacity: \(pastureCapacity) animals", value: $pastureCapacity, in: 1...200)
-
-                Text("These values control dashboard warning logic. They do not change existing pasture records.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -95,14 +95,7 @@ extension HomeView {
             tint: pastureOperationsCardCount > 0 ? .green : .gray
         )
 
-        if !overstockedPastures.isEmpty {
-            Button {
-                openPastureList(.overstocked)
-            } label: {
-                HomeSummaryCardView(card: card)
-            }
-            .buttonStyle(.plain)
-        } else if !rotationReadyPastures.isEmpty {
+        if !rotationReadyPastures.isEmpty {
             Button {
                 openPastureList(.rotationReady)
             } label: {

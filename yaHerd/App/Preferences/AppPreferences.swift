@@ -40,10 +40,6 @@ final class AppPreferences: AppPreferencesProviding {
 enum SyncedAppSettingKey: String, CaseIterable {
     case allowHardDelete
     case isDashboardEnabled
-    case pregCheckIntervalDays
-    case treatmentIntervalDays
-    case enablePastureOverstockWarnings
-    case pastureCapacity
     case targetAcresPerHeadDefault
     case usableAcreagePercentDefault
     case recentPastureNames

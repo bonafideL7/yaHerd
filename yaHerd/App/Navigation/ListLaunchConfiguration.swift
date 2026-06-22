@@ -33,18 +33,6 @@ struct AnimalListLaunchConfiguration: Hashable {
         showArchivedRecords: true
     )
 
-    static let overduePregnancyChecks = AnimalListLaunchConfiguration(
-        filter: AnimalFilter(care: .overduePregnancyCheck)
-    )
-
-    static let overdueTreatments = AnimalListLaunchConfiguration(
-        filter: AnimalFilter(care: .overdueTreatment)
-    )
-
-    static let calvingWatch = AnimalListLaunchConfiguration(
-        filter: AnimalFilter(care: .calvingWatch)
-    )
-
     static func dashboard(_ kind: DashboardAnimalListKind) -> AnimalListLaunchConfiguration {
         switch kind {
         case .active:
@@ -53,12 +41,6 @@ struct AnimalListLaunchConfiguration: Hashable {
             return .workingPen
         case .unassigned:
             return .missingPasture
-        case .overduePregChecks:
-            return .overduePregnancyChecks
-        case .overdueTreatments:
-            return .overdueTreatments
-        case .calvingWatch:
-            return .calvingWatch
         }
     }
 }
@@ -67,7 +49,6 @@ struct PastureListLaunchConfiguration: Hashable {
     var filter: PastureListFilter = .all
 
     static let all = PastureListLaunchConfiguration()
-    static let overstocked = PastureListLaunchConfiguration(filter: .overstocked)
     static let underutilized = PastureListLaunchConfiguration(filter: .underutilized)
     static let rotationReady = PastureListLaunchConfiguration(filter: .rotationReady)
     static let missingStockingData = PastureListLaunchConfiguration(filter: .missingStockingData)
@@ -76,8 +57,6 @@ struct PastureListLaunchConfiguration: Hashable {
         switch filter {
         case .all:
             return .all
-        case .overstocked:
-            return .overstocked
         case .underutilized:
             return .underutilized
         case .rotationReady:

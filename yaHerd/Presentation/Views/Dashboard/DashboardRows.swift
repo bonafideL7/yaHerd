@@ -106,11 +106,7 @@ struct DashboardPastureRow: View {
 
                 Spacer()
 
-                if pasture.isOverstocked {
-                    Label("Over", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                } else if pasture.isRotationReady {
+                if pasture.isRotationReady {
                     Label("Ready", systemImage: "arrow.triangle.2.circlepath")
                         .font(.caption)
                         .foregroundStyle(.green)

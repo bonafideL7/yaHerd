@@ -4,10 +4,6 @@ struct HomeView: View {
     @EnvironmentObject var dependencies: AppDependencies
     @EnvironmentObject var tagColorLibrary: TagColorLibraryStore
 
-    @AppStorage("pregCheckIntervalDays") var pregCheckIntervalDays = 180
-    @AppStorage("treatmentIntervalDays") var treatmentIntervalDays = 180
-    @AppStorage("enablePastureOverstockWarnings") var enablePastureOverstockWarnings = true
-    @AppStorage("pastureCapacity") var pastureCapacity = 30
     @AppStorage("isDashboardEnabled") var isDashboardEnabled = false
     @AppStorage("syncMode") var syncModeRawValue = SyncMode.localOnly.rawValue
     @AppStorage("homeDismissedSetupSuggestionIDs") var dismissedSetupSuggestionIDsRaw = ""
@@ -38,23 +34,7 @@ struct HomeView: View {
         self.openPastureList = openPastureList
     }
 
-    var configuration: DashboardConfiguration {
-        DashboardConfiguration(
-            pregnancyCheckIntervalDays: pregCheckIntervalDays,
-            treatmentIntervalDays: treatmentIntervalDays,
-            enablePastureOverstockWarnings: enablePastureOverstockWarnings,
-            fallbackPastureCapacity: pastureCapacity
-        )
-    }
-
-    var configurationSignature: String {
-        [
-            String(configuration.pregnancyCheckIntervalDays),
-            String(configuration.treatmentIntervalDays),
-            String(configuration.enablePastureOverstockWarnings),
-            String(configuration.fallbackPastureCapacity)
-        ].joined(separator: ":")
-    }
+    let configuration = DashboardConfiguration()
 
     var body: some View {
         ScrollView {
@@ -63,7 +43,6 @@ struct HomeView: View {
                 homeSummaryCardsSection
                 alertsSection
                 continueSection
-                careStatusSection
                 fieldWorkSection
                 workPenSection
                 pastureOperationsSection
@@ -86,9 +65,6 @@ struct HomeView: View {
             loadHomeData()
         }
         .onAppear {
-            loadHomeData()
-        }
-        .onChange(of: configurationSignature) { _, _ in
             loadHomeData()
         }
         .onChange(of: isPresentingAddAnimal) { _, isPresented in

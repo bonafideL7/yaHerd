@@ -68,7 +68,7 @@ struct PastureTileCard: View {
 
     @ViewBuilder
     private var statusBadge: some View {
-        if pasture.isOverstocked {
+        if pasture.isOverCapacity {
             Label("Over", systemImage: "exclamationmark.triangle.fill")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.red)

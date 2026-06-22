@@ -96,11 +96,7 @@ struct DashboardOverview: Equatable {
     let activeAnimalCount: Int
     let workingPenCount: Int
     let unassignedAnimalCount: Int
-    let overduePregnancyCheckCount: Int
-    let overdueTreatmentCount: Int
-    let calvingWatchCount: Int
     let pastureCount: Int
-    let overstockedPastureCount: Int
     let underutilizedPastureCount: Int
     let rotationReadyPastureCount: Int
 }
@@ -134,10 +130,6 @@ struct DashboardPastureItem: Identifiable, Hashable {
         metrics.capacityHead
     }
 
-    var isOverstocked: Bool {
-        metrics.isOverstocked
-    }
-
     var isUnderutilized: Bool {
         metrics.isUnderutilized
     }
@@ -147,7 +139,7 @@ struct DashboardPastureItem: Identifiable, Hashable {
     }
 
     var isRotationReady: Bool {
-        guard isRestedForRotation, !isOverstocked else { return false }
+        guard isRestedForRotation else { return false }
         guard let utilizationPercent = metrics.utilizationPercent else { return activeAnimalCount == 0 }
         return utilizationPercent < 0.80
     }

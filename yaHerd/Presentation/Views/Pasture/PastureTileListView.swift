@@ -49,8 +49,8 @@ struct PastureTileListView: View {
         switch filterValue {
         case .all:
             return model.items
-        case .overstocked:
-            return model.items.filter(\.isOverstocked)
+        case .overCapacity:
+            return model.items.filter(\.isOverCapacity)
         case .underutilized:
             return model.items.filter(\.isUnderutilized)
         case .rotationReady:

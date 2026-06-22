@@ -43,30 +43,6 @@ enum AnimalLocationFilter: CaseIterable, Hashable {
     }
 }
 
-enum AnimalCareFilter: CaseIterable, Hashable {
-    case any
-    case overduePregnancyCheck
-    case overdueTreatment
-    case calvingWatch
-
-    var isActive: Bool {
-        self != .any
-    }
-
-    var label: String {
-        switch self {
-        case .any:
-            return "Any Care Status"
-        case .overduePregnancyCheck:
-            return "Overdue Pregnancy Check"
-        case .overdueTreatment:
-            return "Overdue Treatment"
-        case .calvingWatch:
-            return "Calving Watch"
-        }
-    }
-}
-
 enum AnimalRecordIssueFilter: CaseIterable, Hashable {
     case any
     case missingPasture
@@ -100,7 +76,6 @@ struct AnimalFilter: Hashable {
     var status: AnimalStatus? = nil
     var pasture: AnimalPastureFilter = .any
     var location: AnimalLocationFilter = .any
-    var care: AnimalCareFilter = .any
     var recordIssue: AnimalRecordIssueFilter = .any
 
     var pastureID: UUID? {
@@ -121,7 +96,6 @@ struct AnimalFilter: Hashable {
         || status != nil
         || pasture.isActive
         || location.isActive
-        || care.isActive
         || recordIssue.isActive
     }
 
@@ -131,7 +105,6 @@ struct AnimalFilter: Hashable {
         status = nil
         pasture = .any
         location = .any
-        care = .any
         recordIssue = .any
     }
 }
