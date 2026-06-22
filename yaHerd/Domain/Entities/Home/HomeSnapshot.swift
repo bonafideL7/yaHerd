@@ -2,6 +2,11 @@ import Foundation
 
 struct HomeSnapshot: Equatable {
     let activeSession: DashboardWorkingSessionSummary?
+    let alerts: [DashboardAlert]
+    let activeAnimalRecords: [DashboardAnimalRecord]
+    let calvingWatchAnimalRecords: [DashboardAnimalRecord]
+    let overduePregnancyCheckAnimalRecords: [DashboardAnimalRecord]
+    let overdueTreatmentAnimalRecords: [DashboardAnimalRecord]
     let activeCheckSessions: [FieldCheckSessionSummary]
     let openFindings: [FieldCheckFindingSnapshot]
     let flaggedCheckSessions: [FieldCheckSessionSummary]
@@ -31,6 +36,10 @@ struct HomeSnapshot: Equatable {
 
     var workingPenCount: Int {
         workingPenAnimalRecords.count
+    }
+
+    var pastureAssignedAnimalCount: Int {
+        activeAnimalRecords.filter { $0.location == .pasture && $0.pastureID != nil }.count
     }
 
     var fieldWorkCardCount: Int {

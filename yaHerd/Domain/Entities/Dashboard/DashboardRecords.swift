@@ -23,10 +23,25 @@ struct DashboardAnimalRecord: Identifiable, Hashable {
     let lastPregnancyStatus: DashboardPregnancyStatus?
     let expectedCalvingDate: Date?
     let lastTreatmentDate: Date?
+    let birthDate: Date
+    let saleDate: Date?
+    let deathDate: Date?
+    let healthRecords: [DashboardHealthRecord]
+    let offspringCount: Int
 
     var isActiveInHerd: Bool {
         status == .active && !isArchived
     }
+
+    var hasRecordedDam: Bool {
+        damDisplayTagNumber != nil
+    }
+}
+
+struct DashboardHealthRecord: Hashable {
+    let date: Date
+    let treatment: String
+    let notes: String?
 }
 
 struct DashboardPastureRecord: Identifiable, Hashable {

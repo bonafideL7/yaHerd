@@ -64,6 +64,10 @@ struct HomeView: View {
         snapshot?.activeSession
     }
 
+    private var alerts: [DashboardAlert] {
+        snapshot?.alerts ?? []
+    }
+
     private var openFindings: [FieldCheckFindingSnapshot] {
         snapshot?.openFindings ?? []
     }
@@ -76,6 +80,26 @@ struct HomeView: View {
         snapshot?.flaggedCheckAnimalCount ?? 0
     }
 
+    private var activeAnimalRecords: [DashboardAnimalRecord] {
+        snapshot?.activeAnimalRecords ?? []
+    }
+
+    private var calvingWatchAnimalRecords: [DashboardAnimalRecord] {
+        snapshot?.calvingWatchAnimalRecords ?? []
+    }
+
+    private var overduePregnancyCheckAnimalRecords: [DashboardAnimalRecord] {
+        snapshot?.overduePregnancyCheckAnimalRecords ?? []
+    }
+
+    private var overdueTreatmentAnimalRecords: [DashboardAnimalRecord] {
+        snapshot?.overdueTreatmentAnimalRecords ?? []
+    }
+
+    private var pastureAssignedAnimalCount: Int {
+        snapshot?.pastureAssignedAnimalCount ?? 0
+    }
+
     private var pastureCheckDueItems: [HomePastureCheckDueItem] {
         snapshot?.pastureCheckDueItems ?? []
     }
@@ -85,7 +109,9 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 24) {
                 setupSuggestionsSection
                 homeSummaryCardsSection
+                alertsSection
                 continueSection
+                careStatusSection
                 fieldWorkSection
                 workPenSection
                 pastureOperationsSection
@@ -254,6 +280,30 @@ struct HomeView: View {
         return "Start work"
     }
 
+    private var alertSummarySubtitle: String {
+        guard snapshot != nil else { return "Loading alerts" }
+        guard !alerts.isEmpty else { return "No current alerts" }
+
+        let criticalCount = alerts.filter { $0.severity == .critical }.count
+        let warningCount = alerts.filter { $0.severity == .warning }.count
+
+        if criticalCount > 0 {
+            return "\(criticalCount) critical · \(warningCount) warnings"
+        }
+
+        if warningCount > 0 {
+            return warningCount == 1 ? "1 warning" : "\(warningCount) warnings"
+        }
+
+        return alerts.count == 1 ? "1 informational alert" : "\(alerts.count) informational alerts"
+    }
+
+    private var alertTint: Color {
+        if alerts.contains(where: { $0.severity == .critical }) { return .red }
+        if alerts.contains(where: { $0.severity == .warning }) { return .orange }
+        return alerts.isEmpty ? .green : .blue
+    }
+
     private var hasFieldWorkRows: Bool {
         snapshot?.hasFieldWorkRows ?? false
     }
@@ -268,6 +318,10 @@ struct HomeView: View {
 
     private var shouldShowOpenFindingsRow: Bool {
         snapshot?.shouldShowOpenFindingsRow ?? false
+    }
+
+    private var unassignedAnimalCount: Int {
+        unassignedAnimalRecords.count
     }
 
     private var hasPastureOperationRows: Bool {
@@ -497,6 +551,33 @@ struct HomeView: View {
     }
 
     @ViewBuilder
+    private var alertsSection: some View {
+        HomeSection(title: "Alerts") {
+            if snapshot == nil {
+                HomeLoadingRow(title: "Loading alerts…")
+            } else {
+                NavigationLink {
+                    HomeAlertsView(
+                        alerts: alerts,
+                        openAnimalList: openAnimalList,
+                        openPastureList: openPastureList
+                    )
+                } label: {
+                    HomeListRow(
+                        title: "Alerts",
+                        subtitle: alertSummarySubtitle,
+                        systemImage: alerts.isEmpty ? "checkmark.shield.fill" : "exclamationmark.triangle.fill",
+                        tint: alertTint,
+                        count: alerts.count,
+                        showsChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder
     private var continueSection: some View {
         HomeSection(title: "Continue") {
             if snapshot == nil {
@@ -560,6 +641,58 @@ struct HomeView: View {
                     systemImage: "checkmark.circle.fill",
                     tint: .green
                 )
+            }
+        }
+    }
+
+
+    @ViewBuilder
+    private var careStatusSection: some View {
+        HomeSection(title: "Care Status") {
+            if snapshot == nil {
+                HomeLoadingRow(title: "Loading care status…")
+            } else {
+                Button {
+                    openAnimalList(.calvingWatch)
+                } label: {
+                    HomeListRow(
+                        title: "Calving watch",
+                        subtitle: "Pregnant animals currently inside the watch window.",
+                        systemImage: "figure.2.and.child.holdinghands",
+                        tint: calvingWatchAnimalRecords.isEmpty ? .gray : .pink,
+                        count: calvingWatchAnimalRecords.count,
+                        showsChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    openAnimalList(.overduePregnancyChecks)
+                } label: {
+                    HomeListRow(
+                        title: "Pregnancy check status",
+                        subtitle: "Threshold: \(configuration.pregnancyCheckIntervalDays) days since last check.",
+                        systemImage: "stethoscope",
+                        tint: overduePregnancyCheckAnimalRecords.isEmpty ? .green : .orange,
+                        count: overduePregnancyCheckAnimalRecords.count,
+                        showsChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    openAnimalList(.overdueTreatments)
+                } label: {
+                    HomeListRow(
+                        title: "Treatment status",
+                        subtitle: "Threshold: \(configuration.treatmentIntervalDays) days since last treatment.",
+                        systemImage: "pills.fill",
+                        tint: overdueTreatmentAnimalRecords.isEmpty ? .green : .red,
+                        count: overdueTreatmentAnimalRecords.count,
+                        showsChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -1217,6 +1350,94 @@ private struct HomePastureCheckDueListView: View {
             }
         }
         .navigationTitle("Pasture Checks Due")
+    }
+}
+
+
+private struct HomeAlertsView: View {
+    let alerts: [DashboardAlert]
+    let openAnimalList: (AnimalListLaunchConfiguration) -> Void
+    let openPastureList: (PastureListLaunchConfiguration) -> Void
+
+    var body: some View {
+        Group {
+            if alerts.isEmpty {
+                ContentUnavailableView(
+                    "No Alerts",
+                    systemImage: "checkmark.shield.fill",
+                    description: Text("There are no current pasture, care, or record alerts.")
+                )
+            } else {
+                List {
+                    Section("Current Alerts") {
+                        ForEach(alerts) { alert in
+                            alertRow(alert)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Alerts")
+    }
+
+    @ViewBuilder
+    private func alertRow(_ alert: DashboardAlert) -> some View {
+        switch alert.destination {
+        case .some(.animal(let animalID)):
+            NavigationLink {
+                AnimalDetailView(animalID: animalID)
+            } label: {
+                alertLabel(alert)
+            }
+        case .some(.pasture(let pastureID)):
+            NavigationLink {
+                PastureDetailView(pastureID: pastureID)
+            } label: {
+                alertLabel(alert)
+            }
+        case .some(.animalList(let kind)):
+            Button {
+                openAnimalList(.dashboard(kind))
+            } label: {
+                alertLabel(alert, showsChevron: true)
+            }
+            .buttonStyle(.plain)
+        case .some(.pastureList):
+            Button {
+                openPastureList(.all)
+            } label: {
+                alertLabel(alert, showsChevron: true)
+            }
+            .buttonStyle(.plain)
+        case .none:
+            alertLabel(alert)
+        }
+    }
+
+    private func alertLabel(_ alert: DashboardAlert, showsChevron: Bool = false) -> some View {
+        HStack(spacing: 8) {
+            DashboardAlertRow(alert: alert, colorForSeverity: alertSeverityColor)
+
+            Spacer(minLength: 8)
+
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(Color.tertiary)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func alertSeverityColor(_ severity: DashboardAlertSeverity) -> Color {
+        switch severity {
+        case .critical:
+            return .red
+        case .warning:
+            return .orange
+        case .info:
+            return .blue
+        }
     }
 }
 
