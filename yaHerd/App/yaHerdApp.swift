@@ -10,26 +10,53 @@ import SwiftData
 
 @main
 struct yaHerdApp: App {
-    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var nav = NavigationCoordinator()
-    @StateObject private var tagColorLibrary: TagColorLibraryStore
-    private let sharedModelContainer: ModelContainer
-    private let dependencies: AppDependencies
-    private let startupStorageError: String?
+
+    private let bootstrapState: AppBootstrapState
     private let appSettingsSynchronizer: AppSettingsSynchronizer
 
     init() {
         let schema = Self.makeSchema()
         let preferences = AppPreferences()
-        let syncMode = preferences.syncMode
         let appSettingsSynchronizer = AppSettingsSynchronizer.shared
-        
+
+        self.appSettingsSynchronizer = appSettingsSynchronizer
+        self.bootstrapState = Self.bootstrap(
+            schema: schema,
+            preferences: preferences,
+            appSettingsSynchronizer: appSettingsSynchronizer
+        )
+    }
+
+    var body: some Scene {
+        WindowGroup {
+            switch bootstrapState {
+            case .ready(let runtime):
+                RunningAppView(
+                    runtime: runtime,
+                    appSettingsSynchronizer: appSettingsSynchronizer
+                )
+                .environmentObject(nav)
+
+            case .storageUnavailable(let message):
+                StartupStorageFailureView(message: message)
+            }
+        }
+    }
+
+    private static func bootstrap(
+        schema: Schema,
+        preferences: AppPreferencesProviding,
+        appSettingsSynchronizer: AppSettingsSynchronizer
+    ) -> AppBootstrapState {
+        let syncMode = preferences.syncMode
+
         do {
             let container = try ModelContainerFactory.makeContainer(
                 schema: schema,
                 syncMode: syncMode
             )
-            
+
             AppLaunchDiagnostics.record(
                 requestedSyncMode: syncMode,
                 actualStorageMode: syncMode == .iCloud ? .iCloud : .localOnly,
@@ -37,16 +64,21 @@ struct yaHerdApp: App {
             )
 
             appSettingsSynchronizer.startIfNeeded(syncMode: syncMode)
-            self.appSettingsSynchronizer = appSettingsSynchronizer
-            self.sharedModelContainer = container
-            self.dependencies = AppDependencies(context: container.mainContext)
-            self._tagColorLibrary = StateObject(wrappedValue: TagColorLibraryStore(context: container.mainContext, syncMode: syncMode))
-            self.startupStorageError = nil
+
+            return .ready(
+                AppRuntime(
+                    modelContainer: container,
+                    dependencies: AppDependencies(context: container.mainContext),
+                    syncMode: syncMode,
+                    storageError: nil
+                )
+            )
         } catch {
             let primaryError = error
 
             if syncMode == .iCloud {
                 preferences.syncMode = .localOnly
+                appSettingsSynchronizer.stop()
 
                 do {
                     let localContainer = try ModelContainerFactory.makeContainer(
@@ -65,12 +97,14 @@ struct yaHerdApp: App {
                         startupError: startupMessage
                     )
 
-                    self.appSettingsSynchronizer = appSettingsSynchronizer
-                    self.sharedModelContainer = localContainer
-                    self.dependencies = AppDependencies(context: localContainer.mainContext)
-                    self._tagColorLibrary = StateObject(wrappedValue: TagColorLibraryStore(context: localContainer.mainContext, syncMode: .localOnly))
-                    self.startupStorageError = startupMessage
-                    return
+                    return .ready(
+                        AppRuntime(
+                            modelContainer: localContainer,
+                            dependencies: AppDependencies(context: localContainer.mainContext),
+                            syncMode: .localOnly,
+                            storageError: startupMessage
+                        )
+                    )
                 } catch {
                     let localRecoveryError = error
 
@@ -93,34 +127,42 @@ struct yaHerdApp: App {
                             startupError: startupMessage
                         )
 
-                        self.appSettingsSynchronizer = appSettingsSynchronizer
-                        self.sharedModelContainer = fallbackContainer
-                        self.dependencies = AppDependencies(context: fallbackContainer.mainContext)
-                        self._tagColorLibrary = StateObject(wrappedValue: TagColorLibraryStore(context: fallbackContainer.mainContext, syncMode: .localOnly))
-                        self.startupStorageError = startupMessage
-                        return
+                        return .ready(
+                            AppRuntime(
+                                modelContainer: fallbackContainer,
+                                dependencies: AppDependencies(context: fallbackContainer.mainContext),
+                                syncMode: .localOnly,
+                                storageError: startupMessage
+                            )
+                        )
                     } catch {
-                        fatalError("""
-                        Failed to create SwiftData containers.
+                        let startupMessage = """
+                        Persistent storage could not be opened, and the in-memory recovery store could not be started. No data was loaded and changes are disabled.
 
-                        iCloud container error:
-                        \(primaryError)
+                        iCloud container error: \(primaryError.localizedDescription)
+                        Local recovery error: \(localRecoveryError.localizedDescription)
+                        In-memory recovery error: \(error.localizedDescription)
+                        """
 
-                        Local recovery error:
-                        \(localRecoveryError)
+                        AppLaunchDiagnostics.record(
+                            requestedSyncMode: syncMode,
+                            actualStorageMode: .unavailable,
+                            cloudKitOpened: false,
+                            startupError: startupMessage
+                        )
 
-                        Fallback container error:
-                        \(error)
-                        """)
+                        return .storageUnavailable(startupMessage)
                     }
                 }
             }
-            
+
+            appSettingsSynchronizer.stop()
+
             do {
                 let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer(
                     schema: schema
                 )
-                
+
                 let startupMessage = """
                 Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved. Original error: \(primaryError.localizedDescription)
                 """
@@ -132,38 +174,32 @@ struct yaHerdApp: App {
                     startupError: startupMessage
                 )
 
-                self.appSettingsSynchronizer = appSettingsSynchronizer
-                self.sharedModelContainer = fallbackContainer
-                self.dependencies = AppDependencies(context: fallbackContainer.mainContext)
-                self._tagColorLibrary = StateObject(wrappedValue: TagColorLibraryStore(context: fallbackContainer.mainContext, syncMode: .localOnly))
-                self.startupStorageError = startupMessage
+                return .ready(
+                    AppRuntime(
+                        modelContainer: fallbackContainer,
+                        dependencies: AppDependencies(context: fallbackContainer.mainContext),
+                        syncMode: .localOnly,
+                        storageError: startupMessage
+                    )
+                )
             } catch {
-                fatalError("""
-                Failed to create SwiftData containers.
-                
-                Primary container error:
-                \(primaryError)
-                
-                Fallback container error:
-                \(error)
-                """)
+                let startupMessage = """
+                Persistent storage could not be opened, and the in-memory recovery store could not be started. No data was loaded and changes are disabled.
+
+                Primary container error: \(primaryError.localizedDescription)
+                In-memory recovery error: \(error.localizedDescription)
+                """
+
+                AppLaunchDiagnostics.record(
+                    requestedSyncMode: syncMode,
+                    actualStorageMode: .unavailable,
+                    cloudKitOpened: false,
+                    startupError: startupMessage
+                )
+
+                return .storageUnavailable(startupMessage)
             }
         }
-    }
-    var body: some Scene {
-        WindowGroup {
-            RootAppView(storageError: startupStorageError)
-                .environmentObject(nav)
-                .environmentObject(tagColorLibrary)
-                .environmentObject(dependencies)
-                .onChange(of: scenePhase) { _, newPhase in
-                    if newPhase == .active {
-                        appSettingsSynchronizer.refreshFromICloudIfStarted()
-                        tagColorLibrary.refresh()
-                    }
-                }
-        }
-        .modelContainer(sharedModelContainer)
     }
 
     static func makeSchema() -> Schema {
@@ -189,6 +225,50 @@ struct yaHerdApp: App {
     }
 }
 
+private enum AppBootstrapState {
+    case ready(AppRuntime)
+    case storageUnavailable(String)
+}
+
+private struct AppRuntime {
+    let modelContainer: ModelContainer
+    let dependencies: AppDependencies
+    let syncMode: SyncMode
+    let storageError: String?
+}
+
+private struct RunningAppView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var tagColorLibrary: TagColorLibraryStore
+
+    private let runtime: AppRuntime
+    private let appSettingsSynchronizer: AppSettingsSynchronizer
+
+    init(runtime: AppRuntime, appSettingsSynchronizer: AppSettingsSynchronizer) {
+        self.runtime = runtime
+        self.appSettingsSynchronizer = appSettingsSynchronizer
+        self._tagColorLibrary = StateObject(
+            wrappedValue: TagColorLibraryStore(
+                context: runtime.modelContainer.mainContext,
+                syncMode: runtime.syncMode
+            )
+        )
+    }
+
+    var body: some View {
+        RootAppView(storageError: runtime.storageError)
+            .environmentObject(tagColorLibrary)
+            .environmentObject(runtime.dependencies)
+            .modelContainer(runtime.modelContainer)
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active {
+                    appSettingsSynchronizer.refreshFromICloudIfStarted()
+                    tagColorLibrary.refresh()
+                }
+            }
+    }
+}
+
 private struct RootAppView: View {
     let storageError: String?
     @State private var showsStorageError: Bool
@@ -205,5 +285,32 @@ private struct RootAppView: View {
             } message: {
                 Text(storageError ?? "Persistent storage could not be opened.")
             }
+    }
+}
+
+private struct StartupStorageFailureView: View {
+    let message: String
+
+    var body: some View {
+        NavigationStack {
+            ContentUnavailableView {
+                Label("Storage Unavailable", systemImage: "externaldrive.badge.exclamationmark")
+            } description: {
+                Text("yaHerd could not open persistent storage or start an in-memory recovery store.")
+            } actions: {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("No data was loaded. Changes are disabled for this launch.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+                .padding(.horizontal)
+            }
+            .navigationTitle("yaHerd")
+        }
     }
 }

@@ -17,13 +17,16 @@ protocol SyncDataResetting {
 
 final class SyncDataResetService: SyncDataResetting {
     private let preferences: AppPreferencesProviding
+    private let settingsSynchronizer: AppSettingsSyncing
     private let cloudKitContainerIdentifier: String
 
     init(
         preferences: AppPreferencesProviding = AppPreferences(),
+        settingsSynchronizer: AppSettingsSyncing = AppSettingsSynchronizer.shared,
         cloudKitContainerIdentifier: String = ModelContainerFactory.cloudKitContainerIdentifier
     ) {
         self.preferences = preferences
+        self.settingsSynchronizer = settingsSynchronizer
         self.cloudKitContainerIdentifier = cloudKitContainerIdentifier
     }
 
@@ -32,6 +35,7 @@ final class SyncDataResetService: SyncDataResetting {
 
         await MainActor.run {
             preferences.syncMode = .localOnly
+            settingsSynchronizer.stop()
         }
 
         return SyncDataResetSummary(

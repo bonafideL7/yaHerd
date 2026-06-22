@@ -9,6 +9,7 @@ enum AppLaunchStorageMode: String {
     case localOnly
     case iCloud
     case recovery
+    case unavailable
 
     var displayName: String {
         switch self {
@@ -18,6 +19,8 @@ enum AppLaunchStorageMode: String {
             "iCloud Sync"
         case .recovery:
             "Recovery Mode"
+        case .unavailable:
+            "Storage Unavailable"
         }
     }
 }

@@ -9,6 +9,11 @@ protocol AppPreferencesProviding: AnyObject {
     var syncMode: SyncMode { get set }
 }
 
+protocol AppSettingsSyncing: AnyObject {
+    func startIfNeeded(syncMode: SyncMode)
+    func stop()
+}
+
 final class AppPreferences: AppPreferencesProviding {
     private enum Keys {
         static let syncMode = "syncMode"
@@ -43,7 +48,7 @@ enum SyncedAppSettingKey: String, CaseIterable {
     case recentPastureNames
 }
 
-final class AppSettingsSynchronizer {
+final class AppSettingsSynchronizer: AppSettingsSyncing {
     static let shared = AppSettingsSynchronizer()
 
     private let userDefaults: UserDefaults
@@ -64,13 +69,14 @@ final class AppSettingsSynchronizer {
     }
 
     deinit {
-        for token in observerTokens {
-            NotificationCenter.default.removeObserver(token)
-        }
+        stop()
     }
 
     func startIfNeeded(syncMode: SyncMode) {
-        guard syncMode == .iCloud else { return }
+        guard syncMode == .iCloud else {
+            stop()
+            return
+        }
 
         cloudStore.synchronize()
         applyCloudSettingsToLocalDefaults()
@@ -79,6 +85,18 @@ final class AppSettingsSynchronizer {
         guard !isStarted else { return }
         isStarted = true
         observeChanges()
+    }
+
+    func stop() {
+        guard isStarted || !observerTokens.isEmpty else { return }
+
+        for token in observerTokens {
+            NotificationCenter.default.removeObserver(token)
+        }
+
+        observerTokens.removeAll()
+        isStarted = false
+        isApplyingCloudValues = false
     }
 
     func applyCloudSettingsToLocalDefaults() {

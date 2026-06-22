@@ -1,5 +1,16 @@
 import Foundation
 
+private enum PreviewRepositoryError: LocalizedError {
+    case unsupportedOperation(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedOperation(let operation):
+            return "Preview repository does not support \(operation)."
+        }
+    }
+}
+
 struct EmptyWorkingRepository: WorkingRepository {
     func fetchSessions() throws -> [WorkingSessionSummary] { [] }
     func fetchSessionDetail(id: UUID) throws -> WorkingSessionDetailSnapshot? { nil }
@@ -27,16 +38,16 @@ struct EmptyAnimalRepository: AnimalRepository {
     func fetchStatusReferenceOptions() throws -> [AnimalStatusReferenceOption] { [] }
     func fetchParentOptions(excluding excludedAnimalID: UUID?) throws -> [AnimalParentOption] { [] }
     func fetchOffspringDraftSeed(forDamID damID: UUID) throws -> OffspringDraftSeed? { nil }
-    func create(input: AnimalInput) throws -> AnimalDetailSnapshot { fatalError() }
-    func update(id: UUID, input: AnimalInput) throws -> AnimalDetailSnapshot { fatalError() }
+    func create(input: AnimalInput) throws -> AnimalDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("creating animals") }
+    func update(id: UUID, input: AnimalInput) throws -> AnimalDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("updating animals") }
     func delete(ids: [UUID]) throws {}
     func archive(ids: [UUID]) throws {}
     func restore(ids: [UUID]) throws {}
     func move(ids: [UUID], toPastureID: UUID?) throws {}
-    func addTag(animalID: UUID, input: AnimalTagInput) throws -> AnimalDetailSnapshot { fatalError() }
-    func updateTag(animalID: UUID, tagID: UUID, input: AnimalTagInput) throws -> AnimalDetailSnapshot { fatalError() }
-    func promoteTag(animalID: UUID, tagID: UUID) throws -> AnimalDetailSnapshot { fatalError() }
-    func retireTag(animalID: UUID, tagID: UUID) throws -> AnimalDetailSnapshot { fatalError() }
-    func addHealthRecord(animalID: UUID, input: HealthRecordInput) throws -> AnimalDetailSnapshot { fatalError() }
-    func addPregnancyCheck(animalID: UUID, input: PregnancyCheckInput) throws -> AnimalDetailSnapshot { fatalError() }
+    func addTag(animalID: UUID, input: AnimalTagInput) throws -> AnimalDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("adding tags") }
+    func updateTag(animalID: UUID, tagID: UUID, input: AnimalTagInput) throws -> AnimalDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("updating tags") }
+    func promoteTag(animalID: UUID, tagID: UUID) throws -> AnimalDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("promoting tags") }
+    func retireTag(animalID: UUID, tagID: UUID) throws -> AnimalDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("retiring tags") }
+    func addHealthRecord(animalID: UUID, input: HealthRecordInput) throws -> AnimalDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("adding health records") }
+    func addPregnancyCheck(animalID: UUID, input: PregnancyCheckInput) throws -> AnimalDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("adding pregnancy checks") }
 }

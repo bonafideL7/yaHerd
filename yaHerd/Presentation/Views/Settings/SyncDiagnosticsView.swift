@@ -44,8 +44,9 @@ struct SyncDiagnosticsView: View {
 
             Section("iCloud") {
                 LabeledContent("Account Status", value: iCloudStatusText)
-                LabeledContent("Container", value: ModelContainerFactory.cloudKitContainerIdentifier)
-                LabeledContent("Store", value: ModelContainerFactory.storeName)
+                LabeledContent("SwiftData CloudKit", value: swiftDataCloudKitDescription)
+                LabeledContent("CloudKit Container", value: ModelContainerFactory.cloudKitContainerIdentifier)
+                LabeledContent("Store", value: activeStoreDescription)
             }
 
             Section("App") {
@@ -195,6 +196,24 @@ struct SyncDiagnosticsView: View {
         }
     }
 
+
+    private var swiftDataCloudKitDescription: String {
+        launchSnapshot.actualStorageMode == .iCloud
+            ? "Private: \(ModelContainerFactory.cloudKitContainerIdentifier)"
+            : "Disabled"
+    }
+
+    private var activeStoreDescription: String {
+        switch launchSnapshot.actualStorageMode {
+        case .recovery:
+            ModelContainerFactory.recoveryStoreName
+        case .unavailable:
+            "None"
+        case .localOnly, .iCloud:
+            ModelContainerFactory.storeName
+        }
+    }
+
     private var buildConfiguration: String {
         #if DEBUG
         return "Debug"
@@ -222,6 +241,10 @@ struct SyncDiagnosticsView: View {
 
         if launchSnapshot.actualStorageMode == .recovery {
             return "This install is running in recovery mode. Changes from this session are not being saved normally and will not sync."
+        }
+
+        if launchSnapshot.actualStorageMode == .unavailable {
+            return "This install could not open persistent storage or an in-memory recovery store. Data was not loaded for that launch."
         }
 
         if preferences.syncMode == .iCloud, launchSnapshot.actualStorageMode != .iCloud {

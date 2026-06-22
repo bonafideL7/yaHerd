@@ -7,6 +7,7 @@ import SwiftData
 
 enum ModelContainerFactory {
     static let storeName = "yaHerdStore"
+    static let recoveryStoreName = "yaHerdRecoveryStore"
     static let cloudKitContainerIdentifier = "iCloud.ltd.yaherd"
 
     static func makeContainer(
@@ -27,7 +28,7 @@ enum ModelContainerFactory {
 
     static func makeRecoveryContainer(schema: Schema) throws -> ModelContainer {
         let fallbackConfiguration = ModelConfiguration(
-            "yaHerdRecoveryStore",
+            recoveryStoreName,
             schema: schema,
             isStoredInMemoryOnly: true
         )
@@ -43,7 +44,7 @@ enum ModelContainerFactory {
         case .localOnly:
             .none
         case .iCloud:
-            .automatic
+            .private(cloudKitContainerIdentifier)
         }
     }
 }
