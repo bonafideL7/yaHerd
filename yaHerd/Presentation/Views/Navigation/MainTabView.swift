@@ -72,7 +72,6 @@ struct MainTabView: View {
         }
 
         if animalFilter.location.isActive { count += 1 }
-        if animalFilter.care.isActive { count += 1 }
         if animalFilter.recordIssue.isActive { count += 1 }
         
         return count

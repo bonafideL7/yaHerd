@@ -15,8 +15,6 @@ struct AnimalListView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
-    @AppStorage("pregCheckIntervalDays") private var pregCheckIntervalDays = 180
-    @AppStorage("treatmentIntervalDays") private var treatmentIntervalDays = 180
 
     @State private var viewModel = AnimalListViewModel()
     @State private var internalSearchText = ""
@@ -195,9 +193,7 @@ struct AnimalListView: View {
             sortOrder: sortOrderValue,
             filter: filterValue,
             showRemovedStatuses: showRemovedStatusesValue,
-            showArchivedRecords: showArchivedRecordsValue,
-            pregnancyCheckIntervalDays: pregCheckIntervalDays,
-            treatmentIntervalDays: treatmentIntervalDays
+            showArchivedRecords: showArchivedRecordsValue
         ) { tagNumber, colorID in
             tagColorLibrary.formattedTag(tagNumber: tagNumber, colorID: colorID)
         }
@@ -540,13 +536,6 @@ struct AnimalListView: View {
             })
         }
 
-        if filterValue.care.isActive {
-            chips.append(.init(title: filterValue.care.label) {
-                var updatedFilter = filterValue
-                updatedFilter.care = .any
-                filterBinding.wrappedValue = updatedFilter
-            })
-        }
 
         if filterValue.recordIssue.isActive {
             chips.append(.init(title: filterValue.recordIssue.label) {

@@ -20,10 +20,6 @@ enum AnimalListDerivations {
         filter: AnimalFilter,
         showRemovedStatuses: Bool,
         showArchivedRecords: Bool,
-        pregnancyCheckIntervalDays: Int = 180,
-        treatmentIntervalDays: Int = 180,
-        calvingWatchDays: Int = 14,
-        now: Date = .now,
         formatTag: (String, UUID?) -> String
     ) -> [AnimalSummary] {
         var result = items
@@ -73,32 +69,6 @@ enum AnimalListDerivations {
             result = result.filter { $0.location == .pasture }
         case .workingPen:
             result = result.filter { $0.location == .workingPen }
-        }
-
-        switch filter.care {
-        case .any:
-            break
-        case .overduePregnancyCheck:
-            result = result.filter { animal in
-                guard animal.isActiveInVisibleHerd else { return false }
-                guard let lastPregnancyCheckDate = animal.lastPregnancyCheckDate else { return false }
-                let days = Calendar.current.dateComponents([.day], from: lastPregnancyCheckDate, to: now).day ?? 0
-                return days > pregnancyCheckIntervalDays
-            }
-        case .overdueTreatment:
-            result = result.filter { animal in
-                guard !animal.isArchived else { return false }
-                guard let lastTreatmentDate = animal.lastTreatmentDate else { return false }
-                let days = Calendar.current.dateComponents([.day], from: lastTreatmentDate, to: now).day ?? 0
-                return days > treatmentIntervalDays
-            }
-        case .calvingWatch:
-            let watchEndDate = Calendar.current.date(byAdding: .day, value: calvingWatchDays, to: now) ?? now
-            result = result.filter { animal in
-                animal.isActiveInVisibleHerd
-                && animal.lastPregnancyStatus == .pregnant
-                && (animal.expectedCalvingDate ?? .distantFuture) <= watchEndDate
-            }
         }
 
         switch filter.recordIssue {

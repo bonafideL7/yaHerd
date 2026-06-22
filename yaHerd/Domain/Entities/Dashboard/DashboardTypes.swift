@@ -1,19 +1,12 @@
 import Foundation
 
-struct DashboardConfiguration: Equatable, Hashable {
-    var pregnancyCheckIntervalDays: Int
-    var treatmentIntervalDays: Int
-    var enablePastureOverstockWarnings: Bool
-    var fallbackPastureCapacity: Int
-}
+struct DashboardConfiguration: Equatable, Hashable {}
+
 
 enum DashboardAnimalListKind: String, Hashable {
     case active
     case workingPen
     case unassigned
-    case overduePregChecks
-    case overdueTreatments
-    case calvingWatch
 
     var title: String {
         switch self {
@@ -23,19 +16,12 @@ enum DashboardAnimalListKind: String, Hashable {
             return "Working Pen"
         case .unassigned:
             return "Unassigned"
-        case .overduePregChecks:
-            return "Overdue Pregnancy Checks"
-        case .overdueTreatments:
-            return "Overdue Treatments"
-        case .calvingWatch:
-            return "Calving Watch"
         }
     }
 }
 
 enum DashboardPastureFilter: CaseIterable, Hashable {
     case all
-    case overstocked
     case underutilized
     case rotationReady
 
@@ -43,8 +29,6 @@ enum DashboardPastureFilter: CaseIterable, Hashable {
         switch self {
         case .all:
             return "All"
-        case .overstocked:
-            return "Over"
         case .underutilized:
             return "Low"
         case .rotationReady:

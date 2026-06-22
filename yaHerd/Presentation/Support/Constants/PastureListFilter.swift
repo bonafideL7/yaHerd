@@ -2,7 +2,7 @@ import Foundation
 
 enum PastureListFilter: CaseIterable, Hashable {
     case all
-    case overstocked
+    case overCapacity
     case underutilized
     case rotationReady
     case missingStockingData
@@ -11,8 +11,8 @@ enum PastureListFilter: CaseIterable, Hashable {
         switch self {
         case .all:
             return "All"
-        case .overstocked:
-            return "Overstocked"
+        case .overCapacity:
+            return "Over Capacity"
         case .underutilized:
             return "Low Use"
         case .rotationReady:
@@ -26,7 +26,7 @@ enum PastureListFilter: CaseIterable, Hashable {
         switch self {
         case .all:
             return "All"
-        case .overstocked:
+        case .overCapacity:
             return "Over"
         case .underutilized:
             return "Low"

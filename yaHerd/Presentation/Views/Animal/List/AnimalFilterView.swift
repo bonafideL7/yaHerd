@@ -141,17 +141,6 @@ struct AnimalFilterView: View {
                     }
                 }
 
-                Section("Care Status") {
-                    Picker("Care Status", selection: Binding(
-                        get: { filter.care },
-                        set: { filter.care = $0 }
-                    )) {
-                        ForEach(AnimalCareFilter.allCases, id: \.self) { option in
-                            Text(option.label).tag(option)
-                        }
-                    }
-                }
-
                 Section("Record Issues") {
                     Picker("Record Issues", selection: Binding(
                         get: { filter.recordIssue },

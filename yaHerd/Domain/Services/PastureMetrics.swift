@@ -42,7 +42,7 @@ struct PastureMetrics: Hashable {
         return Double(activeAnimals) / capacityHead
     }
 
-    var isOverstocked: Bool {
+    var isOverCapacity: Bool {
         guard let capacityHead else { return false }
         return Double(activeAnimals) > capacityHead
     }

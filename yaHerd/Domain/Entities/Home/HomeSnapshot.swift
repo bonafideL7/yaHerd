@@ -4,16 +4,12 @@ struct HomeSnapshot: Equatable {
     let activeSession: DashboardWorkingSessionSummary?
     let alerts: [DashboardAlert]
     let activeAnimalRecords: [DashboardAnimalRecord]
-    let calvingWatchAnimalRecords: [DashboardAnimalRecord]
-    let overduePregnancyCheckAnimalRecords: [DashboardAnimalRecord]
-    let overdueTreatmentAnimalRecords: [DashboardAnimalRecord]
     let activeCheckSessions: [FieldCheckSessionSummary]
     let openFindings: [FieldCheckFindingSnapshot]
     let flaggedCheckSessions: [FieldCheckSessionSummary]
     let missingCheckSessions: [FieldCheckSessionSummary]
     let pastureCheckDueItems: [HomePastureCheckDueItem]
     let workingPenAnimalRecords: [DashboardAnimalRecord]
-    let overstockedPastures: [DashboardPastureItem]
     let rotationReadyPastures: [DashboardPastureItem]
     let underutilizedPastures: [DashboardPastureItem]
     let pasturesMissingStockingData: [DashboardPastureItem]
@@ -51,8 +47,7 @@ struct HomeSnapshot: Equatable {
     }
 
     var pastureOperationsCardCount: Int {
-        overstockedPastures.count
-            + rotationReadyPastures.count
+        rotationReadyPastures.count
             + underutilizedPastures.count
             + pasturesMissingStockingData.count
     }
@@ -100,8 +95,7 @@ struct HomeSnapshot: Equatable {
     }
 
     var hasPastureOperationRows: Bool {
-        !overstockedPastures.isEmpty
-            || !rotationReadyPastures.isEmpty
+        !rotationReadyPastures.isEmpty
             || !underutilizedPastures.isEmpty
             || !pasturesMissingStockingData.isEmpty
     }

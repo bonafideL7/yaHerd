@@ -170,8 +170,8 @@ struct PastureDetailView: View {
                     
                     Spacer()
                     
-                    if metrics.isOverstocked {
-                        Label("Overstocked", systemImage: "exclamationmark.triangle.fill")
+                    if metrics.isOverCapacity {
+                        Label("Over Capacity", systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.red)
                     } else if metrics.isUnderutilized {
                         Label("Underutilized", systemImage: "arrow.down.left.and.arrow.up.right")

@@ -28,8 +28,8 @@ struct PastureSummary: Identifiable, Hashable {
         metrics.capacityHead
     }
 
-    var isOverstocked: Bool {
-        metrics.isOverstocked
+    var isOverCapacity: Bool {
+        metrics.isOverCapacity
     }
 
     var isUnderutilized: Bool {
@@ -45,7 +45,7 @@ struct PastureSummary: Identifiable, Hashable {
     }
 
     var isRotationReady: Bool {
-        guard isRestedForRotation, !isOverstocked else { return false }
+        guard isRestedForRotation, !isOverCapacity else { return false }
         guard let utilizationPercent = metrics.utilizationPercent else { return activeAnimalCount == 0 }
         return utilizationPercent < 0.80
     }
