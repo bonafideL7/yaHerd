@@ -33,7 +33,18 @@ enum DashboardMapper {
             lastPregnancyCheckDate: latestPregnancyCheck?.date,
             lastPregnancyStatus: pregnancyStatus(from: latestPregnancyCheck?.result),
             expectedCalvingDate: latestPregnancyCheck?.result == .pregnant ? expectedCalvingDate : nil,
-            lastTreatmentDate: latestHealthRecord?.date
+            lastTreatmentDate: latestHealthRecord?.date,
+            birthDate: animal.birthDate,
+            saleDate: animal.saleDate,
+            deathDate: animal.deathDate,
+            healthRecords: animal.healthRecords.map { record in
+                DashboardHealthRecord(
+                    date: record.date,
+                    treatment: record.treatment,
+                    notes: record.notes
+                )
+            },
+            offspringCount: animal.offspringCount
         )
     }
 

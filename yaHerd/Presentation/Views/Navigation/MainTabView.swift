@@ -105,14 +105,10 @@ struct MainTabView: View {
             
             if isDashboardEnabled {
                 Tab("Dashboard", systemImage: "rectangle.3.group", value: MainTab.dashboard) {
-                    NavigationStack(path: $nav.globalPath) {
-                        DashboardView(
-                            openAnimalList: openAnimalList,
-                            openPastureList: openPastureList
-                        )
+                    NavigationStack {
+                        DashboardView()
                             .yaherdInlineLargeNavigationTitle("Dashboard")
                             .appSettingsToolbar(isPresented: $isShowingSettings)
-                            .navigationDestination(for: DashboardRoute.self, destination: dashboardDestination)
                     }
                 }
             }
@@ -259,19 +255,6 @@ struct MainTabView: View {
         pastureFilter = configuration.filter
     }
     
-    @ViewBuilder
-    private func dashboardDestination(for route: DashboardRoute) -> some View {
-        switch route {
-        case .animal(let id):
-            AnimalDetailView(animalID: id)
-        case .pasture(let id):
-            PastureDetailView(pastureID: id)
-        case .animalList(let kind):
-            DashboardAnimalListView(kind: kind, repository: dependencies.dashboardRepository)
-        case .pastureList:
-            DashboardPastureListView(repository: dependencies.dashboardRepository)
-        }
-    }
 }
 
 private struct SettingsSheetView: View {
