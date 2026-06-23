@@ -7,11 +7,37 @@ struct AnimalListContentList: View {
     @Binding var selectedAnimalIDs: Set<UUID>
     let hardDeleteOnSwipe: Bool
     @Binding var collapsedSectionIDs: Set<String>
+    let inlineEntryIsActive: Bool
+    let inlineEntryIdentity: UUID
+    let editingAnimalID: UUID?
+    @Binding var inlineText: String
+    @Binding var inlineSex: Sex
+    @Binding var inlineBirthDate: Date
+    @Binding var inlinePastureID: UUID?
+    let pastureOptions: [PastureOption]
+    let inlineHelperText: String
+    let inlineFocusRequestID: UUID
+    let onStartNewInlineEntry: () -> Void
+    let onStartEditingAnimal: (AnimalSummary) -> Void
+    let onSubmitInlineEntry: () -> Void
+    let onCommitInlineEntryFocusLoss: () -> Void
+    let onCancelInlineEntry: () -> Void
+    let onOpenInlineDetails: (UUID) -> Void
     let onPrimarySwipeAction: (AnimalSummary) -> Void
     let onRestoreArchivedRecord: (AnimalSummary) -> Void
 
+    private var hasVisibleRows: Bool {
+        groupedAnimals.contains { !$0.animals.isEmpty }
+    }
+
     var body: some View {
         List(selection: batchMode ? $selectedAnimalIDs : nil) {
+            if inlineEntryIsActive && !hasVisibleRows {
+                inlineEntryRow(mode: .new)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+
             ForEach(groupedAnimals) { section in
                 Section {
                     if !isCollapsed(section) {
@@ -20,6 +46,16 @@ struct AnimalListContentList: View {
                 } header: {
                     sectionHeader(for: section)
                 }
+            }
+
+            if inlineEntryIsActive && hasVisibleRows && editingAnimalID == nil {
+                inlineEntryRow(mode: .new)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            } else if !batchMode {
+                AnimalListInlineTapRow(onTap: onStartNewInlineEntry)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
         }
         .environment(\.editMode, .constant(batchMode ? .active : .inactive))
@@ -49,7 +85,7 @@ struct AnimalListContentList: View {
             .accessibilityLabel(sectionHeaderAccessibilityLabel(for: section))
             .accessibilityValue(isCollapsed(section) ? "Collapsed" : "Expanded")
             .accessibilityHint("Double-tap to \(isCollapsed(section) ? "expand" : "collapse") this group")
-        } else {
+        } else if hasVisibleRows {
             AnimalListSectionHeader(
                 title: nil,
                 count: section.animals.count,
@@ -68,28 +104,62 @@ struct AnimalListContentList: View {
                     .listRowBackground(batchRowBackground(for: animal))
                     .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
                     .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
+            } else if editingAnimalID == animal.id {
+                inlineEntryRow(mode: .edit, animalID: animal.id)
+                    .listRowBackground(Color.clear)
+                    .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+                    .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
             } else {
-                NavigationLink(value: animal.id) {
-                    AnimalListRowContent(animal: animal)
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    trailingSwipeActions(for: animal)
-                }
-                .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                    if animal.isArchived {
-                        Button {
-                            onRestoreArchivedRecord(animal)
-                        } label: {
-                            Label("Restore", systemImage: "arrow.uturn.backward")
-                        }
-                        .tint(.blue)
+                editableAnimalRow(animal)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        trailingSwipeActions(for: animal)
                     }
-                }
-                .listRowBackground(Color.clear)
-                .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
-                .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
+                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                        if animal.isArchived {
+                            Button {
+                                onRestoreArchivedRecord(animal)
+                            } label: {
+                                Label("Restore", systemImage: "arrow.uturn.backward")
+                            }
+                            .tint(.blue)
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                    .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+                    .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
             }
         }
+    }
+
+    private func editableAnimalRow(_ animal: AnimalSummary) -> some View {
+        Button {
+            onStartEditingAnimal(animal)
+        } label: {
+            AnimalListRowContent(animal: animal)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Double-tap to edit this animal inline")
+    }
+
+    private func inlineEntryRow(mode: AnimalListInlineEntryRow.Mode, animalID: UUID? = nil) -> some View {
+        AnimalListInlineEntryRow(
+            text: $inlineText,
+            sex: $inlineSex,
+            birthDate: $inlineBirthDate,
+            pastureID: $inlinePastureID,
+            mode: mode,
+            pastureOptions: pastureOptions,
+            helperText: inlineHelperText,
+            focusRequestID: inlineFocusRequestID,
+            onSubmit: onSubmitInlineEntry,
+            onCommitFocusLoss: onCommitInlineEntryFocusLoss,
+            onCancel: onCancelInlineEntry,
+            detailsAnimalID: animalID,
+            onOpenDetails: onOpenInlineDetails
+        )
+        .id(animalID ?? inlineEntryIdentity)
     }
 
     @ViewBuilder
@@ -134,6 +204,21 @@ struct AnimalListContentList: View {
     private func sectionHeaderAccessibilityLabel(for section: AnimalSection) -> String {
         let countText = section.animals.count == 1 ? "1 animal" : "\(section.animals.count) animals"
         return "\(section.title), \(countText)"
+    }
+}
+
+private struct AnimalListInlineTapRow: View {
+    let onTap: () -> Void
+
+    var body: some View {
+        Color.clear
+            .frame(minHeight: 52)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onTap)
+            .accessibilityElement()
+            .accessibilityLabel("Add animal")
+            .accessibilityHint("Double-tap to start a new inline animal entry")
     }
 }
 
