@@ -18,10 +18,22 @@ final class PastureTileListViewModel {
 
     func movePastures(from source: IndexSet, to destination: Int, using repository: any PastureRepository) {
         let originalItems = items
-        items = movedItems(from: source, to: destination)
+        movePasturesInMemory(from: source, to: destination)
 
+        commitPastureOrder(using: repository, rollbackTo: originalItems)
+    }
+
+    func movePasturesInMemory(from source: IndexSet, to destination: Int) {
+        items = movedItems(from: source, to: destination)
+    }
+
+    func persistPastureOrder(using repository: any PastureRepository) throws {
+        try ReorderPasturesUseCase(repository: repository).execute(ids: items.map(\.id))
+    }
+
+    func commitPastureOrder(using repository: any PastureRepository, rollbackTo originalItems: [PastureSummary]) {
         do {
-            try ReorderPasturesUseCase(repository: repository).execute(ids: items.map(\.id))
+            try persistPastureOrder(using: repository)
         } catch {
             items = originalItems
             errorMessage = error.localizedDescription
@@ -41,11 +53,16 @@ final class PastureTileListViewModel {
 
         do {
             try DeletePasturesUseCase(repository: repository).execute(ids: ids)
-            try ReorderPasturesUseCase(repository: repository).execute(ids: items.map(\.id))
+            try persistPastureOrder(using: repository)
         } catch {
             items = originalItems
             errorMessage = error.localizedDescription
         }
+    }
+
+    func deletePasture(id: UUID, using repository: any PastureRepository) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        deletePastures(at: IndexSet(integer: index), using: repository)
     }
 
     private func movedItems(from source: IndexSet, to destination: Int) -> [PastureSummary] {

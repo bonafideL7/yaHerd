@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct PastureTileListView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -7,6 +8,9 @@ struct PastureTileListView: View {
     @State private var selectedPasture: PastureSummary?
     @State private var isPresentingAddPasture = false
     @State private var internalFilter: PastureListFilter = .all
+    @State private var draggedPasture: PastureSummary?
+    @State private var dragStartOrder: [PastureSummary] = []
+    @State private var pasturePendingDeletion: PastureSummary?
 
     @Binding private var isManaging: Bool
 
@@ -65,7 +69,7 @@ struct PastureTileListView: View {
             if model.items.isEmpty {
                 emptyState
             } else if isManaging {
-                manageList
+                manageGrid
             } else if filteredItems.isEmpty {
                 noMatchesState
             } else {
@@ -86,13 +90,36 @@ struct PastureTileListView: View {
                 .allowsHitTesting(false)
         }
         .overlay(alignment: .bottomTrailing) {
-            addPastureButton
-                .padding(.trailing, 24)
-                .padding(.bottom, 24)
+            if !isManaging {
+                addPastureButton
+                    .padding(.trailing, 24)
+                    .padding(.bottom, 24)
+            }
         }
         .sheet(isPresented: $isPresentingAddPasture) {
             AddPastureView {
                 model.load(using: repository)
+            }
+        }
+        .confirmationDialog(
+            "Delete Pasture?",
+            isPresented: deleteConfirmationBinding,
+            titleVisibility: .visible
+        ) {
+            if let pasture = pasturePendingDeletion {
+                Button("Delete \(pasture.name)", role: .destructive) {
+                    withAnimation(.snappy) {
+                        model.deletePasture(id: pasture.id, using: repository)
+                    }
+                }
+            }
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if let pasture = pasturePendingDeletion {
+                Text("This will permanently delete \(pasture.name). This action can’t be undone.")
+            } else {
+                Text("This action can’t be undone.")
             }
         }
         .task {
@@ -216,11 +243,60 @@ struct PastureTileListView: View {
                         PastureTileCard(pasture: pasture) {
                             selectedPasture = pasture
                         }
-                        .onLongPressGesture {
+                        .onLongPressGesture(minimumDuration: 0.35) {
                             withAnimation(.snappy) {
                                 isManaging = true
                             }
                         }
+                    }
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private var manageGrid: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                LazyVGrid(columns: columns, spacing: 16) {
+                    ForEach(model.items) { pasture in
+                        PastureTileCard(
+                            pasture: pasture,
+                            isManaging: true,
+                            isDragging: draggedPasture?.id == pasture.id,
+                            onDelete: {
+                                pasturePendingDeletion = pasture
+                            },
+                            onTap: {}
+                        )
+                        .onDrag {
+                            dragStartOrder = model.items
+                            draggedPasture = pasture
+                            return NSItemProvider(object: pasture.id.uuidString as NSString)
+                        }
+                        .onDrop(
+                            of: [UTType.text],
+                            delegate: PastureTileDropDelegate(
+                                pasture: pasture,
+                                items: model.items,
+                                draggedPasture: $draggedPasture,
+                                movePasture: { source, destination in
+                                    withAnimation(.snappy) {
+                                        model.movePasturesInMemory(
+                                            from: IndexSet(integer: source),
+                                            to: destination
+                                        )
+                                    }
+                                },
+                                commitPastureOrder: {
+                                    if !dragStartOrder.isEmpty {
+                                        model.commitPastureOrder(using: repository, rollbackTo: dragStartOrder)
+                                    }
+                                    dragStartOrder = []
+                                }
+                            )
+                        )
+                        .zIndex(draggedPasture?.id == pasture.id ? 1 : 0)
                     }
                 }
             }
@@ -263,22 +339,6 @@ struct PastureTileListView: View {
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private var manageList: some View {
-        List {
-            ForEach(model.items) { pasture in
-                PastureManageRow(pasture: pasture)
-            }
-            .onMove { source, destination in
-                model.movePastures(from: source, to: destination, using: repository)
-            }
-            .onDelete { offsets in
-                model.deletePastures(at: offsets, using: repository)
-            }
-        }
-        .environment(\.editMode, .constant(.active))
-        .listStyle(.insetGrouped)
-    }
-
     private func toggleManageMode() {
         withAnimation(.snappy) {
             isManaging.toggle()
@@ -295,27 +355,47 @@ struct PastureTileListView: View {
             }
         )
     }
+
+    private var deleteConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { pasturePendingDeletion != nil },
+            set: { newValue in
+                if !newValue {
+                    pasturePendingDeletion = nil
+                }
+            }
+        )
+    }
 }
 
-private struct PastureManageRow: View {
+private struct PastureTileDropDelegate: DropDelegate {
     let pasture: PastureSummary
+    let items: [PastureSummary]
+    @Binding var draggedPasture: PastureSummary?
+    let movePasture: (Int, Int) -> Void
+    let commitPastureOrder: () -> Void
 
-    private var acreage: String {
-        if let acres = pasture.acreage {
-            return acres.formatted()
+    func dropEntered(info: DropInfo) {
+        guard let draggedPasture,
+              draggedPasture.id != pasture.id,
+              let sourceIndex = items.firstIndex(where: { $0.id == draggedPasture.id }),
+              let destinationIndex = items.firstIndex(where: { $0.id == pasture.id }) else {
+            return
         }
-        return "—"
+
+        let destination = sourceIndex < destinationIndex ? destinationIndex + 1 : destinationIndex
+        movePasture(sourceIndex, destination)
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(pasture.name)
-                .font(.headline)
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
 
-            Text("\(pasture.activeAnimalCount) head • \(acreage) acres")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 6)
+    func performDrop(info: DropInfo) -> Bool {
+        guard draggedPasture != nil else { return false }
+
+        commitPastureOrder()
+        draggedPasture = nil
+        return true
     }
 }
