@@ -29,19 +29,11 @@ struct AnimalListView: View {
     @State private var selectedAnimalIDs: Set<UUID> = []
     @State private var collapsedSectionIDs: Set<String> = []
     @State private var showingPasturePicker = false
-    @State private var inlineEntryIsActive = false
-    @State private var inlineEntryIdentity = UUID()
-    @State private var editingAnimalID: UUID?
-    @State private var inlineText = ""
-    @State private var inlineSex: Sex = .unknown
-    @State private var inlineBirthDate = Calendar.current.startOfDay(for: .now)
-    @State private var inlinePastureID: UUID?
-    @State private var inlineFocusRequestID = UUID()
+    @State private var inlineEntry = AnimalInlineEntryViewModel()
     @State private var isShowingInlineSexPicker = false
     @State private var isShowingInlinePasturePicker = false
     @State private var isShowingInlineBirthDateOptions = false
     @State private var isShowingInlineBirthDatePicker = false
-    @State private var isCommittingInlineEntry = false
     @State private var ignoresNextInlineFocusLoss = false
     @State private var detailAnimalID: UUID?
     @State private var isShowingInlineDetail = false
@@ -264,7 +256,7 @@ struct AnimalListView: View {
 
     var body: some View {
         Group {
-            if filteredAndSortedAnimals.isEmpty && !inlineEntryIsActive {
+            if filteredAndSortedAnimals.isEmpty && !inlineEntry.isActive {
                 emptyStateView
             } else {
                 herdList
@@ -285,7 +277,7 @@ struct AnimalListView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomOverlay }
         .overlay(alignment: .bottomTrailing) {
-            if !batchMode && !inlineEntryIsActive {
+            if !batchMode && !inlineEntry.isActive {
                 addAnimalButton
                     .padding(.trailing, 24)
                     .padding(.bottom, floatingAddButtonBottomPadding)
@@ -309,32 +301,32 @@ struct AnimalListView: View {
         .confirmationDialog("Sex", isPresented: $isShowingInlineSexPicker, titleVisibility: .visible) {
             ForEach(Sex.allCases, id: \.self) { option in
                 Button(option.label) {
-                    inlineSex = option
+                    inlineEntry.sex = option
                     requestInlineEntryFocus()
                 }
             }
         }
         .confirmationDialog("Pasture", isPresented: $isShowingInlinePasturePicker, titleVisibility: .visible) {
             Button("No Pasture") {
-                inlinePastureID = nil
+                inlineEntry.pastureID = nil
                 requestInlineEntryFocus()
             }
 
             ForEach(viewModel.pastureOptions) { pasture in
                 Button(pasture.name) {
-                    inlinePastureID = pasture.id
+                    inlineEntry.pastureID = pasture.id
                     requestInlineEntryFocus()
                 }
             }
         }
         .confirmationDialog("Birthdate", isPresented: $isShowingInlineBirthDateOptions, titleVisibility: .visible) {
             Button("Today") {
-                inlineBirthDate = Calendar.current.startOfDay(for: .now)
+                inlineEntry.birthDate = Calendar.current.startOfDay(for: .now)
                 requestInlineEntryFocus()
             }
 
             Button("Yesterday") {
-                inlineBirthDate = Calendar.current.date(
+                inlineEntry.birthDate = Calendar.current.date(
                     byAdding: .day,
                     value: -1,
                     to: Calendar.current.startOfDay(for: .now)
@@ -343,7 +335,7 @@ struct AnimalListView: View {
             }
 
             Button("Choose Date…") {
-                ignoresNextInlineFocusLoss = true
+                inlineEntry.ignoresNextFocusLoss = true
                 isShowingInlineBirthDatePicker = true
             }
         }
@@ -372,16 +364,16 @@ struct AnimalListView: View {
             selectedAnimalIDs: $selectedAnimalIDs,
             hardDeleteOnSwipe: hardDeleteOnSwipe,
             collapsedSectionIDs: $collapsedSectionIDs,
-            inlineEntryIsActive: inlineEntryIsActive,
-            inlineEntryIdentity: inlineEntryIdentity,
-            editingAnimalID: editingAnimalID,
-            inlineText: $inlineText,
-            inlineSex: $inlineSex,
-            inlineBirthDate: $inlineBirthDate,
-            inlinePastureID: $inlinePastureID,
+            inlineEntryIsActive: inlineEntry.isActive,
+            inlineEntryIdentity: inlineEntry.identity,
+            editingAnimalID: inlineEntry.editingAnimalID,
+            inlineText: $inlineEntry.text,
+            inlineSex: $inlineEntry.sex,
+            inlineBirthDate: $inlineEntry.birthDate,
+            inlinePastureID: $inlineEntry.pastureID,
             pastureOptions: viewModel.pastureOptions,
             inlineHelperText: inlineHelperText,
-            inlineFocusRequestID: inlineFocusRequestID,
+            inlineFocusRequestID: inlineEntry.focusRequestID,
             onStartNewInlineEntry: beginNewInlineEntry,
             onStartEditingAnimal: beginInlineEditing,
             onSubmitInlineEntry: submitInlineEntry,
@@ -521,7 +513,7 @@ struct AnimalListView: View {
 
     @ViewBuilder
     private var bottomOverlay: some View {
-        if inlineEntryIsActive {
+        if inlineEntry.isActive {
             VStack(spacing: 10) {
                 inlineEntryAccessoryBar
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -557,7 +549,7 @@ struct AnimalListView: View {
             inlineAccessoryButton(
                 systemName: "figure.stand",
                 accessibilityLabel: "Sex",
-                accessibilityValue: inlineSex.label
+                accessibilityValue: inlineEntry.sex.label
             ) {
                 presentInlineEntryPicker { isShowingInlineSexPicker = true }
             }
@@ -573,7 +565,7 @@ struct AnimalListView: View {
             inlineAccessoryButton(
                 systemName: "calendar",
                 accessibilityLabel: "Birthdate",
-                accessibilityValue: inlineBirthDate.formatted(date: .abbreviated, time: .omitted)
+                accessibilityValue: inlineEntry.birthDate.formatted(date: .abbreviated, time: .omitted)
             ) {
                 presentInlineEntryPicker { isShowingInlineBirthDateOptions = true }
             }
@@ -586,8 +578,8 @@ struct AnimalListView: View {
                     .frame(width: 44, height: 40)
                     .contentShape(Rectangle())
             }
-            .disabled(inlineText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .accessibilityLabel(editingAnimalID == nil ? "Add animal" : "Save animal")
+            .disabled(inlineEntry.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityLabel(inlineEntry.editingAnimalID == nil ? "Add animal" : "Save animal")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -596,8 +588,8 @@ struct AnimalListView: View {
     }
 
     private var selectedInlinePastureLabel: String {
-        guard let inlinePastureID else { return "No Pasture" }
-        return viewModel.pastureOptions.first(where: { $0.id == inlinePastureID })?.name ?? "Pasture"
+        guard let pastureID = inlineEntry.pastureID else { return "No Pasture" }
+        return viewModel.pastureOptions.first(where: { $0.id == pastureID })?.name ?? "Pasture"
     }
 
     private func inlineAccessoryButton(
@@ -623,7 +615,7 @@ struct AnimalListView: View {
             Form {
                 DatePicker(
                     "Birthdate",
-                    selection: $inlineBirthDate,
+                    selection: $inlineEntry.birthDate,
                     displayedComponents: .date
                 )
                 .datePickerStyle(.graphical)
@@ -809,30 +801,19 @@ struct AnimalListView: View {
     }
 
     private func presentInlineEntryPicker(_ action: () -> Void) {
-        ignoresNextInlineFocusLoss = true
+        inlineEntry.prepareForPickerPresentation()
         action()
     }
 
     private func requestInlineEntryFocus() {
-        guard inlineEntryIsActive else { return }
-
-        DispatchQueue.main.async {
-            inlineFocusRequestID = UUID()
-        }
+        inlineEntry.requestFocus()
     }
 
     private func beginNewInlineEntry() {
         guard !batchMode else { return }
 
         withAnimation(.snappy) {
-            editingAnimalID = nil
-            inlineEntryIsActive = true
-            inlineEntryIdentity = UUID()
-            ignoresNextInlineFocusLoss = false
-            inlineText = ""
-            inlineSex = .unknown
-            inlineBirthDate = Calendar.current.startOfDay(for: .now)
-            inlinePastureID = nil
+            inlineEntry.beginNew()
         }
     }
 
@@ -840,152 +821,47 @@ struct AnimalListView: View {
         guard !batchMode else { return }
 
         withAnimation(.snappy) {
-            editingAnimalID = animal.id
-            inlineEntryIsActive = true
-            inlineEntryIdentity = animal.id
-            ignoresNextInlineFocusLoss = false
-            inlineText = AnimalInlineEntryParser.editableText(for: animal, tagColorLibrary: tagColorLibrary)
-            inlineSex = animal.sex
-            inlineBirthDate = animal.birthDate
-            inlinePastureID = animal.pastureID
+            inlineEntry.beginEditing(animal, tagColorLibrary: tagColorLibrary)
         }
     }
 
     private func submitInlineEntry() {
-        let trimmedText = inlineText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedText = inlineEntry.trimmedText
+        
         if !trimmedText.isEmpty {
-            ignoresNextInlineFocusLoss = true
+            inlineEntry.ignoresNextFocusLoss = true
         }
-        commitInlineEntry(startNewEntryAfterCreate: editingAnimalID == nil)
+        
+        commitInlineEntry(startNewEntryAfterCreate: !inlineEntry.isEditing)
     }
 
     private func commitInlineEntryFromFocusLoss() {
-        if ignoresNextInlineFocusLoss {
-            ignoresNextInlineFocusLoss = false
-            return
-        }
+        guard inlineEntry.shouldCommitAfterFocusLoss() else { return }
         commitInlineEntry(startNewEntryAfterCreate: false)
     }
 
     private func cancelInlineEntry() {
         withAnimation(.snappy) {
-            inlineEntryIsActive = false
-            editingAnimalID = nil
-            inlineText = ""
-            inlineSex = .unknown
-            inlineBirthDate = Calendar.current.startOfDay(for: .now)
-            inlinePastureID = nil
-            inlineEntryIdentity = UUID()
-            ignoresNextInlineFocusLoss = false
+            inlineEntry.cancel()
         }
     }
 
     private func commitInlineEntry(startNewEntryAfterCreate: Bool) {
-        guard inlineEntryIsActive, !isCommittingInlineEntry else { return }
-
-        let trimmedText = inlineText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedText.isEmpty else {
-            if !startNewEntryAfterCreate {
-                cancelInlineEntry()
-            }
-            return
-        }
-
-        isCommittingInlineEntry = true
-        defer { isCommittingInlineEntry = false }
-
         do {
-            if let editingAnimalID {
-                try updateInlineAnimal(id: editingAnimalID, text: trimmedText)
-                clearCommittedInlineEntry()
-            } else {
-                try createInlineAnimal(text: trimmedText)
-                if startNewEntryAfterCreate {
-                    beginNewInlineEntry()
-                } else {
-                    clearCommittedInlineEntry()
-                }
+            let didCommit = try inlineEntry.commit(
+                startNewEntryAfterCreate: startNewEntryAfterCreate,
+                colors: tagColorLibrary.colors,
+                defaultTagColorID: tagColorLibrary.defaultColorID,
+                using: repository
+            )
+
+            if didCommit {
+                reload()
             }
-            reload()
         } catch {
             viewModel.errorMessage = error.localizedDescription
         }
     }
-
-    private func createInlineAnimal(text: String) throws {
-        let parsed = AnimalInlineEntryParser.parse(text, colors: tagColorLibrary.colors)
-        guard !parsed.isEmpty else { return }
-
-        _ = try CreateAnimalUseCase(repository: repository).execute(
-            input: AnimalInput(
-                name: parsed.name,
-                tagNumber: parsed.tagNumber,
-                tagColorID: parsed.tagNumber.isEmpty ? nil : (parsed.tagColorID ?? tagColorLibrary.defaultColorID),
-                sex: inlineSex,
-                birthDate: inlineBirthDate,
-                status: .active,
-                pastureID: inlinePastureID,
-                sireID: nil,
-                damID: nil,
-                distinguishingFeatures: [],
-                saleDate: nil,
-                salePrice: nil,
-                reasonSold: nil,
-                deathDate: nil,
-                causeOfDeath: nil,
-                statusReferenceID: nil
-            )
-        )
-    }
-
-    private func updateInlineAnimal(id: UUID, text: String) throws {
-        guard let detail = try repository.fetchAnimalDetail(id: id) else {
-            throw AnimalValidationError.animalNotFound
-        }
-
-        let parsed = AnimalInlineEntryParser.parse(text, colors: tagColorLibrary.colors)
-        let updatedName = parsed.tagNumber.isEmpty ? parsed.name : detail.name
-        let updatedTagNumber = parsed.tagNumber.isEmpty ? detail.displayTagNumber : parsed.tagNumber
-        let updatedTagColorID = parsed.tagNumber.isEmpty
-            ? detail.displayTagColorID
-            : (parsed.tagColorID ?? tagColorLibrary.defaultColorID)
-
-        _ = try UpdateAnimalUseCase(repository: repository).execute(
-            id: id,
-            input: AnimalInput(
-                name: updatedName,
-                tagNumber: updatedTagNumber,
-                tagColorID: updatedTagColorID,
-                sex: inlineSex,
-                birthDate: inlineBirthDate,
-                status: detail.status,
-                pastureID: inlinePastureID,
-                sireID: detail.sireID,
-                damID: detail.damID,
-                distinguishingFeatures: detail.distinguishingFeatures,
-                saleDate: detail.saleDate,
-                salePrice: detail.salePrice,
-                reasonSold: detail.reasonSold,
-                deathDate: detail.deathDate,
-                causeOfDeath: detail.causeOfDeath,
-                statusReferenceID: detail.statusReferenceID
-            )
-        )
-    }
-
-    private func clearCommittedInlineEntry() {
-        withAnimation(.snappy) {
-            inlineEntryIsActive = false
-            editingAnimalID = nil
-            inlineText = ""
-            inlineSex = .unknown
-            inlineBirthDate = Calendar.current.startOfDay(for: .now)
-            inlinePastureID = nil
-            inlineEntryIdentity = UUID()
-            ignoresNextInlineFocusLoss = false
-        }
-    }
-
 
     private func openInlineDetails(_ animalID: UUID) {
         detailAnimalID = animalID

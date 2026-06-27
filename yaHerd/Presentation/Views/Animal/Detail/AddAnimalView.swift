@@ -13,21 +13,19 @@ struct AddAnimalView: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.dismiss) private var dismiss
 
-    @State private var form: AnimalFormViewModel
+    @State private var viewModel: AddAnimalViewModel
     @State private var activeParentPicker: ParentPickerType?
     @State private var showingError = false
     @State private var showingAddTag = false
     @State private var editingPendingTag: AnimalTagSnapshot?
-    @State private var pendingTags: [AnimalTagSnapshot] = []
-
-
+    
     init(
         title: String = "Add Animal",
         initialDraft: AnimalEditorDraft = AnimalEditorDraft(),
         editorContext: AnimalEditorContext = .standard
     ) {
         self.title = title
-        _form = State(initialValue: AnimalFormViewModel(draft: initialDraft, context: editorContext))
+        _viewModel = State(initialValue: AddAnimalViewModel(initialDraft: initialDraft, editorContext: editorContext))
     }
 
     private var repository: any AnimalRepository {
@@ -39,16 +37,19 @@ struct AddAnimalView: View {
             Form {
                 AnimalEditorSections(
                     draft: Binding(
-                        get: { form.draft },
-                        set: { form.draft = $0 }
+                        get: { viewModel.form.draft },
+                        set: { viewModel.form.draft = $0 }
                     ),
                     activeParentPicker: $activeParentPicker,
-                    editorContext: form.context,
-                    pastures: form.pastureOptions,
-                    statusReferences: form.statusReferenceOptions,
+                    editorContext: viewModel.form.context,
+                    pastures: viewModel.form.pastureOptions,
+                    statusReferences: viewModel.form.statusReferenceOptions,
                     tagDetail: nil,
                     tagActions: nil,
-                    pendingTags: $pendingTags,
+                    pendingTags: Binding(
+                        get: { viewModel.pendingTags },
+                        set: { viewModel.pendingTags = $0 }
+                    ),
                     onAddExistingTag: nil,
                     onEditExistingTag: nil,
                     onAddPendingTag: { showingAddTag = true },
@@ -73,11 +74,11 @@ struct AddAnimalView: View {
             .alert("Validation Error", isPresented: $showingError) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(form.errorMessage ?? "")
+                Text(viewModel.form.errorMessage ?? viewModel.errorMessage ?? "")
             }
         }
         .task {
-            form.loadSupportData(using: repository)
+            viewModel.loadSupportData(using: repository)
         }
         .sheet(isPresented: $showingAddTag) {
             AnimalTagEditView(
@@ -85,7 +86,7 @@ struct AddAnimalView: View {
                 saveButtonTitle: "Save",
                 showsPrimaryToggle: true
             ) { number, colorID, isPrimary in
-                addPendingTag(number: number, colorID: colorID, isPrimary: isPrimary)
+                viewModel.addPendingTag(number: number, colorID: colorID, isPrimary: isPrimary, defaultTagColorID: tagColorLibrary.defaultColorID)
             }
             .presentationDetents([.medium, .large])
         }
@@ -98,125 +99,45 @@ struct AddAnimalView: View {
                 saveButtonTitle: "Save",
                 showsPrimaryToggle: true
             ) { number, colorID, isPrimary in
-                updatePendingTag(tagID: tag.id, number: number, colorID: colorID, isPrimary: isPrimary)
+                viewModel.updatePendingTag(tagID: tag.id, number: number, colorID: colorID, isPrimary: isPrimary, defaultTagColorID: tagColorLibrary.defaultColorID)
             }
             .presentationDetents([.medium, .large])
         }
         .animalParentPickerSheet(
             activePicker: $activeParentPicker,
             sireID: Binding(
-                get: { form.draft.sireID },
-                set: { form.draft.sireID = $0 }
+                get: { viewModel.form.draft.sireID },
+                set: { viewModel.form.draft.sireID = $0 }
             ),
             sire: Binding(
-                get: { form.draft.sire },
-                set: { form.draft.sire = $0 }
+                get: { viewModel.form.draft.sire },
+                set: { viewModel.form.draft.sire = $0 }
             ),
             damID: Binding(
-                get: { form.draft.damID },
-                set: { form.draft.damID = $0 }
+                get: { viewModel.form.draft.damID },
+                set: { viewModel.form.draft.damID = $0 }
             ),
             dam: Binding(
-                get: { form.draft.dam },
-                set: { form.draft.dam = $0 }
+                get: { viewModel.form.draft.dam },
+                set: { viewModel.form.draft.dam = $0 }
             ),
             excludeAnimalID: nil
         )
-        .onChange(of: form.errorMessage) { _, newValue in
+        .onChange(of: viewModel.form.errorMessage) { _, newValue in
+            showingError = newValue != nil
+        }
+        .onChange(of: viewModel.errorMessage) { _, newValue in
             showingError = newValue != nil
         }
     }
 
     private func validateAndSave() {
         do {
-            let input = try form.makeInput(defaultTagColorID: tagColorLibrary.defaultColorID)
-            let created = try CreateAnimalUseCase(repository: repository).execute(input: input)
-
-            for tag in pendingTags where !tag.isPrimary {
-                _ = try AddAnimalTagUseCase(repository: repository).execute(
-                    animalID: created.id,
-                    input: AnimalTagInput(
-                        number: tag.normalizedNumber,
-                        colorID: tagColorLibrary.resolvedColorID(tag.colorID),
-                        isPrimary: false
-                    )
-                )
-            }
-
+            try viewModel.save(defaultTagColorID: tagColorLibrary.defaultColorID, using: repository)
             dismiss()
         } catch {
-            form.errorMessage = error.localizedDescription
+            viewModel.errorMessage = error.localizedDescription
             showingError = true
-        }
-    }
-
-    private func addPendingTag(number: String, colorID: UUID?, isPrimary: Bool) {
-        let normalizedNumber = number.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedNumber.isEmpty else { return }
-        let resolvedColorID = tagColorLibrary.resolvedColorID(colorID)
-
-        let shouldBePrimary = isPrimary || pendingTags.isEmpty
-
-        if shouldBePrimary {
-            pendingTags = pendingTags.map { tag in
-                AnimalTagSnapshot(
-                    id: tag.id,
-                    number: tag.number,
-                    colorID: tag.colorID,
-                    isPrimary: false,
-                    isActive: tag.isActive,
-                    assignedAt: tag.assignedAt,
-                    removedAt: tag.removedAt
-                )
-            }
-        }
-
-        pendingTags.append(
-            AnimalTagSnapshot(
-                id: UUID(),
-                number: normalizedNumber,
-                colorID: resolvedColorID,
-                isPrimary: shouldBePrimary,
-                isActive: true,
-                assignedAt: .now,
-                removedAt: nil
-            )
-        )
-
-        if let primary = pendingTags.first(where: { $0.isPrimary }) {
-            form.draft.tagNumber = primary.normalizedNumber
-            form.draft.tagColorID = primary.colorID
-        }
-    }
-    private func updatePendingTag(tagID: UUID, number: String, colorID: UUID?, isPrimary: Bool) {
-        let normalizedNumber = number.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedNumber.isEmpty else { return }
-        let resolvedColorID = tagColorLibrary.resolvedColorID(colorID)
-
-        let shouldBePrimary = isPrimary || pendingTags.filter({ $0.id != tagID }).isEmpty
-
-        pendingTags = pendingTags.map { tag in
-            AnimalTagSnapshot(
-                id: tag.id,
-                number: tag.id == tagID ? normalizedNumber : tag.number,
-                colorID: tag.id == tagID ? resolvedColorID : tag.colorID,
-                isPrimary: tag.id == tagID ? shouldBePrimary : (shouldBePrimary ? false : tag.isPrimary),
-                isActive: tag.isActive,
-                assignedAt: tag.assignedAt,
-                removedAt: tag.removedAt
-            )
-        }
-
-        syncPendingPrimaryTagToDraft()
-    }
-
-    private func syncPendingPrimaryTagToDraft() {
-        if let primary = pendingTags.first(where: { $0.isPrimary }) {
-            form.draft.tagNumber = primary.normalizedNumber
-            form.draft.tagColorID = tagColorLibrary.resolvedColorID(primary.colorID)
-        } else {
-            form.draft.tagNumber = ""
-            form.draft.tagColorID = nil
         }
     }
 
