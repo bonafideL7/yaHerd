@@ -32,22 +32,6 @@ struct AnimalDetailSnapshot: Identifiable, Hashable {
     let maternalOffspring: [AnimalSummary]
 
     var age: String {
-        AnimalSummary(
-            id: id,
-            name: name,
-            displayTagNumber: displayTagNumber,
-            displayTagColorID: displayTagColorID,
-            damDisplayTagNumber: dam,
-            damDisplayTagColorID: nil,
-            sex: sex,
-            animalType: animalType,
-            firstDistinguishingFeature: distinguishingFeatures.firstOrderedDistinguishingFeatureDescription,
-            birthDate: birthDate,
-            status: status,
-            isArchived: isArchived,
-            pastureID: pastureID,
-            pastureName: pastureName,
-            location: location
-        ).age
+        AnimalAgeFormatter.string(from: birthDate, style: .compact)
     }
 }

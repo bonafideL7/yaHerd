@@ -70,33 +70,85 @@ struct SwiftDataAnimalRepository: AnimalRepository {
     }
 
     func create(input: AnimalInput) throws -> AnimalDetailSnapshot {
-        try createAnimal(input: input, desiredTags: nil, defaultTagColorID: nil)
-    }
+        let pasture = try fetchPasture(id: input.pastureID)
+        let damAnimal = try fetchAnimal(id: input.damID)
+        let sireAnimal = try resolvedSireAnimal(for: input, pasture: pasture, damAnimal: damAnimal)
+        try validateAnimalInput(input, animalID: nil, sireAnimal: sireAnimal, damAnimal: damAnimal)
 
-    func createWithTags(input: AnimalInput, desiredTags: [AnimalTagSnapshot], defaultTagColorID: UUID?) throws -> AnimalDetailSnapshot {
-        try createAnimal(input: input, desiredTags: desiredTags, defaultTagColorID: defaultTagColorID)
+        let animal = Animal(
+            name: input.name,
+            tagNumber: input.tagNumber,
+            tagColorID: input.tagColorID,
+            birthDate: input.birthDate,
+            status: input.status,
+            saleDate: input.saleDate,
+            salePrice: input.salePrice,
+            reasonSold: input.reasonSold,
+            deathDate: input.deathDate,
+            causeOfDeath: input.causeOfDeath,
+            statusReferenceID: input.statusReferenceID,
+            sireAnimal: sireAnimal,
+            damAnimal: damAnimal,
+            pasture: pasture,
+            sex: input.sex,
+            distinguishingFeatures: input.distinguishingFeatures
+        )
+
+        try ensureUniqueAnimalPublicID(animal)
+        context.insert(animal)
+        if !animal.tagNumber.isEmpty {
+            let tag = animal.ensurePrimaryTagRecord()
+            try ensureUniqueAnimalTagPublicID(tag)
+        }
+        try context.save()
+        return try makeDetail(from: animal)
     }
 
     func update(id: UUID, input: AnimalInput) throws -> AnimalDetailSnapshot {
-        try updateAnimal(id: id, input: input, desiredTags: nil, defaultTagColorID: nil)
-    }
+        guard let animal = try fetchAnimal(id: id) else {
+            throw AnimalValidationError.animalNotFound
+        }
 
-    func updateWithTags(id: UUID, input: AnimalInput, desiredTags: [AnimalTagSnapshot], defaultTagColorID: UUID?) throws -> AnimalDetailSnapshot {
-        try updateAnimal(id: id, input: input, desiredTags: desiredTags, defaultTagColorID: defaultTagColorID)
-    }
+        let oldStatus = animal.status
+        let oldStatusReferenceID = animal.statusReferenceID
+        let pasture = try fetchPasture(id: input.pastureID)
+        let damAnimal = try fetchAnimal(id: input.damID)
+        let sireAnimal = try resolvedSireAnimal(for: input, pasture: pasture, damAnimal: damAnimal)
+        try validateAnimalInput(input, animalID: id, sireAnimal: sireAnimal, damAnimal: damAnimal)
 
-    private func createAnimal(input: AnimalInput, desiredTags: [AnimalTagSnapshot]?, defaultTagColorID: UUID?) throws -> AnimalDetailSnapshot {
-        do {
-            let pasture = try fetchPasture(id: input.pastureID)
-            let damAnimal = try fetchAnimal(id: input.damID)
-            let sireAnimal = try resolvedSireAnimal(for: input, pasture: pasture, damAnimal: damAnimal)
-            try validateAnimalInput(input, animalID: nil, sireAnimal: sireAnimal, damAnimal: damAnimal)
+        animal.name = input.name
+        animal.sex = input.sex
+        animal.birthDate = input.birthDate
+        animal.sireAnimal = sireAnimal
+        animal.damAnimal = damAnimal
+        animal.distinguishingFeatures = input.distinguishingFeatures
 
-            let animal = Animal(
-                name: input.name,
-                tagNumber: input.tagNumber,
-                tagColorID: input.tagColorID,
-                birthDate: input.birthDate,
+        if input.tagNumber.isEmpty, animal.tags.isEmpty {
+            animal.tagNumber = ""
+            animal.tagColorID = input.tagColorID
+        } else {
+            animal.updatePrimaryTag(number: input.tagNumber, colorID: input.tagColorID)
+            try ensureUniqueAnimalTagPublicIDs(for: animal)
+        }
+
+        if animal.pasture?.publicID != pasture?.publicID {
+            try AnimalMovementStore.move(animal, to: pasture, in: context, save: false)
+        }
+
+        if animal.status != input.status {
+            let record = StatusRecord(
+                date: .now,
+                oldStatus: oldStatus,
+                newStatus: input.status,
+                oldStatusReferenceID: oldStatusReferenceID,
+                newStatusReferenceID: input.statusReferenceID,
+                animal: animal
+            )
+            context.insert(record)
+        }
+
+        animal.applyStatusState(
+            AnimalStatusTransitionService.normalizedState(
                 status: input.status,
                 saleDate: input.saleDate,
                 salePrice: input.salePrice,
@@ -104,121 +156,12 @@ struct SwiftDataAnimalRepository: AnimalRepository {
                 deathDate: input.deathDate,
                 causeOfDeath: input.causeOfDeath,
                 statusReferenceID: input.statusReferenceID,
-                sireAnimal: sireAnimal,
-                damAnimal: damAnimal,
-                pasture: pasture,
-                sex: input.sex,
-                distinguishingFeatures: input.distinguishingFeatures
+                effectiveDate: statusEffectiveDate(for: input)
             )
+        )
 
-            try ensureUniqueAnimalPublicID(animal)
-            context.insert(animal)
-            if !animal.tagNumber.isEmpty {
-                let tag = animal.ensurePrimaryTagRecord()
-                try ensureUniqueAnimalTagPublicID(tag)
-            }
-
-            if let desiredTags {
-                try applyDesiredTagsForNewAnimal(
-                    desiredTags,
-                    to: animal,
-                    defaultTagColorID: defaultTagColorID
-                )
-            }
-
-            try ensureUniqueAnimalTagPublicIDs(for: animal)
-            try context.save()
-            return try makeDetail(from: animal)
-        } catch {
-            context.rollback()
-            throw error
-        }
-    }
-
-    private func updateAnimal(id: UUID, input: AnimalInput, desiredTags: [AnimalTagSnapshot]?, defaultTagColorID: UUID?) throws -> AnimalDetailSnapshot {
-        do {
-            guard let animal = try fetchAnimal(id: id) else {
-                throw AnimalValidationError.animalNotFound
-            }
-
-            let oldStatus = animal.status
-            let oldStatusReferenceID = animal.statusReferenceID
-            let pasture = try fetchPasture(id: input.pastureID)
-            let damAnimal = try fetchAnimal(id: input.damID)
-            let sireAnimal = try resolvedSireAnimal(for: input, pasture: pasture, damAnimal: damAnimal)
-            try validateAnimalInput(input, animalID: id, sireAnimal: sireAnimal, damAnimal: damAnimal)
-
-            animal.name = input.name
-            animal.sex = input.sex
-            animal.birthDate = input.birthDate
-            animal.sireAnimal = sireAnimal
-            animal.damAnimal = damAnimal
-            animal.distinguishingFeatures = input.distinguishingFeatures
-
-            if input.tagNumber.isEmpty, animal.tags.isEmpty {
-                animal.tagNumber = ""
-                animal.tagColorID = input.tagColorID
-            } else {
-                animal.updatePrimaryTag(number: input.tagNumber, colorID: input.tagColorID)
-                try ensureUniqueAnimalTagPublicIDs(for: animal)
-            }
-
-            if animal.pasture?.publicID != pasture?.publicID {
-                try AnimalMovementStore.move(animal, to: pasture, in: context, save: false)
-            }
-
-            if animal.status != input.status {
-                animal.applyStatus(input.status, effectiveDate: statusEffectiveDate(for: input))
-                let record = StatusRecord(
-                    date: .now,
-                    oldStatus: oldStatus,
-                    newStatus: input.status,
-                    oldStatusReferenceID: oldStatusReferenceID,
-                    newStatusReferenceID: input.statusReferenceID,
-                    animal: animal
-                )
-                context.insert(record)
-            }
-
-            animal.status = input.status
-            animal.statusReferenceID = input.statusReferenceID
-
-            switch input.status {
-            case .active:
-                animal.saleDate = nil
-                animal.salePrice = nil
-                animal.reasonSold = nil
-                animal.deathDate = nil
-                animal.causeOfDeath = nil
-            case .sold:
-                animal.saleDate = input.saleDate
-                animal.salePrice = input.salePrice
-                animal.reasonSold = input.reasonSold
-                animal.deathDate = nil
-                animal.causeOfDeath = nil
-            case .dead:
-                animal.deathDate = input.deathDate
-                animal.causeOfDeath = input.causeOfDeath
-                animal.saleDate = nil
-                animal.salePrice = nil
-                animal.reasonSold = nil
-            }
-
-            if let desiredTags {
-                try applyDesiredTags(
-                    desiredTags,
-                    to: animal,
-                    defaultTagColorID: defaultTagColorID
-                )
-            }
-
-            try ensureUniqueAnimalTagPublicIDs(for: animal)
-            try context.save()
-            return try makeDetail(from: animal)
-        } catch {
-            context.rollback()
-            throw error
-        }
+        try context.save()
+        return try makeDetail(from: animal)
     }
 
     func delete(ids: [UUID]) throws {
@@ -325,133 +268,6 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         return try makeDetail(from: animal)
     }
 
-    private func applyDesiredTagsForNewAnimal(
-        _ desiredTags: [AnimalTagSnapshot],
-        to animal: Animal,
-        defaultTagColorID: UUID?
-    ) throws {
-        let activeDesiredTags = desiredTags.filter { $0.isActive && !$0.normalizedNumber.isEmpty }
-
-        for tag in activeDesiredTags where !tag.isPrimary {
-            let addedTag = animal.addTag(
-                number: tag.normalizedNumber,
-                colorID: resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID),
-                isPrimary: false
-            )
-            try ensureUniqueAnimalTagPublicID(addedTag)
-        }
-
-        for tag in activeDesiredTags where tag.isPrimary {
-            let represented = animal.tags.contains { existing in
-                existing.isActive
-                    && existing.isPrimary
-                    && existing.normalizedNumber == tag.normalizedNumber
-                    && existing.colorID == resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID)
-            }
-
-            if !represented {
-                let addedTag = animal.addTag(
-                    number: tag.normalizedNumber,
-                    colorID: resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID),
-                    isPrimary: true
-                )
-                try ensureUniqueAnimalTagPublicID(addedTag)
-            }
-        }
-    }
-
-    private func applyDesiredTags(
-        _ desiredTags: [AnimalTagSnapshot],
-        to animal: Animal,
-        defaultTagColorID: UUID?
-    ) throws {
-        var currentTagsByID = animalTagsByPublicID(for: animal)
-
-        let existingDesiredTags = desiredTags.filter { currentTagsByID[$0.id] != nil }
-        let activeExistingNonPrimaryTags = existingDesiredTags.filter { $0.isActive && !$0.isPrimary }
-        let inactiveExistingTags = existingDesiredTags.filter { !$0.isActive }
-        let activeExistingPrimaryTags = existingDesiredTags.filter { $0.isActive && $0.isPrimary }
-
-        for tag in activeExistingNonPrimaryTags {
-            try updateExistingTag(tag, on: animal, isPrimary: false, defaultTagColorID: defaultTagColorID)
-        }
-
-        for tag in inactiveExistingTags {
-            try updateExistingTag(tag, on: animal, isPrimary: false, defaultTagColorID: defaultTagColorID)
-        }
-
-        for tag in activeExistingPrimaryTags {
-            try updateExistingTag(tag, on: animal, isPrimary: true, defaultTagColorID: defaultTagColorID)
-        }
-
-        currentTagsByID = animalTagsByPublicID(for: animal)
-        for tag in inactiveExistingTags where currentTagsByID[tag.id]?.isActive == true {
-            guard let animalTag = currentTagsByID[tag.id] else { continue }
-            animal.retireTag(animalTag)
-        }
-
-        currentTagsByID = animalTagsByPublicID(for: animal)
-        let newActiveTags = desiredTags.filter { tag in
-            currentTagsByID[tag.id] == nil
-                && tag.isActive
-                && !tag.normalizedNumber.isEmpty
-        }
-
-        for tag in newActiveTags where !tag.isPrimary {
-            let addedTag = animal.addTag(
-                number: tag.normalizedNumber,
-                colorID: resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID),
-                isPrimary: false
-            )
-            try ensureUniqueAnimalTagPublicID(addedTag)
-        }
-
-        for tag in newActiveTags where tag.isPrimary {
-            let represented = animal.tags.contains { existing in
-                existing.isActive
-                    && existing.isPrimary
-                    && existing.normalizedNumber == tag.normalizedNumber
-                    && existing.colorID == resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID)
-            }
-
-            if !represented {
-                let addedTag = animal.addTag(
-                    number: tag.normalizedNumber,
-                    colorID: resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID),
-                    isPrimary: true
-                )
-                try ensureUniqueAnimalTagPublicID(addedTag)
-            }
-        }
-    }
-
-    private func updateExistingTag(
-        _ desiredTag: AnimalTagSnapshot,
-        on animal: Animal,
-        isPrimary: Bool,
-        defaultTagColorID: UUID?
-    ) throws {
-        guard let tag = animal.tags.first(where: { $0.publicID == desiredTag.id }) else {
-            throw AnimalValidationError.animalTagNotFound
-        }
-
-        animal.updateTag(
-            tag,
-            number: desiredTag.normalizedNumber,
-            colorID: resolvedTagColorID(for: desiredTag, defaultTagColorID: defaultTagColorID),
-            isPrimary: isPrimary
-        )
-        try ensureUniqueAnimalTagPublicID(tag)
-    }
-
-    private func animalTagsByPublicID(for animal: Animal) -> [UUID: AnimalTag] {
-        Dictionary(uniqueKeysWithValues: animal.tags.map { ($0.publicID, $0) })
-    }
-
-    private func resolvedTagColorID(for tag: AnimalTagSnapshot, defaultTagColorID: UUID?) -> UUID? {
-        tag.normalizedNumber.isEmpty ? tag.colorID : (tag.colorID ?? defaultTagColorID)
-    }
-
     private func ensureUniqueAnimalPublicID(_ animal: Animal) throws {
         let existingIDs = Set(try context.fetch(FetchDescriptor<Animal>()).map(\.publicID))
         while existingIDs.contains(animal.publicID) {
@@ -540,14 +356,11 @@ struct SwiftDataAnimalRepository: AnimalRepository {
     }
 
     private func statusEffectiveDate(for input: AnimalInput) -> Date {
-        switch input.status {
-        case .active:
-            return .now
-        case .sold:
-            return input.saleDate ?? .now
-        case .dead:
-            return input.deathDate ?? .now
-        }
+        AnimalStatusTransitionService.effectiveDate(
+            for: input.status,
+            saleDate: input.saleDate,
+            deathDate: input.deathDate
+        )
     }
 }
 

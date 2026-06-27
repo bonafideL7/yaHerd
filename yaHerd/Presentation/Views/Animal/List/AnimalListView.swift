@@ -34,6 +34,7 @@ struct AnimalListView: View {
     @State private var isShowingInlinePasturePicker = false
     @State private var isShowingInlineBirthDateOptions = false
     @State private var isShowingInlineBirthDatePicker = false
+    @State private var ignoresNextInlineFocusLoss = false
     @State private var detailAnimalID: UUID?
     @State private var isShowingInlineDetail = false
     private let externalSearchText: Binding<String>?
