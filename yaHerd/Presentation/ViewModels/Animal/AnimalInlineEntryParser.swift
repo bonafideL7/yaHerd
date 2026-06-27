@@ -18,6 +18,10 @@ enum AnimalInlineEntryParser {
             return AnimalInlineEntryResult(rawText: trimmed, name: "", tagNumber: "", tagColorID: nil)
         }
 
+        if trimmed.isOnlyDigits {
+            return AnimalInlineEntryResult(rawText: trimmed, name: "", tagNumber: trimmed, tagColorID: nil)
+        }
+
         let uppercasedText = trimmed.uppercased()
         let definitions = colors
             .enumerated()

@@ -828,6 +828,7 @@ struct AnimalListView: View {
             editingAnimalID = nil
             inlineEntryIsActive = true
             inlineEntryIdentity = UUID()
+            ignoresNextInlineFocusLoss = false
             inlineText = ""
             inlineSex = .unknown
             inlineBirthDate = Calendar.current.startOfDay(for: .now)
@@ -851,7 +852,10 @@ struct AnimalListView: View {
     }
 
     private func submitInlineEntry() {
-        ignoresNextInlineFocusLoss = true
+        let trimmedText = inlineText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedText.isEmpty {
+            ignoresNextInlineFocusLoss = true
+        }
         commitInlineEntry(startNewEntryAfterCreate: editingAnimalID == nil)
     }
 
