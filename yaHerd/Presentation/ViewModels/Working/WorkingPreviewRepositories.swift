@@ -39,7 +39,9 @@ struct EmptyAnimalRepository: AnimalRepository {
     func fetchParentOptions(excluding excludedAnimalID: UUID?) throws -> [AnimalParentOption] { [] }
     func fetchOffspringDraftSeed(forDamID damID: UUID) throws -> OffspringDraftSeed? { nil }
     func create(input: AnimalInput) throws -> AnimalDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("creating animals") }
+    func createWithTags(input: AnimalInput, desiredTags: [AnimalTagSnapshot], defaultTagColorID: UUID?) throws -> AnimalDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("creating animals with tags") }
     func update(id: UUID, input: AnimalInput) throws -> AnimalDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("updating animals") }
+    func updateWithTags(id: UUID, input: AnimalInput, desiredTags: [AnimalTagSnapshot], defaultTagColorID: UUID?) throws -> AnimalDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("updating animals with tags") }
     func delete(ids: [UUID]) throws {}
     func archive(ids: [UUID]) throws {}
     func restore(ids: [UUID]) throws {}
