@@ -62,91 +62,14 @@ final class AnimalDetailViewModel {
 
         do {
             let input = try form.makeInput(defaultTagColorID: defaultTagColorID)
-            var updated = try UpdateAnimalUseCase(repository: repository).execute(id: animalID, input: input)
+            let updated = try UpdateAnimalWithTagsUseCase(repository: repository).execute(
+                animalID: animalID,
+                input: input,
+                desiredTags: draftTags,
+                defaultTagColorID: defaultTagColorID
+            )
 
-            let desiredTags = draftTags
-            var currentTagsByID = Dictionary(uniqueKeysWithValues: (updated.activeTags + updated.inactiveTags).map { ($0.id, $0) })
-
-            let existingDesiredTags = desiredTags.filter { currentTagsByID[$0.id] != nil }
-            let activeExistingNonPrimaryTags = existingDesiredTags.filter { $0.isActive && !$0.isPrimary }
-            let inactiveExistingTags = existingDesiredTags.filter { !$0.isActive }
-            let activeExistingPrimaryTags = existingDesiredTags.filter { $0.isActive && $0.isPrimary }
-
-            for tag in activeExistingNonPrimaryTags {
-                updated = try UpdateAnimalTagUseCase(repository: repository).execute(
-                    animalID: animalID,
-                    tagID: tag.id,
-                    input: AnimalTagInput(
-                        number: tag.normalizedNumber,
-                        colorID: resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID),
-                        isPrimary: false
-                    )
-                )
-            }
-
-            for tag in inactiveExistingTags {
-                updated = try UpdateAnimalTagUseCase(repository: repository).execute(
-                    animalID: animalID,
-                    tagID: tag.id,
-                    input: AnimalTagInput(
-                        number: tag.normalizedNumber,
-                        colorID: resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID),
-                        isPrimary: false
-                    )
-                )
-            }
-
-            for tag in activeExistingPrimaryTags {
-                updated = try UpdateAnimalTagUseCase(repository: repository).execute(
-                    animalID: animalID,
-                    tagID: tag.id,
-                    input: AnimalTagInput(
-                        number: tag.normalizedNumber,
-                        colorID: resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID),
-                        isPrimary: true
-                    )
-                )
-            }
-
-            currentTagsByID = Dictionary(uniqueKeysWithValues: (updated.activeTags + updated.inactiveTags).map { ($0.id, $0) })
-            for tag in inactiveExistingTags where currentTagsByID[tag.id]?.isActive == true {
-                updated = try RetireAnimalTagUseCase(repository: repository).execute(animalID: animalID, tagID: tag.id)
-            }
-
-            let newActiveTags = desiredTags.filter { currentTagsByID[$0.id] == nil && $0.isActive }
-            for tag in newActiveTags.filter({ !$0.isPrimary }) {
-                updated = try AddAnimalTagUseCase(repository: repository).execute(
-                    animalID: animalID,
-                    input: AnimalTagInput(
-                        number: tag.normalizedNumber,
-                        colorID: resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID),
-                        isPrimary: false
-                    )
-                )
-            }
-
-            let refreshedCurrentTags = updated.activeTags + updated.inactiveTags
-            for tag in newActiveTags.filter({ $0.isPrimary }) {
-                let alreadyRepresented = refreshedCurrentTags.contains { existing in
-                    existing.isActive
-                        && existing.isPrimary
-                        && existing.normalizedNumber == tag.normalizedNumber
-                        && existing.colorID == resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID)
-                }
-
-                if !alreadyRepresented {
-                    updated = try AddAnimalTagUseCase(repository: repository).execute(
-                        animalID: animalID,
-                        input: AnimalTagInput(
-                            number: tag.normalizedNumber,
-                            colorID: resolvedTagColorID(for: tag, defaultTagColorID: defaultTagColorID),
-                            isPrimary: true
-                        )
-                    )
-                }
-            }
-
-            self.detail = updated
+            detail = updated
             form.populate(from: updated)
             draftTags = updated.activeTags + updated.inactiveTags
             pendingScrollTarget = nil
@@ -205,115 +128,45 @@ final class AnimalDetailViewModel {
 
 
     func addDraftTag(number: String, colorID: UUID?, isPrimary: Bool) {
-        let normalizedNumber = number.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedNumber.isEmpty else { return }
-
-        let shouldBePrimary = isPrimary || draftTags.filter(\.isActive).isEmpty
-
-        if shouldBePrimary {
-            draftTags = draftTags.map { tag in
-                AnimalTagSnapshot(
-                    id: tag.id,
-                    number: tag.number,
-                    colorID: tag.colorID,
-                    isPrimary: false,
-                    isActive: tag.isActive,
-                    assignedAt: tag.assignedAt,
-                    removedAt: tag.removedAt
-                )
-            }
-        }
-
-        draftTags.append(
-            AnimalTagSnapshot(
-                id: UUID(),
-                number: normalizedNumber,
-                colorID: colorID,
-                isPrimary: shouldBePrimary,
-                isActive: true,
-                assignedAt: .now,
-                removedAt: nil
-            )
+        draftTags = AnimalTagDraftEditor.addTag(
+            to: draftTags,
+            number: number,
+            colorID: colorID,
+            isPrimary: isPrimary
         )
-
         syncDraftPrimaryTagToForm()
     }
 
     func updateDraftTag(tagID: UUID, number: String, colorID: UUID?, isPrimary: Bool) {
-        let normalizedNumber = number.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedNumber.isEmpty else { return }
-
-        let shouldBePrimary = isPrimary || draftTags.filter { $0.id != tagID && $0.isActive }.isEmpty
-
-        draftTags = draftTags.map { tag in
-            AnimalTagSnapshot(
-                id: tag.id,
-                number: tag.id == tagID ? normalizedNumber : tag.number,
-                colorID: tag.id == tagID ? colorID : tag.colorID,
-                isPrimary: tag.id == tagID ? (tag.isActive ? shouldBePrimary : false) : ((shouldBePrimary && tag.isActive) ? false : tag.isPrimary),
-                isActive: tag.isActive,
-                assignedAt: tag.assignedAt,
-                removedAt: tag.removedAt
-            )
-        }
-
+        draftTags = AnimalTagDraftEditor.updateTag(
+            in: draftTags,
+            tagID: tagID,
+            number: number,
+            colorID: colorID,
+            isPrimary: isPrimary
+        )
         syncDraftPrimaryTagToForm()
     }
 
     func promoteDraftTag(tagID: UUID) {
-        draftTags = draftTags.map { tag in
-            AnimalTagSnapshot(
-                id: tag.id,
-                number: tag.number,
-                colorID: tag.colorID,
-                isPrimary: tag.id == tagID,
-                isActive: tag.isActive,
-                assignedAt: tag.assignedAt,
-                removedAt: tag.removedAt
-            )
-        }
+        draftTags = AnimalTagDraftEditor.promoteTag(in: draftTags, tagID: tagID)
         syncDraftPrimaryTagToForm()
     }
 
     func retireDraftTag(tagID: UUID) {
         let originalIDs = Set((detail?.activeTags ?? []).map(\.id) + (detail?.inactiveTags ?? []).map(\.id))
-
-        if !originalIDs.contains(tagID) {
-            draftTags.removeAll { $0.id == tagID }
-        } else {
-            draftTags = draftTags.map { tag in
-                guard tag.id == tagID else { return tag }
-                return AnimalTagSnapshot(
-                    id: tag.id,
-                    number: tag.number,
-                    colorID: tag.colorID,
-                    isPrimary: false,
-                    isActive: false,
-                    assignedAt: tag.assignedAt,
-                    removedAt: tag.removedAt ?? .now
-                )
-            }
-        }
-
-        if !draftTags.contains(where: { $0.isActive && $0.isPrimary }), let firstActiveID = draftTags.first(where: { $0.isActive })?.id {
-            promoteDraftTag(tagID: firstActiveID)
-        } else {
-            syncDraftPrimaryTagToForm()
-        }
+        draftTags = AnimalTagDraftEditor.retireTag(in: draftTags, tagID: tagID, persistedTagIDs: originalIDs)
+        syncDraftPrimaryTagToForm()
     }
 
     private func syncDraftPrimaryTagToForm() {
-        if let primary = draftTags.first(where: { $0.isActive && $0.isPrimary }) {
+        if let primary = AnimalTagDraftEditor.primaryTag(in: draftTags) {
             form.draft.tagNumber = primary.normalizedNumber
             form.draft.tagColorID = primary.colorID
         } else {
             form.draft.tagNumber = ""
             form.draft.tagColorID = nil
         }
-    }
-
-    private func resolvedTagColorID(for tag: AnimalTagSnapshot, defaultTagColorID: UUID?) -> UUID? {
-        tag.normalizedNumber.isEmpty ? tag.colorID : (tag.colorID ?? defaultTagColorID)
     }
 
     var canAddOffspring: Bool {
