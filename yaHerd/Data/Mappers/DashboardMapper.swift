@@ -14,7 +14,7 @@ enum DashboardMapper {
             if let dueDate = latestPregnancyCheck.dueDate {
                 return dueDate
             }
-            return Calendar.current.date(byAdding: .day, value: 283, to: latestPregnancyCheck.date)
+            return Calendar.current.date(byAdding: .day, value: CattleReproductionRules.gestationDays, to: latestPregnancyCheck.date)
         }()
 
         return DashboardAnimalRecord(

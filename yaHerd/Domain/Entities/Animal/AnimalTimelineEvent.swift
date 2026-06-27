@@ -15,14 +15,12 @@ struct AnimalTimelineEvent: Identifiable, Hashable {
     let type: AnimalTimelineEventType
     let title: String
     let details: String?
-    let icon: String
 
-    init(id: UUID = UUID(), date: Date, type: AnimalTimelineEventType, title: String, details: String?, icon: String) {
+    init(id: UUID = UUID(), date: Date, type: AnimalTimelineEventType, title: String, details: String?) {
         self.id = id
         self.date = date
         self.type = type
         self.title = title
         self.details = details
-        self.icon = icon
     }
 }

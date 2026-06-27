@@ -9,7 +9,7 @@ struct PrepareOffspringDraftUseCase {
         }
 
         return PreparedAnimalEditor(
-            draft: seed.makeDraft(),
+            draftSeed: seed,
             context: seed.makeEditorContext()
         )
     }

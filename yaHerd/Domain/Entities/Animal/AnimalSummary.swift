@@ -17,7 +17,7 @@ struct AnimalSummary: Identifiable, Hashable {
     let pastureName: String?
     let location: AnimalLocation
     let lastPregnancyCheckDate: Date?
-    let lastPregnancyStatus: DashboardPregnancyStatus?
+    let lastPregnancyStatus: AnimalPregnancyStatus?
     let expectedCalvingDate: Date?
     let lastTreatmentDate: Date?
 
@@ -38,7 +38,7 @@ struct AnimalSummary: Identifiable, Hashable {
         pastureName: String?,
         location: AnimalLocation,
         lastPregnancyCheckDate: Date? = nil,
-        lastPregnancyStatus: DashboardPregnancyStatus? = nil,
+        lastPregnancyStatus: AnimalPregnancyStatus? = nil,
         expectedCalvingDate: Date? = nil,
         lastTreatmentDate: Date? = nil
     ) {

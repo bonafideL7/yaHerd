@@ -13,7 +13,7 @@ struct AnimalMapper {
             if let dueDate = latestPregnancyCheck.dueDate {
                 return dueDate
             }
-            return Calendar.current.date(byAdding: .day, value: 283, to: latestPregnancyCheck.date)
+            return Calendar.current.date(byAdding: .day, value: CattleReproductionRules.gestationDays, to: latestPregnancyCheck.date)
         }()
 
         return AnimalSummary(
@@ -33,7 +33,7 @@ struct AnimalMapper {
             pastureName: animal.pasture?.name,
             location: animal.location,
             lastPregnancyCheckDate: latestPregnancyCheck?.date,
-            lastPregnancyStatus: DashboardMapper.pregnancyStatus(from: latestPregnancyCheck?.result),
+            lastPregnancyStatus: pregnancyStatus(from: latestPregnancyCheck?.result),
             expectedCalvingDate: latestPregnancyCheck?.result == .pregnant ? expectedCalvingDate : nil,
             lastTreatmentDate: latestHealthRecord?.date
         )
@@ -104,6 +104,19 @@ struct AnimalMapper {
 
     static func makeTimeline(from animal: Animal) -> [AnimalTimelineEvent] {
         animal.timelineEvents
+    }
+
+    private static func pregnancyStatus(from result: PregnancyResult?) -> AnimalPregnancyStatus? {
+        guard let result else { return nil }
+
+        switch result {
+        case .open:
+            return .open
+        case .pregnant:
+            return .pregnant
+        case .unknown:
+            return .unknown
+        }
     }
 
     private static func parentDisplayName(for animal: Animal) -> String {

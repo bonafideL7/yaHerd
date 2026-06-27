@@ -9,19 +9,6 @@ struct OffspringDraftSeed: Hashable {
     let inferredSireDisplayName: String?
     let defaultBirthDate: Date
 
-    func makeDraft() -> AnimalEditorDraft {
-        AnimalEditorDraft(
-            sex: .unknown,
-            birthDate: defaultBirthDate,
-            status: .active,
-            pastureID: pastureID,
-            sireID: inferredSireID,
-            sire: inferredSireDisplayName ?? "",
-            damID: damID,
-            dam: damDisplayName
-        )
-    }
-
     func makeEditorContext() -> AnimalEditorContext {
         AnimalEditorContext(
             kind: .offspring(
