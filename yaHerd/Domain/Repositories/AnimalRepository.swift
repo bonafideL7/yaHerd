@@ -11,11 +11,7 @@ protocol AnimalRepository {
     @discardableResult
     func create(input: AnimalInput) throws -> AnimalDetailSnapshot
     @discardableResult
-    func createWithTags(input: AnimalInput, desiredTags: [AnimalTagSnapshot], defaultTagColorID: UUID?) throws -> AnimalDetailSnapshot
-    @discardableResult
     func update(id: UUID, input: AnimalInput) throws -> AnimalDetailSnapshot
-    @discardableResult
-    func updateWithTags(id: UUID, input: AnimalInput, desiredTags: [AnimalTagSnapshot], defaultTagColorID: UUID?) throws -> AnimalDetailSnapshot
     func delete(ids: [UUID]) throws
     func archive(ids: [UUID]) throws
     func restore(ids: [UUID]) throws
