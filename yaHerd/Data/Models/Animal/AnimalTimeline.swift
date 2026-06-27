@@ -17,8 +17,7 @@ extension Animal {
                 date: birthDate,
                 type: .birth,
                 title: "Birth",
-                details: birthEventDetails,
-                icon: "baby"
+                details: birthEventDetails
             )
         )
 
@@ -28,8 +27,7 @@ extension Animal {
                     date: offspring.birthDate,
                     type: .birth,
                     title: "Offspring Recorded",
-                    details: offspringBirthEventDetails(for: offspring),
-                    icon: "baby"
+                    details: offspringBirthEventDetails(for: offspring)
                 )
             )
         }
@@ -40,8 +38,7 @@ extension Animal {
                     date: r.date,
                     type: .health,
                     title: r.treatment,
-                    details: r.notes,
-                    icon: "syringe"
+                    details: r.notes
                 )
             )
         }
@@ -52,8 +49,7 @@ extension Animal {
                     date: p.date,
                     type: .pregnancy,
                     title: "Pregnancy Check: \(p.result.rawValue.capitalized)",
-                    details: p.technician,
-                    icon: "baby"
+                    details: p.technician
                 )
             )
         }
@@ -65,8 +61,7 @@ extension Animal {
                     date: m.date,
                     type: .movement,
                     title: "Pasture Movement",
-                    details: desc,
-                    icon: "move"
+                    details: desc
                 )
             )
         }
@@ -78,8 +73,7 @@ extension Animal {
                     date: s.date,
                     type: .status,
                     title: "Status Change",
-                    details: desc,
-                    icon: "badge-alert"
+                    details: desc
                 )
             )
         }
@@ -91,8 +85,7 @@ extension Animal {
                     date: tag.assignedAt,
                     type: .tag,
                     title: "Tag Assigned",
-                    details: details,
-                    icon: "tag"
+                    details: details
                 )
             )
 
@@ -102,8 +95,7 @@ extension Animal {
                         date: removedAt,
                         type: .tag,
                         title: "Tag Retired",
-                        details: details,
-                        icon: "tag"
+                        details: details
                     )
                 )
             }

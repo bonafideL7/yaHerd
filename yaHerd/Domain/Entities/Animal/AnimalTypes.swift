@@ -27,13 +27,6 @@ enum AnimalStatus: String, Codable, CaseIterable {
         }
     }
 
-    var systemImage: String {
-        switch self {
-        case .active: return "checkmark.circle.fill"
-        case .sold: return "dollarsign.circle.fill"
-        case .dead: return "xmark.circle.fill"
-        }
-    }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()

@@ -58,7 +58,7 @@ struct AnimalTimelineView: View {
 
     private func timelineRow(_ event: AnimalTimelineEvent) -> some View {
         HStack(alignment: .top) {
-            if let icon = UIImage(lucideId: event.icon) {
+            if let icon = UIImage(lucideId: event.type.lucideIcon) {
                 Image(uiImage: icon.scaled(to: CGSize(width: 20, height: 20)))
                     .renderingMode(.template)
                     .foregroundStyle(color(for: event.type))
@@ -111,5 +111,18 @@ struct DayGroup: Identifiable {
 
     var dateString: String {
         date.formatted(date: .abbreviated, time: .omitted)
+    }
+}
+
+private extension AnimalTimelineEventType {
+    var lucideIcon: String {
+        switch self {
+        case .birth: return "baby"
+        case .health: return "syringe"
+        case .pregnancy: return "baby"
+        case .movement: return "move"
+        case .status: return "badge-alert"
+        case .tag: return "tag"
+        }
     }
 }
