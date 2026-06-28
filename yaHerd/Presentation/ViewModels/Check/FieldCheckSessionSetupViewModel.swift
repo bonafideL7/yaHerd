@@ -21,7 +21,7 @@ final class FieldCheckSessionSetupViewModel {
         pastureID: UUID?,
         startedAt: Date,
         notes: String,
-        using repository: any FieldCheckRepository
+        using repository: any FieldCheckSessionCreating
     ) throws -> UUID {
         guard let pastureID else {
             throw FieldCheckRepositoryError.pastureNotFound

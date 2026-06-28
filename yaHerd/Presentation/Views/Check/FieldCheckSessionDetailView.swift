@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct FieldCheckSessionDetailView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.fieldCheckSessionDetailRepository) private var repository
+    @Environment(\.fieldCheckSessionSetupRepository) private var setupRepository
+    @Environment(\.pastureReferenceDataReader) private var pastureReferenceDataReader
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.colorScheme) private var colorScheme
     
@@ -58,10 +60,6 @@ struct FieldCheckSessionDetailView: View {
         _currentSessionID = State(initialValue: nil)
         _selectedPastureID = State(initialValue: suggestedPastureID)
         _selectedPane = State(initialValue: .summary)
-    }
-    
-    private var repository: any FieldCheckRepository {
-        dependencies.fieldCheckRepository
     }
     
     private var navigationSubtitleText: String {
@@ -129,7 +127,7 @@ struct FieldCheckSessionDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .applyFieldCheckNavigationSubtitle(navigationSubtitleText)
         .task(id: currentSessionID) {
-            setupModel.load(using: dependencies.pastureRepository)
+            setupModel.load(using: pastureReferenceDataReader)
             
             if selectedPastureID == nil {
                 selectedPastureID = suggestedPastureID
@@ -500,7 +498,7 @@ struct FieldCheckSessionDetailView: View {
                 pastureID: selectedPastureID,
                 startedAt: startedAt,
                 notes: model.notesDraft,
-                using: repository
+                using: setupRepository
             )
             currentSessionID = sessionID
             selectedPane = FieldCheckSessionPane.defaultPane
@@ -526,16 +524,6 @@ struct FieldCheckSessionDetailView: View {
         }
     }
     
-    private func defaultSeverity(for type: FieldCheckFindingType) -> FieldCheckFindingSeverity {
-        switch type {
-        case .injury, .medicalAttention, .calvingInProgress:
-            return .critical
-        case .pinkEye, .limping, .missingAnimal, .waterIssue, .fenceIssue:
-            return .warning
-        default:
-            return .info
-        }
-    }
     
     private var errorBinding: Binding<Bool> {
         Binding(
@@ -754,7 +742,8 @@ struct FieldCheckFindingRow: View {
 
 
 struct FieldCheckAnimalDetailView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.animalDetailRepository) private var animalRepository
+    @Environment(\.fieldCheckAnimalDetailRepository) private var fieldCheckRepository
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     
     @State private var model = FieldCheckAnimalDetailViewModel()
@@ -763,14 +752,6 @@ struct FieldCheckAnimalDetailView: View {
     
     let sessionID: UUID
     let animalID: UUID
-    
-    private var animalRepository: any AnimalRepository {
-        dependencies.animalRepository
-    }
-    
-    private var fieldCheckRepository: any FieldCheckRepository {
-        dependencies.fieldCheckRepository
-    }
     
     private var displayedTagNumber: String {
         model.animalDetail?.displayTagNumber ?? ""
@@ -975,7 +956,7 @@ private struct FieldCheckFindingEditorView: View {
         self.animals = animals
         self.onSave = onSave
         _type = State(initialValue: suggestedTypes.first ?? .generalObservation)
-        _severity = State(initialValue: .warning)
+        _severity = State(initialValue: FieldCheckFindingRules.defaultSeverity(for: suggestedTypes.first ?? .generalObservation))
     }
     
     private var animalOptions: [FieldCheckAnimalCheckSnapshot] {

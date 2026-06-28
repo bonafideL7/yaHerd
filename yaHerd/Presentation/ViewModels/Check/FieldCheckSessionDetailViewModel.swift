@@ -9,7 +9,7 @@ final class FieldCheckSessionDetailViewModel {
     var errorMessage: String?
     var hasLoaded = false
 
-    func load(sessionID: UUID, using repository: any FieldCheckRepository) {
+    func load(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) {
         defer { hasLoaded = true }
 
         do {
@@ -22,7 +22,7 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func refresh(sessionID: UUID, using repository: any FieldCheckRepository) {
+    func refresh(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) {
         do {
             let loadedDetail = try LoadFieldCheckDetailUseCase(repository: repository).execute(id: sessionID)
             detail = loadedDetail
@@ -35,7 +35,7 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func persistNotes(sessionID: UUID, using repository: any FieldCheckRepository) {
+    func persistNotes(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) {
         guard let detail else { return }
         let normalizedDraft = notesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedSaved = detail.notes.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -49,7 +49,7 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func updateQuickAnimalTypeCounts(sessionID: UUID, counts: [AnimalType: Int], using repository: any FieldCheckRepository) {
+    func updateQuickAnimalTypeCounts(sessionID: UUID, counts: [AnimalType: Int], using repository: any FieldCheckSessionDetailRepository) {
         do {
             try repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: counts)
             refresh(sessionID: sessionID, using: repository)
@@ -58,7 +58,7 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool, using repository: any FieldCheckRepository) {
+    func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool, using repository: any FieldCheckSessionDetailRepository) {
         do {
             try repository.setAnimalCheckCounted(sessionID: sessionID, animalCheckID: animalCheckID, isCounted: isCounted)
             refresh(sessionID: sessionID, using: repository)
@@ -67,7 +67,7 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func setAnimalCheckNeedsAttention(sessionID: UUID, animalCheckID: UUID, needsAttention: Bool, using repository: any FieldCheckRepository) {
+    func setAnimalCheckNeedsAttention(sessionID: UUID, animalCheckID: UUID, needsAttention: Bool, using repository: any FieldCheckSessionDetailRepository) {
         do {
             try repository.setAnimalCheckNeedsAttention(sessionID: sessionID, animalCheckID: animalCheckID, needsAttention: needsAttention)
             refresh(sessionID: sessionID, using: repository)
@@ -76,7 +76,7 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool, using repository: any FieldCheckRepository) {
+    func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool, using repository: any FieldCheckSessionDetailRepository) {
         do {
             try repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: animalCheckID, isMissing: isMissing)
             refresh(sessionID: sessionID, using: repository)
@@ -85,7 +85,7 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func addFinding(sessionID: UUID, input: FieldCheckFindingInput, using repository: any FieldCheckRepository) {
+    func addFinding(sessionID: UUID, input: FieldCheckFindingInput, using repository: any FieldCheckSessionDetailRepository) {
         do {
             try repository.addFinding(sessionID: sessionID, input: input)
             if let animalID = input.animalID {
@@ -98,7 +98,7 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus, using repository: any FieldCheckRepository) {
+    func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus, using repository: any FieldCheckSessionDetailRepository) {
         do {
             try repository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: status)
             refresh(sessionID: sessionID, using: repository)
@@ -107,7 +107,7 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func deleteFinding(sessionID: UUID, findingID: UUID, using repository: any FieldCheckRepository) {
+    func deleteFinding(sessionID: UUID, findingID: UUID, using repository: any FieldCheckSessionDetailRepository) {
         let animalID = detail?.findings.first(where: { $0.id == findingID })?.animalID
 
         do {
@@ -122,7 +122,7 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func completeSession(sessionID: UUID, using repository: any FieldCheckRepository) {
+    func completeSession(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) {
         do {
             persistNotes(sessionID: sessionID, using: repository)
             try repository.completeSession(id: sessionID)
@@ -132,7 +132,7 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func reopenSession(sessionID: UUID, using repository: any FieldCheckRepository) {
+    func reopenSession(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) {
         do {
             try repository.reopenSession(id: sessionID)
             refresh(sessionID: sessionID, using: repository)
@@ -141,7 +141,7 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    private func syncNeedsAttention(sessionID: UUID, animalID: UUID, using repository: any FieldCheckRepository) throws {
+    private func syncNeedsAttention(sessionID: UUID, animalID: UUID, using repository: any FieldCheckSessionDetailRepository) throws {
         let refreshedDetail = try LoadFieldCheckDetailUseCase(repository: repository).execute(id: sessionID)
         detail = refreshedDetail
         if let refreshedDetail, notesDraft.trimmingCharacters(in: .whitespacesAndNewlines) == refreshedDetail.notes.trimmingCharacters(in: .whitespacesAndNewlines) {
@@ -193,8 +193,8 @@ final class FieldCheckAnimalDetailViewModel {
     func load(
         animalID: UUID,
         sessionID: UUID,
-        animalRepository: any AnimalRepository,
-        fieldCheckRepository: any FieldCheckRepository
+        animalRepository: any AnimalDetailRepository,
+        fieldCheckRepository: any FieldCheckAnimalDetailRepository
     ) {
         defer { hasLoaded = true }
 
@@ -211,8 +211,8 @@ final class FieldCheckAnimalDetailViewModel {
     func refresh(
         animalID: UUID,
         sessionID: UUID,
-        animalRepository: any AnimalRepository,
-        fieldCheckRepository: any FieldCheckRepository
+        animalRepository: any AnimalDetailRepository,
+        fieldCheckRepository: any FieldCheckAnimalDetailRepository
     ) {
         do {
             animalDetail = try LoadAnimalDetailUseCase(repository: animalRepository).execute(id: animalID)
@@ -228,8 +228,8 @@ final class FieldCheckAnimalDetailViewModel {
         animalID: UUID,
         sessionID: UUID,
         isCounted: Bool,
-        animalRepository: any AnimalRepository,
-        fieldCheckRepository: any FieldCheckRepository
+        animalRepository: any AnimalDetailRepository,
+        fieldCheckRepository: any FieldCheckAnimalDetailRepository
     ) {
         guard let animalCheckID = animalCheck?.id else { return }
 
@@ -245,8 +245,8 @@ final class FieldCheckAnimalDetailViewModel {
         animalID: UUID,
         sessionID: UUID,
         needsAttention: Bool,
-        animalRepository: any AnimalRepository,
-        fieldCheckRepository: any FieldCheckRepository
+        animalRepository: any AnimalDetailRepository,
+        fieldCheckRepository: any FieldCheckAnimalDetailRepository
     ) {
         guard let animalCheckID = animalCheck?.id else { return }
 
@@ -262,8 +262,8 @@ final class FieldCheckAnimalDetailViewModel {
         animalID: UUID,
         sessionID: UUID,
         isMissing: Bool,
-        animalRepository: any AnimalRepository,
-        fieldCheckRepository: any FieldCheckRepository
+        animalRepository: any AnimalDetailRepository,
+        fieldCheckRepository: any FieldCheckAnimalDetailRepository
     ) {
         guard let animalCheckID = animalCheck?.id else { return }
 
@@ -279,8 +279,8 @@ final class FieldCheckAnimalDetailViewModel {
         animalID: UUID,
         sessionID: UUID,
         type: FieldCheckFindingType,
-        animalRepository: any AnimalRepository,
-        fieldCheckRepository: any FieldCheckRepository
+        animalRepository: any AnimalDetailRepository,
+        fieldCheckRepository: any FieldCheckAnimalDetailRepository
     ) {
         do {
             try fieldCheckRepository.addFinding(
@@ -288,7 +288,7 @@ final class FieldCheckAnimalDetailViewModel {
                 input: FieldCheckFindingInput(
                     recordedAt: .now,
                     type: type,
-                    severity: defaultSeverity(for: type),
+                    severity: FieldCheckFindingRules.defaultSeverity(for: type),
                     status: .open,
                     note: "",
                     animalID: animalID
@@ -310,8 +310,8 @@ final class FieldCheckAnimalDetailViewModel {
         sessionID: UUID,
         findingID: UUID,
         status: FieldCheckFindingStatus,
-        animalRepository: any AnimalRepository,
-        fieldCheckRepository: any FieldCheckRepository
+        animalRepository: any AnimalDetailRepository,
+        fieldCheckRepository: any FieldCheckAnimalDetailRepository
     ) {
         do {
             try fieldCheckRepository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: status)
@@ -325,8 +325,8 @@ final class FieldCheckAnimalDetailViewModel {
         animalID: UUID,
         sessionID: UUID,
         findingID: UUID,
-        animalRepository: any AnimalRepository,
-        fieldCheckRepository: any FieldCheckRepository
+        animalRepository: any AnimalDetailRepository,
+        fieldCheckRepository: any FieldCheckAnimalDetailRepository
     ) {
         do {
             try fieldCheckRepository.deleteFinding(sessionID: sessionID, findingID: findingID)
@@ -344,8 +344,8 @@ final class FieldCheckAnimalDetailViewModel {
     private func syncNeedsAttention(
         animalID: UUID,
         sessionID: UUID,
-        animalRepository: any AnimalRepository,
-        fieldCheckRepository: any FieldCheckRepository
+        animalRepository: any AnimalDetailRepository,
+        fieldCheckRepository: any FieldCheckAnimalDetailRepository
     ) throws {
         let refreshedSessionDetail = try LoadFieldCheckDetailUseCase(repository: fieldCheckRepository).execute(id: sessionID)
         sessionDetail = refreshedSessionDetail
@@ -369,14 +369,4 @@ final class FieldCheckAnimalDetailViewModel {
         refresh(animalID: animalID, sessionID: sessionID, animalRepository: animalRepository, fieldCheckRepository: fieldCheckRepository)
     }
 
-    private func defaultSeverity(for type: FieldCheckFindingType) -> FieldCheckFindingSeverity {
-        switch type {
-        case .injury, .medicalAttention, .calvingInProgress:
-            return .critical
-        case .pinkEye, .limping, .missingAnimal, .waterIssue, .fenceIssue:
-            return .warning
-        default:
-            return .info
-        }
-    }
 }
