@@ -18,10 +18,14 @@ final class AnimalDetailViewModel {
     var pendingScrollTarget: AnimalEditorScrollTarget?
     var preparedOffspringEditor: PreparedAnimalEditor?
 
-    func load(animalID: UUID, using repository: any AnimalRepository) {
+    func load(
+        animalID: UUID,
+        using repository: any AnimalRepository,
+        pastureRepository: any PastureReferenceDataReader
+    ) {
         defer { hasLoaded = true }
 
-        form.loadSupportData(using: repository)
+        form.loadSupportData(using: repository, pastureRepository: pastureRepository)
 
         do {
             let loadedDetail = try LoadAnimalDetailUseCase(repository: repository).execute(id: animalID)
@@ -205,19 +209,27 @@ final class AnimalDetailViewModel {
         isEditing = true
     }
 
-    func archive(animalID: UUID, using repository: any AnimalRepository) {
+    func archive(
+        animalID: UUID,
+        using repository: any AnimalRepository,
+        pastureRepository: any PastureReferenceDataReader
+    ) {
         do {
             try ArchiveAnimalsUseCase(repository: repository).execute(ids: [animalID])
-            load(animalID: animalID, using: repository)
+            load(animalID: animalID, using: repository, pastureRepository: pastureRepository)
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    func restore(animalID: UUID, using repository: any AnimalRepository) {
+    func restore(
+        animalID: UUID,
+        using repository: any AnimalRepository,
+        pastureRepository: any PastureReferenceDataReader
+    ) {
         do {
             try RestoreAnimalsUseCase(repository: repository).execute(ids: [animalID])
-            load(animalID: animalID, using: repository)
+            load(animalID: animalID, using: repository, pastureRepository: pastureRepository)
         } catch {
             errorMessage = error.localizedDescription
         }

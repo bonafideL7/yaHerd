@@ -11,7 +11,7 @@ struct WorkingFinishSessionView: View {
     @State private var showingError = false
 
     init(sessionID: UUID) {
-        _viewModel = StateObject(wrappedValue: WorkingFinishSessionViewModel(sessionID: sessionID, workingRepository: EmptyWorkingRepository(), animalRepository: EmptyAnimalRepository()))
+        _viewModel = StateObject(wrappedValue: WorkingFinishSessionViewModel(sessionID: sessionID, workingRepository: EmptyWorkingRepository(), pastureRepository: EmptyPastureRepository()))
     }
 
     private var session: WorkingSessionDetailSnapshot? {
@@ -77,7 +77,7 @@ struct WorkingFinishSessionView: View {
                 }
             }
             .task {
-                viewModel.configure(workingRepository: dependencies.workingRepository, animalRepository: dependencies.animalRepository)
+                viewModel.configure(workingRepository: dependencies.workingRepository, pastureRepository: dependencies.pastureRepository)
                 viewModel.load()
                 seedDestinations()
             }

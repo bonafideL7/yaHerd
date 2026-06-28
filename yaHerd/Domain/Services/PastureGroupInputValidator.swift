@@ -10,7 +10,7 @@ struct PastureGroupInputValidator {
         self.groupNameExists = groupNameExists
     }
 
-    init(repository: any PastureRepository) {
+    init(repository: any PastureGroupNameChecking) {
         self.groupNameExists = { name in
             try repository.groupNameExists(name)
         }

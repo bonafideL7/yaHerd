@@ -7,9 +7,9 @@ final class FieldCheckSessionSetupViewModel {
     private(set) var pastures: [PastureOption] = []
     var errorMessage: String?
 
-    func load(using repository: any FieldCheckRepository) {
+    func load(using repository: any PastureReferenceDataReader) {
         do {
-            pastures = try repository.fetchPastureOptions()
+            pastures = try LoadPastureOptionsUseCase(repository: repository).execute()
                 .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             errorMessage = nil
         } catch {

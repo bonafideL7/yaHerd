@@ -23,7 +23,7 @@ struct WorkingSessionAnimalEditView: View {
     @State private var showingError = false
 
     init(sessionID: UUID, queueItemID: UUID) {
-        _viewModel = StateObject(wrappedValue: WorkingQueueItemEditorViewModel(sessionID: sessionID, queueItemID: queueItemID, workingRepository: EmptyWorkingRepository(), animalRepository: EmptyAnimalRepository()))
+        _viewModel = StateObject(wrappedValue: WorkingQueueItemEditorViewModel(sessionID: sessionID, queueItemID: queueItemID, workingRepository: EmptyWorkingRepository(), pastureRepository: EmptyPastureRepository()))
     }
 
     private var snapshot: WorkingQueueItemEditorSnapshot? { viewModel.snapshot }
@@ -188,7 +188,7 @@ struct WorkingSessionAnimalEditView: View {
             }
         }
         .task {
-            viewModel.configure(workingRepository: dependencies.workingRepository, animalRepository: dependencies.animalRepository)
+            viewModel.configure(workingRepository: dependencies.workingRepository, pastureRepository: dependencies.pastureRepository)
             viewModel.load()
             seedState()
         }

@@ -293,7 +293,7 @@ struct AnimalListView: View {
         }
         .sheet(isPresented: $showingPasturePicker) {
             PastureTilePickerView { pasture in
-                viewModel.move(ids: Array(selectedAnimalIDs), toPastureID: pasture.id, using: repository)
+                viewModel.move(ids: Array(selectedAnimalIDs), toPastureID: pasture.id, using: repository, pastureRepository: dependencies.pastureRepository)
                 selectedAnimalIDs.removeAll()
                 batchMode = false
             }
@@ -755,7 +755,7 @@ struct AnimalListView: View {
     }
 
     private func reload() {
-        viewModel.load(using: repository)
+        viewModel.load(using: repository, pastureRepository: dependencies.pastureRepository)
     }
 
     private func toggleBatchMode() {
@@ -872,11 +872,12 @@ struct AnimalListView: View {
         viewModel.performPrimarySwipeAction(
             animalID: animal.id,
             hardDelete: animal.isArchived || hardDeleteOnSwipe,
-            using: repository
+            using: repository,
+            pastureRepository: dependencies.pastureRepository
         )
     }
 
     private func restoreArchivedRecord(_ animal: AnimalSummary) {
-        viewModel.restore(animalID: animal.id, using: repository)
+        viewModel.restore(animalID: animal.id, using: repository, pastureRepository: dependencies.pastureRepository)
     }
 }

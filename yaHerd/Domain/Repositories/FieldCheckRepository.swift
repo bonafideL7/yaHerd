@@ -20,8 +20,11 @@ enum FieldCheckRepositoryError: LocalizedError {
     }
 }
 
-protocol FieldCheckRepository {
-    func fetchPastureOptions() throws -> [PastureOption]
+protocol FieldCheckPastureCleanupWriter {
+    func deleteSessions(forPastureIDs ids: [UUID]) throws
+}
+
+protocol FieldCheckRepository: FieldCheckPastureCleanupWriter {
     func fetchSessions() throws -> [FieldCheckSessionSummary]
     func fetchSessionDetail(id: UUID) throws -> FieldCheckSessionDetailSnapshot?
     func fetchOpenFindings(limit: Int) throws -> [FieldCheckFindingSnapshot]

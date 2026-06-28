@@ -16,10 +16,10 @@ final class PastureDetailViewModel {
             return form.shouldShowStockingFields
         }
         
-        PastureStockingPolicy.shouldUseStockingFields(acreage: detail?.acreage)
+        return PastureStockingPolicy.shouldUseStockingFields(acreage: detail?.acreage)
     }
     
-    func load(pastureID: UUID, using repository: any PastureRepository) {
+    func load(pastureID: UUID, using repository: any PastureDetailRepository) {
         defer { hasLoaded = true }
 
         do {
@@ -49,7 +49,7 @@ final class PastureDetailViewModel {
         isEditing = false
     }
 
-    func save(pastureID: UUID, using repository: any PastureRepository) {
+    func save(pastureID: UUID, using repository: any PastureUpdateRepository & PastureResidentAnimalReader) {
         do {
             let input = try form.makeUpdateInput()
             let updated = try UpdatePastureUseCase(repository: repository).execute(

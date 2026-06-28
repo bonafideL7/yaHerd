@@ -7,7 +7,7 @@ struct PastureInputValidator {
         self.nameExists = nameExists
     }
 
-    init(repository: any PastureRepository) {
+    init(repository: any PastureNameChecking) {
         self.nameExists = { name, id in
             try repository.nameExists(name, excluding: id)
         }

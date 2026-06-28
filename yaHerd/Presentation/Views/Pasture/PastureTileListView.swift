@@ -15,6 +15,7 @@ struct PastureTileListView: View {
     @Binding private var isManaging: Bool
 
     private let repository: any PastureRepository
+    private let fieldCheckRepository: any FieldCheckPastureCleanupWriter
     private let externalFilter: Binding<PastureListFilter>?
     private let onOpenSettings: () -> Void
     private let columns = [
@@ -23,11 +24,13 @@ struct PastureTileListView: View {
 
     init(
         repository: any PastureRepository,
+        fieldCheckRepository: any FieldCheckPastureCleanupWriter,
         isManaging: Binding<Bool>,
         filter: Binding<PastureListFilter>? = nil,
         onOpenSettings: @escaping () -> Void = {}
     ) {
         self.repository = repository
+        self.fieldCheckRepository = fieldCheckRepository
         self._isManaging = isManaging
         self.externalFilter = filter
         self.onOpenSettings = onOpenSettings
@@ -109,7 +112,11 @@ struct PastureTileListView: View {
             if let pasture = pasturePendingDeletion {
                 Button("Delete \(pasture.name)", role: .destructive) {
                     withAnimation(.snappy) {
-                        model.deletePasture(id: pasture.id, using: repository)
+                        model.deletePasture(
+                            id: pasture.id,
+                            pastureRepository: repository,
+                            fieldCheckRepository: fieldCheckRepository
+                        )
                     }
                 }
             }

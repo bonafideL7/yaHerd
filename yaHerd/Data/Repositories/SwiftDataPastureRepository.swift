@@ -31,6 +31,13 @@ struct SwiftDataPastureRepository: PastureRepository {
             }
     }
 
+    func fetchPastureOptions() throws -> [PastureOption] {
+        let descriptor = FetchDescriptor<Pasture>(sortBy: [SortDescriptor(\Pasture.name)])
+        return try context.fetch(descriptor).map { pasture in
+            PastureOption(id: pasture.publicID, name: pasture.name)
+        }
+    }
+
     func nameExists(_ name: String, excluding id: UUID?) throws -> Bool {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let descriptor = FetchDescriptor<Pasture>()
@@ -104,21 +111,9 @@ struct SwiftDataPastureRepository: PastureRepository {
         guard !ids.isEmpty else { return }
 
         let identifierSet = Set(ids)
-
-        let pastureDescriptor = FetchDescriptor<Pasture>()
-        let pasturesToDelete = try context.fetch(pastureDescriptor)
+        let descriptor = FetchDescriptor<Pasture>()
+        let pasturesToDelete = try context.fetch(descriptor)
             .filter { identifierSet.contains($0.publicID) }
-
-        let sessionDescriptor = FetchDescriptor<FieldCheckSession>()
-        let sessionsToDelete = try context.fetch(sessionDescriptor)
-            .filter { session in
-                guard let pastureID = session.pastureID else { return false }
-                return identifierSet.contains(pastureID)
-            }
-
-        for session in sessionsToDelete {
-            context.delete(session)
-        }
 
         for pasture in pasturesToDelete {
             context.delete(pasture)

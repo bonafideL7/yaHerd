@@ -12,8 +12,11 @@ final class AddAnimalViewModel {
         form = AnimalFormViewModel(draft: initialDraft, context: editorContext)
     }
 
-    func loadSupportData(using repository: any AnimalRepository) {
-        form.loadSupportData(using: repository)
+    func loadSupportData(
+        using animalRepository: any AnimalRepository,
+        pastureRepository: any PastureReferenceDataReader
+    ) {
+        form.loadSupportData(using: animalRepository, pastureRepository: pastureRepository)
     }
 
     func save(defaultTagColorID: UUID?, using repository: any AnimalRepository) throws {

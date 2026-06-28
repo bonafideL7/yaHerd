@@ -6,22 +6,22 @@ final class NewWorkingSessionViewModel: ObservableObject {
     @Published private(set) var templates: [WorkingProtocolTemplateSummary] = []
     @Published var errorMessage: String?
 
-    private var animalRepository: any AnimalRepository
+    private var pastureRepository: any PastureReferenceDataReader
     private var workingRepository: any WorkingRepository
 
-    init(animalRepository: any AnimalRepository, workingRepository: any WorkingRepository) {
-        self.animalRepository = animalRepository
+    init(pastureRepository: any PastureReferenceDataReader, workingRepository: any WorkingRepository) {
+        self.pastureRepository = pastureRepository
         self.workingRepository = workingRepository
     }
 
-    func configure(animalRepository: any AnimalRepository, workingRepository: any WorkingRepository) {
-        self.animalRepository = animalRepository
+    func configure(pastureRepository: any PastureReferenceDataReader, workingRepository: any WorkingRepository) {
+        self.pastureRepository = pastureRepository
         self.workingRepository = workingRepository
     }
 
     func load() {
         do {
-            pastures = try animalRepository.fetchPastureOptions()
+            pastures = try LoadPastureOptionsUseCase(repository: pastureRepository).execute()
             templates = try workingRepository.fetchTemplates()
             errorMessage = nil
         } catch {

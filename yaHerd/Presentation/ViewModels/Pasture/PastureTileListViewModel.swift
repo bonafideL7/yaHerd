@@ -7,7 +7,7 @@ final class PastureTileListViewModel {
     private(set) var items: [PastureSummary] = []
     var errorMessage: String?
 
-    func load(using repository: any PastureRepository) {
+    func load(using repository: any PastureListReader) {
         do {
             items = try LoadPasturesUseCase(repository: repository).execute()
         } catch {
@@ -16,7 +16,7 @@ final class PastureTileListViewModel {
     }
 
 
-    func movePastures(from source: IndexSet, to destination: Int, using repository: any PastureRepository) {
+    func movePastures(from source: IndexSet, to destination: Int, using repository: any PastureOrdering) {
         let originalItems = items
         movePasturesInMemory(from: source, to: destination)
 
@@ -27,11 +27,11 @@ final class PastureTileListViewModel {
         items = movedItems(from: source, to: destination)
     }
 
-    func persistPastureOrder(using repository: any PastureRepository) throws {
+    func persistPastureOrder(using repository: any PastureOrdering) throws {
         try ReorderPasturesUseCase(repository: repository).execute(ids: items.map(\.id))
     }
 
-    func commitPastureOrder(using repository: any PastureRepository, rollbackTo originalItems: [PastureSummary]) {
+    func commitPastureOrder(using repository: any PastureOrdering, rollbackTo originalItems: [PastureSummary]) {
         do {
             try persistPastureOrder(using: repository)
         } catch {
@@ -40,7 +40,11 @@ final class PastureTileListViewModel {
         }
     }
 
-    func deletePastures(at offsets: IndexSet, using repository: any PastureRepository) {
+    func deletePastures(
+        at offsets: IndexSet,
+        pastureRepository: any PastureDeleting & PastureOrdering,
+        fieldCheckRepository: any FieldCheckPastureCleanupWriter
+    ) {
         let originalItems = items
         let ids: [UUID] = offsets.sorted().reduce(into: []) { result, index in
             guard items.indices.contains(index) else { return }
@@ -52,17 +56,28 @@ final class PastureTileListViewModel {
             .map(\.element)
 
         do {
-            try DeletePasturesUseCase(repository: repository).execute(ids: ids)
-            try persistPastureOrder(using: repository)
+            try DeletePasturesUseCase(
+                pastureRepository: pastureRepository,
+                fieldCheckRepository: fieldCheckRepository
+            ).execute(ids: ids)
+            try persistPastureOrder(using: pastureRepository)
         } catch {
             items = originalItems
             errorMessage = error.localizedDescription
         }
     }
 
-    func deletePasture(id: UUID, using repository: any PastureRepository) {
+    func deletePasture(
+        id: UUID,
+        pastureRepository: any PastureDeleting & PastureOrdering,
+        fieldCheckRepository: any FieldCheckPastureCleanupWriter
+    ) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
-        deletePastures(at: IndexSet(integer: index), using: repository)
+        deletePastures(
+            at: IndexSet(integer: index),
+            pastureRepository: pastureRepository,
+            fieldCheckRepository: fieldCheckRepository
+        )
     }
 
     private func movedItems(from source: IndexSet, to destination: Int) -> [PastureSummary] {

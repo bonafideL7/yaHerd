@@ -15,9 +15,15 @@ final class AnimalFormViewModel {
         self.context = context
     }
 
-    func loadSupportData(using repository: any AnimalRepository) {
+    func loadSupportData(
+        using animalRepository: any AnimalRepository,
+        pastureRepository: any PastureReferenceDataReader
+    ) {
         do {
-            let options = try LoadAnimalEditorOptionsUseCase(repository: repository).execute()
+            let options = try LoadAnimalEditorOptionsUseCase(
+                animalRepository: animalRepository,
+                pastureRepository: pastureRepository
+            ).execute()
             pastureOptions = options.pastures
             statusReferenceOptions = options.statusReferences
         } catch {

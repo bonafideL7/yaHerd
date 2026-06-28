@@ -1,9 +1,13 @@
 import Foundation
 
 struct DeletePasturesUseCase {
-    let repository: any PastureRepository
+    let pastureRepository: any PastureDeleting
+    let fieldCheckRepository: any FieldCheckPastureCleanupWriter
 
     func execute(ids: [UUID]) throws {
-        try repository.delete(ids: ids)
+        guard !ids.isEmpty else { return }
+
+        try fieldCheckRepository.deleteSessions(forPastureIDs: ids)
+        try pastureRepository.delete(ids: ids)
     }
 }

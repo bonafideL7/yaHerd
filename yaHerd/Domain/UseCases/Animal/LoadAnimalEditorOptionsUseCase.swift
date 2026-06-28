@@ -1,12 +1,13 @@
 import Foundation
 
 struct LoadAnimalEditorOptionsUseCase {
-    let repository: any AnimalRepository
+    let animalRepository: any AnimalRepository
+    let pastureRepository: any PastureReferenceDataReader
 
     func execute() throws -> (pastures: [PastureOption], statusReferences: [AnimalStatusReferenceOption]) {
         (
-            pastures: try repository.fetchPastureOptions(),
-            statusReferences: try repository.fetchStatusReferenceOptions()
+            pastures: try LoadPastureOptionsUseCase(repository: pastureRepository).execute(),
+            statusReferences: try animalRepository.fetchStatusReferenceOptions()
         )
     }
 }
