@@ -55,6 +55,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
             observationNotes: observationNotes
         )
     }
+
     func createSession(date: Date, sourcePastureID: UUID?, protocolName: String, protocolItems: [WorkingProtocolItem]) throws -> UUID {
         let session = WorkingSession(
             date: date,
@@ -105,43 +106,17 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         let queueItem = try fetchQueueItem(id: queueItemID, sessionID: sessionID)
         guard let animal = queueItem.animal else { return }
 
+        let completedAt = Date.now
         queueItem.status = .done
-        queueItem.completedAt = .now
+        queueItem.completedAt = completedAt
 
-        try deleteTreatmentRecords(session: session, animal: animal)
-        for entry in treatmentEntries {
-            let record = WorkingTreatmentRecord(date: entry.date, itemName: entry.itemName, given: entry.given, quantity: entry.quantity, animal: animal, session: session)
-            context.insert(record)
-        }
-
-        try deletePregnancyChecks(session: session, animal: animal)
-        if let pregnancyCheck, pregnancyCheck.result == .open || pregnancyCheck.result == .pregnant {
-            let check = PregnancyCheck(
-                date: pregnancyCheck.date,
-                result: pregnancyCheck.result,
-                technician: nil,
-                estimatedDaysPregnant: pregnancyCheck.estimatedDaysPregnant,
-                dueDate: pregnancyCheck.dueDate,
-                sireAnimal: try fetchAnimal(id: pregnancyCheck.sireAnimalID),
-                workingSession: session,
-                animal: animal
-            )
-            context.insert(check)
-        }
-
-        try deleteHealthRecords(session: session, animal: animal, treatment: WorkingGeneratedHealthRecord.castration.treatmentName)
-        if markCastrated {
-            let record = HealthRecord(date: .now, treatment: WorkingGeneratedHealthRecord.castration.treatmentName, notes: nil, workingSession: session, animal: animal)
-            context.insert(record)
-        }
-
-        try deleteHealthRecords(session: session, animal: animal, treatment: WorkingGeneratedHealthRecord.observation.treatmentName)
-        let trimmedNotes = observationNotes.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedNotes.isEmpty {
-            let record = HealthRecord(date: .now, treatment: WorkingGeneratedHealthRecord.observation.treatmentName, notes: trimmedNotes, workingSession: session, animal: animal)
-            context.insert(record)
-        }
-
+        let input = WorkingQueueItemWorkDataInput(
+            treatmentEntries: treatmentEntries,
+            pregnancyCheck: pregnancyCheck,
+            castrationPerformed: markCastrated,
+            observationNotes: observationNotes
+        )
+        try workDataWriter.replaceWorkData(session: session, animal: animal, input: input, recordDate: completedAt)
         try context.save()
     }
 
@@ -150,45 +125,12 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         let queueItem = try fetchQueueItem(id: queueItemID, sessionID: sessionID)
         guard let animal = queueItem.animal else { return }
 
+        let completedAt = input.status == .done ? (input.completedAt ?? Date.now) : nil
         queueItem.status = input.status
-        queueItem.completedAt = input.status == .done ? (input.completedAt ?? .now) : nil
+        queueItem.completedAt = completedAt
         queueItem.destinationPasture = try fetchPasture(id: input.destinationPastureID)
 
-        try deleteTreatmentRecords(session: session, animal: animal)
-        for entry in input.treatmentEntries {
-            let record = WorkingTreatmentRecord(date: entry.date, itemName: entry.itemName, given: entry.given, quantity: entry.quantity, animal: animal, session: session)
-            context.insert(record)
-        }
-
-        try deletePregnancyChecks(session: session, animal: animal)
-        if let pregnancyCheck = input.pregnancyCheck,
-           pregnancyCheck.result == .open || pregnancyCheck.result == .pregnant {
-            let check = PregnancyCheck(
-                date: pregnancyCheck.date,
-                result: pregnancyCheck.result,
-                technician: nil,
-                estimatedDaysPregnant: pregnancyCheck.estimatedDaysPregnant,
-                dueDate: pregnancyCheck.dueDate,
-                sireAnimal: try fetchAnimal(id: pregnancyCheck.sireAnimalID),
-                workingSession: session,
-                animal: animal
-            )
-            context.insert(check)
-        }
-
-        try deleteHealthRecords(session: session, animal: animal, treatment: WorkingGeneratedHealthRecord.castration.treatmentName)
-        if input.castrationPerformed {
-            let record = HealthRecord(date: .now, treatment: WorkingGeneratedHealthRecord.castration.treatmentName, notes: nil, workingSession: session, animal: animal)
-            context.insert(record)
-        }
-
-        try deleteHealthRecords(session: session, animal: animal, treatment: WorkingGeneratedHealthRecord.observation.treatmentName)
-        let trimmedNotes = input.observationNotes.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedNotes.isEmpty {
-            let record = HealthRecord(date: .now, treatment: WorkingGeneratedHealthRecord.observation.treatmentName, notes: trimmedNotes, workingSession: session, animal: animal)
-            context.insert(record)
-        }
-
+        try workDataWriter.replaceWorkData(session: session, animal: animal, input: input.workData, recordDate: completedAt ?? Date.now)
         try context.save()
     }
 
@@ -196,9 +138,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         let session = try fetchSession(id: sessionID)
         let queueItem = try fetchQueueItem(id: queueItemID, sessionID: sessionID)
         guard let animal = queueItem.animal else { return }
-        try deleteTreatmentRecords(session: session, animal: animal)
-        try deletePregnancyChecks(session: session, animal: animal)
-        try deleteHealthRecords(session: session, animal: animal)
+        try workDataWriter.deleteAllWorkData(session: session, animal: animal)
         queueItem.status = .queued
         queueItem.completedAt = nil
         try context.save()
@@ -236,17 +176,19 @@ struct SwiftDataWorkingRepository: WorkingRepository {
 
     func finishSession(id: UUID) throws {
         let session = try fetchSession(id: id)
-        var changedAny = false
         for item in session.queueItems.sorted(by: { $0.queueOrder < $1.queueOrder }) {
             guard let animal = item.animal else { continue }
             let destination = item.destinationPasture ?? session.sourcePasture
-            let changed = try AnimalMovementStore.move(animal, to: destination, in: context, fromPastureName: item.collectedFromPasture?.name, save: false)
-            changedAny = changedAny || changed
+            _ = try AnimalMovementStore.move(
+                animal,
+                to: destination,
+                in: context,
+                fromPastureName: item.collectedFromPasture?.name,
+                save: false
+            )
         }
         session.status = .finished
-        if changedAny || session.status == .finished {
-            try context.save()
-        }
+        try context.save()
     }
 
     func createTemplate(name: String, items: [WorkingProtocolItem]) throws -> UUID {
@@ -280,6 +222,10 @@ struct SwiftDataWorkingRepository: WorkingRepository {
             context.delete(template)
         }
         try context.save()
+    }
+
+    private var workDataWriter: SwiftDataWorkingWorkDataWriter {
+        SwiftDataWorkingWorkDataWriter(context: context)
     }
 
     private func fetchSession(id: UUID) throws -> WorkingSession {
@@ -352,12 +298,6 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         return ids.compactMap { animalsByID[$0] }
     }
 
-    private func fetchAnimal(id: UUID?) throws -> Animal? {
-        guard let id else { return nil }
-        let descriptor = FetchDescriptor<Animal>(predicate: #Predicate<Animal> { animal in animal.publicID == id })
-        return try context.fetch(descriptor).first
-    }
-
     private func fetchPasture(id: UUID?) throws -> Pasture? {
         guard let id else { return nil }
         let descriptor = FetchDescriptor<Pasture>(predicate: #Predicate<Pasture> { pasture in pasture.publicID == id })
@@ -387,32 +327,6 @@ struct SwiftDataWorkingRepository: WorkingRepository {
             $0.workingSession?.persistentModelID == sid && $0.animal?.persistentModelID == aid
         }
     }
-
-    private func deleteTreatmentRecords(session: WorkingSession, animal: Animal) throws {
-        let sid = session.persistentModelID
-        let aid = animal.persistentModelID
-        for record in try context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) where record.session?.persistentModelID == sid && record.animal?.persistentModelID == aid {
-            context.delete(record)
-        }
-    }
-
-    private func deletePregnancyChecks(session: WorkingSession, animal: Animal) throws {
-        let sid = session.persistentModelID
-        let aid = animal.persistentModelID
-        for check in try context.fetch(FetchDescriptor<PregnancyCheck>()) where check.workingSession?.persistentModelID == sid && check.animal?.persistentModelID == aid {
-            context.delete(check)
-        }
-    }
-
-    private func deleteHealthRecords(session: WorkingSession, animal: Animal, treatment: String? = nil) throws {
-        let sid = session.persistentModelID
-        let aid = animal.persistentModelID
-        for record in try context.fetch(FetchDescriptor<HealthRecord>()) where record.workingSession?.persistentModelID == sid && record.animal?.persistentModelID == aid {
-            if let treatment, record.treatment != treatment { continue }
-            context.delete(record)
-        }
-    }
-
 
     private func validateCollection(animals: [Animal], for session: WorkingSession) throws {
         let existingAnimalIDs = Set(session.queueItems.compactMap { $0.animal?.publicID })
