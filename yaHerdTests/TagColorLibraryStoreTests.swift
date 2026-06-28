@@ -8,7 +8,7 @@ final class TagColorLibraryStoreTests: XCTestCase {
         let container = try TestSupport.makeModelContainer()
         let context = ModelContext(container)
 
-        let store = TagColorLibraryStore(context: context)
+        let store = makeStore(context: context)
 
         XCTAssertEqual(store.defaultColor.name, "White")
         XCTAssertEqual(store.resolvedColorID(nil), store.defaultColorID)
@@ -17,7 +17,7 @@ final class TagColorLibraryStoreTests: XCTestCase {
     func testSetDefaultColorPersistsSingleDefault() throws {
         let container = try TestSupport.makeModelContainer()
         let context = ModelContext(container)
-        let store = TagColorLibraryStore(context: context)
+        let store = makeStore(context: context)
         let blue = try XCTUnwrap(store.colors.first { $0.name == "Blue" })
 
         store.setDefaultColor(id: blue.id)
@@ -32,7 +32,7 @@ final class TagColorLibraryStoreTests: XCTestCase {
 
 
     func testSeedDefaultColorsExcludesRetiredTagColors() throws {
-        let names = TagColorLibraryStore.seedDefaultColors().map(\.name)
+        let names = TagColorDefaults.seedDefaultColors().map(\.name)
 
         XCTAssertFalse(names.contains("Black"))
         XCTAssertFalse(names.contains("Brown"))
@@ -54,7 +54,7 @@ final class TagColorLibraryStoreTests: XCTestCase {
         context.insert(TagColorDefinition(name: "White", rgba: RGBAColor(r: 1, g: 1, b: 1), isDefault: true))
         try context.save()
 
-        let store = TagColorLibraryStore(context: context)
+        let store = makeStore(context: context)
         let names = store.colors.map(\.name)
 
         XCTAssertFalse(names.contains("Black"))
@@ -71,8 +71,13 @@ final class TagColorLibraryStoreTests: XCTestCase {
         context.insert(animal)
         try context.save()
 
-        let store = TagColorLibraryStore(context: context)
+        let store = makeStore(context: context)
 
         XCTAssertEqual(animal.tagColorID, store.defaultColorID)
+    }
+    private func makeStore(context: ModelContext) -> TagColorLibraryStore {
+        TagColorLibraryStore(
+            repository: SwiftDataTagColorRepository(context: context)
+        )
     }
 }

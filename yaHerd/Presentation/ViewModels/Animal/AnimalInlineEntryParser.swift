@@ -12,7 +12,7 @@ struct AnimalInlineEntryResult: Hashable {
 }
 
 enum AnimalInlineEntryParser {
-    static func parse(_ text: String, colors: [TagColorDefinition]) -> AnimalInlineEntryResult {
+    static func parse(_ text: String, colors: [TagColorSnapshot]) -> AnimalInlineEntryResult {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return AnimalInlineEntryResult(rawText: trimmed, name: "", tagNumber: "", tagColorID: nil)

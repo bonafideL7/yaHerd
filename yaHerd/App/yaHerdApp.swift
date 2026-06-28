@@ -68,7 +68,10 @@ struct yaHerdApp: App {
             return .ready(
                 AppRuntime(
                     modelContainer: container,
-                    dependencies: AppDependencies(context: container.mainContext),
+                    dependencies: AppDependencies(
+                        context: container.mainContext,
+                        tagColorDuplicateResolutionPolicy: syncMode.tagColorDuplicateResolutionPolicy
+                    ),
                     syncMode: syncMode,
                     storageError: nil
                 )
@@ -100,7 +103,10 @@ struct yaHerdApp: App {
                     return .ready(
                         AppRuntime(
                             modelContainer: localContainer,
-                            dependencies: AppDependencies(context: localContainer.mainContext),
+                            dependencies: AppDependencies(
+                                context: localContainer.mainContext,
+                                tagColorDuplicateResolutionPolicy: SyncMode.localOnly.tagColorDuplicateResolutionPolicy
+                            ),
                             syncMode: .localOnly,
                             storageError: startupMessage
                         )
@@ -130,7 +136,10 @@ struct yaHerdApp: App {
                         return .ready(
                             AppRuntime(
                                 modelContainer: fallbackContainer,
-                                dependencies: AppDependencies(context: fallbackContainer.mainContext),
+                                dependencies: AppDependencies(
+                            context: fallbackContainer.mainContext,
+                            tagColorDuplicateResolutionPolicy: SyncMode.localOnly.tagColorDuplicateResolutionPolicy
+                        ),
                                 syncMode: .localOnly,
                                 storageError: startupMessage
                             )
@@ -177,7 +186,10 @@ struct yaHerdApp: App {
                 return .ready(
                     AppRuntime(
                         modelContainer: fallbackContainer,
-                        dependencies: AppDependencies(context: fallbackContainer.mainContext),
+                        dependencies: AppDependencies(
+                            context: fallbackContainer.mainContext,
+                            tagColorDuplicateResolutionPolicy: SyncMode.localOnly.tagColorDuplicateResolutionPolicy
+                        ),
                         syncMode: .localOnly,
                         storageError: startupMessage
                     )
@@ -225,6 +237,12 @@ struct yaHerdApp: App {
     }
 }
 
+private extension SyncMode {
+    var tagColorDuplicateResolutionPolicy: TagColorDuplicateResolutionPolicy {
+        self == .iCloud ? .newestNonDefaultWins : .stableSortOrderWins
+    }
+}
+
 private enum AppBootstrapState {
     case ready(AppRuntime)
     case storageUnavailable(String)
@@ -249,8 +267,7 @@ private struct RunningAppView: View {
         self.appSettingsSynchronizer = appSettingsSynchronizer
         self._tagColorLibrary = StateObject(
             wrappedValue: TagColorLibraryStore(
-                context: runtime.modelContainer.mainContext,
-                syncMode: runtime.syncMode
+                repository: runtime.dependencies.tagColorRepository
             )
         )
     }
