@@ -2,7 +2,7 @@ import XCTest
 @testable import yaHerd
 
 final class HomeServiceTests: XCTestCase {
-    func testPastureCheckDueItemsExcludeActiveChecksAndRecentChecks() {
+    func testPastureCheckStartPasturesComeFromDashboardPastures() {
         let now = date(year: 2026, month: 1, day: 10)
         let alphaID = UUID()
         let betaID = UUID()
@@ -34,10 +34,10 @@ final class HomeServiceTests: XCTestCase {
             now: now
         )
 
-        XCTAssertEqual(snapshot.pastureCheckDueItems.map(\.name), ["Delta", "Beta"])
+        XCTAssertEqual(snapshot.pastureCheckStartPastures.map(\.name), ["Alpha", "Beta", "Delta", "Gamma"])
     }
 
-    func testRecordsCleanupCountsComeFromHomeSnapshot() {
+    func testRecordsCleanupRowsComeFromHomeSnapshot() {
         let animalMissingPasture = animal(tag: "10", sex: .female, status: .active, isArchived: false, pastureID: nil, location: .pasture)
         let animalMissingTag = animal(tag: "   ", sex: .female, status: .active, isArchived: false, pastureID: UUID(), location: .pasture)
         let animalUnknownSex = animal(tag: "12", sex: .unknown, status: .active, isArchived: false, pastureID: UUID(), location: .pasture)
@@ -62,7 +62,15 @@ final class HomeServiceTests: XCTestCase {
         XCTAssertEqual(snapshot.missingTagAnimals.map(\.id), [animalMissingTag.id])
         XCTAssertEqual(snapshot.unknownSexAnimals.map(\.id), [animalUnknownSex.id])
         XCTAssertEqual(snapshot.archivedActiveRecords.map(\.id), [archivedActive.id])
-        XCTAssertEqual(snapshot.recordsCleanupCardCount, 4)
+        let cleanupRowCount = [
+            snapshot.unassignedAnimalRecords,
+            snapshot.missingTagAnimals,
+            snapshot.unknownSexAnimals,
+            snapshot.archivedActiveRecords
+        ].filter { !$0.isEmpty }.count
+
+        XCTAssertEqual(cleanupRowCount, 4)
+        XCTAssertTrue(snapshot.hasRecordsCleanupRows)
     }
 
     private var configuration: DashboardConfiguration {
@@ -106,7 +114,12 @@ final class HomeServiceTests: XCTestCase {
             lastPregnancyCheckDate: nil,
             lastPregnancyStatus: nil,
             expectedCalvingDate: nil,
-            lastTreatmentDate: nil
+            lastTreatmentDate: nil,
+            birthDate: date(year: 2024, month: 1, day: 1),
+            saleDate: nil,
+            deathDate: nil,
+            healthRecords: [],
+            offspringCount: 0
         )
     }
 
