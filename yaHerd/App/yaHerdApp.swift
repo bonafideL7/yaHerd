@@ -276,6 +276,9 @@ private struct RunningAppView: View {
         RootAppView(storageError: runtime.storageError)
             .environmentObject(tagColorLibrary)
             .environmentObject(runtime.dependencies)
+            .environment(\.dashboardRecordReader, runtime.dependencies.dashboardRepository)
+            .environment(\.fieldCheckOverviewReader, runtime.dependencies.fieldCheckRepository)
+            .environment(\.workingProtocolTemplateReader, runtime.dependencies.workingRepository)
             .environment(\.syncDiagnosticsRepository, runtime.dependencies.syncDiagnosticsRepository)
             .modelContainer(runtime.modelContainer)
             .onChange(of: scenePhase) { _, newPhase in

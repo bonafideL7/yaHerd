@@ -7,7 +7,7 @@ final class DashboardPastureListViewModel {
     private(set) var items: [DashboardPastureItem] = []
     var errorMessage: String?
 
-    func load(configuration: DashboardConfiguration, using repository: any DashboardRepository) {
+    func load(configuration: DashboardConfiguration, using repository: any DashboardRecordReading) {
         do {
             items = try LoadDashboardPastureListUseCase(repository: repository)
                 .execute(configuration: configuration)
@@ -20,7 +20,7 @@ final class DashboardPastureListViewModel {
     func markPastureGrazedToday(
         pastureID: UUID,
         configuration: DashboardConfiguration,
-        using repository: any DashboardRepository
+        using repository: any DashboardReadWriting
     ) {
         do {
             try MarkPastureGrazedTodayUseCase(repository: repository)

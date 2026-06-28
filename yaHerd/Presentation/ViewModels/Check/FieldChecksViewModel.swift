@@ -21,7 +21,7 @@ final class FieldChecksViewModel {
         )
     }
 
-    func load(using repository: any FieldCheckRepository) {
+    func load(using repository: any FieldCheckOverviewReading) {
         defer { hasLoaded = true }
 
         do {

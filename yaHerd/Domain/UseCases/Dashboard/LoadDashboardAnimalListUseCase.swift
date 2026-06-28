@@ -1,10 +1,10 @@
 import Foundation
 
 struct LoadDashboardAnimalListUseCase {
-    let repository: any DashboardRepository
+    let repository: any DashboardRecordReading
     let service: DashboardService
 
-    init(repository: any DashboardRepository, service: DashboardService = DashboardService()) {
+    init(repository: any DashboardRecordReading, service: DashboardService = DashboardService()) {
         self.repository = repository
         self.service = service
     }

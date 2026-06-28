@@ -2,19 +2,13 @@ import Charts
 import SwiftUI
 
 struct DashboardView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.dashboardRecordReader) private var dashboardRecordReader
+    @Environment(\.fieldCheckOverviewReader) private var fieldCheckOverviewReader
 
     @State private var viewModel = DashboardViewModel()
     @State private var fieldChecksModel = FieldChecksViewModel()
     @State private var selectedPastureName: String?
 
-    private var repository: any DashboardRepository {
-        dependencies.dashboardRepository
-    }
-
-    private var fieldCheckRepository: any FieldCheckRepository {
-        dependencies.fieldCheckRepository
-    }
 
     private let configuration = DashboardConfiguration()
 
@@ -534,8 +528,8 @@ struct DashboardView: View {
     }
 
     private func loadDashboardData() {
-        viewModel.load(configuration: configuration, using: repository)
-        fieldChecksModel.load(using: fieldCheckRepository)
+        viewModel.load(configuration: configuration, using: dashboardRecordReader)
+        fieldChecksModel.load(using: fieldCheckOverviewReader)
     }
 
     private func chartHeight(for itemCount: Int) -> CGFloat {

@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct HomeView: View {
-    @EnvironmentObject var dependencies: AppDependencies
+    @Environment(\.dashboardRecordReader) private var dashboardRecordReader
+    @Environment(\.fieldCheckOverviewReader) private var fieldCheckOverviewReader
+    @Environment(\.workingProtocolTemplateReader) private var workingProtocolTemplateReader
     @EnvironmentObject var tagColorLibrary: TagColorLibraryStore
 
     @AppStorage("isDashboardEnabled") var isDashboardEnabled = false
@@ -147,9 +149,11 @@ struct HomeView: View {
     func loadHomeData() {
         viewModel.load(
             configuration: configuration,
-            dashboardRepository: dependencies.dashboardRepository,
-            fieldCheckRepository: dependencies.fieldCheckRepository,
-            workingRepository: dependencies.workingRepository
+            useCase: LoadHomeUseCase(
+                dashboardRepository: dashboardRecordReader,
+                fieldCheckRepository: fieldCheckOverviewReader,
+                workingRepository: workingProtocolTemplateReader
+            )
         )
     }
 
