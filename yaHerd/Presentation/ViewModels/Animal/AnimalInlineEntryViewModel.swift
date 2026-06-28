@@ -80,7 +80,7 @@ final class AnimalInlineEntryViewModel {
         startNewEntryAfterCreate: Bool,
         colors: [TagColorSnapshot],
         defaultTagColorID: UUID?,
-        using repository: any AnimalRepository
+        using repository: any AnimalListRepository
     ) throws -> Bool {
         guard isActive, !isCommitting else { return false }
 
@@ -114,7 +114,7 @@ final class AnimalInlineEntryViewModel {
         text: String,
         colors: [TagColorSnapshot],
         defaultTagColorID: UUID?,
-        using repository: any AnimalRepository
+        using repository: any AnimalListRepository
     ) throws {
         let parsed = AnimalInlineEntryParser.parse(text, colors: colors)
         guard !parsed.isEmpty else { return }
@@ -134,7 +134,7 @@ final class AnimalInlineEntryViewModel {
         text: String,
         colors: [TagColorSnapshot],
         defaultTagColorID: UUID?,
-        using repository: any AnimalRepository
+        using repository: any AnimalListRepository
     ) throws {
         let parsed = AnimalInlineEntryParser.parse(text, colors: colors)
 

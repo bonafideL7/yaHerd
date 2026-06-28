@@ -9,7 +9,7 @@ final class AnimalListViewModel {
     var errorMessage: String?
 
     func load(
-        using repository: any AnimalRepository,
+        using repository: any AnimalListRepository,
         pastureRepository: any PastureReferenceDataReader
     ) {
         do {
@@ -23,7 +23,7 @@ final class AnimalListViewModel {
     func performPrimarySwipeAction(
         animalID: UUID,
         hardDelete: Bool,
-        using repository: any AnimalRepository,
+        using repository: any AnimalListRepository,
         pastureRepository: any PastureReferenceDataReader
     ) {
         do {
@@ -40,7 +40,7 @@ final class AnimalListViewModel {
 
     func restore(
         animalID: UUID,
-        using repository: any AnimalRepository,
+        using repository: any AnimalListRepository,
         pastureRepository: any PastureReferenceDataReader
     ) {
         do {
@@ -54,7 +54,7 @@ final class AnimalListViewModel {
     func move(
         ids: [UUID],
         toPastureID pastureID: UUID?,
-        using repository: any AnimalRepository,
+        using repository: any AnimalListRepository,
         pastureRepository: any PastureReferenceDataReader
     ) {
         do {

@@ -280,6 +280,9 @@ private struct RunningAppView: View {
             .environment(\.fieldCheckOverviewReader, runtime.dependencies.fieldCheckRepository)
             .environment(\.workingProtocolTemplateReader, runtime.dependencies.workingRepository)
             .environment(\.syncDiagnosticsRepository, runtime.dependencies.syncDiagnosticsRepository)
+            .environment(\.animalListRepository, runtime.dependencies.animalRepository)
+            .environment(\.pastureReferenceDataReader, runtime.dependencies.pastureRepository)
+            .environment(\.sampleDataSeeder, runtime.dependencies.sampleDataSeeder)
             .modelContainer(runtime.modelContainer)
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
