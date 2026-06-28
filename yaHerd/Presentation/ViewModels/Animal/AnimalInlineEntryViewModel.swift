@@ -4,16 +4,28 @@ import Observation
 @MainActor
 @Observable
 final class AnimalInlineEntryViewModel {
+    @ObservationIgnored private let dateProvider: any DateProviding
+    @ObservationIgnored private let calendar: Calendar
+
     var isActive = false
     var identity = UUID()
     var editingAnimalID: UUID?
     var text = ""
     var sex: Sex = .unknown
-    var birthDate = Calendar.current.startOfDay(for: .now)
+    var birthDate: Date
     var pastureID: UUID?
     var focusRequestID = UUID()
     var isCommitting = false
     var ignoresNextFocusLoss = false
+
+    init(
+        dateProvider: any DateProviding = SystemDateProvider(),
+        calendar: Calendar = .current
+    ) {
+        self.dateProvider = dateProvider
+        self.calendar = calendar
+        self.birthDate = calendar.startOfDay(for: dateProvider.now)
+    }
 
     var isEditing: Bool {
         editingAnimalID != nil
@@ -29,7 +41,7 @@ final class AnimalInlineEntryViewModel {
         identity = UUID()
         text = ""
         sex = .unknown
-        birthDate = Calendar.current.startOfDay(for: .now)
+        birthDate = defaultBirthDate
         pastureID = nil
         ignoresNextFocusLoss = false
     }
@@ -69,7 +81,7 @@ final class AnimalInlineEntryViewModel {
         editingAnimalID = nil
         text = ""
         sex = .unknown
-        birthDate = Calendar.current.startOfDay(for: .now)
+        birthDate = defaultBirthDate
         pastureID = nil
         identity = UUID()
         ignoresNextFocusLoss = false
@@ -149,12 +161,16 @@ final class AnimalInlineEntryViewModel {
         )
     }
 
+    private var defaultBirthDate: Date {
+        calendar.startOfDay(for: dateProvider.now)
+    }
+
     private func clearCommittedEntry() {
         isActive = false
         editingAnimalID = nil
         text = ""
         sex = .unknown
-        birthDate = Calendar.current.startOfDay(for: .now)
+        birthDate = defaultBirthDate
         pastureID = nil
         identity = UUID()
         ignoresNextFocusLoss = false
