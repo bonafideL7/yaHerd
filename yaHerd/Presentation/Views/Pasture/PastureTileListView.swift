@@ -1,26 +1,21 @@
 import SwiftUI
 
 struct PastureTileListView: View {
+    @Environment(\.pastureListRepository) private var repository
+    @Environment(\.animalPastureMover) private var animalMover
+    @Environment(\.fieldCheckPastureCleanupWriter) private var fieldCheckCleanupWriter
+
     @State private var model = PastureTileListViewModel()
     @Binding private var isManaging: Bool
 
-    private let repository: any PastureRepository
-    private let animalRepository: any AnimalPastureMoving
-    private let fieldCheckRepository: any FieldCheckPastureCleanupWriter
     private let externalFilter: Binding<PastureListFilter>?
     private let onOpenSettings: () -> Void
 
     init(
-        repository: any PastureRepository,
-        animalRepository: any AnimalPastureMoving,
-        fieldCheckRepository: any FieldCheckPastureCleanupWriter,
         isManaging: Binding<Bool>,
         filter: Binding<PastureListFilter>? = nil,
         onOpenSettings: @escaping () -> Void = {}
     ) {
-        self.repository = repository
-        self.animalRepository = animalRepository
-        self.fieldCheckRepository = fieldCheckRepository
         self._isManaging = isManaging
         self.externalFilter = filter
         self.onOpenSettings = onOpenSettings
@@ -123,8 +118,8 @@ struct PastureTileListView: View {
                         model.deletePasture(
                             id: pasture.id,
                             pastureRepository: repository,
-                            animalRepository: animalRepository,
-                            fieldCheckRepository: fieldCheckRepository
+                            animalRepository: animalMover,
+                            fieldCheckRepository: fieldCheckCleanupWriter
                         )
                     }
                 }

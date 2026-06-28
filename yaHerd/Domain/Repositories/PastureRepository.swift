@@ -107,16 +107,16 @@ protocol PastureGroupAssignRepository: PastureGroupAssignmentWriting, PastureExi
 protocol PastureDetailRepository: PastureDetailReader, PastureResidentAnimalReader {}
 protocol PastureDeleteRepository: PastureDeleting, PastureExistenceChecking, PastureResidentAnimalReader {}
 
-protocol PastureRepository: PastureListReader,
-                            PastureDetailRepository,
+protocol PastureListRepository: PastureListReader, PastureOrdering, PastureDeleteRepository {}
+protocol PastureDetailEditingRepository: PastureDetailRepository, PastureUpdateRepository {}
+protocol PastureGroupListRepository: PastureGroupListReader, PastureGroupDeleteRepository {}
+protocol PastureGroupDetailRepository: PastureGroupDetailReader, PastureListReader, PastureGroupAssignRepository {}
+protocol PastureGroupEditorRepository: PastureGroupCreateRepository, PastureGroupUpdateRepository {}
+
+protocol PastureRepository: PastureListRepository,
+                            PastureDetailEditingRepository,
                             PastureReferenceDataReader,
                             PastureCreateRepository,
-                            PastureUpdateRepository,
-                            PastureOrdering,
-                            PastureDeleteRepository,
-                            PastureGroupListReader,
-                            PastureGroupDetailReader,
-                            PastureGroupCreateRepository,
-                            PastureGroupUpdateRepository,
-                            PastureGroupDeleteRepository,
-                            PastureGroupAssignRepository {}
+                            PastureGroupListRepository,
+                            PastureGroupDetailRepository,
+                            PastureGroupEditorRepository {}

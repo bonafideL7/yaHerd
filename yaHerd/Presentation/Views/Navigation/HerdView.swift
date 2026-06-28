@@ -6,8 +6,6 @@ enum HerdViewMode: Hashable {
 }
 
 struct HerdView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
-
     @Binding private var searchText: String
     @Binding private var isSearchPresented: Bool
 
@@ -68,9 +66,6 @@ struct HerdView: View {
                 )
             case .pastures:
                 PastureTileListView(
-                    repository: dependencies.pastureRepository,
-                    animalRepository: dependencies.animalRepository,
-                    fieldCheckRepository: dependencies.fieldCheckRepository,
                     isManaging: $isManagingPastures,
                     filter: pastureFilter,
                     onOpenSettings: onOpenSettings

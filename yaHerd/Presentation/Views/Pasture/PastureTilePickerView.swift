@@ -9,7 +9,7 @@ import SwiftUI
 
 struct PastureTilePickerView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.pastureListRepository) private var pastureListRepository
 
     /// Called when user selects a pasture
     let onSelect: (PastureSummary) -> Void
@@ -98,7 +98,7 @@ struct PastureTilePickerView: View {
 
     private func loadPastures() {
         if let migratedRawValue = model.load(
-            using: dependencies.pastureRepository,
+            using: pastureListRepository,
             recentPastureIDsRaw: recentPastureIDsRaw,
             legacyRecentPastureNamesRaw: legacyRecentPastureNamesRaw
         ) {

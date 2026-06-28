@@ -12,7 +12,6 @@ private enum MainTab: Hashable {
 
 struct MainTabView: View {
     @EnvironmentObject private var nav: NavigationCoordinator
-    @EnvironmentObject private var dependencies: AppDependencies
     @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
     
     @State private var selectedTab: MainTab = .home

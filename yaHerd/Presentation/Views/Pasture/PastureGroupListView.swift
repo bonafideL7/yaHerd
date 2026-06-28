@@ -1,12 +1,8 @@
 import SwiftUI
 
 struct PastureGroupListView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.pastureGroupListRepository) private var repository
     @State private var model = PastureGroupListViewModel()
-
-    private var repository: any PastureRepository {
-        dependencies.pastureRepository
-    }
 
     var body: some View {
         Group {
