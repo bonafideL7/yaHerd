@@ -9,7 +9,7 @@ struct NewWorkingSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var dependencies: AppDependencies
 
-    @StateObject private var viewModel = NewWorkingSessionViewModel(animalRepository: EmptyAnimalRepository(), workingRepository: EmptyWorkingRepository())
+    @StateObject private var viewModel = NewWorkingSessionViewModel(pastureRepository: EmptyPastureRepository(), workingRepository: EmptyWorkingRepository())
 
     @State private var date: Date = .now
     @State private var sourcePasture: PastureOption?
@@ -119,7 +119,7 @@ struct NewWorkingSessionView: View {
                 }
             }
             .task {
-                viewModel.configure(animalRepository: dependencies.animalRepository, workingRepository: dependencies.workingRepository)
+                viewModel.configure(pastureRepository: dependencies.pastureRepository, workingRepository: dependencies.workingRepository)
                 viewModel.load()
                 seedDefaultsIfNeeded()
             }

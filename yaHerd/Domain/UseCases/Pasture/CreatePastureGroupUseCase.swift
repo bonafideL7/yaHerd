@@ -1,7 +1,7 @@
 import Foundation
 
 struct CreatePastureGroupUseCase {
-    let repository: any PastureRepository
+    let repository: any PastureGroupCreateRepository
 
     func execute(name: String, grazeDays: Int, restDays: Int) throws {
         let input = PastureGroupInput(name: name, grazeDays: grazeDays, restDays: restDays)

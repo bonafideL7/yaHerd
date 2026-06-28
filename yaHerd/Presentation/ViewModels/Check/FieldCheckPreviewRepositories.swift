@@ -1,7 +1,6 @@
 import Foundation
 
 struct EmptyFieldCheckRepository: FieldCheckRepository {
-    func fetchPastureOptions() throws -> [PastureOption] { [] }
     func fetchSessions() throws -> [FieldCheckSessionSummary] { [] }
     func fetchSessionDetail(id: UUID) throws -> FieldCheckSessionDetailSnapshot? { nil }
     func fetchOpenFindings(limit: Int) throws -> [FieldCheckFindingSnapshot] { [] }
@@ -16,4 +15,5 @@ struct EmptyFieldCheckRepository: FieldCheckRepository {
     func deleteFinding(sessionID: UUID, findingID: UUID) throws {}
     func completeSession(id: UUID) throws {}
     func reopenSession(id: UUID) throws {}
+    func deleteSessions(forPastureIDs ids: [UUID]) throws {}
 }

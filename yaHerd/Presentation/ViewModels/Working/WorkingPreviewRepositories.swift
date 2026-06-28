@@ -30,11 +30,25 @@ struct EmptyWorkingRepository: WorkingRepository {
     func deleteTemplates(ids: [UUID]) throws {}
 }
 
+
+struct EmptyPastureRepository: PastureRepository {
+    func fetchPastures() throws -> [PastureSummary] { [] }
+    func fetchPastureDetail(id: UUID) throws -> PastureDetailSnapshot? { nil }
+    func fetchResidentAnimals(pastureID: UUID) throws -> [AnimalSummary] { [] }
+    func fetchPastureOptions() throws -> [PastureOption] { [] }
+    func nameExists(_ name: String, excluding id: UUID?) throws -> Bool { false }
+    func groupNameExists(_ name: String) throws -> Bool { false }
+    func create(input: PastureInput) throws -> PastureDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("creating pastures") }
+    func update(id: UUID, input: PastureInput) throws -> PastureDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("updating pastures") }
+    func reorder(ids: [UUID]) throws {}
+    func delete(ids: [UUID]) throws {}
+    func createGroup(input: PastureGroupInput) throws {}
+}
+
 struct EmptyAnimalRepository: AnimalRepository {
     func fetchAnimals() throws -> [AnimalSummary] { [] }
     func fetchAnimalDetail(id: UUID) throws -> AnimalDetailSnapshot? { nil }
     func fetchTimeline(id: UUID) throws -> [AnimalTimelineEvent] { [] }
-    func fetchPastureOptions() throws -> [PastureOption] { [] }
     func fetchStatusReferenceOptions() throws -> [AnimalStatusReferenceOption] { [] }
     func fetchParentOptions(excluding excludedAnimalID: UUID?) throws -> [AnimalParentOption] { [] }
     func fetchOffspringDraftSeed(forDamID damID: UUID) throws -> OffspringDraftSeed? { nil }

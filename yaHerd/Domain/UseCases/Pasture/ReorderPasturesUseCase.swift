@@ -1,7 +1,7 @@
 import Foundation
 
 struct ReorderPasturesUseCase {
-    let repository: any PastureRepository
+    let repository: any PastureOrdering
 
     func execute(ids: [UUID]) throws {
         try repository.reorder(ids: ids)

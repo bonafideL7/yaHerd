@@ -8,23 +8,23 @@ final class WorkingFinishSessionViewModel: ObservableObject {
 
     private let sessionID: UUID
     private var workingRepository: any WorkingRepository
-    private var animalRepository: any AnimalRepository
+    private var pastureRepository: any PastureReferenceDataReader
 
-    init(sessionID: UUID, workingRepository: any WorkingRepository, animalRepository: any AnimalRepository) {
+    init(sessionID: UUID, workingRepository: any WorkingRepository, pastureRepository: any PastureReferenceDataReader) {
         self.sessionID = sessionID
         self.workingRepository = workingRepository
-        self.animalRepository = animalRepository
+        self.pastureRepository = pastureRepository
     }
 
-    func configure(workingRepository: any WorkingRepository, animalRepository: any AnimalRepository) {
+    func configure(workingRepository: any WorkingRepository, pastureRepository: any PastureReferenceDataReader) {
         self.workingRepository = workingRepository
-        self.animalRepository = animalRepository
+        self.pastureRepository = pastureRepository
     }
 
     func load() {
         do {
             session = try workingRepository.fetchSessionDetail(id: sessionID)
-            pastures = try animalRepository.fetchPastureOptions()
+            pastures = try LoadPastureOptionsUseCase(repository: pastureRepository).execute()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

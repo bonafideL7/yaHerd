@@ -20,13 +20,6 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         return AnimalMapper.makeTimeline(from: animal)
     }
 
-    func fetchPastureOptions() throws -> [PastureOption] {
-        let descriptor = FetchDescriptor<Pasture>(sortBy: [SortDescriptor(\Pasture.name)])
-        return try context.fetch(descriptor).map { pasture in
-            PastureOption(id: pasture.publicID, name: pasture.name)
-        }
-    }
-
     func fetchStatusReferenceOptions() throws -> [AnimalStatusReferenceOption] {
         let descriptor = FetchDescriptor<AnimalStatusReference>(sortBy: [SortDescriptor(\AnimalStatusReference.name)])
         return try context.fetch(descriptor).map { reference in

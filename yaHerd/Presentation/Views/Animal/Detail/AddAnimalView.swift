@@ -78,7 +78,7 @@ struct AddAnimalView: View {
             }
         }
         .task {
-            viewModel.loadSupportData(using: repository)
+            viewModel.loadSupportData(using: repository, pastureRepository: dependencies.pastureRepository)
         }
         .sheet(isPresented: $showingAddTag) {
             AnimalTagEditView(

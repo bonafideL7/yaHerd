@@ -12,8 +12,12 @@ struct PasturePickerView: View {
     @State private var model = PastureChangeViewModel()
     @State private var showingError = false
 
-    private var repository: any AnimalRepository {
+    private var animalRepository: any AnimalRepository {
         dependencies.animalRepository
+    }
+
+    private var pastureRepository: any PastureReferenceDataReader {
+        dependencies.pastureRepository
     }
 
     init(animalID: UUID, currentPastureID: UUID? = nil) {
@@ -46,7 +50,7 @@ struct PasturePickerView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     ToolbarSaveButton {
-                        if model.moveAnimal(animalID: animalID, using: repository) {
+                        if model.moveAnimal(animalID: animalID, using: animalRepository) {
                             dismiss()
                         } else {
                             showingError = true
@@ -61,7 +65,7 @@ struct PasturePickerView: View {
             .task {
                 model.selectedPastureID = currentPastureID
                 do {
-                    pastureOptions = try repository.fetchPastureOptions()
+                    pastureOptions = try LoadPastureOptionsUseCase(repository: pastureRepository).execute()
                 } catch {
                     model.errorMessage = error.localizedDescription
                     showingError = true

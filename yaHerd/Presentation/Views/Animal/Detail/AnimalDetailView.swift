@@ -119,7 +119,7 @@ struct AnimalDetailView: View {
             .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showingAddOffspring, onDismiss: {
-            viewModel.load(animalID: animalID, using: repository)
+            viewModel.load(animalID: animalID, using: repository, pastureRepository: dependencies.pastureRepository)
         }) {
             if let preparedEditor = viewModel.preparedOffspringEditor {
                 AddAnimalView(
@@ -179,7 +179,7 @@ struct AnimalDetailView: View {
         }
         .task {
             if !viewModel.hasLoaded {
-                viewModel.load(animalID: animalID, using: repository)
+                viewModel.load(animalID: animalID, using: repository, pastureRepository: dependencies.pastureRepository)
             }
         }
         .onChange(of: viewModel.errorMessage) { _, newValue in
@@ -264,8 +264,8 @@ struct AnimalDetailView: View {
         AnimalDetailRecordManagementSection(
             detail: detail,
             hardDeleteOnSwipe: hardDeleteOnSwipe,
-            onRestore: { viewModel.restore(animalID: animalID, using: repository) },
-            onArchive: { viewModel.archive(animalID: animalID, using: repository) },
+            onRestore: { viewModel.restore(animalID: animalID, using: repository, pastureRepository: dependencies.pastureRepository) },
+            onArchive: { viewModel.archive(animalID: animalID, using: repository, pastureRepository: dependencies.pastureRepository) },
             onDelete: { viewModel.delete(animalID: animalID, using: repository) }
         )
     }

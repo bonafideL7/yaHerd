@@ -1,7 +1,7 @@
 import Foundation
 
 struct CreatePastureUseCase {
-    let repository: any PastureRepository
+    let repository: any PastureCreateRepository
 
     func execute(input: PastureInput) throws -> PastureDetailSnapshot {
         let normalized = try PastureInputValidator(repository: repository).validate(

@@ -129,7 +129,7 @@ struct FieldCheckSessionDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .applyFieldCheckNavigationSubtitle(navigationSubtitleText)
         .task(id: currentSessionID) {
-            setupModel.load(using: repository)
+            setupModel.load(using: dependencies.pastureRepository)
             
             if selectedPastureID == nil {
                 selectedPastureID = suggestedPastureID

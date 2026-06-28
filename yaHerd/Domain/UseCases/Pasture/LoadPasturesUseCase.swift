@@ -1,7 +1,7 @@
 import Foundation
 
 struct LoadPasturesUseCase {
-    let repository: any PastureRepository
+    let repository: any PastureListReader
 
     func execute() throws -> [PastureSummary] {
         try repository.fetchPastures()

@@ -4,11 +4,6 @@ import SwiftData
 struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     let context: ModelContext
 
-    func fetchPastureOptions() throws -> [PastureOption] {
-        let descriptor = FetchDescriptor<Pasture>(sortBy: [SortDescriptor(\.name)])
-        return try context.fetch(descriptor).map { PastureOption(id: $0.publicID, name: $0.name) }
-    }
-
     func fetchSessions() throws -> [FieldCheckSessionSummary] {
         let descriptor = FetchDescriptor<FieldCheckSession>(sortBy: [SortDescriptor(\.startedAt, order: .reverse)])
         return try context.fetch(descriptor).map(FieldCheckMapper.makeSessionSummary)
@@ -165,6 +160,24 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             throw FieldCheckRepositoryError.sessionNotFound
         }
         session.completedAt = nil
+        try context.save()
+    }
+
+    func deleteSessions(forPastureIDs ids: [UUID]) throws {
+        guard !ids.isEmpty else { return }
+
+        let identifierSet = Set(ids)
+        let descriptor = FetchDescriptor<FieldCheckSession>()
+        let sessionsToDelete = try context.fetch(descriptor)
+            .filter { session in
+                guard let pastureID = session.pastureID else { return false }
+                return identifierSet.contains(pastureID)
+            }
+
+        for session in sessionsToDelete {
+            context.delete(session)
+        }
+
         try context.save()
     }
 
