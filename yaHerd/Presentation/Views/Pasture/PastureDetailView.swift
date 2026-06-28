@@ -39,7 +39,7 @@ struct PastureDetailView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle(model.detail?.name ?? "Pasture")
+        .navigationTitle(model.navigationTitle)
         .toolbar {
             if model.isEditing {
                 ToolbarItem(placement: .confirmationAction) {
@@ -86,16 +86,16 @@ struct PastureDetailView: View {
                         .keyboardType(.decimalPad)
                 }
             } else {
-                Text("Active Animals: \(detail.activeAnimalCount)")
+                Text(model.activeAnimalCountText)
 
-                if let acreage = detail.acreage, PastureStockingPolicy.shouldUseStockingFields(acreage: acreage) {
+                if let acreage = detail.acreage, model.shouldShowAcreageSummary {
                     HStack {
                         Text("Acreage: \(acreage, format: .number)")
                         
                         Spacer()
                         
                         if let usableAcreage = detail.usableAcreage,
-                           usableAcreage != acreage {
+                           model.shouldShowUsableAcreageSummary {
                             Text("Usable Acres: \(usableAcreage, format: .number)")
                                 .foregroundStyle(.secondary)
                         }
@@ -121,8 +121,6 @@ struct PastureDetailView: View {
 
     @ViewBuilder
     private func stockingSection(_ detail: PastureDetailSnapshot) -> some View {
-        let metrics = detail.metrics        
-
         if model.isEditing {
             Section("Stocking") {
                 HStack {
@@ -141,39 +139,42 @@ struct PastureDetailView: View {
                         .keyboardType(.decimalPad)
                 }
             }
-        } else {
-            DisclosureGroup("Stocking", isExpanded: $isStockingExpanded) {
-                if let capacityHead = metrics.capacityHead {
-                    Text("Capacity: \(capacityHead, format: .number.precision(.fractionLength(2)))")
-                }
-                
+        } else if let stockingDisplay = model.stockingDisplay {
+            stockingDisplaySection(stockingDisplay)
+        }
+    }
+
+    private func stockingDisplaySection(_ display: PastureStockingDisplay) -> some View {
+        let metrics = display.metrics
+
+        return DisclosureGroup("Stocking", isExpanded: $isStockingExpanded) {
+            if let capacityHead = metrics.capacityHead {
+                Text("Capacity: \(capacityHead, format: .number.precision(.fractionLength(2)))")
+            }
+            
+            Text(
+                "Stocking Rate: \(metrics.acresPerHead, format: .number.precision(.fractionLength(2))) acres/head"
+            )
+            
+            if let targetAcresPerHead = metrics.targetAcresPerHead {
                 Text(
-                    "Stocking Rate: \(metrics.acresPerHead, format: .number.precision(.fractionLength(2))) acres/head"
+                    "Target Rate: \(targetAcresPerHead, format: .number.precision(.fractionLength(2))) acres/head"
                 )
-                
-                if let targetAcresPerHead = metrics.targetAcresPerHead {
+            }
+            
+            HStack {
+                if let utilizationPercent = metrics.utilizationPercent {
                     Text(
-                        "Target Rate: \(targetAcresPerHead, format: .number.precision(.fractionLength(2))) acres/head"
+                        "Utilization: \(utilizationPercent, format: .percent.precision(.fractionLength(2)))"
                     )
+                    .foregroundStyle(utilizationColor(for: display.utilizationStatus))
                 }
                 
-                HStack {
-                    if let utilizationPercent = metrics.utilizationPercent {
-                        Text(
-                            "Utilization: \(utilizationPercent, format: .percent.precision(.fractionLength(2)))"
-                        )
-                        .foregroundStyle(utilizationColor(for: metrics.utilizationStatus))
-                    }
-                    
-                    Spacer()
-                    
-                    if metrics.isOverCapacity {
-                        Label("Over Capacity", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
-                    } else if metrics.isUnderutilized {
-                        Label("Underutilized", systemImage: "arrow.down.left.and.arrow.up.right")
-                            .foregroundStyle(.blue)
-                    }
+                Spacer()
+                
+                if let badge = display.badge {
+                    Label(badge.title, systemImage: badge.systemImage)
+                        .foregroundStyle(utilizationColor(for: display.utilizationStatus))
                 }
             }
         }
