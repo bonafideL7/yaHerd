@@ -12,7 +12,7 @@ final class PregnancyCheckAddViewModel {
     var selectedSire: AnimalParentOption?
     var errorMessage: String?
 
-    func save(animalID: UUID, using repository: any AnimalRepository) -> Bool {
+    func save(animalID: UUID, using repository: any AnimalPregnancyCheckAdding) -> Bool {
         do {
             _ = try AddPregnancyCheckUseCase(repository: repository).execute(
                 animalID: animalID,

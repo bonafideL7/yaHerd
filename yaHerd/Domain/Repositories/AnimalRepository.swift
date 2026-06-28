@@ -91,16 +91,32 @@ protocol AnimalListRepository:
     AnimalPastureMoving
 {}
 
-protocol AnimalRepository:
-    AnimalListRepository,
-    AnimalTimelineReading,
+protocol AnimalEditorRepository:
     AnimalStatusReferenceReading,
-    AnimalParentOptionReading,
+    AnimalCreating,
+    AnimalTagAdding
+{}
+
+protocol AnimalDetailRepository:
+    AnimalDetailReading,
+    AnimalStatusReferenceReading,
     AnimalOffspringDraftReading,
+    AnimalUpdating,
+    AnimalDeleting,
+    AnimalArchiving,
+    AnimalRestoring,
     AnimalTagAdding,
     AnimalTagUpdating,
     AnimalTagPromoting,
-    AnimalTagRetiring,
+    AnimalTagRetiring
+{}
+
+protocol AnimalRepository:
+    AnimalListRepository,
+    AnimalEditorRepository,
+    AnimalDetailRepository,
+    AnimalTimelineReading,
+    AnimalParentOptionReading,
     AnimalHealthRecordAdding,
     AnimalPregnancyCheckAdding
 {}

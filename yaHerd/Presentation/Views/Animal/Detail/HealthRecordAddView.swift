@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct HealthRecordAddView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.animalHealthRecordAdder) private var healthRecordAdder
     @Environment(\.dismiss) private var dismiss
 
     let animalID: UUID
@@ -9,9 +9,6 @@ struct HealthRecordAddView: View {
     @State private var model = HealthRecordAddViewModel()
     @State private var showingError = false
 
-    private var repository: any AnimalRepository {
-        dependencies.animalRepository
-    }
 
     init(animalID: UUID) {
         self.animalID = animalID
@@ -31,7 +28,7 @@ struct HealthRecordAddView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     ToolbarSaveButton {
-                        if model.save(animalID: animalID, using: repository) {
+                        if model.save(animalID: animalID, using: healthRecordAdder) {
                             dismiss()
                         } else {
                             showingError = true

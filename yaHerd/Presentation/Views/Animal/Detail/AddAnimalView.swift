@@ -9,7 +9,8 @@ import SwiftUI
 
 struct AddAnimalView: View {
     private let title: String
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.animalEditorRepository) private var repository
+    @Environment(\.pastureReferenceDataReader) private var pastureReferenceDataReader
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.dismiss) private var dismiss
 
@@ -28,9 +29,6 @@ struct AddAnimalView: View {
         _viewModel = State(initialValue: AddAnimalViewModel(initialDraft: initialDraft, editorContext: editorContext))
     }
 
-    private var repository: any AnimalRepository {
-        dependencies.animalRepository
-    }
 
     var body: some View {
         NavigationStack {
@@ -78,7 +76,7 @@ struct AddAnimalView: View {
             }
         }
         .task {
-            viewModel.loadSupportData(using: repository, pastureRepository: dependencies.pastureRepository)
+            viewModel.loadSupportData(using: repository, pastureRepository: pastureReferenceDataReader)
         }
         .sheet(isPresented: $showingAddTag) {
             AnimalTagEditView(

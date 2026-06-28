@@ -11,7 +11,7 @@ final class AnimalParentPickerViewModel {
 
     func load(
         excluding excludedAnimalID: UUID?,
-        using repository: any AnimalRepository
+        using repository: any AnimalParentOptionReading
     ) {
         do {
             items = try LoadAnimalParentOptionsUseCase(repository: repository).execute(excluding: excludedAnimalID)

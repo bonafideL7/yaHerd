@@ -16,7 +16,7 @@ final class AnimalFormViewModel {
     }
 
     func loadSupportData(
-        using animalRepository: any AnimalRepository,
+        using animalRepository: any AnimalStatusReferenceReading,
         pastureRepository: any PastureReferenceDataReader
     ) {
         do {
