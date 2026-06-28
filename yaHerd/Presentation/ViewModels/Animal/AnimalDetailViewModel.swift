@@ -20,7 +20,7 @@ final class AnimalDetailViewModel {
 
     func load(
         animalID: UUID,
-        using repository: any AnimalRepository,
+        using repository: any AnimalDetailRepository,
         pastureRepository: any PastureReferenceDataReader
     ) {
         defer { hasLoaded = true }
@@ -61,7 +61,7 @@ final class AnimalDetailViewModel {
         isEditing = false
     }
 
-    func save(animalID: UUID, defaultTagColorID: UUID?, using repository: any AnimalRepository) {
+    func save(animalID: UUID, defaultTagColorID: UUID?, using repository: any AnimalDetailRepository) {
         guard detail != nil else { return }
 
         do {
@@ -83,7 +83,7 @@ final class AnimalDetailViewModel {
         }
     }
 
-    func addTag(animalID: UUID, number: String, colorID: UUID?, isPrimary: Bool, using repository: any AnimalRepository) {
+    func addTag(animalID: UUID, number: String, colorID: UUID?, isPrimary: Bool, using repository: any AnimalDetailRepository) {
         do {
             let updated = try AddAnimalTagUseCase(repository: repository).execute(
                 animalID: animalID,
@@ -96,7 +96,7 @@ final class AnimalDetailViewModel {
         }
     }
 
-    func updateTag(animalID: UUID, tagID: UUID, number: String, colorID: UUID?, isPrimary: Bool, using repository: any AnimalRepository) {
+    func updateTag(animalID: UUID, tagID: UUID, number: String, colorID: UUID?, isPrimary: Bool, using repository: any AnimalDetailRepository) {
         do {
             let updated = try UpdateAnimalTagUseCase(repository: repository).execute(
                 animalID: animalID,
@@ -110,7 +110,7 @@ final class AnimalDetailViewModel {
         }
     }
 
-    func promoteTag(animalID: UUID, tagID: UUID, using repository: any AnimalRepository) {
+    func promoteTag(animalID: UUID, tagID: UUID, using repository: any AnimalDetailRepository) {
         do {
             let updated = try PromoteAnimalTagUseCase(repository: repository).execute(animalID: animalID, tagID: tagID)
             detail = updated
@@ -120,7 +120,7 @@ final class AnimalDetailViewModel {
         }
     }
 
-    func retireTag(animalID: UUID, tagID: UUID, using repository: any AnimalRepository) {
+    func retireTag(animalID: UUID, tagID: UUID, using repository: any AnimalDetailRepository) {
         do {
             let updated = try RetireAnimalTagUseCase(repository: repository).execute(animalID: animalID, tagID: tagID)
             detail = updated
@@ -211,7 +211,7 @@ final class AnimalDetailViewModel {
 
     func archive(
         animalID: UUID,
-        using repository: any AnimalRepository,
+        using repository: any AnimalDetailRepository,
         pastureRepository: any PastureReferenceDataReader
     ) {
         do {
@@ -224,7 +224,7 @@ final class AnimalDetailViewModel {
 
     func restore(
         animalID: UUID,
-        using repository: any AnimalRepository,
+        using repository: any AnimalDetailRepository,
         pastureRepository: any PastureReferenceDataReader
     ) {
         do {
@@ -235,7 +235,7 @@ final class AnimalDetailViewModel {
         }
     }
 
-    func delete(animalID: UUID, using repository: any AnimalRepository) {
+    func delete(animalID: UUID, using repository: any AnimalDetailRepository) {
         do {
             try DeleteAnimalsUseCase(repository: repository).execute(ids: [animalID])
             didDelete = true

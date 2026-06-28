@@ -9,7 +9,8 @@ import SwiftUI
 
 struct AnimalDetailView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.animalDetailRepository) private var repository
+    @Environment(\.pastureReferenceDataReader) private var pastureReferenceDataReader
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
 
@@ -27,9 +28,6 @@ struct AnimalDetailView: View {
         self.animalID = animalID
     }
 
-    private var repository: any AnimalRepository {
-        dependencies.animalRepository
-    }
 
     private var displayedTagNumber: String {
         if viewModel.isEditing {
@@ -119,7 +117,7 @@ struct AnimalDetailView: View {
             .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showingAddOffspring, onDismiss: {
-            viewModel.load(animalID: animalID, using: repository, pastureRepository: dependencies.pastureRepository)
+            viewModel.load(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader)
         }) {
             if let preparedEditor = viewModel.preparedOffspringEditor {
                 AddAnimalView(
@@ -179,7 +177,7 @@ struct AnimalDetailView: View {
         }
         .task {
             if !viewModel.hasLoaded {
-                viewModel.load(animalID: animalID, using: repository, pastureRepository: dependencies.pastureRepository)
+                viewModel.load(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader)
             }
         }
         .onChange(of: viewModel.errorMessage) { _, newValue in
@@ -264,8 +262,8 @@ struct AnimalDetailView: View {
         AnimalDetailRecordManagementSection(
             detail: detail,
             hardDeleteOnSwipe: hardDeleteOnSwipe,
-            onRestore: { viewModel.restore(animalID: animalID, using: repository, pastureRepository: dependencies.pastureRepository) },
-            onArchive: { viewModel.archive(animalID: animalID, using: repository, pastureRepository: dependencies.pastureRepository) },
+            onRestore: { viewModel.restore(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader) },
+            onArchive: { viewModel.archive(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader) },
             onDelete: { viewModel.delete(animalID: animalID, using: repository) }
         )
     }

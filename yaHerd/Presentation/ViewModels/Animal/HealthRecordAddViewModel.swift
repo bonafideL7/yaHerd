@@ -13,7 +13,7 @@ final class HealthRecordAddViewModel {
         treatment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    func save(animalID: UUID, using repository: any AnimalRepository) -> Bool {
+    func save(animalID: UUID, using repository: any AnimalHealthRecordAdding) -> Bool {
         do {
             _ = try AddHealthRecordUseCase(repository: repository).execute(
                 animalID: animalID,

@@ -9,7 +9,7 @@ import SwiftUI
 
 struct AnimalParentPickerView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.animalParentOptionReader) private var parentOptionReader
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @State private var viewModel = AnimalParentPickerViewModel()
@@ -19,9 +19,6 @@ struct AnimalParentPickerView: View {
     let suggestedSexes: Set<Sex>
     let onSelect: (AnimalParentOption) -> Void
 
-    private var repository: any AnimalRepository {
-        dependencies.animalRepository
-    }
 
     private var filtered: [AnimalParentOption] {
         viewModel.filtered(suggestedSexes: suggestedSexes) { animal in
@@ -90,7 +87,7 @@ struct AnimalParentPickerView: View {
             }
         }
         .task {
-            viewModel.load(excluding: excludeAnimalID, using: repository)
+            viewModel.load(excluding: excludeAnimalID, using: parentOptionReader)
         }
     }
 }

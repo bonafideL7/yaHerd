@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PregnancyCheckAddView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.animalPregnancyCheckAdder) private var pregnancyCheckAdder
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
@@ -11,9 +11,6 @@ struct PregnancyCheckAddView: View {
     @State private var showingSirePicker = false
     @State private var showingError = false
 
-    private var repository: any AnimalRepository {
-        dependencies.animalRepository
-    }
 
     init(animalID: UUID) {
         self.animalID = animalID
@@ -70,7 +67,7 @@ struct PregnancyCheckAddView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     ToolbarSaveButton {
-                        if model.save(animalID: animalID, using: repository) {
+                        if model.save(animalID: animalID, using: pregnancyCheckAdder) {
                             dismiss()
                         } else {
                             showingError = true
