@@ -9,7 +9,7 @@ struct TagColorLibraryView: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @State private var showingAdd = false
-    @State private var editingColor: TagColorDefinition?
+    @State private var editingColor: TagColorSnapshot?
 
     var body: some View {
         List {

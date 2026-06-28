@@ -9,14 +9,14 @@ struct TagColorEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
-    let existing: TagColorDefinition?
+    let existing: TagColorSnapshot?
 
     @State private var name: String
     @State private var prefix: String
     @State private var color: Color
     @State private var prefixEdited = false
 
-    init(existing: TagColorDefinition?) {
+    init(existing: TagColorSnapshot?) {
         self.existing = existing
         _name = State(initialValue: existing?.name ?? "")
         _prefix = State(initialValue: existing?.prefix ?? "")
@@ -92,7 +92,7 @@ struct TagColorEditorView: View {
                             ? TagColorLibraryStore.defaultPrefix(for: trimmedName)
                             : trimmedPrefix.uppercased()
 
-                        let def = TagColorDefinition(
+                        let def = TagColorSnapshot(
                             id: existing?.id ?? UUID(),
                             name: trimmedName,
                             prefix: finalPrefix,

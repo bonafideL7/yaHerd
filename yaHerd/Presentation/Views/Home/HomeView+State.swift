@@ -172,7 +172,7 @@ extension HomeView {
     }
 
     var customTagColorCount: Int {
-        tagColorLibrary.colors.filter { !TagColorLibraryStore.defaultColorIDs.contains($0.id) }.count
+        tagColorLibrary.colors.filter { !TagColorDefaults.defaultColorIDs.contains($0.id) }.count
     }
 
     var syncMode: SyncMode {

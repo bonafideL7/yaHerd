@@ -16,8 +16,7 @@ struct SampleDataService {
         if let existing = try? context.fetch(descriptor),
            !existing.isEmpty { return }
         
-        // Resolve the default "Green" tag color id from the library store.
-        // TagColorDefinition IDs are generated when the library is first seeded, so we look them up by name.
+        // Resolve the default "Green" tag color id from the seeded tag color library.
         let greenTagColorID = tagColorIDsByName(context: context)["Green"]
         
         // MARK: - Pastures
@@ -249,22 +248,23 @@ extension SampleDataService {
     static func tagColorIDsByName(context: ModelContext) -> [String: UUID] {
         var existingColors = (try? context.fetch(FetchDescriptor<TagColorDefinition>())) ?? []
 
-        for defaultColor in TagColorLibraryStore.seedDefaultColors() {
-            let defaultKey = TagColorLibraryStore.normalizedNameKey(defaultColor.name)
+        for defaultColor in TagColorDefaults.seedDefaultColors() {
+            let defaultKey = TagColorLibraryRules.normalizedNameKey(defaultColor.name)
             let alreadyExists = existingColors.contains {
-                TagColorLibraryStore.normalizedNameKey($0.name) == defaultKey
+                TagColorLibraryRules.normalizedNameKey($0.name) == defaultKey
             }
 
             if !alreadyExists {
-                context.insert(defaultColor)
-                existingColors.append(defaultColor)
+                let persistedColor = TagColorDefinition(snapshot: defaultColor)
+                context.insert(persistedColor)
+                existingColors.append(persistedColor)
             }
         }
 
         if !existingColors.contains(where: { $0.isDefault }) {
-            let whiteKey = TagColorLibraryStore.normalizedNameKey("White")
+            let whiteKey = TagColorLibraryRules.normalizedNameKey("White")
             let fallbackDefault = existingColors.first {
-                TagColorLibraryStore.normalizedNameKey($0.name) == whiteKey
+                TagColorLibraryRules.normalizedNameKey($0.name) == whiteKey
             } ?? existingColors.first
 
             fallbackDefault?.setDefault(true)

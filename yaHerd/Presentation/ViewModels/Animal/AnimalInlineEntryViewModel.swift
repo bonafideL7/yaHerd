@@ -78,7 +78,7 @@ final class AnimalInlineEntryViewModel {
     @discardableResult
     func commit(
         startNewEntryAfterCreate: Bool,
-        colors: [TagColorDefinition],
+        colors: [TagColorSnapshot],
         defaultTagColorID: UUID?,
         using repository: any AnimalRepository
     ) throws -> Bool {
@@ -112,7 +112,7 @@ final class AnimalInlineEntryViewModel {
 
     private func createInlineAnimal(
         text: String,
-        colors: [TagColorDefinition],
+        colors: [TagColorSnapshot],
         defaultTagColorID: UUID?,
         using repository: any AnimalRepository
     ) throws {
@@ -132,7 +132,7 @@ final class AnimalInlineEntryViewModel {
     private func updateInlineAnimal(
         id: UUID,
         text: String,
-        colors: [TagColorDefinition],
+        colors: [TagColorSnapshot],
         defaultTagColorID: UUID?,
         using repository: any AnimalRepository
     ) throws {

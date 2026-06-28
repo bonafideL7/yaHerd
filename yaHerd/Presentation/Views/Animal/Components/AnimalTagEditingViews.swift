@@ -19,7 +19,7 @@ struct AnimalTagEditView: View {
     
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 5)
 
-    private var previewColorDefinition: TagColorDefinition {
+    private var previewColorDefinition: TagColorSnapshot {
         tagColorLibrary.resolvedDefinition(tagColorID: colorID)
     }
 

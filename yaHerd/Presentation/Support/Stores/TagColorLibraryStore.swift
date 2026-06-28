@@ -4,12 +4,7 @@
 //
 
 import Foundation
-import SwiftData
 import SwiftUI
-
-#if canImport(UIKit)
-import UIKit
-#endif
 
 protocol AnimalTagDisplayRepresentable {
     var displayTagNumber: String { get }
@@ -22,23 +17,21 @@ extension AnimalParentOption: AnimalTagDisplayRepresentable {}
 
 @MainActor
 final class TagColorLibraryStore: ObservableObject {
-    @Published private(set) var colors: [TagColorDefinition] = []
+    @Published private(set) var colors: [TagColorSnapshot] = []
+    @Published private(set) var lastErrorMessage: String?
 
-    private let legacyStorageKey = "tagColorLibrary.v1"
-    private let context: ModelContext
-    private let syncMode: SyncMode
+    private let repository: any TagColorRepository
 
-    init(context: ModelContext, syncMode: SyncMode = .localOnly) {
-        self.context = context
-        self.syncMode = syncMode
+    init(repository: any TagColorRepository) {
+        self.repository = repository
         load()
     }
 
-    var defaultColor: TagColorDefinition {
+    var defaultColor: TagColorSnapshot {
         colors.first(where: { $0.isDefault })
             ?? colors.first(where: { Self.normalizedNameKey($0.name) == Self.normalizedNameKey("White") })
             ?? colors.first
-            ?? TagColorDefinition(name: "White", rgba: RGBAColor(r: 1, g: 1, b: 1))
+            ?? TagColorSnapshot(name: "White", rgba: RGBAColor(r: 1, g: 1, b: 1), isDefault: true)
     }
 
     var defaultColorID: UUID? {
@@ -53,22 +46,22 @@ final class TagColorLibraryStore: ObservableObject {
         return defaultColorID
     }
 
-    func definition(for id: UUID?) -> TagColorDefinition? {
+    func definition(for id: UUID?) -> TagColorSnapshot? {
         guard let id else { return nil }
         return colors.first(where: { $0.id == id })
     }
 
-    func resolvedDefinition(tagColorID: UUID?) -> TagColorDefinition {
+    func resolvedDefinition(tagColorID: UUID?) -> TagColorSnapshot {
         definition(for: tagColorID) ?? defaultColor
     }
 
     func formattedTag(tagNumber: String, colorID: UUID?) -> String {
-        let def = resolvedDefinition(tagColorID: colorID)
+        let definition = resolvedDefinition(tagColorID: colorID)
         let number = tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-        return number.isEmpty ? "UT" : "\(def.prefix)\(number)"
+        return number.isEmpty ? "UT" : "\(definition.prefix)\(number)"
     }
 
-    func resolvedDefinition(for animal: some AnimalTagDisplayRepresentable) -> TagColorDefinition {
+    func resolvedDefinition(for animal: some AnimalTagDisplayRepresentable) -> TagColorSnapshot {
         resolvedDefinition(tagColorID: animal.displayTagColorID)
     }
 
@@ -76,147 +69,41 @@ final class TagColorLibraryStore: ObservableObject {
         formattedTag(tagNumber: animal.displayTagNumber, colorID: animal.displayTagColorID)
     }
 
-    // MARK: - CRUD
-
-    func upsert(_ def: TagColorDefinition) {
-        do {
-            let cleanedName = Self.normalizedDisplayName(def.name)
-            guard !cleanedName.isEmpty else { return }
-
-            let cleanedPrefix = Self.normalizedPrefix(def.prefix, fallbackName: cleanedName)
-            let existingByID = try persistedColor(id: def.id)
-            let existingByName = try persistedColor(name: cleanedName)
-            let shouldBecomeDefault = def.isDefault || existingByID?.isDefault == true
-
-            if let existingByName, existingByName.id != def.id {
-                existingByName.update(name: cleanedName, prefix: cleanedPrefix, rgba: def.rgba)
-                if shouldBecomeDefault {
-                    existingByName.setDefault(true)
-                }
-                try remapTagColorIDs([def.id: existingByName.id])
-                if let existingByID {
-                    context.delete(existingByID)
-                }
-            } else if let existingByID {
-                existingByID.update(name: cleanedName, prefix: cleanedPrefix, rgba: def.rgba)
-                if shouldBecomeDefault {
-                    existingByID.setDefault(true)
-                }
-            } else {
-                def.name = cleanedName
-                def.prefix = cleanedPrefix
-                def.sortOrder = colors.count
-                def.isHidden = false
-                def.updatedAt = .now
-                context.insert(def)
-            }
-
-            saveAndReload()
-
-            if def.isDefault, let color = try? persistedColor(name: cleanedName) {
-                setDefaultColor(id: color.id)
-            }
-        } catch {
-            assertionFailure("Failed to upsert tag color: \(error)")
+    func upsert(_ color: TagColorSnapshot) {
+        performRepositoryWrite("Failed to save tag color") {
+            try repository.upsert(color)
         }
     }
 
     func setDefaultColor(id: UUID) {
-        do {
-            let persistedColors = try fetchPersistedColors()
-            guard persistedColors.contains(where: { $0.id == id }) else { return }
-
-            for color in persistedColors {
-                color.setDefault(color.id == id)
-            }
-
-            saveAndReload()
-        } catch {
-            assertionFailure("Failed to set default tag color: \(error)")
+        performRepositoryWrite("Failed to set default tag color") {
+            try repository.setDefaultColor(id: id)
         }
     }
 
     func delete(at offsets: IndexSet) {
-        do {
-            for index in offsets where colors.indices.contains(index) {
-                let color = colors[index]
-                if let persisted = try persistedColor(id: color.id) {
-                    context.delete(persisted)
-                }
-            }
+        let ids = offsets.compactMap { index in
+            colors.indices.contains(index) ? colors[index].id : nil
+        }
 
-            try ensureDefaultColorExists()
-            saveAndReload()
-        } catch {
-            assertionFailure("Failed to delete tag color: \(error)")
+        performRepositoryWrite("Failed to delete tag color") {
+            try repository.deleteColors(ids: ids)
         }
     }
 
     func move(from source: IndexSet, to destination: Int) {
         var reordered = colors
         reordered.move(fromOffsets: source, toOffset: destination)
+        let orderedIDs = reordered.map(\.id)
 
-        do {
-            for (index, color) in reordered.enumerated() {
-                if let persisted = try persistedColor(id: color.id) {
-                    persisted.sortOrder = index
-                    persisted.updatedAt = .now
-                }
-            }
-            saveAndReload()
-        } catch {
-            assertionFailure("Failed to move tag color: \(error)")
+        performRepositoryWrite("Failed to reorder tag colors") {
+            try repository.reorder(colorIDs: orderedIDs)
         }
     }
 
     func restoreDefaultColors() {
-        do {
-            try removeRetiredDefaultColors()
-            let existingDefaultID = try fetchPersistedColors().first(where: { $0.isDefault })?.id
-
-            for defaultColor in Self.seedDefaultColors() {
-                if let existingByName = try persistedColor(name: defaultColor.name) {
-                    existingByName.update(
-                        name: defaultColor.name,
-                        prefix: defaultColor.prefix,
-                        rgba: defaultColor.rgba
-                    )
-                } else {
-                    if existingDefaultID != nil {
-                        defaultColor.isDefault = false
-                    }
-                    context.insert(defaultColor)
-                }
-            }
-
-            try ensureDefaultColorExists()
-            saveAndReload()
-        } catch {
-            assertionFailure("Failed to restore default tag colors: \(error)")
-        }
-    }
-
-    // MARK: - Persistence
-
-    private func load() {
-        do {
-            let persistedColors = try fetchPersistedColors()
-
-            if persistedColors.isEmpty {
-                let colorsToSeed = legacyColorsFromUserDefaults() ?? Self.seedDefaultColors()
-                seed(colorsToSeed)
-                try context.save()
-                UserDefaults.standard.removeObject(forKey: legacyStorageKey)
-            }
-
-            try removeRetiredDefaultColors()
-            let currentColors = try fetchPersistedColors()
-            try reconcileColorNames(in: currentColors)
-            try ensureDefaultColorExists()
-            try applyDefaultColorToMissingTagRecords()
-            colors = try fetchPersistedColors()
-        } catch {
-            colors = []
+        performRepositoryWrite("Failed to restore default tag colors") {
+            try repository.restoreDefaultColors()
         }
     }
 
@@ -224,345 +111,48 @@ final class TagColorLibraryStore: ObservableObject {
         load()
     }
 
-    /// Enforces the app-level rule that tag color names are unique.
-    /// In iCloud mode, the newest record wins so a synced CloudKit record with the same name replaces
-    /// a local seeded copy on the next refresh. In local-only mode, the existing library order wins.
-    private func reconcileColorNames(in persistedColors: [TagColorDefinition]) throws {
-        var didChange = false
-        var idRemaps: [UUID: UUID] = [:]
-        let grouped = Dictionary(grouping: persistedColors) { Self.normalizedNameKey($0.name) }
-
-        for (_, group) in grouped {
-            guard !group.isEmpty else { continue }
-
-            for color in group where color.isHidden {
-                color.isHidden = false
-                color.updatedAt = .now
-                didChange = true
-            }
-
-            guard group.count > 1 else { continue }
-            let winner = canonicalColor(from: group)
-
-            for duplicate in group where duplicate !== winner {
-                if duplicate.isDefault {
-                    winner.setDefault(true)
-                }
-                idRemaps[duplicate.id] = winner.id
-                context.delete(duplicate)
-                didChange = true
-            }
-        }
-
-        if !idRemaps.isEmpty {
-            try remapTagColorIDs(idRemaps)
-            didChange = true
-        }
-
-        if didChange {
-            try context.save()
-        }
-    }
-
-    private func canonicalColor(from colors: [TagColorDefinition]) -> TagColorDefinition {
-        if let defaultColor = colors.filter(\.isDefault).sorted(by: Self.defaultSort).first {
-            return defaultColor
-        }
-
-        if syncMode == .iCloud {
-            // If a synced/user record and a local seeded default have the same name, keep the
-            // synced/user record and delete the local default copy. This prevents default-color
-            // seed records from duplicating names when iCloud data arrives later.
-            let nonDefaultColors = colors.filter { !Self.defaultColorIDs.contains($0.id) }
-            let candidates = nonDefaultColors.isEmpty ? colors : nonDefaultColors
-            return candidates.sorted {
-                if $0.updatedAt != $1.updatedAt { return $0.updatedAt > $1.updatedAt }
-                if $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
-                return $0.sortOrder < $1.sortOrder
-            }.first ?? colors[0]
-        }
-
-        return colors.sorted {
-            if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
-            if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
-            return $0.updatedAt < $1.updatedAt
-        }.first ?? colors[0]
-    }
-
-    private func ensureDefaultColorExists() throws {
-        let persistedColors = try fetchPersistedColors()
-        guard !persistedColors.isEmpty else { return }
-
-        let currentDefaults = persistedColors.filter(\.isDefault)
-        let selectedDefault = currentDefaults.sorted(by: Self.defaultSort).first
-            ?? persistedColors.first(where: { Self.normalizedNameKey($0.name) == Self.normalizedNameKey("White") })
-            ?? persistedColors.first!
-
-        var didChange = false
-        for color in persistedColors {
-            let shouldBeDefault = color.id == selectedDefault.id
-            if color.isDefault != shouldBeDefault {
-                color.setDefault(shouldBeDefault)
-                didChange = true
-            }
-        }
-
-        if didChange {
-            try context.save()
-        }
-    }
-
-    private func applyDefaultColorToMissingTagRecords() throws {
-        guard let defaultColorID = try currentDefaultColorID() else { return }
-        var didChange = false
-
-        let animals = try context.fetch(FetchDescriptor<Animal>())
-        for animal in animals where animal.tagColorID == nil {
-            let tagNumber = animal.tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !tagNumber.isEmpty {
-                animal.tagColorID = defaultColorID
-                didChange = true
-            }
-        }
-
-        let tags = try context.fetch(FetchDescriptor<AnimalTag>())
-        for tag in tags where tag.colorID == nil {
-            if !tag.normalizedNumber.isEmpty {
-                tag.colorID = defaultColorID
-                didChange = true
-            }
-        }
-
-        let fieldCheckAnimalChecks = try context.fetch(FetchDescriptor<FieldCheckAnimalCheck>())
-        for check in fieldCheckAnimalChecks where check.rosterTagColorID == nil {
-            let tagNumber = check.rosterTagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !tagNumber.isEmpty {
-                check.rosterTagColorID = defaultColorID
-                didChange = true
-            }
-        }
-
-        if didChange {
-            try context.save()
-        }
-    }
-
-    private func removeRetiredDefaultColors() throws {
-        let persistedColors = try fetchPersistedColors()
-        var didChange = false
-
-        for color in persistedColors where Self.retiredDefaultColorIDs.contains(color.id) {
-            context.delete(color)
-            didChange = true
-        }
-
-        if didChange {
-            try context.save()
-        }
-    }
-
-    private func currentDefaultColorID() throws -> UUID? {
-        let persistedColors = try fetchPersistedColors()
-        return persistedColors.first(where: { $0.isDefault })?.id
-            ?? persistedColors.first(where: { Self.normalizedNameKey($0.name) == Self.normalizedNameKey("White") })?.id
-            ?? persistedColors.first?.id
-    }
-
-    nonisolated private static func defaultSort(_ lhs: TagColorDefinition, _ rhs: TagColorDefinition) -> Bool {
-        if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
-        if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
-        return lhs.sortOrder < rhs.sortOrder
-    }
-
-    private func remapTagColorIDs(_ remaps: [UUID: UUID]) throws {
-        let animals = try context.fetch(FetchDescriptor<Animal>())
-        for animal in animals {
-            if let colorID = animal.tagColorID, let replacementID = remaps[colorID] {
-                animal.tagColorID = replacementID
-            }
-        }
-
-        let tags = try context.fetch(FetchDescriptor<AnimalTag>())
-        for tag in tags {
-            if let colorID = tag.colorID, let replacementID = remaps[colorID] {
-                tag.colorID = replacementID
-            }
-        }
-
-        let fieldCheckAnimalChecks = try context.fetch(FetchDescriptor<FieldCheckAnimalCheck>())
-        for check in fieldCheckAnimalChecks {
-            if let colorID = check.rosterTagColorID, let replacementID = remaps[colorID] {
-                check.rosterTagColorID = replacementID
-            }
-        }
-    }
-
-    private func fetchPersistedColors() throws -> [TagColorDefinition] {
-        let descriptor = FetchDescriptor<TagColorDefinition>(
-            sortBy: [
-                SortDescriptor(\TagColorDefinition.sortOrder),
-                SortDescriptor(\TagColorDefinition.name)
-            ]
-        )
-        return try context.fetch(descriptor)
-    }
-
-    private func persistedColor(id: UUID) throws -> TagColorDefinition? {
-        let descriptor = FetchDescriptor<TagColorDefinition>(
-            predicate: #Predicate { $0.id == id }
-        )
-        return try context.fetch(descriptor).first
-    }
-
-    private func persistedColor(name: String) throws -> TagColorDefinition? {
-        let key = Self.normalizedNameKey(name)
-        return try fetchPersistedColors().first { Self.normalizedNameKey($0.name) == key }
-    }
-
-    private func saveAndReload() {
+    private func load() {
         do {
-            try context.save()
-            try removeRetiredDefaultColors()
-            try reconcileColorNames(in: fetchPersistedColors())
-            try ensureDefaultColorExists()
-            try applyDefaultColorToMissingTagRecords()
-            colors = try fetchPersistedColors()
+            colors = try repository.fetchColors()
+            lastErrorMessage = nil
         } catch {
-            assertionFailure("Failed to save tag colors: \(error)")
+            lastErrorMessage = error.localizedDescription
+            assertionFailure("Failed to load tag colors: \(error)")
         }
     }
 
-    private func seed(_ seedColors: [TagColorDefinition]) {
-        var usedNames = Set<String>()
-
-        for color in seedColors {
-            let cleanedName = Self.normalizedDisplayName(color.name)
-            let key = Self.normalizedNameKey(cleanedName)
-            guard !cleanedName.isEmpty, !usedNames.contains(key) else { continue }
-
-            color.name = cleanedName
-            color.prefix = Self.normalizedPrefix(color.prefix, fallbackName: cleanedName)
-            color.sortOrder = usedNames.count
-            color.isHidden = false
-            context.insert(color)
-            usedNames.insert(key)
+    private func performRepositoryWrite(_ failureMessage: String, operation: () throws -> Void) {
+        do {
+            try operation()
+            colors = try repository.fetchColors()
+            lastErrorMessage = nil
+        } catch {
+            lastErrorMessage = error.localizedDescription
+            assertionFailure("\(failureMessage): \(error)")
         }
     }
-
-    private func legacyColorsFromUserDefaults() -> [TagColorDefinition]? {
-        guard let data = UserDefaults.standard.data(forKey: legacyStorageKey) else {
-            return nil
-        }
-
-        guard let legacyColors = try? JSONDecoder().decode([LegacyTagColorDefinition].self, from: data) else {
-            return nil
-        }
-
-        return legacyColors.enumerated().map { index, legacy in
-            TagColorDefinition(
-                id: legacy.id,
-                name: legacy.name,
-                prefix: legacy.prefix,
-                rgba: legacy.rgba,
-                sortOrder: index,
-                isDefault: legacy.isDefault ?? false
-            )
-        }
-    }
-
-    // MARK: - Prefix + Defaults
 
     nonisolated static func normalizedDisplayName(_ name: String) -> String {
-        name.trimmingCharacters(in: .whitespacesAndNewlines)
+        TagColorLibraryRules.normalizedDisplayName(name)
     }
 
     nonisolated static func normalizedNameKey(_ name: String) -> String {
-        normalizedDisplayName(name)
-            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-            .lowercased()
+        TagColorLibraryRules.normalizedNameKey(name)
     }
 
     nonisolated static func normalizedPrefix(_ prefix: String, fallbackName: String) -> String {
-        let cleanedPrefix = prefix
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
-        return cleanedPrefix.isEmpty ? defaultPrefix(for: fallbackName) : cleanedPrefix
+        TagColorLibraryRules.normalizedPrefix(prefix, fallbackName: fallbackName)
     }
 
     nonisolated static func defaultPrefix(for name: String) -> String {
-        let cleaned = name
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "-", with: " ")
-            .replacingOccurrences(of: "_", with: " ")
-
-        let words = cleaned.split(whereSeparator: { $0.isWhitespace })
-        let letters = words.compactMap { $0.first }.map { String($0).uppercased() }
-        let joined = letters.joined()
-        return joined.isEmpty ? "?" : joined
+        TagColorLibraryRules.defaultPrefix(for: name)
     }
 
-
-    nonisolated static var defaultColorIDs: Set<UUID> { [
-        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D01")!,
-        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D02")!,
-        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D04")!,
-        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D05")!,
-        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D06")!,
-        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D07")!,
-        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D08")!,
-        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D09")!
-    ] }
-
-    nonisolated private static var retiredDefaultColorIDs: Set<UUID> { [
-        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D03")!,
-        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D0A")!,
-        UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D0B")!
-    ] }
-
-    nonisolated static func seedDefaultColors() -> [TagColorDefinition] {
-        // Stable IDs keep sample/default records predictable, but names are the real uniqueness rule.
-        return [
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D01")!, name: "Yellow", rgba: RGBAColor(r: 1, g: 1, b: 0), sortOrder: 0),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D02")!, name: "White",  rgba: RGBAColor(r: 1, g: 1, b: 1), sortOrder: 1, isDefault: true),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D04")!, name: "Red",    rgba: RGBAColor(r: 1, g: 0, b: 0), sortOrder: 2),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D05")!, name: "Orange", rgba: RGBAColor(r: 1, g: 0.5, b: 0), sortOrder: 3),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D06")!, name: "Green",  rgba: RGBAColor(r: 0, g: 0.7, b: 0.2), sortOrder: 4),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D07")!, name: "Blue",   rgba: RGBAColor(r: 0, g: 0.48, b: 1), sortOrder: 5),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D08")!, name: "Purple", rgba: RGBAColor(r: 0.6, g: 0.4, b: 1), sortOrder: 6),
-            TagColorDefinition(id: UUID(uuidString: "4D4996E2-B17D-4C0B-9E4D-8DFB60BC0D09")!, name: "Pink",   rgba: RGBAColor(r: 1, g: 0.2, b: 0.6), sortOrder: 7)
-        ]
+    nonisolated static var defaultColorIDs: Set<UUID> {
+        TagColorDefaults.defaultColorIDs
     }
-}
 
-private struct LegacyTagColorDefinition: Decodable {
-    var id: UUID
-    var name: String
-    var prefix: String
-    var rgba: RGBAColor
-    var isDefault: Bool?
-}
-
-extension Color {
-    /// Relative luminance (WCAG-ish). Used for adjusting outlines on light colors.
-    var relativeLuminance: Double {
-        #if canImport(UIKit)
-        let ui = UIColor(self)
-        var rr: CGFloat = 0
-        var gg: CGFloat = 0
-        var bb: CGFloat = 0
-        var aa: CGFloat = 0
-        guard ui.getRed(&rr, green: &gg, blue: &bb, alpha: &aa) else { return 0 }
-
-        func f(_ c: Double) -> Double {
-            c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
-        }
-
-        let r = f(Double(rr))
-        let g = f(Double(gg))
-        let b = f(Double(bb))
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b
-        #else
-        return 0
-        #endif
+    nonisolated static func seedDefaultColors() -> [TagColorSnapshot] {
+        TagColorDefaults.seedDefaultColors()
     }
 }

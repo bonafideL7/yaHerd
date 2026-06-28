@@ -5,11 +5,6 @@
 
 import Foundation
 import SwiftData
-import SwiftUI
-
-#if canImport(UIKit)
-import UIKit
-#endif
 
 @Model
 final class TagColorDefinition: Identifiable {
@@ -37,16 +32,11 @@ final class TagColorDefinition: Identifiable {
         createdAt: Date = Date.now,
         updatedAt: Date = Date.now
     ) {
+        let normalizedName = TagColorLibraryRules.normalizedDisplayName(name)
+
         self.id = id
-        self.name = name
-        let cleanedPrefix = prefix?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
-        if let cleanedPrefix, !cleanedPrefix.isEmpty {
-            self.prefix = cleanedPrefix
-        } else {
-            self.prefix = TagColorLibraryStore.defaultPrefix(for: name)
-        }
+        self.name = normalizedName
+        self.prefix = TagColorLibraryRules.normalizedPrefix(prefix ?? "", fallbackName: normalizedName)
         self.red = rgba.r
         self.green = rgba.g
         self.blue = rgba.b
@@ -56,6 +46,19 @@ final class TagColorDefinition: Identifiable {
         self.isDefault = isDefault
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    convenience init(snapshot: TagColorSnapshot) {
+        self.init(
+            id: snapshot.id,
+            name: snapshot.name,
+            prefix: snapshot.prefix,
+            rgba: snapshot.rgba,
+            sortOrder: snapshot.sortOrder,
+            isDefault: snapshot.isDefault,
+            createdAt: snapshot.createdAt,
+            updatedAt: snapshot.updatedAt
+        )
     }
 
     var rgba: RGBAColor {
@@ -69,65 +72,40 @@ final class TagColorDefinition: Identifiable {
         }
     }
 
-    var color: Color { rgba.color }
+    var snapshot: TagColorSnapshot {
+        TagColorSnapshot(
+            id: id,
+            name: name,
+            prefix: prefix,
+            rgba: rgba,
+            sortOrder: sortOrder,
+            isDefault: isDefault,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
 
     func update(name: String, prefix: String, rgba: RGBAColor) {
-        self.name = name
-        self.prefix = prefix
+        let normalizedName = TagColorLibraryRules.normalizedDisplayName(name)
+
+        self.name = normalizedName
+        self.prefix = TagColorLibraryRules.normalizedPrefix(prefix, fallbackName: normalizedName)
         self.rgba = rgba
         self.isHidden = false
         self.updatedAt = .now
+    }
+
+    func update(from snapshot: TagColorSnapshot) {
+        update(name: snapshot.name, prefix: snapshot.prefix, rgba: snapshot.rgba)
+        sortOrder = snapshot.sortOrder
+        isDefault = snapshot.isDefault
+        createdAt = snapshot.createdAt
+        updatedAt = .now
     }
 
     func setDefault(_ isDefault: Bool) {
         guard self.isDefault != isDefault else { return }
         self.isDefault = isDefault
         self.updatedAt = .now
-    }
-
-}
-
-
-struct RGBAColor: Codable, Hashable {
-    var r: Double
-    var g: Double
-    var b: Double
-    var a: Double
-
-    init(r: Double, g: Double, b: Double, a: Double = 1.0) {
-        self.r = r
-        self.g = g
-        self.b = b
-        self.a = a
-    }
-
-    init(color: Color) {
-        #if canImport(UIKit)
-        let ui = UIColor(color)
-        var rr: CGFloat = 0
-        var gg: CGFloat = 0
-        var bb: CGFloat = 0
-        var aa: CGFloat = 0
-        if ui.getRed(&rr, green: &gg, blue: &bb, alpha: &aa) {
-            r = Double(rr)
-            g = Double(gg)
-            b = Double(bb)
-            a = Double(aa)
-        } else {
-            r = 1
-            g = 1
-            b = 0
-            a = 1
-        }
-        #else
-        r = 1
-        g = 1
-        b = 0
-        a = 1
-        #endif
-    }
-
-    var color: Color {
-        Color(red: r, green: g, blue: b, opacity: a)
     }
 }
