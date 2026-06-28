@@ -11,15 +11,11 @@ final class PastureFormViewModel {
     var errorMessage: String?
 
     var shouldShowStockingFields: Bool {
-        guard let acreage = parseDecimal(acreageText) else { return false }
-        return acreage > 1
+        PastureStockingPolicy.shouldUseStockingFields(acreage: parseDecimal(acreageText))
     }
     
     var canSaveNewPasture: Bool {
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty else { return false }
-        
-        return true
+        PastureInputValidator.hasRequiredName(name)
     }
     
     private var hasPreparedDefaultValues = false
@@ -59,7 +55,7 @@ final class PastureFormViewModel {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let acreage = try parsePositiveOptional(acreageText, error: .invalidAcreage)
         
-        let shouldSaveStocking = (acreage ?? 0) > 1
+        let shouldSaveStocking = PastureStockingPolicy.shouldUseStockingFields(acreage: acreage)
         
         let usableAcreage: Double?
         if shouldSaveStocking {
@@ -103,7 +99,7 @@ final class PastureFormViewModel {
 
     func makeUpdateInput() throws -> PastureInput {
         let acreage = try parsePositiveOptional(acreageText, error: .invalidAcreage)
-        let shouldSaveStocking = (acreage ?? 0) > 1
+        let shouldSaveStocking = PastureStockingPolicy.shouldUseStockingFields(acreage: acreage)
         
         return PastureInput(
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),

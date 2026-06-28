@@ -166,7 +166,7 @@ struct SwiftDataPastureRepository: PastureRepository {
         return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
     }
 
-    private func groupNameExists(_ name: String) throws -> Bool {
+    func groupNameExists(_ name: String) throws -> Bool {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let descriptor = FetchDescriptor<PastureGroup>()
         return try context.fetch(descriptor).contains { group in

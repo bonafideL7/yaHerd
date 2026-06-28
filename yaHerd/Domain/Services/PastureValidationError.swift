@@ -7,6 +7,8 @@ enum PastureValidationError: LocalizedError, Equatable {
     case invalidUsableAcreage
     case invalidTargetAcresPerHead
     case usableAcreageExceedsAcreage
+    case invalidGrazeDays
+    case invalidRestDays
     case pastureNotFound
 
     var errorDescription: String? {
@@ -23,6 +25,10 @@ enum PastureValidationError: LocalizedError, Equatable {
             return "Target acres per head must be greater than zero."
         case .usableAcreageExceedsAcreage:
             return "Usable acres can’t exceed total acreage."
+        case .invalidGrazeDays:
+            return "Graze days must be between 1 and 30."
+        case .invalidRestDays:
+            return "Rest days must be between 7 and 90."
         case .pastureNotFound:
             return "That pasture could not be found."
         }

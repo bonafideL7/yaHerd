@@ -16,8 +16,7 @@ final class PastureDetailViewModel {
             return form.shouldShowStockingFields
         }
         
-        guard let acreage = detail?.acreage else { return false }
-        return acreage > 1
+        PastureStockingPolicy.shouldUseStockingFields(acreage: detail?.acreage)
     }
     
     func load(pastureID: UUID, using repository: any PastureRepository) {

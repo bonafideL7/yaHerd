@@ -23,8 +23,16 @@ struct AddPastureGroupView: View {
             Form {
                 TextField("Group Name", text: $name)
                 
-                Stepper("Graze Days: \(grazeDays)", value: $grazeDays, in: 1...30)
-                Stepper("Rest Days: \(restDays)", value: $restDays, in: 7...90)
+                Stepper(
+                    "Graze Days: \(grazeDays)",
+                    value: $grazeDays,
+                    in: PastureGroupInputValidator.grazeDaysRange
+                )
+                Stepper(
+                    "Rest Days: \(restDays)",
+                    value: $restDays,
+                    in: PastureGroupInputValidator.restDaysRange
+                )
             }
             .navigationTitle("New Pasture Group")
             .toolbar {
@@ -32,7 +40,7 @@ struct AddPastureGroupView: View {
                     ToolbarSaveButton {
                         save()
                     }
-                    .disabled(name.isEmpty)
+                    .disabled(!canSave)
                 }
                 
                 ToolbarItem(placement: .cancellationAction) {
@@ -45,6 +53,14 @@ struct AddPastureGroupView: View {
                 Text(errorMessage ?? "")
             }
         }
+    }
+
+    private var canSave: Bool {
+        PastureGroupInputValidator.canAttemptSave(
+            name: name,
+            grazeDays: grazeDays,
+            restDays: restDays
+        )
     }
 
     private func save() {

@@ -88,7 +88,7 @@ struct PastureDetailView: View {
             } else {
                 Text("Active Animals: \(detail.activeAnimalCount)")
 
-                if let acreage = detail.acreage, acreage > 1 {
+                if let acreage = detail.acreage, PastureStockingPolicy.shouldUseStockingFields(acreage: acreage) {
                     HStack {
                         Text("Acreage: \(acreage, format: .number)")
                         
@@ -162,10 +162,7 @@ struct PastureDetailView: View {
                         Text(
                             "Utilization: \(utilizationPercent, format: .percent.precision(.fractionLength(2)))"
                         )
-                        .foregroundStyle(
-                            utilizationPercent > 0.9 ? .red :
-                                utilizationPercent > 0.75 ? .orange : .green
-                        )
+                        .foregroundStyle(utilizationColor(for: metrics.utilizationStatus))
                     }
                     
                     Spacer()
@@ -210,6 +207,21 @@ struct PastureDetailView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func utilizationColor(for status: PastureUtilizationStatus) -> Color {
+        switch status {
+        case .missingData:
+            return .secondary
+        case .underutilized:
+            return .blue
+        case .normal:
+            return .green
+        case .warning:
+            return .orange
+        case .danger, .overCapacity:
+            return .red
         }
     }
 
