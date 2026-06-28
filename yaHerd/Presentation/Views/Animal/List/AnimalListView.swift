@@ -271,11 +271,15 @@ struct AnimalListView: View {
             }
         }
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                sortToolbarAuxiliaryButton
-                animalToolbarAction
-            }
-
+            AnimalListToolbarContent(
+                sortOrder: sortOrderValue,
+                batchMode: batchMode,
+                canCollapseSections: canCollapseSections,
+                onReverseSortDirection: reverseSortDirection,
+                onCollapseAllSections: collapseAllSections,
+                onToggleBatchMode: toggleBatchMode,
+                onOpenSettings: onOpenSettings
+            )
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomOverlay }
         .overlay(alignment: .bottomTrailing) {
@@ -401,215 +405,53 @@ struct AnimalListView: View {
         .accessibilityLabel("Add Animal")
     }
 
-    @ViewBuilder
-    private var sortToolbarAuxiliaryButton: some View {
-        if sortOrderValue.canReverseDirection && !batchMode {
-            Button {
-                reverseSortDirection()
-            } label: {
-                Image(systemName: sortOrderValue.reverseDirectionIcon)
-                    .font(.system(size: 17, weight: .semibold))
-            }
-            .accessibilityLabel(sortOrderValue.reverseDirectionAccessibilityLabel)
-            .accessibilityHint("Reverses the current animal sort direction")
-        } else if canCollapseSections && !batchMode {
-            Button {
-                collapseAllSections()
-            } label: {
-                Image(systemName: "rectangle.compress.vertical")
-                    .font(.system(size: 17, weight: .semibold))
-            }
-            .accessibilityLabel("Collapse All Sections")
-            .accessibilityHint("Collapses every visible animal group")
-        }
-    }
-
-    @ViewBuilder
-    private var animalToolbarAction: some View {
-        if batchMode {
-            Button {
-                toggleBatchMode()
-            } label: {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 17, weight: .semibold))
-            }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.circle)
-            .accessibilityLabel("Done Selecting")
-        } else {
-            Menu {
-                Button {
-                    toggleBatchMode()
-                } label: {
-                    Label("Select Animals", systemImage: "checklist")
-                }
-
-                Divider()
-
-                NavigationLink {
-                    FieldChecksView(mode: .all)
-                } label: {
-                    Label("Pasture Checks", systemImage: "checklist")
-                }
-
-                NavigationLink {
-                    WorkingSessionsView()
-                } label: {
-                    Label("Working Sessions", systemImage: "wrench.and.screwdriver")
-                }
-
-                Divider()
-
-                Button {
-                    onOpenSettings()
-                } label: {
-                    Label("Settings", systemImage: "gearshape")
-                }
-            } label: {
-                toolbarMenuLabel
-            }
-            .accessibilityLabel("Animal list actions")
-        }
-    }
-
-    private var toolbarMenuLabel: some View {
-        Image(systemName: "ellipsis")
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(.primary)
-    }
-
     private var floatingAddButtonBottomPadding: CGFloat {
         shouldShowFloatingControlBar ? 106 : 24
     }
 
     private var emptyStateView: some View {
-        ZStack {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture(perform: beginNewInlineEntry)
-
-            AnimalListEmptyStateView(
-                configuration: emptyStateConfiguration,
-                hasItems: !viewModel.items.isEmpty,
-                filtersAreActive: filtersAreActive,
-                hasHiddenOffHerdAnimals: hasHiddenOffHerdAnimals,
-                hasHiddenArchivedRecords: hasHiddenArchivedRecords,
-                showRemovedStatuses: showRemovedStatusesValue,
-                showArchivedRecords: showArchivedRecordsValue,
-                colorScheme: colorScheme,
-                onAddAnimal: beginNewInlineEntry,
-                onAddSampleData: {
-                    sampleDataSeeder.seedSampleDataIfNeeded()
-                    reload()
-                },
-                onAddLargeSampleData: {
-                    sampleDataSeeder.seedLargeSampleDataIfNeeded()
-                    reload()
-                },
-                onClearFilters: clearAllFilters,
-                onShowInactive: { showRemovedStatusesBinding.wrappedValue = true },
-                onShowArchivedRecords: { showArchivedRecordsBinding.wrappedValue = true }
-            )
-        }
+        AnimalListEmptyStateContainer(
+            configuration: emptyStateConfiguration,
+            hasItems: !viewModel.items.isEmpty,
+            filtersAreActive: filtersAreActive,
+            hasHiddenOffHerdAnimals: hasHiddenOffHerdAnimals,
+            hasHiddenArchivedRecords: hasHiddenArchivedRecords,
+            showRemovedStatuses: showRemovedStatusesValue,
+            showArchivedRecords: showArchivedRecordsValue,
+            colorScheme: colorScheme,
+            onAddAnimal: beginNewInlineEntry,
+            onAddSampleData: seedSampleData,
+            onAddLargeSampleData: seedLargeSampleData,
+            onClearFilters: clearAllFilters,
+            onShowInactive: { showRemovedStatusesBinding.wrappedValue = true },
+            onShowArchivedRecords: { showArchivedRecordsBinding.wrappedValue = true }
+        )
     }
 
-    @ViewBuilder
     private var bottomOverlay: some View {
-        if inlineEntry.isActive {
-            VStack(spacing: 10) {
-                inlineEntryAccessoryBar
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 10)
-        } else if batchMode {
-            VStack(spacing: 10) {
-                batchActionBar
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 10)
-        } else if shouldShowFloatingControlBar {
-            VStack(spacing: 10) {
-                floatingControlBar
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 10)
-        } else {
-            Color.clear
-                .frame(height: 88)
-                .allowsHitTesting(false)
-        }
+        AnimalListBottomOverlay(
+            inlineEntryIsActive: inlineEntry.isActive,
+            batchMode: batchMode,
+            shouldShowFloatingControlBar: shouldShowFloatingControlBar,
+            inlineAccessory: { inlineEntryAccessoryBar },
+            batchActionBar: { batchActionBar },
+            floatingControlBar: { floatingControlBar }
+        )
     }
 
     private var inlineEntryAccessoryBar: some View {
-        HStack(spacing: 12) {
-            inlineAccessoryButton(
-                systemName: "figure.stand",
-                accessibilityLabel: "Sex",
-                accessibilityValue: inlineEntry.sex.label
-            ) {
-                presentInlineEntryPicker { isShowingInlineSexPicker = true }
-            }
-
-            inlineAccessoryButton(
-                systemName: "leaf",
-                accessibilityLabel: "Pasture",
-                accessibilityValue: selectedInlinePastureLabel
-            ) {
-                presentInlineEntryPicker { isShowingInlinePasturePicker = true }
-            }
-
-            inlineAccessoryButton(
-                systemName: "calendar",
-                accessibilityLabel: "Birthdate",
-                accessibilityValue: inlineEntry.birthDate.formatted(date: .abbreviated, time: .omitted)
-            ) {
-                presentInlineEntryPicker { isShowingInlineBirthDateOptions = true }
-            }
-
-            Spacer(minLength: 12)
-
-            Button(action: submitInlineEntry) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title3.weight(.semibold))
-                    .frame(width: 44, height: 40)
-                    .contentShape(Rectangle())
-            }
-            .disabled(inlineEntry.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .accessibilityLabel(inlineEntry.editingAnimalID == nil ? "Add animal" : "Save animal")
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity)
-        .background(.bar, in: Capsule())
-    }
-
-    private var selectedInlinePastureLabel: String {
-        guard let pastureID = inlineEntry.pastureID else { return "No Pasture" }
-        return viewModel.pastureOptions.first(where: { $0.id == pastureID })?.name ?? "Pasture"
-    }
-
-    private func inlineAccessoryButton(
-        systemName: String,
-        accessibilityLabel: String,
-        accessibilityValue: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.title3)
-                .frame(width: 44, height: 40)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.primary)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue(accessibilityValue)
+        AnimalListInlineEntryAccessoryBar(
+            text: $inlineEntry.text,
+            sex: $inlineEntry.sex,
+            birthDate: $inlineEntry.birthDate,
+            pastureID: $inlineEntry.pastureID,
+            pastureOptions: viewModel.pastureOptions,
+            isEditing: inlineEntry.isEditing,
+            onShowSexPicker: { presentInlineEntryPicker { isShowingInlineSexPicker = true } },
+            onShowPasturePicker: { presentInlineEntryPicker { isShowingInlinePasturePicker = true } },
+            onShowBirthDateOptions: { presentInlineEntryPicker { isShowingInlineBirthDateOptions = true } },
+            onSubmit: submitInlineEntry
+        )
     }
 
     private var inlineBirthDatePickerSheet: some View {
@@ -676,77 +518,15 @@ struct AnimalListView: View {
     }
 
     private var currentFilterChips: [AnimalListFilterChip] {
-        var chips: [AnimalListFilterChip] = []
-
-        if showRemovedStatusesValue {
-            chips.append(.init(title: "Off-Herd Visible") { showRemovedStatusesBinding.wrappedValue = false })
-        }
-
-        if showArchivedRecordsValue {
-            chips.append(.init(title: "Archived Visible") { showArchivedRecordsBinding.wrappedValue = false })
-        }
-
-        if let sex = filterValue.sex {
-            chips.append(.init(title: sex.label) {
-                var updatedFilter = filterValue
-                updatedFilter.sex = nil
-                filterBinding.wrappedValue = updatedFilter
-            })
-        }
-
-        if let animalType = filterValue.animalType {
-            chips.append(.init(title: animalType.label) {
-                var updatedFilter = filterValue
-                updatedFilter.animalType = nil
-                filterBinding.wrappedValue = updatedFilter
-            })
-        }
-
-        if let status = filterValue.status {
-            chips.append(.init(title: status.label) {
-                var updatedFilter = filterValue
-                updatedFilter.status = nil
-                filterBinding.wrappedValue = updatedFilter
-            })
-        }
-
-        switch filterValue.pasture {
-        case .any:
-            break
-        case .noPasture:
-            chips.append(.init(title: "No Pasture") {
-                var updatedFilter = filterValue
-                updatedFilter.pasture = .any
-                filterBinding.wrappedValue = updatedFilter
-            })
-        case let .pasture(pastureID):
-            if let pastureName = viewModel.pastureName(for: pastureID) {
-                chips.append(.init(title: pastureName) {
-                    var updatedFilter = filterValue
-                    updatedFilter.pasture = .any
-                    filterBinding.wrappedValue = updatedFilter
-                })
-            }
-        }
-
-        if filterValue.location.isActive {
-            chips.append(.init(title: filterValue.location.label) {
-                var updatedFilter = filterValue
-                updatedFilter.location = .any
-                filterBinding.wrappedValue = updatedFilter
-            })
-        }
-
-
-        if filterValue.recordIssue.isActive {
-            chips.append(.init(title: filterValue.recordIssue.label) {
-                var updatedFilter = filterValue
-                updatedFilter.recordIssue = .any
-                filterBinding.wrappedValue = updatedFilter
-            })
-        }
-
-        return chips
+        AnimalListFilterChipFactory.makeChips(
+            filter: filterValue,
+            showRemovedStatuses: showRemovedStatusesValue,
+            showArchivedRecords: showArchivedRecordsValue,
+            pastureName: viewModel.pastureName(for:),
+            setFilter: { filterBinding.wrappedValue = $0 },
+            setShowRemovedStatuses: { showRemovedStatusesBinding.wrappedValue = $0 },
+            setShowArchivedRecords: { showArchivedRecordsBinding.wrappedValue = $0 }
+        )
     }
 
     private var hasAnyActiveCriteria: Bool {
@@ -754,6 +534,16 @@ struct AnimalListView: View {
         || filterValue.isActive
         || showRemovedStatusesValue
         || showArchivedRecordsValue
+    }
+
+    private func seedSampleData() {
+        sampleDataSeeder.seedSampleDataIfNeeded()
+        reload()
+    }
+
+    private func seedLargeSampleData() {
+        sampleDataSeeder.seedLargeSampleDataIfNeeded()
+        reload()
     }
 
     private func reload() {
