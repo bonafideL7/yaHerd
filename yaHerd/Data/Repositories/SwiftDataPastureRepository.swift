@@ -23,7 +23,7 @@ struct SwiftDataPastureRepository: PastureRepository {
         guard let pasture = try fetchModel(id: pastureID) else { return [] }
         return pasture.animals
             .filter(\.isActiveInHerd)
-            .map(PastureMapper.makeResidentAnimalSummary)
+            .map(AnimalMapper.makeSummary)
             .sorted { lhs, rhs in
                 lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
             }
