@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PastureDetailView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.pastureDetailRepository) private var repository
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @State private var isStockingExpanded = false
     @State private var model = PastureDetailViewModel()
@@ -10,10 +10,6 @@ struct PastureDetailView: View {
 
     init(pastureID: UUID) {
         self.pastureID = pastureID
-    }
-
-    private var repository: any PastureRepository {
-        dependencies.pastureRepository
     }
 
 

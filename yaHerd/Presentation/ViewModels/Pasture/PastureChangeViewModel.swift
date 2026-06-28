@@ -7,7 +7,7 @@ final class PastureChangeViewModel {
     var selectedPastureID: UUID?
     var errorMessage: String?
 
-    func moveAnimal(animalID: UUID, using repository: any AnimalRepository) -> Bool {
+    func moveAnimal(animalID: UUID, using repository: any AnimalPastureMoving) -> Bool {
         do {
             try MoveAnimalsUseCase(repository: repository).execute(ids: [animalID], toPastureID: selectedPastureID)
             return true

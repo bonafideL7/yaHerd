@@ -1,8 +1,9 @@
 import SwiftUI
 
 struct PasturePickerView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.animalPastureMover) private var animalMover
+    @Environment(\.pastureReferenceReader) private var pastureReferenceReader
 
     @State private var pastureOptions: [PastureOption] = []
 
@@ -12,13 +13,6 @@ struct PasturePickerView: View {
     @State private var model = PastureChangeViewModel()
     @State private var showingError = false
 
-    private var animalRepository: any AnimalRepository {
-        dependencies.animalRepository
-    }
-
-    private var pastureRepository: any PastureReferenceDataReader {
-        dependencies.pastureRepository
-    }
 
     init(animalID: UUID, currentPastureID: UUID? = nil) {
         self.animalID = animalID
@@ -50,7 +44,7 @@ struct PasturePickerView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     ToolbarSaveButton {
-                        if model.moveAnimal(animalID: animalID, using: animalRepository) {
+                        if model.moveAnimal(animalID: animalID, using: animalMover) {
                             dismiss()
                         } else {
                             showingError = true
@@ -65,7 +59,7 @@ struct PasturePickerView: View {
             .task {
                 model.selectedPastureID = currentPastureID
                 do {
-                    pastureOptions = try LoadPastureOptionsUseCase(repository: pastureRepository).execute()
+                    pastureOptions = try LoadPastureOptionsUseCase(repository: pastureReferenceReader).execute()
                 } catch {
                     model.errorMessage = error.localizedDescription
                     showingError = true

@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct PastureGroupEditorView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.pastureGroupEditorRepository) private var repository
 
     @State private var model = PastureGroupFormViewModel()
     @State private var hasPreparedForm = false
@@ -15,9 +15,6 @@ struct PastureGroupEditorView: View {
         self.onSave = onSave
     }
 
-    private var repository: any PastureRepository {
-        dependencies.pastureRepository
-    }
 
     var body: some View {
         @Bindable var model = model

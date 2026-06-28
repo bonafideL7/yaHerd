@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PastureGroupDetailView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.pastureGroupDetailRepository) private var repository
     @State private var model = PastureGroupDetailViewModel()
 
     private let groupID: UUID
@@ -10,9 +10,6 @@ struct PastureGroupDetailView: View {
         self.groupID = groupID
     }
 
-    private var repository: any PastureRepository {
-        dependencies.pastureRepository
-    }
 
     var body: some View {
         Group {
