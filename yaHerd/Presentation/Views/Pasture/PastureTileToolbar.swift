@@ -40,6 +40,12 @@ struct PastureTileToolbar: View {
                 Divider()
 
                 NavigationLink {
+                    PastureGroupListView()
+                } label: {
+                    Label("Pasture Groups", systemImage: "rectangle.3.group")
+                }
+
+                NavigationLink {
                     FieldChecksView(mode: .all)
                 } label: {
                     Label("Pasture Checks", systemImage: "checklist")

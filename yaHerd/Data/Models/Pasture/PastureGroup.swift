@@ -5,14 +5,13 @@
 //  Created by mm on 12/14/25.
 //
 
-
 import SwiftData
 import Foundation
 
 @Model
 final class PastureGroup {
+    var publicID: UUID = UUID()
     var name: String = ""
-    
     var grazeDays: Int = 7
     var restDays: Int = 21
 
@@ -27,7 +26,13 @@ final class PastureGroup {
         set { pastureStorage = newValue }
     }
 
-    init(name: String, grazeDays: Int = 7, restDays: Int = 21) {
+    init(
+        publicID: UUID = UUID(),
+        name: String,
+        grazeDays: Int = 7,
+        restDays: Int = 21
+    ) {
+        self.publicID = publicID
         self.name = name
         self.grazeDays = grazeDays
         self.restDays = restDays

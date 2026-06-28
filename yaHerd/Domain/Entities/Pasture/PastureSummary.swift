@@ -9,6 +9,8 @@ struct PastureSummary: Identifiable, Hashable {
     let activeAnimalCount: Int
     let sortOrder: Int
     let lastGrazedDate: Date?
+    let groupID: UUID?
+    let groupName: String?
     let restDays: Int?
 
     var metrics: PastureMetrics {

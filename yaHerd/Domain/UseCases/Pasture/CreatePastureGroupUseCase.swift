@@ -3,9 +3,10 @@ import Foundation
 struct CreatePastureGroupUseCase {
     let repository: any PastureGroupCreateRepository
 
-    func execute(name: String, grazeDays: Int, restDays: Int) throws {
+    @discardableResult
+    func execute(name: String, grazeDays: Int, restDays: Int) throws -> PastureGroupDetailSnapshot {
         let input = PastureGroupInput(name: name, grazeDays: grazeDays, restDays: restDays)
         let normalized = try PastureGroupInputValidator(repository: repository).validate(input: input)
-        try repository.createGroup(input: normalized)
+        return try repository.createGroup(input: normalized)
     }
 }

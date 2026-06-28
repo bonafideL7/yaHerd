@@ -10,6 +10,7 @@ enum PastureValidationError: LocalizedError, Equatable {
     case invalidGrazeDays
     case invalidRestDays
     case pastureNotFound
+    case pastureGroupNotFound
 
     var errorDescription: String? {
         switch self {
@@ -31,6 +32,8 @@ enum PastureValidationError: LocalizedError, Equatable {
             return "Rest days must be between 7 and 90."
         case .pastureNotFound:
             return "That pasture could not be found."
+        case .pastureGroupNotFound:
+            return "That pasture group could not be found."
         }
     }
 }

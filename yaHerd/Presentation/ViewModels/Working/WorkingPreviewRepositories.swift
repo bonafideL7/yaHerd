@@ -38,12 +38,18 @@ struct EmptyPastureRepository: PastureRepository {
     func fetchPastureOptions() throws -> [PastureOption] { [] }
     func validatePastureIDsExist(_ ids: [UUID]) throws {}
     func nameExists(_ name: String, excluding id: UUID?) throws -> Bool { false }
-    func groupNameExists(_ name: String) throws -> Bool { false }
+    func groupNameExists(_ name: String, excluding id: UUID?) throws -> Bool { false }
     func create(input: PastureInput) throws -> PastureDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("creating pastures") }
     func update(id: UUID, input: PastureInput) throws -> PastureDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("updating pastures") }
     func reorder(ids: [UUID]) throws {}
     func delete(ids: [UUID]) throws {}
-    func createGroup(input: PastureGroupInput) throws {}
+    func fetchPastureGroups() throws -> [PastureGroupSummary] { [] }
+    func fetchPastureGroupDetail(id: UUID) throws -> PastureGroupDetailSnapshot? { nil }
+    func validatePastureGroupIDsExist(_ ids: [UUID]) throws {}
+    func createGroup(input: PastureGroupInput) throws -> PastureGroupDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("creating pasture groups") }
+    func updateGroup(id: UUID, input: PastureGroupInput) throws -> PastureGroupDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("updating pasture groups") }
+    func deleteGroups(ids: [UUID]) throws {}
+    func assignPasture(id pastureID: UUID, toGroupID groupID: UUID?) throws {}
 }
 
 struct EmptyAnimalRepository: AnimalRepository {
