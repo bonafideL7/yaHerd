@@ -166,16 +166,16 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     func deleteSessions(forPastureIDs ids: [UUID]) throws {
         guard !ids.isEmpty else { return }
 
-        let identifierSet = Set(ids)
-        let descriptor = FetchDescriptor<FieldCheckSession>()
-        let sessionsToDelete = try context.fetch(descriptor)
-            .filter { session in
-                guard let pastureID = session.pastureID else { return false }
-                return identifierSet.contains(pastureID)
+        for pastureID in Set(ids) {
+            let descriptor = FetchDescriptor<FieldCheckSession>(
+                predicate: #Predicate<FieldCheckSession> { session in
+                    session.pastureID == pastureID
+                }
+            )
+            let sessionsToDelete = try context.fetch(descriptor)
+            for session in sessionsToDelete {
+                context.delete(session)
             }
-
-        for session in sessionsToDelete {
-            context.delete(session)
         }
 
         try context.save()

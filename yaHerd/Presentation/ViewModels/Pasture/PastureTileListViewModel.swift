@@ -42,7 +42,8 @@ final class PastureTileListViewModel {
 
     func deletePastures(
         at offsets: IndexSet,
-        pastureRepository: any PastureDeleting & PastureOrdering,
+        pastureRepository: any PastureDeleteRepository & PastureOrdering,
+        animalRepository: any AnimalPastureMoving,
         fieldCheckRepository: any FieldCheckPastureCleanupWriter
     ) {
         let originalItems = items
@@ -58,6 +59,7 @@ final class PastureTileListViewModel {
         do {
             try DeletePasturesUseCase(
                 pastureRepository: pastureRepository,
+                animalRepository: animalRepository,
                 fieldCheckRepository: fieldCheckRepository
             ).execute(ids: ids)
             try persistPastureOrder(using: pastureRepository)
@@ -69,13 +71,15 @@ final class PastureTileListViewModel {
 
     func deletePasture(
         id: UUID,
-        pastureRepository: any PastureDeleting & PastureOrdering,
+        pastureRepository: any PastureDeleteRepository & PastureOrdering,
+        animalRepository: any AnimalPastureMoving,
         fieldCheckRepository: any FieldCheckPastureCleanupWriter
     ) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         deletePastures(
             at: IndexSet(integer: index),
             pastureRepository: pastureRepository,
+            animalRepository: animalRepository,
             fieldCheckRepository: fieldCheckRepository
         )
     }

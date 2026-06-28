@@ -15,6 +15,7 @@ struct PastureTileListView: View {
     @Binding private var isManaging: Bool
 
     private let repository: any PastureRepository
+    private let animalRepository: any AnimalPastureMoving
     private let fieldCheckRepository: any FieldCheckPastureCleanupWriter
     private let externalFilter: Binding<PastureListFilter>?
     private let onOpenSettings: () -> Void
@@ -24,12 +25,14 @@ struct PastureTileListView: View {
 
     init(
         repository: any PastureRepository,
+        animalRepository: any AnimalPastureMoving,
         fieldCheckRepository: any FieldCheckPastureCleanupWriter,
         isManaging: Binding<Bool>,
         filter: Binding<PastureListFilter>? = nil,
         onOpenSettings: @escaping () -> Void = {}
     ) {
         self.repository = repository
+        self.animalRepository = animalRepository
         self.fieldCheckRepository = fieldCheckRepository
         self._isManaging = isManaging
         self.externalFilter = filter
@@ -115,6 +118,7 @@ struct PastureTileListView: View {
                         model.deletePasture(
                             id: pasture.id,
                             pastureRepository: repository,
+                            animalRepository: animalRepository,
                             fieldCheckRepository: fieldCheckRepository
                         )
                     }

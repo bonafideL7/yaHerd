@@ -36,6 +36,7 @@ struct EmptyPastureRepository: PastureRepository {
     func fetchPastureDetail(id: UUID) throws -> PastureDetailSnapshot? { nil }
     func fetchResidentAnimals(pastureID: UUID) throws -> [AnimalSummary] { [] }
     func fetchPastureOptions() throws -> [PastureOption] { [] }
+    func validatePastureIDsExist(_ ids: [UUID]) throws {}
     func nameExists(_ name: String, excluding id: UUID?) throws -> Bool { false }
     func groupNameExists(_ name: String) throws -> Bool { false }
     func create(input: PastureInput) throws -> PastureDetailSnapshot { throw PreviewRepositoryError.unsupportedOperation("creating pastures") }
