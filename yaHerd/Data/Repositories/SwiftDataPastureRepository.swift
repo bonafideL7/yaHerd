@@ -120,9 +120,23 @@ struct SwiftDataPastureRepository: PastureRepository {
         try context.save()
     }
 
-    func createGroup(input: PastureGroupInput) throws {
+    func fetchPastureGroups() throws -> [PastureGroupSummary] {
+        let descriptor = FetchDescriptor<PastureGroup>(sortBy: [SortDescriptor(\PastureGroup.name)])
+        return try context.fetch(descriptor).map(PastureMapper.makeGroupSummary)
+    }
+
+    func fetchPastureGroupDetail(id: UUID) throws -> PastureGroupDetailSnapshot? {
+        guard let group = try fetchGroupModel(id: id) else { return nil }
+        return PastureMapper.makeGroupDetail(from: group)
+    }
+
+    func validatePastureGroupIDsExist(_ ids: [UUID]) throws {
+        _ = try fetchGroupModels(ids: ids)
+    }
+
+    func createGroup(input: PastureGroupInput) throws -> PastureGroupDetailSnapshot {
         let normalizedInput = input.normalized
-        if try groupNameExists(normalizedInput.name) {
+        if try groupNameExists(normalizedInput.name, excluding: nil) {
             throw PastureValidationError.duplicateName(normalizedInput.name)
         }
 
@@ -131,14 +145,65 @@ struct SwiftDataPastureRepository: PastureRepository {
             grazeDays: normalizedInput.grazeDays,
             restDays: normalizedInput.restDays
         )
+        try ensureUniquePastureGroupPublicID(group)
         context.insert(group)
+        try context.save()
+        return PastureMapper.makeGroupDetail(from: group)
+    }
+
+    func updateGroup(id: UUID, input: PastureGroupInput) throws -> PastureGroupDetailSnapshot {
+        guard let group = try fetchGroupModel(id: id) else {
+            throw PastureValidationError.pastureGroupNotFound
+        }
+
+        let normalizedInput = input.normalized
+        if try groupNameExists(normalizedInput.name, excluding: id) {
+            throw PastureValidationError.duplicateName(normalizedInput.name)
+        }
+
+        group.name = normalizedInput.name
+        group.grazeDays = normalizedInput.grazeDays
+        group.restDays = normalizedInput.restDays
+        try context.save()
+        return PastureMapper.makeGroupDetail(from: group)
+    }
+
+    func deleteGroups(ids: [UUID]) throws {
+        guard !ids.isEmpty else { return }
+
+        let groupsToDelete = try fetchGroupModels(ids: ids)
+        for group in groupsToDelete {
+            context.delete(group)
+        }
         try context.save()
     }
 
-    func groupNameExists(_ name: String) throws -> Bool {
+    func assignPasture(id pastureID: UUID, toGroupID groupID: UUID?) throws {
+        guard let pasture = try fetchModel(id: pastureID) else {
+            throw PastureValidationError.pastureNotFound
+        }
+
+        let group: PastureGroup?
+        if let groupID {
+            guard let foundGroup = try fetchGroupModel(id: groupID) else {
+                throw PastureValidationError.pastureGroupNotFound
+            }
+            group = foundGroup
+        } else {
+            group = nil
+        }
+
+        pasture.group = group
+        try context.save()
+    }
+
+    func groupNameExists(_ name: String, excluding id: UUID?) throws -> Bool {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return try fetchPastureGroupsForNameLookup().contains { group in
-            group.name.caseInsensitiveCompare(normalizedName) == .orderedSame
+            if let id, group.publicID == id {
+                return false
+            }
+            return group.name.caseInsensitiveCompare(normalizedName) == .orderedSame
         }
     }
 
@@ -174,6 +239,38 @@ struct SwiftDataPastureRepository: PastureRepository {
         return models
     }
 
+    private func fetchGroupModel(id: UUID) throws -> PastureGroup? {
+        let descriptor = FetchDescriptor<PastureGroup>(
+            predicate: #Predicate<PastureGroup> { group in
+                group.publicID == id
+            }
+        )
+        return try context.fetch(descriptor).first
+    }
+
+    private func fetchGroupModels(ids: [UUID]) throws -> [PastureGroup] {
+        guard Set(ids).count == ids.count else {
+            throw PastureRepositoryError.duplicatePastureGroupIDs
+        }
+
+        var models: [PastureGroup] = []
+        var missingIDs: [UUID] = []
+
+        for id in ids {
+            if let group = try fetchGroupModel(id: id) {
+                models.append(group)
+            } else {
+                missingIDs.append(id)
+            }
+        }
+
+        guard missingIDs.isEmpty else {
+            throw PastureRepositoryError.pastureGroupIDsNotFound(missingIDs)
+        }
+
+        return models
+    }
+
     private func fetchAllPastures() throws -> [Pasture] {
         let descriptor = FetchDescriptor<Pasture>(
             sortBy: [
@@ -197,6 +294,12 @@ struct SwiftDataPastureRepository: PastureRepository {
     private func ensureUniquePasturePublicID(_ pasture: Pasture) throws {
         while try fetchModel(id: pasture.publicID) != nil {
             pasture.publicID = UUID()
+        }
+    }
+
+    private func ensureUniquePastureGroupPublicID(_ group: PastureGroup) throws {
+        while try fetchGroupModel(id: group.publicID) != nil {
+            group.publicID = UUID()
         }
     }
 

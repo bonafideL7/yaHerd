@@ -8,6 +8,8 @@ struct PastureDetailSnapshot: Identifiable, Equatable {
     let targetAcresPerHead: Double?
     let activeAnimalCount: Int
     let lastGrazedDate: Date?
+    let groupID: UUID?
+    let groupName: String?
 
     var metrics: PastureMetrics {
         PastureMetrics(

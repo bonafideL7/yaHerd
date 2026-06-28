@@ -4,19 +4,19 @@ struct PastureGroupInputValidator {
     static let grazeDaysRange = 1...30
     static let restDaysRange = 7...90
 
-    private let groupNameExists: (String) throws -> Bool
+    private let groupNameExists: (String, UUID?) throws -> Bool
 
-    init(groupNameExists: @escaping (String) throws -> Bool) {
+    init(groupNameExists: @escaping (String, UUID?) throws -> Bool) {
         self.groupNameExists = groupNameExists
     }
 
     init(repository: any PastureGroupNameChecking) {
-        self.groupNameExists = { name in
-            try repository.groupNameExists(name)
+        self.groupNameExists = { name, excludedID in
+            try repository.groupNameExists(name, excluding: excludedID)
         }
     }
 
-    func validate(input: PastureGroupInput) throws -> PastureGroupInput {
+    func validate(input: PastureGroupInput, excluding excludedID: UUID? = nil) throws -> PastureGroupInput {
         let normalized = input.normalized
 
         guard PastureInputValidator.hasRequiredName(normalized.name) else {
@@ -31,7 +31,7 @@ struct PastureGroupInputValidator {
             throw PastureValidationError.invalidRestDays
         }
 
-        if try groupNameExists(normalized.name) {
+        if try groupNameExists(normalized.name, excludedID) {
             throw PastureValidationError.duplicateName(normalized.name)
         }
 
