@@ -80,19 +80,23 @@ protocol AnimalPregnancyCheckAdding {
     func addPregnancyCheck(animalID: UUID, input: PregnancyCheckInput) throws -> AnimalDetailSnapshot
 }
 
-protocol AnimalRepository:
+protocol AnimalListRepository:
     AnimalSummaryReading,
     AnimalDetailReading,
-    AnimalTimelineReading,
-    AnimalStatusReferenceReading,
-    AnimalParentOptionReading,
-    AnimalOffspringDraftReading,
     AnimalCreating,
     AnimalUpdating,
     AnimalDeleting,
     AnimalArchiving,
     AnimalRestoring,
-    AnimalPastureMoving,
+    AnimalPastureMoving
+{}
+
+protocol AnimalRepository:
+    AnimalListRepository,
+    AnimalTimelineReading,
+    AnimalStatusReferenceReading,
+    AnimalParentOptionReading,
+    AnimalOffspringDraftReading,
     AnimalTagAdding,
     AnimalTagUpdating,
     AnimalTagPromoting,

@@ -10,6 +10,7 @@ final class AppDependencies: ObservableObject {
     let fieldCheckRepository: any FieldCheckRepository
     let tagColorRepository: any TagColorRepository
     let syncDiagnosticsRepository: any SyncDiagnosticsRepository
+    let sampleDataSeeder: any SampleDataSeeding
 
     private let context: ModelContext
 
@@ -28,14 +29,7 @@ final class AppDependencies: ObservableObject {
             context: context,
             duplicateResolutionPolicy: tagColorDuplicateResolutionPolicy
         )
-    }
-
-    func seedSampleDataIfNeeded() {
-        SampleDataService.seedSampleDataIfNeeded(context: context)
-    }
-    
-    func seedLargeSampleDataIfNeeded() {
-        SampleLargeDataService.seedIfNeeded(context: context)
+        self.sampleDataSeeder = AppSampleDataSeeder(context: context)
     }
 
     func seedDefaultsIfNeeded() {

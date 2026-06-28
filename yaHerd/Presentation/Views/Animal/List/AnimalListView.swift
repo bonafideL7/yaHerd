@@ -10,8 +10,10 @@ import SwiftUI
 }
 
 struct AnimalListView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+    @Environment(\.animalListRepository) private var animalListRepository
+    @Environment(\.pastureReferenceDataReader) private var pastureReferenceDataReader
+    @Environment(\.sampleDataSeeder) private var sampleDataSeeder
     @Environment(\.colorScheme) private var colorScheme
 
     @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
@@ -190,7 +192,7 @@ struct AnimalListView: View {
         filterValue.isActive || showRemovedStatusesValue || showArchivedRecordsValue
     }
 
-    private var repository: any AnimalRepository { dependencies.animalRepository }
+    private var repository: any AnimalListRepository { animalListRepository }
 
     private var filteredAndSortedAnimals: [AnimalSummary] {
         AnimalListDerivations.filteredAndSortedAnimals(
@@ -293,7 +295,7 @@ struct AnimalListView: View {
         }
         .sheet(isPresented: $showingPasturePicker) {
             PastureTilePickerView { pasture in
-                viewModel.move(ids: Array(selectedAnimalIDs), toPastureID: pasture.id, using: repository, pastureRepository: dependencies.pastureRepository)
+                viewModel.move(ids: Array(selectedAnimalIDs), toPastureID: pasture.id, using: repository, pastureRepository: pastureReferenceDataReader)
                 selectedAnimalIDs.removeAll()
                 batchMode = false
             }
@@ -497,11 +499,11 @@ struct AnimalListView: View {
                 colorScheme: colorScheme,
                 onAddAnimal: beginNewInlineEntry,
                 onAddSampleData: {
-                    dependencies.seedSampleDataIfNeeded()
+                    sampleDataSeeder.seedSampleDataIfNeeded()
                     reload()
                 },
                 onAddLargeSampleData: {
-                    dependencies.seedLargeSampleDataIfNeeded()
+                    sampleDataSeeder.seedLargeSampleDataIfNeeded()
                     reload()
                 },
                 onClearFilters: clearAllFilters,
@@ -755,7 +757,7 @@ struct AnimalListView: View {
     }
 
     private func reload() {
-        viewModel.load(using: repository, pastureRepository: dependencies.pastureRepository)
+        viewModel.load(using: repository, pastureRepository: pastureReferenceDataReader)
     }
 
     private func toggleBatchMode() {
@@ -873,11 +875,11 @@ struct AnimalListView: View {
             animalID: animal.id,
             hardDelete: animal.isArchived || hardDeleteOnSwipe,
             using: repository,
-            pastureRepository: dependencies.pastureRepository
+            pastureRepository: pastureReferenceDataReader
         )
     }
 
     private func restoreArchivedRecord(_ animal: AnimalSummary) {
-        viewModel.restore(animalID: animal.id, using: repository, pastureRepository: dependencies.pastureRepository)
+        viewModel.restore(animalID: animal.id, using: repository, pastureRepository: pastureReferenceDataReader)
     }
 }
