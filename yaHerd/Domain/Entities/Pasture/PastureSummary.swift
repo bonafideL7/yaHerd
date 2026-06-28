@@ -45,8 +45,11 @@ struct PastureSummary: Identifiable, Hashable {
     }
 
     var isRotationReady: Bool {
-        guard isRestedForRotation, !isOverCapacity else { return false }
-        guard let utilizationPercent = metrics.utilizationPercent else { return activeAnimalCount == 0 }
-        return utilizationPercent < 0.80
+        PastureStockingPolicy.isRotationReady(
+            isRestedForRotation: isRestedForRotation,
+            isOverCapacity: isOverCapacity,
+            utilizationPercent: metrics.utilizationPercent,
+            activeAnimalCount: activeAnimalCount
+        )
     }
 }

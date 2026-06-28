@@ -5,6 +5,7 @@ protocol PastureRepository {
     func fetchPastureDetail(id: UUID) throws -> PastureDetailSnapshot?
     func fetchResidentAnimals(pastureID: UUID) throws -> [AnimalSummary]
     func nameExists(_ name: String, excluding id: UUID?) throws -> Bool
+    func groupNameExists(_ name: String) throws -> Bool
     @discardableResult
     func create(input: PastureInput) throws -> PastureDetailSnapshot
     @discardableResult
@@ -18,4 +19,12 @@ struct PastureGroupInput: Hashable {
     var name: String
     var grazeDays: Int
     var restDays: Int
+
+    var normalized: PastureGroupInput {
+        PastureGroupInput(
+            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+            grazeDays: grazeDays,
+            restDays: restDays
+        )
+    }
 }

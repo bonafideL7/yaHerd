@@ -47,8 +47,14 @@ struct PastureMetrics: Hashable {
         return Double(activeAnimals) > capacityHead
     }
 
+    var utilizationStatus: PastureUtilizationStatus {
+        PastureStockingPolicy.status(
+            utilizationPercent: utilizationPercent,
+            isOverCapacity: isOverCapacity
+        )
+    }
+
     var isUnderutilized: Bool {
-        guard let utilizationPercent else { return false }
-        return utilizationPercent < 0.40
+        utilizationStatus == .underutilized
     }
 }
