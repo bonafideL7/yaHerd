@@ -3,7 +3,8 @@ import SwiftUI
 struct WorkingSessionAnimalEditView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.workingQueueItemEditingRepository) private var repository
+    @Environment(\.pastureReferenceDataReader) private var pastureRepository
     @StateObject private var viewModel: WorkingQueueItemEditorViewModel
 
     @State private var status: WorkingQueueStatus = .queued
@@ -188,7 +189,7 @@ struct WorkingSessionAnimalEditView: View {
             }
         }
         .task {
-            viewModel.configure(workingRepository: dependencies.workingRepository, pastureRepository: dependencies.pastureRepository)
+            viewModel.configure(workingRepository: repository, pastureRepository: pastureRepository)
             viewModel.load()
             seedState()
         }
@@ -290,7 +291,7 @@ struct WorkingSessionAnimalEditView: View {
         )
 
         do {
-            let useCase = SaveWorkingQueueItemEditsUseCase(repository: dependencies.workingRepository)
+            let useCase = SaveWorkingQueueItemEditsUseCase(repository: repository)
             try useCase.execute(queueItemID: snapshot.id, sessionID: snapshot.sessionID, input: input)
             dismiss()
         } catch {
@@ -302,7 +303,7 @@ struct WorkingSessionAnimalEditView: View {
     private func deleteWorkDataForAnimal() {
         guard let snapshot else { return }
         do {
-            let useCase = DeleteWorkingQueueItemDataUseCase(repository: dependencies.workingRepository)
+            let useCase = DeleteWorkingQueueItemDataUseCase(repository: repository)
             try useCase.execute(queueItemID: snapshot.id, sessionID: snapshot.sessionID)
             dismiss()
         } catch {

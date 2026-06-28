@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct WorkingQueueView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.workingQueueRepository) private var repository
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @StateObject private var viewModel: WorkingSessionDetailViewModel
     private let sessionID: UUID
@@ -30,7 +30,7 @@ struct WorkingQueueView: View {
         .navigationTitle("Queue")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            viewModel.configure(repository: dependencies.workingRepository)
+            viewModel.configure(repository: repository)
             viewModel.load()
         }
     }

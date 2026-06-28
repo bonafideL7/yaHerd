@@ -7,7 +7,8 @@ import SwiftUI
 
 struct NewWorkingSessionView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.newWorkingSessionRepository) private var repository
+    @Environment(\.pastureReferenceDataReader) private var pastureRepository
 
     @StateObject private var viewModel = NewWorkingSessionViewModel(pastureRepository: EmptyPastureRepository(), workingRepository: EmptyWorkingRepository())
 
@@ -119,7 +120,7 @@ struct NewWorkingSessionView: View {
                 }
             }
             .task {
-                viewModel.configure(pastureRepository: dependencies.pastureRepository, workingRepository: dependencies.workingRepository)
+                viewModel.configure(pastureRepository: pastureRepository, workingRepository: repository)
                 viewModel.load()
                 seedDefaultsIfNeeded()
             }
@@ -166,7 +167,7 @@ struct NewWorkingSessionView: View {
         }
 
         do {
-            let useCase = CreateWorkingSessionUseCase(repository: dependencies.workingRepository)
+            let useCase = CreateWorkingSessionUseCase(repository: repository)
             _ = try useCase.execute(
                 date: date,
                 sourcePastureID: sourcePasture?.id,

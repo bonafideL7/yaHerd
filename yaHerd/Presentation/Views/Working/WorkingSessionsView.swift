@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct WorkingSessionsView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.workingSessionsRepository) private var repository
     @StateObject private var viewModel: WorkingSessionsViewModel
 
     @State private var showingNewSession = false
@@ -87,7 +87,7 @@ struct WorkingSessionsView: View {
             }
         }
         .task {
-            viewModel.configure(repository: dependencies.workingRepository)
+            viewModel.configure(repository: repository)
             viewModel.load()
         }
         .onChange(of: showingNewSession) { _, isPresented in
@@ -131,7 +131,7 @@ struct WorkingSessionsView: View {
 
     private func deleteSession(_ session: WorkingSessionSummary) {
         do {
-            let useCase = DeleteWorkingSessionUseCase(repository: dependencies.workingRepository)
+            let useCase = DeleteWorkingSessionUseCase(repository: repository)
             try useCase.execute(sessionID: session.id)
             viewModel.load()
         } catch {

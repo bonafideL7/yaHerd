@@ -6,14 +6,14 @@ final class WorkingSessionDetailViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let sessionID: UUID
-    private var repository: any WorkingRepository
+    private var repository: any WorkingSessionDetailReader
 
-    init(sessionID: UUID, repository: any WorkingRepository) {
+    init(sessionID: UUID, repository: any WorkingSessionDetailReader) {
         self.sessionID = sessionID
         self.repository = repository
     }
 
-    func configure(repository: any WorkingRepository) {
+    func configure(repository: any WorkingSessionDetailReader) {
         self.repository = repository
     }
 

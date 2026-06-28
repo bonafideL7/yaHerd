@@ -2,7 +2,8 @@ import SwiftUI
 
 struct WorkingFinishSessionView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.workingFinishSessionRepository) private var repository
+    @Environment(\.pastureReferenceDataReader) private var pastureRepository
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @StateObject private var viewModel: WorkingFinishSessionViewModel
 
@@ -77,7 +78,7 @@ struct WorkingFinishSessionView: View {
                 }
             }
             .task {
-                viewModel.configure(workingRepository: dependencies.workingRepository, pastureRepository: dependencies.pastureRepository)
+                viewModel.configure(workingRepository: repository, pastureRepository: pastureRepository)
                 viewModel.load()
                 seedDestinations()
             }
@@ -120,9 +121,9 @@ struct WorkingFinishSessionView: View {
             WorkingQueueDestinationAssignment(queueItemID: $0.id, destinationPastureID: destinationPastureIDs[$0.id] ?? $0.destinationPastureID ?? session.sourcePastureID)
         }
         do {
-            let saveUseCase = SaveWorkingDestinationsUseCase(repository: dependencies.workingRepository)
+            let saveUseCase = SaveWorkingDestinationsUseCase(repository: repository)
             try saveUseCase.execute(sessionID: session.id, assignments: assignments)
-            let finishUseCase = FinishWorkingSessionUseCase(repository: dependencies.workingRepository)
+            let finishUseCase = FinishWorkingSessionUseCase(repository: repository)
             try finishUseCase.execute(sessionID: session.id)
             dismiss()
         } catch {

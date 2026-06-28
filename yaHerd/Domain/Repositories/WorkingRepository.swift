@@ -124,21 +124,61 @@ protocol WorkingProtocolTemplateDeleting {
     func deleteTemplates(ids: [UUID]) throws
 }
 
-protocol WorkingRepository:
-    WorkingSessionListReader,
-    WorkingSessionDetailReader,
+
+protocol WorkingSessionsRepository: WorkingSessionListReader, WorkingSessionDeleting {}
+
+protocol WorkingSessionDetailRepository: WorkingSessionDetailReader, WorkingSessionDeleting {}
+
+protocol NewWorkingSessionRepository:
     WorkingProtocolTemplateListReader,
     WorkingProtocolTemplateDetailReader,
+    WorkingSessionCreating
+{}
+
+protocol WorkingCollectAnimalsRepository:
+    WorkingSessionDetailReader,
+    WorkingAnimalCollecting
+{}
+
+protocol WorkingQueueRepository: WorkingSessionDetailReader {}
+
+protocol WorkingQueueItemEditingRepository:
     WorkingQueueItemEditorReader,
-    WorkingSessionCreating,
-    WorkingAnimalCollecting,
-    WorkingQueueItemCompleting,
     WorkingQueueItemEditSaving,
-    WorkingQueueItemDataDeleting,
-    WorkingSessionDeleting,
+    WorkingQueueItemDataDeleting
+{}
+
+protocol WorkingChuteRepository:
+    WorkingQueueItemEditorReader,
+    WorkingQueueItemCompleting
+{}
+
+protocol WorkingFinishSessionRepository:
+    WorkingSessionDetailReader,
     WorkingDestinationSaving,
-    WorkingSessionFinishing,
-    WorkingProtocolTemplateCreating,
-    WorkingProtocolTemplateUpdating,
+    WorkingSessionFinishing
+{}
+
+protocol WorkingProtocolTemplatesRepository:
+    WorkingProtocolTemplateListReader,
     WorkingProtocolTemplateDeleting
+{}
+
+protocol WorkingProtocolTemplateEditorRepository:
+    WorkingProtocolTemplateDetailReader,
+    WorkingProtocolTemplateUpdating
+{}
+
+protocol WorkingRepository:
+    WorkingSessionsRepository,
+    WorkingSessionDetailRepository,
+    NewWorkingSessionRepository,
+    WorkingCollectAnimalsRepository,
+    WorkingQueueRepository,
+    WorkingQueueItemEditingRepository,
+    WorkingChuteRepository,
+    WorkingFinishSessionRepository,
+    WorkingProtocolTemplatesRepository,
+    WorkingProtocolTemplateCreating,
+    WorkingProtocolTemplateEditorRepository
 {}
