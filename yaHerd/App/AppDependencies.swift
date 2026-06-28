@@ -9,6 +9,7 @@ final class AppDependencies: ObservableObject {
     let workingRepository: any WorkingRepository
     let fieldCheckRepository: any FieldCheckRepository
     let tagColorRepository: any TagColorRepository
+    let syncDiagnosticsRepository: any SyncDiagnosticsRepository
 
     private let context: ModelContext
 
@@ -22,6 +23,7 @@ final class AppDependencies: ObservableObject {
         self.dashboardRepository = SwiftDataDashboardRepository(context: context)
         self.workingRepository = SwiftDataWorkingRepository(context: context)
         self.fieldCheckRepository = SwiftDataFieldCheckRepository(context: context)
+        self.syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(context: context)
         self.tagColorRepository = SwiftDataTagColorRepository(
             context: context,
             duplicateResolutionPolicy: tagColorDuplicateResolutionPolicy

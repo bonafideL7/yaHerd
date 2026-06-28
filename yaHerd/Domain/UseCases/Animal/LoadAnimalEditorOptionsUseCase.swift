@@ -1,7 +1,7 @@
 import Foundation
 
 struct LoadAnimalEditorOptionsUseCase {
-    let animalRepository: any AnimalRepository
+    let animalRepository: any AnimalStatusReferenceReading
     let pastureRepository: any PastureReferenceDataReader
 
     func execute() throws -> (pastures: [PastureOption], statusReferences: [AnimalStatusReferenceOption]) {

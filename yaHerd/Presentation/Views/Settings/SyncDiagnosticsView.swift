@@ -3,11 +3,10 @@
 //  yaHerd
 //
 
-import SwiftData
 import SwiftUI
 
 struct SyncDiagnosticsView: View {
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.syncDiagnosticsRepository) private var diagnosticsRepository
 
     private let preferences: AppPreferencesProviding
     private let checker: ICloudAvailabilityChecking
@@ -270,62 +269,17 @@ struct SyncDiagnosticsView: View {
 
     @MainActor
     private func loadCounts() {
+        guard let diagnosticsRepository else {
+            counts = .empty
+            countError = "Diagnostics repository is not configured."
+            return
+        }
+
         do {
-            counts = SyncDiagnosticsCounts(
-                animals: try count(Animal.self),
-                pastures: try count(Pasture.self),
-                pastureGroups: try count(PastureGroup.self),
-                healthRecords: try count(HealthRecord.self),
-                pregnancyChecks: try count(PregnancyCheck.self),
-                movementRecords: try count(MovementRecord.self),
-                statusRecords: try count(StatusRecord.self),
-                workingSessions: try count(WorkingSession.self),
-                workingQueueItems: try count(WorkingQueueItem.self),
-                workingTreatmentRecords: try count(WorkingTreatmentRecord.self),
-                fieldCheckSessions: try count(FieldCheckSession.self),
-                fieldCheckAnimalChecks: try count(FieldCheckAnimalCheck.self),
-                fieldCheckFindings: try count(FieldCheckFinding.self)
-            )
+            counts = try diagnosticsRepository.fetchCounts()
             countError = nil
         } catch {
             countError = "Could not read local data counts: \(error.localizedDescription)"
         }
     }
-
-    @MainActor
-    private func count<T: PersistentModel>(_ modelType: T.Type) throws -> Int {
-        try modelContext.fetchCount(FetchDescriptor<T>())
-    }
-}
-
-private struct SyncDiagnosticsCounts: Equatable {
-    let animals: Int
-    let pastures: Int
-    let pastureGroups: Int
-    let healthRecords: Int
-    let pregnancyChecks: Int
-    let movementRecords: Int
-    let statusRecords: Int
-    let workingSessions: Int
-    let workingQueueItems: Int
-    let workingTreatmentRecords: Int
-    let fieldCheckSessions: Int
-    let fieldCheckAnimalChecks: Int
-    let fieldCheckFindings: Int
-
-    static let empty = SyncDiagnosticsCounts(
-        animals: 0,
-        pastures: 0,
-        pastureGroups: 0,
-        healthRecords: 0,
-        pregnancyChecks: 0,
-        movementRecords: 0,
-        statusRecords: 0,
-        workingSessions: 0,
-        workingQueueItems: 0,
-        workingTreatmentRecords: 0,
-        fieldCheckSessions: 0,
-        fieldCheckAnimalChecks: 0,
-        fieldCheckFindings: 0
-    )
 }

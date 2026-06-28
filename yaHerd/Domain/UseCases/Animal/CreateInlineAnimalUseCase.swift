@@ -1,7 +1,7 @@
 import Foundation
 
 struct CreateInlineAnimalUseCase {
-    let repository: any AnimalRepository
+    let repository: any AnimalCreating
 
     @discardableResult
     func execute(

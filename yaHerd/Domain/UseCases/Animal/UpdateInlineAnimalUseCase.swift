@@ -1,7 +1,7 @@
 import Foundation
 
 struct UpdateInlineAnimalUseCase {
-    let repository: any AnimalRepository
+    let repository: any AnimalDetailReading & AnimalUpdating
 
     @discardableResult
     func execute(

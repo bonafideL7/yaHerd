@@ -1,7 +1,7 @@
 import Foundation
 
 struct PrepareOffspringDraftUseCase {
-    let repository: any AnimalRepository
+    let repository: any AnimalOffspringDraftReading
 
     func execute(forDamID damID: UUID) throws -> PreparedAnimalEditor? {
         guard let seed = try repository.fetchOffspringDraftSeed(forDamID: damID) else {
