@@ -1,7 +1,7 @@
 import Foundation
 
 struct AddPregnancyCheckUseCase {
-    let repository: any AnimalRepository
+    let repository: any AnimalPregnancyCheckAdding
 
     func execute(animalID: UUID, input: PregnancyCheckInput) throws -> AnimalDetailSnapshot {
         try ValidationService.validatePregCheck()

@@ -1,7 +1,7 @@
 import Foundation
 
 struct LoadAnimalsUseCase {
-    let repository: any AnimalRepository
+    let repository: any AnimalSummaryReading
 
     func execute() throws -> [AnimalSummary] {
         try repository.fetchAnimals()

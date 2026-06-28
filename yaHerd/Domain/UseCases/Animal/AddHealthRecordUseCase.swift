@@ -1,7 +1,7 @@
 import Foundation
 
 struct AddHealthRecordUseCase {
-    let repository: any AnimalRepository
+    let repository: any AnimalHealthRecordAdding
 
     func execute(animalID: UUID, date: Date, treatment: String, notes: String?) throws -> AnimalDetailSnapshot {
         try ValidationService.validateHealthRecord(treatment: treatment)

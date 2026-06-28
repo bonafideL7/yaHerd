@@ -1,36 +1,105 @@
 import Foundation
 
+protocol AnimalSummaryReading {
+    func fetchAnimals() throws -> [AnimalSummary]
+}
+
+protocol AnimalDetailReading {
+    func fetchAnimalDetail(id: UUID) throws -> AnimalDetailSnapshot?
+}
+
+protocol AnimalTimelineReading {
+    func fetchTimeline(id: UUID) throws -> [AnimalTimelineEvent]
+}
+
+protocol AnimalStatusReferenceReading {
+    func fetchStatusReferenceOptions() throws -> [AnimalStatusReferenceOption]
+}
+
+protocol AnimalParentOptionReading {
+    func fetchParentOptions(excluding excludedAnimalID: UUID?) throws -> [AnimalParentOption]
+}
+
+protocol AnimalOffspringDraftReading {
+    func fetchOffspringDraftSeed(forDamID damID: UUID) throws -> OffspringDraftSeed?
+}
+
+protocol AnimalCreating {
+    @discardableResult
+    func create(input: AnimalInput) throws -> AnimalDetailSnapshot
+}
+
+protocol AnimalUpdating {
+    @discardableResult
+    func update(id: UUID, input: AnimalInput) throws -> AnimalDetailSnapshot
+}
+
+protocol AnimalDeleting {
+    func delete(ids: [UUID]) throws
+}
+
+protocol AnimalArchiving {
+    func archive(ids: [UUID]) throws
+}
+
+protocol AnimalRestoring {
+    func restore(ids: [UUID]) throws
+}
+
 protocol AnimalPastureMoving {
     func move(ids: [UUID], toPastureID: UUID?) throws
 }
 
-protocol AnimalRepository: AnimalPastureMoving {
-    func fetchAnimals() throws -> [AnimalSummary]
-    func fetchAnimalDetail(id: UUID) throws -> AnimalDetailSnapshot?
-    func fetchTimeline(id: UUID) throws -> [AnimalTimelineEvent]
-    func fetchStatusReferenceOptions() throws -> [AnimalStatusReferenceOption]
-    func fetchParentOptions(excluding excludedAnimalID: UUID?) throws -> [AnimalParentOption]
-    func fetchOffspringDraftSeed(forDamID damID: UUID) throws -> OffspringDraftSeed?
-    @discardableResult
-    func create(input: AnimalInput) throws -> AnimalDetailSnapshot
-    @discardableResult
-    func update(id: UUID, input: AnimalInput) throws -> AnimalDetailSnapshot
-    func delete(ids: [UUID]) throws
-    func archive(ids: [UUID]) throws
-    func restore(ids: [UUID]) throws
+protocol AnimalTagAdding {
     @discardableResult
     func addTag(animalID: UUID, input: AnimalTagInput) throws -> AnimalDetailSnapshot
+}
+
+protocol AnimalTagUpdating {
     @discardableResult
     func updateTag(animalID: UUID, tagID: UUID, input: AnimalTagInput) throws -> AnimalDetailSnapshot
+}
+
+protocol AnimalTagPromoting {
     @discardableResult
     func promoteTag(animalID: UUID, tagID: UUID) throws -> AnimalDetailSnapshot
+}
+
+protocol AnimalTagRetiring {
     @discardableResult
     func retireTag(animalID: UUID, tagID: UUID) throws -> AnimalDetailSnapshot
+}
+
+protocol AnimalHealthRecordAdding {
     @discardableResult
     func addHealthRecord(animalID: UUID, input: HealthRecordInput) throws -> AnimalDetailSnapshot
+}
+
+protocol AnimalPregnancyCheckAdding {
     @discardableResult
     func addPregnancyCheck(animalID: UUID, input: PregnancyCheckInput) throws -> AnimalDetailSnapshot
 }
+
+protocol AnimalRepository:
+    AnimalSummaryReading,
+    AnimalDetailReading,
+    AnimalTimelineReading,
+    AnimalStatusReferenceReading,
+    AnimalParentOptionReading,
+    AnimalOffspringDraftReading,
+    AnimalCreating,
+    AnimalUpdating,
+    AnimalDeleting,
+    AnimalArchiving,
+    AnimalRestoring,
+    AnimalPastureMoving,
+    AnimalTagAdding,
+    AnimalTagUpdating,
+    AnimalTagPromoting,
+    AnimalTagRetiring,
+    AnimalHealthRecordAdding,
+    AnimalPregnancyCheckAdding
+{}
 
 struct HealthRecordInput: Hashable {
     var date: Date

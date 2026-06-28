@@ -3,13 +3,13 @@ import Foundation
 struct LoadHomeUseCase {
     let dashboardRepository: any DashboardRepository
     let fieldCheckRepository: any FieldCheckRepository
-    let workingRepository: any WorkingRepository
+    let workingRepository: any WorkingProtocolTemplateListReader
     let service: HomeService
 
     init(
         dashboardRepository: any DashboardRepository,
         fieldCheckRepository: any FieldCheckRepository,
-        workingRepository: any WorkingRepository,
+        workingRepository: any WorkingProtocolTemplateListReader,
         service: HomeService = HomeService()
     ) {
         self.dashboardRepository = dashboardRepository

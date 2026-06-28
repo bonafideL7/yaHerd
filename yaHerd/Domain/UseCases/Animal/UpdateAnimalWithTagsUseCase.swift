@@ -1,7 +1,7 @@
 import Foundation
 
 struct UpdateAnimalWithTagsUseCase {
-    let repository: any AnimalRepository
+    let repository: any AnimalUpdating & AnimalTagAdding & AnimalTagUpdating & AnimalTagRetiring
 
     @discardableResult
     func execute(

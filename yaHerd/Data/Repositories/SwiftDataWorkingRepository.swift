@@ -42,8 +42,8 @@ struct SwiftDataWorkingRepository: WorkingRepository {
             .map(WorkingMapper.makePregnancyCheckSnapshot)
 
         let healthRecords = try fetchHealthRecords(session: session, animal: animal)
-        let observationNotes = healthRecords.first(where: { $0.treatment == "Observation" })?.notes ?? ""
-        let castrationPerformed = healthRecords.contains(where: { $0.treatment == "Castration" })
+        let observationNotes = healthRecords.first(where: { $0.treatment == WorkingGeneratedHealthRecord.observation.treatmentName })?.notes ?? ""
+        let castrationPerformed = healthRecords.contains(where: { $0.treatment == WorkingGeneratedHealthRecord.castration.treatmentName })
 
         return WorkingMapper.makeQueueItemEditorSnapshot(
             session: session,
@@ -129,16 +129,16 @@ struct SwiftDataWorkingRepository: WorkingRepository {
             context.insert(check)
         }
 
-        try deleteHealthRecords(session: session, animal: animal, treatment: "Castration")
+        try deleteHealthRecords(session: session, animal: animal, treatment: WorkingGeneratedHealthRecord.castration.treatmentName)
         if markCastrated {
-            let record = HealthRecord(date: .now, treatment: "Castration", notes: nil, workingSession: session, animal: animal)
+            let record = HealthRecord(date: .now, treatment: WorkingGeneratedHealthRecord.castration.treatmentName, notes: nil, workingSession: session, animal: animal)
             context.insert(record)
         }
 
-        try deleteHealthRecords(session: session, animal: animal, treatment: "Observation")
+        try deleteHealthRecords(session: session, animal: animal, treatment: WorkingGeneratedHealthRecord.observation.treatmentName)
         let trimmedNotes = observationNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedNotes.isEmpty {
-            let record = HealthRecord(date: .now, treatment: "Observation", notes: trimmedNotes, workingSession: session, animal: animal)
+            let record = HealthRecord(date: .now, treatment: WorkingGeneratedHealthRecord.observation.treatmentName, notes: trimmedNotes, workingSession: session, animal: animal)
             context.insert(record)
         }
 
@@ -176,16 +176,16 @@ struct SwiftDataWorkingRepository: WorkingRepository {
             context.insert(check)
         }
 
-        try deleteHealthRecords(session: session, animal: animal, treatment: "Castration")
+        try deleteHealthRecords(session: session, animal: animal, treatment: WorkingGeneratedHealthRecord.castration.treatmentName)
         if input.castrationPerformed {
-            let record = HealthRecord(date: .now, treatment: "Castration", notes: nil, workingSession: session, animal: animal)
+            let record = HealthRecord(date: .now, treatment: WorkingGeneratedHealthRecord.castration.treatmentName, notes: nil, workingSession: session, animal: animal)
             context.insert(record)
         }
 
-        try deleteHealthRecords(session: session, animal: animal, treatment: "Observation")
+        try deleteHealthRecords(session: session, animal: animal, treatment: WorkingGeneratedHealthRecord.observation.treatmentName)
         let trimmedNotes = input.observationNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedNotes.isEmpty {
-            let record = HealthRecord(date: .now, treatment: "Observation", notes: trimmedNotes, workingSession: session, animal: animal)
+            let record = HealthRecord(date: .now, treatment: WorkingGeneratedHealthRecord.observation.treatmentName, notes: trimmedNotes, workingSession: session, animal: animal)
             context.insert(record)
         }
 
