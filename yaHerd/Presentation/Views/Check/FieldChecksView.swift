@@ -24,7 +24,7 @@ enum FieldChecksViewMode: Hashable {
 }
 
 struct FieldChecksView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.fieldCheckOverviewReader) private var fieldCheckOverviewReader
     @State private var model = FieldChecksViewModel()
     @State private var showingStartPastureCheck = false
 
@@ -32,10 +32,6 @@ struct FieldChecksView: View {
 
     init(mode: FieldChecksViewMode = .all) {
         self.mode = mode
-    }
-
-    private var repository: any FieldCheckRepository {
-        dependencies.fieldCheckRepository
     }
 
     private var flaggedSessions: [FieldCheckSessionSummary] {
@@ -99,7 +95,7 @@ struct FieldChecksView: View {
                     }
                 }
                 .refreshable {
-                    model.load(using: repository)
+                    model.load(using: fieldCheckOverviewReader)
                 }
             }
         }
@@ -118,7 +114,7 @@ struct FieldChecksView: View {
             }
         }
         .task {
-            model.load(using: repository)
+            model.load(using: fieldCheckOverviewReader)
         }
         .alert("Can't Load Checks", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
