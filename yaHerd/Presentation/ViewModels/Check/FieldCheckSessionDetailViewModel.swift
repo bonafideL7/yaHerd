@@ -154,7 +154,10 @@ final class FieldCheckSessionDetailViewModel {
             return
         }
 
-        let shouldNeedAttention = refreshedDetail?.findings.contains(where: { $0.animalID == animalID }) ?? false
+        let shouldNeedAttention = FieldCheckAnimalAttentionRules.shouldNeedAttention(
+            animalID: animalID,
+            findings: refreshedDetail?.findings ?? []
+        )
         if animalCheck.needsAttention != shouldNeedAttention {
             try repository.setAnimalCheckNeedsAttention(
                 sessionID: sessionID,
@@ -172,6 +175,7 @@ final class FieldCheckSessionDetailViewModel {
 @MainActor
 @Observable
 final class FieldCheckAnimalDetailViewModel {
+    @ObservationIgnored private let dateProvider: any DateProviding
     private(set) var animalDetail: AnimalDetailSnapshot?
     private(set) var sessionDetail: FieldCheckSessionDetailSnapshot?
     var preparedOffspringEditor: PreparedAnimalEditor?
@@ -188,6 +192,10 @@ final class FieldCheckAnimalDetailViewModel {
         return (sessionDetail?.findings ?? [])
             .filter { $0.animalID == animalID }
             .sorted { $0.recordedAt > $1.recordedAt }
+    }
+
+    init(dateProvider: any DateProviding = SystemDateProvider()) {
+        self.dateProvider = dateProvider
     }
 
     func load(
@@ -286,7 +294,7 @@ final class FieldCheckAnimalDetailViewModel {
             try fieldCheckRepository.addFinding(
                 sessionID: sessionID,
                 input: FieldCheckFindingInput(
-                    recordedAt: .now,
+                    recordedAt: dateProvider.now,
                     type: type,
                     severity: FieldCheckFindingRules.defaultSeverity(for: type),
                     status: .open,
@@ -357,7 +365,10 @@ final class FieldCheckAnimalDetailViewModel {
             return
         }
 
-        let shouldNeedAttention = refreshedSessionDetail?.findings.contains(where: { $0.animalID == animalID }) ?? false
+        let shouldNeedAttention = FieldCheckAnimalAttentionRules.shouldNeedAttention(
+            animalID: animalID,
+            findings: refreshedSessionDetail?.findings ?? []
+        )
         if animalCheck.needsAttention != shouldNeedAttention {
             try fieldCheckRepository.setAnimalCheckNeedsAttention(
                 sessionID: sessionID,
