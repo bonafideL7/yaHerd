@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct WorkingSessionDetailView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.workingSessionDetailRepository) private var repository
     @StateObject private var viewModel: WorkingSessionDetailViewModel
 
     @State private var showingCollect = false
@@ -119,7 +119,7 @@ struct WorkingSessionDetailView: View {
         }
         .navigationTitle("Working Session")
         .task {
-            viewModel.configure(repository: dependencies.workingRepository)
+            viewModel.configure(repository: repository)
             viewModel.load()
         }
         .alert("Can’t Save", isPresented: $showingError) {
@@ -138,7 +138,7 @@ struct WorkingSessionDetailView: View {
 
     private func deleteSession(sessionID: UUID) {
         do {
-            let useCase = DeleteWorkingSessionUseCase(repository: dependencies.workingRepository)
+            let useCase = DeleteWorkingSessionUseCase(repository: repository)
             try useCase.execute(sessionID: sessionID)
         } catch {
             errorMessage = error.localizedDescription

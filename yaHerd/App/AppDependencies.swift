@@ -1,8 +1,7 @@
 import SwiftData
-import SwiftUI
 
 @MainActor
-final class AppDependencies: ObservableObject {
+final class AppDependencies {
     let animalRepository: any AnimalRepository
     let pastureRepository: any PastureRepository
     let dashboardRepository: any DashboardRepository

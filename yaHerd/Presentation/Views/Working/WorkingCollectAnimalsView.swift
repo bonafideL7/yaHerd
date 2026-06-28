@@ -7,7 +7,8 @@ import SwiftUI
 
 struct WorkingCollectAnimalsView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.workingCollectAnimalsRepository) private var repository
+    @Environment(\.workingAnimalSummaryReader) private var animalSummaryReader
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     let sessionID: UUID
@@ -94,8 +95,8 @@ struct WorkingCollectAnimalsView: View {
 
     private func load() {
         do {
-            session = try dependencies.workingRepository.fetchSessionDetail(id: sessionID)
-            availableAnimals = try dependencies.animalRepository.fetchAnimals()
+            session = try repository.fetchSessionDetail(id: sessionID)
+            availableAnimals = try animalSummaryReader.fetchAnimals()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -106,7 +107,7 @@ struct WorkingCollectAnimalsView: View {
     private func collectSelected() {
         guard session != nil else { return }
         do {
-            let useCase = CollectWorkingAnimalsUseCase(repository: dependencies.workingRepository)
+            let useCase = CollectWorkingAnimalsUseCase(repository: repository)
             try useCase.execute(sessionID: sessionID, animalIDs: Array(selectedAnimalIDs))
             dismiss()
         } catch {

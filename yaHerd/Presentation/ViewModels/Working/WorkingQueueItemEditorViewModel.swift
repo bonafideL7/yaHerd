@@ -8,17 +8,17 @@ final class WorkingQueueItemEditorViewModel: ObservableObject {
 
     private let sessionID: UUID
     private let queueItemID: UUID
-    private var workingRepository: any WorkingRepository
+    private var workingRepository: any WorkingQueueItemEditorReader
     private var pastureRepository: any PastureReferenceDataReader
 
-    init(sessionID: UUID, queueItemID: UUID, workingRepository: any WorkingRepository, pastureRepository: any PastureReferenceDataReader) {
+    init(sessionID: UUID, queueItemID: UUID, workingRepository: any WorkingQueueItemEditorReader, pastureRepository: any PastureReferenceDataReader) {
         self.sessionID = sessionID
         self.queueItemID = queueItemID
         self.workingRepository = workingRepository
         self.pastureRepository = pastureRepository
     }
 
-    func configure(workingRepository: any WorkingRepository, pastureRepository: any PastureReferenceDataReader) {
+    func configure(workingRepository: any WorkingQueueItemEditorReader, pastureRepository: any PastureReferenceDataReader) {
         self.workingRepository = workingRepository
         self.pastureRepository = pastureRepository
     }

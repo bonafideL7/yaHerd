@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct ProtocolTemplatesView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.workingProtocolTemplatesRepository) private var repository
     @StateObject private var viewModel = WorkingProtocolTemplatesViewModel(repository: EmptyWorkingRepository())
 
     @State private var showingAdd = false
@@ -49,7 +49,7 @@ struct ProtocolTemplatesView: View {
             }
         }
         .task {
-            viewModel.configure(repository: dependencies.workingRepository)
+            viewModel.configure(repository: repository)
             viewModel.load()
         }
         .onChange(of: showingAdd) { _, isPresented in
@@ -72,7 +72,7 @@ struct ProtocolTemplatesView: View {
 
     private func delete(at offsets: IndexSet) {
         do {
-            let useCase = DeleteWorkingProtocolTemplatesUseCase(repository: dependencies.workingRepository)
+            let useCase = DeleteWorkingProtocolTemplatesUseCase(repository: repository)
             try useCase.execute(offsets.map { viewModel.templates[$0].id })
             viewModel.load()
         } catch {
@@ -84,7 +84,7 @@ struct ProtocolTemplatesView: View {
 
 private struct ProtocolTemplateAddView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.workingProtocolTemplateCreator) private var repository
 
     @State private var name: String = ""
     @State private var items: [WorkingProtocolItem] = [WorkingProtocolItem(name: "")]
@@ -145,7 +145,7 @@ private struct ProtocolTemplateAddView: View {
         guard !cleaned.isEmpty else { return }
 
         do {
-            let useCase = CreateWorkingProtocolTemplateUseCase(repository: dependencies.workingRepository)
+            let useCase = CreateWorkingProtocolTemplateUseCase(repository: repository)
             _ = try useCase.execute(name: trimmed, items: cleaned)
             dismiss()
         } catch {
@@ -156,7 +156,7 @@ private struct ProtocolTemplateAddView: View {
 }
 
 private struct ProtocolTemplateDetailView: View {
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.workingProtocolTemplateEditorRepository) private var repository
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: WorkingProtocolTemplateDetailViewModel
 
@@ -213,7 +213,7 @@ private struct ProtocolTemplateDetailView: View {
             }
         }
         .task {
-            viewModel.configure(repository: dependencies.workingRepository)
+            viewModel.configure(repository: repository)
             viewModel.load()
             seedFromSnapshot()
         }
@@ -243,7 +243,7 @@ private struct ProtocolTemplateDetailView: View {
         guard !cleaned.isEmpty else { return }
 
         do {
-            let useCase = UpdateWorkingProtocolTemplateUseCase(repository: dependencies.workingRepository)
+            let useCase = UpdateWorkingProtocolTemplateUseCase(repository: repository)
             try useCase.execute(templateID: template.id, name: trimmedName, items: cleaned)
             dismiss()
         } catch {

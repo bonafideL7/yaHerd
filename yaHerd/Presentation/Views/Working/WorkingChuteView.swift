@@ -2,7 +2,8 @@ import SwiftUI
 
 struct WorkingChuteView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var dependencies: AppDependencies
+    @Environment(\.workingChuteRepository) private var repository
+    @Environment(\.pastureReferenceDataReader) private var pastureRepository
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @StateObject private var viewModel: WorkingQueueItemEditorViewModel
 
@@ -153,7 +154,7 @@ struct WorkingChuteView: View {
             }
         }
         .task {
-            viewModel.configure(workingRepository: dependencies.workingRepository, pastureRepository: dependencies.pastureRepository)
+            viewModel.configure(workingRepository: repository, pastureRepository: pastureRepository)
             viewModel.load()
             seedState()
         }
@@ -237,7 +238,7 @@ struct WorkingChuteView: View {
         }
 
         do {
-            let useCase = CompleteWorkingQueueItemUseCase(repository: dependencies.workingRepository)
+            let useCase = CompleteWorkingQueueItemUseCase(repository: repository)
             try useCase.execute(
                 queueItemID: snapshot.id,
                 sessionID: snapshot.sessionID,

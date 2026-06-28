@@ -7,14 +7,14 @@ final class NewWorkingSessionViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private var pastureRepository: any PastureReferenceDataReader
-    private var workingRepository: any WorkingRepository
+    private var workingRepository: any NewWorkingSessionRepository
 
-    init(pastureRepository: any PastureReferenceDataReader, workingRepository: any WorkingRepository) {
+    init(pastureRepository: any PastureReferenceDataReader, workingRepository: any NewWorkingSessionRepository) {
         self.pastureRepository = pastureRepository
         self.workingRepository = workingRepository
     }
 
-    func configure(pastureRepository: any PastureReferenceDataReader, workingRepository: any WorkingRepository) {
+    func configure(pastureRepository: any PastureReferenceDataReader, workingRepository: any NewWorkingSessionRepository) {
         self.pastureRepository = pastureRepository
         self.workingRepository = workingRepository
     }
