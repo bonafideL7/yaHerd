@@ -1,6 +1,10 @@
 import Foundation
 
-protocol AnimalRepository {
+protocol AnimalPastureMoving {
+    func move(ids: [UUID], toPastureID: UUID?) throws
+}
+
+protocol AnimalRepository: AnimalPastureMoving {
     func fetchAnimals() throws -> [AnimalSummary]
     func fetchAnimalDetail(id: UUID) throws -> AnimalDetailSnapshot?
     func fetchTimeline(id: UUID) throws -> [AnimalTimelineEvent]
@@ -14,7 +18,6 @@ protocol AnimalRepository {
     func delete(ids: [UUID]) throws
     func archive(ids: [UUID]) throws
     func restore(ids: [UUID]) throws
-    func move(ids: [UUID], toPastureID: UUID?) throws
     @discardableResult
     func addTag(animalID: UUID, input: AnimalTagInput) throws -> AnimalDetailSnapshot
     @discardableResult

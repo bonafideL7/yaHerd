@@ -1,5 +1,21 @@
 import Foundation
 
+enum PastureRepositoryError: LocalizedError, Equatable {
+    case duplicatePastureIDs
+    case pastureIDsNotFound([UUID])
+
+    var errorDescription: String? {
+        switch self {
+        case .duplicatePastureIDs:
+            return "Pasture IDs must be unique."
+        case .pastureIDsNotFound(let ids):
+            let identifierList = ids.map(\.uuidString).joined(separator: ", ")
+            return "One or more pastures could not be found: \(identifierList)."
+        }
+    }
+}
+
+
 protocol PastureListReader {
     func fetchPastures() throws -> [PastureSummary]
 }
@@ -10,6 +26,10 @@ protocol PastureDetailReader {
 
 protocol PastureResidentAnimalReader {
     func fetchResidentAnimals(pastureID: UUID) throws -> [AnimalSummary]
+}
+
+protocol PastureExistenceChecking {
+    func validatePastureIDsExist(_ ids: [UUID]) throws
 }
 
 protocol PastureReferenceDataReader {
@@ -50,6 +70,7 @@ protocol PastureCreateRepository: PastureNameChecking, PastureCreating {}
 protocol PastureUpdateRepository: PastureNameChecking, PastureUpdating {}
 protocol PastureGroupCreateRepository: PastureGroupNameChecking, PastureGroupCreating {}
 protocol PastureDetailRepository: PastureDetailReader, PastureResidentAnimalReader {}
+protocol PastureDeleteRepository: PastureDeleting, PastureExistenceChecking, PastureResidentAnimalReader {}
 
 protocol PastureRepository: PastureListReader,
                             PastureDetailRepository,
@@ -57,7 +78,7 @@ protocol PastureRepository: PastureListReader,
                             PastureCreateRepository,
                             PastureUpdateRepository,
                             PastureOrdering,
-                            PastureDeleting,
+                            PastureDeleteRepository,
                             PastureGroupCreateRepository {}
 
 struct PastureGroupInput: Hashable {

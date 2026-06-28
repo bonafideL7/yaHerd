@@ -69,6 +69,7 @@ struct HerdView: View {
             case .pastures:
                 PastureTileListView(
                     repository: dependencies.pastureRepository,
+                    animalRepository: dependencies.animalRepository,
                     fieldCheckRepository: dependencies.fieldCheckRepository,
                     isManaging: $isManagingPastures,
                     filter: pastureFilter,

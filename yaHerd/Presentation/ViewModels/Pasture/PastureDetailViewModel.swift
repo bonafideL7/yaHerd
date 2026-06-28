@@ -15,7 +15,7 @@ final class PastureDetailViewModel {
         if isEditing {
             return form.shouldShowStockingFields
         }
-        
+
         return PastureStockingPolicy.shouldUseStockingFields(acreage: detail?.acreage)
     }
     

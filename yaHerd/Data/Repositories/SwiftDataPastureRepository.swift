@@ -15,10 +15,8 @@ struct SwiftDataPastureRepository: PastureRepository {
     }
 
     func fetchPastureDetail(id: UUID) throws -> PastureDetailSnapshot? {
-        if let pasture = try fetchModel(id: id) {
-            return PastureMapper.makeDetail(from: pasture)
-        }
-        return nil
+        guard let pasture = try fetchModel(id: id) else { return nil }
+        return PastureMapper.makeDetail(from: pasture)
     }
 
     func fetchResidentAnimals(pastureID: UUID) throws -> [AnimalSummary] {
@@ -38,10 +36,13 @@ struct SwiftDataPastureRepository: PastureRepository {
         }
     }
 
+    func validatePastureIDsExist(_ ids: [UUID]) throws {
+        _ = try fetchModels(ids: ids)
+    }
+
     func nameExists(_ name: String, excluding id: UUID?) throws -> Bool {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let descriptor = FetchDescriptor<Pasture>()
-        return try context.fetch(descriptor).contains { pasture in
+        return try fetchPasturesForNameLookup().contains { pasture in
             if let id, pasture.publicID == id {
                 return false
             }
@@ -50,16 +51,16 @@ struct SwiftDataPastureRepository: PastureRepository {
     }
 
     func create(input: PastureInput) throws -> PastureDetailSnapshot {
-        let normalizedName = input.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if try nameExists(normalizedName, excluding: nil) {
-            throw PastureValidationError.duplicateName(normalizedName)
+        let normalizedInput = input.normalized
+        if try nameExists(normalizedInput.name, excluding: nil) {
+            throw PastureValidationError.duplicateName(normalizedInput.name)
         }
 
         let pasture = Pasture(
-            name: normalizedName,
-            acreage: input.acreage,
-            usableAcreage: input.usableAcreage,
-            targetAcresPerHead: input.targetAcresPerHead,
+            name: normalizedInput.name,
+            acreage: normalizedInput.acreage,
+            usableAcreage: normalizedInput.usableAcreage,
+            targetAcresPerHead: normalizedInput.targetAcresPerHead,
             sortOrder: try nextSortOrder()
         )
         try ensureUniquePasturePublicID(pasture)
@@ -73,30 +74,31 @@ struct SwiftDataPastureRepository: PastureRepository {
             throw PastureValidationError.pastureNotFound
         }
 
-        let normalizedName = input.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if try nameExists(normalizedName, excluding: id) {
-            throw PastureValidationError.duplicateName(normalizedName)
+        let normalizedInput = input.normalized
+        if try nameExists(normalizedInput.name, excluding: id) {
+            throw PastureValidationError.duplicateName(normalizedInput.name)
         }
 
-        pasture.name = normalizedName
-        pasture.acreage = input.acreage
-        pasture.usableAcreage = input.usableAcreage
-        pasture.targetAcresPerHead = input.targetAcresPerHead
+        pasture.name = normalizedInput.name
+        pasture.acreage = normalizedInput.acreage
+        pasture.usableAcreage = normalizedInput.usableAcreage
+        pasture.targetAcresPerHead = normalizedInput.targetAcresPerHead
         try context.save()
 
         return PastureMapper.makeDetail(from: pasture)
     }
 
     func reorder(ids: [UUID]) throws {
-        let pastures = try context.fetch(FetchDescriptor<Pasture>())
+        guard !ids.isEmpty else { return }
+
+        let pasturesToReorder = try fetchModels(ids: ids)
         let requestedIDs = Set(ids)
 
-        for (index, id) in ids.enumerated() {
-            guard let pasture = pastures.first(where: { $0.publicID == id }) else { continue }
+        for (index, pasture) in pasturesToReorder.enumerated() {
             pasture.sortOrder = index
         }
 
-        let remainingPastures = pastures
+        let remainingPastures = try fetchAllPastures()
             .filter { !requestedIDs.contains($0.publicID) }
             .sorted(by: pastureSortComparison)
 
@@ -110,11 +112,7 @@ struct SwiftDataPastureRepository: PastureRepository {
     func delete(ids: [UUID]) throws {
         guard !ids.isEmpty else { return }
 
-        let identifierSet = Set(ids)
-        let descriptor = FetchDescriptor<Pasture>()
-        let pasturesToDelete = try context.fetch(descriptor)
-            .filter { identifierSet.contains($0.publicID) }
-
+        let pasturesToDelete = try fetchModels(ids: ids)
         for pasture in pasturesToDelete {
             context.delete(pasture)
         }
@@ -123,14 +121,25 @@ struct SwiftDataPastureRepository: PastureRepository {
     }
 
     func createGroup(input: PastureGroupInput) throws {
-        let normalizedName = input.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if try groupNameExists(normalizedName) {
-            throw PastureValidationError.duplicateName(normalizedName)
+        let normalizedInput = input.normalized
+        if try groupNameExists(normalizedInput.name) {
+            throw PastureValidationError.duplicateName(normalizedInput.name)
         }
 
-        let group = PastureGroup(name: normalizedName, grazeDays: input.grazeDays, restDays: input.restDays)
+        let group = PastureGroup(
+            name: normalizedInput.name,
+            grazeDays: normalizedInput.grazeDays,
+            restDays: normalizedInput.restDays
+        )
         context.insert(group)
         try context.save()
+    }
+
+    func groupNameExists(_ name: String) throws -> Bool {
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return try fetchPastureGroupsForNameLookup().contains { group in
+            group.name.caseInsensitiveCompare(normalizedName) == .orderedSame
+        }
     }
 
     private func fetchModel(id: UUID) throws -> Pasture? {
@@ -142,16 +151,61 @@ struct SwiftDataPastureRepository: PastureRepository {
         return try context.fetch(descriptor).first
     }
 
+    private func fetchModels(ids: [UUID]) throws -> [Pasture] {
+        guard Set(ids).count == ids.count else {
+            throw PastureRepositoryError.duplicatePastureIDs
+        }
+
+        var models: [Pasture] = []
+        var missingIDs: [UUID] = []
+
+        for id in ids {
+            if let pasture = try fetchModel(id: id) {
+                models.append(pasture)
+            } else {
+                missingIDs.append(id)
+            }
+        }
+
+        guard missingIDs.isEmpty else {
+            throw PastureRepositoryError.pastureIDsNotFound(missingIDs)
+        }
+
+        return models
+    }
+
+    private func fetchAllPastures() throws -> [Pasture] {
+        let descriptor = FetchDescriptor<Pasture>(
+            sortBy: [
+                SortDescriptor(\Pasture.sortOrder),
+                SortDescriptor(\Pasture.name)
+            ]
+        )
+        return try context.fetch(descriptor)
+    }
+
+    private func fetchPasturesForNameLookup() throws -> [Pasture] {
+        let descriptor = FetchDescriptor<Pasture>(sortBy: [SortDescriptor(\Pasture.name)])
+        return try context.fetch(descriptor)
+    }
+
+    private func fetchPastureGroupsForNameLookup() throws -> [PastureGroup] {
+        let descriptor = FetchDescriptor<PastureGroup>(sortBy: [SortDescriptor(\PastureGroup.name)])
+        return try context.fetch(descriptor)
+    }
+
     private func ensureUniquePasturePublicID(_ pasture: Pasture) throws {
-        let existingIDs = Set(try context.fetch(FetchDescriptor<Pasture>()).map(\.publicID))
-        while existingIDs.contains(pasture.publicID) {
+        while try fetchModel(id: pasture.publicID) != nil {
             pasture.publicID = UUID()
         }
     }
 
     private func nextSortOrder() throws -> Int {
-        let pastures = try context.fetch(FetchDescriptor<Pasture>())
-        return (pastures.map(\.sortOrder).max() ?? -1) + 1
+        var descriptor = FetchDescriptor<Pasture>(
+            sortBy: [SortDescriptor(\Pasture.sortOrder, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        return (try context.fetch(descriptor).first?.sortOrder ?? -1) + 1
     }
 
     private func pastureSortComparison(_ lhs: Pasture, _ rhs: Pasture) -> Bool {
@@ -159,13 +213,5 @@ struct SwiftDataPastureRepository: PastureRepository {
             return lhs.sortOrder < rhs.sortOrder
         }
         return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-    }
-
-    func groupNameExists(_ name: String) throws -> Bool {
-        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let descriptor = FetchDescriptor<PastureGroup>()
-        return try context.fetch(descriptor).contains { group in
-            group.name.caseInsensitiveCompare(normalizedName) == .orderedSame
-        }
     }
 }
