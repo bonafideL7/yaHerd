@@ -57,24 +57,4 @@ enum PastureMapper {
                 }
         )
     }
-
-    static func makeResidentAnimalSummary(from animal: Animal) -> AnimalSummary {
-        AnimalSummary(
-            id: animal.publicID,
-            name: animal.name,
-            displayTagNumber: animal.displayTagNumber,
-            displayTagColorID: animal.displayTagColorID,
-            damDisplayTagNumber: AnimalDisplayTagFormatter.displayTagNumber(for: animal.damAnimal),
-            damDisplayTagColorID: animal.damAnimal?.displayTagColorID,
-            sex: animal.sex ?? .unknown,
-            animalType: animal.animalType,
-            firstDistinguishingFeature: animal.distinguishingFeatures.firstOrderedDistinguishingFeatureDescription,
-            birthDate: animal.birthDate,
-            status: animal.status,
-            isArchived: animal.isArchived,
-            pastureID: animal.pasture?.publicID,
-            pastureName: animal.pasture?.name,
-            location: animal.location
-        )
-    }
 }
