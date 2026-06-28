@@ -36,7 +36,6 @@ struct AnimalListView: View {
     @State private var isShowingInlinePasturePicker = false
     @State private var isShowingInlineBirthDateOptions = false
     @State private var isShowingInlineBirthDatePicker = false
-    @State private var ignoresNextInlineFocusLoss = false
     @State private var detailAnimalID: UUID?
     @State private var isShowingInlineDetail = false
     private let externalSearchText: Binding<String>?
@@ -284,9 +283,10 @@ struct AnimalListView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomOverlay }
         .overlay(alignment: .bottomTrailing) {
             if !batchMode && !inlineEntry.isActive {
-                addAnimalButton
-                    .padding(.trailing, 24)
-                    .padding(.bottom, floatingAddButtonBottomPadding)
+                AnimalListFloatingAddButton(
+                    bottomPadding: floatingAddButtonBottomPadding,
+                    action: beginNewInlineEntry
+                )
             }
         }
         .sheet(isPresented: showingFiltersBinding) {
@@ -299,55 +299,21 @@ struct AnimalListView: View {
         }
         .sheet(isPresented: $showingPasturePicker) {
             PastureTilePickerView { pasture in
-                viewModel.move(ids: Array(selectedAnimalIDs), toPastureID: pasture.id, using: repository, pastureRepository: pastureReferenceDataReader)
-                selectedAnimalIDs.removeAll()
-                batchMode = false
+                moveSelectedAnimals(toPastureID: pasture.id)
             }
         }
-        .confirmationDialog("Sex", isPresented: $isShowingInlineSexPicker, titleVisibility: .visible) {
-            ForEach(Sex.allCases, id: \.self) { option in
-                Button(option.label) {
-                    inlineEntry.sex = option
-                    requestInlineEntryFocus()
-                }
-            }
-        }
-        .confirmationDialog("Pasture", isPresented: $isShowingInlinePasturePicker, titleVisibility: .visible) {
-            Button("No Pasture") {
-                inlineEntry.pastureID = nil
-                requestInlineEntryFocus()
-            }
-
-            ForEach(viewModel.pastureOptions) { pasture in
-                Button(pasture.name) {
-                    inlineEntry.pastureID = pasture.id
-                    requestInlineEntryFocus()
-                }
-            }
-        }
-        .confirmationDialog("Birthdate", isPresented: $isShowingInlineBirthDateOptions, titleVisibility: .visible) {
-            Button("Today") {
-                inlineEntry.birthDate = Calendar.current.startOfDay(for: .now)
-                requestInlineEntryFocus()
-            }
-
-            Button("Yesterday") {
-                inlineEntry.birthDate = Calendar.current.date(
-                    byAdding: .day,
-                    value: -1,
-                    to: Calendar.current.startOfDay(for: .now)
-                ) ?? .now
-                requestInlineEntryFocus()
-            }
-
-            Button("Choose Date…") {
-                inlineEntry.ignoresNextFocusLoss = true
-                isShowingInlineBirthDatePicker = true
-            }
-        }
-        .sheet(isPresented: $isShowingInlineBirthDatePicker) {
-            inlineBirthDatePickerSheet
-        }
+        .animalListInlineEntryDialogs(
+            sex: $inlineEntry.sex,
+            pastureID: $inlineEntry.pastureID,
+            birthDate: $inlineEntry.birthDate,
+            isShowingSexPicker: $isShowingInlineSexPicker,
+            isShowingPasturePicker: $isShowingInlinePasturePicker,
+            isShowingBirthDateOptions: $isShowingInlineBirthDateOptions,
+            isShowingBirthDatePicker: $isShowingInlineBirthDatePicker,
+            pastureOptions: viewModel.pastureOptions,
+            onPrepareBirthDatePicker: { inlineEntry.ignoresNextFocusLoss = true },
+            onRequestFocus: requestInlineEntryFocus
+        )
         .alert("Animal Not Saved", isPresented: errorMessageIsPresented) {
             Button("OK", role: .cancel) {
                 viewModel.errorMessage = nil
@@ -389,20 +355,6 @@ struct AnimalListView: View {
             onPrimarySwipeAction: performPrimarySwipeAction,
             onRestoreArchivedRecord: restoreArchivedRecord
         )
-    }
-
-    private var addAnimalButton: some View {
-        Button {
-            beginNewInlineEntry()
-        } label: {
-            Image(systemName: "plus")
-                .font(.title2.weight(.semibold))
-                .frame(width: 58, height: 58)
-                .background(Circle().fill(Color.accentColor))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.16), radius: 16, y: 8)
-        }
-        .accessibilityLabel("Add Animal")
     }
 
     private var floatingAddButtonBottomPadding: CGFloat {
@@ -452,33 +404,6 @@ struct AnimalListView: View {
             onShowBirthDateOptions: { presentInlineEntryPicker { isShowingInlineBirthDateOptions = true } },
             onSubmit: submitInlineEntry
         )
-    }
-
-    private var inlineBirthDatePickerSheet: some View {
-        NavigationStack {
-            Form {
-                DatePicker(
-                    "Birthdate",
-                    selection: $inlineEntry.birthDate,
-                    displayedComponents: .date
-                )
-                .datePickerStyle(.graphical)
-            }
-            .navigationTitle("Birthdate")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    ToolbarDoneButton {
-                        isShowingInlineBirthDatePicker = false
-                        requestInlineEntryFocus()
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .onDisappear {
-            requestInlineEntryFocus()
-        }
     }
 
     private var shouldShowFloatingControlBar: Bool {
@@ -534,6 +459,17 @@ struct AnimalListView: View {
         || filterValue.isActive
         || showRemovedStatusesValue
         || showArchivedRecordsValue
+    }
+
+    private func moveSelectedAnimals(toPastureID pastureID: UUID?) {
+        viewModel.move(
+            ids: Array(selectedAnimalIDs),
+            toPastureID: pastureID,
+            using: repository,
+            pastureRepository: pastureReferenceDataReader
+        )
+        selectedAnimalIDs.removeAll()
+        batchMode = false
     }
 
     private func seedSampleData() {
