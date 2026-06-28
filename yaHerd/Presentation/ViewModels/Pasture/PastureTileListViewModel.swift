@@ -5,16 +5,63 @@ import Observation
 @Observable
 final class PastureTileListViewModel {
     private(set) var items: [PastureSummary] = []
+    var selectedPasture: PastureSummary?
+    var isPresentingAddPasture = false
+    var internalFilter: PastureListFilter = .all
+    var draggedPasture: PastureSummary?
+    var pasturePendingDeletion: PastureSummary?
     var errorMessage: String?
+
+    private var dragStartOrder: [PastureSummary] = []
 
     func load(using repository: any PastureListReader) {
         do {
             items = try LoadPasturesUseCase(repository: repository).execute()
+            errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
+    func filteredItems(for filter: PastureListFilter) -> [PastureSummary] {
+        switch filter {
+        case .all:
+            return items
+        case .overCapacity:
+            return items.filter(\.isOverCapacity)
+        case .underutilized:
+            return items.filter(\.isUnderutilized)
+        case .rotationReady:
+            return items.filter(\.isRotationReady)
+        case .missingStockingData:
+            return items.filter(\.isMissingStockingData)
+        }
+    }
+
+    func clearError() {
+        errorMessage = nil
+    }
+
+    func requestAddPasture() {
+        isPresentingAddPasture = true
+    }
+
+    func select(_ pasture: PastureSummary) {
+        selectedPasture = pasture
+    }
+
+    func requestDelete(_ pasture: PastureSummary) {
+        pasturePendingDeletion = pasture
+    }
+
+    func clearPendingDeletion() {
+        pasturePendingDeletion = nil
+    }
+
+    func beginDragging(_ pasture: PastureSummary) {
+        dragStartOrder = items
+        draggedPasture = pasture
+    }
 
     func movePastures(from source: IndexSet, to destination: Int, using repository: any PastureOrdering) {
         let originalItems = items
@@ -25,6 +72,16 @@ final class PastureTileListViewModel {
 
     func movePasturesInMemory(from source: IndexSet, to destination: Int) {
         items = movedItems(from: source, to: destination)
+    }
+
+    func moveDraggedPasture(from source: Int, to destination: Int) {
+        movePasturesInMemory(from: IndexSet(integer: source), to: destination)
+    }
+
+    func commitDragOrder(using repository: any PastureOrdering) {
+        guard !dragStartOrder.isEmpty else { return }
+        commitPastureOrder(using: repository, rollbackTo: dragStartOrder)
+        dragStartOrder = []
     }
 
     func persistPastureOrder(using repository: any PastureOrdering) throws {
@@ -63,6 +120,7 @@ final class PastureTileListViewModel {
                 fieldCheckRepository: fieldCheckRepository
             ).execute(ids: ids)
             try persistPastureOrder(using: pastureRepository)
+            clearPendingDeletion()
         } catch {
             items = originalItems
             errorMessage = error.localizedDescription
