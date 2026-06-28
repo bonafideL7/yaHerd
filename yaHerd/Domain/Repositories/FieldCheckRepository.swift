@@ -24,10 +24,18 @@ protocol FieldCheckPastureCleanupWriter {
     func deleteSessions(forPastureIDs ids: [UUID]) throws
 }
 
-protocol FieldCheckRepository: FieldCheckPastureCleanupWriter {
+protocol FieldCheckSessionListReader {
     func fetchSessions() throws -> [FieldCheckSessionSummary]
-    func fetchSessionDetail(id: UUID) throws -> FieldCheckSessionDetailSnapshot?
+}
+
+protocol FieldCheckOpenFindingReading {
     func fetchOpenFindings(limit: Int) throws -> [FieldCheckFindingSnapshot]
+}
+
+protocol FieldCheckOverviewReading: FieldCheckSessionListReader, FieldCheckOpenFindingReading {}
+
+protocol FieldCheckRepository: FieldCheckPastureCleanupWriter, FieldCheckOverviewReading {
+    func fetchSessionDetail(id: UUID) throws -> FieldCheckSessionDetailSnapshot?
     @discardableResult
     func createSession(input: FieldCheckSessionStartInput) throws -> UUID
     func updateQuickAnimalTypeCounts(sessionID: UUID, counts: [AnimalType: Int]) throws

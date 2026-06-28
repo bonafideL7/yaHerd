@@ -10,7 +10,7 @@ final class DashboardViewModel {
     var isPresentingAddPasture = false
     var isPresentingNewWorkingSession = false
 
-    func load(configuration: DashboardConfiguration, using repository: any DashboardRepository) {
+    func load(configuration: DashboardConfiguration, using repository: any DashboardRecordReading) {
         do {
             snapshot = try LoadDashboardUseCase(repository: repository).execute(configuration: configuration)
             errorMessage = nil
@@ -22,7 +22,7 @@ final class DashboardViewModel {
     func markPastureGrazedToday(
         pastureID: UUID,
         configuration: DashboardConfiguration,
-        using repository: any DashboardRepository
+        using repository: any DashboardReadWriting
     ) {
         do {
             try MarkPastureGrazedTodayUseCase(repository: repository).execute(pastureID: pastureID)

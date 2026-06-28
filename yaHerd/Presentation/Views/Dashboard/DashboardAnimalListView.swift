@@ -6,9 +6,9 @@ struct DashboardAnimalListView: View {
     @State private var viewModel = DashboardAnimalListViewModel()
 
     let kind: DashboardAnimalListKind
-    private let repository: any DashboardRepository
+    private let repository: any DashboardRecordReading
 
-    init(kind: DashboardAnimalListKind, repository: any DashboardRepository) {
+    init(kind: DashboardAnimalListKind, repository: any DashboardRecordReading) {
         self.kind = kind
         self.repository = repository
     }

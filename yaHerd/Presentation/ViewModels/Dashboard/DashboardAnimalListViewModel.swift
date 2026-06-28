@@ -10,7 +10,7 @@ final class DashboardAnimalListViewModel {
     func load(
         kind: DashboardAnimalListKind,
         configuration: DashboardConfiguration,
-        using repository: any DashboardRepository
+        using repository: any DashboardRecordReading
     ) {
         do {
             items = try LoadDashboardAnimalListUseCase(repository: repository)

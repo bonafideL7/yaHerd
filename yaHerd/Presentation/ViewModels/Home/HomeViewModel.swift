@@ -7,18 +7,9 @@ final class HomeViewModel {
     private(set) var snapshot: HomeSnapshot?
     var errorMessage: String?
 
-    func load(
-        configuration: DashboardConfiguration,
-        dashboardRepository: any DashboardRepository,
-        fieldCheckRepository: any FieldCheckRepository,
-        workingRepository: any WorkingRepository
-    ) {
+    func load(configuration: DashboardConfiguration, useCase: LoadHomeUseCase) {
         do {
-            snapshot = try LoadHomeUseCase(
-                dashboardRepository: dashboardRepository,
-                fieldCheckRepository: fieldCheckRepository,
-                workingRepository: workingRepository
-            ).execute(configuration: configuration)
+            snapshot = try useCase.execute(configuration: configuration)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
