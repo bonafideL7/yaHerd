@@ -16,10 +16,9 @@ struct SwiftDataWorkingLookupStore {
 
     func fetchQueueItem(id: UUID, sessionID: UUID) throws -> WorkingQueueItem {
         let descriptor = FetchDescriptor<WorkingQueueItem>(predicate: #Predicate<WorkingQueueItem> { item in
-            item.publicID == id
+            item.publicID == id && item.session?.publicID == sessionID
         })
-        guard let item = try context.fetch(descriptor).first,
-              item.session?.publicID == sessionID else {
+        guard let item = try context.fetch(descriptor).first else {
             throw WorkingRepositoryError.queueItemNotFound
         }
         return item
@@ -37,20 +36,41 @@ struct SwiftDataWorkingLookupStore {
 
     func templateNameExists(_ name: String, excluding id: UUID?) throws -> Bool {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let descriptor = FetchDescriptor<WorkingProtocolTemplate>()
+        let descriptor: FetchDescriptor<WorkingProtocolTemplate>
+        if let id {
+            descriptor = FetchDescriptor<WorkingProtocolTemplate>(
+                predicate: #Predicate<WorkingProtocolTemplate> { template in
+                    template.publicID != id && template.name.localizedStandardContains(normalizedName)
+                }
+            )
+        } else {
+            descriptor = FetchDescriptor<WorkingProtocolTemplate>(
+                predicate: #Predicate<WorkingProtocolTemplate> { template in
+                    template.name.localizedStandardContains(normalizedName)
+                }
+            )
+        }
+
         return try context.fetch(descriptor).contains { template in
-            if let id, template.publicID == id {
-                return false
-            }
-            return template.name.caseInsensitiveCompare(normalizedName) == .orderedSame
+            template.name.caseInsensitiveCompare(normalizedName) == .orderedSame
         }
     }
 
     func fetchAnimals(ids: [UUID]) throws -> [Animal] {
-        guard !ids.isEmpty else { return [] }
-        let all = try context.fetch(FetchDescriptor<Animal>())
-        let animalsByID = Dictionary(uniqueKeysWithValues: all.map { ($0.publicID, $0) })
-        return ids.compactMap { animalsByID[$0] }
+        var animals: [Animal] = []
+        var seenIDs = Set<UUID>()
+
+        for id in ids {
+            guard seenIDs.insert(id).inserted else { continue }
+            let descriptor = FetchDescriptor<Animal>(predicate: #Predicate<Animal> { animal in
+                animal.publicID == id
+            })
+            if let animal = try context.fetch(descriptor).first {
+                animals.append(animal)
+            }
+        }
+
+        return animals
     }
 
     func fetchPasture(id: UUID?) throws -> Pasture? {
@@ -62,26 +82,35 @@ struct SwiftDataWorkingLookupStore {
     }
 
     func fetchTreatmentRecords(session: WorkingSession, animal: Animal) throws -> [WorkingTreatmentRecord] {
-        let sid = session.persistentModelID
-        let aid = animal.persistentModelID
-        return try context.fetch(FetchDescriptor<WorkingTreatmentRecord>()).filter {
-            $0.session?.persistentModelID == sid && $0.animal?.persistentModelID == aid
-        }
+        let sessionID = session.publicID
+        let animalID = animal.publicID
+        let descriptor = FetchDescriptor<WorkingTreatmentRecord>(
+            predicate: #Predicate<WorkingTreatmentRecord> { record in
+                record.session?.publicID == sessionID && record.animal?.publicID == animalID
+            }
+        )
+        return try context.fetch(descriptor)
     }
 
     func fetchPregnancyChecks(session: WorkingSession, animal: Animal) throws -> [PregnancyCheck] {
-        let sid = session.persistentModelID
-        let aid = animal.persistentModelID
-        return try context.fetch(FetchDescriptor<PregnancyCheck>()).filter {
-            $0.workingSession?.persistentModelID == sid && $0.animal?.persistentModelID == aid
-        }
+        let sessionID = session.publicID
+        let animalID = animal.publicID
+        let descriptor = FetchDescriptor<PregnancyCheck>(
+            predicate: #Predicate<PregnancyCheck> { check in
+                check.workingSession?.publicID == sessionID && check.animal?.publicID == animalID
+            }
+        )
+        return try context.fetch(descriptor)
     }
 
     func fetchHealthRecords(session: WorkingSession, animal: Animal) throws -> [HealthRecord] {
-        let sid = session.persistentModelID
-        let aid = animal.persistentModelID
-        return try context.fetch(FetchDescriptor<HealthRecord>()).filter {
-            $0.workingSession?.persistentModelID == sid && $0.animal?.persistentModelID == aid
-        }
+        let sessionID = session.publicID
+        let animalID = animal.publicID
+        let descriptor = FetchDescriptor<HealthRecord>(
+            predicate: #Predicate<HealthRecord> { record in
+                record.workingSession?.publicID == sessionID && record.animal?.publicID == animalID
+            }
+        )
+        return try context.fetch(descriptor)
     }
 }

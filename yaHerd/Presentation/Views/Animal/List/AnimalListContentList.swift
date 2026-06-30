@@ -111,7 +111,7 @@ struct AnimalListContentList: View {
                     .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
             } else {
                 editableAnimalRow(animal)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    .swipeActions(edge: .trailing, allowsFullSwipe: !(animal.isArchived || hardDeleteOnSwipe)) {
                         trailingSwipeActions(for: animal)
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {

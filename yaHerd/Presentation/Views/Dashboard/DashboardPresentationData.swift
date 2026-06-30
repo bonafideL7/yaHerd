@@ -138,7 +138,21 @@ struct DashboardPresentationData {
     private static func pastureStatusLabel(for pasture: DashboardPastureItem) -> String {
         if pasture.isRotationReady { return "Ready" }
         if pasture.isUnderutilized { return "Low" }
-        return "Normal"
+
+        switch pasture.metrics.utilizationStatus {
+        case .overCapacity:
+            return "Over Capacity"
+        case .danger:
+            return "Danger"
+        case .warning:
+            return "Warning"
+        case .missingData:
+            return "Missing Data"
+        case .underutilized:
+            return "Low"
+        case .normal:
+            return "Normal"
+        }
     }
 }
 

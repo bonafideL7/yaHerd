@@ -1,17 +1,36 @@
+import Foundation
 import SwiftData
 
 struct SwiftDataWorkingSessionCleanupWriter {
     let context: ModelContext
 
     func deleteLinkedRecords(session: WorkingSession) throws {
-        let sid = session.persistentModelID
-        for record in try context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) where record.session?.persistentModelID == sid {
+        let sessionID = session.publicID
+
+        let treatmentDescriptor = FetchDescriptor<WorkingTreatmentRecord>(
+            predicate: #Predicate<WorkingTreatmentRecord> { record in
+                record.session?.publicID == sessionID
+            }
+        )
+        for record in try context.fetch(treatmentDescriptor) {
             context.delete(record)
         }
-        for check in try context.fetch(FetchDescriptor<PregnancyCheck>()) where check.workingSession?.persistentModelID == sid {
+
+        let pregnancyDescriptor = FetchDescriptor<PregnancyCheck>(
+            predicate: #Predicate<PregnancyCheck> { check in
+                check.workingSession?.publicID == sessionID
+            }
+        )
+        for check in try context.fetch(pregnancyDescriptor) {
             context.delete(check)
         }
-        for record in try context.fetch(FetchDescriptor<HealthRecord>()) where record.workingSession?.persistentModelID == sid {
+
+        let healthDescriptor = FetchDescriptor<HealthRecord>(
+            predicate: #Predicate<HealthRecord> { record in
+                record.workingSession?.publicID == sessionID
+            }
+        )
+        for record in try context.fetch(healthDescriptor) {
             context.delete(record)
         }
     }

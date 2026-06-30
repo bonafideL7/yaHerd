@@ -38,6 +38,7 @@ struct AnimalListView: View {
     @State private var isShowingInlineBirthDatePicker = false
     @State private var detailAnimalID: UUID?
     @State private var isShowingInlineDetail = false
+    @State private var pendingHardDeleteAnimal: AnimalSummary?
     private let externalSearchText: Binding<String>?
     private let externalIsSearching: Binding<Bool>?
     private let externalSortOrder: Binding<AnimalSortOrder>?
@@ -255,6 +256,16 @@ struct AnimalListView: View {
         }
     }
 
+    private var hardDeleteConfirmationIsPresented: Binding<Bool> {
+        Binding {
+            pendingHardDeleteAnimal != nil
+        } set: { isPresented in
+            if !isPresented {
+                pendingHardDeleteAnimal = nil
+            }
+        }
+    }
+
     var body: some View {
         Group {
             if filteredAndSortedAnimals.isEmpty && !inlineEntry.isActive {
@@ -320,6 +331,20 @@ struct AnimalListView: View {
             }
         } message: {
             Text(viewModel.errorMessage ?? "")
+        }
+        .alert(
+            "Permanently Delete Animal?",
+            isPresented: hardDeleteConfirmationIsPresented,
+            presenting: pendingHardDeleteAnimal
+        ) { animal in
+            Button("Delete Permanently", role: .destructive) {
+                confirmHardDelete(animal)
+            }
+            Button("Cancel", role: .cancel) {
+                pendingHardDeleteAnimal = nil
+            }
+        } message: { animal in
+            Text("This permanently deletes \(deleteConfirmationLabel(for: animal)) and cannot be undone.")
         }
         .onAppear(perform: reload)
         .scrollDismissesKeyboard(.interactively)
@@ -597,12 +622,39 @@ struct AnimalListView: View {
     }
 
     private func performPrimarySwipeAction(for animal: AnimalSummary) {
+        let shouldHardDelete = animal.isArchived || hardDeleteOnSwipe
+
+        guard shouldHardDelete else {
+            executePrimarySwipeAction(for: animal, hardDelete: false)
+            return
+        }
+
+        pendingHardDeleteAnimal = animal
+    }
+
+    private func confirmHardDelete(_ animal: AnimalSummary) {
+        pendingHardDeleteAnimal = nil
+        executePrimarySwipeAction(for: animal, hardDelete: true)
+    }
+
+    private func executePrimarySwipeAction(for animal: AnimalSummary, hardDelete: Bool) {
         viewModel.performPrimarySwipeAction(
             animalID: animal.id,
-            hardDelete: animal.isArchived || hardDeleteOnSwipe,
+            hardDelete: hardDelete,
             using: repository,
             pastureRepository: pastureReferenceDataReader
         )
+    }
+
+    private func deleteConfirmationLabel(for animal: AnimalSummary) -> String {
+        let tag = tagColorLibrary.formattedTag(for: animal)
+        let name = animal.name.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !name.isEmpty, name != tag else {
+            return tag
+        }
+
+        return "\(tag) / \(name)"
     }
 
     private func restoreArchivedRecord(_ animal: AnimalSummary) {

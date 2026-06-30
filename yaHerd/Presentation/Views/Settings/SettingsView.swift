@@ -112,7 +112,7 @@ private struct HerdSetupView: View {
                 Toggle("Use hard delete for swipe actions", isOn: $hardDeleteOnSwipe)
                     .tint(.red)
                 
-                Text("When off, swiping an animal archives the record. When on, swiping permanently deletes it.")
+                Text("When off, swiping an animal archives the record. When on, swiping asks for confirmation before permanently deleting it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

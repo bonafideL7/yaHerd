@@ -32,13 +32,22 @@ struct SwiftDataAnimalRepository: AnimalRepository {
     }
 
     func fetchParentOptions(excluding excludedAnimalID: UUID?) throws -> [AnimalParentOption] {
-        let descriptor = FetchDescriptor<Animal>()
+        let descriptor: FetchDescriptor<Animal>
+        if let excludedAnimalID {
+            descriptor = FetchDescriptor<Animal>(
+                predicate: #Predicate<Animal> { animal in
+                    !animal.isSoftDeleted && animal.publicID != excludedAnimalID
+                }
+            )
+        } else {
+            descriptor = FetchDescriptor<Animal>(
+                predicate: #Predicate<Animal> { animal in
+                    !animal.isSoftDeleted
+                }
+            )
+        }
+
         return try context.fetch(descriptor)
-            .filter { animal in
-                guard !animal.isSoftDeleted else { return false }
-                guard let excludedAnimalID else { return true }
-                return animal.publicID != excludedAnimalID
-            }
             .map(AnimalMapper.makeParentOption)
             .sorted { lhs, rhs in
                 lhs.displayName.localizedStandardCompare(rhs.displayName) == .orderedAscending
@@ -158,10 +167,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
     }
 
     func delete(ids: [UUID]) throws {
-        guard !ids.isEmpty else { return }
-        let idSet = Set(ids)
-        let descriptor = FetchDescriptor<Animal>()
-        for animal in try context.fetch(descriptor) where idSet.contains(animal.publicID) {
+        for animal in try fetchAnimals(ids: ids) {
             context.delete(animal)
         }
         try context.save()
@@ -177,10 +183,8 @@ struct SwiftDataAnimalRepository: AnimalRepository {
 
     func move(ids: [UUID], toPastureID: UUID?) throws {
         guard !ids.isEmpty else { return }
-        let idSet = Set(ids)
         let pasture = try fetchPasture(id: toPastureID)
-        let descriptor = FetchDescriptor<Animal>()
-        let animals = try context.fetch(descriptor).filter { idSet.contains($0.publicID) }
+        let animals = try fetchAnimals(ids: ids)
         try AnimalMovementStore.move(animals, to: pasture, in: context)
     }
 
@@ -262,8 +266,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
     }
 
     private func ensureUniqueAnimalPublicID(_ animal: Animal) throws {
-        let existingIDs = Set(try context.fetch(FetchDescriptor<Animal>()).map(\.publicID))
-        while existingIDs.contains(animal.publicID) {
+        while try animalPublicIDExists(animal.publicID, excluding: animal) {
             animal.publicID = UUID()
         }
     }
@@ -275,18 +278,13 @@ struct SwiftDataAnimalRepository: AnimalRepository {
     }
 
     private func ensureUniqueAnimalTagPublicID(_ tag: AnimalTag) throws {
-        let existingTags = try context.fetch(FetchDescriptor<AnimalTag>())
-        let existingIDs = Set(existingTags.filter { $0 !== tag }.map(\.publicID))
-        while existingIDs.contains(tag.publicID) {
+        while try animalTagPublicIDExists(tag.publicID, excluding: tag) {
             tag.publicID = UUID()
         }
     }
 
     private func updateArchiveState(ids: [UUID], isArchived: Bool) throws {
-        guard !ids.isEmpty else { return }
-        let idSet = Set(ids)
-        let descriptor = FetchDescriptor<Animal>()
-        for animal in try context.fetch(descriptor) where idSet.contains(animal.publicID) {
+        for animal in try fetchAnimals(ids: ids) {
             if isArchived {
                 animal.archive()
             } else {
@@ -304,6 +302,38 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             }
         )
         return try context.fetch(descriptor).first
+    }
+
+    private func fetchAnimals(ids: [UUID]) throws -> [Animal] {
+        var animals: [Animal] = []
+        var seenIDs = Set<UUID>()
+
+        for id in ids {
+            guard seenIDs.insert(id).inserted else { continue }
+            if let animal = try fetchAnimal(id: id) {
+                animals.append(animal)
+            }
+        }
+
+        return animals
+    }
+
+    private func animalPublicIDExists(_ id: UUID, excluding animal: Animal) throws -> Bool {
+        let descriptor = FetchDescriptor<Animal>(
+            predicate: #Predicate<Animal> { existing in
+                existing.publicID == id
+            }
+        )
+        return try context.fetch(descriptor).contains { $0 !== animal }
+    }
+
+    private func animalTagPublicIDExists(_ id: UUID, excluding tag: AnimalTag) throws -> Bool {
+        let descriptor = FetchDescriptor<AnimalTag>(
+            predicate: #Predicate<AnimalTag> { existing in
+                existing.publicID == id
+            }
+        )
+        return try context.fetch(descriptor).contains { $0 !== tag }
     }
 
     private func fetchPasture(id: UUID?) throws -> Pasture? {
@@ -376,17 +406,26 @@ private extension SwiftDataAnimalRepository {
     }
 
     func inferSingleSire(inPastureID pastureID: UUID, excludingAnimalID: UUID?) throws -> Animal? {
-        let descriptor = FetchDescriptor<Animal>()
-        let matches = try context.fetch(descriptor)
-            .filter { animal in
-                guard !animal.isSoftDeleted else { return false }
-                guard animal.status == .active else { return false }
-                guard animal.sex == .male else { return false }
-                guard animal.animalType == .bull else { return false }
-                guard animal.pasture?.publicID == pastureID else { return false }
-                guard animal.publicID != excludingAnimalID else { return false }
-                return true
+        let oldestBullBirthDate = Calendar.current.date(
+            byAdding: .month,
+            value: -AnimalTypeClassifier.calfAgeThresholdInMonths,
+            to: .now
+        ) ?? .now
+
+        let descriptor = FetchDescriptor<Animal>(
+            predicate: #Predicate<Animal> { animal in
+                animal.pasture?.publicID == pastureID
             }
+        )
+
+        let matches = try context.fetch(descriptor).filter { animal in
+            !animal.isSoftDeleted
+                && animal.status == .active
+                && animal.sex == .male
+                && animal.birthDate <= oldestBullBirthDate
+                && animal.publicID != excludingAnimalID
+                && animal.animalType == .bull
+        }
 
         return matches.count == 1 ? matches[0] : nil
     }

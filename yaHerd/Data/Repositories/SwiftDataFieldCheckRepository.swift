@@ -182,24 +182,48 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     }
 
     private func ensureUniqueSessionPublicID(_ session: FieldCheckSession) throws {
-        let existingIDs = Set(try context.fetch(FetchDescriptor<FieldCheckSession>()).map(\.publicID))
-        while existingIDs.contains(session.publicID) {
+        while try fieldCheckSessionPublicIDExists(session.publicID, excluding: session) {
             session.publicID = UUID()
         }
     }
 
     private func ensureUniqueAnimalCheckPublicID(_ check: FieldCheckAnimalCheck) throws {
-        let existingIDs = Set(try context.fetch(FetchDescriptor<FieldCheckAnimalCheck>()).map(\.publicID))
-        while existingIDs.contains(check.publicID) {
+        while try fieldCheckAnimalCheckPublicIDExists(check.publicID, excluding: check) {
             check.publicID = UUID()
         }
     }
 
     private func ensureUniqueFindingPublicID(_ finding: FieldCheckFinding) throws {
-        let existingIDs = Set(try context.fetch(FetchDescriptor<FieldCheckFinding>()).map(\.publicID))
-        while existingIDs.contains(finding.publicID) {
+        while try fieldCheckFindingPublicIDExists(finding.publicID, excluding: finding) {
             finding.publicID = UUID()
         }
+    }
+
+    private func fieldCheckSessionPublicIDExists(_ id: UUID, excluding session: FieldCheckSession) throws -> Bool {
+        let descriptor = FetchDescriptor<FieldCheckSession>(
+            predicate: #Predicate<FieldCheckSession> { existing in
+                existing.publicID == id
+            }
+        )
+        return try context.fetch(descriptor).contains { $0 !== session }
+    }
+
+    private func fieldCheckAnimalCheckPublicIDExists(_ id: UUID, excluding check: FieldCheckAnimalCheck) throws -> Bool {
+        let descriptor = FetchDescriptor<FieldCheckAnimalCheck>(
+            predicate: #Predicate<FieldCheckAnimalCheck> { existing in
+                existing.publicID == id
+            }
+        )
+        return try context.fetch(descriptor).contains { $0 !== check }
+    }
+
+    private func fieldCheckFindingPublicIDExists(_ id: UUID, excluding finding: FieldCheckFinding) throws -> Bool {
+        let descriptor = FetchDescriptor<FieldCheckFinding>(
+            predicate: #Predicate<FieldCheckFinding> { existing in
+                existing.publicID == id
+            }
+        )
+        return try context.fetch(descriptor).contains { $0 !== finding }
     }
 
     private func fetchSession(id: UUID) throws -> FieldCheckSession? {
@@ -214,11 +238,10 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     private func fetchAnimalCheck(id: UUID, sessionID: UUID) throws -> FieldCheckAnimalCheck {
         let descriptor = FetchDescriptor<FieldCheckAnimalCheck>(
             predicate: #Predicate<FieldCheckAnimalCheck> { check in
-                check.publicID == id
+                check.publicID == id && check.session?.publicID == sessionID
             }
         )
-        guard let check = try context.fetch(descriptor).first,
-              check.session?.publicID == sessionID else {
+        guard let check = try context.fetch(descriptor).first else {
             throw FieldCheckRepositoryError.animalCheckNotFound
         }
         return check
@@ -227,11 +250,10 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     private func fetchFinding(id: UUID, sessionID: UUID) throws -> FieldCheckFinding {
         let descriptor = FetchDescriptor<FieldCheckFinding>(
             predicate: #Predicate<FieldCheckFinding> { finding in
-                finding.publicID == id
+                finding.publicID == id && finding.session?.publicID == sessionID
             }
         )
-        guard let finding = try context.fetch(descriptor).first,
-              finding.session?.publicID == sessionID else {
+        guard let finding = try context.fetch(descriptor).first else {
             throw FieldCheckRepositoryError.findingNotFound
         }
         return finding

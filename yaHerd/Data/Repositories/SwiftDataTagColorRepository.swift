@@ -79,7 +79,8 @@ final class SwiftDataTagColorRepository: TagColorRepository {
         guard !ids.isEmpty else { return }
         let idsToDelete = Set(ids)
 
-        for color in try fetchPersistedColors() where idsToDelete.contains(color.id) {
+        for colorID in idsToDelete {
+            guard let color = try persistedColor(id: colorID) else { continue }
             context.delete(color)
         }
 
@@ -227,8 +228,14 @@ final class SwiftDataTagColorRepository: TagColorRepository {
         guard let defaultColorID = try currentDefaultColorID() else { return }
         var didChange = false
 
-        let animals = try context.fetch(FetchDescriptor<Animal>())
-        for animal in animals where animal.tagColorID == nil {
+        let animalsMissingColor = try context.fetch(
+            FetchDescriptor<Animal>(
+                predicate: #Predicate<Animal> { animal in
+                    animal.tagColorID == nil
+                }
+            )
+        )
+        for animal in animalsMissingColor {
             let tagNumber = animal.tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
             if !tagNumber.isEmpty {
                 animal.tagColorID = defaultColorID
@@ -236,16 +243,28 @@ final class SwiftDataTagColorRepository: TagColorRepository {
             }
         }
 
-        let tags = try context.fetch(FetchDescriptor<AnimalTag>())
-        for tag in tags where tag.colorID == nil {
+        let tagsMissingColor = try context.fetch(
+            FetchDescriptor<AnimalTag>(
+                predicate: #Predicate<AnimalTag> { tag in
+                    tag.colorID == nil
+                }
+            )
+        )
+        for tag in tagsMissingColor {
             if !tag.normalizedNumber.isEmpty {
                 tag.colorID = defaultColorID
                 didChange = true
             }
         }
 
-        let fieldCheckAnimalChecks = try context.fetch(FetchDescriptor<FieldCheckAnimalCheck>())
-        for check in fieldCheckAnimalChecks where check.rosterTagColorID == nil {
+        let fieldCheckAnimalChecksMissingColor = try context.fetch(
+            FetchDescriptor<FieldCheckAnimalCheck>(
+                predicate: #Predicate<FieldCheckAnimalCheck> { check in
+                    check.rosterTagColorID == nil
+                }
+            )
+        )
+        for check in fieldCheckAnimalChecksMissingColor {
             let tagNumber = check.rosterTagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
             if !tagNumber.isEmpty {
                 check.rosterTagColorID = defaultColorID
@@ -261,7 +280,8 @@ final class SwiftDataTagColorRepository: TagColorRepository {
     private func removeRetiredDefaultColors() throws {
         var didChange = false
 
-        for color in try fetchPersistedColors() where TagColorDefaults.retiredDefaultColorIDs.contains(color.id) {
+        for colorID in TagColorDefaults.retiredDefaultColorIDs {
+            guard let color = try persistedColor(id: colorID) else { continue }
             context.delete(color)
             didChange = true
         }
@@ -287,23 +307,31 @@ final class SwiftDataTagColorRepository: TagColorRepository {
     private func remapTagColorIDs(_ remaps: [UUID: UUID]) throws {
         guard !remaps.isEmpty else { return }
 
-        let animals = try context.fetch(FetchDescriptor<Animal>())
-        for animal in animals {
-            if let colorID = animal.tagColorID, let replacementID = remaps[colorID] {
+        for (oldColorID, replacementID) in remaps {
+            let animalDescriptor = FetchDescriptor<Animal>(
+                predicate: #Predicate<Animal> { animal in
+                    animal.tagColorID == oldColorID
+                }
+            )
+            for animal in try context.fetch(animalDescriptor) {
                 animal.tagColorID = replacementID
             }
-        }
 
-        let tags = try context.fetch(FetchDescriptor<AnimalTag>())
-        for tag in tags {
-            if let colorID = tag.colorID, let replacementID = remaps[colorID] {
+            let tagDescriptor = FetchDescriptor<AnimalTag>(
+                predicate: #Predicate<AnimalTag> { tag in
+                    tag.colorID == oldColorID
+                }
+            )
+            for tag in try context.fetch(tagDescriptor) {
                 tag.colorID = replacementID
             }
-        }
 
-        let fieldCheckAnimalChecks = try context.fetch(FetchDescriptor<FieldCheckAnimalCheck>())
-        for check in fieldCheckAnimalChecks {
-            if let colorID = check.rosterTagColorID, let replacementID = remaps[colorID] {
+            let fieldCheckAnimalCheckDescriptor = FetchDescriptor<FieldCheckAnimalCheck>(
+                predicate: #Predicate<FieldCheckAnimalCheck> { check in
+                    check.rosterTagColorID == oldColorID
+                }
+            )
+            for check in try context.fetch(fieldCheckAnimalCheckDescriptor) {
                 check.rosterTagColorID = replacementID
             }
         }
@@ -327,8 +355,18 @@ final class SwiftDataTagColorRepository: TagColorRepository {
     }
 
     private func persistedColor(name: String) throws -> TagColorDefinition? {
-        let key = TagColorLibraryRules.normalizedNameKey(name)
-        return try fetchPersistedColors().first { TagColorLibraryRules.normalizedNameKey($0.name) == key }
+        let cleanedName = TagColorLibraryRules.normalizedDisplayName(name)
+        let key = TagColorLibraryRules.normalizedNameKey(cleanedName)
+        let descriptor = FetchDescriptor<TagColorDefinition>(
+            predicate: #Predicate<TagColorDefinition> { color in
+                color.name.localizedStandardContains(cleanedName)
+            },
+            sortBy: [
+                SortDescriptor(\TagColorDefinition.sortOrder),
+                SortDescriptor(\TagColorDefinition.name)
+            ]
+        )
+        return try context.fetch(descriptor).first { TagColorLibraryRules.normalizedNameKey($0.name) == key }
     }
 
     private func saveAndNormalize() throws {

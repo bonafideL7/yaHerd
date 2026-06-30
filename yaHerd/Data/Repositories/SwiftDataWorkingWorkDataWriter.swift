@@ -93,26 +93,52 @@ struct SwiftDataWorkingWorkDataWriter {
     }
 
     private func deleteTreatmentRecords(session: WorkingSession, animal: Animal) throws {
-        let sid = session.persistentModelID
-        let aid = animal.persistentModelID
-        for record in try context.fetch(FetchDescriptor<WorkingTreatmentRecord>()) where record.session?.persistentModelID == sid && record.animal?.persistentModelID == aid {
+        let sessionID = session.publicID
+        let animalID = animal.publicID
+        let descriptor = FetchDescriptor<WorkingTreatmentRecord>(
+            predicate: #Predicate<WorkingTreatmentRecord> { record in
+                record.session?.publicID == sessionID && record.animal?.publicID == animalID
+            }
+        )
+        for record in try context.fetch(descriptor) {
             context.delete(record)
         }
     }
 
     private func deletePregnancyChecks(session: WorkingSession, animal: Animal) throws {
-        let sid = session.persistentModelID
-        let aid = animal.persistentModelID
-        for check in try context.fetch(FetchDescriptor<PregnancyCheck>()) where check.workingSession?.persistentModelID == sid && check.animal?.persistentModelID == aid {
+        let sessionID = session.publicID
+        let animalID = animal.publicID
+        let descriptor = FetchDescriptor<PregnancyCheck>(
+            predicate: #Predicate<PregnancyCheck> { check in
+                check.workingSession?.publicID == sessionID && check.animal?.publicID == animalID
+            }
+        )
+        for check in try context.fetch(descriptor) {
             context.delete(check)
         }
     }
 
     private func deleteHealthRecords(session: WorkingSession, animal: Animal, treatment: String? = nil) throws {
-        let sid = session.persistentModelID
-        let aid = animal.persistentModelID
-        for record in try context.fetch(FetchDescriptor<HealthRecord>()) where record.workingSession?.persistentModelID == sid && record.animal?.persistentModelID == aid {
-            if let treatment, record.treatment != treatment { continue }
+        let sessionID = session.publicID
+        let animalID = animal.publicID
+        let descriptor: FetchDescriptor<HealthRecord>
+        if let treatment {
+            descriptor = FetchDescriptor<HealthRecord>(
+                predicate: #Predicate<HealthRecord> { record in
+                    record.workingSession?.publicID == sessionID
+                        && record.animal?.publicID == animalID
+                        && record.treatment == treatment
+                }
+            )
+        } else {
+            descriptor = FetchDescriptor<HealthRecord>(
+                predicate: #Predicate<HealthRecord> { record in
+                    record.workingSession?.publicID == sessionID && record.animal?.publicID == animalID
+                }
+            )
+        }
+
+        for record in try context.fetch(descriptor) {
             context.delete(record)
         }
     }
