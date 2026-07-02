@@ -139,7 +139,7 @@ struct FieldCheckSessionDetailView: View {
             }
         }
         .onDisappear {
-            if let currentSessionID {
+            if let currentSessionID, model.detail?.isCompleted == false {
                 model.persistNotes(sessionID: currentSessionID, using: repository)
             }
         }
@@ -149,7 +149,7 @@ struct FieldCheckSessionDetailView: View {
                     suggestedTypes: suggestedFindingTypes,
                     animals: model.detail?.animalChecks ?? []
                 ) { input in
-                    guard let currentSessionID else { return }
+                    guard let currentSessionID, model.detail?.isCompleted == false else { return }
                     model.addFinding(sessionID: currentSessionID, input: input, using: repository)
                 }
             }
@@ -172,6 +172,10 @@ struct FieldCheckSessionDetailView: View {
     private func detailContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         List {
             completionSection(detail)
+
+            if detail.isCompleted {
+                lockedCheckSection
+            }
             
             sessionPaneSection()
             
@@ -183,9 +187,9 @@ struct FieldCheckSessionDetailView: View {
             case .quickCount:
                 quickCountSection(detail)
             case .findings:
-                findingsSection
+                findingsSection(detail)
             case .notes:
-                notesSection
+                notesSection(detail)
             }
         }
         .searchable(
@@ -337,6 +341,7 @@ struct FieldCheckSessionDetailView: View {
                     FieldCheckAnimalCheckRow(
                         sessionID: detail.id,
                         check: check,
+                        isEditable: !detail.isCompleted,
                         onToggleCounted: {
                             guard let currentSessionID else { return }
                             model.setAnimalCheckCounted(
@@ -361,17 +366,24 @@ struct FieldCheckSessionDetailView: View {
         } header: {
             Text("Roster")
         } footer: {
-            Text("Mark animals counted as they are verified, or swipe a roster row to mark an animal missing.")
+            Text(detail.isCompleted ? "Completed checks are locked. Reopen this check to edit roster statuses." : "Mark animals counted as they are verified, or swipe a roster row to mark an animal missing.")
         }
     }
     
     @ViewBuilder
     private func quickCountSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section {
-            FieldCheckAnimalQuickCountCounter(
-                remainingRosterChecks: remainingRosterChecks(for: detail),
-                animalTypeCounts: quickAnimalTypeCountsBinding(detail)
-            )
+            if detail.isCompleted {
+                LabeledContent("Quick Count") {
+                    Text("\(detail.quickAnimalTypeCounts.values.reduce(0, +))")
+                        .fontWeight(.semibold)
+                }
+            } else {
+                FieldCheckAnimalQuickCountCounter(
+                    remainingRosterChecks: remainingRosterChecks(for: detail),
+                    animalTypeCounts: quickAnimalTypeCountsBinding(detail)
+                )
+            }
 
             LabeledContent("Breakdown") {
                 Text(quickTypeSummary(for: detail))
@@ -381,21 +393,22 @@ struct FieldCheckSessionDetailView: View {
         } header: {
             Text("Quick Count")
         } footer: {
-            Text("Quick counts are capped to the remaining available roster by animal type.")
+            Text(detail.isCompleted ? "Completed checks are locked. Reopen this check to edit quick counts." : "Quick counts are capped to the remaining available roster by animal type.")
         }
     }
     
     @ViewBuilder
-    private var findingsSection: some View {
-        Section("Findings") {
-            
-            Button {
-                showingAddFinding = true
-            } label: {
-                HStack {
-                    Text("Add Finding")
-                    Spacer()
-                    Image(systemName: "plus.circle.fill")
+    private func findingsSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+        Section {
+            if !detail.isCompleted {
+                Button {
+                    showingAddFinding = true
+                } label: {
+                    HStack {
+                        Text("Add Finding")
+                        Spacer()
+                        Image(systemName: "plus.circle.fill")
+                    }
                 }
             }
             
@@ -404,37 +417,82 @@ struct FieldCheckSessionDetailView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(sortedFindings) { finding in
-                    FieldCheckFindingRow(
-                        finding: finding,
-                        onStatusChange: { status in
-                            guard let currentSessionID else { return }
-                            model.updateFindingStatus(
-                                sessionID: currentSessionID,
-                                findingID: finding.id,
-                                status: status,
-                                using: repository
-                            )
-                        }
-                    )
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button("Delete", role: .destructive) {
-                            guard let currentSessionID else { return }
-                            model.deleteFinding(sessionID: currentSessionID, findingID: finding.id, using: repository)
-                        }
-                    }
+                    findingRow(finding, isEditable: !detail.isCompleted)
                 }
+            }
+        } header: {
+            Text("Findings")
+        } footer: {
+            if detail.isCompleted {
+                Text("Completed checks are locked. Reopen this check to add, update, or delete findings.")
             }
         }
     }
     
     @ViewBuilder
-    private var notesSection: some View {
-        Section("Notes") {
-            TextField("Session notes", text: $model.notesDraft, axis: .vertical)
-                .lineLimit(3...6)
+    private func notesSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+        Section {
+            if detail.isCompleted {
+                let trimmedNotes = detail.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmedNotes.isEmpty {
+                    Text("No notes recorded.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(trimmedNotes)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                TextField("Session notes", text: $model.notesDraft, axis: .vertical)
+                    .lineLimit(3...6)
+            }
+        } header: {
+            Text("Notes")
+        } footer: {
+            if detail.isCompleted {
+                Text("Completed checks are locked. Reopen this check to edit notes.")
+            }
         }
     }
     
+    private var lockedCheckSection: some View {
+        Section {
+            Label {
+                Text("This check is read-only until reopened.")
+            } icon: {
+                Image(systemName: "lock.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func findingRow(_ finding: FieldCheckFindingSnapshot, isEditable: Bool) -> some View {
+        if isEditable {
+            FieldCheckFindingRow(
+                finding: finding,
+                onStatusChange: { status in
+                    guard let currentSessionID else { return }
+                    model.updateFindingStatus(
+                        sessionID: currentSessionID,
+                        findingID: finding.id,
+                        status: status,
+                        using: repository
+                    )
+                }
+            )
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button("Delete", role: .destructive) {
+                    guard let currentSessionID else { return }
+                    model.deleteFinding(sessionID: currentSessionID, findingID: finding.id, using: repository)
+                }
+            }
+        } else {
+            FieldCheckFindingRow(finding: finding)
+        }
+    }
+
     @ViewBuilder
     private func completionSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         if detail.isCompleted {

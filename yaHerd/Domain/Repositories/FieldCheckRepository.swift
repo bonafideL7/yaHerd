@@ -5,6 +5,7 @@ enum FieldCheckRepositoryError: LocalizedError {
     case animalCheckNotFound
     case findingNotFound
     case pastureNotFound
+    case sessionCompleted
 
     var errorDescription: String? {
         switch self {
@@ -16,6 +17,8 @@ enum FieldCheckRepositoryError: LocalizedError {
             return "The finding could not be found."
         case .pastureNotFound:
             return "The pasture could not be found."
+        case .sessionCompleted:
+            return "This check is completed. Reopen it before making changes."
         }
     }
 }

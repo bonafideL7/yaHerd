@@ -71,6 +71,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         guard let session = try fetchSession(id: sessionID) else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
+        try ensureSessionIsEditable(session)
 
         applyQuickAnimalTypeCounts(
             normalizedQuickAnimalTypeCounts(counts, for: session),
@@ -83,12 +84,16 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         guard let session = try fetchSession(id: sessionID) else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
+        try ensureSessionIsEditable(session)
+
         session.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         try context.save()
     }
 
     func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool) throws {
         let check = try fetchAnimalCheck(id: animalCheckID, sessionID: sessionID)
+        try ensureSessionIsEditable(check.session)
+
         if isCounted {
             check.countedAt = .now
             check.missingConfirmedAt = nil
@@ -101,12 +106,16 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
 
     func setAnimalCheckNeedsAttention(sessionID: UUID, animalCheckID: UUID, needsAttention: Bool) throws {
         let check = try fetchAnimalCheck(id: animalCheckID, sessionID: sessionID)
+        try ensureSessionIsEditable(check.session)
+
         check.needsAttention = needsAttention
         try context.save()
     }
 
     func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool) throws {
         let check = try fetchAnimalCheck(id: animalCheckID, sessionID: sessionID)
+        try ensureSessionIsEditable(check.session)
+
         if isMissing {
             check.missingConfirmedAt = .now
             check.countedAt = nil
@@ -121,6 +130,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         guard let session = try fetchSession(id: sessionID) else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
+        try ensureSessionIsEditable(session)
 
         let animal = try fetchAnimal(id: input.animalID)
         let finding = FieldCheckFinding(
@@ -140,12 +150,16 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
 
     func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus) throws {
         let finding = try fetchFinding(id: findingID, sessionID: sessionID)
+        try ensureSessionIsEditable(finding.session)
+
         finding.status = status
         try context.save()
     }
 
     func deleteFinding(sessionID: UUID, findingID: UUID) throws {
         let finding = try fetchFinding(id: findingID, sessionID: sessionID)
+        try ensureSessionIsEditable(finding.session)
+
         context.delete(finding)
         try context.save()
     }
@@ -154,6 +168,8 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         guard let session = try fetchSession(id: id) else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
+        guard FieldCheckSessionLockRules.isEditable(completedAt: session.completedAt) else { return }
+
         normalizeQuickAnimalTypeCounts(for: session)
         session.completedAt = .now
         try context.save()
@@ -183,6 +199,16 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         }
 
         try context.save()
+    }
+
+
+    private func ensureSessionIsEditable(_ session: FieldCheckSession?) throws {
+        guard let session else {
+            throw FieldCheckRepositoryError.sessionNotFound
+        }
+        guard FieldCheckSessionLockRules.isEditable(completedAt: session.completedAt) else {
+            throw FieldCheckRepositoryError.sessionCompleted
+        }
     }
 
     private func applyFindingSideEffects(

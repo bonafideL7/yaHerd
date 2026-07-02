@@ -6,10 +6,40 @@ struct FieldCheckAnimalCheckRow: View {
     
     let sessionID: UUID
     let check: FieldCheckAnimalCheckSnapshot
+    let isEditable: Bool
     let onToggleCounted: () -> Void
     let onToggleMissing: () -> Void
     
     var body: some View {
+        if isEditable {
+            rowContent
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    Button {
+                        onToggleMissing()
+                    } label: {
+                        Label(missingActionTitle, systemImage: missingActionSystemImage)
+                    }
+                    .tint(check.isMissing ? .accentColor : .orange)
+                }
+                .contextMenu {
+                    Button {
+                        onToggleCounted()
+                    } label: {
+                        Label(countToggleActionTitle, systemImage: primaryActionSystemImage)
+                    }
+
+                    Button {
+                        onToggleMissing()
+                    } label: {
+                        Label(missingActionTitle, systemImage: missingActionSystemImage)
+                    }
+                }
+        } else {
+            rowContent
+        }
+    }
+
+    private var rowContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
                 let definition = tagColorLibrary.resolvedDefinition(tagColorID: check.displayTagColorID)
@@ -43,14 +73,18 @@ struct FieldCheckAnimalCheckRow: View {
                 
                 Spacer(minLength: 8)
                 
-                Button {
-                    onToggleCounted()
-                } label: {
-                    Label(primaryActionTitle, systemImage: primaryActionSystemImage)
+                if isEditable {
+                    Button {
+                        onToggleCounted()
+                    } label: {
+                        Label(primaryActionTitle, systemImage: primaryActionSystemImage)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(primaryActionTint)
+                    .foregroundStyle(colorScheme == .dark ? .black : .white)
+                } else {
+                    FieldCheckBadge(title: readOnlyStatusTitle, tint: readOnlyStatusTint)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(primaryActionTint)
-                .foregroundStyle(colorScheme == .dark ? .black : .white)
             }
             
             if let animalID = check.animalID {
@@ -63,27 +97,6 @@ struct FieldCheckAnimalCheckRow: View {
             }
         }
         .padding(.vertical, 4)
-        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            Button {
-                onToggleMissing()
-            } label: {
-                Label(missingActionTitle, systemImage: missingActionSystemImage)
-            }
-            .tint(check.isMissing ? .accentColor : .orange)
-        }
-        .contextMenu {
-            Button {
-                onToggleCounted()
-            } label: {
-                Label(countToggleActionTitle, systemImage: primaryActionSystemImage)
-            }
-
-            Button {
-                onToggleMissing()
-            } label: {
-                Label(missingActionTitle, systemImage: missingActionSystemImage)
-            }
-        }
     }
 
     private var countToggleActionTitle: String {
@@ -114,5 +127,17 @@ struct FieldCheckAnimalCheckRow: View {
 
     private var missingActionSystemImage: String {
         check.isMissing ? "checkmark.circle" : "exclamationmark.triangle"
+    }
+
+    private var readOnlyStatusTitle: String {
+        if check.wasCounted { return "Counted" }
+        if check.isMissing { return "Missing" }
+        return "Not Seen"
+    }
+
+    private var readOnlyStatusTint: Color {
+        if check.wasCounted { return .green }
+        if check.isMissing { return .orange }
+        return .secondary
     }
 }

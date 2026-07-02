@@ -109,6 +109,104 @@ final class SwiftDataFieldCheckRepositoryQuickCountTests: XCTestCase {
         XCTAssertEqual(updatedDetail.missingAnimalCount, 1)
     }
 
+
+    func testCompletedSessionRejectsFieldCheckEditsUntilReopened() throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = ModelContext(container)
+        let repository = SwiftDataFieldCheckRepository(context: context)
+        let pasture = try makePastureWithAnimals(context: context, animalCount: 2, sex: .female)
+
+        let sessionID = try repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.publicID,
+                startedAt: Date(timeIntervalSince1970: 0),
+                notes: ""
+            )
+        )
+
+        let initialDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let animalCheck = try XCTUnwrap(initialDetail.animalChecks.first)
+        let animalID = try XCTUnwrap(animalCheck.animalID)
+
+        try repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSince1970: 10),
+                type: .pinkEye,
+                severity: .warning,
+                status: .open,
+                note: "Watch.",
+                animalID: animalID
+            )
+        )
+
+        let detailWithFinding = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let findingID = try XCTUnwrap(detailWithFinding.findings.first?.id)
+
+        try repository.completeSession(id: sessionID)
+
+        assertSessionCompletedThrown {
+            try repository.updateNotes(sessionID: sessionID, notes: "Should not save")
+        }
+        assertSessionCompletedThrown {
+            try repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.heifer: 1])
+        }
+        assertSessionCompletedThrown {
+            try repository.setAnimalCheckCounted(sessionID: sessionID, animalCheckID: animalCheck.id, isCounted: true)
+        }
+        assertSessionCompletedThrown {
+            try repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: animalCheck.id, isMissing: true)
+        }
+        assertSessionCompletedThrown {
+            try repository.setAnimalCheckNeedsAttention(sessionID: sessionID, animalCheckID: animalCheck.id, needsAttention: true)
+        }
+        assertSessionCompletedThrown {
+            try repository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: .resolved)
+        }
+        assertSessionCompletedThrown {
+            try repository.deleteFinding(sessionID: sessionID, findingID: findingID)
+        }
+        assertSessionCompletedThrown {
+            try repository.addFinding(
+                sessionID: sessionID,
+                input: FieldCheckFindingInput(
+                    recordedAt: Date(timeIntervalSince1970: 20),
+                    type: .limping,
+                    severity: .warning,
+                    status: .open,
+                    note: "",
+                    animalID: animalID
+                )
+            )
+        }
+
+        let lockedDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        XCTAssertEqual(lockedDetail.notes, "")
+        XCTAssertEqual(lockedDetail.quickAnimalTypeCounts.values.reduce(0, +), 0)
+        XCTAssertFalse(try XCTUnwrap(lockedDetail.animalChecks.first { $0.id == animalCheck.id }).wasCounted)
+        XCTAssertEqual(lockedDetail.findings.count, 1)
+        XCTAssertEqual(try XCTUnwrap(lockedDetail.findings.first).status, .open)
+
+        try repository.reopenSession(id: sessionID)
+        try repository.updateNotes(sessionID: sessionID, notes: "Unlocked")
+
+        let reopenedDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        XCTAssertFalse(reopenedDetail.isCompleted)
+        XCTAssertEqual(reopenedDetail.notes, "Unlocked")
+    }
+
+    private func assertSessionCompletedThrown(
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        _ action: () throws -> Void
+    ) {
+        XCTAssertThrowsError(try action(), file: file, line: line) { error in
+            guard case FieldCheckRepositoryError.sessionCompleted = error else {
+                return XCTFail("Expected sessionCompleted, got \(error)", file: file, line: line)
+            }
+        }
+    }
+
     private func makePastureWithAnimals(
         context: ModelContext,
         animalCount: Int,

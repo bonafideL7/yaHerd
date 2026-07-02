@@ -20,6 +20,10 @@ struct FieldCheckAnimalDetailView: View {
         model.animalDetail?.displayTagColorID
     }
     
+    private var isSessionEditable: Bool {
+        model.sessionDetail?.isCompleted == false
+    }
+    
     private var errorBinding: Binding<Bool> {
         Binding(
             get: { model.errorMessage != nil },
@@ -36,7 +40,7 @@ struct FieldCheckAnimalDetailView: View {
             if let detail = model.animalDetail {
                 Form {
                     if let animalCheck = model.animalCheck {
-                        fieldCheckFindingsSection(animalCheck)
+                        fieldCheckFindingsSection(animalCheck, isEditable: isSessionEditable)
                     }
                     
                     AnimalDetailOffspringSection(
@@ -105,7 +109,7 @@ struct FieldCheckAnimalDetailView: View {
     }
     
     @ViewBuilder
-    private func fieldCheckFindingsSection(_ animalCheck: FieldCheckAnimalCheckSnapshot) -> some View {
+    private func fieldCheckFindingsSection(_ animalCheck: FieldCheckAnimalCheckSnapshot, isEditable: Bool) -> some View {
         Section {
             HStack {
                 if animalCheck.isMissing {
@@ -118,70 +122,86 @@ struct FieldCheckAnimalDetailView: View {
 
                 Spacer(minLength: 12)
 
-                Button {
-                    model.setAnimalCheckMissing(
-                        animalID: animalID,
-                        sessionID: sessionID,
-                        isMissing: !animalCheck.isMissing,
-                        animalRepository: animalRepository,
-                        fieldCheckRepository: fieldCheckRepository
-                    )
-                } label: {
-                    Label(
-                        animalCheck.isMissing ? "Clear Missing" : "Mark Missing",
-                        systemImage: animalCheck.isMissing ? "checkmark.circle" : "exclamationmark.triangle"
-                    )
+                if isEditable {
+                    Button {
+                        model.setAnimalCheckMissing(
+                            animalID: animalID,
+                            sessionID: sessionID,
+                            isMissing: !animalCheck.isMissing,
+                            animalRepository: animalRepository,
+                            fieldCheckRepository: fieldCheckRepository
+                        )
+                    } label: {
+                        Label(
+                            animalCheck.isMissing ? "Clear Missing" : "Mark Missing",
+                            systemImage: animalCheck.isMissing ? "checkmark.circle" : "exclamationmark.triangle"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(animalCheck.isMissing ? .accentColor : .orange)
                 }
-                .buttonStyle(.bordered)
-                .tint(animalCheck.isMissing ? .accentColor : .orange)
             }
             
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    findingButton(.pinkEye)
-                    findingButton(.limping)
-                    findingButton(.missingAnimal)
+            if isEditable {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        findingButton(.pinkEye)
+                        findingButton(.limping)
+                        findingButton(.missingAnimal)
+                    }
+                    .padding(.vertical, 4)
                 }
-                .padding(.vertical, 4)
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
             }
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
             
             if model.animalFindings.isEmpty {
                 Text("No findings recorded for this animal in this check.")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(model.animalFindings) { finding in
-                    FieldCheckFindingRow(
-                        finding: finding,
-                        showsAnimalDisplayTagNumber: false,
-                        onStatusChange: { status in
-                            model.updateFindingStatus(
-                                animalID: animalID,
-                                sessionID: sessionID,
-                                findingID: finding.id,
-                                status: status,
-                                animalRepository: animalRepository,
-                                fieldCheckRepository: fieldCheckRepository
-                            )
-                        }
-                    )
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button("Delete", role: .destructive) {
-                            model.deleteFinding(
-                                animalID: animalID,
-                                sessionID: sessionID,
-                                findingID: finding.id,
-                                animalRepository: animalRepository,
-                                fieldCheckRepository: fieldCheckRepository
-                            )
-                        }
-                    }
+                    animalFindingRow(finding, isEditable: isEditable)
                 }
             }
         } header: {
             Text("Findings")
         } footer: {
-            Text("A Missing Animal finding marks this roster entry missing automatically. Clearing missing status does not delete existing findings.")
+            Text(isEditable ? "A Missing Animal finding marks this roster entry missing automatically. Clearing missing status does not delete existing findings." : "Completed checks are locked. Reopen the check to update this animal's check status or findings.")
+        }
+    }
+    
+    @ViewBuilder
+    private func animalFindingRow(_ finding: FieldCheckFindingSnapshot, isEditable: Bool) -> some View {
+        if isEditable {
+            FieldCheckFindingRow(
+                finding: finding,
+                showsAnimalDisplayTagNumber: false,
+                onStatusChange: { status in
+                    model.updateFindingStatus(
+                        animalID: animalID,
+                        sessionID: sessionID,
+                        findingID: finding.id,
+                        status: status,
+                        animalRepository: animalRepository,
+                        fieldCheckRepository: fieldCheckRepository
+                    )
+                }
+            )
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button("Delete", role: .destructive) {
+                    model.deleteFinding(
+                        animalID: animalID,
+                        sessionID: sessionID,
+                        findingID: finding.id,
+                        animalRepository: animalRepository,
+                        fieldCheckRepository: fieldCheckRepository
+                    )
+                }
+            }
+        } else {
+            FieldCheckFindingRow(
+                finding: finding,
+                showsAnimalDisplayTagNumber: false
+            )
         }
     }
     
