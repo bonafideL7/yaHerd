@@ -67,15 +67,6 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func setAnimalCheckNeedsAttention(sessionID: UUID, animalCheckID: UUID, needsAttention: Bool, using repository: any FieldCheckSessionDetailRepository) {
-        do {
-            try repository.setAnimalCheckNeedsAttention(sessionID: sessionID, animalCheckID: animalCheckID, needsAttention: needsAttention)
-            refresh(sessionID: sessionID, using: repository)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
     func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool, using repository: any FieldCheckSessionDetailRepository) {
         do {
             try repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: animalCheckID, isMissing: isMissing)
@@ -88,11 +79,7 @@ final class FieldCheckSessionDetailViewModel {
     func addFinding(sessionID: UUID, input: FieldCheckFindingInput, using repository: any FieldCheckSessionDetailRepository) {
         do {
             try repository.addFinding(sessionID: sessionID, input: input)
-            if let animalID = input.animalID {
-                try syncNeedsAttention(sessionID: sessionID, animalID: animalID, using: repository)
-            } else {
-                refresh(sessionID: sessionID, using: repository)
-            }
+            refresh(sessionID: sessionID, using: repository)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -108,15 +95,9 @@ final class FieldCheckSessionDetailViewModel {
     }
 
     func deleteFinding(sessionID: UUID, findingID: UUID, using repository: any FieldCheckSessionDetailRepository) {
-        let animalID = detail?.findings.first(where: { $0.id == findingID })?.animalID
-
         do {
             try repository.deleteFinding(sessionID: sessionID, findingID: findingID)
-            if let animalID {
-                try syncNeedsAttention(sessionID: sessionID, animalID: animalID, using: repository)
-            } else {
-                refresh(sessionID: sessionID, using: repository)
-            }
+            refresh(sessionID: sessionID, using: repository)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -138,35 +119,6 @@ final class FieldCheckSessionDetailViewModel {
             refresh(sessionID: sessionID, using: repository)
         } catch {
             errorMessage = error.localizedDescription
-        }
-    }
-
-    private func syncNeedsAttention(sessionID: UUID, animalID: UUID, using repository: any FieldCheckSessionDetailRepository) throws {
-        let refreshedDetail = try LoadFieldCheckDetailUseCase(repository: repository).execute(id: sessionID)
-        detail = refreshedDetail
-        if let refreshedDetail, notesDraft.trimmingCharacters(in: .whitespacesAndNewlines) == refreshedDetail.notes.trimmingCharacters(in: .whitespacesAndNewlines) {
-            notesDraft = refreshedDetail.notes
-        }
-
-        guard
-            let animalCheck = refreshedDetail?.animalChecks.first(where: { $0.animalID == animalID })
-        else {
-            return
-        }
-
-        let shouldNeedAttention = FieldCheckAnimalAttentionRules.shouldNeedAttention(
-            animalID: animalID,
-            findings: refreshedDetail?.findings ?? []
-        )
-        if animalCheck.needsAttention != shouldNeedAttention {
-            try repository.setAnimalCheckNeedsAttention(
-                sessionID: sessionID,
-                animalCheckID: animalCheck.id,
-                needsAttention: shouldNeedAttention
-            )
-            refresh(sessionID: sessionID, using: repository)
-        } else {
-            errorMessage = nil
         }
     }
 }
@@ -249,23 +201,6 @@ final class FieldCheckAnimalDetailViewModel {
         }
     }
 
-    func setAnimalCheckNeedsAttention(
-        animalID: UUID,
-        sessionID: UUID,
-        needsAttention: Bool,
-        animalRepository: any AnimalDetailRepository,
-        fieldCheckRepository: any FieldCheckAnimalDetailRepository
-    ) {
-        guard let animalCheckID = animalCheck?.id else { return }
-
-        do {
-            try fieldCheckRepository.setAnimalCheckNeedsAttention(sessionID: sessionID, animalCheckID: animalCheckID, needsAttention: needsAttention)
-            refresh(animalID: animalID, sessionID: sessionID, animalRepository: animalRepository, fieldCheckRepository: fieldCheckRepository)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
     func setAnimalCheckMissing(
         animalID: UUID,
         sessionID: UUID,
@@ -302,7 +237,7 @@ final class FieldCheckAnimalDetailViewModel {
                     animalID: animalID
                 )
             )
-            try syncNeedsAttention(
+            refresh(
                 animalID: animalID,
                 sessionID: sessionID,
                 animalRepository: animalRepository,
@@ -338,7 +273,7 @@ final class FieldCheckAnimalDetailViewModel {
     ) {
         do {
             try fieldCheckRepository.deleteFinding(sessionID: sessionID, findingID: findingID)
-            try syncNeedsAttention(
+            refresh(
                 animalID: animalID,
                 sessionID: sessionID,
                 animalRepository: animalRepository,
@@ -348,36 +283,4 @@ final class FieldCheckAnimalDetailViewModel {
             errorMessage = error.localizedDescription
         }
     }
-
-    private func syncNeedsAttention(
-        animalID: UUID,
-        sessionID: UUID,
-        animalRepository: any AnimalDetailRepository,
-        fieldCheckRepository: any FieldCheckAnimalDetailRepository
-    ) throws {
-        let refreshedSessionDetail = try LoadFieldCheckDetailUseCase(repository: fieldCheckRepository).execute(id: sessionID)
-        sessionDetail = refreshedSessionDetail
-
-        guard
-            let animalCheck = refreshedSessionDetail?.animalChecks.first(where: { $0.animalID == animalID })
-        else {
-            refresh(animalID: animalID, sessionID: sessionID, animalRepository: animalRepository, fieldCheckRepository: fieldCheckRepository)
-            return
-        }
-
-        let shouldNeedAttention = FieldCheckAnimalAttentionRules.shouldNeedAttention(
-            animalID: animalID,
-            findings: refreshedSessionDetail?.findings ?? []
-        )
-        if animalCheck.needsAttention != shouldNeedAttention {
-            try fieldCheckRepository.setAnimalCheckNeedsAttention(
-                sessionID: sessionID,
-                animalCheckID: animalCheck.id,
-                needsAttention: shouldNeedAttention
-            )
-        }
-
-        refresh(animalID: animalID, sessionID: sessionID, animalRepository: animalRepository, fieldCheckRepository: fieldCheckRepository)
-    }
-
 }

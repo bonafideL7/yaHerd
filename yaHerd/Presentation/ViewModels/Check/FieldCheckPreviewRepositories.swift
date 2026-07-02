@@ -8,7 +8,6 @@ struct EmptyFieldCheckRepository: FieldCheckRepository {
     func updateQuickAnimalTypeCounts(sessionID: UUID, counts: [AnimalType: Int]) throws {}
     func updateNotes(sessionID: UUID, notes: String) throws {}
     func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool) throws {}
-    func setAnimalCheckNeedsAttention(sessionID: UUID, animalCheckID: UUID, needsAttention: Bool) throws {}
     func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool) throws {}
     func addFinding(sessionID: UUID, input: FieldCheckFindingInput) throws {}
     func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus) throws {}

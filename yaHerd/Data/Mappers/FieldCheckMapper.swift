@@ -1,7 +1,10 @@
 import Foundation
 
 enum FieldCheckMapper {
-    static func makeAnimalCheckSnapshot(from check: FieldCheckAnimalCheck) -> FieldCheckAnimalCheckSnapshot {
+    static func makeAnimalCheckSnapshot(
+        from check: FieldCheckAnimalCheck,
+        needsAttention: Bool? = nil
+    ) -> FieldCheckAnimalCheckSnapshot {
         FieldCheckAnimalCheckSnapshot(
             id: check.publicID,
             animalID: check.animal?.publicID,
@@ -14,7 +17,7 @@ enum FieldCheckMapper {
             animalType: check.animal?.animalType ?? fallbackAnimalType(for: check.animalSex),
             wasExpectedAtStart: check.wasExpectedAtStart,
             wasCounted: check.wasCounted,
-            needsAttention: check.needsAttention,
+            needsAttention: needsAttention ?? check.needsAttention,
             isMissing: check.isMissing
         )
     }
@@ -36,8 +39,12 @@ enum FieldCheckMapper {
     }
 
     static func makeSessionSummary(from session: FieldCheckSession) -> FieldCheckSessionSummary {
-        let animalChecks = session.animalChecks.map(makeAnimalCheckSnapshot)
-        let openFindingsCount = session.findings.filter { $0.status != .resolved }.count
+        let findings = session.findings.map(makeFindingSnapshot)
+        let animalChecks = makeAnimalCheckSnapshots(
+            from: session.animalChecks,
+            findings: findings
+        )
+        let openFindingsCount = findings.filter { $0.status != .resolved }.count
 
         return FieldCheckSessionSummary(
             id: session.publicID,
@@ -57,7 +64,13 @@ enum FieldCheckMapper {
     }
 
     static func makeSessionDetail(from session: FieldCheckSession) -> FieldCheckSessionDetailSnapshot {
-        FieldCheckSessionDetailSnapshot(
+        let findings = session.findings.map(makeFindingSnapshot)
+        let animalChecks = makeAnimalCheckSnapshots(
+            from: session.animalChecks,
+            findings: findings
+        )
+
+        return FieldCheckSessionDetailSnapshot(
             id: session.publicID,
             startedAt: session.startedAt,
             completedAt: session.completedAt,
@@ -70,13 +83,36 @@ enum FieldCheckMapper {
             quickCalfCount: session.quickCalfCount,
             quickBullCount: session.quickBullCount,
             quickSteerCount: session.quickSteerCount,
-            animalChecks: session.animalChecks.map(makeAnimalCheckSnapshot),
-            findings: session.findings.map(makeFindingSnapshot)
+            animalChecks: animalChecks,
+            findings: findings
         )
     }
 }
 
 private extension FieldCheckMapper {
+    static func makeAnimalCheckSnapshots(
+        from checks: [FieldCheckAnimalCheck],
+        findings: [FieldCheckFindingSnapshot]
+    ) -> [FieldCheckAnimalCheckSnapshot] {
+        checks.map { check in
+            makeAnimalCheckSnapshot(
+                from: check,
+                needsAttention: derivedNeedsAttention(for: check, findings: findings)
+            )
+        }
+    }
+
+    static func derivedNeedsAttention(
+        for check: FieldCheckAnimalCheck,
+        findings: [FieldCheckFindingSnapshot]
+    ) -> Bool {
+        guard let animalID = check.animal?.publicID else { return false }
+        return FieldCheckAnimalAttentionRules.shouldNeedAttention(
+            animalID: animalID,
+            findings: findings
+        )
+    }
+
     static func fallbackAnimalType(for sex: Sex) -> AnimalType {
         switch sex {
         case .female:

@@ -5,6 +5,8 @@ enum FieldCheckAnimalAttentionRules {
         animalID: UUID,
         findings: [FieldCheckFindingSnapshot]
     ) -> Bool {
-        findings.contains { $0.animalID == animalID }
+        findings.contains { finding in
+            finding.animalID == animalID && finding.status != .resolved
+        }
     }
 }

@@ -56,7 +56,6 @@ protocol FieldCheckNotesUpdating {
 
 protocol FieldCheckAnimalCheckWriting {
     func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool) throws
-    func setAnimalCheckNeedsAttention(sessionID: UUID, animalCheckID: UUID, needsAttention: Bool) throws
     func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool) throws
 }
 

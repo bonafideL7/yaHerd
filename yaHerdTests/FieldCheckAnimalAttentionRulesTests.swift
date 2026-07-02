@@ -2,9 +2,48 @@ import XCTest
 @testable import yaHerd
 
 final class FieldCheckAnimalAttentionRulesTests: XCTestCase {
-    func testShouldNeedAttentionWhenFindingExistsForAnimal() {
+    func testShouldNeedAttentionWhenUnresolvedFindingExistsForAnimal() {
         let animalID = UUID()
         let findings = [makeFinding(animalID: animalID)]
+
+        XCTAssertTrue(
+            FieldCheckAnimalAttentionRules.shouldNeedAttention(
+                animalID: animalID,
+                findings: findings
+            )
+        )
+    }
+
+    func testShouldNeedAttentionWhenMonitoringFindingExistsForAnimal() {
+        let animalID = UUID()
+        let findings = [makeFinding(animalID: animalID, status: .monitoring)]
+
+        XCTAssertTrue(
+            FieldCheckAnimalAttentionRules.shouldNeedAttention(
+                animalID: animalID,
+                findings: findings
+            )
+        )
+    }
+
+    func testShouldNotNeedAttentionWhenOnlyResolvedFindingsExistForAnimal() {
+        let animalID = UUID()
+        let findings = [makeFinding(animalID: animalID, status: .resolved)]
+
+        XCTAssertFalse(
+            FieldCheckAnimalAttentionRules.shouldNeedAttention(
+                animalID: animalID,
+                findings: findings
+            )
+        )
+    }
+
+    func testShouldNeedAttentionWhenResolvedAndUnresolvedFindingsExistForAnimal() {
+        let animalID = UUID()
+        let findings = [
+            makeFinding(animalID: animalID, status: .resolved),
+            makeFinding(animalID: animalID, status: .open)
+        ]
 
         XCTAssertTrue(
             FieldCheckAnimalAttentionRules.shouldNeedAttention(
@@ -38,13 +77,16 @@ final class FieldCheckAnimalAttentionRulesTests: XCTestCase {
         )
     }
 
-    private func makeFinding(animalID: UUID?) -> FieldCheckFindingSnapshot {
+    private func makeFinding(
+        animalID: UUID?,
+        status: FieldCheckFindingStatus = .open
+    ) -> FieldCheckFindingSnapshot {
         FieldCheckFindingSnapshot(
             id: UUID(),
             recordedAt: Date(timeIntervalSince1970: 0),
             type: .generalObservation,
             severity: .info,
-            status: .open,
+            status: status,
             note: "",
             animalID: animalID,
             animalDisplayTagNumber: nil,

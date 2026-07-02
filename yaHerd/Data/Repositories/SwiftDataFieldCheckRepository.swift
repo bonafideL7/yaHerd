@@ -104,14 +104,6 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try context.save()
     }
 
-    func setAnimalCheckNeedsAttention(sessionID: UUID, animalCheckID: UUID, needsAttention: Bool) throws {
-        let check = try fetchAnimalCheck(id: animalCheckID, sessionID: sessionID)
-        try ensureSessionIsEditable(check.session)
-
-        check.needsAttention = needsAttention
-        try context.save()
-    }
-
     func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool) throws {
         let check = try fetchAnimalCheck(id: animalCheckID, sessionID: sessionID)
         try ensureSessionIsEditable(check.session)
@@ -145,6 +137,11 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try ensureUniqueFindingPublicID(finding)
         context.insert(finding)
         applyFindingSideEffects(input: input, linkedAnimal: animal, session: session)
+        syncNeedsAttention(
+            for: animal,
+            in: session,
+            includesNewUnresolvedFinding: input.status != .resolved
+        )
         try context.save()
     }
 
@@ -153,6 +150,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try ensureSessionIsEditable(finding.session)
 
         finding.status = status
+        syncNeedsAttention(for: finding.animal, in: finding.session)
         try context.save()
     }
 
@@ -160,6 +158,10 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         let finding = try fetchFinding(id: findingID, sessionID: sessionID)
         try ensureSessionIsEditable(finding.session)
 
+        let linkedAnimal = finding.animal
+        let session = finding.session
+
+        syncNeedsAttention(for: linkedAnimal, in: session, excludingFindingID: finding.publicID)
         context.delete(finding)
         try context.save()
     }
@@ -222,8 +224,35 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
 
         check.missingConfirmedAt = input.recordedAt
         check.countedAt = nil
-        check.needsAttention = true
         normalizeQuickAnimalTypeCounts(for: session)
+    }
+
+    private func syncNeedsAttention(
+        for animal: Animal?,
+        in session: FieldCheckSession?,
+        excludingFindingID: UUID? = nil,
+        includesNewUnresolvedFinding: Bool = false
+    ) {
+        guard let animal, let session else { return }
+        guard let check = animalCheck(for: animal.publicID, in: session) else { return }
+        check.needsAttention = includesNewUnresolvedFinding
+            || hasUnresolvedFinding(
+                for: animal.publicID,
+                in: session,
+                excludingFindingID: excludingFindingID
+            )
+    }
+
+    private func hasUnresolvedFinding(
+        for animalID: UUID,
+        in session: FieldCheckSession,
+        excludingFindingID: UUID? = nil
+    ) -> Bool {
+        session.findings.contains { finding in
+            finding.publicID != excludingFindingID
+                && finding.animal?.publicID == animalID
+                && finding.status != .resolved
+        }
     }
 
     private func animalCheck(for animalID: UUID, in session: FieldCheckSession) -> FieldCheckAnimalCheck? {

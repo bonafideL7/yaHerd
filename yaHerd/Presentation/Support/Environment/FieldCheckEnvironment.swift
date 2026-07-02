@@ -41,10 +41,6 @@ private struct MissingFieldCheckSessionDetailRepository: FieldCheckSessionDetail
         throw MissingFieldCheckDependencyError.fieldCheckSessionDetailRepository
     }
 
-    func setAnimalCheckNeedsAttention(sessionID: UUID, animalCheckID: UUID, needsAttention: Bool) throws {
-        throw MissingFieldCheckDependencyError.fieldCheckSessionDetailRepository
-    }
-
     func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool) throws {
         throw MissingFieldCheckDependencyError.fieldCheckSessionDetailRepository
     }
@@ -76,10 +72,6 @@ private struct MissingFieldCheckAnimalDetailRepository: FieldCheckAnimalDetailRe
     }
 
     func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool) throws {
-        throw MissingFieldCheckDependencyError.fieldCheckAnimalDetailRepository
-    }
-
-    func setAnimalCheckNeedsAttention(sessionID: UUID, animalCheckID: UUID, needsAttention: Bool) throws {
         throw MissingFieldCheckDependencyError.fieldCheckAnimalDetailRepository
     }
 
