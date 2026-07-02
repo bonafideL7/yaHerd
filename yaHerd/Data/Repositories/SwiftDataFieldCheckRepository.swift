@@ -203,6 +203,64 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try context.save()
     }
 
+    func updateFinding(sessionID: UUID, findingID: UUID, input: FieldCheckFindingInput) throws {
+        let finding = try fetchFinding(id: findingID, sessionID: sessionID)
+        try ensureSessionIsEditable(finding.session)
+        try saveIfNeeded(backfillHistoricalSnapshots(in: finding.session))
+
+        guard let session = finding.session else {
+            throw FieldCheckRepositoryError.sessionNotFound
+        }
+        let oldLinkedAnimalID = animalID(for: finding)
+        let oldShouldSyncMissing = FieldCheckFindingRules.shouldMarkAnimalMissing(for: finding.type)
+            && finding.status != .resolved
+        let oldShouldSyncAttention = finding.status != .resolved
+
+        let animal = try fetchAnimal(id: input.animalID)
+        let linkedAnimalID = input.animalID ?? animal?.publicID
+        let check = linkedAnimalID.flatMap { animalCheck(for: $0, in: session) }
+
+        finding.recordedAt = input.recordedAt
+        finding.type = input.type
+        finding.severity = input.severity
+        finding.status = input.status
+        finding.note = input.note.trimmingCharacters(in: .whitespacesAndNewlines)
+        finding.animalIDSnapshot = linkedAnimalID
+        finding.animalDisplayTagNumberSnapshot = check?.rosterTagNumber ?? animal?.displayTagNumber ?? ""
+        finding.animalDisplayTagColorIDSnapshot = check?.rosterTagColorID ?? animal?.displayTagColorID
+        finding.animalNameSnapshot = check?.animalName ?? animal?.name ?? ""
+        finding.pastureNameSnapshot = session.pastureNameSnapshot
+        finding.sessionIDSnapshot = session.publicID
+        finding.animal = animal
+
+        let newShouldSyncMissing = FieldCheckFindingRules.shouldMarkAnimalMissing(for: input.type)
+            && input.status != .resolved
+        var missingAnimalIDs = Set<UUID>()
+        if oldShouldSyncMissing, let oldLinkedAnimalID {
+            missingAnimalIDs.insert(oldLinkedAnimalID)
+        }
+        if newShouldSyncMissing, let linkedAnimalID {
+            missingAnimalIDs.insert(linkedAnimalID)
+        }
+        for affectedAnimalID in missingAnimalIDs {
+            syncMissingStatus(forAnimalID: affectedAnimalID, in: session)
+        }
+
+        let newShouldSyncAttention = input.status != .resolved
+        var attentionAnimalIDs = Set<UUID>()
+        if oldShouldSyncAttention, let oldLinkedAnimalID {
+            attentionAnimalIDs.insert(oldLinkedAnimalID)
+        }
+        if newShouldSyncAttention, let linkedAnimalID {
+            attentionAnimalIDs.insert(linkedAnimalID)
+        }
+        for affectedAnimalID in attentionAnimalIDs {
+            syncNeedsAttention(forAnimalID: affectedAnimalID, in: session)
+        }
+
+        try context.save()
+    }
+
     func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus) throws {
         let finding = try fetchFinding(id: findingID, sessionID: sessionID)
         try ensureSessionCanUpdateFindingStatus(finding.session)
@@ -350,6 +408,9 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             excludingFindingID: excludingFindingID
         )
         check.missingConfirmedAt = unresolvedMissingFinding?.recordedAt
+        if unresolvedMissingFinding != nil {
+            check.countedAt = nil
+        }
         normalizeQuickAnimalTypeCounts(for: session)
     }
 

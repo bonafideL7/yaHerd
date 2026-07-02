@@ -8,6 +8,7 @@ struct FieldCheckAnimalDetailView: View {
     @State private var model = FieldCheckAnimalDetailViewModel()
     @State private var isLineageExpanded = false
     @State private var showingAddOffspring = false
+    @State private var editingFinding: FieldCheckFindingSnapshot?
     
     let sessionID: UUID
     let animalID: UUID
@@ -97,6 +98,25 @@ struct FieldCheckAnimalDetailView: View {
                 }
             }
         }
+        .sheet(item: $editingFinding) { finding in
+            NavigationStack {
+                FieldCheckFindingEditorView(
+                    suggestedTypes: [.pinkEye, .limping, .missingAnimal],
+                    animals: model.sessionDetail?.animalChecks ?? [],
+                    finding: finding
+                ) { input in
+                    guard isSessionEditable else { return }
+                    model.updateFinding(
+                        animalID: animalID,
+                        sessionID: sessionID,
+                        findingID: finding.id,
+                        input: input,
+                        animalRepository: animalRepository,
+                        fieldCheckRepository: fieldCheckRepository
+                    )
+                }
+            }
+        }
         .task {
             if !model.hasLoaded {
                 model.load(
@@ -165,21 +185,24 @@ struct FieldCheckAnimalDetailView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(model.animalFindings) { finding in
-                    animalFindingRow(finding, allowsDeleting: isEditable)
+                    animalFindingRow(finding, allowsEditing: isEditable)
                 }
             }
         } header: {
             Text("Findings")
         } footer: {
-            Text(isEditable ? "A Missing Animal finding marks this roster entry missing automatically. Clearing missing status does not delete existing findings." : "Finding status can still be updated after completion. Reopen the check to update this animal's roster status or add/delete findings.")
+            Text(isEditable ? "A Missing Animal finding marks this roster entry missing automatically. Clearing missing status does not delete existing findings." : "Finding status can still be updated after completion. Reopen the check to update this animal's roster status or add/edit/delete findings.")
         }
     }
     
     @ViewBuilder
-    private func animalFindingRow(_ finding: FieldCheckFindingSnapshot, allowsDeleting: Bool) -> some View {
+    private func animalFindingRow(_ finding: FieldCheckFindingSnapshot, allowsEditing: Bool) -> some View {
         let row = FieldCheckFindingRow(
             finding: finding,
             showsAnimalDisplayTagNumber: false,
+            onEdit: allowsEditing ? {
+                editingFinding = finding
+            } : nil,
             onStatusChange: { status in
                 model.updateFindingStatus(
                     animalID: animalID,
@@ -192,7 +215,7 @@ struct FieldCheckAnimalDetailView: View {
             }
         )
 
-        if allowsDeleting {
+        if allowsEditing {
             row
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button("Delete", role: .destructive) {

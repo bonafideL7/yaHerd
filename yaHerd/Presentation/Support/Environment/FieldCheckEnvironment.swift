@@ -53,6 +53,10 @@ private struct MissingFieldCheckSessionDetailRepository: FieldCheckSessionDetail
         throw MissingFieldCheckDependencyError.fieldCheckSessionDetailRepository
     }
 
+    func updateFinding(sessionID: UUID, findingID: UUID, input: FieldCheckFindingInput) throws {
+        throw MissingFieldCheckDependencyError.fieldCheckSessionDetailRepository
+    }
+
     func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus) throws {
         throw MissingFieldCheckDependencyError.fieldCheckSessionDetailRepository
     }
@@ -88,6 +92,10 @@ private struct MissingFieldCheckAnimalDetailRepository: FieldCheckAnimalDetailRe
     }
 
     func addFinding(sessionID: UUID, input: FieldCheckFindingInput) throws {
+        throw MissingFieldCheckDependencyError.fieldCheckAnimalDetailRepository
+    }
+
+    func updateFinding(sessionID: UUID, findingID: UUID, input: FieldCheckFindingInput) throws {
         throw MissingFieldCheckDependencyError.fieldCheckAnimalDetailRepository
     }
 

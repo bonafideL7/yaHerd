@@ -71,6 +71,7 @@ protocol FieldCheckTrackedAnimalAdding {
 
 protocol FieldCheckFindingWriting {
     func addFinding(sessionID: UUID, input: FieldCheckFindingInput) throws
+    func updateFinding(sessionID: UUID, findingID: UUID, input: FieldCheckFindingInput) throws
     func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus) throws
     func deleteFinding(sessionID: UUID, findingID: UUID) throws
 }

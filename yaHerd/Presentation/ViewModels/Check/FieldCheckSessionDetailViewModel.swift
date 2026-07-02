@@ -96,6 +96,15 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
+    func updateFinding(sessionID: UUID, findingID: UUID, input: FieldCheckFindingInput, using repository: any FieldCheckSessionDetailRepository) {
+        do {
+            try repository.updateFinding(sessionID: sessionID, findingID: findingID, input: input)
+            refresh(sessionID: sessionID, using: repository)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus, using repository: any FieldCheckSessionDetailRepository) {
         do {
             try repository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: status)
@@ -262,6 +271,22 @@ final class FieldCheckAnimalDetailViewModel {
                 animalRepository: animalRepository,
                 fieldCheckRepository: fieldCheckRepository
             )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func updateFinding(
+        animalID: UUID,
+        sessionID: UUID,
+        findingID: UUID,
+        input: FieldCheckFindingInput,
+        animalRepository: any AnimalDetailRepository,
+        fieldCheckRepository: any FieldCheckAnimalDetailRepository
+    ) {
+        do {
+            try fieldCheckRepository.updateFinding(sessionID: sessionID, findingID: findingID, input: input)
+            refresh(animalID: animalID, sessionID: sessionID, animalRepository: animalRepository, fieldCheckRepository: fieldCheckRepository)
         } catch {
             errorMessage = error.localizedDescription
         }

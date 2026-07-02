@@ -5,6 +5,7 @@ struct FieldCheckFindingRow: View {
     
     let finding: FieldCheckFindingSnapshot
     var showsAnimalDisplayTagNumber = true
+    var onEdit: (() -> Void)? = nil
     var onStatusChange: ((FieldCheckFindingStatus) -> Void)? = nil
     
     private var tint: Color {
@@ -30,8 +31,8 @@ struct FieldCheckFindingRow: View {
                 noteRow
             }
             
-            if let onStatusChange {
-                statusMenu(onStatusChange)
+            if onEdit != nil || onStatusChange != nil {
+                actionRow
             }
         }
         .padding(.vertical, 8)
@@ -109,6 +110,25 @@ struct FieldCheckFindingRow: View {
             .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
     
+    private var actionRow: some View {
+        HStack(spacing: 10) {
+            if let onEdit {
+                Button {
+                    onEdit()
+                } label: {
+                    Label("Edit", systemImage: "pencil")
+                        .font(.footnote.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+
+            if let onStatusChange {
+                statusMenu(onStatusChange)
+            }
+        }
+    }
+
     private func statusMenu(_ onStatusChange: @escaping (FieldCheckFindingStatus) -> Void) -> some View {
         Menu {
             ForEach(FieldCheckFindingStatus.allCases) { status in
@@ -133,6 +153,7 @@ struct FieldCheckFindingRow: View {
             .foregroundStyle(.primary)
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
+            .frame(maxWidth: .infinity)
             .background(.regularMaterial, in: Capsule())
             .overlay {
                 Capsule()

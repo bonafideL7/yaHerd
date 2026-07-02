@@ -2,30 +2,39 @@ import SwiftUI
 
 struct FieldCheckFindingEditorView: View {
     @Environment(\.dismiss) private var dismiss
-    
+
     let suggestedTypes: [FieldCheckFindingType]
     let animals: [FieldCheckAnimalCheckSnapshot]
+    let finding: FieldCheckFindingSnapshot?
     let onSave: (FieldCheckFindingInput) -> Void
-    
-    @State private var recordedAt: Date = .now
+
+    @State private var recordedAt: Date
     @State private var type: FieldCheckFindingType
     @State private var severity: FieldCheckFindingSeverity
-    @State private var status: FieldCheckFindingStatus = .open
-    @State private var note = ""
+    @State private var status: FieldCheckFindingStatus
+    @State private var note: String
     @State private var selectedAnimalID: UUID?
-    
+
     init(
         suggestedTypes: [FieldCheckFindingType],
         animals: [FieldCheckAnimalCheckSnapshot],
+        finding: FieldCheckFindingSnapshot? = nil,
         onSave: @escaping (FieldCheckFindingInput) -> Void
     ) {
         self.suggestedTypes = suggestedTypes
         self.animals = animals
+        self.finding = finding
         self.onSave = onSave
-        _type = State(initialValue: suggestedTypes.first ?? .generalObservation)
-        _severity = State(initialValue: FieldCheckFindingRules.defaultSeverity(for: suggestedTypes.first ?? .generalObservation))
+
+        let initialType = finding?.type ?? suggestedTypes.first ?? .generalObservation
+        _recordedAt = State(initialValue: finding?.recordedAt ?? .now)
+        _type = State(initialValue: initialType)
+        _severity = State(initialValue: finding?.severity ?? FieldCheckFindingRules.defaultSeverity(for: initialType))
+        _status = State(initialValue: finding?.status ?? .open)
+        _note = State(initialValue: finding?.note ?? "")
+        _selectedAnimalID = State(initialValue: finding?.animalID)
     }
-    
+
     private var animalOptions: [FieldCheckAnimalCheckSnapshot] {
         animals
             .filter { $0.animalID != nil }
@@ -34,6 +43,10 @@ struct FieldCheckFindingEditorView: View {
                 let rightKey = animalSortKey(for: right)
                 return leftKey.localizedStandardCompare(rightKey) == .orderedAscending
             }
+    }
+
+    private var navigationTitle: String {
+        finding == nil ? "Add Finding" : "Edit Finding"
     }
 
     private func animalSortKey(for animal: FieldCheckAnimalCheckSnapshot) -> String {
@@ -54,31 +67,31 @@ struct FieldCheckFindingEditorView: View {
     private var canSave: Bool {
         !requiresLinkedAnimal || selectedAnimalID != nil
     }
-    
+
     var body: some View {
         Form {
             Section("Finding") {
                 DatePicker("Observed", selection: $recordedAt, displayedComponents: [.date, .hourAndMinute])
-                
+
                 Picker("Type", selection: $type) {
                     ForEach(FieldCheckFindingType.allCases) { type in
                         Text(type.label).tag(type)
                     }
                 }
-                
+
                 Picker("Severity", selection: $severity) {
                     ForEach(FieldCheckFindingSeverity.allCases) { severity in
                         Text(severity.label).tag(severity)
                     }
                 }
-                
+
                 Picker("Status", selection: $status) {
                     ForEach(FieldCheckFindingStatus.allCases) { status in
                         Text(status.label).tag(status)
                     }
                 }
             }
-            
+
             Section {
                 FieldCheckLinkedAnimalSelectorRow(
                     animals: animalOptions,
@@ -93,19 +106,19 @@ struct FieldCheckFindingEditorView: View {
                     Text("Use the linked animal selector when a finding should be tied to a specific roster entry.")
                 }
             }
-            
+
             Section("Notes") {
                 TextField("Notes", text: $note, axis: .vertical)
                     .lineLimit(3...5)
             }
         }
-        .navigationTitle("Add Finding")
+        .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 ToolbarCancelButton { dismiss() }
             }
-            
+
             ToolbarItem(placement: .confirmationAction) {
                 ToolbarSaveButton {
                     onSave(
@@ -127,5 +140,4 @@ struct FieldCheckFindingEditorView: View {
             severity = FieldCheckFindingRules.defaultSeverity(for: newType)
         }
     }
-
 }

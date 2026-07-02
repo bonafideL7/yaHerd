@@ -14,6 +14,7 @@ struct FieldCheckSessionDetailView: View {
     @State private var rosterSearchText = ""
     @State private var showingAddFinding = false
     @State private var showingAddTrackedAnimal = false
+    @State private var editingFinding: FieldCheckFindingSnapshot?
     @State private var currentSessionID: UUID?
     @State private var selectedPastureID: UUID?
     @State private var startedAt: Date = .now
@@ -166,6 +167,23 @@ struct FieldCheckSessionDetailView: View {
                             using: repository
                         )
                     }
+                }
+            }
+        }
+        .sheet(item: $editingFinding) { finding in
+            NavigationStack {
+                FieldCheckFindingEditorView(
+                    suggestedTypes: suggestedFindingTypes,
+                    animals: model.detail?.animalChecks ?? [],
+                    finding: finding
+                ) { input in
+                    guard let currentSessionID, model.detail?.isCompleted == false else { return }
+                    model.updateFinding(
+                        sessionID: currentSessionID,
+                        findingID: finding.id,
+                        input: input,
+                        using: repository
+                    )
                 }
             }
         }
@@ -440,14 +458,14 @@ struct FieldCheckSessionDetailView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(sortedFindings) { finding in
-                    findingRow(finding, allowsDeleting: !detail.isCompleted)
+                    findingRow(finding, allowsEditing: !detail.isCompleted)
                 }
             }
         } header: {
             Text("Findings")
         } footer: {
             if detail.isCompleted {
-                Text("Finding status can still be updated after completion. Reopen this check to add or delete findings.")
+                Text("Finding status can still be updated after completion. Reopen this check to add, edit, or delete findings.")
             }
         }
     }
@@ -491,9 +509,12 @@ struct FieldCheckSessionDetailView: View {
     }
 
     @ViewBuilder
-    private func findingRow(_ finding: FieldCheckFindingSnapshot, allowsDeleting: Bool) -> some View {
+    private func findingRow(_ finding: FieldCheckFindingSnapshot, allowsEditing: Bool) -> some View {
         let row = FieldCheckFindingRow(
             finding: finding,
+            onEdit: allowsEditing ? {
+                editingFinding = finding
+            } : nil,
             onStatusChange: { status in
                 guard let currentSessionID else { return }
                 model.updateFindingStatus(
@@ -505,7 +526,7 @@ struct FieldCheckSessionDetailView: View {
             }
         )
 
-        if allowsDeleting {
+        if allowsEditing {
             row
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button("Delete", role: .destructive) {
