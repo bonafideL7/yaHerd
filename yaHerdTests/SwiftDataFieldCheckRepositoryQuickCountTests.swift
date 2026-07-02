@@ -67,6 +67,49 @@ final class SwiftDataFieldCheckRepositoryQuickCountTests: XCTestCase {
         XCTAssertEqual(updatedDetail.missingAnimalCount, 1)
     }
 
+    func testUpdatingNonMissingFindingDoesNotClearManualMissingStatus() throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = ModelContext(container)
+        let repository = SwiftDataFieldCheckRepository(context: context)
+        let pasture = try makePastureWithAnimals(context: context, animalCount: 1, sex: .female)
+
+        let sessionID = try repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.publicID,
+                startedAt: Date(timeIntervalSince1970: 0),
+                notes: ""
+            )
+        )
+
+        let initialDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let animalCheck = try XCTUnwrap(initialDetail.animalChecks.first)
+        let animalID = try XCTUnwrap(animalCheck.animalID)
+
+        try repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: animalCheck.id, isMissing: true)
+        try repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSince1970: 10),
+                type: .pinkEye,
+                severity: .warning,
+                status: .open,
+                note: "Watch.",
+                animalID: animalID
+            )
+        )
+
+        let detailWithFinding = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let findingID = try XCTUnwrap(detailWithFinding.findings.first?.id)
+
+        try repository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: .resolved)
+
+        let updatedDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let updatedAnimalCheck = try XCTUnwrap(updatedDetail.animalChecks.first { $0.id == animalCheck.id })
+        XCTAssertTrue(updatedAnimalCheck.isMissing)
+        XCTAssertFalse(updatedAnimalCheck.needsAttention)
+        XCTAssertEqual(updatedDetail.missingAnimalCount, 1)
+    }
+
     func testMissingAnimalFindingMarksRosterEntryMissingAndNormalizesQuickCount() throws {
         let container = try TestSupport.makeModelContainer()
         let context = ModelContext(container)
@@ -107,6 +150,187 @@ final class SwiftDataFieldCheckRepositoryQuickCountTests: XCTestCase {
         XCTAssertEqual(updatedDetail.quickAnimalTypeCounts[.heifer], 2)
         XCTAssertEqual(updatedDetail.totalSeen, 2)
         XCTAssertEqual(updatedDetail.missingAnimalCount, 1)
+    }
+
+    func testResolvingMissingAnimalFindingClearsMissingStatusWhenNoUnresolvedMissingFindingRemains() throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = ModelContext(container)
+        let repository = SwiftDataFieldCheckRepository(context: context)
+        let pasture = try makePastureWithAnimals(context: context, animalCount: 3, sex: .female)
+
+        let sessionID = try repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.publicID,
+                startedAt: Date(timeIntervalSince1970: 0),
+                notes: ""
+            )
+        )
+        try repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.heifer: 3])
+
+        let initialDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let animalCheck = try XCTUnwrap(initialDetail.animalChecks.first)
+        let animalID = try XCTUnwrap(animalCheck.animalID)
+
+        try repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSince1970: 10),
+                type: .missingAnimal,
+                severity: .critical,
+                status: .open,
+                note: "Gate was open.",
+                animalID: animalID
+            )
+        )
+
+        let missingDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let findingID = try XCTUnwrap(missingDetail.findings.first?.id)
+        XCTAssertTrue(try XCTUnwrap(missingDetail.animalChecks.first { $0.id == animalCheck.id }).isMissing)
+        XCTAssertEqual(missingDetail.missingAnimalCount, 1)
+
+        try repository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: .resolved)
+
+        let resolvedDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let resolvedAnimalCheck = try XCTUnwrap(resolvedDetail.animalChecks.first { $0.id == animalCheck.id })
+        XCTAssertFalse(resolvedAnimalCheck.isMissing)
+        XCTAssertFalse(resolvedAnimalCheck.needsAttention)
+        XCTAssertEqual(resolvedDetail.missingAnimalCount, 0)
+        XCTAssertEqual(resolvedDetail.totalSeen, 2)
+        XCTAssertEqual(resolvedDetail.remainingExpectedCount, 1)
+    }
+
+    func testResolvingOneMissingAnimalFindingKeepsMissingStatusWhenAnotherUnresolvedMissingFindingRemains() throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = ModelContext(container)
+        let repository = SwiftDataFieldCheckRepository(context: context)
+        let pasture = try makePastureWithAnimals(context: context, animalCount: 1, sex: .female)
+
+        let sessionID = try repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.publicID,
+                startedAt: Date(timeIntervalSince1970: 0),
+                notes: ""
+            )
+        )
+
+        let initialDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let animalCheck = try XCTUnwrap(initialDetail.animalChecks.first)
+        let animalID = try XCTUnwrap(animalCheck.animalID)
+
+        try repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSince1970: 10),
+                type: .missingAnimal,
+                severity: .warning,
+                status: .open,
+                note: "Missing near gate.",
+                animalID: animalID
+            )
+        )
+        try repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSince1970: 20),
+                type: .missingAnimal,
+                severity: .critical,
+                status: .open,
+                note: "Still missing.",
+                animalID: animalID
+            )
+        )
+
+        let detailWithFindings = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let firstFindingID = try XCTUnwrap(
+            detailWithFindings.findings
+                .filter { $0.type == .missingAnimal }
+                .sorted { $0.recordedAt < $1.recordedAt }
+                .first?.id
+        )
+
+        try repository.updateFindingStatus(sessionID: sessionID, findingID: firstFindingID, status: .resolved)
+
+        let updatedDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let updatedAnimalCheck = try XCTUnwrap(updatedDetail.animalChecks.first { $0.id == animalCheck.id })
+        XCTAssertTrue(updatedAnimalCheck.isMissing)
+        XCTAssertTrue(updatedAnimalCheck.needsAttention)
+        XCTAssertEqual(updatedDetail.missingAnimalCount, 1)
+    }
+
+    func testDeletingLastMissingAnimalFindingClearsMissingStatus() throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = ModelContext(container)
+        let repository = SwiftDataFieldCheckRepository(context: context)
+        let pasture = try makePastureWithAnimals(context: context, animalCount: 1, sex: .female)
+
+        let sessionID = try repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.publicID,
+                startedAt: Date(timeIntervalSince1970: 0),
+                notes: ""
+            )
+        )
+
+        let initialDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let animalCheck = try XCTUnwrap(initialDetail.animalChecks.first)
+        let animalID = try XCTUnwrap(animalCheck.animalID)
+
+        try repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSince1970: 10),
+                type: .missingAnimal,
+                severity: .warning,
+                status: .open,
+                note: "Missing.",
+                animalID: animalID
+            )
+        )
+
+        let missingDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let findingID = try XCTUnwrap(missingDetail.findings.first?.id)
+        XCTAssertTrue(try XCTUnwrap(missingDetail.animalChecks.first { $0.id == animalCheck.id }).isMissing)
+
+        try repository.deleteFinding(sessionID: sessionID, findingID: findingID)
+
+        let updatedDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        XCTAssertFalse(try XCTUnwrap(updatedDetail.animalChecks.first { $0.id == animalCheck.id }).isMissing)
+        XCTAssertEqual(updatedDetail.missingAnimalCount, 0)
+    }
+
+    func testResolvedMissingAnimalFindingDoesNotMarkRosterEntryMissing() throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = ModelContext(container)
+        let repository = SwiftDataFieldCheckRepository(context: context)
+        let pasture = try makePastureWithAnimals(context: context, animalCount: 1, sex: .female)
+
+        let sessionID = try repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.publicID,
+                startedAt: Date(timeIntervalSince1970: 0),
+                notes: ""
+            )
+        )
+
+        let initialDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let animalCheck = try XCTUnwrap(initialDetail.animalChecks.first)
+        let animalID = try XCTUnwrap(animalCheck.animalID)
+
+        try repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSince1970: 10),
+                type: .missingAnimal,
+                severity: .warning,
+                status: .resolved,
+                note: "Was missing, now accounted for.",
+                animalID: animalID
+            )
+        )
+
+        let updatedDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        XCTAssertFalse(try XCTUnwrap(updatedDetail.animalChecks.first { $0.id == animalCheck.id }).isMissing)
+        XCTAssertEqual(updatedDetail.missingAnimalCount, 0)
     }
 
     func testResolvingLastUnresolvedFindingClearsNeedsAttention() throws {
@@ -464,6 +688,51 @@ final class SwiftDataFieldCheckRepositoryQuickCountTests: XCTestCase {
         let reopenedDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
         XCTAssertFalse(reopenedDetail.isCompleted)
         XCTAssertEqual(reopenedDetail.notes, "Unlocked")
+    }
+
+    func testCompletedSessionAllowsResolvingMissingFindingAndClearsMissingStatus() throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = ModelContext(container)
+        let repository = SwiftDataFieldCheckRepository(context: context)
+        let pasture = try makePastureWithAnimals(context: context, animalCount: 1, sex: .female)
+
+        let sessionID = try repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.publicID,
+                startedAt: Date(timeIntervalSince1970: 0),
+                notes: ""
+            )
+        )
+
+        let initialDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let animalCheck = try XCTUnwrap(initialDetail.animalChecks.first)
+        let animalID = try XCTUnwrap(animalCheck.animalID)
+
+        try repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSince1970: 10),
+                type: .missingAnimal,
+                severity: .warning,
+                status: .open,
+                note: "Missing.",
+                animalID: animalID
+            )
+        )
+
+        let missingDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let findingID = try XCTUnwrap(missingDetail.findings.first?.id)
+        XCTAssertTrue(try XCTUnwrap(missingDetail.animalChecks.first { $0.id == animalCheck.id }).isMissing)
+
+        try repository.completeSession(id: sessionID)
+        try repository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: .resolved)
+
+        let resolvedDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let resolvedAnimalCheck = try XCTUnwrap(resolvedDetail.animalChecks.first { $0.id == animalCheck.id })
+        XCTAssertTrue(resolvedDetail.isCompleted)
+        XCTAssertFalse(resolvedAnimalCheck.isMissing)
+        XCTAssertFalse(resolvedAnimalCheck.needsAttention)
+        XCTAssertEqual(resolvedDetail.missingAnimalCount, 0)
     }
 
     private func assertSessionCompletedThrown(

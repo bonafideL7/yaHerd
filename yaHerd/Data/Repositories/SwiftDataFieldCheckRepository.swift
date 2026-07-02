@@ -208,8 +208,13 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try ensureSessionCanUpdateFindingStatus(finding.session)
         try saveIfNeeded(backfillHistoricalSnapshots(in: finding.session))
 
+        let linkedAnimalID = animalID(for: finding)
+        let session = finding.session
         finding.status = status
-        syncNeedsAttention(forAnimalID: animalID(for: finding), in: finding.session)
+        if FieldCheckFindingRules.shouldMarkAnimalMissing(for: finding.type) {
+            syncMissingStatus(forAnimalID: linkedAnimalID, in: session)
+        }
+        syncNeedsAttention(forAnimalID: linkedAnimalID, in: session)
         try context.save()
     }
 
@@ -221,6 +226,9 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         let linkedAnimalID = animalID(for: finding)
         let session = finding.session
 
+        if FieldCheckFindingRules.shouldMarkAnimalMissing(for: finding.type) {
+            syncMissingStatus(forAnimalID: linkedAnimalID, in: session, excludingFindingID: finding.publicID)
+        }
         syncNeedsAttention(forAnimalID: linkedAnimalID, in: session, excludingFindingID: finding.publicID)
         context.delete(finding)
         try context.save()
@@ -319,11 +327,29 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         session: FieldCheckSession
     ) {
         guard FieldCheckFindingRules.shouldMarkAnimalMissing(for: input.type) else { return }
+        guard input.status != .resolved else { return }
         guard let linkedAnimalID else { return }
         guard let check = animalCheck(for: linkedAnimalID, in: session) else { return }
 
         check.missingConfirmedAt = input.recordedAt
         check.countedAt = nil
+        normalizeQuickAnimalTypeCounts(for: session)
+    }
+
+    private func syncMissingStatus(
+        forAnimalID animalID: UUID?,
+        in session: FieldCheckSession?,
+        excludingFindingID: UUID? = nil
+    ) {
+        guard let animalID, let session else { return }
+        guard let check = animalCheck(for: animalID, in: session) else { return }
+
+        let unresolvedMissingFinding = latestUnresolvedMissingFinding(
+            for: animalID,
+            in: session,
+            excludingFindingID: excludingFindingID
+        )
+        check.missingConfirmedAt = unresolvedMissingFinding?.recordedAt
         normalizeQuickAnimalTypeCounts(for: session)
     }
 
@@ -353,6 +379,21 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
                 && self.animalID(for: finding) == animalID
                 && finding.status != .resolved
         }
+    }
+
+    private func latestUnresolvedMissingFinding(
+        for animalID: UUID,
+        in session: FieldCheckSession,
+        excludingFindingID: UUID? = nil
+    ) -> FieldCheckFinding? {
+        session.findings
+            .filter { finding in
+                finding.publicID != excludingFindingID
+                    && self.animalID(for: finding) == animalID
+                    && FieldCheckFindingRules.shouldMarkAnimalMissing(for: finding.type)
+                    && finding.status != .resolved
+            }
+            .max { left, right in left.recordedAt < right.recordedAt }
     }
 
     private func animalCheck(for animalID: UUID, in session: FieldCheckSession) -> FieldCheckAnimalCheck? {
