@@ -53,12 +53,15 @@ struct FieldCheckAnimalCheckRow: View {
                     damTagColor: damDefinition.color,
                     damTagColorName: damDefinition.name
                 )
+                .fixedSize(horizontal: true, vertical: false)
                 
                 VStack(alignment: .leading, spacing: 4) {
                     if !check.animalName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text(check.animalName)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                     }
                     HStack(spacing: 6) {
                         if check.isMissing {
@@ -69,22 +72,13 @@ struct FieldCheckAnimalCheckRow: View {
                             FieldCheckBadge(title: "Flagged", tint: .orange)
                         }
                     }
+                    .lineLimit(1)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(0)
                 
-                Spacer(minLength: 8)
-                
-                if isEditable {
-                    Button {
-                        onToggleCounted()
-                    } label: {
-                        Label(primaryActionTitle, systemImage: primaryActionSystemImage)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(primaryActionTint)
-                    .foregroundStyle(colorScheme == .dark ? .black : .white)
-                } else {
-                    FieldCheckBadge(title: readOnlyStatusTitle, tint: readOnlyStatusTint)
-                }
+                statusControl
+                    .layoutPriority(2)
             }
             
             if let animalID = check.animalID {
@@ -97,6 +91,30 @@ struct FieldCheckAnimalCheckRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var statusControl: some View {
+        if isEditable {
+            Button {
+                onToggleCounted()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: primaryActionSystemImage)
+                    Text(primaryActionTitle)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .tint(primaryActionTint)
+            .foregroundStyle(colorScheme == .dark ? .black : .white)
+            .fixedSize(horizontal: true, vertical: false)
+        } else {
+            FieldCheckBadge(title: readOnlyStatusTitle, tint: readOnlyStatusTint)
+                .fixedSize(horizontal: true, vertical: false)
+        }
     }
 
     private var countToggleActionTitle: String {

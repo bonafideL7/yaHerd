@@ -150,6 +150,8 @@ struct FieldCheckBadge: View {
     var body: some View {
         Text(title)
             .font(.caption.weight(.semibold))
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(tint.opacity(0.14), in: Capsule())

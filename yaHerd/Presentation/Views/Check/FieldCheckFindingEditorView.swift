@@ -30,8 +30,21 @@ struct FieldCheckFindingEditorView: View {
         animals
             .filter { $0.animalID != nil }
             .sorted { left, right in
-                left.displayTagNumber.localizedStandardCompare(right.displayTagNumber) == .orderedAscending
+                let leftKey = animalSortKey(for: left)
+                let rightKey = animalSortKey(for: right)
+                return leftKey.localizedStandardCompare(rightKey) == .orderedAscending
             }
+    }
+
+    private func animalSortKey(for animal: FieldCheckAnimalCheckSnapshot) -> String {
+        let trimmedName = animal.animalName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return [
+            animal.displayTagNumber,
+            trimmedName,
+            animal.animalType.label,
+            animal.animalSex.label
+        ]
+        .joined(separator: " ")
     }
 
     private var requiresLinkedAnimal: Bool {
@@ -67,15 +80,15 @@ struct FieldCheckFindingEditorView: View {
             }
             
             Section("Animal") {
-                Picker("Linked Animal", selection: $selectedAnimalID) {
-                    Text("None").tag(Optional<UUID>.none)
-                    ForEach(animalOptions) { animal in
-                        Text(animalOptionLabel(for: animal)).tag(animal.animalID)
-                    }
-                }
+                FieldCheckLinkedAnimalSelectorRow(
+                    animals: animalOptions,
+                    selectedAnimalID: $selectedAnimalID
+                )
             } footer: {
                 if requiresLinkedAnimal {
                     Text("Select the missing animal so the roster entry is marked missing automatically.")
+                } else {
+                    Text("Use the linked animal selector when a finding should be tied to a specific roster entry.")
                 }
             }
             
@@ -113,9 +126,4 @@ struct FieldCheckFindingEditorView: View {
         }
     }
 
-    private func animalOptionLabel(for animal: FieldCheckAnimalCheckSnapshot) -> String {
-        let trimmedName = animal.animalName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty else { return animal.displayTagNumber }
-        return "\(animal.displayTagNumber) • \(trimmedName)"
-    }
 }

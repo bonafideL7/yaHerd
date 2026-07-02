@@ -1,0 +1,188 @@
+import SwiftUI
+
+struct FieldCheckLinkedAnimalSelectorRow: View {
+    let animals: [FieldCheckAnimalCheckSnapshot]
+    @Binding var selectedAnimalID: UUID?
+
+    private var selectedAnimal: FieldCheckAnimalCheckSnapshot? {
+        guard let selectedAnimalID else { return nil }
+        return animals.first { $0.animalID == selectedAnimalID }
+    }
+
+    var body: some View {
+        NavigationLink {
+            FieldCheckAnimalPickerView(
+                animals: animals,
+                selectedAnimalID: $selectedAnimalID
+            )
+        } label: {
+            LabeledContent("Linked Animal") {
+                FieldCheckSelectedAnimalLabel(animal: selectedAnimal)
+            }
+        }
+    }
+}
+
+struct FieldCheckAnimalPickerView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let animals: [FieldCheckAnimalCheckSnapshot]
+    @Binding var selectedAnimalID: UUID?
+
+    var body: some View {
+        List {
+            Section {
+                Button {
+                    selectedAnimalID = nil
+                    dismiss()
+                } label: {
+                    HStack(spacing: 12) {
+                        Text("None")
+                            .foregroundStyle(.primary)
+
+                        Spacer(minLength: 12)
+
+                        if selectedAnimalID == nil {
+                            Image(systemName: "checkmark")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Section {
+                ForEach(animals) { animal in
+                    Button {
+                        selectedAnimalID = animal.animalID
+                        dismiss()
+                    } label: {
+                        HStack(alignment: .center, spacing: 12) {
+                            FieldCheckAnimalPickerRow(animal: animal)
+
+                            if selectedAnimalID == animal.animalID {
+                                Image(systemName: "checkmark")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(Color.accentColor)
+                                    .fixedSize()
+                            }
+                        }
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                Text("Roster Animals")
+            } footer: {
+                Text("Animals are shown with check-specific status and type details instead of pasture or birth date metadata.")
+            }
+        }
+        .navigationTitle("Linked Animal")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct FieldCheckSelectedAnimalLabel: View {
+    let animal: FieldCheckAnimalCheckSnapshot?
+
+    var body: some View {
+        if let animal {
+            Text(selectionTitle(for: animal))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        } else {
+            Text("None")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func selectionTitle(for animal: FieldCheckAnimalCheckSnapshot) -> String {
+        let trimmedName = animal.animalName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = trimmedName.isEmpty ? animal.displayTagNumber : "\(animal.displayTagNumber) • \(trimmedName)"
+        return "\(base) • \(animal.animalType.label)"
+    }
+}
+
+private struct FieldCheckAnimalPickerRow: View {
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+
+    let animal: FieldCheckAnimalCheckSnapshot
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                animalTag
+                primaryInfoPill
+            }
+
+            VStack(alignment: .trailing, spacing: 8) {
+                FieldCheckAnimalPickerStatusPills(animal: animal)
+                typeAndSexPill
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var animalTag: some View {
+        let definition = tagColorLibrary.resolvedDefinition(tagColorID: animal.displayTagColorID)
+        let damDefinition = tagColorLibrary.resolvedDefinition(tagColorID: animal.damDisplayTagColorID)
+
+        return AnimalTagView(
+            tagNumber: animal.displayTagNumber,
+            color: definition.color,
+            colorName: definition.name,
+            damTagNumber: animal.damDisplayTagNumber,
+            damTagColor: damDefinition.color,
+            damTagColorName: damDefinition.name,
+            damTagVisibility: animal.animalType == .calf ? .always : .whenUntagged
+        )
+    }
+
+    private var primaryInfoPill: some View {
+        let trimmedName = animal.animalName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = trimmedName.isEmpty ? animal.animalType.label : trimmedName
+
+        return AnimalListInfoPill(title: title, systemImage: "")
+            .lineLimit(1)
+            .truncationMode(.tail)
+    }
+
+    private var typeAndSexPill: some View {
+        AnimalListInfoPill(
+            title: "\(animal.animalType.label) • \(animal.animalSex.label)",
+            systemImage: "tag"
+        )
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+private struct FieldCheckAnimalPickerStatusPills: View {
+    let animal: FieldCheckAnimalCheckSnapshot
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if animal.isMissing {
+                FieldCheckBadge(title: "Missing", tint: .orange)
+            }
+
+            if animal.wasCounted {
+                FieldCheckBadge(title: "Counted", tint: .green)
+            }
+
+            if animal.needsAttention {
+                FieldCheckBadge(title: "Flagged", tint: .orange)
+            }
+
+            if !animal.isMissing && !animal.wasCounted && !animal.needsAttention {
+                FieldCheckBadge(title: "Expected", tint: .secondary)
+            }
+        }
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
