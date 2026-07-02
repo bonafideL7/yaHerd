@@ -275,7 +275,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     ) -> Bool {
         session.findings.contains { finding in
             finding.publicID != excludingFindingID
-                && animalID(for: finding) == animalID
+                && self.animalID(for: finding) == animalID
                 && finding.status != .resolved
         }
     }

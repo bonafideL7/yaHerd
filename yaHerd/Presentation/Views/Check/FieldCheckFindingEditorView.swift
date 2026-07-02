@@ -79,11 +79,13 @@ struct FieldCheckFindingEditorView: View {
                 }
             }
             
-            Section("Animal") {
+            Section {
                 FieldCheckLinkedAnimalSelectorRow(
                     animals: animalOptions,
                     selectedAnimalID: $selectedAnimalID
                 )
+            } header: {
+                Text("Animal")
             } footer: {
                 if requiresLinkedAnimal {
                     Text("Select the missing animal so the roster entry is marked missing automatically.")
