@@ -33,6 +33,14 @@ struct FieldCheckFindingEditorView: View {
                 left.displayTagNumber.localizedStandardCompare(right.displayTagNumber) == .orderedAscending
             }
     }
+
+    private var requiresLinkedAnimal: Bool {
+        FieldCheckFindingRules.shouldMarkAnimalMissing(for: type)
+    }
+
+    private var canSave: Bool {
+        !requiresLinkedAnimal || selectedAnimalID != nil
+    }
     
     var body: some View {
         Form {
@@ -62,8 +70,12 @@ struct FieldCheckFindingEditorView: View {
                 Picker("Linked Animal", selection: $selectedAnimalID) {
                     Text("None").tag(Optional<UUID>.none)
                     ForEach(animalOptions) { animal in
-                        Text(animal.displayTagNumber).tag(animal.animalID)
+                        Text(animalOptionLabel(for: animal)).tag(animal.animalID)
                     }
+                }
+            } footer: {
+                if requiresLinkedAnimal {
+                    Text("Select the missing animal so the roster entry is marked missing automatically.")
                 }
             }
             
@@ -93,7 +105,17 @@ struct FieldCheckFindingEditorView: View {
                     )
                     dismiss()
                 }
+                .disabled(!canSave)
             }
         }
+        .onChange(of: type) { _, newType in
+            severity = FieldCheckFindingRules.defaultSeverity(for: newType)
+        }
+    }
+
+    private func animalOptionLabel(for animal: FieldCheckAnimalCheckSnapshot) -> String {
+        let trimmedName = animal.animalName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return animal.displayTagNumber }
+        return "\(animal.displayTagNumber) • \(trimmedName)"
     }
 }

@@ -67,6 +67,48 @@ final class SwiftDataFieldCheckRepositoryQuickCountTests: XCTestCase {
         XCTAssertEqual(updatedDetail.missingAnimalCount, 1)
     }
 
+    func testMissingAnimalFindingMarksRosterEntryMissingAndNormalizesQuickCount() throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = ModelContext(container)
+        let repository = SwiftDataFieldCheckRepository(context: context)
+        let pasture = try makePastureWithAnimals(context: context, animalCount: 3, sex: .female)
+
+        let sessionID = try repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.publicID,
+                startedAt: Date(timeIntervalSince1970: 0),
+                notes: ""
+            )
+        )
+        try repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.heifer: 3])
+
+        let initialDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let animalCheck = try XCTUnwrap(initialDetail.animalChecks.first)
+        let animalID = try XCTUnwrap(animalCheck.animalID)
+
+        try repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSince1970: 10),
+                type: .missingAnimal,
+                severity: .critical,
+                status: .open,
+                note: "Gate was open.",
+                animalID: animalID
+            )
+        )
+
+        let updatedDetail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let updatedAnimalCheck = try XCTUnwrap(updatedDetail.animalChecks.first { $0.id == animalCheck.id })
+        XCTAssertTrue(updatedAnimalCheck.isMissing)
+        XCTAssertTrue(updatedAnimalCheck.needsAttention)
+        XCTAssertFalse(updatedAnimalCheck.wasCounted)
+        XCTAssertEqual(updatedDetail.quickHeiferCount, 2)
+        XCTAssertEqual(updatedDetail.quickAnimalTypeCounts[.heifer], 2)
+        XCTAssertEqual(updatedDetail.totalSeen, 2)
+        XCTAssertEqual(updatedDetail.missingAnimalCount, 1)
+    }
+
     private func makePastureWithAnimals(
         context: ModelContext,
         animalCount: Int,

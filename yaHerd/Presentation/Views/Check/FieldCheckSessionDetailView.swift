@@ -345,6 +345,15 @@ struct FieldCheckSessionDetailView: View {
                                 isCounted: !check.wasCounted,
                                 using: repository
                             )
+                        },
+                        onToggleMissing: {
+                            guard let currentSessionID else { return }
+                            model.setAnimalCheckMissing(
+                                sessionID: currentSessionID,
+                                animalCheckID: check.id,
+                                isMissing: !check.isMissing,
+                                using: repository
+                            )
                         }
                     )
                 }
@@ -352,7 +361,7 @@ struct FieldCheckSessionDetailView: View {
         } header: {
             Text("Roster")
         } footer: {
-            Text("Each animal can be marked counted once, which prevents accidental double counting.")
+            Text("Mark animals counted as they are verified, or swipe a roster row to mark an animal missing.")
         }
     }
     

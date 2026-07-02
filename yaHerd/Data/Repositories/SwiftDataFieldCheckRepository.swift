@@ -122,17 +122,19 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             throw FieldCheckRepositoryError.sessionNotFound
         }
 
+        let animal = try fetchAnimal(id: input.animalID)
         let finding = FieldCheckFinding(
             recordedAt: input.recordedAt,
             type: input.type,
             severity: input.severity,
             status: input.status,
             note: input.note.trimmingCharacters(in: .whitespacesAndNewlines),
-            animal: try fetchAnimal(id: input.animalID),
+            animal: animal,
             session: session
         )
         try ensureUniqueFindingPublicID(finding)
         context.insert(finding)
+        applyFindingSideEffects(input: input, linkedAnimal: animal, session: session)
         try context.save()
     }
 
@@ -181,6 +183,27 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         }
 
         try context.save()
+    }
+
+    private func applyFindingSideEffects(
+        input: FieldCheckFindingInput,
+        linkedAnimal: Animal?,
+        session: FieldCheckSession
+    ) {
+        guard FieldCheckFindingRules.shouldMarkAnimalMissing(for: input.type) else { return }
+        guard let linkedAnimal else { return }
+        guard let check = animalCheck(for: linkedAnimal.publicID, in: session) else { return }
+
+        check.missingConfirmedAt = input.recordedAt
+        check.countedAt = nil
+        check.needsAttention = true
+        normalizeQuickAnimalTypeCounts(for: session)
+    }
+
+    private func animalCheck(for animalID: UUID, in session: FieldCheckSession) -> FieldCheckAnimalCheck? {
+        session.animalChecks.first { check in
+            check.animal?.publicID == animalID
+        }
     }
 
     private func currentQuickAnimalTypeCounts(for session: FieldCheckSession) -> [AnimalType: Int] {

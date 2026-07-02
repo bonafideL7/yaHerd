@@ -107,10 +107,33 @@ struct FieldCheckAnimalDetailView: View {
     @ViewBuilder
     private func fieldCheckFindingsSection(_ animalCheck: FieldCheckAnimalCheckSnapshot) -> some View {
         Section {
-            if animalCheck.isMissing {
-                HStack(spacing: 8) {
+            HStack {
+                if animalCheck.isMissing {
                     FieldCheckBadge(title: "Missing", tint: .orange)
+                } else {
+                    Text("No missing status recorded.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
+
+                Spacer(minLength: 12)
+
+                Button {
+                    model.setAnimalCheckMissing(
+                        animalID: animalID,
+                        sessionID: sessionID,
+                        isMissing: !animalCheck.isMissing,
+                        animalRepository: animalRepository,
+                        fieldCheckRepository: fieldCheckRepository
+                    )
+                } label: {
+                    Label(
+                        animalCheck.isMissing ? "Clear Missing" : "Mark Missing",
+                        systemImage: animalCheck.isMissing ? "checkmark.circle" : "exclamationmark.triangle"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .tint(animalCheck.isMissing ? .accentColor : .orange)
             }
             
             ScrollView(.horizontal, showsIndicators: false) {
@@ -158,7 +181,7 @@ struct FieldCheckAnimalDetailView: View {
         } header: {
             Text("Findings")
         } footer: {
-            Text("This animal is marked as needing attention whenever findings exist in the current check.")
+            Text("A Missing Animal finding marks this roster entry missing automatically. Clearing missing status does not delete existing findings.")
         }
     }
     

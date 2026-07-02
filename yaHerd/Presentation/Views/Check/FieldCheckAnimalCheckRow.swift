@@ -7,6 +7,7 @@ struct FieldCheckAnimalCheckRow: View {
     let sessionID: UUID
     let check: FieldCheckAnimalCheckSnapshot
     let onToggleCounted: () -> Void
+    let onToggleMissing: () -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -29,8 +30,14 @@ struct FieldCheckAnimalCheckRow: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                    if check.needsAttention {
-                        FieldCheckBadge(title: "Flagged", tint: .orange)
+                    HStack(spacing: 6) {
+                        if check.isMissing {
+                            FieldCheckBadge(title: "Missing", tint: .orange)
+                        }
+
+                        if check.needsAttention {
+                            FieldCheckBadge(title: "Flagged", tint: .orange)
+                        }
                     }
                 }
                 
@@ -39,10 +46,10 @@ struct FieldCheckAnimalCheckRow: View {
                 Button {
                     onToggleCounted()
                 } label: {
-                    Label(check.wasCounted ? "Counted" : "Count", systemImage: check.wasCounted ? "checkmark.circle.fill" : "circle")
+                    Label(primaryActionTitle, systemImage: primaryActionSystemImage)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(check.wasCounted ? .green : .accentColor)
+                .tint(primaryActionTint)
                 .foregroundStyle(colorScheme == .dark ? .black : .white)
             }
             
@@ -56,5 +63,56 @@ struct FieldCheckAnimalCheckRow: View {
             }
         }
         .padding(.vertical, 4)
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                onToggleMissing()
+            } label: {
+                Label(missingActionTitle, systemImage: missingActionSystemImage)
+            }
+            .tint(check.isMissing ? .accentColor : .orange)
+        }
+        .contextMenu {
+            Button {
+                onToggleCounted()
+            } label: {
+                Label(countToggleActionTitle, systemImage: primaryActionSystemImage)
+            }
+
+            Button {
+                onToggleMissing()
+            } label: {
+                Label(missingActionTitle, systemImage: missingActionSystemImage)
+            }
+        }
+    }
+
+    private var countToggleActionTitle: String {
+        check.wasCounted ? "Clear Counted" : primaryActionTitle
+    }
+
+    private var primaryActionTitle: String {
+        if check.wasCounted { return "Counted" }
+        if check.isMissing { return "Found" }
+        return "Count"
+    }
+
+    private var primaryActionSystemImage: String {
+        if check.wasCounted { return "checkmark.circle.fill" }
+        if check.isMissing { return "checkmark.circle" }
+        return "circle"
+    }
+
+    private var primaryActionTint: Color {
+        if check.wasCounted { return .green }
+        if check.isMissing { return .accentColor }
+        return .accentColor
+    }
+
+    private var missingActionTitle: String {
+        check.isMissing ? "Clear Missing" : "Mark Missing"
+    }
+
+    private var missingActionSystemImage: String {
+        check.isMissing ? "checkmark.circle" : "exclamationmark.triangle"
     }
 }
