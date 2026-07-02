@@ -81,7 +81,6 @@ final class FieldCheckAnimalCheck {
     var wasExpectedAtStart: Bool = true
     var countedAt: Date?
     var missingConfirmedAt: Date?
-    var needsAttention: Bool = false
     var note: String = ""
 
     @Relationship(deleteRule: .nullify)
@@ -103,7 +102,6 @@ final class FieldCheckAnimalCheck {
         wasExpectedAtStart: Bool = true,
         countedAt: Date? = nil,
         missingConfirmedAt: Date? = nil,
-        needsAttention: Bool = false,
         note: String = "",
         animal: Animal? = nil,
         session: FieldCheckSession? = nil
@@ -120,7 +118,6 @@ final class FieldCheckAnimalCheck {
         self.wasExpectedAtStart = wasExpectedAtStart
         self.countedAt = countedAt
         self.missingConfirmedAt = missingConfirmedAt
-        self.needsAttention = needsAttention
         self.note = note
         self.animal = animal
         self.session = session

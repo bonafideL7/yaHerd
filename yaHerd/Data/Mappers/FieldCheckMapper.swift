@@ -3,7 +3,7 @@ import Foundation
 enum FieldCheckMapper {
     static func makeAnimalCheckSnapshot(
         from check: FieldCheckAnimalCheck,
-        needsAttention: Bool? = nil
+        needsAttention: Bool
     ) -> FieldCheckAnimalCheckSnapshot {
         FieldCheckAnimalCheckSnapshot(
             id: check.publicID,
@@ -17,7 +17,7 @@ enum FieldCheckMapper {
             animalType: check.animalTypeSnapshot,
             wasExpectedAtStart: check.wasExpectedAtStart,
             wasCounted: check.wasCounted,
-            needsAttention: needsAttention ?? check.needsAttention,
+            needsAttention: needsAttention,
             isMissing: check.isMissing
         )
     }
