@@ -10,7 +10,7 @@ struct FieldCheckQuickCountRosterEntry: Hashable {
 enum FieldCheckQuickCountRules {
     static func individuallyVerifiedCount(in rosterEntries: [FieldCheckQuickCountRosterEntry]) -> Int {
         rosterEntries.filter { entry in
-            entry.wasExpectedAtStart && entry.wasCounted
+            entry.wasCounted && !entry.isMissing
         }.count
     }
 

@@ -76,6 +76,17 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
+    func addTrackedAnimalToSession(sessionID: UUID, animalID: UUID, using repository: any FieldCheckSessionDetailRepository) -> Bool {
+        do {
+            try repository.addTrackedAnimalToSession(sessionID: sessionID, animalID: animalID, checkedAt: .now)
+            refresh(sessionID: sessionID, using: repository)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func addFinding(sessionID: UUID, input: FieldCheckFindingInput, using repository: any FieldCheckSessionDetailRepository) {
         do {
             try repository.addFinding(sessionID: sessionID, input: input)
@@ -218,6 +229,14 @@ final class FieldCheckAnimalDetailViewModel {
         }
     }
 
+    func addTrackedAnimalToSession(
+        animalID: UUID,
+        sessionID: UUID,
+        fieldCheckRepository: any FieldCheckAnimalDetailRepository
+    ) throws {
+        try fieldCheckRepository.addTrackedAnimalToSession(sessionID: sessionID, animalID: animalID, checkedAt: dateProvider.now)
+    }
+
     func addFinding(
         animalID: UUID,
         sessionID: UUID,
@@ -282,5 +301,51 @@ final class FieldCheckAnimalDetailViewModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+@MainActor
+@Observable
+final class FieldCheckTrackedAnimalPickerViewModel {
+    private(set) var animals: [AnimalSummary] = []
+    var searchText = ""
+    var errorMessage: String?
+    var hasLoaded = false
+
+    func load(using repository: any AnimalSummaryReading) {
+        defer { hasLoaded = true }
+
+        do {
+            animals = try LoadAnimalsUseCase(repository: repository).execute()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func eligibleAnimals(
+        forPastureID pastureID: UUID?,
+        excluding checkedAnimalIDs: Set<UUID>
+    ) -> [AnimalSummary] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return animals
+            .filter { animal in
+                animal.status == .active
+                    && !animal.isArchived
+                    && animal.pastureID != pastureID
+                    && !checkedAnimalIDs.contains(animal.id)
+            }
+            .filter { animal in
+                guard !query.isEmpty else { return true }
+                return animal.displayTagNumber.localizedCaseInsensitiveContains(query)
+                    || animal.name.localizedCaseInsensitiveContains(query)
+                    || (animal.pastureName?.localizedCaseInsensitiveContains(query) ?? false)
+            }
+            .sorted { left, right in
+                let lhs = left.displayTagNumber.isEmpty ? left.name : left.displayTagNumber
+                let rhs = right.displayTagNumber.isEmpty ? right.name : right.displayTagNumber
+                return lhs.localizedStandardCompare(rhs) == .orderedAscending
+            }
     }
 }

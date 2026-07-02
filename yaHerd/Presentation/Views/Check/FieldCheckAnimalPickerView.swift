@@ -186,3 +186,93 @@ private struct FieldCheckAnimalPickerStatusPills: View {
         .fixedSize(horizontal: true, vertical: false)
     }
 }
+
+struct FieldCheckTrackedAnimalPickerView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.animalListRepository) private var animalRepository
+
+    @State private var model = FieldCheckTrackedAnimalPickerViewModel()
+
+    let session: FieldCheckSessionDetailSnapshot
+    let onSelect: (UUID) -> Bool
+
+    private var existingAnimalIDs: Set<UUID> {
+        Set(session.animalChecks.compactMap(\.animalID))
+    }
+
+    private var eligibleAnimals: [AnimalSummary] {
+        model.eligibleAnimals(
+            forPastureID: session.pastureID,
+            excluding: existingAnimalIDs
+        )
+    }
+
+    private var destinationName: String {
+        session.pastureName ?? "this pasture"
+    }
+
+    var body: some View {
+        List {
+            Section {
+                if eligibleAnimals.isEmpty {
+                    ContentUnavailableView(
+                        "No Tracked Animals",
+                        systemImage: "tag",
+                        description: Text("No active tracked herd animals from other pastures match this search.")
+                    )
+                } else {
+                    ForEach(eligibleAnimals) { animal in
+                        Button {
+                            if onSelect(animal.id) {
+                                dismiss()
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 8) {
+                                AnimalListRowContent(animal: animal)
+
+                                Text(moveSummary(for: animal))
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } header: {
+                Text("Tracked Herd Animals")
+            } footer: {
+                Text("Selecting an animal moves it to \(destinationName), records a pasture movement, adds it to this check, and marks it checked. Use Add Offspring from the dam record for new calves.")
+            }
+        }
+        .navigationTitle("Add to Pasture")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $model.searchText, prompt: "Search animals")
+        .task {
+            if !model.hasLoaded {
+                model.load(using: animalRepository)
+            }
+        }
+        .alert("Can’t Load Animals", isPresented: errorBinding) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.errorMessage ?? "Unknown error")
+        }
+    }
+
+    private func moveSummary(for animal: AnimalSummary) -> String {
+        let fromName = animal.pastureName ?? "No pasture"
+        return "Move from \(fromName) to \(destinationName)"
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { model.errorMessage != nil },
+            set: { newValue in
+                if !newValue {
+                    model.errorMessage = nil
+                }
+            }
+        )
+    }
+}

@@ -11,10 +11,12 @@ struct AnimalMovementStore {
         date: Date = .now,
         save: Bool = true
     ) throws -> Bool {
+        let previousPastureID = animal.pasture?.publicID
+        let newPastureID = pasture?.publicID
         let previousName = fromPastureName ?? animal.pasture?.name
         let newName = pasture?.name
 
-        guard previousName != newName else { return false }
+        guard previousPastureID != newPastureID || previousName != newName else { return false }
 
         animal.pasture = pasture
         animal.location = .pasture

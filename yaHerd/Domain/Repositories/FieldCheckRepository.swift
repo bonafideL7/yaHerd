@@ -5,6 +5,8 @@ enum FieldCheckRepositoryError: LocalizedError {
     case animalCheckNotFound
     case findingNotFound
     case pastureNotFound
+    case animalNotFound
+    case animalNotActive
     case sessionCompleted
 
     var errorDescription: String? {
@@ -17,6 +19,10 @@ enum FieldCheckRepositoryError: LocalizedError {
             return "The finding could not be found."
         case .pastureNotFound:
             return "The pasture could not be found."
+        case .animalNotFound:
+            return "The animal could not be found."
+        case .animalNotActive:
+            return "Only active herd animals can be added to a pasture check."
         case .sessionCompleted:
             return "This check is completed. Reopen it before making changes."
         }
@@ -59,6 +65,10 @@ protocol FieldCheckAnimalCheckWriting {
     func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool) throws
 }
 
+protocol FieldCheckTrackedAnimalAdding {
+    func addTrackedAnimalToSession(sessionID: UUID, animalID: UUID, checkedAt: Date) throws
+}
+
 protocol FieldCheckFindingWriting {
     func addFinding(sessionID: UUID, input: FieldCheckFindingInput) throws
     func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus) throws
@@ -77,6 +87,7 @@ protocol FieldCheckSessionDetailRepository:
     FieldCheckQuickCountUpdating,
     FieldCheckNotesUpdating,
     FieldCheckAnimalCheckWriting,
+    FieldCheckTrackedAnimalAdding,
     FieldCheckFindingWriting,
     FieldCheckSessionCompletionWriting
 {}
@@ -84,6 +95,7 @@ protocol FieldCheckSessionDetailRepository:
 protocol FieldCheckAnimalDetailRepository:
     FieldCheckSessionDetailReading,
     FieldCheckAnimalCheckWriting,
+    FieldCheckTrackedAnimalAdding,
     FieldCheckFindingWriting
 {}
 

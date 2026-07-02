@@ -56,18 +56,10 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         context.insert(session)
 
         for animal in rosterAnimals {
-            let check = FieldCheckAnimalCheck(
-                animalIDSnapshot: animal.publicID,
-                rosterTagNumber: animal.displayTagNumber,
-                rosterTagColorID: animal.displayTagColorID,
-                damRosterTagNumber: AnimalDisplayTagFormatter.displayTagNumber(for: animal.damAnimal) ?? "",
-                damRosterTagColorID: animal.damAnimal?.displayTagColorID,
-                animalName: animal.name,
-                animalSex: animal.sex ?? .unknown,
-                animalType: animal.animalType,
-                wasExpectedAtStart: true,
-                animal: animal,
-                session: session
+            let check = makeAnimalCheck(
+                for: animal,
+                in: session,
+                wasExpectedAtStart: true
             )
             try ensureUniqueAnimalCheckPublicID(check)
             context.insert(check)
@@ -128,6 +120,51 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             check.missingConfirmedAt = nil
         }
         normalizeQuickAnimalTypeCounts(for: check.session)
+        try context.save()
+    }
+
+    func addTrackedAnimalToSession(sessionID: UUID, animalID: UUID, checkedAt: Date) throws {
+        guard let session = try fetchSession(id: sessionID) else {
+            throw FieldCheckRepositoryError.sessionNotFound
+        }
+        try ensureSessionIsEditable(session)
+        try saveIfNeeded(backfillHistoricalSnapshots(in: session))
+
+        guard let animal = try fetchAnimal(id: animalID) else {
+            throw FieldCheckRepositoryError.animalNotFound
+        }
+        guard animal.isActiveInHerd else {
+            throw FieldCheckRepositoryError.animalNotActive
+        }
+        guard let destinationPasture = try sessionPasture(for: session) else {
+            throw FieldCheckRepositoryError.pastureNotFound
+        }
+
+        if let existingCheck = animalCheck(for: animalID, in: session) {
+            existingCheck.countedAt = checkedAt
+            existingCheck.missingConfirmedAt = nil
+            if animal.pasture?.publicID != destinationPasture.publicID {
+                try AnimalMovementStore.move(animal, to: destinationPasture, in: context, date: checkedAt, save: false)
+            }
+            normalizeQuickAnimalTypeCounts(for: session)
+            try context.save()
+            return
+        }
+
+        if animal.pasture?.publicID != destinationPasture.publicID {
+            try AnimalMovementStore.move(animal, to: destinationPasture, in: context, date: checkedAt, save: false)
+        }
+
+        let check = makeAnimalCheck(
+            for: animal,
+            in: session,
+            wasExpectedAtStart: false,
+            countedAt: checkedAt
+        )
+        try ensureUniqueAnimalCheckPublicID(check)
+        context.insert(check)
+        session.expectedHeadCountSnapshot += 1
+        normalizeQuickAnimalTypeCounts(for: session)
         try context.save()
     }
 
@@ -226,6 +263,35 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         }
 
         try context.save()
+    }
+
+
+    private func sessionPasture(for session: FieldCheckSession) throws -> Pasture? {
+        if let pasture = session.pasture { return pasture }
+        return try fetchPasture(id: session.pastureID)
+    }
+
+    private func makeAnimalCheck(
+        for animal: Animal,
+        in session: FieldCheckSession,
+        wasExpectedAtStart: Bool,
+        countedAt: Date? = nil
+    ) -> FieldCheckAnimalCheck {
+        FieldCheckAnimalCheck(
+            animalIDSnapshot: animal.publicID,
+            rosterTagNumber: animal.displayTagNumber,
+            rosterTagColorID: animal.displayTagColorID,
+            damRosterTagNumber: AnimalDisplayTagFormatter.displayTagNumber(for: animal.damAnimal) ?? "",
+            damRosterTagColorID: animal.damAnimal?.displayTagColorID,
+            animalName: animal.name,
+            animalSex: animal.sex ?? .unknown,
+            animalType: animal.animalType,
+            wasExpectedAtStart: wasExpectedAtStart,
+            countedAt: countedAt,
+            missingConfirmedAt: nil,
+            animal: animal,
+            session: session
+        )
     }
 
 

@@ -279,6 +279,103 @@ final class SwiftDataFieldCheckRepositoryQuickCountTests: XCTestCase {
 
 
 
+
+    func testAddingTrackedAnimalFromAnotherPastureMovesAnimalAddsCheckedRosterEntryAndUpdatesExpectedCount() throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = ModelContext(container)
+        let repository = SwiftDataFieldCheckRepository(context: context)
+        let north = try makePastureWithAnimals(context: context, animalCount: 1, sex: .female)
+        let south = Pasture(name: "South")
+        context.insert(south)
+
+        let movedAnimal = Animal(
+            name: "Wanderer",
+            tagNumber: "20",
+            birthDate: Date(timeIntervalSince1970: 0),
+            status: .active,
+            pasture: south,
+            sex: .female
+        )
+        context.insert(movedAnimal)
+        try context.save()
+
+        let checkedAt = Date(timeIntervalSince1970: 60)
+        let sessionID = try repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: north.publicID,
+                startedAt: Date(timeIntervalSince1970: 0),
+                notes: ""
+            )
+        )
+
+        try repository.addTrackedAnimalToSession(
+            sessionID: sessionID,
+            animalID: movedAnimal.publicID,
+            checkedAt: checkedAt
+        )
+
+        let detail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let addedCheck = try XCTUnwrap(detail.animalChecks.first { $0.animalID == movedAnimal.publicID })
+        XCTAssertEqual(detail.expectedHeadCountSnapshot, 2)
+        XCTAssertEqual(detail.totalSeen, 1)
+        XCTAssertEqual(detail.remainingExpectedCount, 1)
+        XCTAssertTrue(addedCheck.wasCounted)
+        XCTAssertFalse(addedCheck.wasExpectedAtStart)
+        XCTAssertFalse(addedCheck.isMissing)
+        XCTAssertEqual(movedAnimal.pasture?.publicID, north.publicID)
+
+        let movements = try context.fetch(FetchDescriptor<MovementRecord>())
+        let movement = try XCTUnwrap(movements.first)
+        XCTAssertEqual(movements.count, 1)
+        XCTAssertEqual(movement.date, checkedAt)
+        XCTAssertEqual(movement.fromPasture, "South")
+        XCTAssertEqual(movement.toPasture, "North")
+        XCTAssertEqual(movement.animal?.publicID, movedAnimal.publicID)
+    }
+
+    func testAddingTrackedAnimalAlreadyInPastureAddsCheckedRosterEntryWithoutMovementRecord() throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = ModelContext(container)
+        let repository = SwiftDataFieldCheckRepository(context: context)
+        let north = try makePastureWithAnimals(context: context, animalCount: 1, sex: .female)
+
+        let sessionID = try repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: north.publicID,
+                startedAt: Date(timeIntervalSince1970: 0),
+                notes: ""
+            )
+        )
+
+        let newCalf = Animal(
+            name: "Calf",
+            tagNumber: "21",
+            birthDate: Date(),
+            status: .active,
+            pasture: north,
+            sex: .unknown
+        )
+        context.insert(newCalf)
+        try context.save()
+
+        try repository.addTrackedAnimalToSession(
+            sessionID: sessionID,
+            animalID: newCalf.publicID,
+            checkedAt: Date(timeIntervalSince1970: 90)
+        )
+
+        let detail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
+        let addedCheck = try XCTUnwrap(detail.animalChecks.first { $0.animalID == newCalf.publicID })
+        XCTAssertEqual(detail.expectedHeadCountSnapshot, 2)
+        XCTAssertEqual(detail.totalSeen, 1)
+        XCTAssertTrue(addedCheck.wasCounted)
+        XCTAssertFalse(addedCheck.wasExpectedAtStart)
+        XCTAssertEqual(addedCheck.animalType, .calf)
+
+        let movements = try context.fetch(FetchDescriptor<MovementRecord>())
+        XCTAssertTrue(movements.isEmpty)
+    }
+
     func testCompletedSessionRejectsFieldCheckEditsUntilReopened() throws {
         let container = try TestSupport.makeModelContainer()
         let context = ModelContext(container)
@@ -325,6 +422,13 @@ final class SwiftDataFieldCheckRepositoryQuickCountTests: XCTestCase {
         }
         assertSessionCompletedThrown {
             try repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: animalCheck.id, isMissing: true)
+        }
+        assertSessionCompletedThrown {
+            try repository.addTrackedAnimalToSession(
+                sessionID: sessionID,
+                animalID: animalID,
+                checkedAt: Date(timeIntervalSince1970: 30)
+            )
         }
         assertSessionCompletedThrown {
             try repository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: .resolved)

@@ -45,7 +45,7 @@ struct FieldCheckAnimalDetailView: View {
                     
                     AnimalDetailOffspringSection(
                         detail: detail,
-                        canAddOffspring: model.preparedOffspringEditor != nil,
+                        canAddOffspring: isSessionEditable && model.preparedOffspringEditor != nil,
                         onAddOffspring: {
                             showingAddOffspring = true
                         }
@@ -88,7 +88,13 @@ struct FieldCheckAnimalDetailView: View {
                     title: "Add Offspring",
                     initialDraft: preparedEditor.draft,
                     editorContext: preparedEditor.context
-                )
+                ) { createdAnimal in
+                    try model.addTrackedAnimalToSession(
+                        animalID: createdAnimal.id,
+                        sessionID: sessionID,
+                        fieldCheckRepository: fieldCheckRepository
+                    )
+                }
             }
         }
         .task {

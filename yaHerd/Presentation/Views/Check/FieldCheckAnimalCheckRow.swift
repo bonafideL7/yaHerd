@@ -64,6 +64,10 @@ struct FieldCheckAnimalCheckRow: View {
                             .truncationMode(.tail)
                     }
                     HStack(spacing: 6) {
+                        if !check.wasExpectedAtStart {
+                            FieldCheckBadge(title: "Added", tint: .secondary)
+                        }
+
                         if check.isMissing {
                             FieldCheckBadge(title: "Missing", tint: .orange)
                         }

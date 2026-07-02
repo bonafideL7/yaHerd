@@ -13,6 +13,7 @@ struct FieldCheckSessionDetailView: View {
     @State private var rosterFilter: FieldCheckRosterFilter = .all
     @State private var rosterSearchText = ""
     @State private var showingAddFinding = false
+    @State private var showingAddTrackedAnimal = false
     @State private var currentSessionID: UUID?
     @State private var selectedPastureID: UUID?
     @State private var startedAt: Date = .now
@@ -151,6 +152,20 @@ struct FieldCheckSessionDetailView: View {
                 ) { input in
                     guard let currentSessionID, model.detail?.isCompleted == false else { return }
                     model.addFinding(sessionID: currentSessionID, input: input, using: repository)
+                }
+            }
+        }
+        .sheet(isPresented: $showingAddTrackedAnimal) {
+            if let detail = model.detail {
+                NavigationStack {
+                    FieldCheckTrackedAnimalPickerView(session: detail) { animalID in
+                        guard let currentSessionID, model.detail?.isCompleted == false else { return false }
+                        return model.addTrackedAnimalToSession(
+                            sessionID: currentSessionID,
+                            animalID: animalID,
+                            using: repository
+                        )
+                    }
                 }
             }
         }
@@ -329,6 +344,14 @@ struct FieldCheckSessionDetailView: View {
                 }
             }
             .pickerStyle(.segmented)
+
+            if !detail.isCompleted {
+                Button {
+                    showingAddTrackedAnimal = true
+                } label: {
+                    Label("Add Tracked Animal to Pasture", systemImage: "arrow.left.arrow.right.circle")
+                }
+            }
             
             if filteredAnimalChecks.isEmpty {
                 ContentUnavailableView(
@@ -366,7 +389,7 @@ struct FieldCheckSessionDetailView: View {
         } header: {
             Text("Roster")
         } footer: {
-            Text(detail.isCompleted ? "Completed checks are locked. Reopen this check to edit roster statuses." : "Mark animals counted as they are verified, or swipe a roster row to mark an animal missing.")
+            Text(detail.isCompleted ? "Completed checks are locked. Reopen this check to edit roster statuses." : "Mark animals counted as they are verified. Add a tracked animal when an existing herd animal has moved into this pasture; use Add Offspring from the dam record for new calves.")
         }
     }
     

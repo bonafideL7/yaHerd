@@ -36,6 +36,23 @@ final class FieldCheckQuickCountRulesTests: XCTestCase {
         XCTAssertEqual(totalSeen, 3)
     }
 
+
+    func testTotalSeenIncludesCheckedAnimalsAddedAfterSessionStart() {
+        let rosterEntries = [
+            makeRosterEntry(type: .cow, wasExpectedAtStart: false, wasCounted: true),
+            makeRosterEntry(type: .cow),
+            makeRosterEntry(type: .cow)
+        ]
+
+        let totalSeen = FieldCheckQuickCountRules.totalSeen(
+            quickCounts: [.cow: 2],
+            rosterEntries: rosterEntries
+        )
+
+        XCTAssertEqual(totalSeen, 3)
+        XCTAssertEqual(FieldCheckQuickCountRules.individuallyVerifiedCount(in: rosterEntries), 1)
+    }
+
     func testMarkingAnimalMissingReducesQuickCountCapacity() {
         let rosterEntries = [
             makeRosterEntry(type: .heifer, isMissing: true),

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AddAnimalView: View {
     private let title: String
+    private let onSave: ((AnimalDetailSnapshot) throws -> Void)?
     @Environment(\.animalEditorRepository) private var repository
     @Environment(\.pastureReferenceDataReader) private var pastureReferenceDataReader
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
@@ -23,9 +24,11 @@ struct AddAnimalView: View {
     init(
         title: String = "Add Animal",
         initialDraft: AnimalEditorDraft = AnimalEditorDraft(),
-        editorContext: AnimalEditorContext = .standard
+        editorContext: AnimalEditorContext = .standard,
+        onSave: ((AnimalDetailSnapshot) throws -> Void)? = nil
     ) {
         self.title = title
+        self.onSave = onSave
         _viewModel = State(initialValue: AddAnimalViewModel(initialDraft: initialDraft, editorContext: editorContext))
     }
 
@@ -131,7 +134,8 @@ struct AddAnimalView: View {
 
     private func validateAndSave() {
         do {
-            try viewModel.save(defaultTagColorID: tagColorLibrary.defaultColorID, using: repository)
+            let createdAnimal = try viewModel.save(defaultTagColorID: tagColorLibrary.defaultColorID, using: repository)
+            try onSave?(createdAnimal)
             dismiss()
         } catch {
             viewModel.errorMessage = error.localizedDescription
