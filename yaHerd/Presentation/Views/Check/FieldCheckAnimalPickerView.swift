@@ -29,58 +29,208 @@ struct FieldCheckAnimalPickerView: View {
     let animals: [FieldCheckAnimalCheckSnapshot]
     @Binding var selectedAnimalID: UUID?
 
+    @State private var searchText = ""
+    @State private var selectedFilter: FieldCheckLinkedAnimalPickerFilter = .all
+
+    private var animalOptions: [FieldCheckAnimalCheckSnapshot] {
+        FieldCheckLinkedAnimalPickerRules.animalOptions(from: animals)
+    }
+
+    private var filteredAnimals: [FieldCheckAnimalCheckSnapshot] {
+        FieldCheckLinkedAnimalPickerRules.filteredAnimals(
+            from: animalOptions,
+            searchText: searchText,
+            filter: selectedFilter
+        )
+    }
+
+    private var selectedAnimal: FieldCheckAnimalCheckSnapshot? {
+        guard let selectedAnimalID else { return nil }
+        return animalOptions.first { $0.animalID == selectedAnimalID }
+    }
+
+    private var selectedAnimalIsVisible: Bool {
+        guard let selectedAnimalID else { return true }
+        return filteredAnimals.contains { $0.animalID == selectedAnimalID }
+    }
+
+    private var suggestionAnimals: [FieldCheckAnimalCheckSnapshot] {
+        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedSearch.isEmpty {
+            return FieldCheckLinkedAnimalPickerRules.priorityAnimals(
+                from: animalOptions,
+                excluding: selectedAnimalID,
+                limit: 6
+            )
+        }
+
+        return Array(filteredAnimals.prefix(6))
+    }
+
+    private var navigationSubtitle: String {
+        guard !animalOptions.isEmpty else { return "No roster animals" }
+        guard filteredAnimals.count != animalOptions.count else {
+            return "\(animalOptions.count) roster animals"
+        }
+        return "\(filteredAnimals.count) of \(animalOptions.count) roster animals"
+    }
+
+    private var emptyStateTitle: String {
+        animalOptions.isEmpty ? "No Roster Animals" : "No Matching Animals"
+    }
+
+    private var emptyStateDescription: String {
+        if animalOptions.isEmpty {
+            return "This check does not have any roster animals that can be linked to a finding."
+        }
+
+        return "Try a different tag number, name, dam tag, status, or filter."
+    }
+
     var body: some View {
         List {
-            Section {
-                Button {
-                    selectedAnimalID = nil
-                    dismiss()
-                } label: {
-                    HStack(spacing: 12) {
-                        Text("None")
-                            .foregroundStyle(.primary)
-
-                        Spacer(minLength: 12)
-
-                        if selectedAnimalID == nil {
-                            Image(systemName: "checkmark")
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(Color.accentColor)
-                        }
-                    }
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-            }
-
-            Section {
-                ForEach(animals) { animal in
-                    Button {
-                        selectedAnimalID = animal.animalID
-                        dismiss()
-                    } label: {
-                        HStack(alignment: .center, spacing: 12) {
-                            FieldCheckAnimalPickerRow(animal: animal)
-
-                            if selectedAnimalID == animal.animalID {
-                                Image(systemName: "checkmark")
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(Color.accentColor)
-                                    .fixedSize()
-                            }
-                        }
-                        .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                }
-            } header: {
-                Text("Roster Animals")
-            } footer: {
-                Text("Animals are shown with check-specific status and type details instead of pasture or birth date metadata.")
-            }
+            noneSection
+            selectedAnimalSection
+            animalResultsSection
         }
         .navigationTitle("Linked Animal")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationSubtitle(navigationSubtitle)
+        .searchable(
+            text: $searchText,
+            placement: .automatic,
+            prompt: "Search tag, name, dam, status"
+        )
+        .searchSuggestions {
+            ForEach(suggestionAnimals) { animal in
+                Text(suggestionTitle(for: animal))
+                    .searchCompletion(FieldCheckLinkedAnimalPickerRules.searchCompletionText(for: animal))
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                filterMenu
+            }
+        }
+    }
+
+    private var noneSection: some View {
+        Section {
+            Button {
+                selectedAnimalID = nil
+                dismiss()
+            } label: {
+                HStack(spacing: 12) {
+                    Text("None")
+                        .foregroundStyle(.primary)
+
+                    Spacer(minLength: 12)
+
+                    if selectedAnimalID == nil {
+                        Image(systemName: "checkmark")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+        } footer: {
+            Text("Leave unlinked for pasture-level findings like water, gate, or fence notes.")
+        }
+    }
+
+    @ViewBuilder
+    private var selectedAnimalSection: some View {
+        if let selectedAnimal, !selectedAnimalIsVisible {
+            Section("Current Selection") {
+                animalButton(selectedAnimal)
+            } footer: {
+                Text("The selected animal does not match the current search or filter, but it remains linked unless you choose another animal or None.")
+            }
+        }
+    }
+
+    private var animalResultsSection: some View {
+        Section {
+            if filteredAnimals.isEmpty {
+                ContentUnavailableView(
+                    emptyStateTitle,
+                    systemImage: "magnifyingglass",
+                    description: Text(emptyStateDescription)
+                )
+            } else {
+                ForEach(filteredAnimals) { animal in
+                    animalButton(animal)
+                }
+            }
+        } header: {
+            HStack {
+                Text(selectedFilter.label)
+                Spacer()
+                Text("\(filteredAnimals.count)")
+                    .foregroundStyle(.secondary)
+            }
+        } footer: {
+            Text("Search checks tag number, name, dam tag, type, sex, and field-check status. Use filters for missing, flagged, remaining, checked, or added animals.")
+        }
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            Picker("Filter", selection: $selectedFilter) {
+                ForEach(FieldCheckLinkedAnimalPickerFilter.allCases) { filter in
+                    Label(filter.label, systemImage: filter.systemImage)
+                        .tag(filter)
+                }
+            }
+
+            if !searchText.isEmpty || selectedFilter != .all {
+                Section {
+                    Button {
+                        searchText = ""
+                        selectedFilter = .all
+                    } label: {
+                        Label("Reset Search and Filter", systemImage: "arrow.counterclockwise")
+                    }
+                }
+            }
+        } label: {
+            Label(selectedFilter.label, systemImage: selectedFilter.systemImage)
+        }
+        .accessibilityLabel("Animal filter")
+    }
+
+    private func animalButton(_ animal: FieldCheckAnimalCheckSnapshot) -> some View {
+        Button {
+            selectedAnimalID = animal.animalID
+            dismiss()
+        } label: {
+            HStack(alignment: .center, spacing: 12) {
+                FieldCheckAnimalPickerRow(animal: animal)
+
+                if selectedAnimalID == animal.animalID {
+                    Image(systemName: "checkmark")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .fixedSize()
+                }
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func suggestionTitle(for animal: FieldCheckAnimalCheckSnapshot) -> String {
+        let completionText = FieldCheckLinkedAnimalPickerRules.searchCompletionText(for: animal)
+        let status = FieldCheckLinkedAnimalPickerRules.statusSummary(for: animal)
+        let trimmedName = animal.animalName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmedName.isEmpty || trimmedName == completionText {
+            return "\(completionText) • \(status)"
+        }
+
+        return "\(completionText) • \(trimmedName) • \(status)"
     }
 }
 
@@ -166,19 +316,23 @@ private struct FieldCheckAnimalPickerStatusPills: View {
 
     var body: some View {
         HStack(spacing: 6) {
+            if !animal.wasExpectedAtStart {
+                FieldCheckBadge(title: "Added", tint: .blue)
+            }
+
             if animal.isMissing {
                 FieldCheckBadge(title: "Missing", tint: .orange)
             }
 
             if animal.wasCounted {
-                FieldCheckBadge(title: "Counted", tint: .green)
+                FieldCheckBadge(title: "Checked", tint: .green)
             }
 
             if animal.needsAttention {
                 FieldCheckBadge(title: "Flagged", tint: .orange)
             }
 
-            if !animal.isMissing && !animal.wasCounted && !animal.needsAttention {
+            if animal.wasExpectedAtStart && !animal.isMissing && !animal.wasCounted && !animal.needsAttention {
                 FieldCheckBadge(title: "Expected", tint: .secondary)
             }
         }
