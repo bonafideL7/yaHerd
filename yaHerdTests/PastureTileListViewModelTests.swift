@@ -86,7 +86,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         let pastureRepository = PastureDeleteRepositorySpy()
         pastureRepository.existingIDs = [pasture.id]
         let animalRepository = AnimalPastureMovingSpy()
-        let fieldCheckRepository = FieldCheckPastureCleanupWriterSpy()
+        let fieldCheckRepository = FieldCheckPastureArchiveWriterSpy()
         let viewModel = PastureTileListViewModel()
         viewModel.load(using: loadRepository)
         viewModel.requestDelete(pasture)
@@ -101,7 +101,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.items.isEmpty)
         XCTAssertNil(viewModel.pasturePendingDeletion)
         XCTAssertEqual(pastureRepository.deletedIDs, [[pasture.id]])
-        XCTAssertEqual(fieldCheckRepository.cleanupCalls, [[pasture.id]])
+        XCTAssertEqual(fieldCheckRepository.archiveCalls.map(\.pastureIDs), [[pasture.id]])
     }
 
     func testDeletePastureRollsBackOnFailure() {
@@ -110,7 +110,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         let pastureRepository = PastureDeleteRepositorySpy()
         pastureRepository.existingIDs = []
         let animalRepository = AnimalPastureMovingSpy()
-        let fieldCheckRepository = FieldCheckPastureCleanupWriterSpy()
+        let fieldCheckRepository = FieldCheckPastureArchiveWriterSpy()
         let viewModel = PastureTileListViewModel()
         viewModel.load(using: loadRepository)
 

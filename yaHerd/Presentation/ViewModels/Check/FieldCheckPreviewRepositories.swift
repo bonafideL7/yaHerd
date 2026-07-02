@@ -16,5 +16,5 @@ struct EmptyFieldCheckRepository: FieldCheckRepository {
     func deleteFinding(sessionID: UUID, findingID: UUID) throws {}
     func completeSession(id: UUID) throws {}
     func reopenSession(id: UUID) throws {}
-    func deleteSessions(forPastureIDs ids: [UUID]) throws {}
+    func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) throws {}
 }

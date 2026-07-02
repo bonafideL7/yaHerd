@@ -13,6 +13,12 @@ final class FieldChecksViewModel {
         sessions.filter { !$0.isCompleted }
     }
 
+    var archivedPastureSessions: [FieldCheckSessionSummary] {
+        sessions
+            .filter(\.isPastureArchived)
+            .sorted { $0.startedAt > $1.startedAt }
+    }
+
     var recentSessions: [FieldCheckSessionSummary] {
         Array(
             sessions

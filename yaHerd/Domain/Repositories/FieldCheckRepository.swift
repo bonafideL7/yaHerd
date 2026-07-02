@@ -29,8 +29,8 @@ enum FieldCheckRepositoryError: LocalizedError {
     }
 }
 
-protocol FieldCheckPastureCleanupWriter {
-    func deleteSessions(forPastureIDs ids: [UUID]) throws
+protocol FieldCheckPastureArchiveWriter {
+    func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) throws
 }
 
 protocol FieldCheckSessionListReader {
@@ -101,7 +101,7 @@ protocol FieldCheckAnimalDetailRepository:
 {}
 
 protocol FieldCheckRepository:
-    FieldCheckPastureCleanupWriter,
+    FieldCheckPastureArchiveWriter,
     FieldCheckOverviewReading,
     FieldCheckSessionSetupRepository,
     FieldCheckSessionDetailRepository,

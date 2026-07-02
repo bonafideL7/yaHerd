@@ -42,6 +42,8 @@ struct FieldCheckSessionSummary: Identifiable, Hashable {
     let completedAt: Date?
     let pastureID: UUID?
     let pastureName: String?
+    let pastureArchivedAt: Date? = nil
+    let isPastureArchived: Bool = false
     let expectedHeadCountSnapshot: Int
     let quickCowCount: Int
     let quickHeiferCount: Int
@@ -54,6 +56,10 @@ struct FieldCheckSessionSummary: Identifiable, Hashable {
     var displayTitle: String {
         let trimmedPastureName = pastureName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmedPastureName.isEmpty ? "Pasture Check" : trimmedPastureName
+    }
+
+    var pastureStatusLabel: String? {
+        isPastureArchived ? "Archived pasture" : nil
     }
 
     var isCompleted: Bool {
@@ -112,6 +118,8 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
     let notes: String
     let pastureID: UUID?
     let pastureName: String?
+    let pastureArchivedAt: Date? = nil
+    let isPastureArchived: Bool = false
     let expectedHeadCountSnapshot: Int
     let quickCowCount: Int
     let quickHeiferCount: Int
@@ -124,6 +132,10 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
     var displayTitle: String {
         let trimmedPastureName = pastureName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmedPastureName.isEmpty ? "Pasture Check" : trimmedPastureName
+    }
+
+    var pastureStatusLabel: String? {
+        isPastureArchived ? "Archived pasture" : nil
     }
 
     var isCompleted: Bool {

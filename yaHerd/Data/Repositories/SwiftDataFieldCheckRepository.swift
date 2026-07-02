@@ -292,24 +292,39 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try context.save()
     }
 
-    func deleteSessions(forPastureIDs ids: [UUID]) throws {
+    func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) throws {
         guard !ids.isEmpty else { return }
 
-        for pastureID in Set(ids) {
-            let descriptor = FetchDescriptor<FieldCheckSession>(
-                predicate: #Predicate<FieldCheckSession> { session in
-                    session.pastureID == pastureID
-                }
-            )
-            let sessionsToDelete = try context.fetch(descriptor)
-            for session in sessionsToDelete {
-                context.delete(session)
-            }
-        }
+        let deletedPastureIDs = Set(ids)
+        let descriptor = FetchDescriptor<FieldCheckSession>()
+        let sessions = try context.fetch(descriptor)
 
-        try context.save()
+        // Do not save here. Pasture deletion uses the same ModelContext and commits
+        // the archive marker and pasture deletion together.
+        for session in sessions where sessionMatchesDeletedPasture(session, ids: deletedPastureIDs) {
+            backfillPastureSnapshotIfNeeded(in: session)
+            session.pastureArchivedAt = archivedAt
+        }
     }
 
+
+    private func sessionMatchesDeletedPasture(_ session: FieldCheckSession, ids: Set<UUID>) -> Bool {
+        if let pastureID = session.pastureID, ids.contains(pastureID) { return true }
+        if let pasture = session.pasture, ids.contains(pasture.publicID) { return true }
+        return false
+    }
+
+    private func backfillPastureSnapshotIfNeeded(in session: FieldCheckSession) {
+        guard let pasture = session.pasture else { return }
+
+        if session.pastureID == nil {
+            session.pastureID = pasture.publicID
+        }
+
+        if session.pastureNameSnapshot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            session.pastureNameSnapshot = pasture.name
+        }
+    }
 
     private func sessionPasture(for session: FieldCheckSession) throws -> Pasture? {
         if let pasture = session.pasture { return pasture }

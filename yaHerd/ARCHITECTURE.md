@@ -111,7 +111,7 @@ Pasture delete behavior is intentionally coordinated by `DeletePasturesUseCase`:
 1. validate requested pasture IDs
 2. fetch resident animals
 3. unassign resident animals through `AnimalPastureMoving`
-4. clean up related field-check sessions through `FieldCheckPastureCleanupWriter`
+4. archive related field-check sessions through `FieldCheckPastureArchiveWriter`
 5. delete the pasture records through `PastureDeleting`
 
 That cross-feature sequence should not be moved into `SwiftDataPastureRepository`.
@@ -180,7 +180,7 @@ The pasture check flow is separated as:
 
 Checks stay flexible by design: one session can mix head counts, tag-by-tag verification, and findings without templates or type-specific modes.
 
-Check-specific cleanup capabilities that are needed by other use cases should be exposed through narrow protocols, such as `FieldCheckPastureCleanupWriter`, instead of making unrelated features depend on the full `FieldCheckRepository` surface.
+Check-specific archive capabilities that are needed by other use cases should be exposed through narrow protocols, such as `FieldCheckPastureArchiveWriter`, instead of making unrelated features depend on the full `FieldCheckRepository` surface.
 
 ## Working reference implementation
 

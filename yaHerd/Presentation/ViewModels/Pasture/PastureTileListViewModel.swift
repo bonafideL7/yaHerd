@@ -101,7 +101,7 @@ final class PastureTileListViewModel {
         at offsets: IndexSet,
         pastureRepository: any PastureDeleteRepository & PastureOrdering,
         animalRepository: any AnimalPastureMoving,
-        fieldCheckRepository: any FieldCheckPastureCleanupWriter
+        fieldCheckRepository: any FieldCheckPastureArchiveWriter
     ) {
         let originalItems = items
         let ids: [UUID] = offsets.sorted().reduce(into: []) { result, index in
@@ -131,7 +131,7 @@ final class PastureTileListViewModel {
         id: UUID,
         pastureRepository: any PastureDeleteRepository & PastureOrdering,
         animalRepository: any AnimalPastureMoving,
-        fieldCheckRepository: any FieldCheckPastureCleanupWriter
+        fieldCheckRepository: any FieldCheckPastureArchiveWriter
     ) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         deletePastures(

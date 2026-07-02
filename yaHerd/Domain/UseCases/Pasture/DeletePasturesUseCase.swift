@@ -3,9 +3,9 @@ import Foundation
 struct DeletePasturesUseCase {
     let pastureRepository: any PastureDeleteRepository
     let animalRepository: any AnimalPastureMoving
-    let fieldCheckRepository: any FieldCheckPastureCleanupWriter
+    let fieldCheckRepository: any FieldCheckPastureArchiveWriter
 
-    func execute(ids: [UUID]) throws {
+    func execute(ids: [UUID], archivedAt: Date = .now) throws {
         guard !ids.isEmpty else { return }
         try validateUnique(ids)
         try pastureRepository.validatePastureIDsExist(ids)
@@ -18,7 +18,7 @@ struct DeletePasturesUseCase {
             try animalRepository.move(ids: residentAnimalIDs, toPastureID: nil)
         }
 
-        try fieldCheckRepository.deleteSessions(forPastureIDs: ids)
+        try fieldCheckRepository.archiveSessionsForDeletedPastures(ids, archivedAt: archivedAt)
         try pastureRepository.delete(ids: ids)
     }
 

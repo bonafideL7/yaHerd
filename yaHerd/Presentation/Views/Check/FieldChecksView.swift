@@ -63,6 +63,7 @@ struct FieldChecksView: View {
             && model.openFindings.isEmpty
             && flaggedSessions.isEmpty
             && missingSessions.isEmpty
+            && model.archivedPastureSessions.isEmpty
             && model.recentSessions.isEmpty
         case .inProgress:
             return model.activeSessions.isEmpty
@@ -167,6 +168,7 @@ struct FieldChecksView: View {
         openFindingsSection
         flaggedAnimalsSection
         missingAnimalsSection
+        archivedPasturesSection
         recentChecksSection
     }
 
@@ -224,6 +226,21 @@ struct FieldChecksView: View {
                         FieldCheckSessionDetailView(sessionID: session.id, opensMissingRoster: true)
                     } label: {
                         FieldCheckSessionSummaryRow(session: session, emphasis: .missing)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var archivedPasturesSection: some View {
+        if !model.archivedPastureSessions.isEmpty {
+            Section("Archived Pastures") {
+                ForEach(model.archivedPastureSessions) { session in
+                    NavigationLink {
+                        FieldCheckSessionDetailView(sessionID: session.id)
+                    } label: {
+                        FieldCheckSessionSummaryRow(session: session)
                     }
                 }
             }
@@ -321,14 +338,22 @@ private struct FieldCheckSessionSummaryRow: View {
 
                 Spacer()
 
-                FieldCheckBadge(
-                    title: session.isCompleted ? "Done" : "Open",
-                    tint: session.isCompleted ? Color.green : Color.orange
-                )
+                HStack(spacing: 6) {
+                    if session.isPastureArchived {
+                        FieldCheckBadge(title: "Archived", tint: Color.secondary)
+                    }
+
+                    FieldCheckBadge(
+                        title: session.isCompleted ? "Done" : "Open",
+                        tint: session.isCompleted ? Color.green : Color.orange
+                    )
+                }
             }
 
             HStack(spacing: 10) {
-                if let pastureName = session.pastureName {
+                if session.isPastureArchived {
+                    Label(session.pastureName ?? "Archived pasture", systemImage: "archivebox")
+                } else if let pastureName = session.pastureName {
                     Label(pastureName, systemImage: "leaf")
                 }
 

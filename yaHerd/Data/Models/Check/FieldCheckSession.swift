@@ -14,6 +14,7 @@ final class FieldCheckSession {
     var quickBullCount: Int = 0
     var quickSteerCount: Int = 0
     var pastureNameSnapshot: String = ""
+    var pastureArchivedAt: Date?
 
     @Relationship(deleteRule: .nullify)
     var pasture: Pasture?
@@ -47,6 +48,7 @@ final class FieldCheckSession {
         quickBullCount: Int = 0,
         quickSteerCount: Int = 0,
         pastureNameSnapshot: String = "",
+        pastureArchivedAt: Date? = nil,
         pastureID: UUID? = nil,
         pasture: Pasture? = nil
     ) {
@@ -61,6 +63,7 @@ final class FieldCheckSession {
         self.quickBullCount = quickBullCount
         self.quickSteerCount = quickSteerCount
         self.pastureNameSnapshot = pastureNameSnapshot
+        self.pastureArchivedAt = pastureArchivedAt
         self.pastureID = pastureID
         self.pasture = pasture
     }

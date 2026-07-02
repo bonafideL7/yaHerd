@@ -53,6 +53,8 @@ enum FieldCheckMapper {
             completedAt: session.completedAt,
             pastureID: session.pastureID ?? session.pasture?.publicID,
             pastureName: trimmed(session.pastureNameSnapshot),
+            pastureArchivedAt: session.pastureArchivedAt,
+            isPastureArchived: isPastureArchived(session),
             expectedHeadCountSnapshot: session.expectedHeadCountSnapshot,
             quickCowCount: session.quickCowCount,
             quickHeiferCount: session.quickHeiferCount,
@@ -78,6 +80,8 @@ enum FieldCheckMapper {
             notes: session.notes,
             pastureID: session.pastureID ?? session.pasture?.publicID,
             pastureName: trimmed(session.pastureNameSnapshot),
+            pastureArchivedAt: session.pastureArchivedAt,
+            isPastureArchived: isPastureArchived(session),
             expectedHeadCountSnapshot: session.expectedHeadCountSnapshot,
             quickCowCount: session.quickCowCount,
             quickHeiferCount: session.quickHeiferCount,
@@ -112,6 +116,12 @@ private extension FieldCheckMapper {
             animalID: animalID,
             findings: findings
         )
+    }
+
+    static func isPastureArchived(_ session: FieldCheckSession) -> Bool {
+        if session.pastureArchivedAt != nil { return true }
+        guard session.pasture == nil else { return false }
+        return session.pastureID != nil || trimmed(session.pastureNameSnapshot) != nil
     }
 
     static func displayTagNumber(from tagNumber: String) -> String? {

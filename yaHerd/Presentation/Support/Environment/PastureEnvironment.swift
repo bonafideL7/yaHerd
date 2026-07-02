@@ -10,7 +10,7 @@ enum MissingPastureDependencyError: LocalizedError {
     case pastureGroupEditorRepository
     case pastureReferenceDataReader
     case animalPastureMover
-    case fieldCheckPastureCleanupWriter
+    case fieldCheckPastureArchiveWriter
 
     var errorDescription: String? {
         switch self {
@@ -30,8 +30,8 @@ enum MissingPastureDependencyError: LocalizedError {
             return "Pasture reference data reader has not been configured."
         case .animalPastureMover:
             return "Animal pasture mover has not been configured."
-        case .fieldCheckPastureCleanupWriter:
-            return "Field check pasture cleanup writer has not been configured."
+        case .fieldCheckPastureArchiveWriter:
+            return "Field check pasture archive writer has not been configured."
         }
     }
 }
@@ -148,9 +148,9 @@ private struct MissingAnimalPastureMover: AnimalPastureMoving {
     }
 }
 
-private struct MissingFieldCheckPastureCleanupWriter: FieldCheckPastureCleanupWriter {
-    func deleteSessions(forPastureIDs ids: [UUID]) throws {
-        throw MissingPastureDependencyError.fieldCheckPastureCleanupWriter
+private struct MissingFieldCheckPastureArchiveWriter: FieldCheckPastureArchiveWriter {
+    func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) throws {
+        throw MissingPastureDependencyError.fieldCheckPastureArchiveWriter
     }
 }
 
@@ -186,8 +186,8 @@ private struct AnimalPastureMoverEnvironmentKey: EnvironmentKey {
     static let defaultValue: any AnimalPastureMoving = MissingAnimalPastureMover()
 }
 
-private struct FieldCheckPastureCleanupWriterEnvironmentKey: EnvironmentKey {
-    static let defaultValue: any FieldCheckPastureCleanupWriter = MissingFieldCheckPastureCleanupWriter()
+private struct FieldCheckPastureArchiveWriterEnvironmentKey: EnvironmentKey {
+    static let defaultValue: any FieldCheckPastureArchiveWriter = MissingFieldCheckPastureArchiveWriter()
 }
 
 extension EnvironmentValues {
@@ -231,8 +231,8 @@ extension EnvironmentValues {
         set { self[AnimalPastureMoverEnvironmentKey.self] = newValue }
     }
 
-    var fieldCheckPastureCleanupWriter: any FieldCheckPastureCleanupWriter {
-        get { self[FieldCheckPastureCleanupWriterEnvironmentKey.self] }
-        set { self[FieldCheckPastureCleanupWriterEnvironmentKey.self] = newValue }
+    var fieldCheckPastureArchiveWriter: any FieldCheckPastureArchiveWriter {
+        get { self[FieldCheckPastureArchiveWriterEnvironmentKey.self] }
+        set { self[FieldCheckPastureArchiveWriterEnvironmentKey.self] = newValue }
     }
 }

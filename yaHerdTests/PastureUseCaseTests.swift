@@ -73,7 +73,7 @@ final class PastureUseCaseTests: XCTestCase {
         XCTAssertTrue(repository.reorderedIDs.isEmpty)
     }
 
-    func testDeletePasturesCoordinatesAnimalUnassignmentFieldCheckCleanupAndPastureDelete() throws {
+    func testDeletePasturesCoordinatesAnimalUnassignmentFieldCheckArchiveAndPastureDelete() throws {
         let pastureID = UUID()
         let animalID = UUID()
         let pastureRepository = PastureDeleteRepositorySpy()
@@ -82,21 +82,22 @@ final class PastureUseCaseTests: XCTestCase {
             pastureID: [PastureTestSupport.makeAnimalSummary(id: animalID)]
         ]
         let animalRepository = AnimalPastureMovingSpy()
-        let fieldCheckRepository = FieldCheckPastureCleanupWriterSpy()
+        let fieldCheckRepository = FieldCheckPastureArchiveWriterSpy()
         let useCase = DeletePasturesUseCase(
             pastureRepository: pastureRepository,
             animalRepository: animalRepository,
             fieldCheckRepository: fieldCheckRepository
         )
 
-        try useCase.execute(ids: [pastureID])
+        try useCase.execute(ids: [pastureID], archivedAt: Date(timeIntervalSince1970: 100))
 
         XCTAssertEqual(pastureRepository.validateCalls, [[pastureID]])
         XCTAssertEqual(pastureRepository.fetchedResidentPastureIDs, [pastureID])
         XCTAssertEqual(animalRepository.moveCalls.count, 1)
         XCTAssertEqual(animalRepository.moveCalls.first?.ids, [animalID])
         XCTAssertNil(animalRepository.moveCalls.first?.pastureID)
-        XCTAssertEqual(fieldCheckRepository.cleanupCalls, [[pastureID]])
+        XCTAssertEqual(fieldCheckRepository.archiveCalls.map(\.pastureIDs), [[pastureID]])
+        XCTAssertEqual(fieldCheckRepository.archiveCalls.first?.archivedAt, Date(timeIntervalSince1970: 100))
         XCTAssertEqual(pastureRepository.deletedIDs, [[pastureID]])
     }
 
@@ -105,7 +106,7 @@ final class PastureUseCaseTests: XCTestCase {
         let pastureRepository = PastureDeleteRepositorySpy()
         pastureRepository.existingIDs = [pastureID]
         let animalRepository = AnimalPastureMovingSpy()
-        let fieldCheckRepository = FieldCheckPastureCleanupWriterSpy()
+        let fieldCheckRepository = FieldCheckPastureArchiveWriterSpy()
         let useCase = DeletePasturesUseCase(
             pastureRepository: pastureRepository,
             animalRepository: animalRepository,
@@ -118,7 +119,7 @@ final class PastureUseCaseTests: XCTestCase {
 
         XCTAssertTrue(pastureRepository.validateCalls.isEmpty)
         XCTAssertTrue(animalRepository.moveCalls.isEmpty)
-        XCTAssertTrue(fieldCheckRepository.cleanupCalls.isEmpty)
+        XCTAssertTrue(fieldCheckRepository.archiveCalls.isEmpty)
         XCTAssertTrue(pastureRepository.deletedIDs.isEmpty)
     }
 
@@ -127,7 +128,7 @@ final class PastureUseCaseTests: XCTestCase {
         let pastureRepository = PastureDeleteRepositorySpy()
         pastureRepository.existingIDs = [pastureID]
         let animalRepository = AnimalPastureMovingSpy()
-        let fieldCheckRepository = FieldCheckPastureCleanupWriterSpy()
+        let fieldCheckRepository = FieldCheckPastureArchiveWriterSpy()
         let useCase = DeletePasturesUseCase(
             pastureRepository: pastureRepository,
             animalRepository: animalRepository,
@@ -137,7 +138,7 @@ final class PastureUseCaseTests: XCTestCase {
         try useCase.execute(ids: [pastureID])
 
         XCTAssertTrue(animalRepository.moveCalls.isEmpty)
-        XCTAssertEqual(fieldCheckRepository.cleanupCalls, [[pastureID]])
+        XCTAssertEqual(fieldCheckRepository.archiveCalls.map(\.pastureIDs), [[pastureID]])
         XCTAssertEqual(pastureRepository.deletedIDs, [[pastureID]])
     }
     func testDeletePastureGroupsValidatesBeforeDelete() throws {

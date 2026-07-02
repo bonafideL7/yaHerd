@@ -3,7 +3,7 @@ import SwiftUI
 struct PastureTileListView: View {
     @Environment(\.pastureListRepository) private var repository
     @Environment(\.animalPastureMover) private var animalMover
-    @Environment(\.fieldCheckPastureCleanupWriter) private var fieldCheckCleanupWriter
+    @Environment(\.fieldCheckPastureArchiveWriter) private var fieldCheckArchiveWriter
 
     @State private var model = PastureTileListViewModel()
     @Binding private var isManaging: Bool
@@ -119,7 +119,7 @@ struct PastureTileListView: View {
                             id: pasture.id,
                             pastureRepository: repository,
                             animalRepository: animalMover,
-                            fieldCheckRepository: fieldCheckCleanupWriter
+                            fieldCheckRepository: fieldCheckArchiveWriter
                         )
                     }
                 }
@@ -128,9 +128,9 @@ struct PastureTileListView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             if let pasture = model.pasturePendingDeletion {
-                Text("This will permanently delete \(pasture.name). This action can’t be undone.")
+                Text("This will permanently delete the pasture record for \(pasture.name). Historical pasture checks will remain available under Archived Pastures.")
             } else {
-                Text("This action can’t be undone.")
+                Text("Historical pasture checks will remain available under Archived Pastures.")
             }
         }
         .task {

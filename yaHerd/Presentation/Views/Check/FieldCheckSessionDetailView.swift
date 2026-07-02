@@ -205,6 +205,7 @@ struct FieldCheckSessionDetailView: View {
     private func detailContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         List {
             completionSection(detail)
+            archivedPastureSection(detail)
 
             if detail.isCompleted {
                 lockedCheckSection
@@ -274,6 +275,28 @@ struct FieldCheckSessionDetailView: View {
     }
     
     @ViewBuilder
+    private func archivedPastureSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+        if detail.isPastureArchived {
+            Section {
+                Label {
+                    Text("This check is linked to a pasture that has been deleted. Historical roster, counts, findings, and notes remain available.")
+                } icon: {
+                    Image(systemName: "archivebox")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+                if let archivedAt = detail.pastureArchivedAt {
+                    LabeledContent("Archived") {
+                        Text(archivedAt.formatted(date: .abbreviated, time: .shortened))
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private func sessionPaneSection() -> some View {
         if availablePanes.count > 1 {
             Section {
@@ -310,6 +333,13 @@ struct FieldCheckSessionDetailView: View {
     
     private func summarySection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section("Summary") {
+            if detail.isPastureArchived {
+                LabeledContent("Pasture Status") {
+                    Text(detail.pastureStatusLabel ?? "Archived pasture")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             LabeledContent("Expected") {
                 Text("\(detail.expectedHeadCountSnapshot)")
             }

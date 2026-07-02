@@ -294,7 +294,7 @@ private struct RunningAppView: View {
             .environment(\.pastureGroupEditorRepository, runtime.dependencies.pastureRepository)
             .environment(\.pastureReferenceReader, runtime.dependencies.pastureRepository)
             .environment(\.animalPastureMover, runtime.dependencies.animalRepository)
-            .environment(\.fieldCheckPastureCleanupWriter, runtime.dependencies.fieldCheckRepository)
+            .environment(\.fieldCheckPastureArchiveWriter, runtime.dependencies.fieldCheckRepository)
             .environment(\.fieldCheckSessionSetupRepository, runtime.dependencies.fieldCheckRepository)
             .environment(\.fieldCheckSessionDetailRepository, runtime.dependencies.fieldCheckRepository)
             .environment(\.fieldCheckAnimalDetailRepository, runtime.dependencies.fieldCheckRepository)

@@ -184,11 +184,11 @@ final class AnimalPastureMovingSpy: AnimalPastureMoving {
     }
 }
 
-final class FieldCheckPastureCleanupWriterSpy: FieldCheckPastureCleanupWriter {
-    private(set) var cleanupCalls: [[UUID]] = []
+final class FieldCheckPastureArchiveWriterSpy: FieldCheckPastureArchiveWriter {
+    private(set) var archiveCalls: [(pastureIDs: [UUID], archivedAt: Date)] = []
 
-    func deleteSessions(forPastureIDs pastureIDs: [UUID]) throws {
-        cleanupCalls.append(pastureIDs)
+    func archiveSessionsForDeletedPastures(_ pastureIDs: [UUID], archivedAt: Date) throws {
+        archiveCalls.append((pastureIDs, archivedAt))
     }
 }
 
