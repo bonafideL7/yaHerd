@@ -205,7 +205,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
 
     func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus) throws {
         let finding = try fetchFinding(id: findingID, sessionID: sessionID)
-        try ensureSessionIsEditable(finding.session)
+        try ensureSessionCanUpdateFindingStatus(finding.session)
         try saveIfNeeded(backfillHistoricalSnapshots(in: finding.session))
 
         finding.status = status
@@ -230,7 +230,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         guard let session = try fetchSession(id: id) else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
-        guard FieldCheckSessionLockRules.isEditable(completedAt: session.completedAt) else { return }
+        guard FieldCheckSessionLockRules.canEditSessionData(completedAt: session.completedAt) else { return }
 
         _ = backfillHistoricalSnapshots(in: session)
         normalizeQuickAnimalTypeCounts(for: session)
@@ -299,7 +299,16 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         guard let session else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
-        guard FieldCheckSessionLockRules.isEditable(completedAt: session.completedAt) else {
+        guard FieldCheckSessionLockRules.canEditSessionData(completedAt: session.completedAt) else {
+            throw FieldCheckRepositoryError.sessionCompleted
+        }
+    }
+
+    private func ensureSessionCanUpdateFindingStatus(_ session: FieldCheckSession?) throws {
+        guard let session else {
+            throw FieldCheckRepositoryError.sessionNotFound
+        }
+        guard FieldCheckSessionLockRules.canUpdateFindingStatus(completedAt: session.completedAt) else {
             throw FieldCheckRepositoryError.sessionCompleted
         }
     }

@@ -24,7 +24,7 @@ enum FieldCheckRepositoryError: LocalizedError {
         case .animalNotActive:
             return "Only active herd animals can be added to a pasture check."
         case .sessionCompleted:
-            return "This check is completed. Reopen it before making changes."
+            return "This check is completed. Reopen it before editing counts, roster, notes, or adding/removing findings."
         }
     }
 }

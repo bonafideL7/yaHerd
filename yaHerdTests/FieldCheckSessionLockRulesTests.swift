@@ -2,8 +2,13 @@ import XCTest
 @testable import yaHerd
 
 final class FieldCheckSessionLockRulesTests: XCTestCase {
-    func testSessionIsEditableOnlyWhenItIsNotCompleted() {
-        XCTAssertTrue(FieldCheckSessionLockRules.isEditable(completedAt: nil))
-        XCTAssertFalse(FieldCheckSessionLockRules.isEditable(completedAt: Date(timeIntervalSince1970: 0)))
+    func testSessionDataIsEditableOnlyWhenItIsNotCompleted() {
+        XCTAssertTrue(FieldCheckSessionLockRules.canEditSessionData(completedAt: nil))
+        XCTAssertFalse(FieldCheckSessionLockRules.canEditSessionData(completedAt: Date(timeIntervalSince1970: 0)))
+    }
+
+    func testFindingStatusCanBeUpdatedAfterCompletion() {
+        XCTAssertTrue(FieldCheckSessionLockRules.canUpdateFindingStatus(completedAt: nil))
+        XCTAssertTrue(FieldCheckSessionLockRules.canUpdateFindingStatus(completedAt: Date(timeIntervalSince1970: 0)))
     }
 }

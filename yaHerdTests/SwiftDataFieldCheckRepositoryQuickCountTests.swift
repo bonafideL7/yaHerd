@@ -376,7 +376,7 @@ final class SwiftDataFieldCheckRepositoryQuickCountTests: XCTestCase {
         XCTAssertTrue(movements.isEmpty)
     }
 
-    func testCompletedSessionRejectsFieldCheckEditsUntilReopened() throws {
+    func testCompletedSessionLocksSessionDataButAllowsFindingStatusUpdates() throws {
         let container = try TestSupport.makeModelContainer()
         let context = ModelContext(container)
         let repository = SwiftDataFieldCheckRepository(context: context)
@@ -430,9 +430,8 @@ final class SwiftDataFieldCheckRepositoryQuickCountTests: XCTestCase {
                 checkedAt: Date(timeIntervalSince1970: 30)
             )
         }
-        assertSessionCompletedThrown {
-            try repository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: .resolved)
-        }
+        try repository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: .resolved)
+
         assertSessionCompletedThrown {
             try repository.deleteFinding(sessionID: sessionID, findingID: findingID)
         }
@@ -455,7 +454,9 @@ final class SwiftDataFieldCheckRepositoryQuickCountTests: XCTestCase {
         XCTAssertEqual(lockedDetail.quickAnimalTypeCounts.values.reduce(0, +), 0)
         XCTAssertFalse(try XCTUnwrap(lockedDetail.animalChecks.first { $0.id == animalCheck.id }).wasCounted)
         XCTAssertEqual(lockedDetail.findings.count, 1)
-        XCTAssertEqual(try XCTUnwrap(lockedDetail.findings.first).status, .open)
+        let resolvedFinding = try XCTUnwrap(lockedDetail.findings.first)
+        XCTAssertEqual(resolvedFinding.status, .resolved)
+        XCTAssertFalse(try XCTUnwrap(lockedDetail.animalChecks.first { $0.id == animalCheck.id }).needsAttention)
 
         try repository.reopenSession(id: sessionID)
         try repository.updateNotes(sessionID: sessionID, notes: "Unlocked")

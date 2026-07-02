@@ -165,49 +165,48 @@ struct FieldCheckAnimalDetailView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(model.animalFindings) { finding in
-                    animalFindingRow(finding, isEditable: isEditable)
+                    animalFindingRow(finding, allowsDeleting: isEditable)
                 }
             }
         } header: {
             Text("Findings")
         } footer: {
-            Text(isEditable ? "A Missing Animal finding marks this roster entry missing automatically. Clearing missing status does not delete existing findings." : "Completed checks are locked. Reopen the check to update this animal's check status or findings.")
+            Text(isEditable ? "A Missing Animal finding marks this roster entry missing automatically. Clearing missing status does not delete existing findings." : "Finding status can still be updated after completion. Reopen the check to update this animal's roster status or add/delete findings.")
         }
     }
     
     @ViewBuilder
-    private func animalFindingRow(_ finding: FieldCheckFindingSnapshot, isEditable: Bool) -> some View {
-        if isEditable {
-            FieldCheckFindingRow(
-                finding: finding,
-                showsAnimalDisplayTagNumber: false,
-                onStatusChange: { status in
-                    model.updateFindingStatus(
-                        animalID: animalID,
-                        sessionID: sessionID,
-                        findingID: finding.id,
-                        status: status,
-                        animalRepository: animalRepository,
-                        fieldCheckRepository: fieldCheckRepository
-                    )
-                }
-            )
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button("Delete", role: .destructive) {
-                    model.deleteFinding(
-                        animalID: animalID,
-                        sessionID: sessionID,
-                        findingID: finding.id,
-                        animalRepository: animalRepository,
-                        fieldCheckRepository: fieldCheckRepository
-                    )
-                }
+    private func animalFindingRow(_ finding: FieldCheckFindingSnapshot, allowsDeleting: Bool) -> some View {
+        let row = FieldCheckFindingRow(
+            finding: finding,
+            showsAnimalDisplayTagNumber: false,
+            onStatusChange: { status in
+                model.updateFindingStatus(
+                    animalID: animalID,
+                    sessionID: sessionID,
+                    findingID: finding.id,
+                    status: status,
+                    animalRepository: animalRepository,
+                    fieldCheckRepository: fieldCheckRepository
+                )
             }
+        )
+
+        if allowsDeleting {
+            row
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button("Delete", role: .destructive) {
+                        model.deleteFinding(
+                            animalID: animalID,
+                            sessionID: sessionID,
+                            findingID: finding.id,
+                            animalRepository: animalRepository,
+                            fieldCheckRepository: fieldCheckRepository
+                        )
+                    }
+                }
         } else {
-            FieldCheckFindingRow(
-                finding: finding,
-                showsAnimalDisplayTagNumber: false
-            )
+            row
         }
     }
     

@@ -440,14 +440,14 @@ struct FieldCheckSessionDetailView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(sortedFindings) { finding in
-                    findingRow(finding, isEditable: !detail.isCompleted)
+                    findingRow(finding, allowsDeleting: !detail.isCompleted)
                 }
             }
         } header: {
             Text("Findings")
         } footer: {
             if detail.isCompleted {
-                Text("Completed checks are locked. Reopen this check to add, update, or delete findings.")
+                Text("Finding status can still be updated after completion. Reopen this check to add or delete findings.")
             }
         }
     }
@@ -480,7 +480,7 @@ struct FieldCheckSessionDetailView: View {
     private var lockedCheckSection: some View {
         Section {
             Label {
-                Text("This check is read-only until reopened.")
+                Text("Roster, counts, and notes are locked. Finding status can still be updated.")
             } icon: {
                 Image(systemName: "lock.fill")
                     .foregroundStyle(.secondary)
@@ -491,28 +491,30 @@ struct FieldCheckSessionDetailView: View {
     }
 
     @ViewBuilder
-    private func findingRow(_ finding: FieldCheckFindingSnapshot, isEditable: Bool) -> some View {
-        if isEditable {
-            FieldCheckFindingRow(
-                finding: finding,
-                onStatusChange: { status in
-                    guard let currentSessionID else { return }
-                    model.updateFindingStatus(
-                        sessionID: currentSessionID,
-                        findingID: finding.id,
-                        status: status,
-                        using: repository
-                    )
-                }
-            )
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button("Delete", role: .destructive) {
-                    guard let currentSessionID else { return }
-                    model.deleteFinding(sessionID: currentSessionID, findingID: finding.id, using: repository)
-                }
+    private func findingRow(_ finding: FieldCheckFindingSnapshot, allowsDeleting: Bool) -> some View {
+        let row = FieldCheckFindingRow(
+            finding: finding,
+            onStatusChange: { status in
+                guard let currentSessionID else { return }
+                model.updateFindingStatus(
+                    sessionID: currentSessionID,
+                    findingID: finding.id,
+                    status: status,
+                    using: repository
+                )
             }
+        )
+
+        if allowsDeleting {
+            row
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button("Delete", role: .destructive) {
+                        guard let currentSessionID else { return }
+                        model.deleteFinding(sessionID: currentSessionID, findingID: finding.id, using: repository)
+                    }
+                }
         } else {
-            FieldCheckFindingRow(finding: finding)
+            row
         }
     }
 
