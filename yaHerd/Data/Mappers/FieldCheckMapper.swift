@@ -7,14 +7,14 @@ enum FieldCheckMapper {
     ) -> FieldCheckAnimalCheckSnapshot {
         FieldCheckAnimalCheckSnapshot(
             id: check.publicID,
-            animalID: check.animal?.publicID,
+            animalID: check.animalIDSnapshot ?? check.animal?.publicID,
             displayTagNumber: check.displayTagNumber,
-            displayTagColorID: check.animal?.displayTagColorID ?? check.rosterTagColorID,
-            damDisplayTagNumber: AnimalDisplayTagFormatter.displayTagNumber(for: check.animal?.damAnimal),
-            damDisplayTagColorID: check.animal?.damAnimal?.displayTagColorID,
-            animalName: check.animal?.name ?? check.animalName,
-            animalSex: check.animal?.sex ?? check.animalSex,
-            animalType: check.animal?.animalType ?? fallbackAnimalType(for: check.animalSex),
+            displayTagColorID: check.rosterTagColorID,
+            damDisplayTagNumber: displayTagNumber(from: check.damRosterTagNumber),
+            damDisplayTagColorID: check.damRosterTagColorID,
+            animalName: check.displayAnimalName,
+            animalSex: check.animalSex,
+            animalType: check.animalTypeSnapshot,
             wasExpectedAtStart: check.wasExpectedAtStart,
             wasCounted: check.wasCounted,
             needsAttention: needsAttention ?? check.needsAttention,
@@ -30,11 +30,12 @@ enum FieldCheckMapper {
             severity: finding.severity,
             status: finding.status,
             note: finding.note,
-            animalID: finding.animal?.publicID,
-            animalDisplayTagNumber: trimmed(finding.animal?.displayTagNumber) ?? trimmed(finding.animal?.name),
-            animalDisplayTagColorID: finding.animal?.displayTagColorID,
-            pastureName: finding.session?.pasture?.name,
-            sessionID: finding.session?.publicID ?? finding.publicID
+            animalID: finding.animalIDSnapshot ?? finding.animal?.publicID,
+            animalDisplayTagNumber: displayTagNumber(from: finding.animalDisplayTagNumberSnapshot)
+                ?? trimmed(finding.animalNameSnapshot),
+            animalDisplayTagColorID: finding.animalDisplayTagColorIDSnapshot,
+            pastureName: trimmed(finding.pastureNameSnapshot),
+            sessionID: finding.sessionIDSnapshot ?? finding.session?.publicID ?? finding.publicID
         )
     }
 
@@ -50,8 +51,8 @@ enum FieldCheckMapper {
             id: session.publicID,
             startedAt: session.startedAt,
             completedAt: session.completedAt,
-            pastureID: session.pasture?.publicID,
-            pastureName: session.pasture?.name,
+            pastureID: session.pastureID ?? session.pasture?.publicID,
+            pastureName: trimmed(session.pastureNameSnapshot),
             expectedHeadCountSnapshot: session.expectedHeadCountSnapshot,
             quickCowCount: session.quickCowCount,
             quickHeiferCount: session.quickHeiferCount,
@@ -75,8 +76,8 @@ enum FieldCheckMapper {
             startedAt: session.startedAt,
             completedAt: session.completedAt,
             notes: session.notes,
-            pastureID: session.pasture?.publicID,
-            pastureName: session.pasture?.name,
+            pastureID: session.pastureID ?? session.pasture?.publicID,
+            pastureName: trimmed(session.pastureNameSnapshot),
             expectedHeadCountSnapshot: session.expectedHeadCountSnapshot,
             quickCowCount: session.quickCowCount,
             quickHeiferCount: session.quickHeiferCount,
@@ -106,22 +107,16 @@ private extension FieldCheckMapper {
         for check: FieldCheckAnimalCheck,
         findings: [FieldCheckFindingSnapshot]
     ) -> Bool {
-        guard let animalID = check.animal?.publicID else { return false }
+        guard let animalID = check.animalIDSnapshot ?? check.animal?.publicID else { return false }
         return FieldCheckAnimalAttentionRules.shouldNeedAttention(
             animalID: animalID,
             findings: findings
         )
     }
 
-    static func fallbackAnimalType(for sex: Sex) -> AnimalType {
-        switch sex {
-        case .female:
-            return .cow
-        case .male:
-            return .bull
-        case .unknown:
-            return .bull
-        }
+    static func displayTagNumber(from tagNumber: String) -> String? {
+        let display = AnimalDisplayTagFormatter.displayTagNumber(from: tagNumber)
+        return display.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : display
     }
 
     static func trimmed(_ value: String?) -> String? {
@@ -129,5 +124,4 @@ private extension FieldCheckMapper {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
-
 }

@@ -6,11 +6,14 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
 
     func fetchSessions() throws -> [FieldCheckSessionSummary] {
         let descriptor = FetchDescriptor<FieldCheckSession>(sortBy: [SortDescriptor(\.startedAt, order: .reverse)])
-        return try context.fetch(descriptor).map(FieldCheckMapper.makeSessionSummary)
+        let sessions = try context.fetch(descriptor)
+        try saveIfNeeded(backfillHistoricalSnapshots(in: sessions))
+        return sessions.map(FieldCheckMapper.makeSessionSummary)
     }
 
     func fetchSessionDetail(id: UUID) throws -> FieldCheckSessionDetailSnapshot? {
         guard let session = try fetchSession(id: id) else { return nil }
+        try saveIfNeeded(backfillHistoricalSnapshots(in: session))
         return FieldCheckMapper.makeSessionDetail(from: session)
     }
 
@@ -18,6 +21,8 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         let descriptor = FetchDescriptor<FieldCheckFinding>(sortBy: [SortDescriptor(\.recordedAt, order: .reverse)])
         let findings = try context.fetch(descriptor)
             .filter { $0.status != .resolved }
+
+        try saveIfNeeded(backfillHistoricalSnapshots(for: findings))
 
         if limit > 0 {
             return Array(findings.prefix(limit)).map(FieldCheckMapper.makeFindingSnapshot)
@@ -43,6 +48,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             completedAt: nil,
             notes: input.notes.trimmingCharacters(in: .whitespacesAndNewlines),
             expectedHeadCountSnapshot: rosterAnimals.count,
+            pastureNameSnapshot: pasture.name.trimmingCharacters(in: .whitespacesAndNewlines),
             pastureID: pasture.publicID,
             pasture: pasture
         )
@@ -51,10 +57,14 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
 
         for animal in rosterAnimals {
             let check = FieldCheckAnimalCheck(
+                animalIDSnapshot: animal.publicID,
                 rosterTagNumber: animal.displayTagNumber,
                 rosterTagColorID: animal.displayTagColorID,
+                damRosterTagNumber: AnimalDisplayTagFormatter.displayTagNumber(for: animal.damAnimal) ?? "",
+                damRosterTagColorID: animal.damAnimal?.displayTagColorID,
                 animalName: animal.name,
                 animalSex: animal.sex ?? .unknown,
+                animalType: animal.animalType,
                 wasExpectedAtStart: true,
                 animal: animal,
                 session: session
@@ -72,6 +82,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             throw FieldCheckRepositoryError.sessionNotFound
         }
         try ensureSessionIsEditable(session)
+        try saveIfNeeded(backfillHistoricalSnapshots(in: session))
 
         applyQuickAnimalTypeCounts(
             normalizedQuickAnimalTypeCounts(counts, for: session),
@@ -93,6 +104,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool) throws {
         let check = try fetchAnimalCheck(id: animalCheckID, sessionID: sessionID)
         try ensureSessionIsEditable(check.session)
+        try saveIfNeeded(backfillHistoricalSnapshots(in: check.session))
 
         if isCounted {
             check.countedAt = .now
@@ -107,6 +119,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool) throws {
         let check = try fetchAnimalCheck(id: animalCheckID, sessionID: sessionID)
         try ensureSessionIsEditable(check.session)
+        try saveIfNeeded(backfillHistoricalSnapshots(in: check.session))
 
         if isMissing {
             check.missingConfirmedAt = .now
@@ -123,22 +136,30 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             throw FieldCheckRepositoryError.sessionNotFound
         }
         try ensureSessionIsEditable(session)
+        try saveIfNeeded(backfillHistoricalSnapshots(in: session))
 
         let animal = try fetchAnimal(id: input.animalID)
+        let check = input.animalID.flatMap { animalCheck(for: $0, in: session) }
         let finding = FieldCheckFinding(
             recordedAt: input.recordedAt,
             type: input.type,
             severity: input.severity,
             status: input.status,
             note: input.note.trimmingCharacters(in: .whitespacesAndNewlines),
+            animalIDSnapshot: input.animalID ?? animal?.publicID,
+            animalDisplayTagNumberSnapshot: check?.rosterTagNumber ?? animal?.displayTagNumber ?? "",
+            animalDisplayTagColorIDSnapshot: check?.rosterTagColorID ?? animal?.displayTagColorID,
+            animalNameSnapshot: check?.animalName ?? animal?.name ?? "",
+            pastureNameSnapshot: session.pastureNameSnapshot,
+            sessionIDSnapshot: session.publicID,
             animal: animal,
             session: session
         )
         try ensureUniqueFindingPublicID(finding)
         context.insert(finding)
-        applyFindingSideEffects(input: input, linkedAnimal: animal, session: session)
+        applyFindingSideEffects(input: input, linkedAnimalID: input.animalID ?? animal?.publicID, session: session)
         syncNeedsAttention(
-            for: animal,
+            forAnimalID: input.animalID ?? animal?.publicID,
             in: session,
             includesNewUnresolvedFinding: input.status != .resolved
         )
@@ -148,20 +169,22 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus) throws {
         let finding = try fetchFinding(id: findingID, sessionID: sessionID)
         try ensureSessionIsEditable(finding.session)
+        try saveIfNeeded(backfillHistoricalSnapshots(in: finding.session))
 
         finding.status = status
-        syncNeedsAttention(for: finding.animal, in: finding.session)
+        syncNeedsAttention(forAnimalID: animalID(for: finding), in: finding.session)
         try context.save()
     }
 
     func deleteFinding(sessionID: UUID, findingID: UUID) throws {
         let finding = try fetchFinding(id: findingID, sessionID: sessionID)
         try ensureSessionIsEditable(finding.session)
+        try saveIfNeeded(backfillHistoricalSnapshots(in: finding.session))
 
-        let linkedAnimal = finding.animal
+        let linkedAnimalID = animalID(for: finding)
         let session = finding.session
 
-        syncNeedsAttention(for: linkedAnimal, in: session, excludingFindingID: finding.publicID)
+        syncNeedsAttention(forAnimalID: linkedAnimalID, in: session, excludingFindingID: finding.publicID)
         context.delete(finding)
         try context.save()
     }
@@ -172,6 +195,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         }
         guard FieldCheckSessionLockRules.isEditable(completedAt: session.completedAt) else { return }
 
+        _ = backfillHistoricalSnapshots(in: session)
         normalizeQuickAnimalTypeCounts(for: session)
         session.completedAt = .now
         try context.save()
@@ -181,6 +205,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         guard let session = try fetchSession(id: id) else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
+        try saveIfNeeded(backfillHistoricalSnapshots(in: session))
         session.completedAt = nil
         try context.save()
     }
@@ -215,12 +240,12 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
 
     private func applyFindingSideEffects(
         input: FieldCheckFindingInput,
-        linkedAnimal: Animal?,
+        linkedAnimalID: UUID?,
         session: FieldCheckSession
     ) {
         guard FieldCheckFindingRules.shouldMarkAnimalMissing(for: input.type) else { return }
-        guard let linkedAnimal else { return }
-        guard let check = animalCheck(for: linkedAnimal.publicID, in: session) else { return }
+        guard let linkedAnimalID else { return }
+        guard let check = animalCheck(for: linkedAnimalID, in: session) else { return }
 
         check.missingConfirmedAt = input.recordedAt
         check.countedAt = nil
@@ -228,16 +253,16 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     }
 
     private func syncNeedsAttention(
-        for animal: Animal?,
+        forAnimalID animalID: UUID?,
         in session: FieldCheckSession?,
         excludingFindingID: UUID? = nil,
         includesNewUnresolvedFinding: Bool = false
     ) {
-        guard let animal, let session else { return }
-        guard let check = animalCheck(for: animal.publicID, in: session) else { return }
+        guard let animalID, let session else { return }
+        guard let check = animalCheck(for: animalID, in: session) else { return }
         check.needsAttention = includesNewUnresolvedFinding
             || hasUnresolvedFinding(
-                for: animal.publicID,
+                for: animalID,
                 in: session,
                 excludingFindingID: excludingFindingID
             )
@@ -250,15 +275,23 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     ) -> Bool {
         session.findings.contains { finding in
             finding.publicID != excludingFindingID
-                && finding.animal?.publicID == animalID
+                && animalID(for: finding) == animalID
                 && finding.status != .resolved
         }
     }
 
     private func animalCheck(for animalID: UUID, in session: FieldCheckSession) -> FieldCheckAnimalCheck? {
         session.animalChecks.first { check in
-            check.animal?.publicID == animalID
+            self.animalID(for: check) == animalID
         }
+    }
+
+    private func animalID(for check: FieldCheckAnimalCheck) -> UUID? {
+        check.animalIDSnapshot ?? check.animal?.publicID
+    }
+
+    private func animalID(for finding: FieldCheckFinding) -> UUID? {
+        finding.animalIDSnapshot ?? finding.animal?.publicID
     }
 
     private func currentQuickAnimalTypeCounts(for session: FieldCheckSession) -> [AnimalType: Int] {
@@ -304,7 +337,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     private func quickCountRosterEntries(for session: FieldCheckSession) -> [FieldCheckQuickCountRosterEntry] {
         session.animalChecks.map { check in
             FieldCheckQuickCountRosterEntry(
-                animalType: animalType(for: check),
+                animalType: check.animalTypeSnapshot,
                 wasExpectedAtStart: check.wasExpectedAtStart,
                 wasCounted: check.wasCounted,
                 isMissing: check.isMissing
@@ -312,8 +345,133 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         }
     }
 
-    private func animalType(for check: FieldCheckAnimalCheck) -> AnimalType {
-        check.animal?.animalType ?? fallbackAnimalType(for: check.animalSex)
+    @discardableResult
+    private func backfillHistoricalSnapshots(in sessions: [FieldCheckSession]) -> Bool {
+        sessions.reduce(false) { didChange, session in
+            backfillHistoricalSnapshots(in: session) || didChange
+        }
+    }
+
+    @discardableResult
+    private func backfillHistoricalSnapshots(in session: FieldCheckSession?) -> Bool {
+        guard let session else { return false }
+        var didChange = false
+
+        if isBlank(session.pastureNameSnapshot), let pastureName = trimmed(session.pasture?.name) {
+            session.pastureNameSnapshot = pastureName
+            didChange = true
+        }
+
+        for check in session.animalChecks {
+            didChange = backfillHistoricalSnapshots(for: check) || didChange
+        }
+
+        for finding in session.findings {
+            didChange = backfillHistoricalSnapshots(for: finding) || didChange
+        }
+
+        return didChange
+    }
+
+    @discardableResult
+    private func backfillHistoricalSnapshots(for findings: [FieldCheckFinding]) -> Bool {
+        findings.reduce(false) { didChange, finding in
+            let sessionChanged = backfillHistoricalSnapshots(in: finding.session)
+            let findingChanged = backfillHistoricalSnapshots(for: finding)
+            return sessionChanged || findingChanged || didChange
+        }
+    }
+
+    @discardableResult
+    private func backfillHistoricalSnapshots(for check: FieldCheckAnimalCheck) -> Bool {
+        var didChange = false
+        let animal = check.animal
+
+        if check.animalIDSnapshot == nil, let animalID = animal?.publicID {
+            check.animalIDSnapshot = animalID
+            didChange = true
+        }
+        if isBlank(check.rosterTagNumber), let displayTagNumber = trimmed(animal?.displayTagNumber) {
+            check.rosterTagNumber = displayTagNumber
+            didChange = true
+        }
+        if check.rosterTagColorID == nil, let tagColorID = animal?.displayTagColorID {
+            check.rosterTagColorID = tagColorID
+            didChange = true
+        }
+        if isBlank(check.damRosterTagNumber), let damDisplayTagNumber = AnimalDisplayTagFormatter.displayTagNumber(for: animal?.damAnimal) {
+            check.damRosterTagNumber = damDisplayTagNumber
+            didChange = true
+        }
+        if check.damRosterTagColorID == nil, let damTagColorID = animal?.damAnimal?.displayTagColorID {
+            check.damRosterTagColorID = damTagColorID
+            didChange = true
+        }
+        if isBlank(check.animalName), let animalName = trimmed(animal?.name) {
+            check.animalName = animalName
+            didChange = true
+        }
+        if !Sex.allCases.map(\.rawValue).contains(check.animalSexRawValue), let sex = animal?.sex {
+            check.animalSex = sex
+            didChange = true
+        }
+        if AnimalType(rawValue: check.animalTypeRawValue) == nil {
+            check.animalTypeSnapshot = animal?.animalType ?? fallbackAnimalType(for: check.animalSex)
+            didChange = true
+        }
+
+        return didChange
+    }
+
+    @discardableResult
+    private func backfillHistoricalSnapshots(for finding: FieldCheckFinding) -> Bool {
+        var didChange = false
+        let session = finding.session
+        let existingAnimalID = animalID(for: finding)
+        let check = existingAnimalID.flatMap { id in
+            session.flatMap { animalCheck(for: id, in: $0) }
+        }
+        let animal = finding.animal
+
+        if finding.sessionIDSnapshot == nil, let sessionID = session?.publicID {
+            finding.sessionIDSnapshot = sessionID
+            didChange = true
+        }
+        if isBlank(finding.pastureNameSnapshot) {
+            if let pastureName = trimmed(session?.pastureNameSnapshot) ?? trimmed(session?.pasture?.name) {
+                finding.pastureNameSnapshot = pastureName
+                didChange = true
+            }
+        }
+        if finding.animalIDSnapshot == nil, let animalID = animal?.publicID {
+            finding.animalIDSnapshot = animalID
+            didChange = true
+        }
+        if isBlank(finding.animalDisplayTagNumberSnapshot) {
+            if let tagNumber = trimmed(check?.rosterTagNumber) ?? trimmed(animal?.displayTagNumber) {
+                finding.animalDisplayTagNumberSnapshot = tagNumber
+                didChange = true
+            }
+        }
+        if finding.animalDisplayTagColorIDSnapshot == nil {
+            if let tagColorID = check?.rosterTagColorID ?? animal?.displayTagColorID {
+                finding.animalDisplayTagColorIDSnapshot = tagColorID
+                didChange = true
+            }
+        }
+        if isBlank(finding.animalNameSnapshot) {
+            if let animalName = trimmed(check?.animalName) ?? trimmed(animal?.name) {
+                finding.animalNameSnapshot = animalName
+                didChange = true
+            }
+        }
+
+        return didChange
+    }
+
+    private func saveIfNeeded(_ shouldSave: Bool) throws {
+        guard shouldSave else { return }
+        try context.save()
     }
 
     private func fallbackAnimalType(for sex: Sex) -> AnimalType {
@@ -423,5 +581,15 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             }
         )
         return try context.fetch(descriptor).first
+    }
+
+    private func trimmed(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func isBlank(_ value: String) -> Bool {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }

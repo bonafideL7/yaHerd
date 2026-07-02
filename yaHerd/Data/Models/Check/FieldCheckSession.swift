@@ -13,6 +13,7 @@ final class FieldCheckSession {
     var quickCalfCount: Int = 0
     var quickBullCount: Int = 0
     var quickSteerCount: Int = 0
+    var pastureNameSnapshot: String = ""
 
     @Relationship(deleteRule: .nullify)
     var pasture: Pasture?
@@ -45,6 +46,7 @@ final class FieldCheckSession {
         quickCalfCount: Int = 0,
         quickBullCount: Int = 0,
         quickSteerCount: Int = 0,
+        pastureNameSnapshot: String = "",
         pastureID: UUID? = nil,
         pasture: Pasture? = nil
     ) {
@@ -58,6 +60,7 @@ final class FieldCheckSession {
         self.quickCalfCount = quickCalfCount
         self.quickBullCount = quickBullCount
         self.quickSteerCount = quickSteerCount
+        self.pastureNameSnapshot = pastureNameSnapshot
         self.pastureID = pastureID
         self.pasture = pasture
     }
@@ -67,10 +70,14 @@ final class FieldCheckSession {
 @Model
 final class FieldCheckAnimalCheck {
     var publicID: UUID = UUID()
+    var animalIDSnapshot: UUID?
     var rosterTagNumber: String = ""
     var rosterTagColorID: UUID?
+    var damRosterTagNumber: String = ""
+    var damRosterTagColorID: UUID?
     var animalName: String = ""
     var animalSexRawValue: String = Sex.unknown.rawValue
+    var animalTypeRawValue: String = ""
     var wasExpectedAtStart: Bool = true
     var countedAt: Date?
     var missingConfirmedAt: Date?
@@ -85,10 +92,14 @@ final class FieldCheckAnimalCheck {
 
     init(
         publicID: UUID = UUID(),
+        animalIDSnapshot: UUID? = nil,
         rosterTagNumber: String,
         rosterTagColorID: UUID? = nil,
+        damRosterTagNumber: String = "",
+        damRosterTagColorID: UUID? = nil,
         animalName: String = "",
         animalSex: Sex = .unknown,
+        animalType: AnimalType? = nil,
         wasExpectedAtStart: Bool = true,
         countedAt: Date? = nil,
         missingConfirmedAt: Date? = nil,
@@ -98,10 +109,14 @@ final class FieldCheckAnimalCheck {
         session: FieldCheckSession? = nil
     ) {
         self.publicID = publicID
+        self.animalIDSnapshot = animalIDSnapshot
         self.rosterTagNumber = rosterTagNumber
         self.rosterTagColorID = rosterTagColorID
+        self.damRosterTagNumber = damRosterTagNumber
+        self.damRosterTagColorID = damRosterTagColorID
         self.animalName = animalName
         self.animalSexRawValue = animalSex.rawValue
+        self.animalTypeRawValue = (animalType ?? Self.fallbackAnimalType(for: animalSex)).rawValue
         self.wasExpectedAtStart = wasExpectedAtStart
         self.countedAt = countedAt
         self.missingConfirmedAt = missingConfirmedAt
@@ -116,14 +131,18 @@ final class FieldCheckAnimalCheck {
         set { animalSexRawValue = newValue.rawValue }
     }
 
-    var displayTagNumber: String {
-        let trimmedAnimalTag = animal?.displayTagNumber.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !trimmedAnimalTag.isEmpty {
-            return trimmedAnimalTag
-        }
+    var animalTypeSnapshot: AnimalType {
+        get { AnimalType(rawValue: animalTypeRawValue) ?? Self.fallbackAnimalType(for: animalSex) }
+        set { animalTypeRawValue = newValue.rawValue }
+    }
 
+    var displayTagNumber: String {
         let trimmedRosterTag = rosterTagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmedRosterTag.isEmpty ? "UT" : trimmedRosterTag
+    }
+
+    var displayAnimalName: String {
+        animalName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var wasCounted: Bool {
@@ -132,6 +151,17 @@ final class FieldCheckAnimalCheck {
 
     var isMissing: Bool {
         missingConfirmedAt != nil
+    }
+
+    private static func fallbackAnimalType(for sex: Sex) -> AnimalType {
+        switch sex {
+        case .female:
+            return .cow
+        case .male:
+            return .bull
+        case .unknown:
+            return .bull
+        }
     }
 }
 
@@ -143,6 +173,12 @@ final class FieldCheckFinding {
     var severityRawValue: String = FieldCheckFindingSeverity.warning.rawValue
     var statusRawValue: String = FieldCheckFindingStatus.open.rawValue
     var note: String = ""
+    var animalIDSnapshot: UUID?
+    var animalDisplayTagNumberSnapshot: String = ""
+    var animalDisplayTagColorIDSnapshot: UUID?
+    var animalNameSnapshot: String = ""
+    var pastureNameSnapshot: String = ""
+    var sessionIDSnapshot: UUID?
 
     @Relationship(deleteRule: .nullify)
     var animal: Animal?
@@ -157,6 +193,12 @@ final class FieldCheckFinding {
         severity: FieldCheckFindingSeverity,
         status: FieldCheckFindingStatus = .open,
         note: String = "",
+        animalIDSnapshot: UUID? = nil,
+        animalDisplayTagNumberSnapshot: String = "",
+        animalDisplayTagColorIDSnapshot: UUID? = nil,
+        animalNameSnapshot: String = "",
+        pastureNameSnapshot: String = "",
+        sessionIDSnapshot: UUID? = nil,
         animal: Animal? = nil,
         session: FieldCheckSession? = nil
     ) {
@@ -166,6 +208,12 @@ final class FieldCheckFinding {
         self.severityRawValue = severity.rawValue
         self.statusRawValue = status.rawValue
         self.note = note
+        self.animalIDSnapshot = animalIDSnapshot
+        self.animalDisplayTagNumberSnapshot = animalDisplayTagNumberSnapshot
+        self.animalDisplayTagColorIDSnapshot = animalDisplayTagColorIDSnapshot
+        self.animalNameSnapshot = animalNameSnapshot
+        self.pastureNameSnapshot = pastureNameSnapshot
+        self.sessionIDSnapshot = sessionIDSnapshot
         self.animal = animal
         self.session = session
     }
