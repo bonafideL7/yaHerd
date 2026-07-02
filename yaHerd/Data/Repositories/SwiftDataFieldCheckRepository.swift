@@ -72,11 +72,10 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             throw FieldCheckRepositoryError.sessionNotFound
         }
 
-        session.quickCowCount = max(counts[.cow, default: 0], 0)
-        session.quickHeiferCount = max(counts[.heifer, default: 0], 0)
-        session.quickCalfCount = max(counts[.calf, default: 0], 0)
-        session.quickBullCount = max(counts[.bull, default: 0], 0)
-        session.quickSteerCount = max(counts[.steer, default: 0], 0)
+        applyQuickAnimalTypeCounts(
+            normalizedQuickAnimalTypeCounts(counts, for: session),
+            to: session
+        )
         try context.save()
     }
 
@@ -96,6 +95,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         } else {
             check.countedAt = nil
         }
+        normalizeQuickAnimalTypeCounts(for: check.session)
         try context.save()
     }
 
@@ -113,6 +113,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         } else {
             check.missingConfirmedAt = nil
         }
+        normalizeQuickAnimalTypeCounts(for: check.session)
         try context.save()
     }
 
@@ -151,6 +152,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         guard let session = try fetchSession(id: id) else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
+        normalizeQuickAnimalTypeCounts(for: session)
         session.completedAt = .now
         try context.save()
     }
@@ -179,6 +181,72 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         }
 
         try context.save()
+    }
+
+    private func currentQuickAnimalTypeCounts(for session: FieldCheckSession) -> [AnimalType: Int] {
+        [
+            .cow: max(session.quickCowCount, 0),
+            .heifer: max(session.quickHeiferCount, 0),
+            .calf: max(session.quickCalfCount, 0),
+            .bull: max(session.quickBullCount, 0),
+            .steer: max(session.quickSteerCount, 0)
+        ]
+    }
+
+    private func normalizedQuickAnimalTypeCounts(
+        _ counts: [AnimalType: Int],
+        for session: FieldCheckSession
+    ) -> [AnimalType: Int] {
+        FieldCheckQuickCountRules.normalizedCounts(
+            counts,
+            rosterEntries: quickCountRosterEntries(for: session)
+        )
+    }
+
+    private func normalizeQuickAnimalTypeCounts(for session: FieldCheckSession?) {
+        guard let session else { return }
+        let normalizedCounts = normalizedQuickAnimalTypeCounts(
+            currentQuickAnimalTypeCounts(for: session),
+            for: session
+        )
+        applyQuickAnimalTypeCounts(normalizedCounts, to: session)
+    }
+
+    private func applyQuickAnimalTypeCounts(
+        _ counts: [AnimalType: Int],
+        to session: FieldCheckSession
+    ) {
+        session.quickCowCount = max(counts[.cow, default: 0], 0)
+        session.quickHeiferCount = max(counts[.heifer, default: 0], 0)
+        session.quickCalfCount = max(counts[.calf, default: 0], 0)
+        session.quickBullCount = max(counts[.bull, default: 0], 0)
+        session.quickSteerCount = max(counts[.steer, default: 0], 0)
+    }
+
+    private func quickCountRosterEntries(for session: FieldCheckSession) -> [FieldCheckQuickCountRosterEntry] {
+        session.animalChecks.map { check in
+            FieldCheckQuickCountRosterEntry(
+                animalType: animalType(for: check),
+                wasExpectedAtStart: check.wasExpectedAtStart,
+                wasCounted: check.wasCounted,
+                isMissing: check.isMissing
+            )
+        }
+    }
+
+    private func animalType(for check: FieldCheckAnimalCheck) -> AnimalType {
+        check.animal?.animalType ?? fallbackAnimalType(for: check.animalSex)
+    }
+
+    private func fallbackAnimalType(for sex: Sex) -> AnimalType {
+        switch sex {
+        case .female:
+            return .cow
+        case .male:
+            return .bull
+        case .unknown:
+            return .bull
+        }
     }
 
     private func ensureUniqueSessionPublicID(_ session: FieldCheckSession) throws {

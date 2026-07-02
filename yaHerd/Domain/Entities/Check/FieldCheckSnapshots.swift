@@ -61,11 +61,14 @@ struct FieldCheckSessionSummary: Identifiable, Hashable {
     }
 
     var individuallyVerifiedCount: Int {
-        animalChecks.filter(\.wasCounted).count
+        FieldCheckQuickCountRules.individuallyVerifiedCount(in: quickCountRosterEntries)
     }
 
     var totalSeen: Int {
-        individuallyVerifiedCount + quickAnimalTypeCounts.values.reduce(0, +)
+        FieldCheckQuickCountRules.totalSeen(
+            quickCounts: storedQuickAnimalTypeCounts,
+            rosterEntries: quickCountRosterEntries
+        )
     }
 
     var flaggedAnimalCount: Int {
@@ -81,6 +84,13 @@ struct FieldCheckSessionSummary: Identifiable, Hashable {
     }
 
     var quickAnimalTypeCounts: [AnimalType: Int] {
+        FieldCheckQuickCountRules.normalizedCounts(
+            storedQuickAnimalTypeCounts,
+            rosterEntries: quickCountRosterEntries
+        )
+    }
+
+    private var storedQuickAnimalTypeCounts: [AnimalType: Int] {
         [
             .cow: max(quickCowCount, 0),
             .heifer: max(quickHeiferCount, 0),
@@ -88,6 +98,10 @@ struct FieldCheckSessionSummary: Identifiable, Hashable {
             .bull: max(quickBullCount, 0),
             .steer: max(quickSteerCount, 0)
         ]
+    }
+
+    private var quickCountRosterEntries: [FieldCheckQuickCountRosterEntry] {
+        animalChecks.map(\.quickCountRosterEntry)
     }
 }
 
@@ -117,11 +131,14 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
     }
 
     var individuallyVerifiedCount: Int {
-        animalChecks.filter(\.wasCounted).count
+        FieldCheckQuickCountRules.individuallyVerifiedCount(in: quickCountRosterEntries)
     }
 
     var totalSeen: Int {
-        individuallyVerifiedCount + quickAnimalTypeCounts.values.reduce(0, +)
+        FieldCheckQuickCountRules.totalSeen(
+            quickCounts: storedQuickAnimalTypeCounts,
+            rosterEntries: quickCountRosterEntries
+        )
     }
 
     var flaggedAnimalCount: Int {
@@ -137,6 +154,13 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
     }
 
     var quickAnimalTypeCounts: [AnimalType: Int] {
+        FieldCheckQuickCountRules.normalizedCounts(
+            storedQuickAnimalTypeCounts,
+            rosterEntries: quickCountRosterEntries
+        )
+    }
+
+    private var storedQuickAnimalTypeCounts: [AnimalType: Int] {
         [
             .cow: max(quickCowCount, 0),
             .heifer: max(quickHeiferCount, 0),
@@ -144,6 +168,10 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
             .bull: max(quickBullCount, 0),
             .steer: max(quickSteerCount, 0)
         ]
+    }
+
+    private var quickCountRosterEntries: [FieldCheckQuickCountRosterEntry] {
+        animalChecks.map(\.quickCountRosterEntry)
     }
 
     var countVariance: Int {

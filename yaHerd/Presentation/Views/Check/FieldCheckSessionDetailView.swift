@@ -372,7 +372,7 @@ struct FieldCheckSessionDetailView: View {
         } header: {
             Text("Quick Count")
         } footer: {
-            Text("Quick counts use the current remaining roster by animal type.")
+            Text("Quick counts are capped to the remaining available roster by animal type.")
         }
     }
     
