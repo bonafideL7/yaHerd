@@ -42,8 +42,8 @@ struct FieldCheckSessionSummary: Identifiable, Hashable {
     let completedAt: Date?
     let pastureID: UUID?
     let pastureName: String?
-    let pastureArchivedAt: Date? = nil
-    let isPastureArchived: Bool = false
+    let pastureArchivedAt: Date?
+    let isPastureArchived: Bool
     let expectedHeadCountSnapshot: Int
     let quickCowCount: Int
     let quickHeiferCount: Int
@@ -52,6 +52,40 @@ struct FieldCheckSessionSummary: Identifiable, Hashable {
     let quickSteerCount: Int
     let animalChecks: [FieldCheckAnimalCheckSnapshot]
     let openFindingsCount: Int
+
+    init(
+        id: UUID,
+        startedAt: Date,
+        completedAt: Date?,
+        pastureID: UUID?,
+        pastureName: String?,
+        pastureArchivedAt: Date? = nil,
+        isPastureArchived: Bool = false,
+        expectedHeadCountSnapshot: Int,
+        quickCowCount: Int,
+        quickHeiferCount: Int,
+        quickCalfCount: Int,
+        quickBullCount: Int,
+        quickSteerCount: Int,
+        animalChecks: [FieldCheckAnimalCheckSnapshot],
+        openFindingsCount: Int
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.completedAt = completedAt
+        self.pastureID = pastureID
+        self.pastureName = pastureName
+        self.pastureArchivedAt = pastureArchivedAt
+        self.isPastureArchived = isPastureArchived
+        self.expectedHeadCountSnapshot = expectedHeadCountSnapshot
+        self.quickCowCount = quickCowCount
+        self.quickHeiferCount = quickHeiferCount
+        self.quickCalfCount = quickCalfCount
+        self.quickBullCount = quickBullCount
+        self.quickSteerCount = quickSteerCount
+        self.animalChecks = animalChecks
+        self.openFindingsCount = openFindingsCount
+    }
 
     var displayTitle: String {
         let trimmedPastureName = pastureName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -118,8 +152,8 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
     let notes: String
     let pastureID: UUID?
     let pastureName: String?
-    let pastureArchivedAt: Date? = nil
-    let isPastureArchived: Bool = false
+    let pastureArchivedAt: Date?
+    let isPastureArchived: Bool
     let expectedHeadCountSnapshot: Int
     let quickCowCount: Int
     let quickHeiferCount: Int
@@ -128,6 +162,42 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
     let quickSteerCount: Int
     let animalChecks: [FieldCheckAnimalCheckSnapshot]
     let findings: [FieldCheckFindingSnapshot]
+
+    init(
+        id: UUID,
+        startedAt: Date,
+        completedAt: Date?,
+        notes: String,
+        pastureID: UUID?,
+        pastureName: String?,
+        pastureArchivedAt: Date? = nil,
+        isPastureArchived: Bool = false,
+        expectedHeadCountSnapshot: Int,
+        quickCowCount: Int,
+        quickHeiferCount: Int,
+        quickCalfCount: Int,
+        quickBullCount: Int,
+        quickSteerCount: Int,
+        animalChecks: [FieldCheckAnimalCheckSnapshot],
+        findings: [FieldCheckFindingSnapshot]
+    ) {
+        self.id = id
+        self.startedAt = startedAt
+        self.completedAt = completedAt
+        self.notes = notes
+        self.pastureID = pastureID
+        self.pastureName = pastureName
+        self.pastureArchivedAt = pastureArchivedAt
+        self.isPastureArchived = isPastureArchived
+        self.expectedHeadCountSnapshot = expectedHeadCountSnapshot
+        self.quickCowCount = quickCowCount
+        self.quickHeiferCount = quickHeiferCount
+        self.quickCalfCount = quickCalfCount
+        self.quickBullCount = quickBullCount
+        self.quickSteerCount = quickSteerCount
+        self.animalChecks = animalChecks
+        self.findings = findings
+    }
 
     var displayTitle: String {
         let trimmedPastureName = pastureName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

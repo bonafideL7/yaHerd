@@ -143,8 +143,10 @@ struct FieldCheckAnimalPickerView: View {
     @ViewBuilder
     private var selectedAnimalSection: some View {
         if let selectedAnimal, !selectedAnimalIsVisible {
-            Section("Current Selection") {
+            Section {
                 animalButton(selectedAnimal)
+            } header: {
+                Text("Current Selection")
             } footer: {
                 Text("The selected animal does not match the current search or filter, but it remains linked unless you choose another animal or None.")
             }
