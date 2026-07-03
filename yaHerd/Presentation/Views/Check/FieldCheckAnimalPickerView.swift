@@ -3,6 +3,7 @@ import SwiftUI
 struct FieldCheckLinkedAnimalSelectorRow: View {
     let animals: [FieldCheckAnimalCheckSnapshot]
     @Binding var selectedAnimalID: UUID?
+    var allowsNone = true
 
     private var selectedAnimal: FieldCheckAnimalCheckSnapshot? {
         guard let selectedAnimalID else { return nil }
@@ -13,7 +14,8 @@ struct FieldCheckLinkedAnimalSelectorRow: View {
         NavigationLink {
             FieldCheckAnimalPickerView(
                 animals: animals,
-                selectedAnimalID: $selectedAnimalID
+                selectedAnimalID: $selectedAnimalID,
+                allowsNone: allowsNone
             )
         } label: {
             LabeledContent("Linked Animal") {
@@ -28,6 +30,7 @@ struct FieldCheckAnimalPickerView: View {
 
     let animals: [FieldCheckAnimalCheckSnapshot]
     @Binding var selectedAnimalID: UUID?
+    var allowsNone = true
 
     @State private var searchText = ""
     @State private var selectedFilter: FieldCheckLinkedAnimalPickerFilter = .all
@@ -89,7 +92,9 @@ struct FieldCheckAnimalPickerView: View {
 
     var body: some View {
         List {
-            noneSection
+            if allowsNone {
+                noneSection
+            }
             selectedAnimalSection
             animalResultsSection
         }
@@ -174,7 +179,11 @@ struct FieldCheckAnimalPickerView: View {
                     .foregroundStyle(.secondary)
             }
         } footer: {
-            Text("Search checks tag number, name, dam tag, type, sex, and field-check status. Use filters for missing, flagged, remaining, checked, or added animals.")
+            if allowsNone {
+                Text("Search tag number, name, dam tag, type, sex, and check status. Use filters for missing, flagged, to check, seen, or added animals.")
+            } else {
+                Text("This finding requires a linked animal. Select the animal that should be marked missing.")
+            }
         }
     }
 
@@ -327,7 +336,7 @@ private struct FieldCheckAnimalPickerStatusPills: View {
             }
 
             if animal.wasCounted {
-                FieldCheckBadge(title: "Checked", tint: .green)
+                FieldCheckBadge(title: "Seen", tint: .green)
             }
 
             if animal.needsAttention {
@@ -348,6 +357,7 @@ struct FieldCheckTrackedAnimalPickerView: View {
     @Environment(\.animalListRepository) private var animalRepository
 
     @State private var model = FieldCheckTrackedAnimalPickerViewModel()
+    @State private var pendingAnimal: AnimalSummary?
 
     let session: FieldCheckSessionDetailSnapshot
     let onSelect: (UUID) -> Bool
@@ -372,16 +382,14 @@ struct FieldCheckTrackedAnimalPickerView: View {
             Section {
                 if eligibleAnimals.isEmpty {
                     ContentUnavailableView(
-                        "No Tracked Animals",
+                        "No Animals Available",
                         systemImage: "tag",
-                        description: Text("No active tracked herd animals from other pastures match this search.")
+                        description: Text("No active herd animals from other pastures match this search.")
                     )
                 } else {
                     ForEach(eligibleAnimals) { animal in
                         Button {
-                            if onSelect(animal.id) {
-                                dismiss()
-                            }
+                            pendingAnimal = animal
                         } label: {
                             VStack(alignment: .leading, spacing: 8) {
                                 AnimalListRowContent(animal: animal)
@@ -398,7 +406,7 @@ struct FieldCheckTrackedAnimalPickerView: View {
             } header: {
                 Text("Tracked Herd Animals")
             } footer: {
-                Text("Selecting an animal moves it to \(destinationName), records a pasture movement, adds it to this check, and marks it checked. Use Add Offspring from the dam record for new calves.")
+                Text("Selecting an animal moves it to \(destinationName), records a pasture movement, adds it to this check, and marks it seen. Use Add Offspring from the dam record for new calves.")
             }
         }
         .navigationTitle("Add to Pasture")
@@ -409,6 +417,25 @@ struct FieldCheckTrackedAnimalPickerView: View {
                 model.load(using: animalRepository)
             }
         }
+        .confirmationDialog(
+            "Move Animal?",
+            isPresented: moveConfirmationBinding,
+            titleVisibility: .visible
+        ) {
+            if let pendingAnimal {
+                Button("Move to \(destinationName)") {
+                    selectPendingAnimal(pendingAnimal)
+                }
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingAnimal = nil
+            }
+        } message: {
+            if let pendingAnimal {
+                Text("\(pendingAnimal.displayTagNumber) will be moved from \(pendingAnimal.pastureName ?? "No pasture") to \(destinationName), added to this check, and marked seen.")
+            }
+        }
         .alert("Can’t Load Animals", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -416,9 +443,27 @@ struct FieldCheckTrackedAnimalPickerView: View {
         }
     }
 
+    private func selectPendingAnimal(_ animal: AnimalSummary) {
+        if onSelect(animal.id) {
+            pendingAnimal = nil
+            dismiss()
+        }
+    }
+
     private func moveSummary(for animal: AnimalSummary) -> String {
         let fromName = animal.pastureName ?? "No pasture"
         return "Move from \(fromName) to \(destinationName)"
+    }
+
+    private var moveConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { pendingAnimal != nil },
+            set: { newValue in
+                if !newValue {
+                    pendingAnimal = nil
+                }
+            }
+        )
     }
 
     private var errorBinding: Binding<Bool> {

@@ -16,7 +16,7 @@ struct HomePastureCheckStartListView: View {
                     Section("Start Check") {
                         ForEach(pastures) { pasture in
                             NavigationLink {
-                                FieldCheckSessionDetailView(suggestedPastureID: pasture.id)
+                                FieldCheckSessionSetupView(suggestedPastureID: pasture.id)
                             } label: {
                                 pastureCheckStartRow(pasture)
                             }

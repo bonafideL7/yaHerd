@@ -3,21 +3,39 @@ import SwiftUI
 enum FieldCheckRosterFilter: String, CaseIterable, Identifiable {
     case all
     case remaining
-    case flagged
+    case seen
     case missing
-    
+    case flagged
+
     var id: String { rawValue }
-    
+
     var label: String {
         switch self {
         case .all:
             return "All"
         case .remaining:
-            return "Remaining"
-        case .flagged:
-            return "Flagged"
+            return "Not Seen"
+        case .seen:
+            return "Seen"
         case .missing:
             return "Missing"
+        case .flagged:
+            return "Flagged"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .all:
+            return "line.3.horizontal.decrease.circle"
+        case .remaining:
+            return "circle.dotted"
+        case .seen:
+            return "checkmark.circle"
+        case .missing:
+            return "questionmark.circle"
+        case .flagged:
+            return "flag"
         }
     }
 }
@@ -37,13 +55,13 @@ enum FieldCheckLinkedAnimalPickerFilter: String, CaseIterable, Identifiable {
         case .all:
             return "All"
         case .remaining:
-            return "Remaining"
+            return "Not Seen"
         case .missing:
             return "Missing"
         case .flagged:
             return "Flagged"
         case .checked:
-            return "Checked"
+            return "Seen"
         case .added:
             return "Added"
         }
@@ -133,7 +151,7 @@ enum FieldCheckLinkedAnimalPickerRules {
         }
 
         if animal.wasCounted {
-            statuses.append("Checked")
+            statuses.append("Seen")
         }
 
         if animal.needsAttention {
@@ -203,7 +221,6 @@ enum FieldCheckLinkedAnimalPickerRules {
 }
 
 enum FieldCheckSessionPane: String, CaseIterable, Identifiable {
-    case summary
     case roster
     case quickCount
     case findings
@@ -213,16 +230,27 @@ enum FieldCheckSessionPane: String, CaseIterable, Identifiable {
     
     var label: String {
         switch self {
-        case .summary:
-            return "Summary"
         case .roster:
             return "Roster"
         case .quickCount:
-            return "Quick Count"
+            return "Count"
         case .findings:
             return "Findings"
         case .notes:
             return "Notes"
+        }
+    }
+    
+    var systemImage: String {
+        switch self {
+        case .roster:
+            return "tag"
+        case .quickCount:
+            return "plus.forwardslash.minus"
+        case .findings:
+            return "exclamationmark.bubble"
+        case .notes:
+            return "note.text"
         }
     }
     

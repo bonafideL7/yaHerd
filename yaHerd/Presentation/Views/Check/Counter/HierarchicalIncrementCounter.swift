@@ -84,7 +84,7 @@ struct HierarchicalIncrementCounter<ID: Hashable>: View {
                     .frame(width: 34, height: 34)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(isComplete ? .green : .secondary)
+            .foregroundStyle(isComplete ? Color.green : Color.secondary)
             .disabled(activeTotal == 0)
             .accessibilityLabel("Confirm all counted")
 

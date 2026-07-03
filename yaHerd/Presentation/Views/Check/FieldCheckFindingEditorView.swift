@@ -19,6 +19,8 @@ struct FieldCheckFindingEditorView: View {
         suggestedTypes: [FieldCheckFindingType],
         animals: [FieldCheckAnimalCheckSnapshot],
         finding: FieldCheckFindingSnapshot? = nil,
+        initialType: FieldCheckFindingType? = nil,
+        initialAnimalID: UUID? = nil,
         onSave: @escaping (FieldCheckFindingInput) -> Void
     ) {
         self.suggestedTypes = suggestedTypes
@@ -26,13 +28,13 @@ struct FieldCheckFindingEditorView: View {
         self.finding = finding
         self.onSave = onSave
 
-        let initialType = finding?.type ?? suggestedTypes.first ?? .generalObservation
+        let resolvedType = finding?.type ?? initialType ?? suggestedTypes.first ?? .generalObservation
         _recordedAt = State(initialValue: finding?.recordedAt ?? .now)
-        _type = State(initialValue: initialType)
-        _severity = State(initialValue: finding?.severity ?? FieldCheckFindingRules.defaultSeverity(for: initialType))
+        _type = State(initialValue: resolvedType)
+        _severity = State(initialValue: finding?.severity ?? FieldCheckFindingRules.defaultSeverity(for: resolvedType))
         _status = State(initialValue: finding?.status ?? .open)
         _note = State(initialValue: finding?.note ?? "")
-        _selectedAnimalID = State(initialValue: finding?.animalID)
+        _selectedAnimalID = State(initialValue: finding?.animalID ?? initialAnimalID)
     }
 
     private var animalOptions: [FieldCheckAnimalCheckSnapshot] {
@@ -68,6 +70,21 @@ struct FieldCheckFindingEditorView: View {
         !requiresLinkedAnimal || selectedAnimalID != nil
     }
 
+    private var selectedAnimal: FieldCheckAnimalCheckSnapshot? {
+        guard let selectedAnimalID else { return nil }
+        return animalOptions.first { $0.animalID == selectedAnimalID }
+    }
+
+    private var selectedAnimalSummary: String {
+        guard let selectedAnimal else { return "None" }
+
+        let trimmedName = selectedAnimal.animalName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = trimmedName.isEmpty
+            ? selectedAnimal.displayTagNumber
+            : "\(selectedAnimal.displayTagNumber) • \(trimmedName)"
+        return "\(title) • \(selectedAnimal.animalType.label)"
+    }
+
     var body: some View {
         Form {
             Section("Finding") {
@@ -92,19 +109,10 @@ struct FieldCheckFindingEditorView: View {
                 }
             }
 
-            Section {
-                FieldCheckLinkedAnimalSelectorRow(
-                    animals: animalOptions,
-                    selectedAnimalID: $selectedAnimalID
-                )
-            } header: {
-                Text("Animal")
-            } footer: {
-                if requiresLinkedAnimal {
-                    Text("Select the missing animal so the roster entry is marked missing automatically.")
-                } else {
-                    Text("Use the linked animal selector when a finding should be tied to a specific roster entry.")
-                }
+            animalLinkSection
+
+            if requiresLinkedAnimal && selectedAnimalID == nil {
+                missingAnimalWarningSection
             }
 
             Section("Notes") {
@@ -138,6 +146,43 @@ struct FieldCheckFindingEditorView: View {
         }
         .onChange(of: type) { _, newType in
             severity = FieldCheckFindingRules.defaultSeverity(for: newType)
+        }
+    }
+
+    private var animalLinkSection: some View {
+        Section {
+            FieldCheckLinkedAnimalSelectorRow(
+                animals: animalOptions,
+                selectedAnimalID: $selectedAnimalID,
+                allowsNone: !requiresLinkedAnimal
+            )
+
+            LabeledContent("Selected") {
+                Text(selectedAnimalSummary)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        } header: {
+            Text("Animal")
+        } footer: {
+            if requiresLinkedAnimal {
+                Text("A Missing Animal finding must be linked to a roster animal. Saving will mark that animal missing in this check.")
+            } else {
+                Text("Link an animal only when this finding belongs to a specific roster entry.")
+            }
+        }
+    }
+
+    private var missingAnimalWarningSection: some View {
+        Section {
+            Label {
+                Text("Select the missing animal before saving.")
+            } icon: {
+                Image(systemName: "exclamationmark.triangle")
+            }
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.orange)
         }
     }
 }

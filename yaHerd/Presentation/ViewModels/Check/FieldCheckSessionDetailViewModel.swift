@@ -249,22 +249,12 @@ final class FieldCheckAnimalDetailViewModel {
     func addFinding(
         animalID: UUID,
         sessionID: UUID,
-        type: FieldCheckFindingType,
+        input: FieldCheckFindingInput,
         animalRepository: any AnimalDetailRepository,
         fieldCheckRepository: any FieldCheckAnimalDetailRepository
     ) {
         do {
-            try fieldCheckRepository.addFinding(
-                sessionID: sessionID,
-                input: FieldCheckFindingInput(
-                    recordedAt: dateProvider.now,
-                    type: type,
-                    severity: FieldCheckFindingRules.defaultSeverity(for: type),
-                    status: .open,
-                    note: "",
-                    animalID: animalID
-                )
-            )
+            try fieldCheckRepository.addFinding(sessionID: sessionID, input: input)
             refresh(
                 animalID: animalID,
                 sessionID: sessionID,

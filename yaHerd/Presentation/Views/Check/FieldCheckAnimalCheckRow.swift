@@ -3,29 +3,21 @@ import SwiftUI
 struct FieldCheckAnimalCheckRow: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.colorScheme) private var colorScheme
-    
+
     let sessionID: UUID
     let check: FieldCheckAnimalCheckSnapshot
     let isEditable: Bool
     let onToggleCounted: () -> Void
     let onToggleMissing: () -> Void
-    
+
     var body: some View {
         if isEditable {
             rowContent
-                .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                    Button {
-                        onToggleMissing()
-                    } label: {
-                        Label(missingActionTitle, systemImage: missingActionSystemImage)
-                    }
-                    .tint(check.isMissing ? .accentColor : .orange)
-                }
                 .contextMenu {
                     Button {
                         onToggleCounted()
                     } label: {
-                        Label(countToggleActionTitle, systemImage: primaryActionSystemImage)
+                        Label(primaryActionTitle, systemImage: primaryActionSystemImage)
                     }
 
                     Button {
@@ -40,22 +32,11 @@ struct FieldCheckAnimalCheckRow: View {
     }
 
     private var rowContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                let definition = tagColorLibrary.resolvedDefinition(tagColorID: check.displayTagColorID)
-                let damDefinition = tagColorLibrary.resolvedDefinition(tagColorID: check.damDisplayTagColorID)
-                AnimalTagView(
-                    tagNumber: check.displayTagNumber,
-                    color: definition.color,
-                    colorName: definition.name,
-                    size: .compact,
-                    damTagNumber: check.damDisplayTagNumber,
-                    damTagColor: damDefinition.color,
-                    damTagColorName: damDefinition.name
-                )
-                .fixedSize(horizontal: true, vertical: false)
-                
-                VStack(alignment: .leading, spacing: 4) {
+                tagView
+
+                VStack(alignment: .leading, spacing: 6) {
                     if !check.animalName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text(check.animalName)
                             .font(.subheadline)
@@ -63,72 +44,128 @@ struct FieldCheckAnimalCheckRow: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
-                    HStack(spacing: 6) {
-                        if !check.wasExpectedAtStart {
-                            FieldCheckBadge(title: "Added", tint: .secondary)
-                        }
 
-                        if check.isMissing {
-                            FieldCheckBadge(title: "Missing", tint: .orange)
-                        }
-
-                        if check.needsAttention {
-                            FieldCheckBadge(title: "Flagged", tint: .orange)
-                        }
-                    }
-                    .lineLimit(1)
+                    statusBadges
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .layoutPriority(0)
-                
-                statusControl
-                    .layoutPriority(2)
+
+                if !isEditable {
+                    FieldCheckBadge(title: readOnlyStatusTitle, tint: readOnlyStatusTint)
+                }
             }
-            
+
+            if isEditable {
+                actionRow
+            }
+
             if let animalID = check.animalID {
                 NavigationLink {
                     FieldCheckAnimalDetailView(sessionID: sessionID, animalID: animalID)
                 } label: {
                     Label("Open Animal", systemImage: "arrow.right.circle")
-                        .font(.footnote)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+    }
+
+    private var tagView: some View {
+        let definition = tagColorLibrary.resolvedDefinition(tagColorID: check.displayTagColorID)
+        let damDefinition = tagColorLibrary.resolvedDefinition(tagColorID: check.damDisplayTagColorID)
+
+        return AnimalTagView(
+            tagNumber: check.displayTagNumber,
+            color: definition.color,
+            colorName: definition.name,
+            size: .compact,
+            damTagNumber: check.damDisplayTagNumber,
+            damTagColor: damDefinition.color,
+            damTagColorName: damDefinition.name
+        )
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var statusBadges: some View {
+        HStack(spacing: 6) {
+            ForEach(Array(statusTokens.enumerated()), id: \.offset) { _, token in
+                FieldCheckBadge(title: token.title, tint: token.tint)
+            }
+        }
+        .lineLimit(1)
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 10) {
+            primaryActionButton
+
+            if showsMissingAction {
+                Button {
+                    onToggleMissing()
+                } label: {
+                    Label(missingActionTitle, systemImage: missingActionSystemImage)
+                        .font(.footnote.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(check.isMissing ? .accentColor : .orange)
+            }
+        }
     }
 
     @ViewBuilder
-    private var statusControl: some View {
-        if isEditable {
+    private var primaryActionButton: some View {
+        if primaryActionIsProminent {
             Button {
                 onToggleCounted()
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: primaryActionSystemImage)
-                    Text(primaryActionTitle)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
+                Label(primaryActionTitle, systemImage: primaryActionSystemImage)
+                    .font(.footnote.weight(.semibold))
+                    .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .controlSize(.small)
             .tint(primaryActionTint)
             .foregroundStyle(colorScheme == .dark ? .black : .white)
-            .fixedSize(horizontal: true, vertical: false)
         } else {
-            FieldCheckBadge(title: readOnlyStatusTitle, tint: readOnlyStatusTint)
-                .fixedSize(horizontal: true, vertical: false)
+            Button {
+                onToggleCounted()
+            } label: {
+                Label(primaryActionTitle, systemImage: primaryActionSystemImage)
+                    .font(.footnote.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .tint(primaryActionTint)
         }
     }
 
-    private var countToggleActionTitle: String {
-        check.wasCounted ? "Clear Counted" : primaryActionTitle
+    private var statusTokens: [(title: String, tint: Color)] {
+        var tokens: [(String, Color)] = []
+
+        if check.wasCounted {
+            tokens.append(("Seen", .green))
+        } else if check.isMissing {
+            tokens.append(("Missing", .orange))
+        } else {
+            tokens.append(("Not Seen", .secondary))
+        }
+
+        if check.needsAttention {
+            tokens.append(("Flagged", .orange))
+        }
+
+        if !check.wasExpectedAtStart {
+            tokens.append(("Added", .secondary))
+        }
+
+        return tokens
     }
 
     private var primaryActionTitle: String {
-        if check.wasCounted { return "Counted" }
-        if check.isMissing { return "Found" }
-        return "Count"
+        if check.wasCounted { return "Mark Not Seen" }
+        if check.isMissing { return "Mark Found" }
+        return "Mark Seen"
     }
 
     private var primaryActionSystemImage: String {
@@ -143,8 +180,16 @@ struct FieldCheckAnimalCheckRow: View {
         return .accentColor
     }
 
+    private var primaryActionIsProminent: Bool {
+        !check.wasCounted
+    }
+
+    private var showsMissingAction: Bool {
+        !check.isMissing && !check.wasCounted
+    }
+
     private var missingActionTitle: String {
-        check.isMissing ? "Clear Missing" : "Mark Missing"
+        check.isMissing ? "Mark Not Missing" : "Mark Missing"
     }
 
     private var missingActionSystemImage: String {
@@ -152,7 +197,7 @@ struct FieldCheckAnimalCheckRow: View {
     }
 
     private var readOnlyStatusTitle: String {
-        if check.wasCounted { return "Counted" }
+        if check.wasCounted { return "Seen" }
         if check.isMissing { return "Missing" }
         return "Not Seen"
     }

@@ -17,19 +17,35 @@ extension HomeView {
     @ViewBuilder
     var fieldWorkRows: some View {
         if shouldShowUnfinishedChecksRow {
-            NavigationLink {
-                FieldChecksView(mode: .inProgress)
-            } label: {
-                HomeListRow(
-                    title: "Checks not completed",
-                    subtitle: "Finish remaining roster work before those counts go stale.",
-                    systemImage: "checklist",
-                    tint: .purple,
-                    count: activeCheckSessions.count,
-                    showsChevron: true
-                )
+            if activeCheckSessions.count == 1, let session = activeCheckSessions.first {
+                NavigationLink {
+                    FieldCheckSessionDetailView(sessionID: session.id, opensRemainingRoster: true)
+                } label: {
+                    HomeListRow(
+                        title: "Open pasture check",
+                        subtitle: session.displayTitle,
+                        systemImage: "checklist",
+                        tint: .purple,
+                        count: 1,
+                        showsChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
+            } else {
+                NavigationLink {
+                    FieldChecksView(mode: .inProgress)
+                } label: {
+                    HomeListRow(
+                        title: "Open pasture checks",
+                        subtitle: "Finish open pasture checks before counts go stale.",
+                        systemImage: "checklist",
+                        tint: .purple,
+                        count: activeCheckSessions.count,
+                        showsChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
 
         if shouldShowOpenFindingsRow {

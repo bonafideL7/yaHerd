@@ -60,7 +60,7 @@ struct HomeView: View {
                 .padding(.bottom, 24)
         }
         .navigationDestination(isPresented: $isStartingFieldCheck) {
-            FieldCheckSessionDetailView()
+            FieldCheckSessionSetupView()
         }
         .task {
             loadHomeData()
