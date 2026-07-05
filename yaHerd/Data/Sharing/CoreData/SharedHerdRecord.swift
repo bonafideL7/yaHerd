@@ -34,3 +34,10 @@ extension SharedHerdRecord {
         lastMirroredAt = mirroredAt
     }
 }
+
+extension SharedHerdRecord {
+    var parsedPublicID: UUID? {
+        guard let publicID else { return nil }
+        return UUID(uuidString: publicID)
+    }
+}

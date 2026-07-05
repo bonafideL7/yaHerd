@@ -112,6 +112,29 @@ final class HerdCollaborationViewModel {
         }
     }
 
+
+    @discardableResult
+    func importSharedBridgeData(
+        using sharingRepository: any HerdSharingRepository,
+        storageMode: HerdStorageMode
+    ) async -> Bool {
+        isSharingActionInProgress = true
+        defer { isSharingActionInProgress = false }
+
+        do {
+            let result = try await ImportSharedHerdDataUseCase(repository: sharingRepository).execute(
+                storageMode: storageMode
+            )
+            successMessage = "\(result.title): \(result.message)"
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            successMessage = nil
+            return false
+        }
+    }
+
     func dismissSystemShare() {
         systemShare = nil
     }

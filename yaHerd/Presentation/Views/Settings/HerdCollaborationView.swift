@@ -26,7 +26,14 @@ struct HerdCollaborationView: View {
                 )
                 readinessSection
                 coreDataBoundarySection
-                shareInvitationSection(sharingRepository: herdSharingRepository)
+                shareInvitationSection(
+                    herdRepository: herdRepository,
+                    sharingRepository: herdSharingRepository
+                )
+                sharedBridgeImportSection(
+                    herdRepository: herdRepository,
+                    sharingRepository: herdSharingRepository
+                )
                 shareActionSection(sharingRepository: herdSharingRepository)
             } else {
                 Section("Herd") {
@@ -115,14 +122,18 @@ struct HerdCollaborationView: View {
             LabeledContent("App data store", value: "SwiftData")
             LabeledContent("Sharing bridge", value: "Core Data + CloudKit")
             LabeledContent("Bridge scope", value: "Herd root + animals")
+            LabeledContent("SwiftData import", value: "Herd root + animals")
 
-            Text("Core Data is intentionally isolated behind the sharing repository. SwiftData remains the app data store. This pass mirrors animals under the shared herd root; pastures, health records, working sessions, and other records still need bridge mirrors in later passes.")
+            Text("Core Data is intentionally isolated behind the sharing repository. SwiftData remains the app data store. The bridge now mirrors animals into CloudKit sharing and can import accepted shared herd/animal records back into SwiftData. Pastures, health records, working sessions, and other records still need bridge mirrors in later passes.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
     }
 
-    private func shareInvitationSection(sharingRepository: any HerdSharingRepository) -> some View {
+    private func shareInvitationSection(
+        herdRepository: any HerdRepository,
+        sharingRepository: any HerdSharingRepository
+    ) -> some View {
         Section("Pending Share Invitation") {
             if let invitation = shareInvitationCoordinator?.pendingInvitation {
                 let summary = invitation.summary
@@ -141,6 +152,11 @@ struct HerdCollaborationView: View {
                         )
                         if accepted {
                             shareInvitationCoordinator?.clearPendingInvitation()
+                            viewModel.load(
+                                herdRepository: herdRepository,
+                                sharingRepository: sharingRepository,
+                                storageMode: preferences.syncMode.herdStorageMode
+                            )
                         }
                     }
                 } label: {
@@ -159,6 +175,36 @@ struct HerdCollaborationView: View {
                     description: Text("Accepted CloudKit share links will appear here after iOS hands the invitation metadata to yaHerd.")
                 )
             }
+        }
+    }
+
+    private func sharedBridgeImportSection(
+        herdRepository: any HerdRepository,
+        sharingRepository: any HerdSharingRepository
+    ) -> some View {
+        Section("Shared Bridge Import") {
+            Button {
+                Task {
+                    let imported = await viewModel.importSharedBridgeData(
+                        using: sharingRepository,
+                        storageMode: preferences.syncMode.herdStorageMode
+                    )
+                    if imported {
+                        viewModel.load(
+                            herdRepository: herdRepository,
+                            sharingRepository: sharingRepository,
+                            storageMode: preferences.syncMode.herdStorageMode
+                        )
+                    }
+                }
+            } label: {
+                Label("Import Shared Data", systemImage: "arrow.triangle.2.circlepath")
+            }
+            .disabled(viewModel.isSharingActionInProgress || preferences.syncMode.herdStorageMode != .iCloud)
+
+            Text("Use this after accepting a share or after the Core Data bridge receives remote shared changes. This pass imports the shared herd root and animal records into SwiftData so the normal app screens can display them.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 

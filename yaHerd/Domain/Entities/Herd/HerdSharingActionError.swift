@@ -11,6 +11,7 @@ enum HerdSharingActionError: LocalizedError, Equatable {
     case shareInvitationMissing
     case sharingStoreUnavailable(String)
     case cloudKitSharingFailed(String)
+    case bridgeImportFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -24,6 +25,8 @@ enum HerdSharingActionError: LocalizedError, Equatable {
             "The CloudKit sharing store is unavailable. \(message)"
         case let .cloudKitSharingFailed(message):
             "CloudKit sharing failed. \(message)"
+        case let .bridgeImportFailed(message):
+            "Shared herd import failed. \(message)"
         }
     }
 }
