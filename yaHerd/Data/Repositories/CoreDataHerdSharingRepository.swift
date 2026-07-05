@@ -61,9 +61,30 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
         }
 
         try await store.acceptShareInvitation(metadata: invitation.metadata)
+
+        do {
+            let importResult = try await store.importSharedRecordsIntoSwiftData(context: context)
+            return HerdSharingActionResult(
+                title: "Invitation accepted",
+                message: "Imported \(importResult.importedAnimalCount) animal records from the Core Data sharing bridge into SwiftData for \(importResult.herdName)."
+            )
+        } catch HerdSharingActionError.bridgeImportFailed {
+            return HerdSharingActionResult(
+                title: "Invitation accepted",
+                message: "The CloudKit share was accepted into the Core Data bridge, but shared records were not available to import into SwiftData yet. Use Import Shared Data after CloudKit finishes syncing."
+            )
+        }
+    }
+
+    func importSharedBridgeData(storageMode: HerdStorageMode) async throws -> HerdSharingActionResult {
+        guard storageMode == .iCloud else {
+            throw HerdSharingActionError.iCloudSyncRequired
+        }
+
+        let importResult = try await store.importSharedRecordsIntoSwiftData(context: context)
         return HerdSharingActionResult(
-            title: "Invitation accepted",
-            message: "The shared herd metadata and mirrored shared records were accepted into the Core Data CloudKit sharing bridge. Importing those shared records into SwiftData will be added in a separate pass."
+            title: "Shared data imported",
+            message: "Imported \(importResult.insertedAnimalCount) new and \(importResult.updatedAnimalCount) existing animal records from the Core Data sharing bridge into SwiftData for \(importResult.herdName)."
         )
     }
 

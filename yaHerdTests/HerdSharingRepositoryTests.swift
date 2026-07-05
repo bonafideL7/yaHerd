@@ -120,4 +120,8 @@ private final class MissingInvitationTestHerdSharingRepository: HerdSharingRepos
         XCTFail("Repository should not be called when the invitation is missing.")
         return HerdSharingActionResult(title: "Unused", message: "Unused")
     }
+
+    func importSharedBridgeData(storageMode: HerdStorageMode) async throws -> HerdSharingActionResult {
+        HerdSharingActionResult(title: "Unused", message: "Unused")
+    }
 }

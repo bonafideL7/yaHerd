@@ -6,6 +6,7 @@
 import CloudKit
 import CoreData
 import Foundation
+import SwiftData
 
 @MainActor
 final class HerdSharingCoreDataStore {
@@ -202,6 +203,41 @@ final class HerdSharingCoreDataStore {
         }
     }
 
+    func importSharedRecordsIntoSwiftData(context swiftDataContext: ModelContext) async throws -> HerdSharingBridgeImportResult {
+        try await loadIfNeeded()
+
+        guard let sharedStore else {
+            throw HerdSharingActionError.sharingStoreUnavailable("The shared CloudKit bridge store was not loaded.")
+        }
+
+        let herdRecords = try fetchSharedHerdRecords(in: sharedStore)
+        guard let herdRecord = herdRecords.sorted(by: sharedHerdRecordSort).first else {
+            throw HerdSharingActionError.bridgeImportFailed("No shared herd records were found in the Core Data sharing bridge.")
+        }
+
+        guard let herdPublicID = herdRecord.parsedPublicID else {
+            throw HerdSharingActionError.bridgeImportFailed("The shared herd record is missing a valid public ID.")
+        }
+
+        let herd = try upsertSwiftDataHerd(from: herdRecord, in: swiftDataContext)
+        let sharedAnimalRecords = try fetchSharedAnimalRecords(herdPublicID: herdPublicID, in: sharedStore)
+        let animalResult = try upsertSwiftDataAnimals(
+            from: sharedAnimalRecords,
+            herd: herd,
+            in: swiftDataContext
+        )
+
+        if swiftDataContext.hasChanges {
+            try swiftDataContext.save()
+        }
+
+        return HerdSharingBridgeImportResult(
+            herdName: herd.name,
+            insertedAnimalCount: animalResult.inserted,
+            updatedAnimalCount: animalResult.updated
+        )
+    }
+
     private func shareRecords(
         _ records: [NSManagedObject],
         title: String
@@ -257,6 +293,146 @@ final class HerdSharingCoreDataStore {
                 continuation.resume()
             }
         }
+    }
+
+    private func upsertSwiftDataHerd(
+        from sharedRecord: SharedHerdRecord,
+        in context: ModelContext
+    ) throws -> Herd {
+        guard let sharedPublicID = sharedRecord.parsedPublicID else {
+            throw HerdSharingActionError.bridgeImportFailed("The shared herd record is missing a valid public ID.")
+        }
+
+        if let existingHerd = try fetchSwiftDataHerd(publicID: sharedPublicID, in: context) {
+            apply(sharedRecord, to: existingHerd)
+            return existingHerd
+        }
+
+        let herd = try DefaultHerdBootstrapper.defaultHerd(in: context)
+        herd.publicID = sharedPublicID
+        apply(sharedRecord, to: herd)
+        return herd
+    }
+
+    private func apply(_ sharedRecord: SharedHerdRecord, to herd: Herd) {
+        herd.name = sharedRecord.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? DefaultHerdBootstrapper.defaultHerdName
+        herd.createdAt = sharedRecord.createdAt ?? herd.createdAt
+        herd.updatedAt = sharedRecord.updatedAt ?? Date.now
+        herd.schemaVersion = sharedRecord.schemaVersion?.intValue ?? herd.schemaVersion
+    }
+
+    private func upsertSwiftDataAnimals(
+        from sharedRecords: [SharedAnimalRecord],
+        herd: Herd,
+        in context: ModelContext
+    ) throws -> (inserted: Int, updated: Int) {
+        let validSharedRecords = sharedRecords.compactMap { record -> (SharedAnimalRecord, UUID)? in
+            guard let publicID = record.parsedPublicID else { return nil }
+            return (record, publicID)
+        }
+        guard !validSharedRecords.isEmpty else { return (0, 0) }
+
+        var animalsByPublicID: [UUID: Animal] = [:]
+        for animal in try context.fetch(FetchDescriptor<Animal>()) where animalsByPublicID[animal.publicID] == nil {
+            animalsByPublicID[animal.publicID] = animal
+        }
+
+        var pasturesByPublicID: [UUID: Pasture] = [:]
+        for pasture in try context.fetch(FetchDescriptor<Pasture>()) where pasturesByPublicID[pasture.publicID] == nil {
+            pasturesByPublicID[pasture.publicID] = pasture
+        }
+
+        var inserted = 0
+        var updated = 0
+
+        for (record, publicID) in validSharedRecords {
+            let animal: Animal
+            if let existingAnimal = animalsByPublicID[publicID] {
+                animal = existingAnimal
+                updated += 1
+            } else {
+                animal = Animal(
+                    publicID: publicID,
+                    name: record.name ?? "",
+                    tagNumber: record.tagNumber ?? "",
+                    tagColorID: record.parsedTagColorID,
+                    birthDate: record.birthDate ?? Date.now,
+                    status: record.parsedStatus,
+                    saleDate: record.saleDate,
+                    salePrice: record.salePrice?.doubleValue,
+                    reasonSold: record.reasonSold,
+                    deathDate: record.deathDate,
+                    causeOfDeath: record.causeOfDeath,
+                    statusReferenceID: record.parsedStatusReferenceID,
+                    isSoftDeleted: record.isSoftDeleted?.boolValue ?? false,
+                    softDeletedAt: record.softDeletedAt,
+                    softDeleteReason: record.softDeleteReason,
+                    sex: record.parsedSex,
+                    distinguishingFeatures: record.parsedDistinguishingFeatures
+                )
+                context.insert(animal)
+                animalsByPublicID[publicID] = animal
+                inserted += 1
+            }
+
+            apply(record, to: animal, herd: herd, pasturesByPublicID: pasturesByPublicID)
+        }
+
+        for (record, publicID) in validSharedRecords {
+            guard let animal = animalsByPublicID[publicID] else { continue }
+            animal.sireAnimal = record.parsedSireAnimalPublicID.flatMap { animalsByPublicID[$0] }
+            animal.damAnimal = record.parsedDamAnimalPublicID.flatMap { animalsByPublicID[$0] }
+        }
+
+        return (inserted, updated)
+    }
+
+    private func apply(
+        _ sharedRecord: SharedAnimalRecord,
+        to animal: Animal,
+        herd: Herd,
+        pasturesByPublicID: [UUID: Pasture]
+    ) {
+        animal.herd = herd
+        animal.name = sharedRecord.name ?? ""
+        animal.tagNumber = sharedRecord.tagNumber ?? ""
+        animal.tagColorID = sharedRecord.parsedTagColorID
+        animal.sex = sharedRecord.parsedSex
+        animal.birthDate = sharedRecord.birthDate ?? animal.birthDate
+        animal.status = sharedRecord.parsedStatus
+        animal.saleDate = sharedRecord.saleDate
+        animal.salePrice = sharedRecord.salePrice?.doubleValue
+        animal.reasonSold = sharedRecord.reasonSold
+        animal.deathDate = sharedRecord.deathDate
+        animal.causeOfDeath = sharedRecord.causeOfDeath
+        animal.statusReferenceID = sharedRecord.parsedStatusReferenceID
+        animal.isSoftDeleted = sharedRecord.isSoftDeleted?.boolValue ?? false
+        animal.softDeletedAt = sharedRecord.softDeletedAt
+        animal.softDeleteReason = sharedRecord.softDeleteReason
+        animal.location = sharedRecord.parsedLocation
+        animal.pasture = sharedRecord.parsedPasturePublicID.flatMap { pasturesByPublicID[$0] }
+        animal.distinguishingFeatures = sharedRecord.parsedDistinguishingFeatures
+    }
+
+    private func fetchSwiftDataHerd(
+        publicID: UUID,
+        in context: ModelContext
+    ) throws -> Herd? {
+        try context.fetch(FetchDescriptor<Herd>()).first { herd in
+            herd.publicID == publicID
+        }
+    }
+
+    private func sharedHerdRecordSort(_ lhs: SharedHerdRecord, _ rhs: SharedHerdRecord) -> Bool {
+        let lhsDate = lhs.lastMirroredAt ?? lhs.updatedAt ?? lhs.createdAt ?? .distantPast
+        let rhsDate = rhs.lastMirroredAt ?? rhs.updatedAt ?? rhs.createdAt ?? .distantPast
+        return lhsDate > rhsDate
+    }
+
+    private func fetchSharedHerdRecords(in store: NSPersistentStore) throws -> [SharedHerdRecord] {
+        let request = SharedHerdRecord.fetchRequest()
+        request.affectedStores = [store]
+        return try persistentContainer.viewContext.fetch(request)
     }
 
     private func fetchSharedHerdRecord(

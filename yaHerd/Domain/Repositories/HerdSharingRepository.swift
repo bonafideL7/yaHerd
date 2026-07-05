@@ -19,4 +19,6 @@ protocol HerdSharingRepository: AnyObject {
         _ invitation: HerdShareInvitation,
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingActionResult
+
+    func importSharedBridgeData(storageMode: HerdStorageMode) async throws -> HerdSharingActionResult
 }
