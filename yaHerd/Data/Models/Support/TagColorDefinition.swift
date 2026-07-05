@@ -9,6 +9,7 @@ import SwiftData
 @Model
 final class TagColorDefinition: Identifiable {
     var id: UUID = UUID()
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var name: String = ""
     var prefix: String = ""
     var red: Double = 1

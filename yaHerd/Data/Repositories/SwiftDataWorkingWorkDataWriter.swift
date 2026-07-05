@@ -44,7 +44,7 @@ struct SwiftDataWorkingWorkDataWriter {
                 animal: animal,
                 session: session
             )
-            context.insert(record)
+            try context.insertIntoDefaultHerd(record)
         }
     }
 
@@ -62,7 +62,7 @@ struct SwiftDataWorkingWorkDataWriter {
             workingSession: session,
             animal: animal
         )
-        context.insert(check)
+        try context.insertIntoDefaultHerd(check)
     }
 
     private func replaceGeneratedHealthRecord(
@@ -83,7 +83,7 @@ struct SwiftDataWorkingWorkDataWriter {
             workingSession: session,
             animal: animal
         )
-        context.insert(record)
+        try context.insertIntoDefaultHerd(record)
     }
 
     private func fetchAnimal(id: UUID?) throws -> Animal? {

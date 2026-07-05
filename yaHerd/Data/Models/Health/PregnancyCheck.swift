@@ -11,6 +11,7 @@ import Foundation
 
 @Model
 final class PregnancyCheck {
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var date: Date = Date.now
     var result: PregnancyResult = PregnancyResult.unknown
     var technician: String?

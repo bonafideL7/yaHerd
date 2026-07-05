@@ -9,6 +9,7 @@ import Foundation
 @Model
 final class WorkingQueueItem {
     var publicID: UUID = UUID()
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var queueOrder: Int = 0
     var status: WorkingQueueStatus = WorkingQueueStatus.queued
     var completedAt: Date?

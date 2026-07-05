@@ -9,6 +9,7 @@ import Foundation
 @Model
 final class WorkingProtocolTemplate {
     var publicID: UUID = UUID()
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var name: String = ""
     var items: [WorkingProtocolItem] = []
 

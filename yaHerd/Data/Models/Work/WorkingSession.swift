@@ -11,6 +11,7 @@ import Foundation
 @Model
 final class WorkingSession {
     var publicID: UUID = UUID()
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var date: Date = Date.now
     var status: WorkingSessionStatus = WorkingSessionStatus.active
 

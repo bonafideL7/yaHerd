@@ -4,6 +4,7 @@ import SwiftData
 @Model
 final class Pasture {
     var publicID: UUID = UUID()
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var name: String = ""
     var sortOrder: Int = 0
     @Relationship(deleteRule: .nullify, inverse: \Animal.pasture)

@@ -44,7 +44,7 @@ struct SampleLargeDataService {
                 usableAcreage: seed.usableAcreage,
                 targetAcresPerHead: seed.targetAcresPerHead
             )
-            context.insert(pasture)
+            context.insertIntoDefaultHerdIfAvailable(pasture)
             pasturesByName[seed.name] = pasture
         }
         
@@ -66,7 +66,7 @@ struct SampleLargeDataService {
                 }
             )
             animal.location = .pasture
-            context.insert(animal)
+            context.insertIntoDefaultHerdIfAvailable(animal)
             animalsByKey[seed.key] = animal
         }
         
@@ -93,7 +93,7 @@ struct SampleLargeDataService {
                     animal: animal
                 )
                 animal.tags.append(tag)
-                context.insert(tag)
+                context.insertIntoDefaultHerdIfAvailable(tag)
             }
             
             if seed.status == .dead, let deathDate = seed.deathDate {
@@ -103,7 +103,7 @@ struct SampleLargeDataService {
                     newStatus: .dead,
                     animal: animal
                 )
-                context.insert(record)
+                context.insertIntoDefaultHerdIfAvailable(record)
             }
             
             if seed.isPregnant {
@@ -117,7 +117,7 @@ struct SampleLargeDataService {
                     workingSession: nil,
                     animal: animal
                 )
-                context.insert(check)
+                context.insertIntoDefaultHerdIfAvailable(check)
             }
             
             for movement in seed.movements {
@@ -127,7 +127,7 @@ struct SampleLargeDataService {
                     toPasture: movement.toPasture,
                     animal: animal
                 )
-                context.insert(record)
+                context.insertIntoDefaultHerdIfAvailable(record)
             }
         }
         

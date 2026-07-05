@@ -54,7 +54,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
             snapshot.prefix = cleanedPrefix
             snapshot.sortOrder = try fetchPersistedColors().count
             snapshot.isDefault = shouldBecomeDefault
-            context.insert(TagColorDefinition(snapshot: snapshot))
+            try context.insertIntoDefaultHerd(TagColorDefinition(snapshot: snapshot))
         }
 
         try saveAndNormalize()
@@ -117,7 +117,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
                 if existingDefaultID != nil {
                     snapshot.isDefault = false
                 }
-                context.insert(TagColorDefinition(snapshot: snapshot))
+                try context.insertIntoDefaultHerd(TagColorDefinition(snapshot: snapshot))
             }
         }
 
@@ -129,7 +129,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
 
         if persistedColors.isEmpty {
             let colorsToSeed = legacyColorsFromUserDefaults() ?? TagColorDefaults.seedDefaultColors()
-            seed(colorsToSeed)
+            try seed(colorsToSeed)
             try context.save()
             UserDefaults.standard.removeObject(forKey: legacyStorageKey)
         }
@@ -377,7 +377,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
         try applyDefaultColorToMissingTagRecords()
     }
 
-    private func seed(_ seedColors: [TagColorSnapshot]) {
+    private func seed(_ seedColors: [TagColorSnapshot]) throws {
         var usedNames = Set<String>()
 
         for color in seedColors {
@@ -389,7 +389,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
             snapshot.name = cleanedName
             snapshot.prefix = TagColorLibraryRules.normalizedPrefix(color.prefix, fallbackName: cleanedName)
             snapshot.sortOrder = usedNames.count
-            context.insert(TagColorDefinition(snapshot: snapshot))
+            try context.insertIntoDefaultHerd(TagColorDefinition(snapshot: snapshot))
             usedNames.insert(key)
         }
     }

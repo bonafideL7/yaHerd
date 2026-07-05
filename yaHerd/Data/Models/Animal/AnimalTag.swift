@@ -4,6 +4,7 @@ import SwiftData
 @Model
 final class AnimalTag {
     var publicID: UUID = UUID()
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var number: String = ""
     var colorID: UUID?
     var isPrimary: Bool = false
