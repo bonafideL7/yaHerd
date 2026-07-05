@@ -8,8 +8,9 @@ import Foundation
 enum HerdSharingActionError: LocalizedError, Equatable {
     case shareRootMissing
     case iCloudSyncRequired
-    case sharingAdapterPending
     case shareInvitationMissing
+    case sharingStoreUnavailable(String)
+    case cloudKitSharingFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -17,10 +18,12 @@ enum HerdSharingActionError: LocalizedError, Equatable {
             "The app could not find a Herd root record to share."
         case .iCloudSyncRequired:
             "Enable iCloud Sync before sharing this herd with other iCloud users."
-        case .sharingAdapterPending:
-            "CloudKit sharing is not wired to persistent storage yet. Add the sharing adapter before enabling invitations."
         case .shareInvitationMissing:
             "No pending CloudKit share invitation is available to accept."
+        case let .sharingStoreUnavailable(message):
+            "The CloudKit sharing store is unavailable. \(message)"
+        case let .cloudKitSharingFailed(message):
+            "CloudKit sharing failed. \(message)"
         }
     }
 }

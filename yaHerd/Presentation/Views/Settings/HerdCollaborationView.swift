@@ -25,9 +25,9 @@ struct HerdCollaborationView: View {
                     sharingRepository: herdSharingRepository
                 )
                 readinessSection
+                coreDataBoundarySection
                 shareInvitationSection(sharingRepository: herdSharingRepository)
                 shareActionSection(sharingRepository: herdSharingRepository)
-                nextImplementationSection
             } else {
                 Section("Herd") {
                     ContentUnavailableView(
@@ -46,6 +46,13 @@ struct HerdCollaborationView: View {
                 sharingRepository: herdSharingRepository,
                 storageMode: preferences.syncMode.herdStorageMode
             )
+        }
+        .sheet(item: $viewModel.systemShare) { systemShare in
+            HerdCloudSharingControllerView(systemShare: systemShare)
+                .ignoresSafeArea()
+                .onDisappear {
+                    viewModel.dismissSystemShare()
+                }
         }
         .alert("Herd Collaboration", isPresented: errorBinding) {
             Button("OK", role: .cancel) {
@@ -91,7 +98,7 @@ struct HerdCollaborationView: View {
         Section("CloudKit Sharing Readiness") {
             LabeledContent("Storage Mode", value: preferences.syncMode.displayName)
             LabeledContent("Share Root", value: viewModel.herd == nil ? "Missing" : "Ready")
-            LabeledContent("Share UI", value: viewModel.readiness?.shareActionEnabled == true ? "Available" : "Not wired")
+            LabeledContent("Share UI", value: viewModel.readiness?.shareActionEnabled == true ? "Available" : "Blocked")
 
             if let readiness = viewModel.readiness {
                 LabeledContent("Status", value: readiness.title)
@@ -103,21 +110,38 @@ struct HerdCollaborationView: View {
         }
     }
 
+    private var coreDataBoundarySection: some View {
+        Section("Core Data Boundary") {
+            LabeledContent("App data store", value: "SwiftData")
+            LabeledContent("Sharing bridge", value: "Core Data + CloudKit")
+            LabeledContent("Bridge scope", value: "Herd share root only")
+
+            Text("Core Data is intentionally isolated behind the sharing repository. Animals, pastures, health records, working sessions, and the rest of yaHerd still use SwiftData.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private func shareInvitationSection(sharingRepository: any HerdSharingRepository) -> some View {
         Section("Pending Share Invitation") {
-            if let invitation = shareInvitationCoordinator?.pendingSummary {
-                LabeledContent("Owner", value: invitation.displayOwnerName)
-                LabeledContent("Container", value: invitation.displayContainerIdentifier)
-                LabeledContent("Share Record", value: invitation.shareRecordName)
-                LabeledContent("Root Record", value: invitation.displayRootRecordName)
+            if let invitation = shareInvitationCoordinator?.pendingInvitation {
+                let summary = invitation.summary
+
+                LabeledContent("Owner", value: summary.displayOwnerName)
+                LabeledContent("Container", value: summary.displayContainerIdentifier)
+                LabeledContent("Share Record", value: summary.shareRecordName)
+                LabeledContent("Root Record", value: summary.displayRootRecordName)
 
                 Button {
                     Task {
-                        await viewModel.acceptPendingInvitation(
+                        let accepted = await viewModel.acceptPendingInvitation(
                             invitation,
                             using: sharingRepository,
                             storageMode: preferences.syncMode.herdStorageMode
                         )
+                        if accepted {
+                            shareInvitationCoordinator?.clearPendingInvitation()
+                        }
                     }
                 } label: {
                     Label("Accept Invitation", systemImage: "tray.and.arrow.down")
@@ -152,17 +176,7 @@ struct HerdCollaborationView: View {
             }
             .disabled(!viewModel.canStartSharing)
 
-            Text("The share button is intentionally blocked until the sharing repository can create a real CloudKit share for the Herd root and persist share changes back to storage.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var nextImplementationSection: some View {
-        Section("Next Implementation Step") {
-            Label("Implement the persistent-store adapter", systemImage: "square.and.arrow.up")
-
-            Text("The app now stores accepted invitation metadata long enough for the collaboration screen to review it. The remaining implementation is the storage adapter that actually accepts the CloudKit share and imports shared herd data.")
+            Text("This opens Apple's CloudKit sharing sheet for the isolated Core Data sharing bridge. It does not move yaHerd's normal app data out of SwiftData.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -173,7 +187,7 @@ struct HerdCollaborationView: View {
         case .localOnly:
             "Enable iCloud Sync before exposing a share action. Local-only stores cannot invite other iCloud users."
         case .iCloud:
-            "The herd is scoped for collaboration prep. A real CloudKit sharing adapter still needs to create and manage a share for this root herd."
+            "The Core Data sharing bridge can create or accept the Herd share root while the app continues to use SwiftData for normal records."
         }
     }
 
