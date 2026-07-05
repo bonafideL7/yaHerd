@@ -15,7 +15,8 @@ protocol HerdSharingRepository: AnyObject {
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingActionResult
 
-    func acceptPendingShareInvitation(
+    func acceptShareInvitation(
+        _ invitation: HerdShareInvitationSummary,
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingActionResult
 }

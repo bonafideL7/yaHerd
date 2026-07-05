@@ -56,7 +56,7 @@ struct SettingsView: View {
                 } label: {
                     SettingsRow(
                         title: "Herd Collaboration",
-                        subtitle: "Prepare the current herd for future CloudKit sharing.",
+                        subtitle: "Prepare the herd for sharing and review incoming invitations.",
                         systemImage: "person.2"
                     )
                 }

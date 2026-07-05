@@ -85,7 +85,10 @@ final class SwiftDataHerdSharingRepositoryTests: XCTestCase {
         let repository = SwiftDataHerdSharingRepository()
 
         do {
-            _ = try await repository.acceptPendingShareInvitation(storageMode: .localOnly)
+            _ = try await repository.acceptShareInvitation(
+                makeInvitationSummary(),
+                storageMode: .localOnly
+            )
             XCTFail("Expected iCloud Sync requirement error.")
         } catch let error as HerdSharingActionError {
             XCTAssertEqual(error, .iCloudSyncRequired)
@@ -98,10 +101,30 @@ final class SwiftDataHerdSharingRepositoryTests: XCTestCase {
         let repository = SwiftDataHerdSharingRepository()
 
         do {
-            _ = try await repository.acceptPendingShareInvitation(storageMode: .iCloud)
+            _ = try await repository.acceptShareInvitation(
+                makeInvitationSummary(),
+                storageMode: .iCloud
+            )
             XCTFail("Expected sharing adapter pending error.")
         } catch let error as HerdSharingActionError {
             XCTAssertEqual(error, .sharingAdapterPending)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+
+    func testAcceptInvitationUseCaseRequiresPendingInvitation() async {
+        let repository = SwiftDataHerdSharingRepository()
+
+        do {
+            _ = try await AcceptHerdShareInvitationUseCase(repository: repository).execute(
+                invitation: nil,
+                storageMode: .iCloud
+            )
+            XCTFail("Expected missing share invitation error.")
+        } catch let error as HerdSharingActionError {
+            XCTAssertEqual(error, .shareInvitationMissing)
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
@@ -114,6 +137,16 @@ final class SwiftDataHerdSharingRepositoryTests: XCTestCase {
             createdAt: Date(timeIntervalSince1970: 0),
             updatedAt: Date(timeIntervalSince1970: 1),
             schemaVersion: 1
+        )
+    }
+
+    private func makeInvitationSummary() -> HerdShareInvitationSummary {
+        HerdShareInvitationSummary(
+            receivedAt: Date(timeIntervalSince1970: 2),
+            containerIdentifier: "iCloud.ltd.yaherd",
+            shareRecordName: "share-record",
+            rootRecordName: "root-record",
+            ownerDisplayName: "Owner"
         )
     }
 }

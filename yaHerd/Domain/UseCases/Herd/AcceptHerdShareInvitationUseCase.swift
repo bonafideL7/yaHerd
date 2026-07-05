@@ -11,7 +11,17 @@ struct AcceptHerdShareInvitationUseCase {
         self.repository = repository
     }
 
-    func execute(storageMode: HerdStorageMode) async throws -> HerdSharingActionResult {
-        try await repository.acceptPendingShareInvitation(storageMode: storageMode)
+    func execute(
+        invitation: HerdShareInvitationSummary?,
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult {
+        guard let invitation else {
+            throw HerdSharingActionError.shareInvitationMissing
+        }
+
+        return try await repository.acceptShareInvitation(
+            invitation,
+            storageMode: storageMode
+        )
     }
 }

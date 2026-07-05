@@ -8,6 +8,7 @@ import SwiftUI
 struct HerdCollaborationView: View {
     @Environment(\.herdRepository) private var herdRepository
     @Environment(\.herdSharingRepository) private var herdSharingRepository
+    @Environment(\.cloudKitShareInvitationCoordinator) private var shareInvitationCoordinator
     @State private var viewModel = HerdCollaborationViewModel()
 
     private let preferences: AppPreferencesProviding
@@ -24,6 +25,7 @@ struct HerdCollaborationView: View {
                     sharingRepository: herdSharingRepository
                 )
                 readinessSection
+                shareInvitationSection(sharingRepository: herdSharingRepository)
                 shareActionSection(sharingRepository: herdSharingRepository)
                 nextImplementationSection
             } else {
@@ -101,6 +103,41 @@ struct HerdCollaborationView: View {
         }
     }
 
+    private func shareInvitationSection(sharingRepository: any HerdSharingRepository) -> some View {
+        Section("Pending Share Invitation") {
+            if let invitation = shareInvitationCoordinator?.pendingSummary {
+                LabeledContent("Owner", value: invitation.displayOwnerName)
+                LabeledContent("Container", value: invitation.displayContainerIdentifier)
+                LabeledContent("Share Record", value: invitation.shareRecordName)
+                LabeledContent("Root Record", value: invitation.displayRootRecordName)
+
+                Button {
+                    Task {
+                        await viewModel.acceptPendingInvitation(
+                            invitation,
+                            using: sharingRepository,
+                            storageMode: preferences.syncMode.herdStorageMode
+                        )
+                    }
+                } label: {
+                    Label("Accept Invitation", systemImage: "tray.and.arrow.down")
+                }
+                .disabled(viewModel.isSharingActionInProgress)
+
+                Button("Clear Pending Invitation", role: .destructive) {
+                    shareInvitationCoordinator?.clearPendingInvitation()
+                    viewModel.clearMessages()
+                }
+            } else {
+                ContentUnavailableView(
+                    "No Pending Invitation",
+                    systemImage: "tray",
+                    description: Text("Accepted CloudKit share links will appear here after iOS hands the invitation metadata to yaHerd.")
+                )
+            }
+        }
+    }
+
     private func shareActionSection(sharingRepository: any HerdSharingRepository) -> some View {
         Section("Share Actions") {
             Button {
@@ -115,19 +152,7 @@ struct HerdCollaborationView: View {
             }
             .disabled(!viewModel.canStartSharing)
 
-            Button {
-                Task {
-                    await viewModel.acceptPendingInvitation(
-                        using: sharingRepository,
-                        storageMode: preferences.syncMode.herdStorageMode
-                    )
-                }
-            } label: {
-                Label("Accept Pending Share Invitation", systemImage: "tray.and.arrow.down")
-            }
-            .disabled(true)
-
-            Text("These buttons are intentionally blocked until the sharing repository can create a real CloudKit share and import accepted share metadata into persistent storage.")
+            Text("The share button is intentionally blocked until the sharing repository can create a real CloudKit share for the Herd root and persist share changes back to storage.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -135,9 +160,9 @@ struct HerdCollaborationView: View {
 
     private var nextImplementationSection: some View {
         Section("Next Implementation Step") {
-            Label("Choose the sharing adapter", systemImage: "square.and.arrow.up")
+            Label("Implement the persistent-store adapter", systemImage: "square.and.arrow.up")
 
-            Text("The app now has share actions, app-level invitation routing, and a stable Herd root. The remaining decision is whether to migrate the store to Core Data + CloudKit Sharing or build a custom CloudKit adapter that owns shared records outside SwiftData.")
+            Text("The app now stores accepted invitation metadata long enough for the collaboration screen to review it. The remaining implementation is the storage adapter that actually accepts the CloudKit share and imports shared herd data.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

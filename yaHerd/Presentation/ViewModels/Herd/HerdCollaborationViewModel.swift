@@ -86,6 +86,7 @@ final class HerdCollaborationViewModel {
     }
 
     func acceptPendingInvitation(
+        _ invitation: HerdShareInvitationSummary?,
         using sharingRepository: any HerdSharingRepository,
         storageMode: HerdStorageMode
     ) async {
@@ -94,6 +95,7 @@ final class HerdCollaborationViewModel {
 
         do {
             let result = try await AcceptHerdShareInvitationUseCase(repository: sharingRepository).execute(
+                invitation: invitation,
                 storageMode: storageMode
             )
             successMessage = "\(result.title): \(result.message)"

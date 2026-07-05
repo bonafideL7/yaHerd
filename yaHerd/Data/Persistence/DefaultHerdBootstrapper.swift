@@ -65,7 +65,7 @@ enum DefaultHerdBootstrapper {
         let records = try context.fetch(FetchDescriptor<Model>())
         var changed = false
 
-        for record in records where record[keyPath: keyPath] == nil {
+        for var record in records where record[keyPath: keyPath] == nil {
             record[keyPath: keyPath] = herd
             changed = true
         }
