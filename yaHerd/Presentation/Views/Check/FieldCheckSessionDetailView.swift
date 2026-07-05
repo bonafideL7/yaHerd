@@ -10,6 +10,11 @@ struct FieldCheckSessionDetailView: View {
     @State private var showingCompletedRoster = false
     @State private var editingFinding: FieldCheckFindingSnapshot?
     @State private var showingFinishConfirmation = false
+    @State private var showingQuickCount = false
+    @State private var showingFindings = false
+    @State private var showingNotes = false
+    @State private var pendingFindingAnimalID: UUID?
+    @State private var selectedAnimalID: UUID?
     @State private var selectedPane: FieldCheckSessionPane
 
     private let sessionID: UUID
@@ -38,6 +43,7 @@ struct FieldCheckSessionDetailView: View {
 
         _selectedPane = State(initialValue: initialPane)
         _rosterFilter = State(initialValue: initialRosterFilter)
+        _showingFindings = State(initialValue: false)
     }
 
     private var navigationSubtitleText: String {
@@ -46,15 +52,19 @@ struct FieldCheckSessionDetailView: View {
     }
 
     private var filteredAnimalChecks: [FieldCheckAnimalCheckSnapshot] {
-        let checks = sortedAnimalChecks(model.detail?.animalChecks ?? [])
+        guard let detail = model.detail else { return [] }
+        let quickCountedIDs = quickCountedAnimalCheckIDs(for: detail)
+        let checks = sortedAnimalChecks(detail.animalChecks)
             .filter { check in
+                let isEffectivelySeen = check.wasCounted || quickCountedIDs.contains(check.id)
+
                 switch rosterFilter {
                 case .all:
                     return true
                 case .remaining:
-                    return !check.wasCounted && !check.isMissing
+                    return !isEffectivelySeen && !check.isMissing
                 case .seen:
-                    return check.wasCounted
+                    return isEffectivelySeen
                 case .missing:
                     return check.isMissing
                 case .flagged:
@@ -106,9 +116,9 @@ struct FieldCheckSessionDetailView: View {
         case .all:
             return "This check does not have any roster entries."
         case .remaining:
-            return "Every roster animal is either seen by tag or marked missing."
+            return "Every roster animal is seen, counted by type, or marked missing."
         case .seen:
-            return "No animals have been marked seen yet."
+            return "No animals have been marked seen or counted by type yet."
         case .missing:
             return "No animals are marked missing in this check."
         case .flagged:
@@ -126,6 +136,22 @@ struct FieldCheckSessionDetailView: View {
 
     private var availablePanes: [FieldCheckSessionPane] {
         FieldCheckSessionPane.allCases
+    }
+
+    private var isRosterSearchFiltering: Bool {
+        selectedPane == .roster && !trimmedRosterSearchText.isEmpty
+    }
+
+    private var listOrQuickCountToolbarTitle: String {
+        selectedPane == .roster ? "Quick Count" : "Animal List"
+    }
+
+    private var listOrQuickCountToolbarSystemImage: String {
+        selectedPane == .roster ? "plus.forwardslash.minus" : "list.bullet"
+    }
+
+    private var listOrQuickCountToolbarTarget: FieldCheckSessionPane {
+        selectedPane == .roster ? .quickCount : .roster
     }
 
     var body: some View {
@@ -147,19 +173,81 @@ struct FieldCheckSessionDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .applyFieldCheckNavigationSubtitle(navigationSubtitleText)
         .toolbar {
-            if model.detail?.isCompleted == true {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button {
-                            model.reopenSession(sessionID: sessionID, using: repository)
+            if let detail = model.detail {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if detail.isCompleted {
+                        Menu {
+                            Button {
+                                model.reopenSession(sessionID: sessionID, using: repository)
+                            } label: {
+                                Label("Reopen Check", systemImage: "lock.open")
+                            }
                         } label: {
-                            Label("Reopen Check", systemImage: "lock.open")
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(.primary)
                         }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
+                        .accessibilityLabel("Check Actions")
+                    } else {
+                        Button {
+                            selectPane(listOrQuickCountToolbarTarget)
+                        } label: {
+                            Label(listOrQuickCountToolbarTitle, systemImage: listOrQuickCountToolbarSystemImage)
+                        }
+                        .accessibilityLabel(listOrQuickCountToolbarTitle)
+
+                        Button {
+                            selectPane(.findings)
+                        } label: {
+                            Label("Findings", systemImage: "exclamationmark.bubble")
+                        }
+                        .accessibilityLabel("Findings")
+
+                        Button {
+                            selectPane(.notes)
+                        } label: {
+                            Label("Notes", systemImage: "note.text")
+                        }
+                        .accessibilityLabel("Notes")
+
+                        Button {
+                            finishSession(from: detail)
+                        } label: {
+                            Text(detail.remainingExpectedCount == 0 && detail.countVariance == 0 ? "Finish" : "Review")
+                        }
+                        .tint(detail.remainingExpectedCount == 0 && detail.countVariance == 0 ? Color.accentColor : Color.orange)
                     }
-                    .accessibilityLabel("Check Actions")
                 }
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if model.detail?.isCompleted == false {
+                Color.clear
+                    .frame(height: 104)
+                    .allowsHitTesting(false)
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if model.detail?.isCompleted == false && !isRosterSearchFiltering {
+                FieldCheckFloatingActionMenu(
+                    onAddFinding: {
+                        pendingFindingAnimalID = nil
+                        showingAddFinding = true
+                    },
+                    onAddAnimal: {
+                        showingAddTrackedAnimal = true
+                    },
+                    onAddNote: {
+                        selectPane(.notes)
+                    }
+                )
+                .padding(.trailing, 24)
+                .padding(.bottom, 24)
+            }
+        }
+        .navigationDestination(isPresented: animalDetailPresentedBinding) {
+            if let selectedAnimalID {
+                FieldCheckAnimalDetailView(sessionID: sessionID, animalID: selectedAnimalID)
             }
         }
         .task(id: sessionID) {
@@ -171,11 +259,12 @@ struct FieldCheckSessionDetailView: View {
                 model.persistNotes(sessionID: sessionID, using: repository)
             }
         }
-        .sheet(isPresented: $showingAddFinding) {
+        .sheet(isPresented: $showingAddFinding, onDismiss: { pendingFindingAnimalID = nil }) {
             NavigationStack {
                 FieldCheckFindingEditorView(
                     suggestedTypes: suggestedFindingTypes,
-                    animals: model.detail?.animalChecks ?? []
+                    animals: model.detail?.animalChecks ?? [],
+                    initialAnimalID: pendingFindingAnimalID
                 ) { input in
                     guard model.detail?.isCompleted == false else { return }
                     model.addFinding(sessionID: sessionID, input: input, using: repository)
@@ -193,6 +282,29 @@ struct FieldCheckSessionDetailView: View {
                             using: repository
                         )
                     }
+                }
+            }
+        }
+        .sheet(isPresented: $showingQuickCount) {
+            if let detail = model.detail {
+                NavigationStack {
+                    quickCountSheetContent(detail)
+                }
+            }
+        }
+        .sheet(isPresented: $showingFindings) {
+            if let detail = model.detail {
+                NavigationStack {
+                    findingsSheetContent(detail)
+                }
+            }
+        }
+        .sheet(isPresented: $showingNotes, onDismiss: {
+            model.persistNotes(sessionID: sessionID, using: repository)
+        }) {
+            if let detail = model.detail {
+                NavigationStack {
+                    notesSheetContent(detail)
                 }
             }
         }
@@ -243,19 +355,20 @@ struct FieldCheckSessionDetailView: View {
 
     private func activeCheckContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         List {
-            progressHeaderSection(detail)
-            archivedPastureSection(detail)
-            sessionPaneSection(detail)
+            if !isRosterSearchFiltering {
+                progressHeaderSection(detail)
+                archivedPastureSection(detail)
+            }
 
             switch selectedPane {
             case .roster:
                 rosterSection(detail)
             case .quickCount:
-                quickCountSection(detail)
+                quickCountMainSection(detail)
             case .findings:
-                findingsSection(detail)
+                findingsMainSection(detail)
             case .notes:
-                notesSection(detail)
+                notesMainSection(detail)
             }
         }
         .refreshable {
@@ -304,20 +417,24 @@ struct FieldCheckSessionDetailView: View {
     private func sessionPaneSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         if availablePanes.count > 1 {
             Section {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 136), spacing: 10)], spacing: 10) {
+                Picker("Check View", selection: $selectedPane) {
                     ForEach(availablePanes) { pane in
-                        FieldCheckWorkModeButton(
-                            pane: pane,
-                            value: workModeValue(for: pane, detail: detail),
-                            isSelected: selectedPane == pane
-                        ) {
-                            selectedPane = pane
-                        }
+                        Text(pane.label).tag(pane)
                     }
                 }
-                .padding(.vertical, 2)
-            } header: {
-                Text("Work")
+                .pickerStyle(.segmented)
+
+                HStack(spacing: 8) {
+                    Image(systemName: selectedPane.systemImage)
+                        .foregroundStyle(.secondary)
+
+                    Text(workModeValue(for: selectedPane, detail: detail))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    Spacer(minLength: 0)
+                }
+                .accessibilityElement(children: .combine)
             }
         }
     }
@@ -325,6 +442,7 @@ struct FieldCheckSessionDetailView: View {
     @ViewBuilder
     private func rosterSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         let visibleAnimalChecks = filteredAnimalChecks
+        let quickCountedIDs = quickCountedAnimalCheckIDs(for: detail)
 
         Section {
             FieldCheckRosterFilterRow(
@@ -357,6 +475,7 @@ struct FieldCheckSessionDetailView: View {
                         sessionID: detail.id,
                         check: check,
                         isEditable: true,
+                        isCountedByQuickCount: quickCountedIDs.contains(check.id),
                         onToggleCounted: {
                             model.setAnimalCheckCounted(
                                 sessionID: sessionID,
@@ -372,27 +491,28 @@ struct FieldCheckSessionDetailView: View {
                                 isMissing: !check.isMissing,
                                 using: repository
                             )
+                        },
+                        onAddFinding: { animalID in
+                            pendingFindingAnimalID = animalID
+                            showingAddFinding = true
+                        },
+                        onOpenAnimal: { animalID in
+                            selectedAnimalID = animalID
                         }
                     )
                 }
             }
-
-            Button {
-                showingAddTrackedAnimal = true
-            } label: {
-                Label("Add Animal", systemImage: "plus.circle")
-                    .frame(maxWidth: .infinity, alignment: .center)
-            }
-            .buttonStyle(.bordered)
         } header: {
-            Text("Roster")
+            Text(trimmedRosterSearchText.isEmpty ? "Animal Checklist" : "Search Results")
         } footer: {
-            Text("Use Add Animal only when an existing herd animal has moved into this pasture.")
+            if trimmedRosterSearchText.isEmpty {
+                Text("Default view shows animals not yet seen by tag. Use search to jump directly to a tag number.")
+            }
         }
     }
 
     @ViewBuilder
-    private func quickCountSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+    private func quickCountMainSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section {
             FieldCheckAnimalQuickCountCounter(
                 remainingRosterChecks: remainingRosterChecks(for: detail),
@@ -405,28 +525,20 @@ struct FieldCheckSessionDetailView: View {
                     .foregroundStyle(.secondary)
             }
         } header: {
-            Text("Count")
+            Text("Quick Count")
         } footer: {
-            Text("Count is capped to animals still to check by type.")
+            Text("Counts by type are reflected in the animal checklist so counted animals do not stay in the Not Seen list.")
         }
     }
 
     @ViewBuilder
-    private func findingsSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+    private func findingsMainSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section {
-            Button {
-                showingAddFinding = true
-            } label: {
-                Label("Add Finding", systemImage: "plus.circle")
-                    .frame(maxWidth: .infinity, alignment: .center)
-            }
-            .buttonStyle(.bordered)
-
             if sortedFindings.isEmpty {
                 ContentUnavailableView(
                     "No Findings",
                     systemImage: "exclamationmark.bubble",
-                    description: Text("Findings added during this check will appear here.")
+                    description: Text("Use the floating add button to record an issue during this check.")
                 )
             } else {
                 ForEach(sortedFindings) { finding in
@@ -439,12 +551,181 @@ struct FieldCheckSessionDetailView: View {
     }
 
     @ViewBuilder
-    private func notesSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+    private func notesMainSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section {
             TextField("Session notes", text: $model.notesDraft, axis: .vertical)
-                .lineLimit(3...6)
+                .lineLimit(4...8)
         } header: {
             Text("Notes")
+        } footer: {
+            Text("Notes save when you leave this check or switch away from the notes view.")
+        }
+    }
+
+    @ViewBuilder
+    private func quickCountSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+        Section {
+            DisclosureGroup(isExpanded: $showingQuickCount) {
+                FieldCheckAnimalQuickCountCounter(
+                    remainingRosterChecks: remainingRosterChecks(for: detail),
+                    animalTypeCounts: quickAnimalTypeCountsBinding(detail)
+                )
+
+                LabeledContent("Breakdown") {
+                    Text(quickTypeSummary(for: detail))
+                        .multilineTextAlignment(.trailing)
+                        .foregroundStyle(.secondary)
+                }
+            } label: {
+                ChecklistDisclosureLabel(
+                    title: "Count by Type",
+                    subtitle: "Bulk count without leaving the checklist",
+                    value: "\(detail.totalSeen)/\(detail.expectedHeadCountSnapshot)",
+                    systemImage: "plus.forwardslash.minus",
+                    tint: .accentColor
+                )
+            }
+        } footer: {
+            if showingQuickCount {
+                Text("Count is capped to animals still to check by type.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func findingsSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+        Section {
+            DisclosureGroup(isExpanded: $showingFindings) {
+                Button {
+                    showingAddFinding = true
+                } label: {
+                    Label("Add Finding", systemImage: "plus.circle")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .buttonStyle(.bordered)
+
+                if sortedFindings.isEmpty {
+                    ContentUnavailableView(
+                        "No Findings",
+                        systemImage: "exclamationmark.bubble",
+                        description: Text("Findings added during this check will appear here.")
+                    )
+                } else {
+                    ForEach(sortedFindings) { finding in
+                        findingRow(finding, allowsEditing: true)
+                    }
+                }
+            } label: {
+                ChecklistDisclosureLabel(
+                    title: "Findings",
+                    subtitle: detail.openFindingsCount == 0 ? "No open findings" : "Open issues recorded during this check",
+                    value: detail.openFindingsCount == 0 ? "None" : "\(detail.openFindingsCount)",
+                    systemImage: "exclamationmark.bubble",
+                    tint: detail.openFindingsCount == 0 ? Color.secondary : Color.orange
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func notesSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+        Section {
+            DisclosureGroup(isExpanded: $showingNotes) {
+                TextField("Session notes", text: $model.notesDraft, axis: .vertical)
+                    .lineLimit(3...6)
+            } label: {
+                ChecklistDisclosureLabel(
+                    title: "Notes",
+                    subtitle: detail.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "No notes yet" : "Notes added",
+                    value: detail.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Empty" : "Added",
+                    systemImage: "note.text",
+                    tint: .secondary
+                )
+            }
+        }
+    }
+
+    private func quickCountSheetContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+        List {
+            Section {
+                FieldCheckAnimalQuickCountCounter(
+                    remainingRosterChecks: remainingRosterChecks(for: detail),
+                    animalTypeCounts: quickAnimalTypeCountsBinding(detail)
+                )
+
+                LabeledContent("Breakdown") {
+                    Text(quickTypeSummary(for: detail))
+                        .multilineTextAlignment(.trailing)
+                        .foregroundStyle(.secondary)
+                }
+            } footer: {
+                Text("Count is capped to animals still to check by type.")
+            }
+        }
+        .navigationTitle("Count by Type")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                    showingQuickCount = false
+                }
+            }
+        }
+    }
+
+    private func findingsSheetContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+        List {
+            Section {
+                Button {
+                    showingFindings = false
+                    showingAddFinding = true
+                } label: {
+                    Label("Add Finding", systemImage: "plus.circle")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .buttonStyle(.bordered)
+
+                if sortedFindings.isEmpty {
+                    ContentUnavailableView(
+                        "No Findings",
+                        systemImage: "exclamationmark.bubble",
+                        description: Text("Findings added during this check will appear here.")
+                    )
+                } else {
+                    ForEach(sortedFindings) { finding in
+                        findingRow(finding, allowsEditing: true)
+                    }
+                }
+            }
+        }
+        .navigationTitle("Findings")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                    showingFindings = false
+                }
+            }
+        }
+    }
+
+    private func notesSheetContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
+        Form {
+            Section {
+                TextField("Session notes", text: $model.notesDraft, axis: .vertical)
+                    .lineLimit(6...12)
+            } footer: {
+                Text("Notes are saved when this sheet closes.")
+            }
+        }
+        .navigationTitle("Notes")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                    showingNotes = false
+                }
+            }
         }
     }
 
@@ -523,7 +804,10 @@ struct FieldCheckSessionDetailView: View {
                         check: check,
                         isEditable: false,
                         onToggleCounted: {},
-                        onToggleMissing: {}
+                        onToggleMissing: {},
+                        onOpenAnimal: { animalID in
+                            selectedAnimalID = animalID
+                        }
                     )
                 }
             }
@@ -536,7 +820,10 @@ struct FieldCheckSessionDetailView: View {
                             check: check,
                             isEditable: false,
                             onToggleCounted: {},
-                            onToggleMissing: {}
+                            onToggleMissing: {},
+                            onOpenAnimal: { animalID in
+                                selectedAnimalID = animalID
+                            }
                         )
                     }
                 } label: {
@@ -615,17 +902,36 @@ struct FieldCheckSessionDetailView: View {
 
     private func progressHeaderSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section {
-            FieldCheckProgressHeader(
-                detail: detail,
-                onFinish: {
-                    if shouldConfirmFinish(detail) {
-                        showingFinishConfirmation = true
-                    } else {
-                        completeCurrentSession()
-                    }
-                }
-            )
+            FieldCheckProgressHeader(detail: detail)
         }
+    }
+
+    private func selectPane(_ pane: FieldCheckSessionPane) {
+        if selectedPane == .notes && pane != .notes {
+            model.persistNotes(sessionID: sessionID, using: repository)
+        }
+
+        if pane != .roster {
+            rosterSearchText = ""
+        }
+
+        selectedPane = pane
+    }
+
+    private func quickCountedAnimalCheckIDs(for detail: FieldCheckSessionDetailSnapshot) -> Set<UUID> {
+        var remainingCounts = detail.quickAnimalTypeCounts
+        var ids: Set<UUID> = []
+
+        for check in sortedAnimalChecks(detail.animalChecks) {
+            guard check.wasExpectedAtStart, !check.wasCounted, !check.isMissing else { continue }
+            let availableCount = remainingCounts[check.animalType, default: 0]
+            guard availableCount > 0 else { continue }
+
+            ids.insert(check.id)
+            remainingCounts[check.animalType] = availableCount - 1
+        }
+
+        return ids
     }
 
     private func resetRosterFilters() {
@@ -711,6 +1017,14 @@ struct FieldCheckSessionDetailView: View {
         return messages.joined(separator: " ")
     }
 
+    private func finishSession(from detail: FieldCheckSessionDetailSnapshot) {
+        if shouldConfirmFinish(detail) {
+            showingFinishConfirmation = true
+        } else {
+            completeCurrentSession()
+        }
+    }
+
     private func completeCurrentSession() {
         model.completeSession(sessionID: sessionID, using: repository)
     }
@@ -731,6 +1045,17 @@ struct FieldCheckSessionDetailView: View {
         }
     }
 
+    private var animalDetailPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { selectedAnimalID != nil },
+            set: { isPresented in
+                if !isPresented {
+                    selectedAnimalID = nil
+                }
+            }
+        )
+    }
+
     private var errorBinding: Binding<Bool> {
         Binding(
             get: { errorMessage != nil },
@@ -742,6 +1067,43 @@ struct FieldCheckSessionDetailView: View {
         )
     }
 }
+
+private struct FieldCheckFloatingActionMenu: View {
+    let onAddFinding: () -> Void
+    let onAddAnimal: () -> Void
+    let onAddNote: () -> Void
+
+    var body: some View {
+        Menu {
+            Button {
+                onAddFinding()
+            } label: {
+                Label("Add Finding", systemImage: "exclamationmark.bubble")
+            }
+
+            Button {
+                onAddAnimal()
+            } label: {
+                Label("Add Animal", systemImage: "tag.badge.plus")
+            }
+
+            Button {
+                onAddNote()
+            } label: {
+                Label("Note", systemImage: "note.text")
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.title2.weight(.semibold))
+                .frame(width: 58, height: 58)
+                .background(Circle().fill(Color.accentColor))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.16), radius: 16, y: 8)
+        }
+        .accessibilityLabel("Quick actions")
+    }
+}
+
 
 private struct FieldCheckRosterFilterRow: View {
     @Binding var selectedFilter: FieldCheckRosterFilter
@@ -811,99 +1173,103 @@ private struct FieldCheckRosterSearchModifier: ViewModifier {
 
 private struct FieldCheckProgressHeader: View {
     let detail: FieldCheckSessionDetailSnapshot
-    let onFinish: () -> Void
 
     private var remainingText: String {
         let count = detail.remainingExpectedCount
-        return count == 1 ? "1 To Check" : "\(count) To Check"
+        return count == 1 ? "1 to check" : "\(count) to check"
     }
 
     private var differenceText: String {
-        guard detail.countVariance != 0 else { return "Matched" }
-        return "Difference \(detail.countVariance > 0 ? "+" : "")\(detail.countVariance)"
+        guard detail.countVariance != 0 else { return "matched" }
+        return "diff \(detail.countVariance > 0 ? "+" : "")\(detail.countVariance)"
     }
 
-    private var isReadyToFinish: Bool {
-        detail.remainingExpectedCount == 0 && detail.countVariance == 0
+    private var statusParts: [String] {
+        var parts: [String] = [remainingText, differenceText]
+        if detail.openFindingsCount > 0 {
+            parts.append(detail.openFindingsCount == 1 ? "1 finding" : "\(detail.openFindingsCount) findings")
+        }
+        return parts
     }
 
-    private var finishActionTitle: String {
-        isReadyToFinish ? "Finish Check" : "Review & Finish"
-    }
-
-    private var finishActionTint: Color {
-        isReadyToFinish ? .accentColor : .orange
+    private var statusTint: Color {
+        detail.remainingExpectedCount == 0 && detail.countVariance == 0 ? Color.secondary : Color.orange
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(detail.totalSeen) / \(detail.expectedHeadCountSnapshot)")
-                    .font(.system(.largeTitle, design: .rounded).weight(.bold))
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(detail.totalSeen)/\(detail.expectedHeadCountSnapshot)")
+                        .font(.system(.title3, design: .rounded).weight(.bold))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
 
-                Text("Seen")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    Text("seen")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                Text(statusParts.joined(separator: " • "))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(statusTint)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 8)], alignment: .leading, spacing: 8) {
-                FieldCheckBadge(
-                    title: detail.remainingExpectedCount == 0 ? "All Seen" : remainingText,
-                    tint: detail.remainingExpectedCount == 0 ? .green : .orange
-                )
-
-                FieldCheckBadge(
-                    title: differenceText,
-                    tint: detail.countVariance == 0 ? .secondary : .orange
-                )
-
-                FieldCheckBadge(
-                    title: detail.openFindingsCount == 1 ? "1 Finding" : "\(detail.openFindingsCount) Findings",
-                    tint: detail.openFindingsCount == 0 ? .secondary : .orange
-                )
-            }
+            Spacer(minLength: 8)
 
             if detail.remainingExpectedCount > 0 || detail.countVariance != 0 {
-                Label(statusMessage, systemImage: "exclamationmark.triangle")
-                    .font(.footnote.weight(.semibold))
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
+            } else {
+                Image(systemName: "checkmark.circle")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.green)
+                    .accessibilityHidden(true)
             }
-
-            finishButton
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
     }
+}
 
-    @ViewBuilder
-    private var finishButton: some View {
-        if isReadyToFinish {
-            Button(action: onFinish) {
-                Label(finishActionTitle, systemImage: "checkmark.circle.fill")
-                    .frame(maxWidth: .infinity)
+
+private struct ChecklistDisclosureLabel: View {
+    let title: String
+    let subtitle: String
+    let value: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            .buttonStyle(.glassProminent)
-            .controlSize(.regular)
-            .tint(finishActionTint)
-        } else {
-            Button(action: onFinish) {
-                Label(finishActionTitle, systemImage: "checkmark.circle")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-            .tint(finishActionTint)
-        }
-    }
 
-    private var statusMessage: String {
-        if detail.remainingExpectedCount > 0 {
-            let noun = detail.remainingExpectedCount == 1 ? "animal" : "animals"
-            return "\(detail.remainingExpectedCount) \(noun) still not seen."
-        }
+            Spacer(minLength: 8)
 
-        return "Count difference: \(detail.countVariance > 0 ? "+" : "")\(detail.countVariance)."
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .monospacedDigit()
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -960,7 +1326,7 @@ private struct FieldCheckCompletedReviewHeader: View {
     }
 
     private var differenceTint: Color {
-        detail.countVariance == 0 ? .green : .orange
+        detail.countVariance == 0 ? Color.green : Color.orange
     }
 
     var body: some View {

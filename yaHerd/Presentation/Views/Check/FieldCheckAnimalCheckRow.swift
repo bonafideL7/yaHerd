@@ -2,28 +2,61 @@ import SwiftUI
 
 struct FieldCheckAnimalCheckRow: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-    @Environment(\.colorScheme) private var colorScheme
 
     let sessionID: UUID
     let check: FieldCheckAnimalCheckSnapshot
     let isEditable: Bool
+    var isCountedByQuickCount = false
     let onToggleCounted: () -> Void
     let onToggleMissing: () -> Void
+    var onAddFinding: ((UUID) -> Void)? = nil
+    var onOpenAnimal: ((UUID) -> Void)? = nil
 
     var body: some View {
         if isEditable {
             rowContent
+                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                    if !isEffectivelySeen {
+                        Button(primaryActionTitle) {
+                            onToggleCounted()
+                        }
+                        .tint(primaryActionTint)
+                    }
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    if let animalID = check.animalID, let onAddFinding {
+                        Button("Finding") {
+                            onAddFinding(animalID)
+                        }
+                        .tint(.blue)
+                    }
+
+                    Button(missingActionTitle) {
+                        onToggleMissing()
+                    }
+                    .tint(.orange)
+                }
                 .contextMenu {
-                    Button {
-                        onToggleCounted()
-                    } label: {
-                        Label(primaryActionTitle, systemImage: primaryActionSystemImage)
+                    if !isCountedByQuickCount {
+                        Button {
+                            onToggleCounted()
+                        } label: {
+                            Label(primaryActionTitle, systemImage: primaryActionSystemImage)
+                        }
                     }
 
                     Button {
                         onToggleMissing()
                     } label: {
                         Label(missingActionTitle, systemImage: missingActionSystemImage)
+                    }
+
+                    if let animalID = check.animalID, let onAddFinding {
+                        Button {
+                            onAddFinding(animalID)
+                        } label: {
+                            Label("Add Finding", systemImage: "exclamationmark.bubble")
+                        }
                     }
                 }
         } else {
@@ -32,43 +65,89 @@ struct FieldCheckAnimalCheckRow: View {
     }
 
     private var rowContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                tagView
+        HStack(alignment: .center, spacing: 10) {
+            tagView
 
-                VStack(alignment: .leading, spacing: 6) {
-                    if !check.animalName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text(check.animalName)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(titleText)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-                    statusBadges
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                if !isEditable {
-                    FieldCheckBadge(title: readOnlyStatusTitle, tint: readOnlyStatusTint)
-                }
+                Text(statusSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            statusBadge
 
             if isEditable {
-                actionRow
+                primaryControl
             }
 
-            if let animalID = check.animalID {
-                NavigationLink {
-                    FieldCheckAnimalDetailView(sessionID: sessionID, animalID: animalID)
+            if let animalID = check.animalID, let onOpenAnimal {
+                Button {
+                    onOpenAnimal(animalID)
                 } label: {
-                    Label("Open Animal", systemImage: "arrow.right.circle")
+                    Image(systemName: "chevron.right")
                         .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(HierarchicalShapeStyle.tertiary)
+                        .frame(width: 24, height: 28)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open animal")
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 3)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var statusBadge: some View {
+        if check.isMissing {
+            FieldCheckBadge(title: "Missing", tint: .orange)
+        } else if isCountedByQuickCount {
+            FieldCheckBadge(title: "Counted", tint: .accentColor)
+        } else if check.needsAttention {
+            FieldCheckBadge(title: "Flagged", tint: .orange)
+        } else if !check.wasExpectedAtStart {
+            FieldCheckBadge(title: "Added", tint: .secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var primaryControl: some View {
+        if isEffectivelySeen {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Color.green)
+                .accessibilityLabel("Seen")
+        } else {
+            Button {
+                onToggleCounted()
+            } label: {
+                Text(primaryActionTitle)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .tint(primaryActionTint)
+        }
+    }
+
+    private var isEffectivelySeen: Bool {
+        check.wasCounted || isCountedByQuickCount
+    }
+
+    private var titleText: String {
+        let trimmedName = check.animalName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return check.displayTagNumber }
+        return trimmedName
     }
 
     private var tagView: some View {
@@ -87,124 +166,50 @@ struct FieldCheckAnimalCheckRow: View {
         .fixedSize(horizontal: true, vertical: false)
     }
 
-    private var statusBadges: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(statusTokens.enumerated()), id: \.offset) { _, token in
-                FieldCheckBadge(title: token.title, tint: token.tint)
-            }
-        }
-        .lineLimit(1)
-    }
-
-    private var actionRow: some View {
-        HStack(spacing: 10) {
-            primaryActionButton
-
-            if showsMissingAction {
-                Button {
-                    onToggleMissing()
-                } label: {
-                    Label(missingActionTitle, systemImage: missingActionSystemImage)
-                        .font(.footnote.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .tint(check.isMissing ? .accentColor : .orange)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var primaryActionButton: some View {
-        if primaryActionIsProminent {
-            Button {
-                onToggleCounted()
-            } label: {
-                Label(primaryActionTitle, systemImage: primaryActionSystemImage)
-                    .font(.footnote.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(primaryActionTint)
-            .foregroundStyle(colorScheme == .dark ? .black : .white)
-        } else {
-            Button {
-                onToggleCounted()
-            } label: {
-                Label(primaryActionTitle, systemImage: primaryActionSystemImage)
-                    .font(.footnote.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .tint(primaryActionTint)
-        }
-    }
-
-    private var statusTokens: [(title: String, tint: Color)] {
-        var tokens: [(String, Color)] = []
+    private var statusSummary: String {
+        var parts: [String] = [check.animalType.label.lowercased()]
 
         if check.wasCounted {
-            tokens.append(("Seen", .green))
+            parts.append("seen")
+        } else if isCountedByQuickCount {
+            parts.append("counted by type")
         } else if check.isMissing {
-            tokens.append(("Missing", .orange))
+            parts.append("missing")
         } else {
-            tokens.append(("Not Seen", .secondary))
-        }
-
-        if check.needsAttention {
-            tokens.append(("Flagged", .orange))
+            parts.append("not seen")
         }
 
         if !check.wasExpectedAtStart {
-            tokens.append(("Added", .secondary))
+            parts.append("added")
         }
 
-        return tokens
+        return parts.joined(separator: " • ")
     }
 
     private var primaryActionTitle: String {
-        if check.wasCounted { return "Mark Not Seen" }
-        if check.isMissing { return "Mark Found" }
-        return "Mark Seen"
+        if check.wasCounted { return "Not Seen" }
+        if isCountedByQuickCount { return "Seen" }
+        if check.isMissing { return "Found" }
+        return "Seen"
     }
 
     private var primaryActionSystemImage: String {
-        if check.wasCounted { return "checkmark.circle.fill" }
+        if check.wasCounted { return "arrow.uturn.backward.circle" }
+        if isCountedByQuickCount { return "checkmark.circle" }
         if check.isMissing { return "checkmark.circle" }
-        return "circle"
+        return "checkmark.circle"
     }
 
     private var primaryActionTint: Color {
-        if check.wasCounted { return .green }
         if check.isMissing { return .accentColor }
         return .accentColor
     }
 
-    private var primaryActionIsProminent: Bool {
-        !check.wasCounted
-    }
-
-    private var showsMissingAction: Bool {
-        !check.isMissing && !check.wasCounted
-    }
-
     private var missingActionTitle: String {
-        check.isMissing ? "Mark Not Missing" : "Mark Missing"
+        check.isMissing ? "Not Missing" : "Missing"
     }
 
     private var missingActionSystemImage: String {
         check.isMissing ? "checkmark.circle" : "exclamationmark.triangle"
-    }
-
-    private var readOnlyStatusTitle: String {
-        if check.wasCounted { return "Seen" }
-        if check.isMissing { return "Missing" }
-        return "Not Seen"
-    }
-
-    private var readOnlyStatusTint: Color {
-        if check.wasCounted { return .green }
-        if check.isMissing { return .orange }
-        return .secondary
     }
 }
