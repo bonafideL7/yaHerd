@@ -11,6 +11,7 @@ import Foundation
 
 @Model
 final class PregnancyCheck {
+    var publicID: UUID = UUID()
     @Relationship(deleteRule: .nullify) var herd: Herd?
     var date: Date = Date.now
     var result: PregnancyResult = PregnancyResult.unknown
@@ -32,6 +33,7 @@ final class PregnancyCheck {
     @Relationship(deleteRule: .nullify) var animal: Animal?
 
     init(
+        publicID: UUID = UUID(),
         date: Date,
         result: PregnancyResult,
         technician: String? = nil,
@@ -41,6 +43,7 @@ final class PregnancyCheck {
         workingSession: WorkingSession? = nil,
         animal: Animal
     ) {
+        self.publicID = publicID
         self.date = date
         self.result = result
         self.technician = technician

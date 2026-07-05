@@ -11,6 +11,7 @@ import Foundation
 
 @Model
 final class HealthRecord {
+    var publicID: UUID = UUID()
     @Relationship(deleteRule: .nullify) var herd: Herd?
     var date: Date = Date.now
     var treatment: String = ""
@@ -20,12 +21,14 @@ final class HealthRecord {
     @Relationship(deleteRule: .nullify) var animal: Animal?
 
     init(
+        publicID: UUID = UUID(),
         date: Date,
         treatment: String,
         notes: String? = nil,
         workingSession: WorkingSession? = nil,
         animal: Animal
     ) {
+        self.publicID = publicID
         self.date = date
         self.treatment = treatment
         self.notes = notes

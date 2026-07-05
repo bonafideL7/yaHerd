@@ -7,7 +7,7 @@ import XCTest
 @testable import yaHerd
 
 final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
-    func testSharingBridgeModelIncludesHerdPastureGroupPastureAnimalMovementAndStatusEntities() {
+    func testSharingBridgeModelIncludesHerdPastureGroupPastureAnimalMovementStatusHealthAndPregnancyEntities() {
         let model = HerdSharingCoreDataModelFactory.makeModel()
 
         let herdEntity = model.entitiesByName[SharedHerdRecord.entityName]
@@ -16,6 +16,8 @@ final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
         let animalEntity = model.entitiesByName[SharedAnimalRecord.entityName]
         let movementEntity = model.entitiesByName[SharedMovementRecord.entityName]
         let statusRecordEntity = model.entitiesByName[SharedStatusRecord.entityName]
+        let healthRecordEntity = model.entitiesByName[SharedHealthRecord.entityName]
+        let pregnancyCheckEntity = model.entitiesByName[SharedPregnancyCheckRecord.entityName]
 
         XCTAssertNotNil(herdEntity)
         XCTAssertNotNil(pastureGroupEntity)
@@ -23,11 +25,15 @@ final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
         XCTAssertNotNil(animalEntity)
         XCTAssertNotNil(movementEntity)
         XCTAssertNotNil(statusRecordEntity)
+        XCTAssertNotNil(healthRecordEntity)
+        XCTAssertNotNil(pregnancyCheckEntity)
         XCTAssertNotNil(herdEntity?.propertiesByName["pastureGroups"])
         XCTAssertNotNil(herdEntity?.propertiesByName["pastures"])
         XCTAssertNotNil(herdEntity?.propertiesByName["animals"])
         XCTAssertNotNil(herdEntity?.propertiesByName["movements"])
         XCTAssertNotNil(herdEntity?.propertiesByName["statusRecords"])
+        XCTAssertNotNil(herdEntity?.propertiesByName["healthRecords"])
+        XCTAssertNotNil(herdEntity?.propertiesByName["pregnancyChecks"])
         XCTAssertNotNil(pastureGroupEntity?.propertiesByName["grazeDays"])
         XCTAssertNotNil(pastureGroupEntity?.propertiesByName["restDays"])
         XCTAssertNotNil(pastureEntity?.propertiesByName["acreage"])
@@ -35,10 +41,16 @@ final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
         XCTAssertNotNil(animalEntity?.propertiesByName["pasturePublicID"])
         XCTAssertNotNil(animalEntity?.propertiesByName["movements"])
         XCTAssertNotNil(animalEntity?.propertiesByName["statusRecords"])
+        XCTAssertNotNil(animalEntity?.propertiesByName["healthRecords"])
+        XCTAssertNotNil(animalEntity?.propertiesByName["pregnancyChecks"])
         XCTAssertNotNil(movementEntity?.propertiesByName["animalPublicID"])
         XCTAssertNotNil(movementEntity?.propertiesByName["fromPasture"])
         XCTAssertNotNil(statusRecordEntity?.propertiesByName["oldStatusRawValue"])
         XCTAssertNotNil(statusRecordEntity?.propertiesByName["newStatusRawValue"])
+        XCTAssertNotNil(healthRecordEntity?.propertiesByName["treatment"])
+        XCTAssertNotNil(healthRecordEntity?.propertiesByName["notes"])
+        XCTAssertNotNil(pregnancyCheckEntity?.propertiesByName["resultRawValue"])
+        XCTAssertNotNil(pregnancyCheckEntity?.propertiesByName["sireAnimalPublicID"])
     }
 
     func testHerdPastureGroupsRelationshipIsInverseOfPastureGroupHerdRelationship() {
@@ -153,4 +165,62 @@ final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
         XCTAssertTrue(animalStatusRecords?.inverseRelationship === statusRecordAnimal)
         XCTAssertTrue(statusRecordAnimal?.inverseRelationship === animalStatusRecords)
     }
+
+
+    func testHerdHealthRecordsRelationshipIsInverseOfHealthRecordHerdRelationship() {
+        let model = HerdSharingCoreDataModelFactory.makeModel()
+
+        let herdHealthRecords = model.entitiesByName[SharedHerdRecord.entityName]?
+            .relationshipsByName["healthRecords"]
+        let healthRecordHerd = model.entitiesByName[SharedHealthRecord.entityName]?
+            .relationshipsByName["herd"]
+
+        XCTAssertEqual(herdHealthRecords?.destinationEntity?.name, SharedHealthRecord.entityName)
+        XCTAssertEqual(healthRecordHerd?.destinationEntity?.name, SharedHerdRecord.entityName)
+        XCTAssertTrue(herdHealthRecords?.inverseRelationship === healthRecordHerd)
+        XCTAssertTrue(healthRecordHerd?.inverseRelationship === herdHealthRecords)
+    }
+
+    func testAnimalHealthRecordsRelationshipIsInverseOfHealthRecordAnimalRelationship() {
+        let model = HerdSharingCoreDataModelFactory.makeModel()
+
+        let animalHealthRecords = model.entitiesByName[SharedAnimalRecord.entityName]?
+            .relationshipsByName["healthRecords"]
+        let healthRecordAnimal = model.entitiesByName[SharedHealthRecord.entityName]?
+            .relationshipsByName["animal"]
+
+        XCTAssertEqual(animalHealthRecords?.destinationEntity?.name, SharedHealthRecord.entityName)
+        XCTAssertEqual(healthRecordAnimal?.destinationEntity?.name, SharedAnimalRecord.entityName)
+        XCTAssertTrue(animalHealthRecords?.inverseRelationship === healthRecordAnimal)
+        XCTAssertTrue(healthRecordAnimal?.inverseRelationship === animalHealthRecords)
+    }
+
+    func testHerdPregnancyChecksRelationshipIsInverseOfPregnancyCheckHerdRelationship() {
+        let model = HerdSharingCoreDataModelFactory.makeModel()
+
+        let herdPregnancyChecks = model.entitiesByName[SharedHerdRecord.entityName]?
+            .relationshipsByName["pregnancyChecks"]
+        let pregnancyCheckHerd = model.entitiesByName[SharedPregnancyCheckRecord.entityName]?
+            .relationshipsByName["herd"]
+
+        XCTAssertEqual(herdPregnancyChecks?.destinationEntity?.name, SharedPregnancyCheckRecord.entityName)
+        XCTAssertEqual(pregnancyCheckHerd?.destinationEntity?.name, SharedHerdRecord.entityName)
+        XCTAssertTrue(herdPregnancyChecks?.inverseRelationship === pregnancyCheckHerd)
+        XCTAssertTrue(pregnancyCheckHerd?.inverseRelationship === herdPregnancyChecks)
+    }
+
+    func testAnimalPregnancyChecksRelationshipIsInverseOfPregnancyCheckAnimalRelationship() {
+        let model = HerdSharingCoreDataModelFactory.makeModel()
+
+        let animalPregnancyChecks = model.entitiesByName[SharedAnimalRecord.entityName]?
+            .relationshipsByName["pregnancyChecks"]
+        let pregnancyCheckAnimal = model.entitiesByName[SharedPregnancyCheckRecord.entityName]?
+            .relationshipsByName["animal"]
+
+        XCTAssertEqual(animalPregnancyChecks?.destinationEntity?.name, SharedPregnancyCheckRecord.entityName)
+        XCTAssertEqual(pregnancyCheckAnimal?.destinationEntity?.name, SharedAnimalRecord.entityName)
+        XCTAssertTrue(animalPregnancyChecks?.inverseRelationship === pregnancyCheckAnimal)
+        XCTAssertTrue(pregnancyCheckAnimal?.inverseRelationship === animalPregnancyChecks)
+    }
+
 }
