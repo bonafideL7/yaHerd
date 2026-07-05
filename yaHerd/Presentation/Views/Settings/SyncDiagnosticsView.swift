@@ -62,6 +62,7 @@ struct SyncDiagnosticsView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 } else {
+                    LabeledContent("Herds", value: counts.herds.formatted())
                     LabeledContent("Animals", value: counts.animals.formatted())
                     LabeledContent("Pastures", value: counts.pastures.formatted())
                     LabeledContent("Pasture Groups", value: counts.pastureGroups.formatted())

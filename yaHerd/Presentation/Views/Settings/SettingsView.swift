@@ -40,14 +40,26 @@ struct SettingsView: View {
                 }
             }
             
-            NavigationLink {
-                SyncSettingsView()
-            } label: {
-                SettingsRow(
-                    title: "Sync",
-                    subtitle: "View storage mode and iCloud sync status.",
-                    systemImage: "icloud"
-                )
+            Section("Sharing") {
+                NavigationLink {
+                    SyncSettingsView()
+                } label: {
+                    SettingsRow(
+                        title: "Sync",
+                        subtitle: "View storage mode and iCloud sync status.",
+                        systemImage: "icloud"
+                    )
+                }
+
+                NavigationLink {
+                    HerdCollaborationView()
+                } label: {
+                    SettingsRow(
+                        title: "Herd Collaboration",
+                        subtitle: "Prepare the current herd for future CloudKit sharing.",
+                        systemImage: "person.2"
+                    )
+                }
             }
             
             Section("About") {
