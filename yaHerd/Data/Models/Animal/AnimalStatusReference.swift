@@ -11,6 +11,7 @@ import SwiftData
 @Model
 final class AnimalStatusReference {
     var id: UUID = UUID()
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var name: String = ""
     var baseStatus: AnimalStatus = AnimalStatus.active
     var createdAt: Date = Date.now

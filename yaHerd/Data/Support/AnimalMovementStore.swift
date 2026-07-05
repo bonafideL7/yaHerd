@@ -28,7 +28,7 @@ struct AnimalMovementStore {
             toPasture: newName,
             animal: animal
         )
-        context.insert(movement)
+        try context.insertIntoDefaultHerd(movement)
 
         if save {
             try context.save()

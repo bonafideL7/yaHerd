@@ -4,6 +4,7 @@ import SwiftData
 @Model
 final class FieldCheckSession {
     var publicID: UUID = UUID()
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var startedAt: Date = Date.now
     var completedAt: Date?
     var notes: String = ""
@@ -73,6 +74,7 @@ final class FieldCheckSession {
 @Model
 final class FieldCheckAnimalCheck {
     var publicID: UUID = UUID()
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var animalIDSnapshot: UUID?
     var rosterTagNumber: String = ""
     var rosterTagColorID: UUID?
@@ -168,6 +170,7 @@ final class FieldCheckAnimalCheck {
 @Model
 final class FieldCheckFinding {
     var publicID: UUID = UUID()
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var recordedAt: Date = Date.now
     var typeRawValue: String = FieldCheckFindingType.generalObservation.rawValue
     var severityRawValue: String = FieldCheckFindingSeverity.warning.rawValue

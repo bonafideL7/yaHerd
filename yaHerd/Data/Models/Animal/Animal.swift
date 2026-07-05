@@ -10,6 +10,7 @@ import Foundation
 @Model
 final class Animal {
     var publicID: UUID = UUID()
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var name: String = ""
     var tagNumber: String = ""
     var tagColorID: UUID?

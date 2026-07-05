@@ -97,7 +97,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         )
 
         try ensureUniqueAnimalPublicID(animal)
-        context.insert(animal)
+        try context.insertIntoDefaultHerd(animal)
         if !animal.tagNumber.isEmpty {
             let tag = animal.ensurePrimaryTagRecord()
             try ensureUniqueAnimalTagPublicID(tag)
@@ -146,7 +146,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
                 newStatusReferenceID: input.statusReferenceID,
                 animal: animal
             )
-            context.insert(record)
+            try context.insertIntoDefaultHerd(record)
         }
 
         animal.applyStatusState(
@@ -241,7 +241,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             throw AnimalValidationError.animalNotFound
         }
         let record = HealthRecord(date: input.date, treatment: input.treatment, notes: input.notes, animal: animal)
-        context.insert(record)
+        try context.insertIntoDefaultHerd(record)
         try context.save()
         return try makeDetail(from: animal)
     }
@@ -260,7 +260,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             workingSession: nil,
             animal: animal
         )
-        context.insert(check)
+        try context.insertIntoDefaultHerd(check)
         try context.save()
         return try makeDetail(from: animal)
     }

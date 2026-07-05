@@ -64,7 +64,7 @@ struct SwiftDataPastureRepository: PastureRepository {
             sortOrder: try nextSortOrder()
         )
         try ensureUniquePasturePublicID(pasture)
-        context.insert(pasture)
+        try context.insertIntoDefaultHerd(pasture)
         try context.save()
         return PastureMapper.makeDetail(from: pasture)
     }
@@ -146,7 +146,7 @@ struct SwiftDataPastureRepository: PastureRepository {
             restDays: normalizedInput.restDays
         )
         try ensureUniquePastureGroupPublicID(group)
-        context.insert(group)
+        try context.insertIntoDefaultHerd(group)
         try context.save()
         return PastureMapper.makeGroupDetail(from: group)
     }

@@ -11,6 +11,7 @@ import Foundation
 
 @Model
 final class StatusRecord {
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var date: Date = Date.now
     var oldStatus: AnimalStatus = AnimalStatus.active
     var newStatus: AnimalStatus = AnimalStatus.active

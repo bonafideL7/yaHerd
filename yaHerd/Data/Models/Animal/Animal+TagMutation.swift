@@ -48,6 +48,9 @@ extension Animal {
 
     func ensurePrimaryTagRecord() -> AnimalTag {
         if let primaryTag {
+            if primaryTag.herd == nil {
+                primaryTag.herd = herd
+            }
             if primaryTag.normalizedNumber != tagNumber {
                 primaryTag.number = tagNumber
             }
@@ -70,6 +73,7 @@ extension Animal {
             assignedAt: .now,
             animal: self
         )
+        tag.herd = herd
         tags.append(tag)
         syncPrimaryTagFieldsFromTags()
         return tag
@@ -96,6 +100,7 @@ extension Animal {
             assignedAt: assignedAt,
             animal: self
         )
+        tag.herd = herd
         tags.append(tag)
         syncPrimaryTagFieldsFromTags()
         return tag

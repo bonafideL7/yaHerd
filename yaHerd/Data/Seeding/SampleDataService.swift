@@ -28,13 +28,13 @@ struct SampleDataService {
         let holding = Pasture(name: "Holding", acreage: 7, usableAcreage: 5, targetAcresPerHead: 3)
         let wallys = Pasture(name: "Wally's", acreage: 48, usableAcreage: 40, targetAcresPerHead: 3)
         
-        context.insert(northwest)
-        context.insert(southwest)
-        context.insert(northeast)
-        context.insert(southeast)
-        context.insert(lower)
-        context.insert(wallys)
-        context.insert(holding)
+        context.insertIntoDefaultHerdIfAvailable(northwest)
+        context.insertIntoDefaultHerdIfAvailable(southwest)
+        context.insertIntoDefaultHerdIfAvailable(northeast)
+        context.insertIntoDefaultHerdIfAvailable(southeast)
+        context.insertIntoDefaultHerdIfAvailable(lower)
+        context.insertIntoDefaultHerdIfAvailable(wallys)
+        context.insertIntoDefaultHerdIfAvailable(holding)
         
         // MARK: - Animals (Matthew and Heather's herd)
         // Tags are green; tag numbers and dates come from the provided list.
@@ -151,22 +151,22 @@ struct SampleDataService {
         
         let animals = [jane, rudy, roux, imogene, telly, aelin, izzy, lottie, limeGreen80]
         animals.forEach { animal in
-            context.insert(animal)
+            context.insertIntoDefaultHerdIfAvailable(animal)
             _ = animal.ensurePrimaryTagRecord()
         }
         
         // MARK: - Pregnancy Checks (dashboard alerts)
-        context.insert(PregnancyCheck(date: daysAgo(30), result: .pregnant, technician: "Dr. Smith", animal: jane))
-        context.insert(PregnancyCheck(date: daysAgo(29), result: .open,     technician: "Dr. Smith", animal: rudy))
-        context.insert(PregnancyCheck(date: daysAgo(220), result: .pregnant, technician: "Dr. Lee", animal: imogene))
-        context.insert(PregnancyCheck(date: daysAgo(61),  result: .unknown,  technician: "Dr. Lee", animal: telly))
+        context.insertIntoDefaultHerdIfAvailable(PregnancyCheck(date: daysAgo(30), result: .pregnant, technician: "Dr. Smith", animal: jane))
+        context.insertIntoDefaultHerdIfAvailable(PregnancyCheck(date: daysAgo(29), result: .open,     technician: "Dr. Smith", animal: rudy))
+        context.insertIntoDefaultHerdIfAvailable(PregnancyCheck(date: daysAgo(220), result: .pregnant, technician: "Dr. Lee", animal: imogene))
+        context.insertIntoDefaultHerdIfAvailable(PregnancyCheck(date: daysAgo(61),  result: .unknown,  technician: "Dr. Lee", animal: telly))
         
         // MARK: - Health Records (dashboard alerts)
-        context.insert(HealthRecord(date: daysAgo(10),  treatment: "Vaccination", notes: "Booster", animal: jane))
-        context.insert(HealthRecord(date: daysAgo(210), treatment: "Deworming",   notes: nil,       animal: limeGreen80))
-        context.insert(HealthRecord(date: daysAgo(45),  treatment: "Foot Trim",   notes: "Mild lesion LF", animal: roux))
-        context.insert(HealthRecord(date: daysAgo(5),   treatment: "Antibiotic",  notes: "Metritis", animal: imogene))
-        context.insert(HealthRecord(date: daysAgo(7),   treatment: "Vaccination", notes: nil,        animal: telly))
+        context.insertIntoDefaultHerdIfAvailable(HealthRecord(date: daysAgo(10),  treatment: "Vaccination", notes: "Booster", animal: jane))
+        context.insertIntoDefaultHerdIfAvailable(HealthRecord(date: daysAgo(210), treatment: "Deworming",   notes: nil,       animal: limeGreen80))
+        context.insertIntoDefaultHerdIfAvailable(HealthRecord(date: daysAgo(45),  treatment: "Foot Trim",   notes: "Mild lesion LF", animal: roux))
+        context.insertIntoDefaultHerdIfAvailable(HealthRecord(date: daysAgo(5),   treatment: "Antibiotic",  notes: "Metritis", animal: imogene))
+        context.insertIntoDefaultHerdIfAvailable(HealthRecord(date: daysAgo(7),   treatment: "Vaccination", notes: nil,        animal: telly))
         
         // MARK: - Movement History (timeline)
         let movementData: [(Animal, String?, String, Int)] = [
@@ -179,7 +179,7 @@ struct SampleDataService {
         ]
         
         for (animal, from, to, days) in movementData {
-            context.insert(
+            context.insertIntoDefaultHerdIfAvailable(
                 MovementRecord(
                     date: daysAgo(days),
                     fromPasture: from,
@@ -195,7 +195,7 @@ struct SampleDataService {
         ]
         
         for (animal, oldStatus, newStatus, days) in statusData {
-            context.insert(
+            context.insertIntoDefaultHerdIfAvailable(
                 StatusRecord(
                     date: daysAgo(days),
                     oldStatus: oldStatus,
@@ -229,8 +229,8 @@ struct SampleDataService {
             ]
         )
         
-        context.insert(spring)
-        context.insert(fall)
+        context.insertIntoDefaultHerdIfAvailable(spring)
+        context.insertIntoDefaultHerdIfAvailable(fall)
         do { try context.save() } catch { assertionFailure("Failed to save seeded data: \(error.localizedDescription)") }
     }
     
@@ -256,7 +256,7 @@ extension SampleDataService {
 
             if !alreadyExists {
                 let persistedColor = TagColorDefinition(snapshot: defaultColor)
-                context.insert(persistedColor)
+                context.insertIntoDefaultHerdIfAvailable(persistedColor)
                 existingColors.append(persistedColor)
             }
         }

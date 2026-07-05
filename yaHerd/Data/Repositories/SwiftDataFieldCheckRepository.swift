@@ -53,7 +53,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             pasture: pasture
         )
         try ensureUniqueSessionPublicID(session)
-        context.insert(session)
+        try context.insertIntoDefaultHerd(session)
 
         for animal in rosterAnimals {
             let check = makeAnimalCheck(
@@ -62,7 +62,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
                 wasExpectedAtStart: true
             )
             try ensureUniqueAnimalCheckPublicID(check)
-            context.insert(check)
+            try context.insertIntoDefaultHerd(check)
         }
 
         try context.save()
@@ -162,7 +162,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             countedAt: checkedAt
         )
         try ensureUniqueAnimalCheckPublicID(check)
-        context.insert(check)
+        try context.insertIntoDefaultHerd(check)
         session.expectedHeadCountSnapshot += 1
         normalizeQuickAnimalTypeCounts(for: session)
         try context.save()
@@ -193,7 +193,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             session: session
         )
         try ensureUniqueFindingPublicID(finding)
-        context.insert(finding)
+        try context.insertIntoDefaultHerd(finding)
         applyFindingSideEffects(input: input, linkedAnimalID: input.animalID ?? animal?.publicID, session: session)
         try context.save()
     }

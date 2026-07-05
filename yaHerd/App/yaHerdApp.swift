@@ -56,6 +56,7 @@ struct yaHerdApp: App {
                 schema: schema,
                 syncMode: syncMode
             )
+            try DefaultHerdBootstrapper.ensureDefaultHerd(in: container.mainContext)
 
             AppLaunchDiagnostics.record(
                 requestedSyncMode: syncMode,
@@ -88,6 +89,7 @@ struct yaHerdApp: App {
                         schema: schema,
                         syncMode: .localOnly
                     )
+                    try DefaultHerdBootstrapper.ensureDefaultHerd(in: localContainer.mainContext)
 
                     let startupMessage = """
                     iCloud Sync could not be enabled, so yaHerd returned to Local Only mode. Your local data is still on this device. Original error: \(primaryError.localizedDescription)
@@ -118,6 +120,7 @@ struct yaHerdApp: App {
                         let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer(
                             schema: schema
                         )
+                        try DefaultHerdBootstrapper.ensureDefaultHerd(in: fallbackContainer.mainContext)
 
                         let startupMessage = """
                         Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved.
@@ -171,6 +174,7 @@ struct yaHerdApp: App {
                 let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer(
                     schema: schema
                 )
+                try DefaultHerdBootstrapper.ensureDefaultHerd(in: fallbackContainer.mainContext)
 
                 let startupMessage = """
                 Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved. Original error: \(primaryError.localizedDescription)
@@ -216,6 +220,7 @@ struct yaHerdApp: App {
 
     static func makeSchema() -> Schema {
         Schema([
+            Herd.self,
             Animal.self,
             AnimalTag.self,
             TagColorDefinition.self,

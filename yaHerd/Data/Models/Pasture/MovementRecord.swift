@@ -11,6 +11,7 @@ import Foundation
 
 @Model
 final class MovementRecord {
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var date: Date = Date.now
     var fromPasture: String?
     var toPasture: String?

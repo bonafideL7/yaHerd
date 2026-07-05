@@ -11,6 +11,7 @@ import Foundation
 
 @Model
 final class HealthRecord {
+    @Relationship(deleteRule: .nullify) var herd: Herd?
     var date: Date = Date.now
     var treatment: String = ""
     var notes: String?

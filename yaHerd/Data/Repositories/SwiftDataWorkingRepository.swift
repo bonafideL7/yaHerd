@@ -71,7 +71,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
             protocolItems: protocolItems
         )
         try idStore.ensureUniqueSessionPublicID(session)
-        context.insert(session)
+        try context.insertIntoDefaultHerd(session)
         try context.save()
         return session.publicID
     }
@@ -99,7 +99,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
                 session: session
             )
             try idStore.ensureUniqueQueueItemPublicID(item)
-            context.insert(item)
+            try context.insertIntoDefaultHerd(item)
             session.queueItems.append(item)
             order += 1
         }
@@ -206,7 +206,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
 
         let template = WorkingProtocolTemplate(name: normalizedName, items: items)
         try idStore.ensureUniqueTemplatePublicID(template)
-        context.insert(template)
+        try context.insertIntoDefaultHerd(template)
         try context.save()
         return template.publicID
     }
