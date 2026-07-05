@@ -16,6 +16,7 @@ final class SwiftDataSyncDiagnosticsRepository: SyncDiagnosticsRepository {
 
     func fetchCounts() throws -> SyncDiagnosticsCounts {
         SyncDiagnosticsCounts(
+            herds: try count(Herd.self),
             animals: try count(Animal.self),
             pastures: try count(Pasture.self),
             pastureGroups: try count(PastureGroup.self),

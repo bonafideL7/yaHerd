@@ -9,6 +9,8 @@ final class AppDependencies {
     let fieldCheckRepository: any FieldCheckRepository
     let tagColorRepository: any TagColorRepository
     let syncDiagnosticsRepository: any SyncDiagnosticsRepository
+    let herdRepository: any HerdRepository
+    let herdSharingRepository: any HerdSharingRepository
     let sampleDataSeeder: any SampleDataSeeding
 
     private let context: ModelContext
@@ -24,6 +26,8 @@ final class AppDependencies {
         self.workingRepository = SwiftDataWorkingRepository(context: context)
         self.fieldCheckRepository = SwiftDataFieldCheckRepository(context: context)
         self.syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(context: context)
+        self.herdRepository = SwiftDataHerdRepository(context: context)
+        self.herdSharingRepository = SwiftDataHerdSharingRepository()
         self.tagColorRepository = SwiftDataTagColorRepository(
             context: context,
             duplicateResolutionPolicy: tagColorDuplicateResolutionPolicy

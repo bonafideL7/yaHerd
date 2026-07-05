@@ -284,6 +284,8 @@ private struct RunningAppView: View {
             .environment(\.fieldCheckOverviewReader, runtime.dependencies.fieldCheckRepository)
             .environment(\.workingProtocolTemplateReader, runtime.dependencies.workingRepository)
             .environment(\.syncDiagnosticsRepository, runtime.dependencies.syncDiagnosticsRepository)
+            .environment(\.herdRepository, runtime.dependencies.herdRepository)
+            .environment(\.herdSharingRepository, runtime.dependencies.herdSharingRepository)
             .environment(\.animalListRepository, runtime.dependencies.animalRepository)
             .environment(\.animalEditorRepository, runtime.dependencies.animalRepository)
             .environment(\.animalDetailRepository, runtime.dependencies.animalRepository)

@@ -6,6 +6,7 @@
 import Foundation
 
 struct SyncDiagnosticsCounts: Equatable {
+    let herds: Int
     let animals: Int
     let pastures: Int
     let pastureGroups: Int
@@ -21,6 +22,7 @@ struct SyncDiagnosticsCounts: Equatable {
     let fieldCheckFindings: Int
 
     static let empty = SyncDiagnosticsCounts(
+        herds: 0,
         animals: 0,
         pastures: 0,
         pastureGroups: 0,
