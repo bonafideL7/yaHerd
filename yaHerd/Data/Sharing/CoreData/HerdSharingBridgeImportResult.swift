@@ -13,6 +13,10 @@ struct HerdSharingBridgeImportResult: Equatable {
     let updatedPastureCount: Int
     let insertedAnimalCount: Int
     let updatedAnimalCount: Int
+    let insertedMovementCount: Int
+    let updatedMovementCount: Int
+    let insertedStatusRecordCount: Int
+    let updatedStatusRecordCount: Int
 
     var importedPastureGroupCount: Int {
         insertedPastureGroupCount + updatedPastureGroupCount
@@ -24,5 +28,13 @@ struct HerdSharingBridgeImportResult: Equatable {
 
     var importedAnimalCount: Int {
         insertedAnimalCount + updatedAnimalCount
+    }
+
+    var importedMovementCount: Int {
+        insertedMovementCount + updatedMovementCount
+    }
+
+    var importedStatusRecordCount: Int {
+        insertedStatusRecordCount + updatedStatusRecordCount
     }
 }

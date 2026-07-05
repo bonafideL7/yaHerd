@@ -17,6 +17,8 @@ final class SharedHerdRecord: NSManagedObject {
     @NSManaged var animals: Set<SharedAnimalRecord>?
     @NSManaged var pastures: Set<SharedPastureRecord>?
     @NSManaged var pastureGroups: Set<SharedPastureGroupRecord>?
+    @NSManaged var movements: Set<SharedMovementRecord>?
+    @NSManaged var statusRecords: Set<SharedStatusRecord>?
 }
 
 extension SharedHerdRecord {

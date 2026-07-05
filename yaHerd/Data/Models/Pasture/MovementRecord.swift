@@ -11,6 +11,7 @@ import Foundation
 
 @Model
 final class MovementRecord {
+    var publicID: UUID = UUID()
     @Relationship(deleteRule: .nullify) var herd: Herd?
     var date: Date = Date.now
     var fromPasture: String?
@@ -18,7 +19,14 @@ final class MovementRecord {
 
     @Relationship(deleteRule: .nullify) var animal: Animal?
 
-    init(date: Date, fromPasture: String?, toPasture: String?, animal: Animal) {
+    init(
+        publicID: UUID = UUID(),
+        date: Date,
+        fromPasture: String?,
+        toPasture: String?,
+        animal: Animal
+    ) {
+        self.publicID = publicID
         self.date = date
         self.fromPasture = fromPasture
         self.toPasture = toPasture

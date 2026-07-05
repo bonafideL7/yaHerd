@@ -84,6 +84,36 @@ enum HerdSharingCoreDataModelFactory {
             ]
         )
 
+        let movementEntity = makeEntity(
+            name: SharedMovementRecord.entityName,
+            managedObjectClass: SharedMovementRecord.self,
+            properties: [
+                makeAttribute(name: "publicID", type: .stringAttributeType),
+                makeAttribute(name: "herdPublicID", type: .stringAttributeType),
+                makeAttribute(name: "animalPublicID", type: .stringAttributeType),
+                makeAttribute(name: "date", type: .dateAttributeType),
+                makeAttribute(name: "fromPasture", type: .stringAttributeType),
+                makeAttribute(name: "toPasture", type: .stringAttributeType),
+                makeAttribute(name: "lastMirroredAt", type: .dateAttributeType)
+            ]
+        )
+
+        let statusRecordEntity = makeEntity(
+            name: SharedStatusRecord.entityName,
+            managedObjectClass: SharedStatusRecord.self,
+            properties: [
+                makeAttribute(name: "publicID", type: .stringAttributeType),
+                makeAttribute(name: "herdPublicID", type: .stringAttributeType),
+                makeAttribute(name: "animalPublicID", type: .stringAttributeType),
+                makeAttribute(name: "date", type: .dateAttributeType),
+                makeAttribute(name: "oldStatusRawValue", type: .stringAttributeType),
+                makeAttribute(name: "newStatusRawValue", type: .stringAttributeType),
+                makeAttribute(name: "oldStatusReferenceID", type: .stringAttributeType),
+                makeAttribute(name: "newStatusReferenceID", type: .stringAttributeType),
+                makeAttribute(name: "lastMirroredAt", type: .dateAttributeType)
+            ]
+        )
+
         addToManyRelationship(
             name: "pastureGroups",
             from: herdEntity,
@@ -116,7 +146,46 @@ enum HerdSharingCoreDataModelFactory {
             deleteRule: .cascadeDeleteRule
         )
 
-        model.entities = [herdEntity, pastureGroupEntity, pastureEntity, animalEntity]
+        addToManyRelationship(
+            name: "movements",
+            from: herdEntity,
+            to: movementEntity,
+            inverseName: "herd",
+            deleteRule: .cascadeDeleteRule
+        )
+
+        addToManyRelationship(
+            name: "statusRecords",
+            from: herdEntity,
+            to: statusRecordEntity,
+            inverseName: "herd",
+            deleteRule: .cascadeDeleteRule
+        )
+
+        addToManyRelationship(
+            name: "movements",
+            from: animalEntity,
+            to: movementEntity,
+            inverseName: "animal",
+            deleteRule: .cascadeDeleteRule
+        )
+
+        addToManyRelationship(
+            name: "statusRecords",
+            from: animalEntity,
+            to: statusRecordEntity,
+            inverseName: "animal",
+            deleteRule: .cascadeDeleteRule
+        )
+
+        model.entities = [
+            herdEntity,
+            pastureGroupEntity,
+            pastureEntity,
+            animalEntity,
+            movementEntity,
+            statusRecordEntity
+        ]
         return model
     }
 
