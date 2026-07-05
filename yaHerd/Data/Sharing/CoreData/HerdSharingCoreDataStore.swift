@@ -678,6 +678,174 @@ final class HerdSharingCoreDataStore {
         return mirroredRecords
     }
 
+
+    func mirrorFieldCheckSessionsIntoPrivateStore(
+        _ sessions: [FieldCheckSession],
+        herd: HerdSummary,
+        herdRecord: SharedHerdRecord
+    ) throws -> [SharedFieldCheckSessionRecord] {
+        guard let privateStore else {
+            throw HerdSharingActionError.sharingStoreUnavailable("The private sharing bridge store was not loaded.")
+        }
+
+        let context = persistentContainer.viewContext
+        let existingRecords = try fetchSharedFieldCheckSessionRecords(herdPublicID: herd.publicID, in: privateStore)
+        var recordsByPublicID: [String: SharedFieldCheckSessionRecord] = [:]
+        for record in existingRecords {
+            guard let publicID = record.publicID, recordsByPublicID[publicID] == nil else { continue }
+            recordsByPublicID[publicID] = record
+        }
+
+        let mirroredSessionIDs = Set(sessions.map { $0.publicID.uuidString })
+        var mirroredRecords: [SharedFieldCheckSessionRecord] = []
+
+        for session in sessions {
+            let publicID = session.publicID.uuidString
+            let existingRecord = recordsByPublicID[publicID]
+            let record = existingRecord ?? SharedFieldCheckSessionRecord(context: context)
+
+            if existingRecord == nil {
+                context.assign(record, to: privateStore)
+            }
+
+            record.mirror(session, herdPublicID: herd.publicID)
+            record.herd = herdRecord
+            mirroredRecords.append(record)
+        }
+
+        for staleRecord in existingRecords where !mirroredSessionIDs.contains(staleRecord.publicID ?? "") {
+            context.delete(staleRecord)
+        }
+
+        if context.hasChanges {
+            try context.save()
+        }
+
+        return mirroredRecords
+    }
+
+    func mirrorFieldCheckAnimalChecksIntoPrivateStore(
+        _ checks: [FieldCheckAnimalCheck],
+        herd: HerdSummary,
+        herdRecord: SharedHerdRecord,
+        sessionRecords: [SharedFieldCheckSessionRecord],
+        animalRecords: [SharedAnimalRecord]
+    ) throws -> [SharedFieldCheckAnimalCheckRecord] {
+        guard let privateStore else {
+            throw HerdSharingActionError.sharingStoreUnavailable("The private sharing bridge store was not loaded.")
+        }
+
+        let context = persistentContainer.viewContext
+        let existingRecords = try fetchSharedFieldCheckAnimalCheckRecords(herdPublicID: herd.publicID, in: privateStore)
+        var recordsByPublicID: [String: SharedFieldCheckAnimalCheckRecord] = [:]
+        for record in existingRecords {
+            guard let publicID = record.publicID, recordsByPublicID[publicID] == nil else { continue }
+            recordsByPublicID[publicID] = record
+        }
+
+        var sessionsByPublicID: [String: SharedFieldCheckSessionRecord] = [:]
+        for sessionRecord in sessionRecords {
+            guard let publicID = sessionRecord.publicID else { continue }
+            sessionsByPublicID[publicID] = sessionRecord
+        }
+
+        var animalsByPublicID: [String: SharedAnimalRecord] = [:]
+        for animalRecord in animalRecords {
+            guard let publicID = animalRecord.publicID else { continue }
+            animalsByPublicID[publicID] = animalRecord
+        }
+
+        let mirroredCheckIDs = Set(checks.map { $0.publicID.uuidString })
+        var mirroredRecords: [SharedFieldCheckAnimalCheckRecord] = []
+
+        for check in checks {
+            let publicID = check.publicID.uuidString
+            let existingRecord = recordsByPublicID[publicID]
+            let record = existingRecord ?? SharedFieldCheckAnimalCheckRecord(context: context)
+
+            if existingRecord == nil {
+                context.assign(record, to: privateStore)
+            }
+
+            record.mirror(check, herdPublicID: herd.publicID)
+            record.herd = herdRecord
+            record.session = check.session.flatMap { sessionsByPublicID[$0.publicID.uuidString] }
+            record.animal = check.animal.flatMap { animalsByPublicID[$0.publicID.uuidString] }
+            mirroredRecords.append(record)
+        }
+
+        for staleRecord in existingRecords where !mirroredCheckIDs.contains(staleRecord.publicID ?? "") {
+            context.delete(staleRecord)
+        }
+
+        if context.hasChanges {
+            try context.save()
+        }
+
+        return mirroredRecords
+    }
+
+    func mirrorFieldCheckFindingsIntoPrivateStore(
+        _ findings: [FieldCheckFinding],
+        herd: HerdSummary,
+        herdRecord: SharedHerdRecord,
+        sessionRecords: [SharedFieldCheckSessionRecord],
+        animalRecords: [SharedAnimalRecord]
+    ) throws -> [SharedFieldCheckFindingRecord] {
+        guard let privateStore else {
+            throw HerdSharingActionError.sharingStoreUnavailable("The private sharing bridge store was not loaded.")
+        }
+
+        let context = persistentContainer.viewContext
+        let existingRecords = try fetchSharedFieldCheckFindingRecords(herdPublicID: herd.publicID, in: privateStore)
+        var recordsByPublicID: [String: SharedFieldCheckFindingRecord] = [:]
+        for record in existingRecords {
+            guard let publicID = record.publicID, recordsByPublicID[publicID] == nil else { continue }
+            recordsByPublicID[publicID] = record
+        }
+
+        var sessionsByPublicID: [String: SharedFieldCheckSessionRecord] = [:]
+        for sessionRecord in sessionRecords {
+            guard let publicID = sessionRecord.publicID else { continue }
+            sessionsByPublicID[publicID] = sessionRecord
+        }
+
+        var animalsByPublicID: [String: SharedAnimalRecord] = [:]
+        for animalRecord in animalRecords {
+            guard let publicID = animalRecord.publicID else { continue }
+            animalsByPublicID[publicID] = animalRecord
+        }
+
+        let mirroredFindingIDs = Set(findings.map { $0.publicID.uuidString })
+        var mirroredRecords: [SharedFieldCheckFindingRecord] = []
+
+        for finding in findings {
+            let publicID = finding.publicID.uuidString
+            let existingRecord = recordsByPublicID[publicID]
+            let record = existingRecord ?? SharedFieldCheckFindingRecord(context: context)
+
+            if existingRecord == nil {
+                context.assign(record, to: privateStore)
+            }
+
+            record.mirror(finding, herdPublicID: herd.publicID)
+            record.herd = herdRecord
+            record.session = finding.session.flatMap { sessionsByPublicID[$0.publicID.uuidString] }
+            record.animal = finding.animal.flatMap { animalsByPublicID[$0.publicID.uuidString] }
+            mirroredRecords.append(record)
+        }
+
+        for staleRecord in existingRecords where !mirroredFindingIDs.contains(staleRecord.publicID ?? "") {
+            context.delete(staleRecord)
+        }
+
+        if context.hasChanges {
+            try context.save()
+        }
+
+        return mirroredRecords
+    }
+
     func makeSystemShare(
         for herd: HerdSummary,
         pastureGroups: [PastureGroup],
@@ -690,7 +858,10 @@ final class HerdSharingCoreDataStore {
         workingProtocolTemplates: [WorkingProtocolTemplate],
         workingSessions: [WorkingSession],
         workingQueueItems: [WorkingQueueItem],
-        workingTreatmentRecords: [WorkingTreatmentRecord]
+        workingTreatmentRecords: [WorkingTreatmentRecord],
+        fieldCheckSessions: [FieldCheckSession],
+        fieldCheckAnimalChecks: [FieldCheckAnimalCheck],
+        fieldCheckFindings: [FieldCheckFinding]
     ) async throws -> HerdSystemShare {
         let record = try await mirrorHerdIntoPrivateStore(herd)
         let pastureGroupRecords = try mirrorPastureGroupsIntoPrivateStore(
@@ -753,6 +924,25 @@ final class HerdSharingCoreDataStore {
             herdRecord: record,
             animalRecords: animalRecords
         )
+        let sharedFieldCheckSessions = try mirrorFieldCheckSessionsIntoPrivateStore(
+            fieldCheckSessions,
+            herd: herd,
+            herdRecord: record
+        )
+        let sharedFieldCheckAnimalChecks = try mirrorFieldCheckAnimalChecksIntoPrivateStore(
+            fieldCheckAnimalChecks,
+            herd: herd,
+            herdRecord: record,
+            sessionRecords: sharedFieldCheckSessions,
+            animalRecords: animalRecords
+        )
+        let sharedFieldCheckFindings = try mirrorFieldCheckFindingsIntoPrivateStore(
+            fieldCheckFindings,
+            herd: herd,
+            herdRecord: record,
+            sessionRecords: sharedFieldCheckSessions,
+            animalRecords: animalRecords
+        )
         let recordsToShare: [NSManagedObject] = [record as NSManagedObject] +
             pastureGroupRecords.map { $0 as NSManagedObject } +
             pastureRecords.map { $0 as NSManagedObject } +
@@ -764,7 +954,10 @@ final class HerdSharingCoreDataStore {
             sharedWorkingQueueItems.map { $0 as NSManagedObject } +
             sharedWorkingTreatmentRecords.map { $0 as NSManagedObject } +
             sharedHealthRecords.map { $0 as NSManagedObject } +
-            sharedPregnancyChecks.map { $0 as NSManagedObject }
+            sharedPregnancyChecks.map { $0 as NSManagedObject } +
+            sharedFieldCheckSessions.map { $0 as NSManagedObject } +
+            sharedFieldCheckAnimalChecks.map { $0 as NSManagedObject } +
+            sharedFieldCheckFindings.map { $0 as NSManagedObject }
         let share = try await shareRecords(recordsToShare, title: herd.name)
 
         return HerdSystemShare(
@@ -887,6 +1080,24 @@ final class HerdSharingCoreDataStore {
             herd: herd,
             in: swiftDataContext
         )
+        let sharedFieldCheckSessions = try fetchSharedFieldCheckSessionRecords(herdPublicID: herdPublicID, in: sharedStore)
+        let fieldCheckSessionResult = try upsertSwiftDataFieldCheckSessions(
+            from: sharedFieldCheckSessions,
+            herd: herd,
+            in: swiftDataContext
+        )
+        let sharedFieldCheckAnimalChecks = try fetchSharedFieldCheckAnimalCheckRecords(herdPublicID: herdPublicID, in: sharedStore)
+        let fieldCheckAnimalCheckResult = try upsertSwiftDataFieldCheckAnimalChecks(
+            from: sharedFieldCheckAnimalChecks,
+            herd: herd,
+            in: swiftDataContext
+        )
+        let sharedFieldCheckFindings = try fetchSharedFieldCheckFindingRecords(herdPublicID: herdPublicID, in: sharedStore)
+        let fieldCheckFindingResult = try upsertSwiftDataFieldCheckFindings(
+            from: sharedFieldCheckFindings,
+            herd: herd,
+            in: swiftDataContext
+        )
 
         if swiftDataContext.hasChanges {
             try swiftDataContext.save()
@@ -915,7 +1126,13 @@ final class HerdSharingCoreDataStore {
             insertedWorkingQueueItemCount: workingQueueItemResult.inserted,
             updatedWorkingQueueItemCount: workingQueueItemResult.updated,
             insertedWorkingTreatmentRecordCount: workingTreatmentRecordResult.inserted,
-            updatedWorkingTreatmentRecordCount: workingTreatmentRecordResult.updated
+            updatedWorkingTreatmentRecordCount: workingTreatmentRecordResult.updated,
+            insertedFieldCheckSessionCount: fieldCheckSessionResult.inserted,
+            updatedFieldCheckSessionCount: fieldCheckSessionResult.updated,
+            insertedFieldCheckAnimalCheckCount: fieldCheckAnimalCheckResult.inserted,
+            updatedFieldCheckAnimalCheckCount: fieldCheckAnimalCheckResult.updated,
+            insertedFieldCheckFindingCount: fieldCheckFindingResult.inserted,
+            updatedFieldCheckFindingCount: fieldCheckFindingResult.updated
         )
     }
 
@@ -1788,6 +2005,268 @@ final class HerdSharingCoreDataStore {
         check.workingSession = sharedRecord.parsedWorkingSessionPublicID.flatMap { sessionsByPublicID[$0] }
     }
 
+
+    private func upsertSwiftDataFieldCheckSessions(
+        from sharedRecords: [SharedFieldCheckSessionRecord],
+        herd: Herd,
+        in context: ModelContext
+    ) throws -> (inserted: Int, updated: Int) {
+        let validSharedRecords = sharedRecords.compactMap { record -> (SharedFieldCheckSessionRecord, UUID)? in
+            guard let publicID = record.parsedPublicID else { return nil }
+            return (record, publicID)
+        }
+        guard !validSharedRecords.isEmpty else { return (0, 0) }
+
+        var sessionsByPublicID: [UUID: FieldCheckSession] = [:]
+        for session in try context.fetch(FetchDescriptor<FieldCheckSession>()) where sessionsByPublicID[session.publicID] == nil {
+            sessionsByPublicID[session.publicID] = session
+        }
+
+        var pasturesByPublicID: [UUID: Pasture] = [:]
+        for pasture in try context.fetch(FetchDescriptor<Pasture>()) where pasturesByPublicID[pasture.publicID] == nil {
+            pasturesByPublicID[pasture.publicID] = pasture
+        }
+
+        var inserted = 0
+        var updated = 0
+
+        for (record, publicID) in validSharedRecords {
+            let session: FieldCheckSession
+            if let existingSession = sessionsByPublicID[publicID] {
+                session = existingSession
+                updated += 1
+            } else {
+                session = FieldCheckSession(
+                    publicID: publicID,
+                    startedAt: record.startedAt ?? Date.now,
+                    completedAt: record.completedAt,
+                    notes: record.notes ?? "",
+                    expectedHeadCountSnapshot: record.expectedHeadCountSnapshot?.intValue ?? 0,
+                    quickCowCount: record.quickCowCount?.intValue ?? 0,
+                    quickHeiferCount: record.quickHeiferCount?.intValue ?? 0,
+                    quickCalfCount: record.quickCalfCount?.intValue ?? 0,
+                    quickBullCount: record.quickBullCount?.intValue ?? 0,
+                    quickSteerCount: record.quickSteerCount?.intValue ?? 0,
+                    pastureNameSnapshot: record.pastureNameSnapshot ?? "",
+                    pastureArchivedAt: record.pastureArchivedAt,
+                    pastureID: record.parsedPasturePublicID,
+                    pasture: record.parsedPasturePublicID.flatMap { pasturesByPublicID[$0] }
+                )
+                context.insert(session)
+                sessionsByPublicID[publicID] = session
+                inserted += 1
+            }
+
+            apply(record, to: session, herd: herd, pasturesByPublicID: pasturesByPublicID)
+        }
+
+        return (inserted, updated)
+    }
+
+    private func apply(
+        _ sharedRecord: SharedFieldCheckSessionRecord,
+        to session: FieldCheckSession,
+        herd: Herd,
+        pasturesByPublicID: [UUID: Pasture]
+    ) {
+        session.herd = herd
+        session.startedAt = sharedRecord.startedAt ?? session.startedAt
+        session.completedAt = sharedRecord.completedAt
+        session.notes = sharedRecord.notes ?? ""
+        session.expectedHeadCountSnapshot = sharedRecord.expectedHeadCountSnapshot?.intValue ?? 0
+        session.quickCowCount = sharedRecord.quickCowCount?.intValue ?? 0
+        session.quickHeiferCount = sharedRecord.quickHeiferCount?.intValue ?? 0
+        session.quickCalfCount = sharedRecord.quickCalfCount?.intValue ?? 0
+        session.quickBullCount = sharedRecord.quickBullCount?.intValue ?? 0
+        session.quickSteerCount = sharedRecord.quickSteerCount?.intValue ?? 0
+        session.pastureNameSnapshot = sharedRecord.pastureNameSnapshot ?? ""
+        session.pastureArchivedAt = sharedRecord.pastureArchivedAt
+        session.pastureID = sharedRecord.parsedPasturePublicID
+        session.pasture = sharedRecord.parsedPasturePublicID.flatMap { pasturesByPublicID[$0] }
+    }
+
+    private func upsertSwiftDataFieldCheckAnimalChecks(
+        from sharedRecords: [SharedFieldCheckAnimalCheckRecord],
+        herd: Herd,
+        in context: ModelContext
+    ) throws -> (inserted: Int, updated: Int) {
+        let validSharedRecords = sharedRecords.compactMap { record -> (SharedFieldCheckAnimalCheckRecord, UUID, UUID)? in
+            guard let publicID = record.parsedPublicID,
+                  let sessionPublicID = record.parsedSessionPublicID else { return nil }
+            return (record, publicID, sessionPublicID)
+        }
+        guard !validSharedRecords.isEmpty else { return (0, 0) }
+
+        var checksByPublicID: [UUID: FieldCheckAnimalCheck] = [:]
+        for check in try context.fetch(FetchDescriptor<FieldCheckAnimalCheck>()) where checksByPublicID[check.publicID] == nil {
+            checksByPublicID[check.publicID] = check
+        }
+
+        var sessionsByPublicID: [UUID: FieldCheckSession] = [:]
+        for session in try context.fetch(FetchDescriptor<FieldCheckSession>()) where sessionsByPublicID[session.publicID] == nil {
+            sessionsByPublicID[session.publicID] = session
+        }
+
+        var animalsByPublicID: [UUID: Animal] = [:]
+        for animal in try context.fetch(FetchDescriptor<Animal>()) where animalsByPublicID[animal.publicID] == nil {
+            animalsByPublicID[animal.publicID] = animal
+        }
+
+        var inserted = 0
+        var updated = 0
+
+        for (record, publicID, sessionPublicID) in validSharedRecords {
+            guard let session = sessionsByPublicID[sessionPublicID] else { continue }
+            let animal = record.parsedAnimalPublicID.flatMap { animalsByPublicID[$0] }
+
+            let check: FieldCheckAnimalCheck
+            if let existingCheck = checksByPublicID[publicID] {
+                check = existingCheck
+                updated += 1
+            } else {
+                check = FieldCheckAnimalCheck(
+                    publicID: publicID,
+                    animalIDSnapshot: record.parsedAnimalIDSnapshot,
+                    rosterTagNumber: record.rosterTagNumber ?? "",
+                    rosterTagColorID: record.parsedRosterTagColorID,
+                    damRosterTagNumber: record.damRosterTagNumber ?? "",
+                    damRosterTagColorID: record.parsedDamRosterTagColorID,
+                    animalName: record.animalName ?? "",
+                    animalSex: record.parsedAnimalSex,
+                    animalType: record.parsedAnimalType,
+                    wasExpectedAtStart: record.wasExpectedAtStart?.boolValue ?? true,
+                    countedAt: record.countedAt,
+                    missingConfirmedAt: record.missingConfirmedAt,
+                    note: record.note ?? "",
+                    animal: animal,
+                    session: session
+                )
+                context.insert(check)
+                checksByPublicID[publicID] = check
+                inserted += 1
+            }
+
+            apply(record, to: check, herd: herd, session: session, animal: animal)
+        }
+
+        return (inserted, updated)
+    }
+
+    private func apply(
+        _ sharedRecord: SharedFieldCheckAnimalCheckRecord,
+        to check: FieldCheckAnimalCheck,
+        herd: Herd,
+        session: FieldCheckSession,
+        animal: Animal?
+    ) {
+        check.herd = herd
+        check.session = session
+        check.animal = animal
+        check.animalIDSnapshot = sharedRecord.parsedAnimalIDSnapshot
+        check.rosterTagNumber = sharedRecord.rosterTagNumber ?? ""
+        check.rosterTagColorID = sharedRecord.parsedRosterTagColorID
+        check.damRosterTagNumber = sharedRecord.damRosterTagNumber ?? ""
+        check.damRosterTagColorID = sharedRecord.parsedDamRosterTagColorID
+        check.animalName = sharedRecord.animalName ?? ""
+        check.animalSex = sharedRecord.parsedAnimalSex
+        if let animalType = sharedRecord.parsedAnimalType {
+            check.animalTypeSnapshot = animalType
+        }
+        check.wasExpectedAtStart = sharedRecord.wasExpectedAtStart?.boolValue ?? true
+        check.countedAt = sharedRecord.countedAt
+        check.missingConfirmedAt = sharedRecord.missingConfirmedAt
+        check.note = sharedRecord.note ?? ""
+    }
+
+    private func upsertSwiftDataFieldCheckFindings(
+        from sharedRecords: [SharedFieldCheckFindingRecord],
+        herd: Herd,
+        in context: ModelContext
+    ) throws -> (inserted: Int, updated: Int) {
+        let validSharedRecords = sharedRecords.compactMap { record -> (SharedFieldCheckFindingRecord, UUID, UUID)? in
+            guard let publicID = record.parsedPublicID,
+                  let sessionPublicID = record.parsedSessionPublicID ?? record.parsedSessionIDSnapshot else { return nil }
+            return (record, publicID, sessionPublicID)
+        }
+        guard !validSharedRecords.isEmpty else { return (0, 0) }
+
+        var findingsByPublicID: [UUID: FieldCheckFinding] = [:]
+        for finding in try context.fetch(FetchDescriptor<FieldCheckFinding>()) where findingsByPublicID[finding.publicID] == nil {
+            findingsByPublicID[finding.publicID] = finding
+        }
+
+        var sessionsByPublicID: [UUID: FieldCheckSession] = [:]
+        for session in try context.fetch(FetchDescriptor<FieldCheckSession>()) where sessionsByPublicID[session.publicID] == nil {
+            sessionsByPublicID[session.publicID] = session
+        }
+
+        var animalsByPublicID: [UUID: Animal] = [:]
+        for animal in try context.fetch(FetchDescriptor<Animal>()) where animalsByPublicID[animal.publicID] == nil {
+            animalsByPublicID[animal.publicID] = animal
+        }
+
+        var inserted = 0
+        var updated = 0
+
+        for (record, publicID, sessionPublicID) in validSharedRecords {
+            guard let session = sessionsByPublicID[sessionPublicID] else { continue }
+            let animal = record.parsedAnimalPublicID.flatMap { animalsByPublicID[$0] }
+
+            let finding: FieldCheckFinding
+            if let existingFinding = findingsByPublicID[publicID] {
+                finding = existingFinding
+                updated += 1
+            } else {
+                finding = FieldCheckFinding(
+                    publicID: publicID,
+                    recordedAt: record.recordedAt ?? Date.now,
+                    type: record.parsedType,
+                    severity: record.parsedSeverity,
+                    status: record.parsedStatus,
+                    note: record.note ?? "",
+                    animalIDSnapshot: record.parsedAnimalIDSnapshot,
+                    animalDisplayTagNumberSnapshot: record.animalDisplayTagNumberSnapshot ?? "",
+                    animalDisplayTagColorIDSnapshot: record.parsedAnimalDisplayTagColorIDSnapshot,
+                    animalNameSnapshot: record.animalNameSnapshot ?? "",
+                    pastureNameSnapshot: record.pastureNameSnapshot ?? "",
+                    sessionIDSnapshot: record.parsedSessionIDSnapshot ?? session.publicID,
+                    animal: animal,
+                    session: session
+                )
+                context.insert(finding)
+                findingsByPublicID[publicID] = finding
+                inserted += 1
+            }
+
+            apply(record, to: finding, herd: herd, session: session, animal: animal)
+        }
+
+        return (inserted, updated)
+    }
+
+    private func apply(
+        _ sharedRecord: SharedFieldCheckFindingRecord,
+        to finding: FieldCheckFinding,
+        herd: Herd,
+        session: FieldCheckSession,
+        animal: Animal?
+    ) {
+        finding.herd = herd
+        finding.session = session
+        finding.animal = animal
+        finding.recordedAt = sharedRecord.recordedAt ?? finding.recordedAt
+        finding.type = sharedRecord.parsedType
+        finding.severity = sharedRecord.parsedSeverity
+        finding.status = sharedRecord.parsedStatus
+        finding.note = sharedRecord.note ?? ""
+        finding.animalIDSnapshot = sharedRecord.parsedAnimalIDSnapshot
+        finding.animalDisplayTagNumberSnapshot = sharedRecord.animalDisplayTagNumberSnapshot ?? ""
+        finding.animalDisplayTagColorIDSnapshot = sharedRecord.parsedAnimalDisplayTagColorIDSnapshot
+        finding.animalNameSnapshot = sharedRecord.animalNameSnapshot ?? ""
+        finding.pastureNameSnapshot = sharedRecord.pastureNameSnapshot ?? ""
+        finding.sessionIDSnapshot = sharedRecord.parsedSessionIDSnapshot ?? session.publicID
+    }
+
     private func fetchSwiftDataHerd(
         publicID: UUID,
         in context: ModelContext
@@ -1927,6 +2406,37 @@ final class HerdSharingCoreDataStore {
         in store: NSPersistentStore
     ) throws -> [SharedWorkingTreatmentRecord] {
         let request = SharedWorkingTreatmentRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
+        request.affectedStores = [store]
+        return try persistentContainer.viewContext.fetch(request)
+    }
+
+
+    private func fetchSharedFieldCheckSessionRecords(
+        herdPublicID: UUID,
+        in store: NSPersistentStore
+    ) throws -> [SharedFieldCheckSessionRecord] {
+        let request = SharedFieldCheckSessionRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
+        request.affectedStores = [store]
+        return try persistentContainer.viewContext.fetch(request)
+    }
+
+    private func fetchSharedFieldCheckAnimalCheckRecords(
+        herdPublicID: UUID,
+        in store: NSPersistentStore
+    ) throws -> [SharedFieldCheckAnimalCheckRecord] {
+        let request = SharedFieldCheckAnimalCheckRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
+        request.affectedStores = [store]
+        return try persistentContainer.viewContext.fetch(request)
+    }
+
+    private func fetchSharedFieldCheckFindingRecords(
+        herdPublicID: UUID,
+        in store: NSPersistentStore
+    ) throws -> [SharedFieldCheckFindingRecord] {
+        let request = SharedFieldCheckFindingRecord.fetchRequest()
         request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
         request.affectedStores = [store]
         return try persistentContainer.viewContext.fetch(request)

@@ -22,6 +22,9 @@ final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
         let workingSessionEntity = model.entitiesByName[SharedWorkingSessionRecord.entityName]
         let workingQueueItemEntity = model.entitiesByName[SharedWorkingQueueItemRecord.entityName]
         let workingTreatmentRecordEntity = model.entitiesByName[SharedWorkingTreatmentRecord.entityName]
+        let fieldCheckSessionEntity = model.entitiesByName[SharedFieldCheckSessionRecord.entityName]
+        let fieldCheckAnimalCheckEntity = model.entitiesByName[SharedFieldCheckAnimalCheckRecord.entityName]
+        let fieldCheckFindingEntity = model.entitiesByName[SharedFieldCheckFindingRecord.entityName]
 
         XCTAssertNotNil(herdEntity)
         XCTAssertNotNil(pastureGroupEntity)
@@ -35,6 +38,9 @@ final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
         XCTAssertNotNil(workingSessionEntity)
         XCTAssertNotNil(workingQueueItemEntity)
         XCTAssertNotNil(workingTreatmentRecordEntity)
+        XCTAssertNotNil(fieldCheckSessionEntity)
+        XCTAssertNotNil(fieldCheckAnimalCheckEntity)
+        XCTAssertNotNil(fieldCheckFindingEntity)
         XCTAssertNotNil(herdEntity?.propertiesByName["pastureGroups"])
         XCTAssertNotNil(herdEntity?.propertiesByName["pastures"])
         XCTAssertNotNil(herdEntity?.propertiesByName["animals"])
@@ -46,6 +52,9 @@ final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
         XCTAssertNotNil(herdEntity?.propertiesByName["workingSessions"])
         XCTAssertNotNil(herdEntity?.propertiesByName["workingQueueItems"])
         XCTAssertNotNil(herdEntity?.propertiesByName["workingTreatmentRecords"])
+        XCTAssertNotNil(herdEntity?.propertiesByName["fieldCheckSessions"])
+        XCTAssertNotNil(herdEntity?.propertiesByName["fieldCheckAnimalChecks"])
+        XCTAssertNotNil(herdEntity?.propertiesByName["fieldCheckFindings"])
         XCTAssertNotNil(pastureGroupEntity?.propertiesByName["grazeDays"])
         XCTAssertNotNil(pastureGroupEntity?.propertiesByName["restDays"])
         XCTAssertNotNil(pastureEntity?.propertiesByName["acreage"])
@@ -57,6 +66,8 @@ final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
         XCTAssertNotNil(animalEntity?.propertiesByName["pregnancyChecks"])
         XCTAssertNotNil(animalEntity?.propertiesByName["workingQueueItems"])
         XCTAssertNotNil(animalEntity?.propertiesByName["workingTreatmentRecords"])
+        XCTAssertNotNil(animalEntity?.propertiesByName["fieldCheckAnimalChecks"])
+        XCTAssertNotNil(animalEntity?.propertiesByName["fieldCheckFindings"])
         XCTAssertNotNil(movementEntity?.propertiesByName["animalPublicID"])
         XCTAssertNotNil(movementEntity?.propertiesByName["fromPasture"])
         XCTAssertNotNil(statusRecordEntity?.propertiesByName["oldStatusRawValue"])
@@ -73,6 +84,13 @@ final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
         XCTAssertNotNil(workingQueueItemEntity?.propertiesByName["animalPublicID"])
         XCTAssertNotNil(workingTreatmentRecordEntity?.propertiesByName["sessionPublicID"])
         XCTAssertNotNil(workingTreatmentRecordEntity?.propertiesByName["animalPublicID"])
+        XCTAssertNotNil(fieldCheckSessionEntity?.propertiesByName["pasturePublicID"])
+        XCTAssertNotNil(fieldCheckSessionEntity?.propertiesByName["animalChecks"])
+        XCTAssertNotNil(fieldCheckSessionEntity?.propertiesByName["findings"])
+        XCTAssertNotNil(fieldCheckAnimalCheckEntity?.propertiesByName["sessionPublicID"])
+        XCTAssertNotNil(fieldCheckAnimalCheckEntity?.propertiesByName["animalPublicID"])
+        XCTAssertNotNil(fieldCheckFindingEntity?.propertiesByName["sessionPublicID"])
+        XCTAssertNotNil(fieldCheckFindingEntity?.propertiesByName["animalPublicID"])
     }
 
     func testHerdPastureGroupsRelationshipIsInverseOfPastureGroupHerdRelationship() {
@@ -308,6 +326,59 @@ final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
         XCTAssertEqual(treatmentAnimal?.destinationEntity?.name, SharedAnimalRecord.entityName)
         XCTAssertTrue(animalTreatmentRecords?.inverseRelationship === treatmentAnimal)
         XCTAssertTrue(treatmentAnimal?.inverseRelationship === animalTreatmentRecords)
+    }
+
+
+    func testFieldCheckRelationshipsHaveExpectedInverses() {
+        let model = HerdSharingCoreDataModelFactory.makeModel()
+
+        let herdFieldCheckSessions = model.entitiesByName[SharedHerdRecord.entityName]?
+            .relationshipsByName["fieldCheckSessions"]
+        let sessionHerd = model.entitiesByName[SharedFieldCheckSessionRecord.entityName]?
+            .relationshipsByName["herd"]
+        let sessionAnimalChecks = model.entitiesByName[SharedFieldCheckSessionRecord.entityName]?
+            .relationshipsByName["animalChecks"]
+        let animalCheckSession = model.entitiesByName[SharedFieldCheckAnimalCheckRecord.entityName]?
+            .relationshipsByName["session"]
+        let sessionFindings = model.entitiesByName[SharedFieldCheckSessionRecord.entityName]?
+            .relationshipsByName["findings"]
+        let findingSession = model.entitiesByName[SharedFieldCheckFindingRecord.entityName]?
+            .relationshipsByName["session"]
+
+        XCTAssertEqual(herdFieldCheckSessions?.destinationEntity?.name, SharedFieldCheckSessionRecord.entityName)
+        XCTAssertEqual(sessionHerd?.destinationEntity?.name, SharedHerdRecord.entityName)
+        XCTAssertTrue(herdFieldCheckSessions?.inverseRelationship === sessionHerd)
+        XCTAssertTrue(sessionHerd?.inverseRelationship === herdFieldCheckSessions)
+        XCTAssertEqual(sessionAnimalChecks?.destinationEntity?.name, SharedFieldCheckAnimalCheckRecord.entityName)
+        XCTAssertEqual(animalCheckSession?.destinationEntity?.name, SharedFieldCheckSessionRecord.entityName)
+        XCTAssertTrue(sessionAnimalChecks?.inverseRelationship === animalCheckSession)
+        XCTAssertTrue(animalCheckSession?.inverseRelationship === sessionAnimalChecks)
+        XCTAssertEqual(sessionFindings?.destinationEntity?.name, SharedFieldCheckFindingRecord.entityName)
+        XCTAssertEqual(findingSession?.destinationEntity?.name, SharedFieldCheckSessionRecord.entityName)
+        XCTAssertTrue(sessionFindings?.inverseRelationship === findingSession)
+        XCTAssertTrue(findingSession?.inverseRelationship === sessionFindings)
+    }
+
+    func testAnimalFieldCheckRelationshipsHaveAnimalInverses() {
+        let model = HerdSharingCoreDataModelFactory.makeModel()
+
+        let animalChecks = model.entitiesByName[SharedAnimalRecord.entityName]?
+            .relationshipsByName["fieldCheckAnimalChecks"]
+        let checkAnimal = model.entitiesByName[SharedFieldCheckAnimalCheckRecord.entityName]?
+            .relationshipsByName["animal"]
+        let animalFindings = model.entitiesByName[SharedAnimalRecord.entityName]?
+            .relationshipsByName["fieldCheckFindings"]
+        let findingAnimal = model.entitiesByName[SharedFieldCheckFindingRecord.entityName]?
+            .relationshipsByName["animal"]
+
+        XCTAssertEqual(animalChecks?.destinationEntity?.name, SharedFieldCheckAnimalCheckRecord.entityName)
+        XCTAssertEqual(checkAnimal?.destinationEntity?.name, SharedAnimalRecord.entityName)
+        XCTAssertTrue(animalChecks?.inverseRelationship === checkAnimal)
+        XCTAssertTrue(checkAnimal?.inverseRelationship === animalChecks)
+        XCTAssertEqual(animalFindings?.destinationEntity?.name, SharedFieldCheckFindingRecord.entityName)
+        XCTAssertEqual(findingAnimal?.destinationEntity?.name, SharedAnimalRecord.entityName)
+        XCTAssertTrue(animalFindings?.inverseRelationship === findingAnimal)
+        XCTAssertTrue(findingAnimal?.inverseRelationship === animalFindings)
     }
 
 }
