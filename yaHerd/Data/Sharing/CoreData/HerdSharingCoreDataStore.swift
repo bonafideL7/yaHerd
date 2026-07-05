@@ -116,9 +116,57 @@ final class HerdSharingCoreDataStore {
         return record
     }
 
-    func makeSystemShare(for herd: HerdSummary) async throws -> HerdSystemShare {
+    func mirrorAnimalsIntoPrivateStore(
+        _ animals: [Animal],
+        herd: HerdSummary,
+        herdRecord: SharedHerdRecord
+    ) throws -> [SharedAnimalRecord] {
+        guard let privateStore else {
+            throw HerdSharingActionError.sharingStoreUnavailable("The private sharing bridge store was not loaded.")
+        }
+
+        let context = persistentContainer.viewContext
+        let existingRecords = try fetchSharedAnimalRecords(herdPublicID: herd.publicID, in: privateStore)
+        var recordsByPublicID: [String: SharedAnimalRecord] = [:]
+        for record in existingRecords {
+            guard let publicID = record.publicID, recordsByPublicID[publicID] == nil else { continue }
+            recordsByPublicID[publicID] = record
+        }
+        let mirroredAnimalIDs = Set(animals.map { $0.publicID.uuidString })
+        var mirroredRecords: [SharedAnimalRecord] = []
+
+        for animal in animals {
+            let publicID = animal.publicID.uuidString
+            let existingRecord = recordsByPublicID[publicID]
+            let record = existingRecord ?? SharedAnimalRecord(context: context)
+
+            if existingRecord == nil {
+                context.assign(record, to: privateStore)
+            }
+
+            record.mirror(animal, herdPublicID: herd.publicID)
+            record.herd = herdRecord
+            mirroredRecords.append(record)
+        }
+
+        for staleRecord in existingRecords where !mirroredAnimalIDs.contains(staleRecord.publicID ?? "") {
+            context.delete(staleRecord)
+        }
+
+        if context.hasChanges {
+            try context.save()
+        }
+
+        return mirroredRecords
+    }
+
+    func makeSystemShare(
+        for herd: HerdSummary,
+        animals: [Animal]
+    ) async throws -> HerdSystemShare {
         let record = try await mirrorHerdIntoPrivateStore(herd)
-        let share = try await shareRecord(record, title: herd.name)
+        let animalRecords = try mirrorAnimalsIntoPrivateStore(animals, herd: herd, herdRecord: record)
+        let share = try await shareRecords([record] + animalRecords, title: herd.name)
 
         return HerdSystemShare(
             title: herd.name,
@@ -154,17 +202,16 @@ final class HerdSharingCoreDataStore {
         }
     }
 
-    private func shareRecord(
-        _ record: SharedHerdRecord,
+    private func shareRecords(
+        _ records: [NSManagedObject],
         title: String
     ) async throws -> CKShare {
-        if let existingShare = try existingShare(for: record) {
-            existingShare[CKShare.SystemFieldKey.title] = title as NSString
-            return existingShare
-        }
+        let existingShare = try records
+            .compactMap { try existingShare(for: $0) }
+            .first
 
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CKShare, Error>) in
-            persistentContainer.share([record], to: nil) { _, share, _, error in
+            persistentContainer.share(records, to: existingShare) { _, share, _, error in
                 if let error {
                     continuation.resume(throwing: HerdSharingActionError.cloudKitSharingFailed(error.localizedDescription))
                     return
@@ -181,7 +228,7 @@ final class HerdSharingCoreDataStore {
         }
     }
 
-    private func existingShare(for record: SharedHerdRecord) throws -> CKShare? {
+    private func existingShare(for record: NSManagedObject) throws -> CKShare? {
         let shares = try persistentContainer.fetchShares(matching: [record.objectID])
         return shares[record.objectID]
     }
@@ -221,6 +268,16 @@ final class HerdSharingCoreDataStore {
         request.predicate = NSPredicate(format: "publicID == %@", publicID.uuidString)
         request.affectedStores = [store]
         return try persistentContainer.viewContext.fetch(request).first
+    }
+
+    private func fetchSharedAnimalRecords(
+        herdPublicID: UUID,
+        in store: NSPersistentStore
+    ) throws -> [SharedAnimalRecord] {
+        let request = SharedAnimalRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
+        request.affectedStores = [store]
+        return try persistentContainer.viewContext.fetch(request)
     }
 
     private func store(named fileName: String) -> NSPersistentStore? {

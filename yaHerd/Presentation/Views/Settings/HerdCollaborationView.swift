@@ -114,9 +114,9 @@ struct HerdCollaborationView: View {
         Section("Core Data Boundary") {
             LabeledContent("App data store", value: "SwiftData")
             LabeledContent("Sharing bridge", value: "Core Data + CloudKit")
-            LabeledContent("Bridge scope", value: "Herd share root only")
+            LabeledContent("Bridge scope", value: "Herd root + animals")
 
-            Text("Core Data is intentionally isolated behind the sharing repository. Animals, pastures, health records, working sessions, and the rest of yaHerd still use SwiftData.")
+            Text("Core Data is intentionally isolated behind the sharing repository. SwiftData remains the app data store. This pass mirrors animals under the shared herd root; pastures, health records, working sessions, and other records still need bridge mirrors in later passes.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -176,7 +176,7 @@ struct HerdCollaborationView: View {
             }
             .disabled(!viewModel.canStartSharing)
 
-            Text("This opens Apple's CloudKit sharing sheet for the isolated Core Data sharing bridge. It does not move yaHerd's normal app data out of SwiftData.")
+            Text("This mirrors the current SwiftData herd and animal records into the isolated Core Data bridge, then opens Apple's CloudKit sharing sheet. It does not move yaHerd's normal app data out of SwiftData.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
