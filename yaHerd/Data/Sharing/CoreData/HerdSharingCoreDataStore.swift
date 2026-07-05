@@ -161,13 +161,126 @@ final class HerdSharingCoreDataStore {
         return mirroredRecords
     }
 
+    func mirrorPastureGroupsIntoPrivateStore(
+        _ pastureGroups: [PastureGroup],
+        herd: HerdSummary,
+        herdRecord: SharedHerdRecord
+    ) throws -> [SharedPastureGroupRecord] {
+        guard let privateStore else {
+            throw HerdSharingActionError.sharingStoreUnavailable("The private sharing bridge store was not loaded.")
+        }
+
+        let context = persistentContainer.viewContext
+        let existingRecords = try fetchSharedPastureGroupRecords(herdPublicID: herd.publicID, in: privateStore)
+        var recordsByPublicID: [String: SharedPastureGroupRecord] = [:]
+        for record in existingRecords {
+            guard let publicID = record.publicID, recordsByPublicID[publicID] == nil else { continue }
+            recordsByPublicID[publicID] = record
+        }
+        let mirroredGroupIDs = Set(pastureGroups.map { $0.publicID.uuidString })
+        var mirroredRecords: [SharedPastureGroupRecord] = []
+
+        for pastureGroup in pastureGroups {
+            let publicID = pastureGroup.publicID.uuidString
+            let existingRecord = recordsByPublicID[publicID]
+            let record = existingRecord ?? SharedPastureGroupRecord(context: context)
+
+            if existingRecord == nil {
+                context.assign(record, to: privateStore)
+            }
+
+            record.mirror(pastureGroup, herdPublicID: herd.publicID)
+            record.herd = herdRecord
+            mirroredRecords.append(record)
+        }
+
+        for staleRecord in existingRecords where !mirroredGroupIDs.contains(staleRecord.publicID ?? "") {
+            context.delete(staleRecord)
+        }
+
+        if context.hasChanges {
+            try context.save()
+        }
+
+        return mirroredRecords
+    }
+
+    func mirrorPasturesIntoPrivateStore(
+        _ pastures: [Pasture],
+        herd: HerdSummary,
+        herdRecord: SharedHerdRecord,
+        pastureGroupRecords: [SharedPastureGroupRecord]
+    ) throws -> [SharedPastureRecord] {
+        guard let privateStore else {
+            throw HerdSharingActionError.sharingStoreUnavailable("The private sharing bridge store was not loaded.")
+        }
+
+        let context = persistentContainer.viewContext
+        let existingRecords = try fetchSharedPastureRecords(herdPublicID: herd.publicID, in: privateStore)
+        var recordsByPublicID: [String: SharedPastureRecord] = [:]
+        for record in existingRecords {
+            guard let publicID = record.publicID, recordsByPublicID[publicID] == nil else { continue }
+            recordsByPublicID[publicID] = record
+        }
+        var groupsByPublicID: [String: SharedPastureGroupRecord] = [:]
+        for groupRecord in pastureGroupRecords {
+            guard let publicID = groupRecord.publicID else { continue }
+            groupsByPublicID[publicID] = groupRecord
+        }
+
+        let mirroredPastureIDs = Set(pastures.map { $0.publicID.uuidString })
+        var mirroredRecords: [SharedPastureRecord] = []
+
+        for pasture in pastures {
+            let publicID = pasture.publicID.uuidString
+            let existingRecord = recordsByPublicID[publicID]
+            let record = existingRecord ?? SharedPastureRecord(context: context)
+
+            if existingRecord == nil {
+                context.assign(record, to: privateStore)
+            }
+
+            record.mirror(pasture, herdPublicID: herd.publicID)
+            record.herd = herdRecord
+            record.group = pasture.group.flatMap { groupsByPublicID[$0.publicID.uuidString] }
+            mirroredRecords.append(record)
+        }
+
+        for staleRecord in existingRecords where !mirroredPastureIDs.contains(staleRecord.publicID ?? "") {
+            context.delete(staleRecord)
+        }
+
+        if context.hasChanges {
+            try context.save()
+        }
+
+        return mirroredRecords
+    }
+
     func makeSystemShare(
         for herd: HerdSummary,
+        pastureGroups: [PastureGroup],
+        pastures: [Pasture],
         animals: [Animal]
     ) async throws -> HerdSystemShare {
         let record = try await mirrorHerdIntoPrivateStore(herd)
+        let pastureGroupRecords = try mirrorPastureGroupsIntoPrivateStore(
+            pastureGroups,
+            herd: herd,
+            herdRecord: record
+        )
+        let pastureRecords = try mirrorPasturesIntoPrivateStore(
+            pastures,
+            herd: herd,
+            herdRecord: record,
+            pastureGroupRecords: pastureGroupRecords
+        )
         let animalRecords = try mirrorAnimalsIntoPrivateStore(animals, herd: herd, herdRecord: record)
-        let share = try await shareRecords([record] + animalRecords, title: herd.name)
+        let recordsToShare: [NSManagedObject] = [record as NSManagedObject] +
+            pastureGroupRecords.map { $0 as NSManagedObject } +
+            pastureRecords.map { $0 as NSManagedObject } +
+            animalRecords.map { $0 as NSManagedObject }
+        let share = try await shareRecords(recordsToShare, title: herd.name)
 
         return HerdSystemShare(
             title: herd.name,
@@ -220,6 +333,18 @@ final class HerdSharingCoreDataStore {
         }
 
         let herd = try upsertSwiftDataHerd(from: herdRecord, in: swiftDataContext)
+        let sharedPastureGroupRecords = try fetchSharedPastureGroupRecords(herdPublicID: herdPublicID, in: sharedStore)
+        let pastureGroupResult = try upsertSwiftDataPastureGroups(
+            from: sharedPastureGroupRecords,
+            herd: herd,
+            in: swiftDataContext
+        )
+        let sharedPastureRecords = try fetchSharedPastureRecords(herdPublicID: herdPublicID, in: sharedStore)
+        let pastureResult = try upsertSwiftDataPastures(
+            from: sharedPastureRecords,
+            herd: herd,
+            in: swiftDataContext
+        )
         let sharedAnimalRecords = try fetchSharedAnimalRecords(herdPublicID: herdPublicID, in: sharedStore)
         let animalResult = try upsertSwiftDataAnimals(
             from: sharedAnimalRecords,
@@ -233,6 +358,10 @@ final class HerdSharingCoreDataStore {
 
         return HerdSharingBridgeImportResult(
             herdName: herd.name,
+            insertedPastureGroupCount: pastureGroupResult.inserted,
+            updatedPastureGroupCount: pastureGroupResult.updated,
+            insertedPastureCount: pastureResult.inserted,
+            updatedPastureCount: pastureResult.updated,
             insertedAnimalCount: animalResult.inserted,
             updatedAnimalCount: animalResult.updated
         )
@@ -319,6 +448,124 @@ final class HerdSharingCoreDataStore {
         herd.createdAt = sharedRecord.createdAt ?? herd.createdAt
         herd.updatedAt = sharedRecord.updatedAt ?? Date.now
         herd.schemaVersion = sharedRecord.schemaVersion?.intValue ?? herd.schemaVersion
+    }
+
+    private func upsertSwiftDataPastureGroups(
+        from sharedRecords: [SharedPastureGroupRecord],
+        herd: Herd,
+        in context: ModelContext
+    ) throws -> (inserted: Int, updated: Int) {
+        let validSharedRecords = sharedRecords.compactMap { record -> (SharedPastureGroupRecord, UUID)? in
+            guard let publicID = record.parsedPublicID else { return nil }
+            return (record, publicID)
+        }
+        guard !validSharedRecords.isEmpty else { return (0, 0) }
+
+        var groupsByPublicID: [UUID: PastureGroup] = [:]
+        for group in try context.fetch(FetchDescriptor<PastureGroup>()) where groupsByPublicID[group.publicID] == nil {
+            groupsByPublicID[group.publicID] = group
+        }
+
+        var inserted = 0
+        var updated = 0
+
+        for (record, publicID) in validSharedRecords {
+            let group: PastureGroup
+            if let existingGroup = groupsByPublicID[publicID] {
+                group = existingGroup
+                updated += 1
+            } else {
+                group = PastureGroup(
+                    publicID: publicID,
+                    name: record.name ?? "",
+                    grazeDays: record.grazeDays?.intValue ?? 7,
+                    restDays: record.restDays?.intValue ?? 21
+                )
+                context.insert(group)
+                groupsByPublicID[publicID] = group
+                inserted += 1
+            }
+
+            apply(record, to: group, herd: herd)
+        }
+
+        return (inserted, updated)
+    }
+
+    private func apply(
+        _ sharedRecord: SharedPastureGroupRecord,
+        to group: PastureGroup,
+        herd: Herd
+    ) {
+        group.herd = herd
+        group.name = sharedRecord.name ?? ""
+        group.grazeDays = sharedRecord.grazeDays?.intValue ?? group.grazeDays
+        group.restDays = sharedRecord.restDays?.intValue ?? group.restDays
+    }
+
+    private func upsertSwiftDataPastures(
+        from sharedRecords: [SharedPastureRecord],
+        herd: Herd,
+        in context: ModelContext
+    ) throws -> (inserted: Int, updated: Int) {
+        let validSharedRecords = sharedRecords.compactMap { record -> (SharedPastureRecord, UUID)? in
+            guard let publicID = record.parsedPublicID else { return nil }
+            return (record, publicID)
+        }
+        guard !validSharedRecords.isEmpty else { return (0, 0) }
+
+        var pasturesByPublicID: [UUID: Pasture] = [:]
+        for pasture in try context.fetch(FetchDescriptor<Pasture>()) where pasturesByPublicID[pasture.publicID] == nil {
+            pasturesByPublicID[pasture.publicID] = pasture
+        }
+
+        var groupsByPublicID: [UUID: PastureGroup] = [:]
+        for group in try context.fetch(FetchDescriptor<PastureGroup>()) where groupsByPublicID[group.publicID] == nil {
+            groupsByPublicID[group.publicID] = group
+        }
+
+        var inserted = 0
+        var updated = 0
+
+        for (record, publicID) in validSharedRecords {
+            let pasture: Pasture
+            if let existingPasture = pasturesByPublicID[publicID] {
+                pasture = existingPasture
+                updated += 1
+            } else {
+                pasture = Pasture(
+                    publicID: publicID,
+                    name: record.name ?? "",
+                    acreage: record.acreage?.doubleValue,
+                    usableAcreage: record.usableAcreage?.doubleValue,
+                    targetAcresPerHead: record.targetAcresPerHead?.doubleValue,
+                    sortOrder: record.sortOrder?.intValue ?? 0
+                )
+                context.insert(pasture)
+                pasturesByPublicID[publicID] = pasture
+                inserted += 1
+            }
+
+            apply(record, to: pasture, herd: herd, groupsByPublicID: groupsByPublicID)
+        }
+
+        return (inserted, updated)
+    }
+
+    private func apply(
+        _ sharedRecord: SharedPastureRecord,
+        to pasture: Pasture,
+        herd: Herd,
+        groupsByPublicID: [UUID: PastureGroup]
+    ) {
+        pasture.herd = herd
+        pasture.name = sharedRecord.name ?? ""
+        pasture.sortOrder = sharedRecord.sortOrder?.intValue ?? pasture.sortOrder
+        pasture.acreage = sharedRecord.acreage?.doubleValue
+        pasture.usableAcreage = sharedRecord.usableAcreage?.doubleValue
+        pasture.targetAcresPerHead = sharedRecord.targetAcresPerHead?.doubleValue
+        pasture.lastGrazedDate = sharedRecord.lastGrazedDate
+        pasture.group = sharedRecord.parsedGroupPublicID.flatMap { groupsByPublicID[$0] }
     }
 
     private func upsertSwiftDataAnimals(
@@ -446,6 +693,26 @@ final class HerdSharingCoreDataStore {
         return try persistentContainer.viewContext.fetch(request).first
     }
 
+    private func fetchSharedPastureGroupRecords(
+        herdPublicID: UUID,
+        in store: NSPersistentStore
+    ) throws -> [SharedPastureGroupRecord] {
+        let request = SharedPastureGroupRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
+        request.affectedStores = [store]
+        return try persistentContainer.viewContext.fetch(request)
+    }
+
+    private func fetchSharedPastureRecords(
+        herdPublicID: UUID,
+        in store: NSPersistentStore
+    ) throws -> [SharedPastureRecord] {
+        let request = SharedPastureRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
+        request.affectedStores = [store]
+        return try persistentContainer.viewContext.fetch(request)
+    }
+
     private func fetchSharedAnimalRecords(
         herdPublicID: UUID,
         in store: NSPersistentStore
@@ -471,6 +738,8 @@ final class HerdSharingCoreDataStore {
         let options = NSPersistentCloudKitContainerOptions(containerIdentifier: containerIdentifier)
         options.databaseScope = databaseScope
         description.cloudKitContainerOptions = options
+        description.shouldMigrateStoreAutomatically = true
+        description.shouldInferMappingModelAutomatically = true
         description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
         description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
         return description
