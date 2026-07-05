@@ -11,6 +11,7 @@ import Foundation
 
 @Model
 final class StatusRecord {
+    var publicID: UUID = UUID()
     @Relationship(deleteRule: .nullify) var herd: Herd?
     var date: Date = Date.now
     var oldStatus: AnimalStatus = AnimalStatus.active
@@ -21,6 +22,7 @@ final class StatusRecord {
     @Relationship(deleteRule: .nullify) var animal: Animal?
 
     init(
+        publicID: UUID = UUID(),
         date: Date,
         oldStatus: AnimalStatus,
         newStatus: AnimalStatus,
@@ -28,6 +30,7 @@ final class StatusRecord {
         newStatusReferenceID: UUID? = nil,
         animal: Animal
     ) {
+        self.publicID = publicID
         self.date = date
         self.oldStatus = oldStatus
         self.newStatus = newStatus

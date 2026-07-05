@@ -32,6 +32,8 @@ final class SharedAnimalRecord: NSManagedObject {
     @NSManaged var distinguishingFeaturesJSON: Data?
     @NSManaged var lastMirroredAt: Date?
     @NSManaged var herd: SharedHerdRecord?
+    @NSManaged var movements: Set<SharedMovementRecord>?
+    @NSManaged var statusRecords: Set<SharedStatusRecord>?
 }
 
 extension SharedAnimalRecord {

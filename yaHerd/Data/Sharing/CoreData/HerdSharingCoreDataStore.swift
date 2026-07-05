@@ -257,11 +257,117 @@ final class HerdSharingCoreDataStore {
         return mirroredRecords
     }
 
+    func mirrorMovementsIntoPrivateStore(
+        _ movements: [MovementRecord],
+        herd: HerdSummary,
+        herdRecord: SharedHerdRecord,
+        animalRecords: [SharedAnimalRecord]
+    ) throws -> [SharedMovementRecord] {
+        guard let privateStore else {
+            throw HerdSharingActionError.sharingStoreUnavailable("The private sharing bridge store was not loaded.")
+        }
+
+        let context = persistentContainer.viewContext
+        let existingRecords = try fetchSharedMovementRecords(herdPublicID: herd.publicID, in: privateStore)
+        var recordsByPublicID: [String: SharedMovementRecord] = [:]
+        for record in existingRecords {
+            guard let publicID = record.publicID, recordsByPublicID[publicID] == nil else { continue }
+            recordsByPublicID[publicID] = record
+        }
+        var animalsByPublicID: [String: SharedAnimalRecord] = [:]
+        for animalRecord in animalRecords {
+            guard let publicID = animalRecord.publicID else { continue }
+            animalsByPublicID[publicID] = animalRecord
+        }
+
+        let mirroredMovementIDs = Set(movements.map { $0.publicID.uuidString })
+        var mirroredRecords: [SharedMovementRecord] = []
+
+        for movement in movements {
+            let publicID = movement.publicID.uuidString
+            let existingRecord = recordsByPublicID[publicID]
+            let record = existingRecord ?? SharedMovementRecord(context: context)
+
+            if existingRecord == nil {
+                context.assign(record, to: privateStore)
+            }
+
+            record.mirror(movement, herdPublicID: herd.publicID)
+            record.herd = herdRecord
+            record.animal = movement.animal.flatMap { animalsByPublicID[$0.publicID.uuidString] }
+            mirroredRecords.append(record)
+        }
+
+        for staleRecord in existingRecords where !mirroredMovementIDs.contains(staleRecord.publicID ?? "") {
+            context.delete(staleRecord)
+        }
+
+        if context.hasChanges {
+            try context.save()
+        }
+
+        return mirroredRecords
+    }
+
+    func mirrorStatusRecordsIntoPrivateStore(
+        _ statusRecords: [StatusRecord],
+        herd: HerdSummary,
+        herdRecord: SharedHerdRecord,
+        animalRecords: [SharedAnimalRecord]
+    ) throws -> [SharedStatusRecord] {
+        guard let privateStore else {
+            throw HerdSharingActionError.sharingStoreUnavailable("The private sharing bridge store was not loaded.")
+        }
+
+        let context = persistentContainer.viewContext
+        let existingRecords = try fetchSharedStatusRecords(herdPublicID: herd.publicID, in: privateStore)
+        var recordsByPublicID: [String: SharedStatusRecord] = [:]
+        for record in existingRecords {
+            guard let publicID = record.publicID, recordsByPublicID[publicID] == nil else { continue }
+            recordsByPublicID[publicID] = record
+        }
+        var animalsByPublicID: [String: SharedAnimalRecord] = [:]
+        for animalRecord in animalRecords {
+            guard let publicID = animalRecord.publicID else { continue }
+            animalsByPublicID[publicID] = animalRecord
+        }
+
+        let mirroredStatusRecordIDs = Set(statusRecords.map { $0.publicID.uuidString })
+        var mirroredRecords: [SharedStatusRecord] = []
+
+        for statusRecord in statusRecords {
+            let publicID = statusRecord.publicID.uuidString
+            let existingRecord = recordsByPublicID[publicID]
+            let record = existingRecord ?? SharedStatusRecord(context: context)
+
+            if existingRecord == nil {
+                context.assign(record, to: privateStore)
+            }
+
+            record.mirror(statusRecord, herdPublicID: herd.publicID)
+            record.herd = herdRecord
+            record.animal = statusRecord.animal.flatMap { animalsByPublicID[$0.publicID.uuidString] }
+            mirroredRecords.append(record)
+        }
+
+        for staleRecord in existingRecords where !mirroredStatusRecordIDs.contains(staleRecord.publicID ?? "") {
+            context.delete(staleRecord)
+        }
+
+        if context.hasChanges {
+            try context.save()
+        }
+
+        return mirroredRecords
+    }
+
     func makeSystemShare(
         for herd: HerdSummary,
         pastureGroups: [PastureGroup],
         pastures: [Pasture],
-        animals: [Animal]
+        animals: [Animal],
+        movements: [MovementRecord],
+        statusRecords: [StatusRecord]
     ) async throws -> HerdSystemShare {
         let record = try await mirrorHerdIntoPrivateStore(herd)
         let pastureGroupRecords = try mirrorPastureGroupsIntoPrivateStore(
@@ -276,10 +382,24 @@ final class HerdSharingCoreDataStore {
             pastureGroupRecords: pastureGroupRecords
         )
         let animalRecords = try mirrorAnimalsIntoPrivateStore(animals, herd: herd, herdRecord: record)
+        let movementRecords = try mirrorMovementsIntoPrivateStore(
+            movements,
+            herd: herd,
+            herdRecord: record,
+            animalRecords: animalRecords
+        )
+        let sharedStatusRecords = try mirrorStatusRecordsIntoPrivateStore(
+            statusRecords,
+            herd: herd,
+            herdRecord: record,
+            animalRecords: animalRecords
+        )
         let recordsToShare: [NSManagedObject] = [record as NSManagedObject] +
             pastureGroupRecords.map { $0 as NSManagedObject } +
             pastureRecords.map { $0 as NSManagedObject } +
-            animalRecords.map { $0 as NSManagedObject }
+            animalRecords.map { $0 as NSManagedObject } +
+            movementRecords.map { $0 as NSManagedObject } +
+            sharedStatusRecords.map { $0 as NSManagedObject }
         let share = try await shareRecords(recordsToShare, title: herd.name)
 
         return HerdSystemShare(
@@ -351,6 +471,18 @@ final class HerdSharingCoreDataStore {
             herd: herd,
             in: swiftDataContext
         )
+        let sharedMovementRecords = try fetchSharedMovementRecords(herdPublicID: herdPublicID, in: sharedStore)
+        let movementResult = try upsertSwiftDataMovements(
+            from: sharedMovementRecords,
+            herd: herd,
+            in: swiftDataContext
+        )
+        let sharedStatusRecords = try fetchSharedStatusRecords(herdPublicID: herdPublicID, in: sharedStore)
+        let statusRecordResult = try upsertSwiftDataStatusRecords(
+            from: sharedStatusRecords,
+            herd: herd,
+            in: swiftDataContext
+        )
 
         if swiftDataContext.hasChanges {
             try swiftDataContext.save()
@@ -363,7 +495,11 @@ final class HerdSharingCoreDataStore {
             insertedPastureCount: pastureResult.inserted,
             updatedPastureCount: pastureResult.updated,
             insertedAnimalCount: animalResult.inserted,
-            updatedAnimalCount: animalResult.updated
+            updatedAnimalCount: animalResult.updated,
+            insertedMovementCount: movementResult.inserted,
+            updatedMovementCount: movementResult.updated,
+            insertedStatusRecordCount: statusRecordResult.inserted,
+            updatedStatusRecordCount: statusRecordResult.updated
         )
     }
 
@@ -661,6 +797,138 @@ final class HerdSharingCoreDataStore {
         animal.distinguishingFeatures = sharedRecord.parsedDistinguishingFeatures
     }
 
+    private func upsertSwiftDataMovements(
+        from sharedRecords: [SharedMovementRecord],
+        herd: Herd,
+        in context: ModelContext
+    ) throws -> (inserted: Int, updated: Int) {
+        let validSharedRecords = sharedRecords.compactMap { record -> (SharedMovementRecord, UUID, UUID)? in
+            guard let publicID = record.parsedPublicID,
+                  let animalPublicID = record.parsedAnimalPublicID else { return nil }
+            return (record, publicID, animalPublicID)
+        }
+        guard !validSharedRecords.isEmpty else { return (0, 0) }
+
+        var animalsByPublicID: [UUID: Animal] = [:]
+        for animal in try context.fetch(FetchDescriptor<Animal>()) where animalsByPublicID[animal.publicID] == nil {
+            animalsByPublicID[animal.publicID] = animal
+        }
+
+        var movementsByPublicID: [UUID: MovementRecord] = [:]
+        for movement in try context.fetch(FetchDescriptor<MovementRecord>()) where movementsByPublicID[movement.publicID] == nil {
+            movementsByPublicID[movement.publicID] = movement
+        }
+
+        var inserted = 0
+        var updated = 0
+
+        for (record, publicID, animalPublicID) in validSharedRecords {
+            guard let animal = animalsByPublicID[animalPublicID] else { continue }
+
+            let movement: MovementRecord
+            if let existingMovement = movementsByPublicID[publicID] {
+                movement = existingMovement
+                updated += 1
+            } else {
+                movement = MovementRecord(
+                    publicID: publicID,
+                    date: record.date ?? Date.now,
+                    fromPasture: record.fromPasture,
+                    toPasture: record.toPasture,
+                    animal: animal
+                )
+                context.insert(movement)
+                movementsByPublicID[publicID] = movement
+                inserted += 1
+            }
+
+            apply(record, to: movement, herd: herd, animal: animal)
+        }
+
+        return (inserted, updated)
+    }
+
+    private func apply(
+        _ sharedRecord: SharedMovementRecord,
+        to movement: MovementRecord,
+        herd: Herd,
+        animal: Animal
+    ) {
+        movement.herd = herd
+        movement.animal = animal
+        movement.date = sharedRecord.date ?? movement.date
+        movement.fromPasture = sharedRecord.fromPasture
+        movement.toPasture = sharedRecord.toPasture
+    }
+
+    private func upsertSwiftDataStatusRecords(
+        from sharedRecords: [SharedStatusRecord],
+        herd: Herd,
+        in context: ModelContext
+    ) throws -> (inserted: Int, updated: Int) {
+        let validSharedRecords = sharedRecords.compactMap { record -> (SharedStatusRecord, UUID, UUID)? in
+            guard let publicID = record.parsedPublicID,
+                  let animalPublicID = record.parsedAnimalPublicID else { return nil }
+            return (record, publicID, animalPublicID)
+        }
+        guard !validSharedRecords.isEmpty else { return (0, 0) }
+
+        var animalsByPublicID: [UUID: Animal] = [:]
+        for animal in try context.fetch(FetchDescriptor<Animal>()) where animalsByPublicID[animal.publicID] == nil {
+            animalsByPublicID[animal.publicID] = animal
+        }
+
+        var statusRecordsByPublicID: [UUID: StatusRecord] = [:]
+        for statusRecord in try context.fetch(FetchDescriptor<StatusRecord>()) where statusRecordsByPublicID[statusRecord.publicID] == nil {
+            statusRecordsByPublicID[statusRecord.publicID] = statusRecord
+        }
+
+        var inserted = 0
+        var updated = 0
+
+        for (record, publicID, animalPublicID) in validSharedRecords {
+            guard let animal = animalsByPublicID[animalPublicID] else { continue }
+
+            let statusRecord: StatusRecord
+            if let existingStatusRecord = statusRecordsByPublicID[publicID] {
+                statusRecord = existingStatusRecord
+                updated += 1
+            } else {
+                statusRecord = StatusRecord(
+                    publicID: publicID,
+                    date: record.date ?? Date.now,
+                    oldStatus: record.parsedOldStatus,
+                    newStatus: record.parsedNewStatus,
+                    oldStatusReferenceID: record.parsedOldStatusReferenceID,
+                    newStatusReferenceID: record.parsedNewStatusReferenceID,
+                    animal: animal
+                )
+                context.insert(statusRecord)
+                statusRecordsByPublicID[publicID] = statusRecord
+                inserted += 1
+            }
+
+            apply(record, to: statusRecord, herd: herd, animal: animal)
+        }
+
+        return (inserted, updated)
+    }
+
+    private func apply(
+        _ sharedRecord: SharedStatusRecord,
+        to statusRecord: StatusRecord,
+        herd: Herd,
+        animal: Animal
+    ) {
+        statusRecord.herd = herd
+        statusRecord.animal = animal
+        statusRecord.date = sharedRecord.date ?? statusRecord.date
+        statusRecord.oldStatus = sharedRecord.parsedOldStatus
+        statusRecord.newStatus = sharedRecord.parsedNewStatus
+        statusRecord.oldStatusReferenceID = sharedRecord.parsedOldStatusReferenceID
+        statusRecord.newStatusReferenceID = sharedRecord.parsedNewStatusReferenceID
+    }
+
     private func fetchSwiftDataHerd(
         publicID: UUID,
         in context: ModelContext
@@ -718,6 +986,27 @@ final class HerdSharingCoreDataStore {
         in store: NSPersistentStore
     ) throws -> [SharedAnimalRecord] {
         let request = SharedAnimalRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
+        request.affectedStores = [store]
+        return try persistentContainer.viewContext.fetch(request)
+    }
+
+
+    private func fetchSharedMovementRecords(
+        herdPublicID: UUID,
+        in store: NSPersistentStore
+    ) throws -> [SharedMovementRecord] {
+        let request = SharedMovementRecord.fetchRequest()
+        request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
+        request.affectedStores = [store]
+        return try persistentContainer.viewContext.fetch(request)
+    }
+
+    private func fetchSharedStatusRecords(
+        herdPublicID: UUID,
+        in store: NSPersistentStore
+    ) throws -> [SharedStatusRecord] {
+        let request = SharedStatusRecord.fetchRequest()
         request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
         request.affectedStores = [store]
         return try persistentContainer.viewContext.fetch(request)

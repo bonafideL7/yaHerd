@@ -13,10 +13,10 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
 
     init(
         context: ModelContext,
-        store: HerdSharingCoreDataStore = HerdSharingCoreDataStore()
+        store: HerdSharingCoreDataStore? = nil
     ) {
         self.context = context
-        self.store = store
+        self.store = store ?? HerdSharingCoreDataStore()
     }
 
     func fetchSharingReadiness(
@@ -46,15 +46,19 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
         let pastureGroups = try fetchSwiftDataPastureGroups(for: herd)
         let pastures = try fetchSwiftDataPastures(for: herd)
         let animals = try fetchSwiftDataAnimals(for: herd)
+        let movements = try fetchSwiftDataMovements(for: herd)
+        let statusRecords = try fetchSwiftDataStatusRecords(for: herd)
         let systemShare = try await store.makeSystemShare(
             for: herd,
             pastureGroups: pastureGroups,
             pastures: pastures,
-            animals: animals
+            animals: animals,
+            movements: movements,
+            statusRecords: statusRecords
         )
         return HerdSharingActionResult(
             title: "Share sheet ready",
-            message: "Invite people through the system CloudKit sharing sheet. SwiftData remains the app data store; Core Data now mirrors the herd root, \(pastureGroups.count) pasture groups, \(pastures.count) pastures, and \(animals.count) animal records for CloudKit sharing.",
+            message: "Invite people through the system CloudKit sharing sheet. SwiftData remains the app data store; Core Data now mirrors the herd root, \(pastureGroups.count) pasture groups, \(pastures.count) pastures, \(animals.count) animal records, \(movements.count) movement records, and \(statusRecords.count) status history records for CloudKit sharing.",
             systemShare: systemShare
         )
     }
@@ -73,7 +77,7 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
             let importResult = try await store.importSharedRecordsIntoSwiftData(context: context)
             return HerdSharingActionResult(
                 title: "Invitation accepted",
-                message: "Imported \(importResult.importedPastureGroupCount) pasture groups, \(importResult.importedPastureCount) pastures, and \(importResult.importedAnimalCount) animal records from the Core Data sharing bridge into SwiftData for \(importResult.herdName)."
+                message: "Imported \(importResult.importedPastureGroupCount) pasture groups, \(importResult.importedPastureCount) pastures, \(importResult.importedAnimalCount) animal records, \(importResult.importedMovementCount) movement records, and \(importResult.importedStatusRecordCount) status history records from the Core Data sharing bridge into SwiftData for \(importResult.herdName)."
             )
         } catch HerdSharingActionError.bridgeImportFailed {
             return HerdSharingActionResult(
@@ -91,7 +95,7 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
         let importResult = try await store.importSharedRecordsIntoSwiftData(context: context)
         return HerdSharingActionResult(
             title: "Shared data imported",
-            message: "Imported \(importResult.insertedPastureGroupCount) new/\(importResult.updatedPastureGroupCount) existing pasture groups, \(importResult.insertedPastureCount) new/\(importResult.updatedPastureCount) existing pastures, and \(importResult.insertedAnimalCount) new/\(importResult.updatedAnimalCount) existing animal records from the Core Data sharing bridge into SwiftData for \(importResult.herdName)."
+            message: "Imported \(importResult.insertedPastureGroupCount) new/\(importResult.updatedPastureGroupCount) existing pasture groups, \(importResult.insertedPastureCount) new/\(importResult.updatedPastureCount) existing pastures, \(importResult.insertedAnimalCount) new/\(importResult.updatedAnimalCount) existing animals, \(importResult.insertedMovementCount) new/\(importResult.updatedMovementCount) existing movement records, and \(importResult.insertedStatusRecordCount) new/\(importResult.updatedStatusRecordCount) existing status history records from the Core Data sharing bridge into SwiftData for \(importResult.herdName)."
         )
     }
 
@@ -113,6 +117,21 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
         let descriptor = FetchDescriptor<Animal>()
         return try context.fetch(descriptor).filter { animal in
             animal.herd?.publicID == herd.publicID
+        }
+    }
+
+
+    private func fetchSwiftDataMovements(for herd: HerdSummary) throws -> [MovementRecord] {
+        let descriptor = FetchDescriptor<MovementRecord>()
+        return try context.fetch(descriptor).filter { movement in
+            movement.herd?.publicID == herd.publicID || movement.animal?.herd?.publicID == herd.publicID
+        }
+    }
+
+    private func fetchSwiftDataStatusRecords(for herd: HerdSummary) throws -> [StatusRecord] {
+        let descriptor = FetchDescriptor<StatusRecord>()
+        return try context.fetch(descriptor).filter { statusRecord in
+            statusRecord.herd?.publicID == herd.publicID || statusRecord.animal?.herd?.publicID == herd.publicID
         }
     }
 }
