@@ -11,9 +11,14 @@ import Observation
 final class HerdCollaborationViewModel {
     private(set) var herd: HerdSummary?
     private(set) var readiness: HerdSharingReadiness?
+    private(set) var isSharingActionInProgress = false
     var draftName = ""
     var errorMessage: String?
     var successMessage: String?
+
+    var canStartSharing: Bool {
+        readiness?.shareActionEnabled == true && herd != nil && !isSharingActionInProgress
+    }
 
     func load(
         herdRepository: any HerdRepository,
@@ -53,6 +58,45 @@ final class HerdCollaborationViewModel {
                 storageMode: storageMode
             )
             successMessage = "Herd name saved."
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+            successMessage = nil
+        }
+    }
+
+    func startSharing(
+        using sharingRepository: any HerdSharingRepository,
+        storageMode: HerdStorageMode
+    ) async {
+        isSharingActionInProgress = true
+        defer { isSharingActionInProgress = false }
+
+        do {
+            let result = try await StartHerdSharingUseCase(repository: sharingRepository).execute(
+                herd: herd,
+                storageMode: storageMode
+            )
+            successMessage = "\(result.title): \(result.message)"
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+            successMessage = nil
+        }
+    }
+
+    func acceptPendingInvitation(
+        using sharingRepository: any HerdSharingRepository,
+        storageMode: HerdStorageMode
+    ) async {
+        isSharingActionInProgress = true
+        defer { isSharingActionInProgress = false }
+
+        do {
+            let result = try await AcceptHerdShareInvitationUseCase(repository: sharingRepository).execute(
+                storageMode: storageMode
+            )
+            successMessage = "\(result.title): \(result.message)"
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

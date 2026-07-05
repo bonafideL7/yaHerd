@@ -24,6 +24,7 @@ struct HerdCollaborationView: View {
                     sharingRepository: herdSharingRepository
                 )
                 readinessSection
+                shareActionSection(sharingRepository: herdSharingRepository)
                 nextImplementationSection
             } else {
                 Section("Herd") {
@@ -100,11 +101,43 @@ struct HerdCollaborationView: View {
         }
     }
 
+    private func shareActionSection(sharingRepository: any HerdSharingRepository) -> some View {
+        Section("Share Actions") {
+            Button {
+                Task {
+                    await viewModel.startSharing(
+                        using: sharingRepository,
+                        storageMode: preferences.syncMode.herdStorageMode
+                    )
+                }
+            } label: {
+                Label("Share Herd", systemImage: "square.and.arrow.up")
+            }
+            .disabled(!viewModel.canStartSharing)
+
+            Button {
+                Task {
+                    await viewModel.acceptPendingInvitation(
+                        using: sharingRepository,
+                        storageMode: preferences.syncMode.herdStorageMode
+                    )
+                }
+            } label: {
+                Label("Accept Pending Share Invitation", systemImage: "tray.and.arrow.down")
+            }
+            .disabled(true)
+
+            Text("These buttons are intentionally blocked until the sharing repository can create a real CloudKit share and import accepted share metadata into persistent storage.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private var nextImplementationSection: some View {
         Section("Next Implementation Step") {
-            Label("Add a CloudKit sharing adapter", systemImage: "square.and.arrow.up")
+            Label("Choose the sharing adapter", systemImage: "square.and.arrow.up")
 
-            Text("The app now has a stable Herd root and repository boundary. The remaining sharing work should live behind this boundary so views do not depend on CloudKit or persistence implementation details.")
+            Text("The app now has share actions, app-level invitation routing, and a stable Herd root. The remaining decision is whether to migrate the store to Core Data + CloudKit Sharing or build a custom CloudKit adapter that owns shared records outside SwiftData.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

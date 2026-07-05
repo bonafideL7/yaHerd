@@ -9,4 +9,13 @@ protocol HerdSharingRepository: AnyObject {
         for herd: HerdSummary?,
         storageMode: HerdStorageMode
     ) -> HerdSharingReadiness
+
+    func startSharing(
+        herd: HerdSummary,
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult
+
+    func acceptPendingShareInvitation(
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult
 }

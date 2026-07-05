@@ -10,6 +10,7 @@ import SwiftData
 
 @main
 struct yaHerdApp: App {
+    @UIApplicationDelegateAdaptor(CloudKitShareAppDelegate.self) private var cloudKitShareAppDelegate
     @StateObject private var nav = NavigationCoordinator()
 
     private let bootstrapState: AppBootstrapState
@@ -263,6 +264,7 @@ private struct AppRuntime {
 private struct RunningAppView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var tagColorLibrary: TagColorLibraryStore
+    @State private var showsPendingCloudKitShareInvitation = false
 
     private let runtime: AppRuntime
     private let appSettingsSynchronizer: AppSettingsSynchronizer
@@ -325,6 +327,14 @@ private struct RunningAppView: View {
                     appSettingsSynchronizer.refreshFromICloudIfStarted()
                     tagColorLibrary.refresh()
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .yaHerdCloudKitShareAccepted)) { _ in
+                showsPendingCloudKitShareInvitation = true
+            }
+            .alert("Herd Share Invitation Received", isPresented: $showsPendingCloudKitShareInvitation) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("yaHerd received a CloudKit share invitation. The app-level invitation hook is now wired, but the persistent-store sharing adapter still needs to accept and import the shared herd.")
             }
     }
 }

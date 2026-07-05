@@ -20,4 +20,27 @@ final class SwiftDataHerdSharingRepository: HerdSharingRepository {
             return .sharingAdapterPending
         }
     }
+
+    func startSharing(
+        herd: HerdSummary,
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult {
+        switch storageMode {
+        case .localOnly:
+            throw HerdSharingActionError.iCloudSyncRequired
+        case .iCloud:
+            throw HerdSharingActionError.sharingAdapterPending
+        }
+    }
+
+    func acceptPendingShareInvitation(
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult {
+        switch storageMode {
+        case .localOnly:
+            throw HerdSharingActionError.iCloudSyncRequired
+        case .iCloud:
+            throw HerdSharingActionError.sharingAdapterPending
+        }
+    }
 }

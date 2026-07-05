@@ -47,6 +47,66 @@ final class SwiftDataHerdSharingRepositoryTests: XCTestCase {
         XCTAssertFalse(readiness.shareActionEnabled)
     }
 
+    func testStartSharingRequiresICloudStorage() async {
+        let repository = SwiftDataHerdSharingRepository()
+        let herd = makeHerdSummary()
+
+        do {
+            _ = try await repository.startSharing(
+                herd: herd,
+                storageMode: .localOnly
+            )
+            XCTFail("Expected iCloud Sync requirement error.")
+        } catch let error as HerdSharingActionError {
+            XCTAssertEqual(error, .iCloudSyncRequired)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testStartSharingBlocksUntilSharingAdapterExists() async {
+        let repository = SwiftDataHerdSharingRepository()
+        let herd = makeHerdSummary()
+
+        do {
+            _ = try await repository.startSharing(
+                herd: herd,
+                storageMode: .iCloud
+            )
+            XCTFail("Expected sharing adapter pending error.")
+        } catch let error as HerdSharingActionError {
+            XCTAssertEqual(error, .sharingAdapterPending)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testAcceptInvitationRequiresICloudStorage() async {
+        let repository = SwiftDataHerdSharingRepository()
+
+        do {
+            _ = try await repository.acceptPendingShareInvitation(storageMode: .localOnly)
+            XCTFail("Expected iCloud Sync requirement error.")
+        } catch let error as HerdSharingActionError {
+            XCTAssertEqual(error, .iCloudSyncRequired)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testAcceptInvitationBlocksUntilSharingAdapterExists() async {
+        let repository = SwiftDataHerdSharingRepository()
+
+        do {
+            _ = try await repository.acceptPendingShareInvitation(storageMode: .iCloud)
+            XCTFail("Expected sharing adapter pending error.")
+        } catch let error as HerdSharingActionError {
+            XCTAssertEqual(error, .sharingAdapterPending)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
     private func makeHerdSummary() -> HerdSummary {
         HerdSummary(
             publicID: UUID(),
