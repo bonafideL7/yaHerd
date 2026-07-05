@@ -27,7 +27,7 @@ final class AppDependencies {
         self.fieldCheckRepository = SwiftDataFieldCheckRepository(context: context)
         self.syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(context: context)
         self.herdRepository = SwiftDataHerdRepository(context: context)
-        self.herdSharingRepository = SwiftDataHerdSharingRepository()
+        self.herdSharingRepository = CoreDataHerdSharingRepository()
         self.tagColorRepository = SwiftDataTagColorRepository(
             context: context,
             duplicateResolutionPolicy: tagColorDuplicateResolutionPolicy

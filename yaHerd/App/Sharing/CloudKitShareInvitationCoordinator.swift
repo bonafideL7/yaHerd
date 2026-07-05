@@ -10,7 +10,7 @@ import SwiftUI
 
 @Observable
 final class CloudKitShareInvitationCoordinator {
-    private(set) var pendingInvitation: PendingCloudKitShareInvitation?
+    private(set) var pendingInvitation: HerdShareInvitation?
 
     var pendingSummary: HerdShareInvitationSummary? {
         pendingInvitation?.summary
@@ -21,7 +21,7 @@ final class CloudKitShareInvitationCoordinator {
     }
 
     func recordAcceptedShare(metadata: CKShare.Metadata, receivedAt: Date = Date.now) {
-        pendingInvitation = PendingCloudKitShareInvitation(
+        pendingInvitation = HerdShareInvitation(
             metadata: metadata,
             receivedAt: receivedAt
         )
@@ -29,23 +29,6 @@ final class CloudKitShareInvitationCoordinator {
 
     func clearPendingInvitation() {
         pendingInvitation = nil
-    }
-}
-
-struct PendingCloudKitShareInvitation: Identifiable {
-    let id = UUID()
-    let metadata: CKShare.Metadata
-    let receivedAt: Date
-
-    var summary: HerdShareInvitationSummary {
-        HerdShareInvitationSummary(
-            id: id,
-            receivedAt: receivedAt,
-            containerIdentifier: metadata.containerIdentifier,
-            shareRecordName: metadata.share.recordID.recordName,
-            rootRecordName: metadata.rootRecordID.recordName,
-            ownerDisplayName: metadata.ownerIdentity.nameComponents?.formatted()
-        )
     }
 }
 

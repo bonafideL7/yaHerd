@@ -12,7 +12,7 @@ struct AcceptHerdShareInvitationUseCase {
     }
 
     func execute(
-        invitation: HerdShareInvitationSummary?,
+        invitation: HerdShareInvitation?,
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingActionResult {
         guard let invitation else {

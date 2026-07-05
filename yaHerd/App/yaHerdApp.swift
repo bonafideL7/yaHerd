@@ -341,9 +341,9 @@ private struct RunningAppView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 if let summary = cloudKitShareInvitationCoordinator.pendingSummary {
-                    Text("yaHerd received a CloudKit share invitation from \(summary.displayOwnerName). Open Settings > Herd Collaboration to review it. The persistent-store sharing adapter still needs to accept and import the shared herd.")
+                    Text("yaHerd received a CloudKit share invitation from \(summary.displayOwnerName). Open Settings > Herd Collaboration to accept it into the Core Data sharing bridge.")
                 } else {
-                    Text("yaHerd received a CloudKit share invitation. The app-level invitation hook is wired, but the persistent-store sharing adapter still needs to accept and import the shared herd.")
+                    Text("yaHerd received a CloudKit share invitation. Open Settings > Herd Collaboration to accept it into the Core Data sharing bridge.")
                 }
             }
     }

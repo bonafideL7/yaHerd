@@ -15,6 +15,7 @@ final class HerdCollaborationViewModel {
     var draftName = ""
     var errorMessage: String?
     var successMessage: String?
+    var systemShare: HerdSystemShare?
 
     var canStartSharing: Bool {
         readiness?.shareActionEnabled == true && herd != nil && !isSharingActionInProgress
@@ -77,19 +78,22 @@ final class HerdCollaborationViewModel {
                 herd: herd,
                 storageMode: storageMode
             )
-            successMessage = "\(result.title): \(result.message)"
+            systemShare = result.systemShare
+            successMessage = result.systemShare == nil ? "\(result.title): \(result.message)" : nil
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
             successMessage = nil
+            systemShare = nil
         }
     }
 
+    @discardableResult
     func acceptPendingInvitation(
-        _ invitation: HerdShareInvitationSummary?,
+        _ invitation: HerdShareInvitation?,
         using sharingRepository: any HerdSharingRepository,
         storageMode: HerdStorageMode
-    ) async {
+    ) async -> Bool {
         isSharingActionInProgress = true
         defer { isSharingActionInProgress = false }
 
@@ -100,10 +104,16 @@ final class HerdCollaborationViewModel {
             )
             successMessage = "\(result.title): \(result.message)"
             errorMessage = nil
+            return true
         } catch {
             errorMessage = error.localizedDescription
             successMessage = nil
+            return false
         }
+    }
+
+    func dismissSystemShare() {
+        systemShare = nil
     }
 
     func resetDraftName() {

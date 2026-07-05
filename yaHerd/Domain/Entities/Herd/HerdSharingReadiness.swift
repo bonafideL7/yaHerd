@@ -7,7 +7,7 @@ struct HerdSharingReadiness: Equatable {
     enum State: Equatable {
         case shareRootMissing
         case iCloudSyncRequired
-        case sharingAdapterPending
+        case sharingAdapterAvailable
     }
 
     let state: State
@@ -15,7 +15,7 @@ struct HerdSharingReadiness: Equatable {
     let message: String
 
     var shareActionEnabled: Bool {
-        false
+        state == .sharingAdapterAvailable
     }
 
     static let shareRootMissing = HerdSharingReadiness(
@@ -30,9 +30,9 @@ struct HerdSharingReadiness: Equatable {
         message: "Enable iCloud Sync before exposing a share action. Local-only stores cannot invite other iCloud users."
     )
 
-    static let sharingAdapterPending = HerdSharingReadiness(
-        state: .sharingAdapterPending,
-        title: "CloudKit sharing adapter needed",
-        message: "The herd is scoped for collaboration prep. A real CloudKit sharing adapter still needs to create and manage a share for this root herd."
+    static let sharingAdapterAvailable = HerdSharingReadiness(
+        state: .sharingAdapterAvailable,
+        title: "CloudKit sharing bridge ready",
+        message: "SwiftData remains the app data store. Core Data is loaded only as the CloudKit sharing bridge for the Herd share root."
     )
 }
