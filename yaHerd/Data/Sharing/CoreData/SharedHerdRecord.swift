@@ -15,6 +15,8 @@ final class SharedHerdRecord: NSManagedObject {
     @NSManaged var schemaVersion: NSNumber?
     @NSManaged var lastMirroredAt: Date?
     @NSManaged var animals: Set<SharedAnimalRecord>?
+    @NSManaged var pastures: Set<SharedPastureRecord>?
+    @NSManaged var pastureGroups: Set<SharedPastureGroupRecord>?
 }
 
 extension SharedHerdRecord {

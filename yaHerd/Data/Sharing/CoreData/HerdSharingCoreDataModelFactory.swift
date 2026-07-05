@@ -24,6 +24,36 @@ enum HerdSharingCoreDataModelFactory {
             ]
         )
 
+        let pastureGroupEntity = makeEntity(
+            name: SharedPastureGroupRecord.entityName,
+            managedObjectClass: SharedPastureGroupRecord.self,
+            properties: [
+                makeAttribute(name: "publicID", type: .stringAttributeType),
+                makeAttribute(name: "herdPublicID", type: .stringAttributeType),
+                makeAttribute(name: "name", type: .stringAttributeType),
+                makeAttribute(name: "grazeDays", type: .integer64AttributeType),
+                makeAttribute(name: "restDays", type: .integer64AttributeType),
+                makeAttribute(name: "lastMirroredAt", type: .dateAttributeType)
+            ]
+        )
+
+        let pastureEntity = makeEntity(
+            name: SharedPastureRecord.entityName,
+            managedObjectClass: SharedPastureRecord.self,
+            properties: [
+                makeAttribute(name: "publicID", type: .stringAttributeType),
+                makeAttribute(name: "herdPublicID", type: .stringAttributeType),
+                makeAttribute(name: "name", type: .stringAttributeType),
+                makeAttribute(name: "sortOrder", type: .integer64AttributeType),
+                makeAttribute(name: "acreage", type: .doubleAttributeType),
+                makeAttribute(name: "usableAcreage", type: .doubleAttributeType),
+                makeAttribute(name: "targetAcresPerHead", type: .doubleAttributeType),
+                makeAttribute(name: "lastGrazedDate", type: .dateAttributeType),
+                makeAttribute(name: "groupPublicID", type: .stringAttributeType),
+                makeAttribute(name: "lastMirroredAt", type: .dateAttributeType)
+            ]
+        )
+
         let animalEntity = makeEntity(
             name: SharedAnimalRecord.entityName,
             managedObjectClass: SharedAnimalRecord.self,
@@ -54,29 +84,39 @@ enum HerdSharingCoreDataModelFactory {
             ]
         )
 
-        let herdAnimals = NSRelationshipDescription()
-        herdAnimals.name = "animals"
-        herdAnimals.destinationEntity = animalEntity
-        herdAnimals.minCount = 0
-        herdAnimals.maxCount = 0
-        herdAnimals.deleteRule = .cascadeDeleteRule
-        herdAnimals.isOptional = true
+        addToManyRelationship(
+            name: "pastureGroups",
+            from: herdEntity,
+            to: pastureGroupEntity,
+            inverseName: "herd",
+            deleteRule: .cascadeDeleteRule
+        )
 
-        let animalHerd = NSRelationshipDescription()
-        animalHerd.name = "herd"
-        animalHerd.destinationEntity = herdEntity
-        animalHerd.minCount = 0
-        animalHerd.maxCount = 1
-        animalHerd.deleteRule = .nullifyDeleteRule
-        animalHerd.isOptional = true
+        addToManyRelationship(
+            name: "pastures",
+            from: herdEntity,
+            to: pastureEntity,
+            inverseName: "herd",
+            deleteRule: .cascadeDeleteRule
+        )
 
-        herdAnimals.inverseRelationship = animalHerd
-        animalHerd.inverseRelationship = herdAnimals
+        addToManyRelationship(
+            name: "pastures",
+            from: pastureGroupEntity,
+            to: pastureEntity,
+            inverseName: "group",
+            deleteRule: .nullifyDeleteRule
+        )
 
-        herdEntity.properties.append(herdAnimals)
-        animalEntity.properties.append(animalHerd)
+        addToManyRelationship(
+            name: "animals",
+            from: herdEntity,
+            to: animalEntity,
+            inverseName: "herd",
+            deleteRule: .cascadeDeleteRule
+        )
 
-        model.entities = [herdEntity, animalEntity]
+        model.entities = [herdEntity, pastureGroupEntity, pastureEntity, animalEntity]
         return model
     }
 
@@ -101,5 +141,35 @@ enum HerdSharingCoreDataModelFactory {
         attribute.attributeType = type
         attribute.isOptional = true
         return attribute
+    }
+
+    private static func addToManyRelationship(
+        name: String,
+        from sourceEntity: NSEntityDescription,
+        to destinationEntity: NSEntityDescription,
+        inverseName: String,
+        deleteRule: NSDeleteRule
+    ) {
+        let toMany = NSRelationshipDescription()
+        toMany.name = name
+        toMany.destinationEntity = destinationEntity
+        toMany.minCount = 0
+        toMany.maxCount = 0
+        toMany.deleteRule = deleteRule
+        toMany.isOptional = true
+
+        let toOne = NSRelationshipDescription()
+        toOne.name = inverseName
+        toOne.destinationEntity = sourceEntity
+        toOne.minCount = 0
+        toOne.maxCount = 1
+        toOne.deleteRule = .nullifyDeleteRule
+        toOne.isOptional = true
+
+        toMany.inverseRelationship = toOne
+        toOne.inverseRelationship = toMany
+
+        sourceEntity.properties.append(toMany)
+        destinationEntity.properties.append(toOne)
     }
 }
