@@ -50,6 +50,10 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
         let statusRecords = try fetchSwiftDataStatusRecords(for: herd)
         let healthRecords = try fetchSwiftDataHealthRecords(for: herd)
         let pregnancyChecks = try fetchSwiftDataPregnancyChecks(for: herd)
+        let workingProtocolTemplates = try fetchSwiftDataWorkingProtocolTemplates(for: herd)
+        let workingSessions = try fetchSwiftDataWorkingSessions(for: herd)
+        let workingQueueItems = try fetchSwiftDataWorkingQueueItems(for: herd)
+        let workingTreatmentRecords = try fetchSwiftDataWorkingTreatmentRecords(for: herd)
         let systemShare = try await store.makeSystemShare(
             for: herd,
             pastureGroups: pastureGroups,
@@ -58,11 +62,15 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
             movements: movements,
             statusRecords: statusRecords,
             healthRecords: healthRecords,
-            pregnancyChecks: pregnancyChecks
+            pregnancyChecks: pregnancyChecks,
+            workingProtocolTemplates: workingProtocolTemplates,
+            workingSessions: workingSessions,
+            workingQueueItems: workingQueueItems,
+            workingTreatmentRecords: workingTreatmentRecords
         )
         return HerdSharingActionResult(
             title: "Share sheet ready",
-            message: "Invite people through the system CloudKit sharing sheet. SwiftData remains the app data store; Core Data now mirrors the herd root, \(pastureGroups.count) pasture groups, \(pastures.count) pastures, \(animals.count) animal records, \(movements.count) movement records, \(statusRecords.count) status history records, \(healthRecords.count) health records, and \(pregnancyChecks.count) pregnancy checks for CloudKit sharing.",
+            message: "Invite people through the system CloudKit sharing sheet. SwiftData remains the app data store; Core Data now mirrors the herd root, \(pastureGroups.count) pasture groups, \(pastures.count) pastures, \(animals.count) animal records, \(movements.count) movement records, \(statusRecords.count) status history records, \(healthRecords.count) health records, \(pregnancyChecks.count) pregnancy checks, \(workingProtocolTemplates.count) working protocol templates, \(workingSessions.count) working sessions, \(workingQueueItems.count) working queue items, and \(workingTreatmentRecords.count) working treatment records for CloudKit sharing.",
             systemShare: systemShare
         )
     }
@@ -81,7 +89,7 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
             let importResult = try await store.importSharedRecordsIntoSwiftData(context: context)
             return HerdSharingActionResult(
                 title: "Invitation accepted",
-                message: "Imported \(importResult.importedPastureGroupCount) pasture groups, \(importResult.importedPastureCount) pastures, \(importResult.importedAnimalCount) animal records, \(importResult.importedMovementCount) movement records, \(importResult.importedStatusRecordCount) status history records, \(importResult.importedHealthRecordCount) health records, and \(importResult.importedPregnancyCheckCount) pregnancy checks from the Core Data sharing bridge into SwiftData for \(importResult.herdName)."
+                message: "Imported \(importResult.importedPastureGroupCount) pasture groups, \(importResult.importedPastureCount) pastures, \(importResult.importedAnimalCount) animal records, \(importResult.importedMovementCount) movement records, \(importResult.importedStatusRecordCount) status history records, \(importResult.importedHealthRecordCount) health records, \(importResult.importedPregnancyCheckCount) pregnancy checks, \(importResult.importedWorkingProtocolTemplateCount) working protocol templates, \(importResult.importedWorkingSessionCount) working sessions, \(importResult.importedWorkingQueueItemCount) queue items, and \(importResult.importedWorkingTreatmentRecordCount) treatment records from the Core Data sharing bridge into SwiftData for \(importResult.herdName)."
             )
         } catch HerdSharingActionError.bridgeImportFailed {
             return HerdSharingActionResult(
@@ -99,7 +107,7 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
         let importResult = try await store.importSharedRecordsIntoSwiftData(context: context)
         return HerdSharingActionResult(
             title: "Shared data imported",
-            message: "Imported \(importResult.insertedPastureGroupCount) new/\(importResult.updatedPastureGroupCount) existing pasture groups, \(importResult.insertedPastureCount) new/\(importResult.updatedPastureCount) existing pastures, \(importResult.insertedAnimalCount) new/\(importResult.updatedAnimalCount) existing animals, \(importResult.insertedMovementCount) new/\(importResult.updatedMovementCount) existing movement records, \(importResult.insertedStatusRecordCount) new/\(importResult.updatedStatusRecordCount) existing status history records, \(importResult.insertedHealthRecordCount) new/\(importResult.updatedHealthRecordCount) existing health records, and \(importResult.insertedPregnancyCheckCount) new/\(importResult.updatedPregnancyCheckCount) existing pregnancy checks from the Core Data sharing bridge into SwiftData for \(importResult.herdName)."
+            message: "Imported \(importResult.insertedPastureGroupCount) new/\(importResult.updatedPastureGroupCount) existing pasture groups, \(importResult.insertedPastureCount) new/\(importResult.updatedPastureCount) existing pastures, \(importResult.insertedAnimalCount) new/\(importResult.updatedAnimalCount) existing animals, \(importResult.insertedMovementCount) new/\(importResult.updatedMovementCount) existing movement records, \(importResult.insertedStatusRecordCount) new/\(importResult.updatedStatusRecordCount) existing status history records, \(importResult.insertedHealthRecordCount) new/\(importResult.updatedHealthRecordCount) existing health records, \(importResult.insertedPregnancyCheckCount) new/\(importResult.updatedPregnancyCheckCount) existing pregnancy checks, \(importResult.insertedWorkingProtocolTemplateCount) new/\(importResult.updatedWorkingProtocolTemplateCount) existing working protocol templates, \(importResult.insertedWorkingSessionCount) new/\(importResult.updatedWorkingSessionCount) existing working sessions, \(importResult.insertedWorkingQueueItemCount) new/\(importResult.updatedWorkingQueueItemCount) existing queue items, and \(importResult.insertedWorkingTreatmentRecordCount) new/\(importResult.updatedWorkingTreatmentRecordCount) existing treatment records from the Core Data sharing bridge into SwiftData for \(importResult.herdName)."
         )
     }
 
@@ -150,6 +158,38 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
         let descriptor = FetchDescriptor<PregnancyCheck>()
         return try context.fetch(descriptor).filter { pregnancyCheck in
             pregnancyCheck.herd?.publicID == herd.publicID || pregnancyCheck.animal?.herd?.publicID == herd.publicID
+        }
+    }
+
+    private func fetchSwiftDataWorkingProtocolTemplates(for herd: HerdSummary) throws -> [WorkingProtocolTemplate] {
+        let descriptor = FetchDescriptor<WorkingProtocolTemplate>()
+        return try context.fetch(descriptor).filter { template in
+            template.herd?.publicID == herd.publicID
+        }
+    }
+
+    private func fetchSwiftDataWorkingSessions(for herd: HerdSummary) throws -> [WorkingSession] {
+        let descriptor = FetchDescriptor<WorkingSession>()
+        return try context.fetch(descriptor).filter { session in
+            session.herd?.publicID == herd.publicID
+        }
+    }
+
+    private func fetchSwiftDataWorkingQueueItems(for herd: HerdSummary) throws -> [WorkingQueueItem] {
+        let descriptor = FetchDescriptor<WorkingQueueItem>()
+        return try context.fetch(descriptor).filter { queueItem in
+            queueItem.herd?.publicID == herd.publicID ||
+                queueItem.session?.herd?.publicID == herd.publicID ||
+                queueItem.animal?.herd?.publicID == herd.publicID
+        }
+    }
+
+    private func fetchSwiftDataWorkingTreatmentRecords(for herd: HerdSummary) throws -> [WorkingTreatmentRecord] {
+        let descriptor = FetchDescriptor<WorkingTreatmentRecord>()
+        return try context.fetch(descriptor).filter { treatmentRecord in
+            treatmentRecord.herd?.publicID == herd.publicID ||
+                treatmentRecord.session?.herd?.publicID == herd.publicID ||
+                treatmentRecord.animal?.herd?.publicID == herd.publicID
         }
     }
 }

@@ -147,101 +147,89 @@ enum HerdSharingCoreDataModelFactory {
             ]
         )
 
-        addToManyRelationship(
-            name: "pastureGroups",
-            from: herdEntity,
-            to: pastureGroupEntity,
-            inverseName: "herd",
-            deleteRule: .cascadeDeleteRule
+        let workingProtocolTemplateEntity = makeEntity(
+            name: SharedWorkingProtocolTemplateRecord.entityName,
+            managedObjectClass: SharedWorkingProtocolTemplateRecord.self,
+            properties: [
+                makeAttribute(name: "publicID", type: .stringAttributeType),
+                makeAttribute(name: "herdPublicID", type: .stringAttributeType),
+                makeAttribute(name: "name", type: .stringAttributeType),
+                makeAttribute(name: "itemsJSON", type: .binaryDataAttributeType),
+                makeAttribute(name: "lastMirroredAt", type: .dateAttributeType)
+            ]
         )
 
-        addToManyRelationship(
-            name: "pastures",
-            from: herdEntity,
-            to: pastureEntity,
-            inverseName: "herd",
-            deleteRule: .cascadeDeleteRule
+        let workingSessionEntity = makeEntity(
+            name: SharedWorkingSessionRecord.entityName,
+            managedObjectClass: SharedWorkingSessionRecord.self,
+            properties: [
+                makeAttribute(name: "publicID", type: .stringAttributeType),
+                makeAttribute(name: "herdPublicID", type: .stringAttributeType),
+                makeAttribute(name: "date", type: .dateAttributeType),
+                makeAttribute(name: "statusRawValue", type: .stringAttributeType),
+                makeAttribute(name: "sourcePasturePublicID", type: .stringAttributeType),
+                makeAttribute(name: "protocolName", type: .stringAttributeType),
+                makeAttribute(name: "protocolItemsJSON", type: .binaryDataAttributeType),
+                makeAttribute(name: "currentQueueIndex", type: .integer64AttributeType),
+                makeAttribute(name: "notes", type: .stringAttributeType),
+                makeAttribute(name: "lastMirroredAt", type: .dateAttributeType)
+            ]
         )
 
-        addToManyRelationship(
-            name: "pastures",
-            from: pastureGroupEntity,
-            to: pastureEntity,
-            inverseName: "group",
-            deleteRule: .nullifyDeleteRule
+        let workingQueueItemEntity = makeEntity(
+            name: SharedWorkingQueueItemRecord.entityName,
+            managedObjectClass: SharedWorkingQueueItemRecord.self,
+            properties: [
+                makeAttribute(name: "publicID", type: .stringAttributeType),
+                makeAttribute(name: "herdPublicID", type: .stringAttributeType),
+                makeAttribute(name: "sessionPublicID", type: .stringAttributeType),
+                makeAttribute(name: "animalPublicID", type: .stringAttributeType),
+                makeAttribute(name: "queueOrder", type: .integer64AttributeType),
+                makeAttribute(name: "statusRawValue", type: .stringAttributeType),
+                makeAttribute(name: "completedAt", type: .dateAttributeType),
+                makeAttribute(name: "collectedFromPasturePublicID", type: .stringAttributeType),
+                makeAttribute(name: "destinationPasturePublicID", type: .stringAttributeType),
+                makeAttribute(name: "workNotes", type: .stringAttributeType),
+                makeAttribute(name: "lastMirroredAt", type: .dateAttributeType)
+            ]
         )
 
-        addToManyRelationship(
-            name: "animals",
-            from: herdEntity,
-            to: animalEntity,
-            inverseName: "herd",
-            deleteRule: .cascadeDeleteRule
+        let workingTreatmentRecordEntity = makeEntity(
+            name: SharedWorkingTreatmentRecord.entityName,
+            managedObjectClass: SharedWorkingTreatmentRecord.self,
+            properties: [
+                makeAttribute(name: "publicID", type: .stringAttributeType),
+                makeAttribute(name: "herdPublicID", type: .stringAttributeType),
+                makeAttribute(name: "sessionPublicID", type: .stringAttributeType),
+                makeAttribute(name: "animalPublicID", type: .stringAttributeType),
+                makeAttribute(name: "date", type: .dateAttributeType),
+                makeAttribute(name: "itemName", type: .stringAttributeType),
+                makeAttribute(name: "given", type: .booleanAttributeType),
+                makeAttribute(name: "quantity", type: .doubleAttributeType),
+                makeAttribute(name: "lastMirroredAt", type: .dateAttributeType)
+            ]
         )
 
-        addToManyRelationship(
-            name: "movements",
-            from: herdEntity,
-            to: movementEntity,
-            inverseName: "herd",
-            deleteRule: .cascadeDeleteRule
-        )
-
-        addToManyRelationship(
-            name: "statusRecords",
-            from: herdEntity,
-            to: statusRecordEntity,
-            inverseName: "herd",
-            deleteRule: .cascadeDeleteRule
-        )
-
-        addToManyRelationship(
-            name: "movements",
-            from: animalEntity,
-            to: movementEntity,
-            inverseName: "animal",
-            deleteRule: .cascadeDeleteRule
-        )
-
-        addToManyRelationship(
-            name: "statusRecords",
-            from: animalEntity,
-            to: statusRecordEntity,
-            inverseName: "animal",
-            deleteRule: .cascadeDeleteRule
-        )
-
-        addToManyRelationship(
-            name: "healthRecords",
-            from: herdEntity,
-            to: healthRecordEntity,
-            inverseName: "herd",
-            deleteRule: .cascadeDeleteRule
-        )
-
-        addToManyRelationship(
-            name: "pregnancyChecks",
-            from: herdEntity,
-            to: pregnancyCheckEntity,
-            inverseName: "herd",
-            deleteRule: .cascadeDeleteRule
-        )
-
-        addToManyRelationship(
-            name: "healthRecords",
-            from: animalEntity,
-            to: healthRecordEntity,
-            inverseName: "animal",
-            deleteRule: .cascadeDeleteRule
-        )
-
-        addToManyRelationship(
-            name: "pregnancyChecks",
-            from: animalEntity,
-            to: pregnancyCheckEntity,
-            inverseName: "animal",
-            deleteRule: .cascadeDeleteRule
-        )
+        addToManyRelationship(name: "pastureGroups", from: herdEntity, to: pastureGroupEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "pastures", from: herdEntity, to: pastureEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "pastures", from: pastureGroupEntity, to: pastureEntity, inverseName: "group", deleteRule: .nullifyDeleteRule)
+        addToManyRelationship(name: "animals", from: herdEntity, to: animalEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "movements", from: herdEntity, to: movementEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "statusRecords", from: herdEntity, to: statusRecordEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "movements", from: animalEntity, to: movementEntity, inverseName: "animal", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "statusRecords", from: animalEntity, to: statusRecordEntity, inverseName: "animal", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "healthRecords", from: herdEntity, to: healthRecordEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "pregnancyChecks", from: herdEntity, to: pregnancyCheckEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "healthRecords", from: animalEntity, to: healthRecordEntity, inverseName: "animal", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "pregnancyChecks", from: animalEntity, to: pregnancyCheckEntity, inverseName: "animal", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "workingProtocolTemplates", from: herdEntity, to: workingProtocolTemplateEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "workingSessions", from: herdEntity, to: workingSessionEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "workingQueueItems", from: herdEntity, to: workingQueueItemEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "workingTreatmentRecords", from: herdEntity, to: workingTreatmentRecordEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "queueItems", from: workingSessionEntity, to: workingQueueItemEntity, inverseName: "session", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "treatmentRecords", from: workingSessionEntity, to: workingTreatmentRecordEntity, inverseName: "session", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "workingQueueItems", from: animalEntity, to: workingQueueItemEntity, inverseName: "animal", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "workingTreatmentRecords", from: animalEntity, to: workingTreatmentRecordEntity, inverseName: "animal", deleteRule: .cascadeDeleteRule)
 
         model.entities = [
             herdEntity,
@@ -251,7 +239,11 @@ enum HerdSharingCoreDataModelFactory {
             movementEntity,
             statusRecordEntity,
             healthRecordEntity,
-            pregnancyCheckEntity
+            pregnancyCheckEntity,
+            workingProtocolTemplateEntity,
+            workingSessionEntity,
+            workingQueueItemEntity,
+            workingTreatmentRecordEntity
         ]
         return model
     }

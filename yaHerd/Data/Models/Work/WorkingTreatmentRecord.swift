@@ -9,6 +9,7 @@ import Foundation
 /// Stores per-animal protocol completion for a working session.
 @Model
 final class WorkingTreatmentRecord {
+    var publicID: UUID = UUID()
     @Relationship(deleteRule: .nullify) var herd: Herd?
     var date: Date = Date.now
     var itemName: String = ""
@@ -22,6 +23,7 @@ final class WorkingTreatmentRecord {
     var session: WorkingSession?
 
     init(
+        publicID: UUID = UUID(),
         date: Date = Date.now,
         itemName: String,
         given: Bool,
@@ -29,6 +31,7 @@ final class WorkingTreatmentRecord {
         animal: Animal,
         session: WorkingSession
     ) {
+        self.publicID = publicID
         self.date = date
         self.itemName = itemName
         self.given = given

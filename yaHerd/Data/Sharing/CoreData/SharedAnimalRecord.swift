@@ -36,6 +36,8 @@ final class SharedAnimalRecord: NSManagedObject {
     @NSManaged var statusRecords: Set<SharedStatusRecord>?
     @NSManaged var healthRecords: Set<SharedHealthRecord>?
     @NSManaged var pregnancyChecks: Set<SharedPregnancyCheckRecord>?
+    @NSManaged var workingQueueItems: Set<SharedWorkingQueueItemRecord>?
+    @NSManaged var workingTreatmentRecords: Set<SharedWorkingTreatmentRecord>?
 }
 
 extension SharedAnimalRecord {
