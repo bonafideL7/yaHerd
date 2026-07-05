@@ -28,9 +28,6 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		8D40A28C2EDAA29E00C89DD2 /* yaHerd */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			explicitFolders = (
-				Presentation,
-			);
 			path = yaHerd;
 			sourceTree = "<group>";
 		};

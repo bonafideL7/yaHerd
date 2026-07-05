@@ -114,6 +114,39 @@ enum HerdSharingCoreDataModelFactory {
             ]
         )
 
+        let healthRecordEntity = makeEntity(
+            name: SharedHealthRecord.entityName,
+            managedObjectClass: SharedHealthRecord.self,
+            properties: [
+                makeAttribute(name: "publicID", type: .stringAttributeType),
+                makeAttribute(name: "herdPublicID", type: .stringAttributeType),
+                makeAttribute(name: "animalPublicID", type: .stringAttributeType),
+                makeAttribute(name: "date", type: .dateAttributeType),
+                makeAttribute(name: "treatment", type: .stringAttributeType),
+                makeAttribute(name: "notes", type: .stringAttributeType),
+                makeAttribute(name: "workingSessionPublicID", type: .stringAttributeType),
+                makeAttribute(name: "lastMirroredAt", type: .dateAttributeType)
+            ]
+        )
+
+        let pregnancyCheckEntity = makeEntity(
+            name: SharedPregnancyCheckRecord.entityName,
+            managedObjectClass: SharedPregnancyCheckRecord.self,
+            properties: [
+                makeAttribute(name: "publicID", type: .stringAttributeType),
+                makeAttribute(name: "herdPublicID", type: .stringAttributeType),
+                makeAttribute(name: "animalPublicID", type: .stringAttributeType),
+                makeAttribute(name: "date", type: .dateAttributeType),
+                makeAttribute(name: "resultRawValue", type: .stringAttributeType),
+                makeAttribute(name: "technician", type: .stringAttributeType),
+                makeAttribute(name: "estimatedDaysPregnant", type: .integer64AttributeType),
+                makeAttribute(name: "dueDate", type: .dateAttributeType),
+                makeAttribute(name: "sireAnimalPublicID", type: .stringAttributeType),
+                makeAttribute(name: "workingSessionPublicID", type: .stringAttributeType),
+                makeAttribute(name: "lastMirroredAt", type: .dateAttributeType)
+            ]
+        )
+
         addToManyRelationship(
             name: "pastureGroups",
             from: herdEntity,
@@ -178,13 +211,47 @@ enum HerdSharingCoreDataModelFactory {
             deleteRule: .cascadeDeleteRule
         )
 
+        addToManyRelationship(
+            name: "healthRecords",
+            from: herdEntity,
+            to: healthRecordEntity,
+            inverseName: "herd",
+            deleteRule: .cascadeDeleteRule
+        )
+
+        addToManyRelationship(
+            name: "pregnancyChecks",
+            from: herdEntity,
+            to: pregnancyCheckEntity,
+            inverseName: "herd",
+            deleteRule: .cascadeDeleteRule
+        )
+
+        addToManyRelationship(
+            name: "healthRecords",
+            from: animalEntity,
+            to: healthRecordEntity,
+            inverseName: "animal",
+            deleteRule: .cascadeDeleteRule
+        )
+
+        addToManyRelationship(
+            name: "pregnancyChecks",
+            from: animalEntity,
+            to: pregnancyCheckEntity,
+            inverseName: "animal",
+            deleteRule: .cascadeDeleteRule
+        )
+
         model.entities = [
             herdEntity,
             pastureGroupEntity,
             pastureEntity,
             animalEntity,
             movementEntity,
-            statusRecordEntity
+            statusRecordEntity,
+            healthRecordEntity,
+            pregnancyCheckEntity
         ]
         return model
     }
