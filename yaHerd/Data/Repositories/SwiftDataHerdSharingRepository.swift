@@ -33,7 +33,8 @@ final class SwiftDataHerdSharingRepository: HerdSharingRepository {
         }
     }
 
-    func acceptPendingShareInvitation(
+    func acceptShareInvitation(
+        _ invitation: HerdShareInvitationSummary,
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingActionResult {
         switch storageMode {

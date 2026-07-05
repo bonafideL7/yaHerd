@@ -5,6 +5,7 @@
 //  Created by mm on 11/28/25.
 //
 
+import CloudKit
 import SwiftUI
 import SwiftData
 
@@ -264,6 +265,7 @@ private struct AppRuntime {
 private struct RunningAppView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var tagColorLibrary: TagColorLibraryStore
+    @State private var cloudKitShareInvitationCoordinator = CloudKitShareInvitationCoordinator()
     @State private var showsPendingCloudKitShareInvitation = false
 
     private let runtime: AppRuntime
@@ -288,6 +290,7 @@ private struct RunningAppView: View {
             .environment(\.syncDiagnosticsRepository, runtime.dependencies.syncDiagnosticsRepository)
             .environment(\.herdRepository, runtime.dependencies.herdRepository)
             .environment(\.herdSharingRepository, runtime.dependencies.herdSharingRepository)
+            .environment(\.cloudKitShareInvitationCoordinator, cloudKitShareInvitationCoordinator)
             .environment(\.animalListRepository, runtime.dependencies.animalRepository)
             .environment(\.animalEditorRepository, runtime.dependencies.animalRepository)
             .environment(\.animalDetailRepository, runtime.dependencies.animalRepository)
@@ -328,13 +331,20 @@ private struct RunningAppView: View {
                     tagColorLibrary.refresh()
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .yaHerdCloudKitShareAccepted)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .yaHerdCloudKitShareAccepted)) { notification in
+                if let metadata = notification.userInfo?[CloudKitShareNotificationUserInfoKey.metadata] as? CKShare.Metadata {
+                    cloudKitShareInvitationCoordinator.recordAcceptedShare(metadata: metadata)
+                }
                 showsPendingCloudKitShareInvitation = true
             }
             .alert("Herd Share Invitation Received", isPresented: $showsPendingCloudKitShareInvitation) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("yaHerd received a CloudKit share invitation. The app-level invitation hook is now wired, but the persistent-store sharing adapter still needs to accept and import the shared herd.")
+                if let summary = cloudKitShareInvitationCoordinator.pendingSummary {
+                    Text("yaHerd received a CloudKit share invitation from \(summary.displayOwnerName). Open Settings > Herd Collaboration to review it. The persistent-store sharing adapter still needs to accept and import the shared herd.")
+                } else {
+                    Text("yaHerd received a CloudKit share invitation. The app-level invitation hook is wired, but the persistent-store sharing adapter still needs to accept and import the shared herd.")
+                }
             }
     }
 }
