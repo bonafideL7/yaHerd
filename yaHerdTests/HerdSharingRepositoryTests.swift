@@ -9,8 +9,8 @@ import XCTest
 
 @MainActor
 final class HerdSharingRepositoryTests: XCTestCase {
-    func testReadinessRequiresShareRoot() {
-        let repository = CoreDataHerdSharingRepository()
+    func testReadinessRequiresShareRoot() throws {
+        let repository = try makeRepository()
 
         let readiness = repository.fetchSharingReadiness(
             for: nil,
@@ -21,8 +21,8 @@ final class HerdSharingRepositoryTests: XCTestCase {
         XCTAssertFalse(readiness.shareActionEnabled)
     }
 
-    func testReadinessRequiresICloudStorage() {
-        let repository = CoreDataHerdSharingRepository()
+    func testReadinessRequiresICloudStorage() throws {
+        let repository = try makeRepository()
         let herd = makeHerdSummary()
 
         let readiness = repository.fetchSharingReadiness(
@@ -34,8 +34,8 @@ final class HerdSharingRepositoryTests: XCTestCase {
         XCTAssertFalse(readiness.shareActionEnabled)
     }
 
-    func testICloudReadinessEnablesSharingBridge() {
-        let repository = CoreDataHerdSharingRepository()
+    func testICloudReadinessEnablesSharingBridge() throws {
+        let repository = try makeRepository()
         let herd = makeHerdSummary()
 
         let readiness = repository.fetchSharingReadiness(
@@ -47,8 +47,8 @@ final class HerdSharingRepositoryTests: XCTestCase {
         XCTAssertTrue(readiness.shareActionEnabled)
     }
 
-    func testStartSharingRequiresICloudStorageBeforeLoadingCoreData() async {
-        let repository = CoreDataHerdSharingRepository()
+    func testStartSharingRequiresICloudStorageBeforeLoadingCoreData() async throws {
+        let repository = try makeRepository()
         let herd = makeHerdSummary()
 
         do {
@@ -78,6 +78,12 @@ final class HerdSharingRepositoryTests: XCTestCase {
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
+    }
+
+
+    private func makeRepository() throws -> CoreDataHerdSharingRepository {
+        let container = try TestSupport.makeModelContainer()
+        return CoreDataHerdSharingRepository(context: container.mainContext)
     }
 
     private func makeHerdSummary() -> HerdSummary {
