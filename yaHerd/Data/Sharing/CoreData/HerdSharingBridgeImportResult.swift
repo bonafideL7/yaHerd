@@ -6,89 +6,107 @@
 import Foundation
 
 struct HerdSharingBridgeImportResult: Equatable {
-    let herdName: String
-    let insertedPastureGroupCount: Int
-    let updatedPastureGroupCount: Int
-    let insertedPastureCount: Int
-    let updatedPastureCount: Int
-    let insertedAnimalCount: Int
-    let updatedAnimalCount: Int
-    let insertedMovementCount: Int
-    let updatedMovementCount: Int
-    let insertedStatusRecordCount: Int
-    let updatedStatusRecordCount: Int
-    let insertedHealthRecordCount: Int
-    let updatedHealthRecordCount: Int
-    let insertedPregnancyCheckCount: Int
-    let updatedPregnancyCheckCount: Int
-    let insertedWorkingProtocolTemplateCount: Int
-    let updatedWorkingProtocolTemplateCount: Int
-    let insertedWorkingSessionCount: Int
-    let updatedWorkingSessionCount: Int
-    let insertedWorkingQueueItemCount: Int
-    let updatedWorkingQueueItemCount: Int
-    let insertedWorkingTreatmentRecordCount: Int
-    let updatedWorkingTreatmentRecordCount: Int
-    let insertedFieldCheckSessionCount: Int
-    let updatedFieldCheckSessionCount: Int
-    let insertedFieldCheckAnimalCheckCount: Int
-    let updatedFieldCheckAnimalCheckCount: Int
-    let insertedFieldCheckFindingCount: Int
-    let updatedFieldCheckFindingCount: Int
+  let herdName: String
+  let insertedTagColorDefinitionCount: Int
+  let updatedTagColorDefinitionCount: Int
+  let insertedStatusReferenceCount: Int
+  let updatedStatusReferenceCount: Int
+  let insertedAnimalTagCount: Int
+  let updatedAnimalTagCount: Int
+  let insertedPastureGroupCount: Int
+  let updatedPastureGroupCount: Int
+  let insertedPastureCount: Int
+  let updatedPastureCount: Int
+  let insertedAnimalCount: Int
+  let updatedAnimalCount: Int
+  let insertedMovementCount: Int
+  let updatedMovementCount: Int
+  let insertedStatusRecordCount: Int
+  let updatedStatusRecordCount: Int
+  let insertedHealthRecordCount: Int
+  let updatedHealthRecordCount: Int
+  let insertedPregnancyCheckCount: Int
+  let updatedPregnancyCheckCount: Int
+  let insertedWorkingProtocolTemplateCount: Int
+  let updatedWorkingProtocolTemplateCount: Int
+  let insertedWorkingSessionCount: Int
+  let updatedWorkingSessionCount: Int
+  let insertedWorkingQueueItemCount: Int
+  let updatedWorkingQueueItemCount: Int
+  let insertedWorkingTreatmentRecordCount: Int
+  let updatedWorkingTreatmentRecordCount: Int
+  let insertedFieldCheckSessionCount: Int
+  let updatedFieldCheckSessionCount: Int
+  let insertedFieldCheckAnimalCheckCount: Int
+  let updatedFieldCheckAnimalCheckCount: Int
+  let insertedFieldCheckFindingCount: Int
+  let updatedFieldCheckFindingCount: Int
 
-    var importedPastureGroupCount: Int {
-        insertedPastureGroupCount + updatedPastureGroupCount
-    }
+  var importedTagColorDefinitionCount: Int {
+    insertedTagColorDefinitionCount + updatedTagColorDefinitionCount
+  }
 
-    var importedPastureCount: Int {
-        insertedPastureCount + updatedPastureCount
-    }
+  var importedStatusReferenceCount: Int {
+    insertedStatusReferenceCount + updatedStatusReferenceCount
+  }
 
-    var importedAnimalCount: Int {
-        insertedAnimalCount + updatedAnimalCount
-    }
+  var importedAnimalTagCount: Int {
+    insertedAnimalTagCount + updatedAnimalTagCount
+  }
 
-    var importedMovementCount: Int {
-        insertedMovementCount + updatedMovementCount
-    }
+  var importedPastureGroupCount: Int {
+    insertedPastureGroupCount + updatedPastureGroupCount
+  }
 
-    var importedStatusRecordCount: Int {
-        insertedStatusRecordCount + updatedStatusRecordCount
-    }
+  var importedPastureCount: Int {
+    insertedPastureCount + updatedPastureCount
+  }
 
-    var importedHealthRecordCount: Int {
-        insertedHealthRecordCount + updatedHealthRecordCount
-    }
+  var importedAnimalCount: Int {
+    insertedAnimalCount + updatedAnimalCount
+  }
 
-    var importedPregnancyCheckCount: Int {
-        insertedPregnancyCheckCount + updatedPregnancyCheckCount
-    }
+  var importedMovementCount: Int {
+    insertedMovementCount + updatedMovementCount
+  }
 
-    var importedWorkingProtocolTemplateCount: Int {
-        insertedWorkingProtocolTemplateCount + updatedWorkingProtocolTemplateCount
-    }
+  var importedStatusRecordCount: Int {
+    insertedStatusRecordCount + updatedStatusRecordCount
+  }
 
-    var importedWorkingSessionCount: Int {
-        insertedWorkingSessionCount + updatedWorkingSessionCount
-    }
+  var importedHealthRecordCount: Int {
+    insertedHealthRecordCount + updatedHealthRecordCount
+  }
 
-    var importedWorkingQueueItemCount: Int {
-        insertedWorkingQueueItemCount + updatedWorkingQueueItemCount
-    }
+  var importedPregnancyCheckCount: Int {
+    insertedPregnancyCheckCount + updatedPregnancyCheckCount
+  }
 
-    var importedWorkingTreatmentRecordCount: Int {
-        insertedWorkingTreatmentRecordCount + updatedWorkingTreatmentRecordCount
-    }
+  var importedWorkingProtocolTemplateCount: Int {
+    insertedWorkingProtocolTemplateCount + updatedWorkingProtocolTemplateCount
+  }
 
-    var importedFieldCheckSessionCount: Int {
-        insertedFieldCheckSessionCount + updatedFieldCheckSessionCount
-    }
+  var importedWorkingSessionCount: Int {
+    insertedWorkingSessionCount + updatedWorkingSessionCount
+  }
 
-    var importedFieldCheckAnimalCheckCount: Int {
-        insertedFieldCheckAnimalCheckCount + updatedFieldCheckAnimalCheckCount
-    }
+  var importedWorkingQueueItemCount: Int {
+    insertedWorkingQueueItemCount + updatedWorkingQueueItemCount
+  }
 
-    var importedFieldCheckFindingCount: Int {
-        insertedFieldCheckFindingCount + updatedFieldCheckFindingCount
-    }
+  var importedWorkingTreatmentRecordCount: Int {
+    insertedWorkingTreatmentRecordCount + updatedWorkingTreatmentRecordCount
+  }
+
+  var importedFieldCheckSessionCount: Int {
+    insertedFieldCheckSessionCount + updatedFieldCheckSessionCount
+  }
+
+  var importedFieldCheckAnimalCheckCount: Int {
+    insertedFieldCheckAnimalCheckCount + updatedFieldCheckAnimalCheckCount
+  }
+
+  var importedFieldCheckFindingCount: Int {
+    insertedFieldCheckFindingCount + updatedFieldCheckFindingCount
+  }
 }
