@@ -210,6 +210,76 @@ enum HerdSharingCoreDataModelFactory {
             ]
         )
 
+
+        let fieldCheckSessionEntity = makeEntity(
+            name: SharedFieldCheckSessionRecord.entityName,
+            managedObjectClass: SharedFieldCheckSessionRecord.self,
+            properties: [
+                makeAttribute(name: "publicID", type: .stringAttributeType),
+                makeAttribute(name: "herdPublicID", type: .stringAttributeType),
+                makeAttribute(name: "startedAt", type: .dateAttributeType),
+                makeAttribute(name: "completedAt", type: .dateAttributeType),
+                makeAttribute(name: "notes", type: .stringAttributeType),
+                makeAttribute(name: "expectedHeadCountSnapshot", type: .integer64AttributeType),
+                makeAttribute(name: "quickCowCount", type: .integer64AttributeType),
+                makeAttribute(name: "quickHeiferCount", type: .integer64AttributeType),
+                makeAttribute(name: "quickCalfCount", type: .integer64AttributeType),
+                makeAttribute(name: "quickBullCount", type: .integer64AttributeType),
+                makeAttribute(name: "quickSteerCount", type: .integer64AttributeType),
+                makeAttribute(name: "pastureNameSnapshot", type: .stringAttributeType),
+                makeAttribute(name: "pastureArchivedAt", type: .dateAttributeType),
+                makeAttribute(name: "pasturePublicID", type: .stringAttributeType),
+                makeAttribute(name: "lastMirroredAt", type: .dateAttributeType)
+            ]
+        )
+
+        let fieldCheckAnimalCheckEntity = makeEntity(
+            name: SharedFieldCheckAnimalCheckRecord.entityName,
+            managedObjectClass: SharedFieldCheckAnimalCheckRecord.self,
+            properties: [
+                makeAttribute(name: "publicID", type: .stringAttributeType),
+                makeAttribute(name: "herdPublicID", type: .stringAttributeType),
+                makeAttribute(name: "sessionPublicID", type: .stringAttributeType),
+                makeAttribute(name: "animalPublicID", type: .stringAttributeType),
+                makeAttribute(name: "animalIDSnapshot", type: .stringAttributeType),
+                makeAttribute(name: "rosterTagNumber", type: .stringAttributeType),
+                makeAttribute(name: "rosterTagColorID", type: .stringAttributeType),
+                makeAttribute(name: "damRosterTagNumber", type: .stringAttributeType),
+                makeAttribute(name: "damRosterTagColorID", type: .stringAttributeType),
+                makeAttribute(name: "animalName", type: .stringAttributeType),
+                makeAttribute(name: "animalSexRawValue", type: .stringAttributeType),
+                makeAttribute(name: "animalTypeRawValue", type: .stringAttributeType),
+                makeAttribute(name: "wasExpectedAtStart", type: .booleanAttributeType),
+                makeAttribute(name: "countedAt", type: .dateAttributeType),
+                makeAttribute(name: "missingConfirmedAt", type: .dateAttributeType),
+                makeAttribute(name: "note", type: .stringAttributeType),
+                makeAttribute(name: "lastMirroredAt", type: .dateAttributeType)
+            ]
+        )
+
+        let fieldCheckFindingEntity = makeEntity(
+            name: SharedFieldCheckFindingRecord.entityName,
+            managedObjectClass: SharedFieldCheckFindingRecord.self,
+            properties: [
+                makeAttribute(name: "publicID", type: .stringAttributeType),
+                makeAttribute(name: "herdPublicID", type: .stringAttributeType),
+                makeAttribute(name: "sessionPublicID", type: .stringAttributeType),
+                makeAttribute(name: "animalPublicID", type: .stringAttributeType),
+                makeAttribute(name: "recordedAt", type: .dateAttributeType),
+                makeAttribute(name: "typeRawValue", type: .stringAttributeType),
+                makeAttribute(name: "severityRawValue", type: .stringAttributeType),
+                makeAttribute(name: "statusRawValue", type: .stringAttributeType),
+                makeAttribute(name: "note", type: .stringAttributeType),
+                makeAttribute(name: "animalIDSnapshot", type: .stringAttributeType),
+                makeAttribute(name: "animalDisplayTagNumberSnapshot", type: .stringAttributeType),
+                makeAttribute(name: "animalDisplayTagColorIDSnapshot", type: .stringAttributeType),
+                makeAttribute(name: "animalNameSnapshot", type: .stringAttributeType),
+                makeAttribute(name: "pastureNameSnapshot", type: .stringAttributeType),
+                makeAttribute(name: "sessionIDSnapshot", type: .stringAttributeType),
+                makeAttribute(name: "lastMirroredAt", type: .dateAttributeType)
+            ]
+        )
+
         addToManyRelationship(name: "pastureGroups", from: herdEntity, to: pastureGroupEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
         addToManyRelationship(name: "pastures", from: herdEntity, to: pastureEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
         addToManyRelationship(name: "pastures", from: pastureGroupEntity, to: pastureEntity, inverseName: "group", deleteRule: .nullifyDeleteRule)
@@ -230,6 +300,13 @@ enum HerdSharingCoreDataModelFactory {
         addToManyRelationship(name: "treatmentRecords", from: workingSessionEntity, to: workingTreatmentRecordEntity, inverseName: "session", deleteRule: .cascadeDeleteRule)
         addToManyRelationship(name: "workingQueueItems", from: animalEntity, to: workingQueueItemEntity, inverseName: "animal", deleteRule: .cascadeDeleteRule)
         addToManyRelationship(name: "workingTreatmentRecords", from: animalEntity, to: workingTreatmentRecordEntity, inverseName: "animal", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "fieldCheckSessions", from: herdEntity, to: fieldCheckSessionEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "fieldCheckAnimalChecks", from: herdEntity, to: fieldCheckAnimalCheckEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "fieldCheckFindings", from: herdEntity, to: fieldCheckFindingEntity, inverseName: "herd", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "animalChecks", from: fieldCheckSessionEntity, to: fieldCheckAnimalCheckEntity, inverseName: "session", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "findings", from: fieldCheckSessionEntity, to: fieldCheckFindingEntity, inverseName: "session", deleteRule: .cascadeDeleteRule)
+        addToManyRelationship(name: "fieldCheckAnimalChecks", from: animalEntity, to: fieldCheckAnimalCheckEntity, inverseName: "animal", deleteRule: .nullifyDeleteRule)
+        addToManyRelationship(name: "fieldCheckFindings", from: animalEntity, to: fieldCheckFindingEntity, inverseName: "animal", deleteRule: .nullifyDeleteRule)
 
         model.entities = [
             herdEntity,
@@ -243,7 +320,10 @@ enum HerdSharingCoreDataModelFactory {
             workingProtocolTemplateEntity,
             workingSessionEntity,
             workingQueueItemEntity,
-            workingTreatmentRecordEntity
+            workingTreatmentRecordEntity,
+            fieldCheckSessionEntity,
+            fieldCheckAnimalCheckEntity,
+            fieldCheckFindingEntity
         ]
         return model
     }

@@ -121,10 +121,10 @@ struct HerdCollaborationView: View {
         Section("Core Data Boundary") {
             LabeledContent("App data store", value: "SwiftData")
             LabeledContent("Sharing bridge", value: "Core Data + CloudKit")
-            LabeledContent("Bridge scope", value: "Herd root + pasture groups + pastures + animals + movement/status/health/pregnancy + working data")
+            LabeledContent("Bridge scope", value: "Herd root + pasture groups + pastures + animals + movement/status/health/pregnancy + working data + field checks")
             LabeledContent("SwiftData import", value: "Herd root + pasture groups + pastures + animals + movement/status/health/pregnancy + working data")
 
-            Text("Core Data is intentionally isolated behind the sharing repository. SwiftData remains the app data store. The bridge now mirrors pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working protocol templates, working sessions, queue items, and treatment records into CloudKit sharing and can import those accepted shared records back into SwiftData. Field checks and support records still need bridge mirrors in later passes.")
+            Text("Core Data is intentionally isolated behind the sharing repository. SwiftData remains the app data store. The bridge now mirrors pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working protocol templates, working sessions, queue items, treatment records, and field checks into CloudKit sharing and can import those accepted shared records back into SwiftData. Support records like tag colors, animal tags, and status references still need bridge mirrors in later passes.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -202,7 +202,7 @@ struct HerdCollaborationView: View {
             }
             .disabled(viewModel.isSharingActionInProgress || preferences.syncMode.herdStorageMode != .iCloud)
 
-            Text("Use this after accepting a share or after the Core Data bridge receives remote shared changes. This pass imports the shared herd root, pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working protocol templates, working sessions, queue items, and treatment records into SwiftData so the normal app screens can display them.")
+            Text("Use this after accepting a share or after the Core Data bridge receives remote shared changes. This pass imports the shared herd root, pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working protocol templates, working sessions, queue items, treatment records, and field checks into SwiftData so the normal app screens can display them.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -222,7 +222,7 @@ struct HerdCollaborationView: View {
             }
             .disabled(!viewModel.canStartSharing)
 
-            Text("This mirrors the current SwiftData herd, pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working protocol templates, working sessions, queue items, and treatment records into the isolated Core Data bridge, then opens Apple's CloudKit sharing sheet. It does not move yaHerd's normal app data out of SwiftData.")
+            Text("This mirrors the current SwiftData herd, pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working protocol templates, working sessions, queue items, treatment records, and field checks into the isolated Core Data bridge, then opens Apple's CloudKit sharing sheet. It does not move yaHerd's normal app data out of SwiftData.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

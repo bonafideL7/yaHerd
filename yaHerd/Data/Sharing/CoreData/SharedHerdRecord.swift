@@ -25,6 +25,9 @@ final class SharedHerdRecord: NSManagedObject {
     @NSManaged var workingSessions: Set<SharedWorkingSessionRecord>?
     @NSManaged var workingQueueItems: Set<SharedWorkingQueueItemRecord>?
     @NSManaged var workingTreatmentRecords: Set<SharedWorkingTreatmentRecord>?
+    @NSManaged var fieldCheckSessions: Set<SharedFieldCheckSessionRecord>?
+    @NSManaged var fieldCheckAnimalChecks: Set<SharedFieldCheckAnimalCheckRecord>?
+    @NSManaged var fieldCheckFindings: Set<SharedFieldCheckFindingRecord>?
 }
 
 extension SharedHerdRecord {
