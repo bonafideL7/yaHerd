@@ -279,6 +279,28 @@ struct HerdCollaborationView: View {
           Label("Review Conflict Details", systemImage: "exclamationmark.triangle")
         }
 
+        Button {
+          Task {
+            if let sharingSyncCoordinator {
+              _ = await sharingSyncCoordinator.resolveConflictByKeepingLocalRecords(
+                conflictReview,
+                syncAfterResolution: true
+              )
+              viewModel.loadLatestConflictReview(from: conflictReviewStore)
+            } else {
+              viewModel.resolveConflictByKeepingLocalRecords(
+                conflictReview,
+                in: conflictReviewStore
+              )
+            }
+          }
+        } label: {
+          Label(
+            "Keep Local Records and Sync",
+            systemImage: "arrow.triangle.2.circlepath.icloud")
+        }
+        .disabled(sharingSyncCoordinator?.isSyncing == true)
+
         if !conflictReview.preventedDeleteConflicts.isEmpty {
           DisclosureGroup("Skipped Shared Deletes") {
             ForEach(conflictReview.preventedDeleteConflicts) { conflict in
@@ -341,8 +363,32 @@ struct HerdCollaborationView: View {
         LabeledContent("Last Conflict Report", value: "None")
       }
 
+      if let resolutions = conflictReviewStore?.resolutionHistory, !resolutions.isEmpty {
+        DisclosureGroup("Resolved Conflict Reports") {
+          ForEach(resolutions) { resolution in
+            VStack(alignment: .leading, spacing: 4) {
+              Text(resolution.choice.displayName)
+                .font(.caption.weight(.semibold))
+              Text(resolution.sourceDescription)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+              Text(formattedSyncDate(resolution.resolvedAt))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+              Text(resolution.conflictSummary)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+          }
+        }
+
+        Button("Clear Resolved Conflict History", role: .destructive) {
+          viewModel.clearConflictResolutionHistory(in: conflictReviewStore)
+        }
+      }
+
       Text(
-        "yaHerd now persists conflict reports locally, survives app restarts, keeps a short history of prior reports, and provides a detail screen for skipped shared deletes. This is still conflict reporting and guardrail logic, not a full manual merge UI."
+        "yaHerd now persists conflict reports locally, survives app restarts, keeps a short history of prior reports, provides a detail screen for skipped shared deletes, and can mark a report resolved by keeping local records. This is still not a field-level manual merge UI."
       )
       .font(.caption)
       .foregroundStyle(.secondary)

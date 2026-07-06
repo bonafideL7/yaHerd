@@ -6,6 +6,10 @@
 import SwiftUI
 
 struct HerdSharingConflictReviewDetailView: View {
+  @Environment(\.herdSharingConflictReviewStore) private var conflictReviewStore
+  @Environment(\.herdSharingSyncCoordinator) private var sharingSyncCoordinator
+  @State private var resolutionMessage: String?
+
   let review: HerdSharingConflictReview
 
   var body: some View {
@@ -13,6 +17,7 @@ struct HerdSharingConflictReviewDetailView: View {
       summarySection
       updatedRecordsSection
       skippedDeletesSection
+      resolutionSection
       nextStepsSection
     }
     .navigationTitle("Conflict Report")
@@ -99,6 +104,36 @@ struct HerdSharingConflictReviewDetailView: View {
     }
   }
 
+  private var resolutionSection: some View {
+    Section("Resolution") {
+      Button {
+        Task { await keepLocalRecords(syncAfterResolution: true) }
+      } label: {
+        Label("Keep Local Records and Sync", systemImage: "arrow.triangle.2.circlepath.icloud")
+      }
+      .disabled(!review.hasConflicts || sharingSyncCoordinator?.isSyncing == true)
+
+      Button {
+        Task { await keepLocalRecords(syncAfterResolution: false) }
+      } label: {
+        Label("Mark Kept Locally", systemImage: "checkmark.circle")
+      }
+      .disabled(!review.hasConflicts)
+
+      if let resolutionMessage {
+        Text(resolutionMessage)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+
+      Text(
+        "Keep Local Records resolves this local conflict report and preserves the resolution in Settings history. The sync option immediately runs shared-data sync so the kept local records can be exported back through the Core Data sharing bridge."
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
+    }
+  }
+
   private var nextStepsSection: some View {
     Section("Next Steps") {
       Text(review.recommendedAction)
@@ -106,10 +141,35 @@ struct HerdSharingConflictReviewDetailView: View {
         .foregroundStyle(.secondary)
 
       Text(
-        "This screen is a review surface, not a merge editor. To resolve a skipped delete today, inspect the record ID above, decide whether the local record should stay or be removed, then edit/delete it through the normal yaHerd screen and run Sync Shared Data."
+        "This screen can resolve the report by keeping local records. It still does not provide a field-level merge editor. To accept a collaborator's delete instead, delete the affected record through the normal yaHerd screen and run Sync Shared Data."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
+    }
+  }
+
+  private func keepLocalRecords(syncAfterResolution: Bool) async {
+    if let sharingSyncCoordinator {
+      let resolved = await sharingSyncCoordinator.resolveConflictByKeepingLocalRecords(
+        review,
+        syncAfterResolution: syncAfterResolution
+      )
+      resolutionMessage =
+        resolved
+        ? resolvedMessage(syncAfterResolution: syncAfterResolution)
+        : "The conflict report could not be resolved."
+    } else if conflictReviewStore?.resolve(review, choice: .keepLocalRecords) != nil {
+      resolutionMessage = resolvedMessage(syncAfterResolution: false)
+    } else {
+      resolutionMessage = "The conflict report could not be resolved."
+    }
+  }
+
+  private func resolvedMessage(syncAfterResolution: Bool) -> String {
+    if syncAfterResolution {
+      "Resolved by keeping local records. Shared-data sync was requested."
+    } else {
+      "Resolved by keeping local records. Run Sync Shared Data when ready."
     }
   }
 

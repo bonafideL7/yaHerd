@@ -98,6 +98,64 @@ final class HerdSharingConflictReviewStoreTests: XCTestCase {
     userDefaults.removePersistentDomain(forName: suiteName)
   }
 
+  func testResolveKeepsResolutionHistoryAndRemovesActiveReview() {
+    let suiteName = "HerdSharingConflictReviewStoreTests.resolve.\(UUID().uuidString)"
+    let userDefaults = makeUserDefaults(suiteName: suiteName)
+    let store = HerdSharingConflictReviewStore(
+      userDefaults: userDefaults,
+      storageKey: "conflicts",
+      maxStoredReviews: 5
+    )
+    let review = makeReview(sourceDescription: "Manual sync", seconds: 20)
+    let resolvedAt = Date(timeIntervalSince1970: 30)
+
+    store.record(review)
+    let resolution = store.resolve(
+      review,
+      choice: .keepLocalRecords,
+      resolvedAt: resolvedAt
+    )
+
+    XCTAssertNil(store.latestReview)
+    XCTAssertTrue(store.reviewHistory.isEmpty)
+    XCTAssertEqual(store.resolutionHistory.first, resolution)
+    XCTAssertEqual(store.resolutionHistory.count, 1)
+    XCTAssertEqual(resolution?.reviewID, review.id)
+    XCTAssertEqual(resolution?.choice, .keepLocalRecords)
+    XCTAssertEqual(resolution?.resolvedAt, resolvedAt)
+    userDefaults.removePersistentDomain(forName: suiteName)
+  }
+
+  func testResolvePersistsResolutionAcrossStoreInstances() {
+    let suiteName = "HerdSharingConflictReviewStoreTests.resolvePersist.\(UUID().uuidString)"
+    let userDefaults = makeUserDefaults(suiteName: suiteName)
+    let review = makeReview(sourceDescription: "Manual sync", seconds: 20)
+
+    let firstStore = HerdSharingConflictReviewStore(
+      userDefaults: userDefaults,
+      storageKey: "conflicts",
+      maxStoredReviews: 5
+    )
+    firstStore.record(review)
+    let resolution = firstStore.resolve(
+      review,
+      choice: .keepLocalRecords,
+      resolvedAt: Date(timeIntervalSince1970: 30)
+    )
+
+    let secondStore = HerdSharingConflictReviewStore(
+      userDefaults: userDefaults,
+      storageKey: "conflicts",
+      maxStoredReviews: 5
+    )
+
+    XCTAssertEqual(secondStore.latestReview, nil)
+    XCTAssertEqual(secondStore.reviewHistory, [])
+    XCTAssertEqual(secondStore.resolutionHistory.first, resolution)
+    XCTAssertEqual(secondStore.resolutionHistory.count, 1)
+    userDefaults.removePersistentDomain(forName: suiteName)
+  }
+
   private func makeUserDefaults(suiteName: String) -> UserDefaults {
     let userDefaults = UserDefaults(suiteName: suiteName)!
     userDefaults.removePersistentDomain(forName: suiteName)

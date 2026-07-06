@@ -218,7 +218,25 @@ final class HerdSharingSyncCoordinator {
 
   func clearAllConflictReviews() {
     conflictReviewStore?.clearAllReviews()
-    lastConflictReview = nil
+    lastConflictReview = conflictReviewStore?.latestReview
+  }
+
+  @discardableResult
+  func resolveConflictByKeepingLocalRecords(
+    _ review: HerdSharingConflictReview,
+    syncAfterResolution: Bool
+  ) async -> Bool {
+    guard conflictReviewStore?.resolve(review, choice: .keepLocalRecords) != nil else {
+      lastSkippedReason = "No active conflict report was available to resolve."
+      return false
+    }
+
+    lastConflictReview = conflictReviewStore?.latestReview
+
+    guard syncAfterResolution else { return true }
+
+    _ = await syncNow(trigger: .manual)
+    return true
   }
 
   @discardableResult
