@@ -9,6 +9,7 @@ struct HerdCollaborationView: View {
   @Environment(\.herdRepository) private var herdRepository
   @Environment(\.herdSharingRepository) private var herdSharingRepository
   @Environment(\.cloudKitShareInvitationCoordinator) private var shareInvitationCoordinator
+  @Environment(\.herdSharingSyncCoordinator) private var sharingSyncCoordinator
   @State private var viewModel = HerdCollaborationViewModel()
 
   private let preferences: AppPreferencesProviding
@@ -238,10 +239,16 @@ struct HerdCollaborationView: View {
     Section("Shared Bridge Sync") {
       Button {
         Task {
-          let synced = await viewModel.syncSharedBridgeData(
-            using: sharingRepository,
-            storageMode: preferences.syncMode.herdStorageMode
-          )
+          let synced: Bool
+          if let sharingSyncCoordinator {
+            synced = await sharingSyncCoordinator.syncNow(trigger: .manual)
+          } else {
+            synced = await viewModel.syncSharedBridgeData(
+              using: sharingRepository,
+              storageMode: preferences.syncMode.herdStorageMode
+            )
+          }
+
           if synced {
             viewModel.load(
               herdRepository: herdRepository,
@@ -254,11 +261,38 @@ struct HerdCollaborationView: View {
         Label("Sync Shared Data", systemImage: "arrow.triangle.2.circlepath.icloud")
       }
       .disabled(
-        viewModel.isSharingActionInProgress || viewModel.herd == nil
-          || preferences.syncMode.herdStorageMode != .iCloud)
+        viewModel.isSharingActionInProgress || sharingSyncCoordinator?.isSyncing == true
+          || viewModel.herd == nil || preferences.syncMode.herdStorageMode != .iCloud)
+
+      if let sharingSyncCoordinator {
+        LabeledContent(
+          "Lifecycle Sync",
+          value: sharingSyncCoordinator.isSyncing ? "Running" : "Idle"
+        )
+
+        if let trigger = sharingSyncCoordinator.lastTriggerDescription {
+          LabeledContent("Last Trigger", value: trigger)
+        }
+
+        if let lastFinishedAt = sharingSyncCoordinator.lastFinishedAt {
+          LabeledContent("Last Finished", value: formattedSyncDate(lastFinishedAt))
+        }
+
+        if let lastSkippedReason = sharingSyncCoordinator.lastSkippedReason {
+          Text(lastSkippedReason)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+
+        if let lastErrorMessage = sharingSyncCoordinator.lastErrorMessage {
+          Text(lastErrorMessage)
+            .font(.caption)
+            .foregroundStyle(.red)
+        }
+      }
 
       Text(
-        "Exports the current SwiftData herd into the Core Data sharing bridge, then imports available accepted shared records back into SwiftData. Owners write through the private bridge store. Collaborators write through the accepted shared bridge store when that herd exists there."
+        "Exports the current SwiftData herd into the Core Data sharing bridge, then imports available accepted shared records back into SwiftData. This now also runs automatically on app launch and when the app returns to the foreground, with debounce/throttle protection so CloudKit is not hammered."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -285,6 +319,10 @@ struct HerdCollaborationView: View {
       .font(.caption)
       .foregroundStyle(.secondary)
     }
+  }
+
+  private func formattedSyncDate(_ date: Date) -> String {
+    date.formatted(date: .abbreviated, time: .standard)
   }
 
   private var readinessMessage: String {

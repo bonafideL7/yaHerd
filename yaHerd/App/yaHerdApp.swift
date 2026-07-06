@@ -266,6 +266,7 @@ private struct RunningAppView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var tagColorLibrary: TagColorLibraryStore
     @State private var cloudKitShareInvitationCoordinator = CloudKitShareInvitationCoordinator()
+    @State private var herdSharingSyncCoordinator: HerdSharingSyncCoordinator
     @State private var showsPendingCloudKitShareInvitation = false
 
     private let runtime: AppRuntime
@@ -277,6 +278,13 @@ private struct RunningAppView: View {
         self._tagColorLibrary = StateObject(
             wrappedValue: TagColorLibraryStore(
                 repository: runtime.dependencies.tagColorRepository
+            )
+        )
+        self._herdSharingSyncCoordinator = State(
+            initialValue: HerdSharingSyncCoordinator(
+                herdRepository: runtime.dependencies.herdRepository,
+                sharingRepository: runtime.dependencies.herdSharingRepository,
+                storageMode: runtime.syncMode.herdStorageMode
             )
         )
     }
@@ -291,6 +299,7 @@ private struct RunningAppView: View {
             .environment(\.herdRepository, runtime.dependencies.herdRepository)
             .environment(\.herdSharingRepository, runtime.dependencies.herdSharingRepository)
             .environment(\.cloudKitShareInvitationCoordinator, cloudKitShareInvitationCoordinator)
+            .environment(\.herdSharingSyncCoordinator, herdSharingSyncCoordinator)
             .environment(\.animalListRepository, runtime.dependencies.animalRepository)
             .environment(\.animalEditorRepository, runtime.dependencies.animalRepository)
             .environment(\.animalDetailRepository, runtime.dependencies.animalRepository)
@@ -325,10 +334,14 @@ private struct RunningAppView: View {
             .environment(\.pastureReferenceDataReader, runtime.dependencies.pastureRepository)
             .environment(\.sampleDataSeeder, runtime.dependencies.sampleDataSeeder)
             .modelContainer(runtime.modelContainer)
+            .task {
+                herdSharingSyncCoordinator.requestAutomaticSync(trigger: .appLaunch)
+            }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     appSettingsSynchronizer.refreshFromICloudIfStarted()
                     tagColorLibrary.refresh()
+                    herdSharingSyncCoordinator.requestAutomaticSync(trigger: .appForeground)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .yaHerdCloudKitShareAccepted)) { notification in
