@@ -31,6 +31,7 @@ final class SharedHerdRecord: NSManagedObject {
   @NSManaged var fieldCheckSessions: Set<SharedFieldCheckSessionRecord>?
   @NSManaged var fieldCheckAnimalChecks: Set<SharedFieldCheckAnimalCheckRecord>?
   @NSManaged var fieldCheckFindings: Set<SharedFieldCheckFindingRecord>?
+  @NSManaged var deletedRecords: Set<SharedDeletedRecord>?
 }
 
 extension SharedHerdRecord {

@@ -31,6 +31,7 @@ final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
     let fieldCheckAnimalCheckEntity = model.entitiesByName[
       SharedFieldCheckAnimalCheckRecord.entityName]
     let fieldCheckFindingEntity = model.entitiesByName[SharedFieldCheckFindingRecord.entityName]
+    let deletedRecordEntity = model.entitiesByName[SharedDeletedRecord.entityName]
 
     XCTAssertNotNil(herdEntity)
     XCTAssertNotNil(tagColorDefinitionEntity)
@@ -50,6 +51,7 @@ final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
     XCTAssertNotNil(fieldCheckSessionEntity)
     XCTAssertNotNil(fieldCheckAnimalCheckEntity)
     XCTAssertNotNil(fieldCheckFindingEntity)
+    XCTAssertNotNil(deletedRecordEntity)
     XCTAssertNotNil(herdEntity?.propertiesByName["tagColorDefinitions"])
     XCTAssertNotNil(herdEntity?.propertiesByName["statusReferences"])
     XCTAssertNotNil(herdEntity?.propertiesByName["animalTags"])
@@ -67,6 +69,7 @@ final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
     XCTAssertNotNil(herdEntity?.propertiesByName["fieldCheckSessions"])
     XCTAssertNotNil(herdEntity?.propertiesByName["fieldCheckAnimalChecks"])
     XCTAssertNotNil(herdEntity?.propertiesByName["fieldCheckFindings"])
+    XCTAssertNotNil(herdEntity?.propertiesByName["deletedRecords"])
     XCTAssertNotNil(tagColorDefinitionEntity?.propertiesByName["red"])
     XCTAssertNotNil(tagColorDefinitionEntity?.propertiesByName["isDefault"])
     XCTAssertNotNil(statusReferenceEntity?.propertiesByName["baseStatusRawValue"])
@@ -109,6 +112,22 @@ final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
     XCTAssertNotNil(fieldCheckAnimalCheckEntity?.propertiesByName["animalPublicID"])
     XCTAssertNotNil(fieldCheckFindingEntity?.propertiesByName["sessionPublicID"])
     XCTAssertNotNil(fieldCheckFindingEntity?.propertiesByName["animalPublicID"])
+    XCTAssertNotNil(deletedRecordEntity?.propertiesByName["sourceEntityName"])
+    XCTAssertNotNil(deletedRecordEntity?.propertiesByName["deletedAt"])
+  }
+
+  func testHerdDeletedRecordsRelationshipIsInverseOfDeletedRecordHerdRelationship() {
+    let model = HerdSharingCoreDataModelFactory.makeModel()
+
+    let herdDeletedRecords = model.entitiesByName[SharedHerdRecord.entityName]?
+      .relationshipsByName["deletedRecords"]
+    let deletedRecordHerd = model.entitiesByName[SharedDeletedRecord.entityName]?
+      .relationshipsByName["herd"]
+
+    XCTAssertEqual(herdDeletedRecords?.destinationEntity?.name, SharedDeletedRecord.entityName)
+    XCTAssertEqual(deletedRecordHerd?.destinationEntity?.name, SharedHerdRecord.entityName)
+    XCTAssertTrue(herdDeletedRecords?.inverseRelationship === deletedRecordHerd)
+    XCTAssertTrue(deletedRecordHerd?.inverseRelationship === herdDeletedRecords)
   }
 
   func testHerdPastureGroupsRelationshipIsInverseOfPastureGroupHerdRelationship() {

@@ -330,6 +330,18 @@ enum HerdSharingCoreDataModelFactory {
       ]
     )
 
+    let deletedRecordEntity = makeEntity(
+      name: SharedDeletedRecord.entityName,
+      managedObjectClass: SharedDeletedRecord.self,
+      properties: [
+        makeAttribute(name: "publicID", type: .stringAttributeType),
+        makeAttribute(name: "herdPublicID", type: .stringAttributeType),
+        makeAttribute(name: "sourceEntityName", type: .stringAttributeType),
+        makeAttribute(name: "deletedAt", type: .dateAttributeType),
+        makeAttribute(name: "lastMirroredAt", type: .dateAttributeType),
+      ]
+    )
+
     addToManyRelationship(
       name: "tagColorDefinitions", from: herdEntity, to: tagColorDefinitionEntity,
       inverseName: "herd", deleteRule: .cascadeDeleteRule)
@@ -423,6 +435,9 @@ enum HerdSharingCoreDataModelFactory {
     addToManyRelationship(
       name: "fieldCheckFindings", from: animalEntity, to: fieldCheckFindingEntity,
       inverseName: "animal", deleteRule: .nullifyDeleteRule)
+    addToManyRelationship(
+      name: "deletedRecords", from: herdEntity, to: deletedRecordEntity, inverseName: "herd",
+      deleteRule: .cascadeDeleteRule)
 
     model.entities = [
       herdEntity,
@@ -443,6 +458,7 @@ enum HerdSharingCoreDataModelFactory {
       fieldCheckSessionEntity,
       fieldCheckAnimalCheckEntity,
       fieldCheckFindingEntity,
+      deletedRecordEntity,
     ]
     return model
   }

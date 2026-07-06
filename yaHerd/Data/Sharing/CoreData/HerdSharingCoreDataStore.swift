@@ -155,6 +155,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords
     where !mirroredDefinitionIDs.contains(staleRecord.publicID ?? "") {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedTagColorDefinitionRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -202,6 +209,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords
     where !mirroredReferenceIDs.contains(staleRecord.publicID ?? "") {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedAnimalStatusReferenceRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -249,6 +263,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords where !mirroredAnimalIDs.contains(staleRecord.publicID ?? "")
     {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedAnimalRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -303,6 +324,13 @@ final class HerdSharingCoreDataStore {
     }
 
     for staleRecord in existingRecords where !mirroredTagIDs.contains(staleRecord.publicID ?? "") {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedAnimalTagRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -350,6 +378,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords where !mirroredGroupIDs.contains(staleRecord.publicID ?? "")
     {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedPastureGroupRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -405,6 +440,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords
     where !mirroredPastureIDs.contains(staleRecord.publicID ?? "") {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedPastureRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -460,6 +502,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords
     where !mirroredMovementIDs.contains(staleRecord.publicID ?? "") {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedMovementRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -515,6 +564,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords
     where !mirroredStatusRecordIDs.contains(staleRecord.publicID ?? "") {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedStatusRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -570,6 +626,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords
     where !mirroredHealthRecordIDs.contains(staleRecord.publicID ?? "") {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedHealthRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -625,6 +688,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords
     where !mirroredPregnancyCheckIDs.contains(staleRecord.publicID ?? "") {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedPregnancyCheckRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -673,6 +743,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords
     where !mirroredTemplateIDs.contains(staleRecord.publicID ?? "") {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedWorkingProtocolTemplateRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -721,6 +798,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords
     where !mirroredSessionIDs.contains(staleRecord.publicID ?? "") {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedWorkingSessionRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -785,6 +869,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords
     where !mirroredQueueItemIDs.contains(staleRecord.publicID ?? "") {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedWorkingQueueItemRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -851,6 +942,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords
     where !mirroredTreatmentRecordIDs.contains(staleRecord.publicID ?? "") {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedWorkingTreatmentRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -899,6 +997,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords
     where !mirroredSessionIDs.contains(staleRecord.publicID ?? "") {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedFieldCheckSessionRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -963,6 +1068,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords where !mirroredCheckIDs.contains(staleRecord.publicID ?? "")
     {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedFieldCheckAnimalCheckRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -1027,6 +1139,13 @@ final class HerdSharingCoreDataStore {
 
     for staleRecord in existingRecords
     where !mirroredFindingIDs.contains(staleRecord.publicID ?? "") {
+      try recordDeletionForStaleRecord(
+        staleRecord,
+        sourceEntityName: SharedFieldCheckFindingRecord.entityName,
+        herd: herd,
+        herdRecord: herdRecord,
+        in: privateStore
+      )
       context.delete(staleRecord)
     }
 
@@ -1035,6 +1154,38 @@ final class HerdSharingCoreDataStore {
     }
 
     return mirroredRecords
+  }
+
+  private func recordDeletionForStaleRecord(
+    _ staleRecord: NSManagedObject,
+    sourceEntityName: String,
+    herd: HerdSummary,
+    herdRecord: SharedHerdRecord,
+    in store: NSPersistentStore
+  ) throws {
+    guard let publicID = staleRecord.value(forKey: "publicID") as? String,
+      !publicID.isEmpty
+    else { return }
+
+    let context = persistentContainer.viewContext
+    let existingTombstone = try fetchSharedDeletedRecord(
+      publicID: publicID,
+      sourceEntityName: sourceEntityName,
+      herdPublicID: herd.publicID,
+      in: store
+    )
+    let tombstone = existingTombstone ?? SharedDeletedRecord(context: context)
+
+    if existingTombstone == nil {
+      context.assign(tombstone, to: store)
+    }
+
+    tombstone.mirrorDeletion(
+      publicID: publicID,
+      herdPublicID: herd.publicID,
+      sourceEntityName: sourceEntityName
+    )
+    tombstone.herd = herdRecord
   }
 
   func makeSystemShare(
@@ -1153,6 +1304,14 @@ final class HerdSharingCoreDataStore {
       sessionRecords: sharedFieldCheckSessions,
       animalRecords: animalRecords
     )
+    guard let privateStore else {
+      throw HerdSharingActionError.sharingStoreUnavailable(
+        "The private sharing bridge store was not loaded.")
+    }
+    let sharedDeletedRecords = try fetchSharedDeletedRecords(
+      herdPublicID: herd.publicID,
+      in: privateStore
+    )
     let recordsToShare: [NSManagedObject] =
       [record as NSManagedObject] + sharedTagColorDefinitions.map { $0 as NSManagedObject }
       + sharedStatusReferences.map { $0 as NSManagedObject }
@@ -1170,6 +1329,7 @@ final class HerdSharingCoreDataStore {
       + sharedFieldCheckSessions.map { $0 as NSManagedObject }
       + sharedFieldCheckAnimalChecks.map { $0 as NSManagedObject }
       + sharedFieldCheckFindings.map { $0 as NSManagedObject }
+      + sharedDeletedRecords.map { $0 as NSManagedObject }
     let share = try await shareRecords(recordsToShare, title: herd.name)
 
     return HerdSystemShare(
@@ -1351,6 +1511,15 @@ final class HerdSharingCoreDataStore {
       herd: herd,
       in: swiftDataContext
     )
+    let sharedDeletedRecords = try fetchSharedDeletedRecords(
+      herdPublicID: herdPublicID,
+      in: sharedStore
+    )
+    let deletedRecordCount = try deleteSwiftDataRecords(
+      from: sharedDeletedRecords,
+      herd: herd,
+      in: swiftDataContext
+    )
 
     if swiftDataContext.hasChanges {
       try swiftDataContext.save()
@@ -1391,7 +1560,8 @@ final class HerdSharingCoreDataStore {
       insertedFieldCheckAnimalCheckCount: fieldCheckAnimalCheckResult.inserted,
       updatedFieldCheckAnimalCheckCount: fieldCheckAnimalCheckResult.updated,
       insertedFieldCheckFindingCount: fieldCheckFindingResult.inserted,
-      updatedFieldCheckFindingCount: fieldCheckFindingResult.updated
+      updatedFieldCheckFindingCount: fieldCheckFindingResult.updated,
+      deletedRecordCount: deletedRecordCount
     )
   }
 
@@ -2805,6 +2975,143 @@ final class HerdSharingCoreDataStore {
     finding.sessionIDSnapshot = sharedRecord.parsedSessionIDSnapshot ?? session.publicID
   }
 
+  private func deleteSwiftDataRecords(
+    from tombstones: [SharedDeletedRecord],
+    herd: Herd,
+    in context: ModelContext
+  ) throws -> Int {
+    var deletedCount = 0
+    let orderedTombstones = tombstones.sorted { lhs, rhs in
+      deletionPriority(for: lhs.sourceEntityName) < deletionPriority(for: rhs.sourceEntityName)
+    }
+
+    for tombstone in orderedTombstones {
+      guard let publicID = tombstone.parsedPublicID,
+        let sourceEntityName = tombstone.sourceEntityName
+      else { continue }
+
+      if try deleteSwiftDataRecord(
+        sourceEntityName: sourceEntityName,
+        publicID: publicID,
+        herd: herd,
+        in: context
+      ) {
+        deletedCount += 1
+      }
+    }
+
+    return deletedCount
+  }
+
+  private func deleteSwiftDataRecord(
+    sourceEntityName: String,
+    publicID: UUID,
+    herd: Herd,
+    in context: ModelContext
+  ) throws -> Bool {
+    switch sourceEntityName {
+    case SharedAnimalTagRecord.entityName:
+      return try deleteSwiftDataRecord(
+        AnimalTag.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedMovementRecord.entityName:
+      return try deleteSwiftDataRecord(
+        MovementRecord.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedStatusRecord.entityName:
+      return try deleteSwiftDataRecord(
+        StatusRecord.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedHealthRecord.entityName:
+      return try deleteSwiftDataRecord(
+        HealthRecord.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedPregnancyCheckRecord.entityName:
+      return try deleteSwiftDataRecord(
+        PregnancyCheck.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedWorkingQueueItemRecord.entityName:
+      return try deleteSwiftDataRecord(
+        WorkingQueueItem.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedWorkingTreatmentRecord.entityName:
+      return try deleteSwiftDataRecord(
+        WorkingTreatmentRecord.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedFieldCheckAnimalCheckRecord.entityName:
+      return try deleteSwiftDataRecord(
+        FieldCheckAnimalCheck.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedFieldCheckFindingRecord.entityName:
+      return try deleteSwiftDataRecord(
+        FieldCheckFinding.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedFieldCheckSessionRecord.entityName:
+      return try deleteSwiftDataRecord(
+        FieldCheckSession.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedWorkingSessionRecord.entityName:
+      return try deleteSwiftDataRecord(
+        WorkingSession.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedWorkingProtocolTemplateRecord.entityName:
+      return try deleteSwiftDataRecord(
+        WorkingProtocolTemplate.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedAnimalRecord.entityName:
+      return try deleteSwiftDataRecord(
+        Animal.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedPastureRecord.entityName:
+      return try deleteSwiftDataRecord(
+        Pasture.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedPastureGroupRecord.entityName:
+      return try deleteSwiftDataRecord(
+        PastureGroup.self, publicID: publicID, keyPath: \.publicID, in: context)
+    case SharedAnimalStatusReferenceRecord.entityName:
+      return try deleteSwiftDataRecord(
+        AnimalStatusReference.self, publicID: publicID, keyPath: \.id, in: context)
+    case SharedTagColorDefinitionRecord.entityName:
+      return try deleteSwiftDataRecord(
+        TagColorDefinition.self, publicID: publicID, keyPath: \.id, in: context)
+    default:
+      return false
+    }
+  }
+
+  private func deleteSwiftDataRecord<T: PersistentModel>(
+    _ modelType: T.Type,
+    publicID: UUID,
+    keyPath: KeyPath<T, UUID>,
+    in context: ModelContext
+  ) throws -> Bool {
+    guard
+      let record = try context.fetch(FetchDescriptor<T>()).first(where: { record in
+        record[keyPath: keyPath] == publicID
+      })
+    else { return false }
+
+    context.delete(record)
+    return true
+  }
+
+  private func deletionPriority(for sourceEntityName: String?) -> Int {
+    switch sourceEntityName {
+    case SharedAnimalTagRecord.entityName,
+      SharedMovementRecord.entityName,
+      SharedStatusRecord.entityName,
+      SharedHealthRecord.entityName,
+      SharedPregnancyCheckRecord.entityName,
+      SharedWorkingQueueItemRecord.entityName,
+      SharedWorkingTreatmentRecord.entityName,
+      SharedFieldCheckAnimalCheckRecord.entityName,
+      SharedFieldCheckFindingRecord.entityName:
+      return 0
+    case SharedFieldCheckSessionRecord.entityName,
+      SharedWorkingSessionRecord.entityName:
+      return 1
+    case SharedWorkingProtocolTemplateRecord.entityName:
+      return 2
+    case SharedAnimalRecord.entityName:
+      return 3
+    case SharedPastureRecord.entityName:
+      return 4
+    case SharedPastureGroupRecord.entityName,
+      SharedAnimalStatusReferenceRecord.entityName,
+      SharedTagColorDefinitionRecord.entityName:
+      return 5
+    default:
+      return 10
+    }
+  }
+
   private func fetchSwiftDataHerd(
     publicID: UUID,
     in context: ModelContext
@@ -3005,6 +3312,34 @@ final class HerdSharingCoreDataStore {
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
     return try persistentContainer.viewContext.fetch(request)
+  }
+
+  private func fetchSharedDeletedRecords(
+    herdPublicID: UUID,
+    in store: NSPersistentStore
+  ) throws -> [SharedDeletedRecord] {
+    let request = SharedDeletedRecord.fetchRequest()
+    request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
+    request.affectedStores = [store]
+    return try persistentContainer.viewContext.fetch(request)
+  }
+
+  private func fetchSharedDeletedRecord(
+    publicID: String,
+    sourceEntityName: String,
+    herdPublicID: UUID,
+    in store: NSPersistentStore
+  ) throws -> SharedDeletedRecord? {
+    let request = SharedDeletedRecord.fetchRequest()
+    request.fetchLimit = 1
+    request.predicate = NSPredicate(
+      format: "publicID == %@ AND sourceEntityName == %@ AND herdPublicID == %@",
+      publicID,
+      sourceEntityName,
+      herdPublicID.uuidString
+    )
+    request.affectedStores = [store]
+    return try persistentContainer.viewContext.fetch(request).first
   }
 
   private func store(named fileName: String) -> NSPersistentStore? {
