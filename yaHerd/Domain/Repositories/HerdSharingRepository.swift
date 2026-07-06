@@ -5,25 +5,30 @@
 
 @MainActor
 protocol HerdSharingRepository: AnyObject {
-    func fetchSharingReadiness(
-        for herd: HerdSummary?,
-        storageMode: HerdStorageMode
-    ) -> HerdSharingReadiness
+  func fetchSharingReadiness(
+    for herd: HerdSummary?,
+    storageMode: HerdStorageMode
+  ) -> HerdSharingReadiness
 
-    func startSharing(
-        herd: HerdSummary,
-        storageMode: HerdStorageMode
-    ) async throws -> HerdSharingActionResult
+  func fetchSharingAccess(
+    for herd: HerdSummary?,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingAccess
 
-    func acceptShareInvitation(
-        _ invitation: HerdShareInvitation,
-        storageMode: HerdStorageMode
-    ) async throws -> HerdSharingActionResult
+  func startSharing(
+    herd: HerdSummary,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult
 
-    func importSharedBridgeData(storageMode: HerdStorageMode) async throws -> HerdSharingActionResult
+  func acceptShareInvitation(
+    _ invitation: HerdShareInvitation,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult
 
-    func syncSharedBridgeData(
-        herd: HerdSummary?,
-        storageMode: HerdStorageMode
-    ) async throws -> HerdSharingActionResult
+  func importSharedBridgeData(storageMode: HerdStorageMode) async throws -> HerdSharingActionResult
+
+  func syncSharedBridgeData(
+    herd: HerdSummary?,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult
 }

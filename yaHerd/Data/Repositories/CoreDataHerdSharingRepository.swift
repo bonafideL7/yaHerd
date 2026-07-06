@@ -35,6 +35,21 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     }
   }
 
+  func fetchSharingAccess(
+    for herd: HerdSummary?,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingAccess {
+    guard storageMode == .iCloud else {
+      throw HerdSharingActionError.iCloudSyncRequired
+    }
+
+    guard let herd else {
+      throw HerdSharingActionError.shareRootMissing
+    }
+
+    return try await store.fetchSharingAccess(for: herd)
+  }
+
   func startSharing(
     herd: HerdSummary,
     storageMode: HerdStorageMode
@@ -140,6 +155,11 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       throw HerdSharingActionError.shareRootMissing
     }
 
+    let access = try await store.fetchSharingAccess(for: herd)
+    guard access.canExportLocalChangesToBridge else {
+      return try await importOnlySyncResult(access: access)
+    }
+
     let tagColorDefinitions = try fetchSwiftDataTagColorDefinitions(for: herd)
     let statusReferences = try fetchSwiftDataStatusReferences(for: herd)
     let pastureGroups = try fetchSwiftDataPastureGroups(for: herd)
@@ -189,7 +209,8 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
         "No accepted shared-store records were available to import. This is expected before accepting a share or before CloudKit finishes downloading shared records."
     }
 
-    let cloudKitMessage = exportResult.didUpdateExistingCloudKitShare
+    let cloudKitMessage =
+      exportResult.didUpdateExistingCloudKitShare
       ? "Existing CloudKit share membership was updated with the mirrored records."
       : "No existing owner-side CKShare needed updating; records were saved into the \(exportResult.writeTargetDescription)."
 
@@ -198,6 +219,25 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       message:
         "Exported \(exportResult.exportedRecordCount) bridge records for \(exportResult.herdName) into the \(exportResult.writeTargetDescription). \(cloudKitMessage) \(importMessage)"
     )
+  }
+
+  private func importOnlySyncResult(
+    access: HerdSharingAccess
+  ) async throws -> HerdSharingActionResult {
+    do {
+      let importResult = try await store.importSharedRecordsIntoSwiftData(context: context)
+      return HerdSharingActionResult(
+        title: "Shared data imported",
+        message:
+          "Your CloudKit share access is \(access.permissionDescription) in the \(access.locationDescription), so yaHerd did not export local SwiftData changes back into the shared bridge. Imported \(importResult.importedTagColorDefinitionCount) tag color definitions, \(importResult.importedStatusReferenceCount) custom status references, \(importResult.importedPastureGroupCount) pasture groups, \(importResult.importedPastureCount) pastures, \(importResult.importedAnimalCount) animals, \(importResult.importedAnimalTagCount) animal tags, \(importResult.importedMovementCount) movement records, \(importResult.importedStatusRecordCount) status history records, \(importResult.importedHealthRecordCount) health records, \(importResult.importedPregnancyCheckCount) pregnancy checks, \(importResult.importedWorkingProtocolTemplateCount) working protocol templates, \(importResult.importedWorkingSessionCount) working sessions, \(importResult.importedWorkingQueueItemCount) queue items, \(importResult.importedWorkingTreatmentRecordCount) treatment records, \(importResult.importedFieldCheckSessionCount) field check sessions, \(importResult.importedFieldCheckAnimalCheckCount) field check animal checks, and \(importResult.importedFieldCheckFindingCount) field check findings from shared bridge records. Applied \(importResult.deletedRecordCount) shared deletions."
+      )
+    } catch HerdSharingActionError.bridgeImportFailed(_) {
+      return HerdSharingActionResult(
+        title: "Shared data not exported",
+        message:
+          "Your CloudKit share access is \(access.permissionDescription) in the \(access.locationDescription), so yaHerd did not export local SwiftData changes back into the shared bridge. No accepted shared-store records were available to import yet."
+      )
+    }
   }
 
   private func fetchSwiftDataTagColorDefinitions(for herd: HerdSummary) throws

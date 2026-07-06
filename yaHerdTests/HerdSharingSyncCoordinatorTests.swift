@@ -70,7 +70,6 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
     XCTAssertEqual(coordinator.lastTriggerDescription, "app foreground")
   }
 
-
   func testDataMutationSyncBypassesLifecycleThrottle() async throws {
     let herdRepository = StubHerdRepository(herd: makeHerdSummary())
     let sharingRepository = RecordingHerdSharingRepository()
@@ -155,6 +154,13 @@ private final class RecordingHerdSharingRepository: HerdSharingRepository {
     storageMode: HerdStorageMode
   ) -> HerdSharingReadiness {
     .sharingAdapterAvailable
+  }
+
+  func fetchSharingAccess(
+    for herd: HerdSummary?,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingAccess {
+    .localOwnerBridgePending
   }
 
   func startSharing(

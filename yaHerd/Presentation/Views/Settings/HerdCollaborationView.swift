@@ -26,6 +26,7 @@ struct HerdCollaborationView: View {
           sharingRepository: herdSharingRepository
         )
         readinessSection
+        sharingAccessSection(sharingRepository: herdSharingRepository)
         coreDataBoundarySection
         shareInvitationSection(
           herdRepository: herdRepository,
@@ -58,6 +59,10 @@ struct HerdCollaborationView: View {
       viewModel.load(
         herdRepository: herdRepository,
         sharingRepository: herdSharingRepository,
+        storageMode: preferences.syncMode.herdStorageMode
+      )
+      await viewModel.refreshSharingAccess(
+        using: herdSharingRepository,
         storageMode: preferences.syncMode.herdStorageMode
       )
     }
@@ -126,6 +131,46 @@ struct HerdCollaborationView: View {
     }
   }
 
+  private func sharingAccessSection(sharingRepository: any HerdSharingRepository) -> some View {
+    Section("Sharing Access") {
+      if let access = viewModel.sharingAccess {
+        LabeledContent("Bridge Location", value: access.locationDescription)
+        LabeledContent("Permission", value: access.permissionDescription)
+        LabeledContent("Participants", value: access.participantDescription)
+        LabeledContent(
+          "Can Export Local Edits",
+          value: access.canExportLocalChangesToBridge ? "Yes" : "No"
+        )
+      } else {
+        LabeledContent("Permission", value: "Unknown")
+      }
+
+      if let sharingAccessMessage = viewModel.sharingAccessMessage {
+        Text(sharingAccessMessage)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+
+      Button {
+        Task {
+          await viewModel.refreshSharingAccess(
+            using: sharingRepository,
+            storageMode: preferences.syncMode.herdStorageMode
+          )
+        }
+      } label: {
+        Label("Refresh Access", systemImage: "person.crop.circle.badge.checkmark")
+      }
+      .disabled(viewModel.herd == nil || preferences.syncMode.herdStorageMode != .iCloud)
+
+      Text(
+        "Read-only CloudKit participants can import shared changes, but yaHerd will not export their local SwiftData edits back into the shared bridge."
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
+    }
+  }
+
   private var coreDataBoundarySection: some View {
     Section("Core Data Boundary") {
       LabeledContent("App data store", value: "SwiftData")
@@ -176,6 +221,10 @@ struct HerdCollaborationView: View {
                 sharingRepository: sharingRepository,
                 storageMode: preferences.syncMode.herdStorageMode
               )
+              await viewModel.refreshSharingAccess(
+                using: sharingRepository,
+                storageMode: preferences.syncMode.herdStorageMode
+              )
             }
           }
         } label: {
@@ -216,6 +265,10 @@ struct HerdCollaborationView: View {
               sharingRepository: sharingRepository,
               storageMode: preferences.syncMode.herdStorageMode
             )
+            await viewModel.refreshSharingAccess(
+              using: sharingRepository,
+              storageMode: preferences.syncMode.herdStorageMode
+            )
           }
         }
       } label: {
@@ -253,6 +306,10 @@ struct HerdCollaborationView: View {
             viewModel.load(
               herdRepository: herdRepository,
               sharingRepository: sharingRepository,
+              storageMode: preferences.syncMode.herdStorageMode
+            )
+            await viewModel.refreshSharingAccess(
+              using: sharingRepository,
               storageMode: preferences.syncMode.herdStorageMode
             )
           }
