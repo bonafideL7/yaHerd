@@ -42,6 +42,7 @@ final class HerdSharingSyncCoordinator {
   private let herdRepository: any HerdRepository
   private let sharingRepository: any HerdSharingRepository
   private let storageMode: HerdStorageMode
+  private let writePolicy: HerdCollaborationWritePolicy?
   private let automaticDebounceNanoseconds: UInt64
   private let minimumAutomaticSyncInterval: TimeInterval
 
@@ -61,12 +62,14 @@ final class HerdSharingSyncCoordinator {
     herdRepository: any HerdRepository,
     sharingRepository: any HerdSharingRepository,
     storageMode: HerdStorageMode,
+    writePolicy: HerdCollaborationWritePolicy? = nil,
     automaticDebounceNanoseconds: UInt64 = 3_000_000_000,
     minimumAutomaticSyncInterval: TimeInterval = 60
   ) {
     self.herdRepository = herdRepository
     self.sharingRepository = sharingRepository
     self.storageMode = storageMode
+    self.writePolicy = writePolicy
     self.automaticDebounceNanoseconds = automaticDebounceNanoseconds
     self.minimumAutomaticSyncInterval = minimumAutomaticSyncInterval
   }
@@ -165,6 +168,11 @@ final class HerdSharingSyncCoordinator {
 
     do {
       let herd = try LoadCurrentHerdUseCase(repository: herdRepository).execute()
+      let access = try await LoadHerdSharingAccessUseCase(repository: sharingRepository).execute(
+        herd: herd,
+        storageMode: storageMode
+      )
+      writePolicy?.update(access: access)
       let result = try await SyncSharedHerdDataUseCase(repository: sharingRepository).execute(
         herd: herd,
         storageMode: storageMode

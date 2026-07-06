@@ -53,7 +53,8 @@ final class HerdCollaborationViewModel {
 
   func refreshSharingAccess(
     using sharingRepository: any HerdSharingRepository,
-    storageMode: HerdStorageMode
+    storageMode: HerdStorageMode,
+    writePolicy: HerdCollaborationWritePolicy? = nil
   ) async {
     do {
       let access = try await LoadHerdSharingAccessUseCase(repository: sharingRepository).execute(
@@ -61,15 +62,19 @@ final class HerdCollaborationViewModel {
         storageMode: storageMode
       )
       sharingAccess = access
+      writePolicy?.update(access: access)
       sharingAccessMessage = nil
     } catch HerdSharingActionError.iCloudSyncRequired {
       sharingAccess = nil
+      writePolicy?.clearAccess()
       sharingAccessMessage = "Enable iCloud Sync to inspect CloudKit share permissions."
     } catch HerdSharingActionError.shareRootMissing {
       sharingAccess = nil
+      writePolicy?.clearAccess()
       sharingAccessMessage = "No Herd share root is available yet."
     } catch {
       sharingAccess = nil
+      writePolicy?.clearAccess()
       sharingAccessMessage = error.localizedDescription
     }
   }

@@ -10,6 +10,7 @@ struct HerdCollaborationView: View {
   @Environment(\.herdSharingRepository) private var herdSharingRepository
   @Environment(\.cloudKitShareInvitationCoordinator) private var shareInvitationCoordinator
   @Environment(\.herdSharingSyncCoordinator) private var sharingSyncCoordinator
+  @Environment(\.herdCollaborationWritePolicy) private var writePolicy
   @State private var viewModel = HerdCollaborationViewModel()
 
   private let preferences: AppPreferencesProviding
@@ -63,7 +64,8 @@ struct HerdCollaborationView: View {
       )
       await viewModel.refreshSharingAccess(
         using: herdSharingRepository,
-        storageMode: preferences.syncMode.herdStorageMode
+        storageMode: preferences.syncMode.herdStorageMode,
+        writePolicy: writePolicy
       )
     }
     .sheet(item: $viewModel.systemShare) { systemShare in
@@ -151,11 +153,29 @@ struct HerdCollaborationView: View {
           .foregroundStyle(.secondary)
       }
 
+      if let writePolicy {
+        let snapshot = writePolicy.snapshot
+        LabeledContent(
+          "Local Edit Policy",
+          value: snapshot.allowsLocalMutations ? "Allowed" : "Blocked"
+        )
+        Text(snapshot.statusDescription)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+
+        if let lastBlockedMutationReason = snapshot.lastBlockedMutationReason {
+          Text("Last blocked edit: \(lastBlockedMutationReason.displayName)")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+      }
+
       Button {
         Task {
           await viewModel.refreshSharingAccess(
             using: sharingRepository,
-            storageMode: preferences.syncMode.herdStorageMode
+            storageMode: preferences.syncMode.herdStorageMode,
+            writePolicy: writePolicy
           )
         }
       } label: {
@@ -164,7 +184,7 @@ struct HerdCollaborationView: View {
       .disabled(viewModel.herd == nil || preferences.syncMode.herdStorageMode != .iCloud)
 
       Text(
-        "Read-only CloudKit participants can import shared changes, but yaHerd will not export their local SwiftData edits back into the shared bridge."
+        "Read-only CloudKit participants can import shared changes. yaHerd now blocks their local edit attempts before SwiftData writes and also refuses to export local changes back into the shared bridge."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -223,7 +243,8 @@ struct HerdCollaborationView: View {
               )
               await viewModel.refreshSharingAccess(
                 using: sharingRepository,
-                storageMode: preferences.syncMode.herdStorageMode
+                storageMode: preferences.syncMode.herdStorageMode,
+                writePolicy: writePolicy
               )
             }
           }
@@ -267,7 +288,8 @@ struct HerdCollaborationView: View {
             )
             await viewModel.refreshSharingAccess(
               using: sharingRepository,
-              storageMode: preferences.syncMode.herdStorageMode
+              storageMode: preferences.syncMode.herdStorageMode,
+              writePolicy: writePolicy
             )
           }
         }
@@ -310,7 +332,8 @@ struct HerdCollaborationView: View {
             )
             await viewModel.refreshSharingAccess(
               using: sharingRepository,
-              storageMode: preferences.syncMode.herdStorageMode
+              storageMode: preferences.syncMode.herdStorageMode,
+              writePolicy: writePolicy
             )
           }
         }
