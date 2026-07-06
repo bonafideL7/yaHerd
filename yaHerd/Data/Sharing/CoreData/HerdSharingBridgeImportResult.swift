@@ -41,6 +41,7 @@ struct HerdSharingBridgeImportResult: Equatable {
   let updatedFieldCheckAnimalCheckCount: Int
   let insertedFieldCheckFindingCount: Int
   let updatedFieldCheckFindingCount: Int
+  let deletedRecordCount: Int
 
   var importedTagColorDefinitionCount: Int {
     insertedTagColorDefinitionCount + updatedTagColorDefinitionCount
