@@ -70,6 +70,47 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
     XCTAssertEqual(coordinator.lastTriggerDescription, "app foreground")
   }
 
+
+  func testDataMutationSyncBypassesLifecycleThrottle() async throws {
+    let herdRepository = StubHerdRepository(herd: makeHerdSummary())
+    let sharingRepository = RecordingHerdSharingRepository()
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 3_600
+    )
+
+    coordinator.requestAutomaticSync(trigger: .appForeground)
+    try await Task.sleep(nanoseconds: 20_000_000)
+    coordinator.requestSharedDataSyncAfterMutation(reason: .animal)
+    try await Task.sleep(nanoseconds: 20_000_000)
+
+    XCTAssertEqual(sharingRepository.syncCallCount, 2)
+    XCTAssertEqual(coordinator.lastTriggerDescription, "animal change")
+  }
+
+  func testMutationSchedulerRequestsCoordinatorSyncAfterAttach() async throws {
+    let herdRepository = StubHerdRepository(herd: makeHerdSummary())
+    let sharingRepository = RecordingHerdSharingRepository()
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+    let scheduler = HerdSharingMutationSyncScheduler()
+
+    scheduler.attach(coordinator: coordinator)
+    scheduler.requestSharedDataSyncAfterMutation(reason: .pasture)
+    try await Task.sleep(nanoseconds: 20_000_000)
+
+    XCTAssertEqual(sharingRepository.syncCallCount, 1)
+    XCTAssertEqual(coordinator.lastTriggerDescription, "pasture change")
+  }
+
   private func makeHerdSummary() -> HerdSummary {
     HerdSummary(
       publicID: UUID(),

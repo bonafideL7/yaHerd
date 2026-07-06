@@ -280,13 +280,15 @@ private struct RunningAppView: View {
                 repository: runtime.dependencies.tagColorRepository
             )
         )
-        self._herdSharingSyncCoordinator = State(
-            initialValue: HerdSharingSyncCoordinator(
-                herdRepository: runtime.dependencies.herdRepository,
-                sharingRepository: runtime.dependencies.herdSharingRepository,
-                storageMode: runtime.syncMode.herdStorageMode
-            )
+        let sharingSyncCoordinator = HerdSharingSyncCoordinator(
+            herdRepository: runtime.dependencies.herdRepository,
+            sharingRepository: runtime.dependencies.herdSharingRepository,
+            storageMode: runtime.syncMode.herdStorageMode
         )
+        runtime.dependencies.herdSharingMutationSyncScheduler.attach(
+            coordinator: sharingSyncCoordinator
+        )
+        self._herdSharingSyncCoordinator = State(initialValue: sharingSyncCoordinator)
     }
 
     var body: some View {

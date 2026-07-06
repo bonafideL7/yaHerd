@@ -12,6 +12,7 @@ final class AppDependencies {
     let herdRepository: any HerdRepository
     let herdSharingRepository: any HerdSharingRepository
     let sampleDataSeeder: any SampleDataSeeding
+    let herdSharingMutationSyncScheduler: HerdSharingMutationSyncScheduler
 
     private let context: ModelContext
 
@@ -20,19 +21,55 @@ final class AppDependencies {
         tagColorDuplicateResolutionPolicy: TagColorDuplicateResolutionPolicy = .stableSortOrderWins
     ) {
         self.context = context
-        self.animalRepository = SwiftDataAnimalRepository(context: context)
-        self.pastureRepository = SwiftDataPastureRepository(context: context)
-        self.dashboardRepository = SwiftDataDashboardRepository(context: context)
-        self.workingRepository = SwiftDataWorkingRepository(context: context)
-        self.fieldCheckRepository = SwiftDataFieldCheckRepository(context: context)
-        self.syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(context: context)
-        self.herdRepository = SwiftDataHerdRepository(context: context)
-        self.herdSharingRepository = CoreDataHerdSharingRepository(context: context)
-        self.tagColorRepository = SwiftDataTagColorRepository(
+        let mutationSyncScheduler = HerdSharingMutationSyncScheduler()
+        self.herdSharingMutationSyncScheduler = mutationSyncScheduler
+
+        let animalRepository = SwiftDataAnimalRepository(context: context)
+        let pastureRepository = SwiftDataPastureRepository(context: context)
+        let dashboardRepository = SwiftDataDashboardRepository(context: context)
+        let workingRepository = SwiftDataWorkingRepository(context: context)
+        let fieldCheckRepository = SwiftDataFieldCheckRepository(context: context)
+        let herdRepository = SwiftDataHerdRepository(context: context)
+        let tagColorRepository = SwiftDataTagColorRepository(
             context: context,
             duplicateResolutionPolicy: tagColorDuplicateResolutionPolicy
         )
-        self.sampleDataSeeder = AppSampleDataSeeder(context: context)
+        let sampleDataSeeder = AppSampleDataSeeder(context: context)
+
+        self.animalRepository = SyncRequestingAnimalRepository(
+            base: animalRepository,
+            scheduler: mutationSyncScheduler
+        )
+        self.pastureRepository = SyncRequestingPastureRepository(
+            base: pastureRepository,
+            scheduler: mutationSyncScheduler
+        )
+        self.dashboardRepository = SyncRequestingDashboardRepository(
+            base: dashboardRepository,
+            scheduler: mutationSyncScheduler
+        )
+        self.workingRepository = SyncRequestingWorkingRepository(
+            base: workingRepository,
+            scheduler: mutationSyncScheduler
+        )
+        self.fieldCheckRepository = SyncRequestingFieldCheckRepository(
+            base: fieldCheckRepository,
+            scheduler: mutationSyncScheduler
+        )
+        self.syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(context: context)
+        self.herdRepository = SyncRequestingHerdRepository(
+            base: herdRepository,
+            scheduler: mutationSyncScheduler
+        )
+        self.herdSharingRepository = CoreDataHerdSharingRepository(context: context)
+        self.tagColorRepository = SyncRequestingTagColorRepository(
+            base: tagColorRepository,
+            scheduler: mutationSyncScheduler
+        )
+        self.sampleDataSeeder = SyncRequestingSampleDataSeeder(
+            base: sampleDataSeeder,
+            scheduler: mutationSyncScheduler
+        )
     }
 
     func seedDefaultsIfNeeded() {
