@@ -224,6 +224,74 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
     XCTAssertEqual(coordinator.lastTriggerDescription, "pasture change")
   }
 
+  func testResolveConflictByKeepingLocalRecordsStoresResolutionAndClearsActiveReview() async {
+    let suiteName = "HerdSharingSyncCoordinatorTests.resolve.\(UUID().uuidString)"
+    let userDefaults = UserDefaults(suiteName: suiteName)!
+    userDefaults.removePersistentDomain(forName: suiteName)
+    let conflictReviewStore = HerdSharingConflictReviewStore(
+      userDefaults: userDefaults,
+      storageKey: "conflicts",
+      maxStoredReviews: 5
+    )
+    let herdRepository = StubHerdRepository(herd: makeHerdSummary())
+    let sharingRepository = RecordingHerdSharingRepository()
+    let conflictReview = makeConflictReview()
+    conflictReviewStore.record(conflictReview)
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      conflictReviewStore: conflictReviewStore,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+
+    let resolved = await coordinator.resolveConflictByKeepingLocalRecords(
+      conflictReview,
+      syncAfterResolution: false
+    )
+
+    XCTAssertTrue(resolved)
+    XCTAssertNil(coordinator.lastConflictReview)
+    XCTAssertTrue(conflictReviewStore.reviewHistory.isEmpty)
+    XCTAssertEqual(conflictReviewStore.resolutionHistory.first?.reviewID, conflictReview.id)
+    XCTAssertEqual(sharingRepository.syncCallCount, 0)
+    userDefaults.removePersistentDomain(forName: suiteName)
+  }
+
+  func testResolveConflictByKeepingLocalRecordsCanRunSyncAfterResolution() async {
+    let suiteName = "HerdSharingSyncCoordinatorTests.resolveSync.\(UUID().uuidString)"
+    let userDefaults = UserDefaults(suiteName: suiteName)!
+    userDefaults.removePersistentDomain(forName: suiteName)
+    let conflictReviewStore = HerdSharingConflictReviewStore(
+      userDefaults: userDefaults,
+      storageKey: "conflicts",
+      maxStoredReviews: 5
+    )
+    let herdRepository = StubHerdRepository(herd: makeHerdSummary())
+    let sharingRepository = RecordingHerdSharingRepository()
+    let conflictReview = makeConflictReview()
+    conflictReviewStore.record(conflictReview)
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      conflictReviewStore: conflictReviewStore,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+
+    let resolved = await coordinator.resolveConflictByKeepingLocalRecords(
+      conflictReview,
+      syncAfterResolution: true
+    )
+
+    XCTAssertTrue(resolved)
+    XCTAssertEqual(sharingRepository.syncCallCount, 1)
+    XCTAssertEqual(conflictReviewStore.resolutionHistory.first?.reviewID, conflictReview.id)
+    userDefaults.removePersistentDomain(forName: suiteName)
+  }
+
   private func makeHerdSummary() -> HerdSummary {
     HerdSummary(
       publicID: UUID(),

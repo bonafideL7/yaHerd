@@ -12,6 +12,7 @@ import SwiftUI
 final class HerdSharingConflictReviewStore {
   private struct StoredConflictReviews: Codable, Equatable {
     var reviews: [HerdSharingConflictReview]
+    var resolutions: [HerdSharingConflictResolution]?
   }
 
   private let userDefaults: UserDefaults
@@ -20,6 +21,7 @@ final class HerdSharingConflictReviewStore {
 
   private(set) var latestReview: HerdSharingConflictReview?
   private(set) var reviewHistory: [HerdSharingConflictReview] = []
+  private(set) var resolutionHistory: [HerdSharingConflictResolution] = []
 
   init(
     userDefaults: UserDefaults = .standard,
@@ -46,10 +48,35 @@ final class HerdSharingConflictReviewStore {
     persist()
   }
 
+  @discardableResult
+  func resolve(
+    _ review: HerdSharingConflictReview,
+    choice: HerdSharingConflictResolutionChoice,
+    resolvedAt: Date = .now
+  ) -> HerdSharingConflictResolution? {
+    guard review.hasConflicts else { return nil }
+
+    let resolution = HerdSharingConflictResolution(
+      review: review,
+      resolvedAt: resolvedAt,
+      choice: choice
+    )
+    resolutionHistory.removeAll { $0.reviewID == resolution.reviewID }
+    resolutionHistory.insert(resolution, at: 0)
+    if resolutionHistory.count > maxStoredReviews {
+      resolutionHistory = Array(resolutionHistory.prefix(maxStoredReviews))
+    }
+
+    reviewHistory.removeAll { $0.id == review.id }
+    latestReview = reviewHistory.first
+    persistOrRemoveIfEmpty()
+    return resolution
+  }
+
   func clearLatestReview() {
     guard !reviewHistory.isEmpty else {
       latestReview = nil
-      userDefaults.removeObject(forKey: storageKey)
+      persistOrRemoveIfEmpty()
       return
     }
 
@@ -61,29 +88,37 @@ final class HerdSharingConflictReviewStore {
   func clearAllReviews() {
     latestReview = nil
     reviewHistory = []
-    userDefaults.removeObject(forKey: storageKey)
+    persistOrRemoveIfEmpty()
+  }
+
+  func clearResolutionHistory() {
+    resolutionHistory = []
+    persistOrRemoveIfEmpty()
   }
 
   private func load() {
     guard let data = userDefaults.data(forKey: storageKey) else {
       latestReview = nil
       reviewHistory = []
+      resolutionHistory = []
       return
     }
 
     do {
       let storedReviews = try JSONDecoder().decode(StoredConflictReviews.self, from: data)
       reviewHistory = Array(storedReviews.reviews.prefix(maxStoredReviews))
+      resolutionHistory = Array((storedReviews.resolutions ?? []).prefix(maxStoredReviews))
       latestReview = reviewHistory.first
     } catch {
       latestReview = nil
       reviewHistory = []
+      resolutionHistory = []
       userDefaults.removeObject(forKey: storageKey)
     }
   }
 
   private func persistOrRemoveIfEmpty() {
-    guard !reviewHistory.isEmpty else {
+    guard !reviewHistory.isEmpty || !resolutionHistory.isEmpty else {
       userDefaults.removeObject(forKey: storageKey)
       return
     }
@@ -92,7 +127,10 @@ final class HerdSharingConflictReviewStore {
   }
 
   private func persist() {
-    let storedReviews = StoredConflictReviews(reviews: reviewHistory)
+    let storedReviews = StoredConflictReviews(
+      reviews: reviewHistory,
+      resolutions: resolutionHistory
+    )
     do {
       let data = try JSONEncoder().encode(storedReviews)
       userDefaults.set(data, forKey: storageKey)

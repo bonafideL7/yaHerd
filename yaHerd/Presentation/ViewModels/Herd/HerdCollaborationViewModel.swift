@@ -233,6 +233,27 @@ final class HerdCollaborationViewModel {
     latestConflictReview = nil
   }
 
+  func resolveConflictByKeepingLocalRecords(
+    _ review: HerdSharingConflictReview,
+    in conflictReviewStore: HerdSharingConflictReviewStore? = nil
+  ) {
+    guard conflictReviewStore?.resolve(review, choice: .keepLocalRecords) != nil else {
+      errorMessage = "No active conflict report was available to resolve."
+      successMessage = nil
+      return
+    }
+
+    latestConflictReview = conflictReviewStore?.latestReview
+    successMessage =
+      "Conflict report resolved by keeping local records. Run Sync Shared Data to re-export local records."
+    errorMessage = nil
+  }
+
+  func clearConflictResolutionHistory(in conflictReviewStore: HerdSharingConflictReviewStore? = nil)
+  {
+    conflictReviewStore?.clearResolutionHistory()
+  }
+
   private func recordConflictReview(
     _ review: HerdSharingConflictReview?,
     in conflictReviewStore: HerdSharingConflictReviewStore?
