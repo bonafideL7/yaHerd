@@ -273,6 +273,12 @@ struct HerdCollaborationView: View {
           .font(.caption)
           .foregroundStyle(.secondary)
 
+        NavigationLink {
+          HerdSharingConflictReviewDetailView(review: conflictReview)
+        } label: {
+          Label("Review Conflict Details", systemImage: "exclamationmark.triangle")
+        }
+
         if !conflictReview.preventedDeleteConflicts.isEmpty {
           DisclosureGroup("Skipped Shared Deletes") {
             ForEach(conflictReview.preventedDeleteConflicts) { conflict in
@@ -305,15 +311,19 @@ struct HerdCollaborationView: View {
         if let history = conflictReviewStore?.reviewHistory, history.count > 1 {
           DisclosureGroup("Conflict History") {
             ForEach(history.dropFirst()) { review in
-              VStack(alignment: .leading, spacing: 4) {
-                Text(review.sourceDescription)
-                  .font(.caption.weight(.semibold))
-                Text(formattedSyncDate(review.detectedAt))
-                  .font(.caption2)
-                  .foregroundStyle(.secondary)
-                Text(review.summary)
-                  .font(.caption2)
-                  .foregroundStyle(.secondary)
+              NavigationLink {
+                HerdSharingConflictReviewDetailView(review: review)
+              } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                  Text(review.sourceDescription)
+                    .font(.caption.weight(.semibold))
+                  Text(formattedSyncDate(review.detectedAt))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                  Text(review.summary)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
               }
             }
           }
@@ -332,7 +342,7 @@ struct HerdCollaborationView: View {
       }
 
       Text(
-        "yaHerd now persists conflict reports locally, survives app restarts, and keeps a short history of prior reports. This is still conflict reporting and guardrail logic, not a full manual merge UI."
+        "yaHerd now persists conflict reports locally, survives app restarts, keeps a short history of prior reports, and provides a detail screen for skipped shared deletes. This is still conflict reporting and guardrail logic, not a full manual merge UI."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
