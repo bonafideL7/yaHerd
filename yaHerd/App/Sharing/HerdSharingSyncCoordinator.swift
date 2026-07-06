@@ -14,6 +14,7 @@ final class HerdSharingSyncCoordinator {
     case appLaunch
     case appForeground
     case manual
+    case dataMutation(SharedDataMutationReason)
 
     var displayName: String {
       switch self {
@@ -23,6 +24,17 @@ final class HerdSharingSyncCoordinator {
         "app foreground"
       case .manual:
         "manual sync"
+      case .dataMutation(let reason):
+        "\(reason.displayName) change"
+      }
+    }
+
+    var shouldThrottleAutomaticRequests: Bool {
+      switch self {
+      case .appLaunch, .appForeground:
+        true
+      case .manual, .dataMutation:
+        false
       }
     }
   }
@@ -35,6 +47,7 @@ final class HerdSharingSyncCoordinator {
 
   private var pendingAutomaticSyncTask: Task<Void, Never>?
   private var lastAutomaticSyncRequestedAt: Date?
+  private var queuedMutationReason: SharedDataMutationReason?
 
   private(set) var isSyncing = false
   private(set) var lastTriggerDescription: String?
@@ -65,12 +78,18 @@ final class HerdSharingSyncCoordinator {
     }
 
     guard !isSyncing else {
-      lastSkippedReason = "A shared-data sync is already running."
+      if case .dataMutation(let reason) = trigger {
+        queuedMutationReason = reason
+        lastSkippedReason = "Queued shared-data sync after the current sync finishes."
+      } else {
+        lastSkippedReason = "A shared-data sync is already running."
+      }
       return
     }
 
     let now = Date.now
-    if let lastAutomaticSyncRequestedAt,
+    if trigger.shouldThrottleAutomaticRequests,
+      let lastAutomaticSyncRequestedAt,
       now.timeIntervalSince(lastAutomaticSyncRequestedAt) < minimumAutomaticSyncInterval
     {
       lastSkippedReason =
@@ -78,7 +97,9 @@ final class HerdSharingSyncCoordinator {
       return
     }
 
-    lastAutomaticSyncRequestedAt = now
+    if trigger.shouldThrottleAutomaticRequests {
+      lastAutomaticSyncRequestedAt = now
+    }
     lastSkippedReason = nil
     pendingAutomaticSyncTask?.cancel()
 
@@ -94,6 +115,10 @@ final class HerdSharingSyncCoordinator {
 
       await self?.runScheduledAutomaticSync(trigger: trigger)
     }
+  }
+
+  func requestSharedDataSyncAfterMutation(reason: SharedDataMutationReason) {
+    requestAutomaticSync(trigger: .dataMutation(reason))
   }
 
   func cancelPendingAutomaticSync() {
@@ -132,6 +157,10 @@ final class HerdSharingSyncCoordinator {
     defer {
       isSyncing = false
       lastFinishedAt = .now
+      if let queuedMutationReason {
+        self.queuedMutationReason = nil
+        requestAutomaticSync(trigger: .dataMutation(queuedMutationReason))
+      }
     }
 
     do {
