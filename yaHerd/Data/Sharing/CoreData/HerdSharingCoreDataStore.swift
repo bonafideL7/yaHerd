@@ -1188,6 +1188,209 @@ final class HerdSharingCoreDataStore {
     tombstone.herd = herdRecord
   }
 
+  func syncBridgeRecordsFromSwiftData(
+    herd: HerdSummary,
+    tagColorDefinitions: [TagColorDefinition],
+    statusReferences: [AnimalStatusReference],
+    animalTags: [AnimalTag],
+    pastureGroups: [PastureGroup],
+    pastures: [Pasture],
+    animals: [Animal],
+    movements: [MovementRecord],
+    statusRecords: [StatusRecord],
+    healthRecords: [HealthRecord],
+    pregnancyChecks: [PregnancyCheck],
+    workingProtocolTemplates: [WorkingProtocolTemplate],
+    workingSessions: [WorkingSession],
+    workingQueueItems: [WorkingQueueItem],
+    workingTreatmentRecords: [WorkingTreatmentRecord],
+    fieldCheckSessions: [FieldCheckSession],
+    fieldCheckAnimalChecks: [FieldCheckAnimalCheck],
+    fieldCheckFindings: [FieldCheckFinding]
+  ) async throws -> HerdSharingBridgeExportResult {
+    try await loadIfNeeded()
+
+    let target = try writableBridgeStore(for: herd)
+    let originalPrivateStore = privateStore
+    privateStore = target.store
+    defer { privateStore = originalPrivateStore }
+
+    let record = try await mirrorHerdIntoPrivateStore(herd)
+    let sharedTagColorDefinitions = try mirrorTagColorDefinitionsIntoPrivateStore(
+      tagColorDefinitions,
+      herd: herd,
+      herdRecord: record
+    )
+    let sharedStatusReferences = try mirrorStatusReferencesIntoPrivateStore(
+      statusReferences,
+      herd: herd,
+      herdRecord: record
+    )
+    let pastureGroupRecords = try mirrorPastureGroupsIntoPrivateStore(
+      pastureGroups,
+      herd: herd,
+      herdRecord: record
+    )
+    let pastureRecords = try mirrorPasturesIntoPrivateStore(
+      pastures,
+      herd: herd,
+      herdRecord: record,
+      pastureGroupRecords: pastureGroupRecords
+    )
+    let animalRecords = try mirrorAnimalsIntoPrivateStore(animals, herd: herd, herdRecord: record)
+    let sharedAnimalTags = try mirrorAnimalTagsIntoPrivateStore(
+      animalTags,
+      herd: herd,
+      herdRecord: record,
+      animalRecords: animalRecords
+    )
+    let movementRecords = try mirrorMovementsIntoPrivateStore(
+      movements,
+      herd: herd,
+      herdRecord: record,
+      animalRecords: animalRecords
+    )
+    let sharedStatusRecords = try mirrorStatusRecordsIntoPrivateStore(
+      statusRecords,
+      herd: herd,
+      herdRecord: record,
+      animalRecords: animalRecords
+    )
+    let sharedWorkingProtocolTemplates = try mirrorWorkingProtocolTemplatesIntoPrivateStore(
+      workingProtocolTemplates,
+      herd: herd,
+      herdRecord: record
+    )
+    let sharedWorkingSessions = try mirrorWorkingSessionsIntoPrivateStore(
+      workingSessions,
+      herd: herd,
+      herdRecord: record
+    )
+    let sharedWorkingQueueItems = try mirrorWorkingQueueItemsIntoPrivateStore(
+      workingQueueItems,
+      herd: herd,
+      herdRecord: record,
+      sessionRecords: sharedWorkingSessions,
+      animalRecords: animalRecords
+    )
+    let sharedWorkingTreatmentRecords = try mirrorWorkingTreatmentRecordsIntoPrivateStore(
+      workingTreatmentRecords,
+      herd: herd,
+      herdRecord: record,
+      sessionRecords: sharedWorkingSessions,
+      animalRecords: animalRecords
+    )
+    let sharedHealthRecords = try mirrorHealthRecordsIntoPrivateStore(
+      healthRecords,
+      herd: herd,
+      herdRecord: record,
+      animalRecords: animalRecords
+    )
+    let sharedPregnancyChecks = try mirrorPregnancyChecksIntoPrivateStore(
+      pregnancyChecks,
+      herd: herd,
+      herdRecord: record,
+      animalRecords: animalRecords
+    )
+    let sharedFieldCheckSessions = try mirrorFieldCheckSessionsIntoPrivateStore(
+      fieldCheckSessions,
+      herd: herd,
+      herdRecord: record
+    )
+    let sharedFieldCheckAnimalChecks = try mirrorFieldCheckAnimalChecksIntoPrivateStore(
+      fieldCheckAnimalChecks,
+      herd: herd,
+      herdRecord: record,
+      sessionRecords: sharedFieldCheckSessions,
+      animalRecords: animalRecords
+    )
+    let sharedFieldCheckFindings = try mirrorFieldCheckFindingsIntoPrivateStore(
+      fieldCheckFindings,
+      herd: herd,
+      herdRecord: record,
+      sessionRecords: sharedFieldCheckSessions,
+      animalRecords: animalRecords
+    )
+    let sharedDeletedRecords = try fetchSharedDeletedRecords(
+      herdPublicID: herd.publicID,
+      in: target.store
+    )
+    let recordsToShare: [NSManagedObject] =
+      [record as NSManagedObject] + sharedTagColorDefinitions.map { $0 as NSManagedObject }
+      + sharedStatusReferences.map { $0 as NSManagedObject }
+      + pastureGroupRecords.map { $0 as NSManagedObject }
+      + pastureRecords.map { $0 as NSManagedObject } + animalRecords.map { $0 as NSManagedObject }
+      + sharedAnimalTags.map { $0 as NSManagedObject }
+      + movementRecords.map { $0 as NSManagedObject }
+      + sharedStatusRecords.map { $0 as NSManagedObject }
+      + sharedWorkingProtocolTemplates.map { $0 as NSManagedObject }
+      + sharedWorkingSessions.map { $0 as NSManagedObject }
+      + sharedWorkingQueueItems.map { $0 as NSManagedObject }
+      + sharedWorkingTreatmentRecords.map { $0 as NSManagedObject }
+      + sharedHealthRecords.map { $0 as NSManagedObject }
+      + sharedPregnancyChecks.map { $0 as NSManagedObject }
+      + sharedFieldCheckSessions.map { $0 as NSManagedObject }
+      + sharedFieldCheckAnimalChecks.map { $0 as NSManagedObject }
+      + sharedFieldCheckFindings.map { $0 as NSManagedObject }
+      + sharedDeletedRecords.map { $0 as NSManagedObject }
+
+    var didUpdateExistingCloudKitShare = false
+    if target.shouldUpdateShare, try existingShare(for: record) != nil {
+      _ = try await shareRecords(recordsToShare, title: herd.name)
+      didUpdateExistingCloudKitShare = true
+    }
+
+    return HerdSharingBridgeExportResult(
+      herdName: herd.name,
+      writeTargetDescription: target.description,
+      didUpdateExistingCloudKitShare: didUpdateExistingCloudKitShare,
+      exportedTagColorDefinitionCount: sharedTagColorDefinitions.count,
+      exportedStatusReferenceCount: sharedStatusReferences.count,
+      exportedAnimalTagCount: sharedAnimalTags.count,
+      exportedPastureGroupCount: pastureGroupRecords.count,
+      exportedPastureCount: pastureRecords.count,
+      exportedAnimalCount: animalRecords.count,
+      exportedMovementCount: movementRecords.count,
+      exportedStatusRecordCount: sharedStatusRecords.count,
+      exportedHealthRecordCount: sharedHealthRecords.count,
+      exportedPregnancyCheckCount: sharedPregnancyChecks.count,
+      exportedWorkingProtocolTemplateCount: sharedWorkingProtocolTemplates.count,
+      exportedWorkingSessionCount: sharedWorkingSessions.count,
+      exportedWorkingQueueItemCount: sharedWorkingQueueItems.count,
+      exportedWorkingTreatmentRecordCount: sharedWorkingTreatmentRecords.count,
+      exportedFieldCheckSessionCount: sharedFieldCheckSessions.count,
+      exportedFieldCheckAnimalCheckCount: sharedFieldCheckAnimalChecks.count,
+      exportedFieldCheckFindingCount: sharedFieldCheckFindings.count,
+      exportedDeletedRecordCount: sharedDeletedRecords.count
+    )
+  }
+
+  private func writableBridgeStore(for herd: HerdSummary) throws -> (
+    store: NSPersistentStore,
+    description: String,
+    shouldUpdateShare: Bool
+  ) {
+    if let privateStore,
+      let privateHerdRecord = try fetchSharedHerdRecord(publicID: herd.publicID, in: privateStore)
+    {
+      let hasExistingShare = try existingShare(for: privateHerdRecord) != nil
+      return (privateStore, "owner private store", hasExistingShare)
+    }
+
+    if let sharedStore,
+      try fetchSharedHerdRecord(publicID: herd.publicID, in: sharedStore) != nil
+    {
+      return (sharedStore, "accepted shared store", false)
+    }
+
+    guard let privateStore else {
+      throw HerdSharingActionError.sharingStoreUnavailable(
+        "The private sharing bridge store was not loaded.")
+    }
+
+    return (privateStore, "owner private store", false)
+  }
+
   func makeSystemShare(
     for herd: HerdSummary,
     tagColorDefinitions: [TagColorDefinition],

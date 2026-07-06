@@ -21,4 +21,9 @@ protocol HerdSharingRepository: AnyObject {
     ) async throws -> HerdSharingActionResult
 
     func importSharedBridgeData(storageMode: HerdStorageMode) async throws -> HerdSharingActionResult
+
+    func syncSharedBridgeData(
+        herd: HerdSummary?,
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult
 }

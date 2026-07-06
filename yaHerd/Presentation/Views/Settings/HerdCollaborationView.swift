@@ -34,6 +34,10 @@ struct HerdCollaborationView: View {
           herdRepository: herdRepository,
           sharingRepository: herdSharingRepository
         )
+        sharedBridgeSyncSection(
+          herdRepository: herdRepository,
+          sharingRepository: herdSharingRepository
+        )
         shareActionSection(sharingRepository: herdSharingRepository)
       } else {
         Section("Herd") {
@@ -221,6 +225,40 @@ struct HerdCollaborationView: View {
 
       Text(
         "Use this after accepting a share or after the Core Data bridge receives remote shared changes. This pass imports the shared herd root, support records, pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working protocol templates, working sessions, queue items, treatment records, and field checks into SwiftData so the normal app screens can display them."
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
+    }
+  }
+
+  private func sharedBridgeSyncSection(
+    herdRepository: any HerdRepository,
+    sharingRepository: any HerdSharingRepository
+  ) -> some View {
+    Section("Shared Bridge Sync") {
+      Button {
+        Task {
+          let synced = await viewModel.syncSharedBridgeData(
+            using: sharingRepository,
+            storageMode: preferences.syncMode.herdStorageMode
+          )
+          if synced {
+            viewModel.load(
+              herdRepository: herdRepository,
+              sharingRepository: sharingRepository,
+              storageMode: preferences.syncMode.herdStorageMode
+            )
+          }
+        }
+      } label: {
+        Label("Sync Shared Data", systemImage: "arrow.triangle.2.circlepath.icloud")
+      }
+      .disabled(
+        viewModel.isSharingActionInProgress || viewModel.herd == nil
+          || preferences.syncMode.herdStorageMode != .iCloud)
+
+      Text(
+        "Exports the current SwiftData herd into the Core Data sharing bridge, then imports available accepted shared records back into SwiftData. Owners write through the private bridge store. Collaborators write through the accepted shared bridge store when that herd exists there."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
