@@ -29,6 +29,7 @@ struct HerdCollaborationView: View {
         readinessSection
         sharingAccessSection(sharingRepository: herdSharingRepository)
         coreDataBoundarySection
+        conflictPolicySection
         shareInvitationSection(
           herdRepository: herdRepository,
           sharingRepository: herdSharingRepository
@@ -243,6 +244,19 @@ struct HerdCollaborationView: View {
 
       Text(
         "Core Data is intentionally isolated behind the sharing repository. SwiftData remains the app data store. The bridge now mirrors tag colors, animal tags, custom status references, pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working protocol templates, working sessions, queue items, treatment records, and field checks into CloudKit sharing and can import those accepted shared records back into SwiftData."
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
+    }
+  }
+
+  private var conflictPolicySection: some View {
+    Section("Conflict Handling") {
+      LabeledContent("Existing local records", value: "Reported on import")
+      LabeledContent("Shared deletes", value: "Skipped when local record is newer")
+
+      Text(
+        "yaHerd now reports when shared imports update existing SwiftData records and keeps local records when a shared tombstone appears older than local edit metadata. This is still conflict reporting and guardrail logic, not a full manual merge UI."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
