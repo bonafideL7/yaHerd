@@ -112,6 +112,60 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
     XCTAssertEqual(writePolicy.snapshot.access?.permission, .readOnly)
   }
 
+  func testRefreshSharingAccessNowUpdatesWritePolicyWithoutSyncingData() async {
+    let herdRepository = StubHerdRepository(herd: makeHerdSummary())
+    let sharingRepository = RecordingHerdSharingRepository(
+      access: .acceptedSharedStore(permission: .readOnly, participantCount: 2)
+    )
+    let writePolicy = HerdCollaborationWritePolicy()
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      writePolicy: writePolicy,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+
+    let refreshed = await coordinator.refreshSharingAccessNow(trigger: .screenOpened("Animals"))
+
+    XCTAssertTrue(refreshed)
+    XCTAssertEqual(sharingRepository.accessCallCount, 1)
+    XCTAssertEqual(sharingRepository.syncCallCount, 0)
+    XCTAssertFalse(writePolicy.snapshot.allowsLocalMutations)
+    XCTAssertEqual(coordinator.lastAccessRefreshTriggerDescription, "Animals opened")
+    XCTAssertNil(coordinator.lastAccessRefreshErrorMessage)
+  }
+
+  func testRefreshSharingAccessNowThrottlesScreenOpenRequests() async {
+    let herdRepository = StubHerdRepository(herd: makeHerdSummary())
+    let sharingRepository = RecordingHerdSharingRepository()
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+
+    let firstRefresh = await coordinator.refreshSharingAccessNow(
+      trigger: .screenOpened("Animals"),
+      minimumInterval: 60
+    )
+    let secondRefresh = await coordinator.refreshSharingAccessNow(
+      trigger: .screenOpened("Pastures"),
+      minimumInterval: 60
+    )
+
+    XCTAssertTrue(firstRefresh)
+    XCTAssertFalse(secondRefresh)
+    XCTAssertEqual(sharingRepository.accessCallCount, 1)
+    XCTAssertEqual(
+      coordinator.lastAccessRefreshSkippedReason,
+      "Skipped sharing-access refresh because the previous access refresh was recent."
+    )
+  }
+
   func testMutationSchedulerRequestsCoordinatorSyncAfterAttach() async throws {
     let herdRepository = StubHerdRepository(herd: makeHerdSummary())
     let sharingRepository = RecordingHerdSharingRepository()
@@ -169,6 +223,7 @@ private final class StubHerdRepository: HerdRepository {
 @MainActor
 private final class RecordingHerdSharingRepository: HerdSharingRepository {
   private let access: HerdSharingAccess
+  private(set) var accessCallCount = 0
   private(set) var syncCallCount = 0
   private(set) var syncedHerdPublicID: UUID?
 
@@ -187,7 +242,8 @@ private final class RecordingHerdSharingRepository: HerdSharingRepository {
     for herd: HerdSummary?,
     storageMode: HerdStorageMode
   ) async throws -> HerdSharingAccess {
-    access
+    accessCallCount += 1
+    return access
   }
 
   func startSharing(

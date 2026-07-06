@@ -170,8 +170,41 @@ struct HerdCollaborationView: View {
         }
       }
 
+      if let sharingSyncCoordinator {
+        LabeledContent(
+          "Access Refresh",
+          value: sharingSyncCoordinator.isRefreshingSharingAccess ? "Running" : "Idle"
+        )
+
+        if let trigger = sharingSyncCoordinator.lastAccessRefreshTriggerDescription {
+          LabeledContent("Last Access Trigger", value: trigger)
+        }
+
+        if let lastFinishedAt = sharingSyncCoordinator.lastAccessRefreshFinishedAt {
+          LabeledContent("Access Last Checked", value: formattedSyncDate(lastFinishedAt))
+        }
+
+        if let skippedReason = sharingSyncCoordinator.lastAccessRefreshSkippedReason {
+          Text(skippedReason)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+
+        if let errorMessage = sharingSyncCoordinator.lastAccessRefreshErrorMessage {
+          Text(errorMessage)
+            .font(.caption)
+            .foregroundStyle(.red)
+        }
+      }
+
       Button {
         Task {
+          if let sharingSyncCoordinator {
+            await sharingSyncCoordinator.refreshSharingAccessNow(
+              trigger: .manual,
+              minimumInterval: 0
+            )
+          }
           await viewModel.refreshSharingAccess(
             using: sharingRepository,
             storageMode: preferences.syncMode.herdStorageMode,
@@ -181,10 +214,12 @@ struct HerdCollaborationView: View {
       } label: {
         Label("Refresh Access", systemImage: "person.crop.circle.badge.checkmark")
       }
-      .disabled(viewModel.herd == nil || preferences.syncMode.herdStorageMode != .iCloud)
+      .disabled(
+        viewModel.herd == nil || preferences.syncMode.herdStorageMode != .iCloud
+          || sharingSyncCoordinator?.isRefreshingSharingAccess == true)
 
       Text(
-        "Read-only CloudKit participants can import shared changes. yaHerd now blocks their local edit attempts before SwiftData writes and also refuses to export local changes back into the shared bridge."
+        "Read-only CloudKit participants can import shared changes. yaHerd now refreshes CloudKit share access on launch, foreground, major tab openings, share invitation receipt, and write-policy preflight. It blocks read-only local edit attempts before SwiftData writes and also refuses to export local changes back into the shared bridge."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -241,6 +276,12 @@ struct HerdCollaborationView: View {
                 sharingRepository: sharingRepository,
                 storageMode: preferences.syncMode.herdStorageMode
               )
+              if let sharingSyncCoordinator {
+                await sharingSyncCoordinator.refreshSharingAccessNow(
+                  trigger: .shareInvitationAccepted,
+                  minimumInterval: 0
+                )
+              }
               await viewModel.refreshSharingAccess(
                 using: sharingRepository,
                 storageMode: preferences.syncMode.herdStorageMode,

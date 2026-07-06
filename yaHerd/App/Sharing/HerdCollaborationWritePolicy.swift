@@ -21,8 +21,11 @@ enum HerdCollaborationWritePolicyError: LocalizedError, Equatable {
 final class HerdCollaborationWritePolicy {
   private let lock = NSLock()
   private var access: HerdSharingAccess?
+  private var accessRefreshRequestHandler: ((SharedDataMutationReason) -> Void)?
+  private var lastAccessRefreshRequestedAt: Date?
   private(set) var lastUpdatedAt: Date?
   private(set) var lastBlockedMutationReason: SharedDataMutationReason?
+  private(set) var lastAccessRefreshRequestedReason: SharedDataMutationReason?
 
   var snapshot: HerdCollaborationWritePolicySnapshot {
     lock.lock()
@@ -31,7 +34,8 @@ final class HerdCollaborationWritePolicy {
     return HerdCollaborationWritePolicySnapshot(
       access: access,
       lastUpdatedAt: lastUpdatedAt,
-      lastBlockedMutationReason: lastBlockedMutationReason
+      lastBlockedMutationReason: lastBlockedMutationReason,
+      lastAccessRefreshRequestedReason: lastAccessRefreshRequestedReason
     )
   }
 
@@ -39,9 +43,22 @@ final class HerdCollaborationWritePolicy {
     lock.lock()
     self.access = access
     lastUpdatedAt = .now
+    lastAccessRefreshRequestedReason = nil
     if access.allowsLocalMutations {
       lastBlockedMutationReason = nil
     }
+    lock.unlock()
+  }
+
+  func setAccessRefreshRequestHandler(_ handler: @escaping (SharedDataMutationReason) -> Void) {
+    lock.lock()
+    accessRefreshRequestHandler = handler
+    lock.unlock()
+  }
+
+  func clearAccessRefreshRequestHandler() {
+    lock.lock()
+    accessRefreshRequestHandler = nil
     lock.unlock()
   }
 
@@ -50,16 +67,26 @@ final class HerdCollaborationWritePolicy {
     access = nil
     lastUpdatedAt = .now
     lastBlockedMutationReason = nil
+    lastAccessRefreshRequestedReason = nil
     lock.unlock()
   }
 
   func validateCanWrite(reason: SharedDataMutationReason) throws {
+    let refreshRequestHandler: ((SharedDataMutationReason) -> Void)?
+
     lock.lock()
     let currentAccess = access
+    if currentAccess == nil {
+      refreshRequestHandler = accessRefreshRequestHandlerIfNeeded(for: reason)
+    } else {
+      refreshRequestHandler = nil
+    }
     if currentAccess?.allowsLocalMutations == false {
       lastBlockedMutationReason = reason
     }
     lock.unlock()
+
+    refreshRequestHandler?(reason)
 
     guard let currentAccess, !currentAccess.allowsLocalMutations else { return }
     throw HerdCollaborationWritePolicyError.readOnlySharedHerd(
@@ -77,12 +104,28 @@ final class HerdCollaborationWritePolicy {
       return false
     }
   }
+
+  private func accessRefreshRequestHandlerIfNeeded(
+    for reason: SharedDataMutationReason
+  ) -> ((SharedDataMutationReason) -> Void)? {
+    let now = Date.now
+    if let lastAccessRefreshRequestedAt,
+      now.timeIntervalSince(lastAccessRefreshRequestedAt) < 10
+    {
+      return nil
+    }
+
+    lastAccessRefreshRequestedAt = now
+    lastAccessRefreshRequestedReason = reason
+    return accessRefreshRequestHandler
+  }
 }
 
 struct HerdCollaborationWritePolicySnapshot: Equatable {
   let access: HerdSharingAccess?
   let lastUpdatedAt: Date?
   let lastBlockedMutationReason: SharedDataMutationReason?
+  let lastAccessRefreshRequestedReason: SharedDataMutationReason?
 
   var allowsLocalMutations: Bool {
     access?.allowsLocalMutations ?? true
@@ -90,6 +133,10 @@ struct HerdCollaborationWritePolicySnapshot: Equatable {
 
   var statusDescription: String {
     guard let access else {
+      if let lastAccessRefreshRequestedReason {
+        return "Sharing access has not been loaded yet. yaHerd requested a CloudKit access "
+          + "refresh before the last \(lastAccessRefreshRequestedReason.displayName) edit attempt."
+      }
       return "No shared-herd write restriction is active."
     }
 

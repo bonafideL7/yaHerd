@@ -289,6 +289,11 @@ private struct RunningAppView: View {
         runtime.dependencies.herdSharingMutationSyncScheduler.attach(
             coordinator: sharingSyncCoordinator
         )
+        runtime.dependencies.herdCollaborationWritePolicy.setAccessRefreshRequestHandler { [weak sharingSyncCoordinator] reason in
+            Task { @MainActor in
+                await sharingSyncCoordinator?.refreshSharingAccessNow(trigger: .writePolicyPreflight(reason))
+            }
+        }
         self._herdSharingSyncCoordinator = State(initialValue: sharingSyncCoordinator)
     }
 
@@ -339,18 +344,28 @@ private struct RunningAppView: View {
             .environment(\.sampleDataSeeder, runtime.dependencies.sampleDataSeeder)
             .modelContainer(runtime.modelContainer)
             .task {
+                await herdSharingSyncCoordinator.refreshSharingAccessNow(trigger: .appLaunch)
                 herdSharingSyncCoordinator.requestAutomaticSync(trigger: .appLaunch)
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     appSettingsSynchronizer.refreshFromICloudIfStarted()
                     tagColorLibrary.refresh()
-                    herdSharingSyncCoordinator.requestAutomaticSync(trigger: .appForeground)
+                    Task {
+                        await herdSharingSyncCoordinator.refreshSharingAccessNow(trigger: .appForeground)
+                        herdSharingSyncCoordinator.requestAutomaticSync(trigger: .appForeground)
+                    }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .yaHerdCloudKitShareAccepted)) { notification in
                 if let metadata = notification.userInfo?[CloudKitShareNotificationUserInfoKey.metadata] as? CKShare.Metadata {
                     cloudKitShareInvitationCoordinator.recordAcceptedShare(metadata: metadata)
+                }
+                Task {
+                    await herdSharingSyncCoordinator.refreshSharingAccessNow(
+                        trigger: .shareInvitationAccepted,
+                        minimumInterval: 0
+                    )
                 }
                 showsPendingCloudKitShareInvitation = true
             }
