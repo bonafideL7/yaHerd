@@ -17,6 +17,40 @@ struct HerdSharingConflictReview: Codable, Equatable, Identifiable {
   var preventedDeleteCount: Int { preventedDeleteConflicts.count }
   var hasConflicts: Bool { existingLocalRecordUpdateCount > 0 || preventedDeleteCount > 0 }
 
+  var preventedDeleteEntitySummaries: [HerdSharingPreventedDeleteEntitySummary] {
+    Dictionary(grouping: preventedDeleteConflicts, by: \.displayEntityName)
+      .map { entityName, conflicts in
+        HerdSharingPreventedDeleteEntitySummary(
+          displayEntityName: entityName,
+          count: conflicts.count
+        )
+      }
+      .sorted { lhs, rhs in
+        if lhs.count != rhs.count { return lhs.count > rhs.count }
+        return lhs.displayEntityName < rhs.displayEntityName
+      }
+  }
+
+  var latestLocalModifiedAt: Date? {
+    preventedDeleteConflicts.map(\.localModifiedAt).max()
+  }
+
+  var earliestSharedDeletedAt: Date? {
+    preventedDeleteConflicts.map(\.sharedDeletedAt).min()
+  }
+
+  var recommendedAction: String {
+    guard hasConflicts else {
+      return "No action is needed."
+    }
+
+    if preventedDeleteCount > 0 {
+      return "Review skipped shared deletes before making more edits to the affected records."
+    }
+
+    return "Review the affected records if the shared update was unexpected."
+  }
+
   var summary: String {
     guard hasConflicts else {
       return "No shared-data conflicts were detected."
@@ -48,4 +82,11 @@ struct HerdSharingPreventedDeleteConflict: Codable, Equatable, Identifiable {
       .replacingOccurrences(of: "Shared", with: "")
       .replacingOccurrences(of: "Record", with: "")
   }
+}
+
+struct HerdSharingPreventedDeleteEntitySummary: Equatable, Identifiable {
+  var id: String { displayEntityName }
+
+  let displayEntityName: String
+  let count: Int
 }
