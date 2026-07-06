@@ -1747,10 +1747,30 @@ final class HerdSharingCoreDataStore {
       herdPublicID: herdPublicID,
       in: sharedStore
     )
-    let deletedRecordCount = try deleteSwiftDataRecords(
+    let deletionResult = try deleteSwiftDataRecords(
       from: sharedDeletedRecords,
       herd: herd,
       in: swiftDataContext
+    )
+    let conflictReport = HerdSharingBridgeConflictReport(
+      existingLocalRecordUpdateCount: tagColorDefinitionResult.updated
+        + statusReferenceResult.updated
+        + animalTagResult.updated
+        + pastureGroupResult.updated
+        + pastureResult.updated
+        + animalResult.updated
+        + movementResult.updated
+        + statusRecordResult.updated
+        + healthRecordResult.updated
+        + pregnancyCheckResult.updated
+        + workingProtocolTemplateResult.updated
+        + workingSessionResult.updated
+        + workingQueueItemResult.updated
+        + workingTreatmentRecordResult.updated
+        + fieldCheckSessionResult.updated
+        + fieldCheckAnimalCheckResult.updated
+        + fieldCheckFindingResult.updated,
+      preventedDeleteConflicts: deletionResult.preventedDeleteConflicts
     )
 
     if swiftDataContext.hasChanges {
@@ -1793,7 +1813,8 @@ final class HerdSharingCoreDataStore {
       updatedFieldCheckAnimalCheckCount: fieldCheckAnimalCheckResult.updated,
       insertedFieldCheckFindingCount: fieldCheckFindingResult.inserted,
       updatedFieldCheckFindingCount: fieldCheckFindingResult.updated,
-      deletedRecordCount: deletedRecordCount
+      deletedRecordCount: deletionResult.deletedCount,
+      conflictReport: conflictReport
     )
   }
 
@@ -3228,8 +3249,9 @@ final class HerdSharingCoreDataStore {
     from tombstones: [SharedDeletedRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> Int {
+  ) throws -> (deletedCount: Int, preventedDeleteConflicts: [HerdSharingBridgeConflictDetail]) {
     var deletedCount = 0
+    var preventedDeleteConflicts: [HerdSharingBridgeConflictDetail] = []
     let orderedTombstones = tombstones.sorted { lhs, rhs in
       deletionPriority(for: lhs.sourceEntityName) < deletionPriority(for: rhs.sourceEntityName)
     }
@@ -3238,6 +3260,16 @@ final class HerdSharingCoreDataStore {
       guard let publicID = tombstone.parsedPublicID,
         let sourceEntityName = tombstone.sourceEntityName
       else { continue }
+
+      if let conflict = try preventedDeleteConflict(
+        sourceEntityName: sourceEntityName,
+        publicID: publicID,
+        tombstoneDeletedAt: tombstone.deletedAt,
+        in: context
+      ) {
+        preventedDeleteConflicts.append(conflict)
+        continue
+      }
 
       if try deleteSwiftDataRecord(
         sourceEntityName: sourceEntityName,
@@ -3249,7 +3281,150 @@ final class HerdSharingCoreDataStore {
       }
     }
 
-    return deletedCount
+    return (deletedCount, preventedDeleteConflicts)
+  }
+
+  private func preventedDeleteConflict(
+    sourceEntityName: String,
+    publicID: UUID,
+    tombstoneDeletedAt: Date?,
+    in context: ModelContext
+  ) throws -> HerdSharingBridgeConflictDetail? {
+    guard let tombstoneDeletedAt,
+      let localModifiedAt = try localModificationDate(
+        sourceEntityName: sourceEntityName,
+        publicID: publicID,
+        in: context
+      ),
+      localModifiedAt > tombstoneDeletedAt
+    else { return nil }
+
+    return HerdSharingBridgeConflictDetail(
+      kind: .preventedSharedDelete,
+      sourceEntityName: sourceEntityName,
+      publicID: publicID,
+      localModifiedAt: localModifiedAt,
+      sharedModifiedAt: tombstoneDeletedAt
+    )
+  }
+
+  private func localModificationDate(
+    sourceEntityName: String,
+    publicID: UUID,
+    in context: ModelContext
+  ) throws -> Date? {
+    switch sourceEntityName {
+    case SharedTagColorDefinitionRecord.entityName:
+      return try fetchSwiftDataRecord(
+        TagColorDefinition.self,
+        publicID: publicID,
+        keyPath: \.id,
+        in: context
+      )?.updatedAt
+    case SharedAnimalStatusReferenceRecord.entityName:
+      return try fetchSwiftDataRecord(
+        AnimalStatusReference.self,
+        publicID: publicID,
+        keyPath: \.id,
+        in: context
+      )?.createdAt
+    case SharedAnimalTagRecord.entityName:
+      return try fetchSwiftDataRecord(
+        AnimalTag.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ).flatMap { latestDate($0.assignedAt, $0.removedAt) }
+    case SharedMovementRecord.entityName:
+      return try fetchSwiftDataRecord(
+        MovementRecord.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      )?.date
+    case SharedStatusRecord.entityName:
+      return try fetchSwiftDataRecord(
+        StatusRecord.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      )?.date
+    case SharedHealthRecord.entityName:
+      return try fetchSwiftDataRecord(
+        HealthRecord.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      )?.date
+    case SharedPregnancyCheckRecord.entityName:
+      return try fetchSwiftDataRecord(
+        PregnancyCheck.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      )?.date
+    case SharedWorkingQueueItemRecord.entityName:
+      return try fetchSwiftDataRecord(
+        WorkingQueueItem.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      )?.completedAt
+    case SharedWorkingTreatmentRecord.entityName:
+      return try fetchSwiftDataRecord(
+        WorkingTreatmentRecord.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      )?.date
+    case SharedFieldCheckAnimalCheckRecord.entityName:
+      return try fetchSwiftDataRecord(
+        FieldCheckAnimalCheck.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ).flatMap { latestDate($0.countedAt, $0.missingConfirmedAt) }
+    case SharedFieldCheckFindingRecord.entityName:
+      return try fetchSwiftDataRecord(
+        FieldCheckFinding.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      )?.recordedAt
+    case SharedFieldCheckSessionRecord.entityName:
+      return try fetchSwiftDataRecord(
+        FieldCheckSession.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ).flatMap { latestDate($0.startedAt, $0.completedAt) }
+    case SharedWorkingSessionRecord.entityName:
+      return try fetchSwiftDataRecord(
+        WorkingSession.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      )?.date
+    case SharedAnimalRecord.entityName:
+      return nil
+    case SharedPastureRecord.entityName:
+      return try fetchSwiftDataRecord(
+        Pasture.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      )?.lastGrazedDate
+    case SharedPastureGroupRecord.entityName:
+      return nil
+    case SharedWorkingProtocolTemplateRecord.entityName:
+      return nil
+    default:
+      return nil
+    }
+  }
+
+  private func latestDate(_ dates: Date?...) -> Date? {
+    dates.compactMap { $0 }.max()
   }
 
   private func deleteSwiftDataRecord(
@@ -3322,13 +3497,27 @@ final class HerdSharingCoreDataStore {
     in context: ModelContext
   ) throws -> Bool {
     guard
-      let record = try context.fetch(FetchDescriptor<T>()).first(where: { record in
-        record[keyPath: keyPath] == publicID
-      })
+      let record = try fetchSwiftDataRecord(
+        modelType,
+        publicID: publicID,
+        keyPath: keyPath,
+        in: context
+      )
     else { return false }
 
     context.delete(record)
     return true
+  }
+
+  private func fetchSwiftDataRecord<T: PersistentModel>(
+    _ modelType: T.Type,
+    publicID: UUID,
+    keyPath: KeyPath<T, UUID>,
+    in context: ModelContext
+  ) throws -> T? {
+    try context.fetch(FetchDescriptor<T>()).first { record in
+      record[keyPath: keyPath] == publicID
+    }
   }
 
   private func deletionPriority(for sourceEntityName: String?) -> Int {
