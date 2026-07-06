@@ -66,6 +66,7 @@ final class HerdSharingSyncCoordinator {
   private(set) var lastStartedAt: Date?
   private(set) var lastFinishedAt: Date?
   private(set) var lastSuccessMessage: String?
+  private(set) var lastConflictReview: HerdSharingConflictReview?
   private(set) var lastErrorMessage: String?
   private(set) var lastSkippedReason: String?
   private(set) var lastAccessRefreshTriggerDescription: String?
@@ -206,6 +207,10 @@ final class HerdSharingSyncCoordinator {
     pendingAutomaticSyncTask = nil
   }
 
+  func clearConflictReview() {
+    lastConflictReview = nil
+  }
+
   @discardableResult
   func syncNow(trigger: Trigger) async -> Bool {
     cancelPendingAutomaticSync()
@@ -255,6 +260,7 @@ final class HerdSharingSyncCoordinator {
         storageMode: storageMode
       )
       lastSuccessMessage = "\(result.title): \(result.message)"
+      lastConflictReview = result.conflictReview
       lastErrorMessage = nil
       return true
     } catch {

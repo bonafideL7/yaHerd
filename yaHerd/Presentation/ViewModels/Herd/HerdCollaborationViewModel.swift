@@ -17,6 +17,7 @@ final class HerdCollaborationViewModel {
   var draftName = ""
   var errorMessage: String?
   var successMessage: String?
+  var latestConflictReview: HerdSharingConflictReview?
   var systemShare: HerdSystemShare?
 
   var canStartSharing: Bool {
@@ -117,6 +118,7 @@ final class HerdCollaborationViewModel {
       )
       systemShare = result.systemShare
       successMessage = result.systemShare == nil ? "\(result.title): \(result.message)" : nil
+      latestConflictReview = result.conflictReview
       errorMessage = nil
     } catch {
       errorMessage = error.localizedDescription
@@ -141,6 +143,7 @@ final class HerdCollaborationViewModel {
           storageMode: storageMode
         )
       successMessage = "\(result.title): \(result.message)"
+      latestConflictReview = result.conflictReview
       errorMessage = nil
       return true
     } catch {
@@ -163,6 +166,7 @@ final class HerdCollaborationViewModel {
         storageMode: storageMode
       )
       successMessage = "\(result.title): \(result.message)"
+      latestConflictReview = result.conflictReview
       errorMessage = nil
       return true
     } catch {
@@ -186,6 +190,7 @@ final class HerdCollaborationViewModel {
         storageMode: storageMode
       )
       successMessage = "\(result.title): \(result.message)"
+      latestConflictReview = result.conflictReview
       errorMessage = nil
       return true
     } catch {
@@ -208,5 +213,9 @@ final class HerdCollaborationViewModel {
   func clearMessages() {
     errorMessage = nil
     successMessage = nil
+  }
+
+  func clearConflictReview() {
+    latestConflictReview = nil
   }
 }

@@ -255,8 +255,52 @@ struct HerdCollaborationView: View {
       LabeledContent("Existing local records", value: "Reported on import")
       LabeledContent("Shared deletes", value: "Skipped when local record is newer")
 
+      if let conflictReview = latestConflictReview {
+        LabeledContent("Last Conflict Source", value: conflictReview.sourceDescription)
+        LabeledContent("Last Checked", value: formattedSyncDate(conflictReview.detectedAt))
+        LabeledContent(
+          "Updated Existing Local Records",
+          value: conflictReview.existingLocalRecordUpdateCount.formatted()
+        )
+        LabeledContent(
+          "Skipped Shared Deletes",
+          value: conflictReview.preventedDeleteCount.formatted()
+        )
+
+        Text(conflictReview.summary)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+
+        if !conflictReview.preventedDeleteConflicts.isEmpty {
+          DisclosureGroup("Skipped Shared Deletes") {
+            ForEach(conflictReview.preventedDeleteConflicts) { conflict in
+              VStack(alignment: .leading, spacing: 4) {
+                Text(conflict.displayEntityName)
+                  .font(.caption.weight(.semibold))
+                Text("Record ID: \(conflict.publicID.uuidString)")
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+                Text("Local edit: \(formattedSyncDate(conflict.localModifiedAt))")
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+                Text("Shared delete: \(formattedSyncDate(conflict.sharedDeletedAt))")
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+              }
+            }
+          }
+        }
+
+        Button("Clear Conflict Report") {
+          viewModel.clearConflictReview()
+          sharingSyncCoordinator?.clearConflictReview()
+        }
+      } else {
+        LabeledContent("Last Conflict Report", value: "None")
+      }
+
       Text(
-        "yaHerd now reports when shared imports update existing SwiftData records and keeps local records when a shared tombstone appears older than local edit metadata. This is still conflict reporting and guardrail logic, not a full manual merge UI."
+        "yaHerd now stores the latest conflict report from accept/import/sync actions and shows skipped shared deletes with record IDs and timestamps. This is still conflict reporting and guardrail logic, not a full manual merge UI."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -458,6 +502,10 @@ struct HerdCollaborationView: View {
 
   private func formattedSyncDate(_ date: Date) -> String {
     date.formatted(date: .abbreviated, time: .standard)
+  }
+
+  private var latestConflictReview: HerdSharingConflictReview? {
+    sharingSyncCoordinator?.lastConflictReview ?? viewModel.latestConflictReview
   }
 
   private var readinessMessage: String {

@@ -50,6 +50,44 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
     XCTAssertNotNil(coordinator.lastSuccessMessage)
   }
 
+  func testSyncNowStoresStructuredConflictReview() async {
+    let herd = makeHerdSummary()
+    let conflictReview = makeConflictReview()
+    let herdRepository = StubHerdRepository(herd: herd)
+    let sharingRepository = RecordingHerdSharingRepository(conflictReview: conflictReview)
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+
+    let didSync = await coordinator.syncNow(trigger: .manual)
+
+    XCTAssertTrue(didSync)
+    XCTAssertEqual(coordinator.lastConflictReview, conflictReview)
+  }
+
+  func testClearConflictReviewClearsStoredReview() async {
+    let herd = makeHerdSummary()
+    let conflictReview = makeConflictReview()
+    let herdRepository = StubHerdRepository(herd: herd)
+    let sharingRepository = RecordingHerdSharingRepository(conflictReview: conflictReview)
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+
+    _ = await coordinator.syncNow(trigger: .manual)
+    coordinator.clearConflictReview()
+
+    XCTAssertNil(coordinator.lastConflictReview)
+  }
+
   func testAutomaticSyncDebouncesAndRunsOnce() async throws {
     let herdRepository = StubHerdRepository(herd: makeHerdSummary())
     let sharingRepository = RecordingHerdSharingRepository()
@@ -195,6 +233,23 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
       schemaVersion: 1
     )
   }
+
+  private func makeConflictReview() -> HerdSharingConflictReview {
+    HerdSharingConflictReview(
+      title: "Shared-data conflicts detected",
+      sourceDescription: "Test sync",
+      detectedAt: Date(timeIntervalSince1970: 100),
+      existingLocalRecordUpdateCount: 2,
+      preventedDeleteConflicts: [
+        HerdSharingPreventedDeleteConflict(
+          sourceEntityName: "SharedAnimalRecord",
+          publicID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+          localModifiedAt: Date(timeIntervalSince1970: 20),
+          sharedDeletedAt: Date(timeIntervalSince1970: 10)
+        )
+      ]
+    )
+  }
 }
 
 @MainActor
@@ -223,12 +278,17 @@ private final class StubHerdRepository: HerdRepository {
 @MainActor
 private final class RecordingHerdSharingRepository: HerdSharingRepository {
   private let access: HerdSharingAccess
+  private let conflictReview: HerdSharingConflictReview?
   private(set) var accessCallCount = 0
   private(set) var syncCallCount = 0
   private(set) var syncedHerdPublicID: UUID?
 
-  init(access: HerdSharingAccess = .localOwnerBridgePending) {
+  init(
+    access: HerdSharingAccess = .localOwnerBridgePending,
+    conflictReview: HerdSharingConflictReview? = nil
+  ) {
     self.access = access
+    self.conflictReview = conflictReview
   }
 
   func fetchSharingReadiness(
@@ -271,6 +331,10 @@ private final class RecordingHerdSharingRepository: HerdSharingRepository {
   ) async throws -> HerdSharingActionResult {
     syncCallCount += 1
     syncedHerdPublicID = herd?.publicID
-    return HerdSharingActionResult(title: "Synced", message: "Shared data synced.")
+    return HerdSharingActionResult(
+      title: "Synced",
+      message: "Shared data synced.",
+      conflictReview: conflictReview
+    )
   }
 }
