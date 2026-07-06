@@ -52,6 +52,10 @@ final class HerdCollaborationViewModel {
     }
   }
 
+  func loadLatestConflictReview(from conflictReviewStore: HerdSharingConflictReviewStore?) {
+    latestConflictReview = conflictReviewStore?.latestReview
+  }
+
   func refreshSharingAccess(
     using sharingRepository: any HerdSharingRepository,
     storageMode: HerdStorageMode,
@@ -106,7 +110,8 @@ final class HerdCollaborationViewModel {
 
   func startSharing(
     using sharingRepository: any HerdSharingRepository,
-    storageMode: HerdStorageMode
+    storageMode: HerdStorageMode,
+    conflictReviewStore: HerdSharingConflictReviewStore? = nil
   ) async {
     isSharingActionInProgress = true
     defer { isSharingActionInProgress = false }
@@ -118,7 +123,7 @@ final class HerdCollaborationViewModel {
       )
       systemShare = result.systemShare
       successMessage = result.systemShare == nil ? "\(result.title): \(result.message)" : nil
-      latestConflictReview = result.conflictReview
+      recordConflictReview(result.conflictReview, in: conflictReviewStore)
       errorMessage = nil
     } catch {
       errorMessage = error.localizedDescription
@@ -131,7 +136,8 @@ final class HerdCollaborationViewModel {
   func acceptPendingInvitation(
     _ invitation: HerdShareInvitation?,
     using sharingRepository: any HerdSharingRepository,
-    storageMode: HerdStorageMode
+    storageMode: HerdStorageMode,
+    conflictReviewStore: HerdSharingConflictReviewStore? = nil
   ) async -> Bool {
     isSharingActionInProgress = true
     defer { isSharingActionInProgress = false }
@@ -143,7 +149,7 @@ final class HerdCollaborationViewModel {
           storageMode: storageMode
         )
       successMessage = "\(result.title): \(result.message)"
-      latestConflictReview = result.conflictReview
+      recordConflictReview(result.conflictReview, in: conflictReviewStore)
       errorMessage = nil
       return true
     } catch {
@@ -156,7 +162,8 @@ final class HerdCollaborationViewModel {
   @discardableResult
   func importSharedBridgeData(
     using sharingRepository: any HerdSharingRepository,
-    storageMode: HerdStorageMode
+    storageMode: HerdStorageMode,
+    conflictReviewStore: HerdSharingConflictReviewStore? = nil
   ) async -> Bool {
     isSharingActionInProgress = true
     defer { isSharingActionInProgress = false }
@@ -166,7 +173,7 @@ final class HerdCollaborationViewModel {
         storageMode: storageMode
       )
       successMessage = "\(result.title): \(result.message)"
-      latestConflictReview = result.conflictReview
+      recordConflictReview(result.conflictReview, in: conflictReviewStore)
       errorMessage = nil
       return true
     } catch {
@@ -179,7 +186,8 @@ final class HerdCollaborationViewModel {
   @discardableResult
   func syncSharedBridgeData(
     using sharingRepository: any HerdSharingRepository,
-    storageMode: HerdStorageMode
+    storageMode: HerdStorageMode,
+    conflictReviewStore: HerdSharingConflictReviewStore? = nil
   ) async -> Bool {
     isSharingActionInProgress = true
     defer { isSharingActionInProgress = false }
@@ -190,7 +198,7 @@ final class HerdCollaborationViewModel {
         storageMode: storageMode
       )
       successMessage = "\(result.title): \(result.message)"
-      latestConflictReview = result.conflictReview
+      recordConflictReview(result.conflictReview, in: conflictReviewStore)
       errorMessage = nil
       return true
     } catch {
@@ -215,7 +223,25 @@ final class HerdCollaborationViewModel {
     successMessage = nil
   }
 
-  func clearConflictReview() {
+  func clearConflictReview(in conflictReviewStore: HerdSharingConflictReviewStore? = nil) {
+    conflictReviewStore?.clearLatestReview()
+    latestConflictReview = conflictReviewStore?.latestReview
+  }
+
+  func clearAllConflictReviews(in conflictReviewStore: HerdSharingConflictReviewStore? = nil) {
+    conflictReviewStore?.clearAllReviews()
     latestConflictReview = nil
+  }
+
+  private func recordConflictReview(
+    _ review: HerdSharingConflictReview?,
+    in conflictReviewStore: HerdSharingConflictReviewStore?
+  ) {
+    conflictReviewStore?.record(review)
+    if let review, review.hasConflicts {
+      latestConflictReview = review
+    } else if latestConflictReview == nil {
+      latestConflictReview = conflictReviewStore?.latestReview
+    }
   }
 }
