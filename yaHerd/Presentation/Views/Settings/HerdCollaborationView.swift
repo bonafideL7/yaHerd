@@ -11,6 +11,7 @@ struct HerdCollaborationView: View {
   @Environment(\.cloudKitShareInvitationCoordinator) private var shareInvitationCoordinator
   @Environment(\.herdSharingSyncCoordinator) private var sharingSyncCoordinator
   @Environment(\.herdCollaborationWritePolicy) private var writePolicy
+  @Environment(\.herdSharingConflictReviewStore) private var conflictReviewStore
   @State private var viewModel = HerdCollaborationViewModel()
 
   private let preferences: AppPreferencesProviding
@@ -63,6 +64,7 @@ struct HerdCollaborationView: View {
         sharingRepository: herdSharingRepository,
         storageMode: preferences.syncMode.herdStorageMode
       )
+      viewModel.loadLatestConflictReview(from: conflictReviewStore)
       await viewModel.refreshSharingAccess(
         using: herdSharingRepository,
         storageMode: preferences.syncMode.herdStorageMode,
@@ -291,16 +293,46 @@ struct HerdCollaborationView: View {
           }
         }
 
-        Button("Clear Conflict Report") {
-          viewModel.clearConflictReview()
-          sharingSyncCoordinator?.clearConflictReview()
+        Button("Clear Latest Conflict Report") {
+          if let sharingSyncCoordinator {
+            sharingSyncCoordinator.clearConflictReview()
+            viewModel.loadLatestConflictReview(from: conflictReviewStore)
+          } else {
+            viewModel.clearConflictReview(in: conflictReviewStore)
+          }
+        }
+
+        if let history = conflictReviewStore?.reviewHistory, history.count > 1 {
+          DisclosureGroup("Conflict History") {
+            ForEach(history.dropFirst()) { review in
+              VStack(alignment: .leading, spacing: 4) {
+                Text(review.sourceDescription)
+                  .font(.caption.weight(.semibold))
+                Text(formattedSyncDate(review.detectedAt))
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+                Text(review.summary)
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+              }
+            }
+          }
+
+          Button("Clear All Conflict Reports", role: .destructive) {
+            if let sharingSyncCoordinator {
+              sharingSyncCoordinator.clearAllConflictReviews()
+              viewModel.loadLatestConflictReview(from: conflictReviewStore)
+            } else {
+              viewModel.clearAllConflictReviews(in: conflictReviewStore)
+            }
+          }
         }
       } else {
         LabeledContent("Last Conflict Report", value: "None")
       }
 
       Text(
-        "yaHerd now stores the latest conflict report from accept/import/sync actions and shows skipped shared deletes with record IDs and timestamps. This is still conflict reporting and guardrail logic, not a full manual merge UI."
+        "yaHerd now persists conflict reports locally, survives app restarts, and keeps a short history of prior reports. This is still conflict reporting and guardrail logic, not a full manual merge UI."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -325,7 +357,8 @@ struct HerdCollaborationView: View {
             let accepted = await viewModel.acceptPendingInvitation(
               invitation,
               using: sharingRepository,
-              storageMode: preferences.syncMode.herdStorageMode
+              storageMode: preferences.syncMode.herdStorageMode,
+              conflictReviewStore: conflictReviewStore
             )
             if accepted {
               shareInvitationCoordinator?.clearPendingInvitation()
@@ -377,7 +410,8 @@ struct HerdCollaborationView: View {
         Task {
           let imported = await viewModel.importSharedBridgeData(
             using: sharingRepository,
-            storageMode: preferences.syncMode.herdStorageMode
+            storageMode: preferences.syncMode.herdStorageMode,
+            conflictReviewStore: conflictReviewStore
           )
           if imported {
             viewModel.load(
@@ -419,7 +453,8 @@ struct HerdCollaborationView: View {
           } else {
             synced = await viewModel.syncSharedBridgeData(
               using: sharingRepository,
-              storageMode: preferences.syncMode.herdStorageMode
+              storageMode: preferences.syncMode.herdStorageMode,
+              conflictReviewStore: conflictReviewStore
             )
           }
 
@@ -484,7 +519,8 @@ struct HerdCollaborationView: View {
         Task {
           await viewModel.startSharing(
             using: sharingRepository,
-            storageMode: preferences.syncMode.herdStorageMode
+            storageMode: preferences.syncMode.herdStorageMode,
+            conflictReviewStore: conflictReviewStore
           )
         }
       } label: {
@@ -505,7 +541,9 @@ struct HerdCollaborationView: View {
   }
 
   private var latestConflictReview: HerdSharingConflictReview? {
-    sharingSyncCoordinator?.lastConflictReview ?? viewModel.latestConflictReview
+    sharingSyncCoordinator?.lastConflictReview
+      ?? viewModel.latestConflictReview
+      ?? conflictReviewStore?.latestReview
   }
 
   private var readinessMessage: String {

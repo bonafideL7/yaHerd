@@ -5,7 +5,9 @@
 
 import Foundation
 
-struct HerdSharingConflictReview: Equatable {
+struct HerdSharingConflictReview: Codable, Equatable, Identifiable {
+  var id: String { "\(detectedAt.timeIntervalSince1970)-\(sourceDescription)-\(title)" }
+
   let title: String
   let sourceDescription: String
   let detectedAt: Date
@@ -33,7 +35,7 @@ struct HerdSharingConflictReview: Equatable {
   }
 }
 
-struct HerdSharingPreventedDeleteConflict: Equatable, Identifiable {
+struct HerdSharingPreventedDeleteConflict: Codable, Equatable, Identifiable {
   var id: String { "\(sourceEntityName)-\(publicID.uuidString)" }
 
   let sourceEntityName: String

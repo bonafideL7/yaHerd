@@ -284,7 +284,8 @@ private struct RunningAppView: View {
             herdRepository: runtime.dependencies.herdRepository,
             sharingRepository: runtime.dependencies.herdSharingRepository,
             storageMode: runtime.syncMode.herdStorageMode,
-            writePolicy: runtime.dependencies.herdCollaborationWritePolicy
+            writePolicy: runtime.dependencies.herdCollaborationWritePolicy,
+            conflictReviewStore: runtime.dependencies.herdSharingConflictReviewStore
         )
         runtime.dependencies.herdSharingMutationSyncScheduler.attach(
             coordinator: sharingSyncCoordinator
@@ -309,6 +310,7 @@ private struct RunningAppView: View {
             .environment(\.cloudKitShareInvitationCoordinator, cloudKitShareInvitationCoordinator)
             .environment(\.herdSharingSyncCoordinator, herdSharingSyncCoordinator)
             .environment(\.herdCollaborationWritePolicy, runtime.dependencies.herdCollaborationWritePolicy)
+            .environment(\.herdSharingConflictReviewStore, runtime.dependencies.herdSharingConflictReviewStore)
             .environment(\.animalListRepository, runtime.dependencies.animalRepository)
             .environment(\.animalEditorRepository, runtime.dependencies.animalRepository)
             .environment(\.animalDetailRepository, runtime.dependencies.animalRepository)

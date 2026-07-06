@@ -14,6 +14,7 @@ final class AppDependencies {
   let sampleDataSeeder: any SampleDataSeeding
   let herdSharingMutationSyncScheduler: HerdSharingMutationSyncScheduler
   let herdCollaborationWritePolicy: HerdCollaborationWritePolicy
+  let herdSharingConflictReviewStore: HerdSharingConflictReviewStore
 
   private let context: ModelContext
 
@@ -24,8 +25,10 @@ final class AppDependencies {
     self.context = context
     let mutationSyncScheduler = HerdSharingMutationSyncScheduler()
     let writePolicy = HerdCollaborationWritePolicy()
+    let conflictReviewStore = HerdSharingConflictReviewStore()
     self.herdSharingMutationSyncScheduler = mutationSyncScheduler
     self.herdCollaborationWritePolicy = writePolicy
+    self.herdSharingConflictReviewStore = conflictReviewStore
 
     let animalRepository = SwiftDataAnimalRepository(context: context)
     let pastureRepository = SwiftDataPastureRepository(context: context)

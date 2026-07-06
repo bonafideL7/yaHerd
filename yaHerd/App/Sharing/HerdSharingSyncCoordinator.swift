@@ -52,6 +52,7 @@ final class HerdSharingSyncCoordinator {
   private let sharingRepository: any HerdSharingRepository
   private let storageMode: HerdStorageMode
   private let writePolicy: HerdCollaborationWritePolicy?
+  private let conflictReviewStore: HerdSharingConflictReviewStore?
   private let automaticDebounceNanoseconds: UInt64
   private let minimumAutomaticSyncInterval: TimeInterval
 
@@ -80,6 +81,7 @@ final class HerdSharingSyncCoordinator {
     sharingRepository: any HerdSharingRepository,
     storageMode: HerdStorageMode,
     writePolicy: HerdCollaborationWritePolicy? = nil,
+    conflictReviewStore: HerdSharingConflictReviewStore? = nil,
     automaticDebounceNanoseconds: UInt64 = 3_000_000_000,
     minimumAutomaticSyncInterval: TimeInterval = 60
   ) {
@@ -87,8 +89,10 @@ final class HerdSharingSyncCoordinator {
     self.sharingRepository = sharingRepository
     self.storageMode = storageMode
     self.writePolicy = writePolicy
+    self.conflictReviewStore = conflictReviewStore
     self.automaticDebounceNanoseconds = automaticDebounceNanoseconds
     self.minimumAutomaticSyncInterval = minimumAutomaticSyncInterval
+    self.lastConflictReview = conflictReviewStore?.latestReview
   }
 
   func requestAutomaticSync(trigger: Trigger) {
@@ -208,6 +212,12 @@ final class HerdSharingSyncCoordinator {
   }
 
   func clearConflictReview() {
+    conflictReviewStore?.clearLatestReview()
+    lastConflictReview = conflictReviewStore?.latestReview
+  }
+
+  func clearAllConflictReviews() {
+    conflictReviewStore?.clearAllReviews()
     lastConflictReview = nil
   }
 
@@ -260,13 +270,22 @@ final class HerdSharingSyncCoordinator {
         storageMode: storageMode
       )
       lastSuccessMessage = "\(result.title): \(result.message)"
-      lastConflictReview = result.conflictReview
+      recordConflictReview(result.conflictReview)
       lastErrorMessage = nil
       return true
     } catch {
       lastErrorMessage = error.localizedDescription
       lastSuccessMessage = nil
       return false
+    }
+  }
+
+  private func recordConflictReview(_ review: HerdSharingConflictReview?) {
+    conflictReviewStore?.record(review)
+    if let review, review.hasConflicts {
+      lastConflictReview = review
+    } else if lastConflictReview == nil {
+      lastConflictReview = conflictReviewStore?.latestReview
     }
   }
 }
