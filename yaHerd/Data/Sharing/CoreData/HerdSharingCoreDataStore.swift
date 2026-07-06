@@ -1365,6 +1365,30 @@ final class HerdSharingCoreDataStore {
     )
   }
 
+  func fetchSharingAccess(for herd: HerdSummary) async throws -> HerdSharingAccess {
+    try await loadIfNeeded()
+
+    if let privateStore,
+      let privateHerdRecord = try fetchSharedHerdRecord(publicID: herd.publicID, in: privateStore)
+    {
+      let share = try existingShare(for: privateHerdRecord)
+      return .ownerPrivateStore(participantCount: share?.participants.count)
+    }
+
+    if let sharedStore,
+      let sharedHerdRecord = try fetchSharedHerdRecord(publicID: herd.publicID, in: sharedStore)
+    {
+      let share = try existingShare(for: sharedHerdRecord)
+      let permission = share.map { sharingPermission(from: $0) } ?? .unknown
+      return .acceptedSharedStore(
+        permission: permission,
+        participantCount: share?.participants.count
+      )
+    }
+
+    return .localOwnerBridgePending
+  }
+
   private func writableBridgeStore(for herd: HerdSummary) throws -> (
     store: NSPersistentStore,
     description: String,
@@ -1378,8 +1402,13 @@ final class HerdSharingCoreDataStore {
     }
 
     if let sharedStore,
-      try fetchSharedHerdRecord(publicID: herd.publicID, in: sharedStore) != nil
+      let sharedHerdRecord = try fetchSharedHerdRecord(publicID: herd.publicID, in: sharedStore)
     {
+      let share = try existingShare(for: sharedHerdRecord)
+      let permission = share.map { sharingPermission(from: $0) } ?? .unknown
+      guard permission == .readWrite || permission == .owner else {
+        throw HerdSharingActionError.readOnlyShareCannotWrite
+      }
       return (sharedStore, "accepted shared store", false)
     }
 
@@ -1804,6 +1833,23 @@ final class HerdSharingCoreDataStore {
   private func existingShare(for record: NSManagedObject) throws -> CKShare? {
     let shares = try persistentContainer.fetchShares(matching: [record.objectID])
     return shares[record.objectID]
+  }
+
+  private func sharingPermission(from share: CKShare) -> HerdSharingAccess.Permission {
+    guard let currentUserParticipant = share.currentUserParticipant else {
+      return .unknown
+    }
+
+    switch currentUserParticipant.permission {
+    case .readOnly:
+      return .readOnly
+    case .readWrite:
+      return .readWrite
+    case .unknown, .none:
+      return .unknown
+    @unknown default:
+      return .unknown
+    }
   }
 
   private func persistUpdatedShare(_ share: CKShare) async {
