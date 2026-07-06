@@ -12,6 +12,7 @@ private enum MainTab: Hashable {
 
 struct MainTabView: View {
     @EnvironmentObject private var nav: NavigationCoordinator
+    @Environment(\.herdSharingSyncCoordinator) private var herdSharingSyncCoordinator
     @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
     
     @State private var selectedTab: MainTab = .home
@@ -142,12 +143,17 @@ struct MainTabView: View {
         .sheet(isPresented: $isShowingSettings) {
             SettingsSheetView()
         }
+        .task {
+            refreshSharingAccessForActiveSurface()
+        }
         .onChange(of: isDashboardEnabled) { _, isEnabled in
             if !isEnabled && selectedTab == .dashboard {
                 selectedTab = .home
             }
         }
         .onChange(of: selectedTab) { oldValue, newValue in
+            refreshSharingAccessForActiveSurface(tab: newValue)
+
             if newValue == .search {
                 herdMode = .animals
                 DispatchQueue.main.async {
@@ -158,6 +164,9 @@ struct MainTabView: View {
             if oldValue == .search && newValue != .search {
                 animalSearchFieldIsFocused = false
             }
+        }
+        .onChange(of: herdMode) { _, newMode in
+            refreshSharingAccessForActiveSurface(mode: newMode)
         }
     }
     
@@ -217,6 +226,36 @@ struct MainTabView: View {
             }
     }
     
+    private func refreshSharingAccessForActiveSurface(
+        tab: MainTab? = nil,
+        mode: HerdViewMode? = nil
+    ) {
+        guard let herdSharingSyncCoordinator else { return }
+
+        let activeTab = tab ?? selectedTab
+        let activeMode = mode ?? herdMode
+        let surfaceName: String
+        switch activeTab {
+        case .home:
+            surfaceName = "Home"
+        case .dashboard:
+            surfaceName = "Dashboard"
+        case .animals, .search:
+            switch activeMode {
+            case .animals:
+                surfaceName = "Animal records"
+            case .pastures:
+                surfaceName = "Pasture records"
+            }
+        }
+
+        Task {
+            await herdSharingSyncCoordinator.refreshSharingAccessNow(
+                trigger: .screenOpened(surfaceName)
+            )
+        }
+    }
+
     private func dismissAnimalSearch(clearText: Bool) {
         if clearText {
             clearAnimalCriteria()

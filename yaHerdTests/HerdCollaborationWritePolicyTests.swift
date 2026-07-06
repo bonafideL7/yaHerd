@@ -31,6 +31,33 @@ final class HerdCollaborationWritePolicyTests: XCTestCase {
     XCTAssertTrue(policy.snapshot.allowsLocalMutations)
   }
 
+  func testUnknownAccessRequestsRefreshBeforeAllowingWrite() throws {
+    let policy = HerdCollaborationWritePolicy()
+    var requestedReason: SharedDataMutationReason?
+    policy.setAccessRefreshRequestHandler { reason in
+      requestedReason = reason
+    }
+
+    XCTAssertNoThrow(try policy.validateCanWrite(reason: .animal))
+    XCTAssertEqual(requestedReason, .animal)
+    XCTAssertEqual(policy.snapshot.lastAccessRefreshRequestedReason, .animal)
+    XCTAssertTrue(policy.snapshot.allowsLocalMutations)
+  }
+
+  func testUnknownAccessRefreshRequestIsThrottled() throws {
+    let policy = HerdCollaborationWritePolicy()
+    var requestCount = 0
+    policy.setAccessRefreshRequestHandler { _ in
+      requestCount += 1
+    }
+
+    XCTAssertNoThrow(try policy.validateCanWrite(reason: .animal))
+    XCTAssertNoThrow(try policy.validateCanWrite(reason: .pasture))
+
+    XCTAssertEqual(requestCount, 1)
+    XCTAssertEqual(policy.snapshot.lastAccessRefreshRequestedReason, .animal)
+  }
+
   func testReadOnlySharedStoreBlocksLocalWrites() {
     let policy = HerdCollaborationWritePolicy()
     policy.update(access: .acceptedSharedStore(permission: .readOnly, participantCount: 2))

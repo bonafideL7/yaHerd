@@ -14,6 +14,9 @@ final class HerdSharingSyncCoordinator {
     case appLaunch
     case appForeground
     case manual
+    case screenOpened(String)
+    case writePolicyPreflight(SharedDataMutationReason)
+    case shareInvitationAccepted
     case dataMutation(SharedDataMutationReason)
 
     var displayName: String {
@@ -24,6 +27,12 @@ final class HerdSharingSyncCoordinator {
         "app foreground"
       case .manual:
         "manual sync"
+      case .screenOpened(let screenName):
+        "\(screenName) opened"
+      case .writePolicyPreflight(let reason):
+        "\(reason.displayName) edit preflight"
+      case .shareInvitationAccepted:
+        "share invitation accepted"
       case .dataMutation(let reason):
         "\(reason.displayName) change"
       }
@@ -31,9 +40,9 @@ final class HerdSharingSyncCoordinator {
 
     var shouldThrottleAutomaticRequests: Bool {
       switch self {
-      case .appLaunch, .appForeground:
+      case .appLaunch, .appForeground, .screenOpened:
         true
-      case .manual, .dataMutation:
+      case .manual, .writePolicyPreflight, .shareInvitationAccepted, .dataMutation:
         false
       }
     }
@@ -48,8 +57,10 @@ final class HerdSharingSyncCoordinator {
 
   private var pendingAutomaticSyncTask: Task<Void, Never>?
   private var lastAutomaticSyncRequestedAt: Date?
+  private var lastAccessRefreshRequestedAt: Date?
   private var queuedMutationReason: SharedDataMutationReason?
 
+  private(set) var isRefreshingSharingAccess = false
   private(set) var isSyncing = false
   private(set) var lastTriggerDescription: String?
   private(set) var lastStartedAt: Date?
@@ -57,6 +68,11 @@ final class HerdSharingSyncCoordinator {
   private(set) var lastSuccessMessage: String?
   private(set) var lastErrorMessage: String?
   private(set) var lastSkippedReason: String?
+  private(set) var lastAccessRefreshTriggerDescription: String?
+  private(set) var lastAccessRefreshStartedAt: Date?
+  private(set) var lastAccessRefreshFinishedAt: Date?
+  private(set) var lastAccessRefreshErrorMessage: String?
+  private(set) var lastAccessRefreshSkippedReason: String?
 
   init(
     herdRepository: any HerdRepository,
@@ -122,6 +138,67 @@ final class HerdSharingSyncCoordinator {
 
   func requestSharedDataSyncAfterMutation(reason: SharedDataMutationReason) {
     requestAutomaticSync(trigger: .dataMutation(reason))
+  }
+
+  func requestSharingAccessRefreshForMutationPreflight(reason: SharedDataMutationReason) {
+    Task { @MainActor [weak self] in
+      await self?.refreshSharingAccessNow(trigger: .writePolicyPreflight(reason))
+    }
+  }
+
+  @discardableResult
+  func refreshSharingAccessNow(trigger: Trigger, minimumInterval: TimeInterval = 5) async -> Bool {
+    guard storageMode == .iCloud else {
+      lastAccessRefreshSkippedReason = "iCloud Sync is not enabled."
+      return false
+    }
+
+    guard !isRefreshingSharingAccess else {
+      lastAccessRefreshSkippedReason = "A sharing-access refresh is already running."
+      return false
+    }
+
+    let now = Date.now
+    if trigger.shouldThrottleAutomaticRequests,
+      let lastAccessRefreshRequestedAt,
+      now.timeIntervalSince(lastAccessRefreshRequestedAt) < minimumInterval
+    {
+      lastAccessRefreshSkippedReason =
+        "Skipped sharing-access refresh because the previous access refresh was recent."
+      return false
+    }
+
+    lastAccessRefreshRequestedAt = now
+    isRefreshingSharingAccess = true
+    lastAccessRefreshTriggerDescription = trigger.displayName
+    lastAccessRefreshStartedAt = now
+    lastAccessRefreshSkippedReason = nil
+    defer {
+      isRefreshingSharingAccess = false
+      lastAccessRefreshFinishedAt = .now
+    }
+
+    do {
+      let herd = try LoadCurrentHerdUseCase(repository: herdRepository).execute()
+      let access = try await LoadHerdSharingAccessUseCase(repository: sharingRepository).execute(
+        herd: herd,
+        storageMode: storageMode
+      )
+      writePolicy?.update(access: access)
+      lastAccessRefreshErrorMessage = nil
+      return true
+    } catch HerdSharingActionError.iCloudSyncRequired {
+      writePolicy?.clearAccess()
+      lastAccessRefreshErrorMessage = "Enable iCloud Sync to inspect CloudKit share permissions."
+      return false
+    } catch HerdSharingActionError.shareRootMissing {
+      writePolicy?.clearAccess()
+      lastAccessRefreshErrorMessage = "No Herd share root is available yet."
+      return false
+    } catch {
+      lastAccessRefreshErrorMessage = error.localizedDescription
+      return false
+    }
   }
 
   func cancelPendingAutomaticSync() {
