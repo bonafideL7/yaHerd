@@ -80,6 +80,39 @@ final class HerdSharingRepositoryTests: XCTestCase {
         }
     }
 
+    func testSyncUseCaseRequiresHerd() async {
+        let repository = MissingInvitationTestHerdSharingRepository()
+
+        do {
+            _ = try await SyncSharedHerdDataUseCase(repository: repository).execute(
+                herd: nil,
+                storageMode: .iCloud
+            )
+            XCTFail("Expected missing share root error.")
+        } catch let error as HerdSharingActionError {
+            XCTAssertEqual(error, .shareRootMissing)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testSyncRequiresICloudStorageBeforeLoadingCoreData() async throws {
+        let repository = try makeRepository()
+        let herd = makeHerdSummary()
+
+        do {
+            _ = try await repository.syncSharedBridgeData(
+                herd: herd,
+                storageMode: .localOnly
+            )
+            XCTFail("Expected iCloud Sync requirement error.")
+        } catch let error as HerdSharingActionError {
+            XCTAssertEqual(error, .iCloudSyncRequired)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
 
     private func makeRepository() throws -> CoreDataHerdSharingRepository {
         let container = try TestSupport.makeModelContainer()
@@ -123,5 +156,13 @@ private final class MissingInvitationTestHerdSharingRepository: HerdSharingRepos
 
     func importSharedBridgeData(storageMode: HerdStorageMode) async throws -> HerdSharingActionResult {
         HerdSharingActionResult(title: "Unused", message: "Unused")
+    }
+
+    func syncSharedBridgeData(
+        herd: HerdSummary?,
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult {
+        XCTFail("Repository should not be called when the herd is missing.")
+        return HerdSharingActionResult(title: "Unused", message: "Unused")
     }
 }
