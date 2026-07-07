@@ -8,14 +8,19 @@ import Foundation
 struct HerdSharingBridgeConflictReport: Equatable {
   static let empty = HerdSharingBridgeConflictReport(
     existingLocalRecordUpdateCount: 0,
+    updatedRecordConflicts: [],
     preventedDeleteConflicts: []
   )
 
   let existingLocalRecordUpdateCount: Int
+  var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
   let preventedDeleteConflicts: [HerdSharingBridgeConflictDetail]
 
+  var updatedRecordConflictCount: Int { updatedRecordConflicts.count }
   var preventedDeleteCount: Int { preventedDeleteConflicts.count }
-  var hasConflicts: Bool { existingLocalRecordUpdateCount > 0 || preventedDeleteCount > 0 }
+  var hasConflicts: Bool {
+    existingLocalRecordUpdateCount > 0 || updatedRecordConflictCount > 0 || preventedDeleteCount > 0
+  }
 
   var summary: String {
     guard hasConflicts else {
@@ -37,6 +42,7 @@ struct HerdSharingBridgeConflictReport: Equatable {
 
 struct HerdSharingBridgeConflictDetail: Equatable, Identifiable {
   enum Kind: String, Equatable {
+    case existingLocalRecordUpdate
     case preventedSharedDelete
   }
 

@@ -15,16 +15,26 @@ final class HerdSharingBridgeConflictReportTests: XCTestCase {
     XCTAssertEqual(report.summary, "No shared-data conflicts were detected.")
   }
 
-  func testExistingLocalRecordUpdateCountIsReported() {
+  func testExistingLocalRecordUpdatesAreReportedWithRecordDetails() {
+    let detail = HerdSharingBridgeConflictDetail(
+      kind: .existingLocalRecordUpdate,
+      sourceEntityName: SharedAnimalRecord.entityName,
+      publicID: UUID(),
+      localModifiedAt: Date(timeIntervalSince1970: 20),
+      sharedModifiedAt: Date(timeIntervalSince1970: 30)
+    )
     let report = HerdSharingBridgeConflictReport(
-      existingLocalRecordUpdateCount: 3,
+      existingLocalRecordUpdateCount: 1,
+      updatedRecordConflicts: [detail],
       preventedDeleteConflicts: []
     )
 
     XCTAssertTrue(report.hasConflicts)
+    XCTAssertEqual(report.updatedRecordConflictCount, 1)
+    XCTAssertEqual(report.updatedRecordConflicts, [detail])
     XCTAssertEqual(
       report.summary,
-      "3 existing local record(s) were updated from shared data."
+      "1 existing local record(s) were updated from shared data."
     )
   }
 

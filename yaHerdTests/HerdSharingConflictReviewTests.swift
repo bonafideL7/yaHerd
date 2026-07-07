@@ -14,6 +14,20 @@ final class HerdSharingConflictReviewTests: XCTestCase {
       sourceDescription: "Manual import",
       detectedAt: Date(timeIntervalSince1970: 30),
       existingLocalRecordUpdateCount: 2,
+      updatedRecordConflicts: [
+        HerdSharingUpdatedRecordConflict(
+          sourceEntityName: "SharedAnimalRecord",
+          publicID: UUID(uuidString: "00000000-0000-0000-0000-000000000004")!,
+          localModifiedAt: Date(timeIntervalSince1970: 20),
+          sharedModifiedAt: Date(timeIntervalSince1970: 25)
+        ),
+        HerdSharingUpdatedRecordConflict(
+          sourceEntityName: "SharedHealthRecord",
+          publicID: UUID(uuidString: "00000000-0000-0000-0000-000000000005")!,
+          localModifiedAt: Date(timeIntervalSince1970: 21),
+          sharedModifiedAt: Date(timeIntervalSince1970: 26)
+        ),
+      ],
       preventedDeleteConflicts: [
         HerdSharingPreventedDeleteConflict(
           sourceEntityName: "SharedHealthRecord",
@@ -25,10 +39,53 @@ final class HerdSharingConflictReviewTests: XCTestCase {
     )
 
     XCTAssertTrue(review.hasConflicts)
+    XCTAssertEqual(review.updatedRecordConflictCount, 2)
     XCTAssertEqual(review.preventedDeleteCount, 1)
     XCTAssertEqual(
       review.summary,
       "2 existing local record(s) were updated from shared data; 1 shared delete(s) were skipped because local records appear newer."
+    )
+  }
+
+  func testUpdatedRecordEntitySummariesSortByCountThenName() {
+    let review = HerdSharingConflictReview(
+      title: "Shared-data conflicts detected",
+      sourceDescription: "Manual sync",
+      detectedAt: Date(timeIntervalSince1970: 30),
+      existingLocalRecordUpdateCount: 3,
+      updatedRecordConflicts: [
+        HerdSharingUpdatedRecordConflict(
+          sourceEntityName: "SharedPastureRecord",
+          publicID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+          localModifiedAt: Date(timeIntervalSince1970: 20),
+          sharedModifiedAt: Date(timeIntervalSince1970: 30)
+        ),
+        HerdSharingUpdatedRecordConflict(
+          sourceEntityName: "SharedAnimalRecord",
+          publicID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+          localModifiedAt: Date(timeIntervalSince1970: 21),
+          sharedModifiedAt: Date(timeIntervalSince1970: 31)
+        ),
+        HerdSharingUpdatedRecordConflict(
+          sourceEntityName: "SharedAnimalRecord",
+          publicID: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!,
+          localModifiedAt: Date(timeIntervalSince1970: 22),
+          sharedModifiedAt: Date(timeIntervalSince1970: 32)
+        ),
+      ],
+      preventedDeleteConflicts: []
+    )
+
+    XCTAssertEqual(
+      review.updatedRecordEntitySummaries,
+      [
+        HerdSharingUpdatedRecordEntitySummary(displayEntityName: "Animal", count: 2),
+        HerdSharingUpdatedRecordEntitySummary(displayEntityName: "Pasture", count: 1),
+      ]
+    )
+    XCTAssertEqual(
+      review.recommendedAction,
+      "Review the updated record IDs by entity. Keep local records only if the shared update was unexpected."
     )
   }
 
@@ -81,7 +138,7 @@ final class HerdSharingConflictReviewTests: XCTestCase {
     XCTAssertEqual(review.earliestSharedDeletedAt, Date(timeIntervalSince1970: 10))
     XCTAssertEqual(
       review.recommendedAction,
-      "Review skipped shared deletes before making more edits to the affected records."
+      "Choose Keep Local Records to preserve local edits, or Accept Shared Deletes to delete the affected local records by public ID."
     )
   }
 

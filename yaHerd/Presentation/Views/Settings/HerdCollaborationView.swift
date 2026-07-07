@@ -318,6 +318,26 @@ struct HerdCollaborationView: View {
           .disabled(sharingSyncCoordinator == nil || sharingSyncCoordinator?.isSyncing == true)
         }
 
+        if !conflictReview.updatedRecordConflicts.isEmpty {
+          DisclosureGroup("Updated Existing Records") {
+            ForEach(conflictReview.updatedRecordConflicts) { conflict in
+              VStack(alignment: .leading, spacing: 4) {
+                Text(conflict.displayEntityName)
+                  .font(.caption.weight(.semibold))
+                Text("Record ID: \(conflict.publicID.uuidString)")
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+                Text("Local modified: \(formattedImportDate(conflict.localModifiedAt))")
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+                Text("Shared mirrored: \(formattedImportDate(conflict.sharedModifiedAt))")
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+              }
+            }
+          }
+        }
+
         if !conflictReview.preventedDeleteConflicts.isEmpty {
           DisclosureGroup("Skipped Shared Deletes") {
             ForEach(conflictReview.preventedDeleteConflicts) { conflict in
@@ -405,7 +425,7 @@ struct HerdCollaborationView: View {
       }
 
       Text(
-        "yaHerd now persists conflict reports locally, survives app restarts, keeps a short history of prior reports, provides a detail screen for skipped shared deletes, and can resolve reports by keeping local records or accepting shared deletes. This is still not a field-level manual merge UI."
+        "yaHerd now persists conflict reports locally, survives app restarts, keeps a short history of prior reports, shows updated existing record IDs by entity, provides a detail screen for skipped shared deletes, and can resolve reports by keeping local records or accepting shared deletes. This is still not a field-level manual merge UI."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -607,6 +627,11 @@ struct HerdCollaborationView: View {
       .font(.caption)
       .foregroundStyle(.secondary)
     }
+  }
+
+  private func formattedImportDate(_ date: Date) -> String {
+    if date == .distantPast { return "Unavailable" }
+    return formattedSyncDate(date)
   }
 
   private func formattedSyncDate(_ date: Date) -> String {

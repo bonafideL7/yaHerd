@@ -50,13 +50,13 @@ struct HerdSharingConflictReviewDetailView: View {
 
   private var updatedRecordsSection: some View {
     Section("Updated Existing Local Records") {
-      if review.existingLocalRecordUpdateCount > 0 {
+      if review.updatedRecordConflicts.isEmpty, review.existingLocalRecordUpdateCount > 0 {
         Text(
-          "These records already existed in SwiftData and were updated from shared bridge data during import. yaHerd reports the count, but this pass does not track field-level before/after values."
+          "This older report only contains an updated-record count. Run shared-data sync again to capture record IDs by entity."
         )
         .font(.caption)
         .foregroundStyle(.secondary)
-      } else {
+      } else if review.updatedRecordConflicts.isEmpty {
         ContentUnavailableView(
           "No Updated Local Records",
           systemImage: "checkmark.circle",
@@ -64,6 +64,30 @@ struct HerdSharingConflictReviewDetailView: View {
             "This report did not include existing SwiftData records updated from shared data."
           )
         )
+      } else {
+        ForEach(review.updatedRecordEntitySummaries) { summary in
+          DisclosureGroup("\(summary.displayEntityName) (\(summary.count))") {
+            ForEach(updatedRecords(for: summary.displayEntityName)) { conflict in
+              VStack(alignment: .leading, spacing: 6) {
+                Text(conflict.publicID.uuidString)
+                  .font(.caption.weight(.semibold))
+                  .textSelection(.enabled)
+
+                LabeledContent("Local modified", value: formattedImportDate(conflict.localModifiedAt))
+                  .font(.caption2)
+                LabeledContent("Shared mirrored", value: formattedImportDate(conflict.sharedModifiedAt))
+                  .font(.caption2)
+
+                Text(
+                  "This existing SwiftData record was overwritten from the accepted shared bridge record during import."
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+              }
+              .padding(.vertical, 4)
+            }
+          }
+        }
       }
     }
   }
@@ -213,6 +237,17 @@ struct HerdSharingConflictReviewDetailView: View {
     }
   }
 
+  private func updatedRecords(for displayEntityName: String) -> [HerdSharingUpdatedRecordConflict] {
+    review.updatedRecordConflicts
+      .filter { $0.displayEntityName == displayEntityName }
+      .sorted { lhs, rhs in
+        if lhs.sharedModifiedAt != rhs.sharedModifiedAt {
+          return lhs.sharedModifiedAt > rhs.sharedModifiedAt
+        }
+        return lhs.publicID.uuidString < rhs.publicID.uuidString
+      }
+  }
+
   private func conflicts(for displayEntityName: String) -> [HerdSharingPreventedDeleteConflict] {
     review.preventedDeleteConflicts
       .filter { $0.displayEntityName == displayEntityName }
@@ -222,6 +257,11 @@ struct HerdSharingConflictReviewDetailView: View {
         }
         return lhs.publicID.uuidString < rhs.publicID.uuidString
       }
+  }
+
+  private func formattedImportDate(_ date: Date) -> String {
+    if date == .distantPast { return "Unavailable" }
+    return formattedDate(date)
   }
 
   private func formattedDate(_ date: Date) -> String {
@@ -237,6 +277,14 @@ struct HerdSharingConflictReviewDetailView: View {
         sourceDescription: "Manual sync",
         detectedAt: .now,
         existingLocalRecordUpdateCount: 3,
+        updatedRecordConflicts: [
+          HerdSharingUpdatedRecordConflict(
+            sourceEntityName: "SharedAnimalRecord",
+            publicID: UUID(),
+            localModifiedAt: .now,
+            sharedModifiedAt: Date(timeIntervalSinceNow: -600)
+          )
+        ],
         preventedDeleteConflicts: [
           HerdSharingPreventedDeleteConflict(
             sourceEntityName: "SharedAnimalRecord",
