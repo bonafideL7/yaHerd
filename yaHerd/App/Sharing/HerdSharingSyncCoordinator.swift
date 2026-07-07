@@ -298,6 +298,40 @@ final class HerdSharingSyncCoordinator {
     }
   }
 
+
+  @discardableResult
+  func restoreLocalFieldsFromConflict(
+    _ selections: [HerdSharingLocalFieldRestoreSelection],
+    in review: HerdSharingConflictReview,
+    syncAfterResolution: Bool
+  ) async -> Bool {
+    guard !selections.isEmpty else {
+      lastSkippedReason = "Select one or more local field values to restore."
+      return false
+    }
+
+    do {
+      let result = try await RestoreLocalConflictFieldsUseCase(repository: sharingRepository)
+        .execute(
+          selections: selections,
+          review: review,
+          storageMode: storageMode
+        )
+      lastSuccessMessage = "\(result.title): \(result.message)"
+      lastErrorMessage = nil
+      lastSkippedReason = nil
+
+      guard syncAfterResolution else { return true }
+
+      _ = await syncNow(trigger: .manual)
+      return true
+    } catch {
+      lastErrorMessage = error.localizedDescription
+      lastSuccessMessage = nil
+      return false
+    }
+  }
+
   @discardableResult
   func syncNow(trigger: Trigger) async -> Bool {
     cancelPendingAutomaticSync()
