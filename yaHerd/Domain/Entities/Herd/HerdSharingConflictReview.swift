@@ -135,6 +135,14 @@ struct HerdSharingConflictReview: Codable, Equatable, Identifiable {
   }
 }
 
+struct HerdSharingUpdatedRecordFieldChange: Codable, Equatable, Identifiable {
+  var id: String { fieldName }
+
+  let fieldName: String
+  let localValueDescription: String
+  let sharedValueDescription: String
+}
+
 struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
   var id: String { "\(sourceEntityName)-\(publicID.uuidString)" }
 
@@ -142,6 +150,43 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
   let publicID: UUID
   let localModifiedAt: Date
   let sharedModifiedAt: Date
+  var fieldChanges: [HerdSharingUpdatedRecordFieldChange]
+
+  enum CodingKeys: String, CodingKey {
+    case sourceEntityName
+    case publicID
+    case localModifiedAt
+    case sharedModifiedAt
+    case fieldChanges
+  }
+
+  init(
+    sourceEntityName: String,
+    publicID: UUID,
+    localModifiedAt: Date,
+    sharedModifiedAt: Date,
+    fieldChanges: [HerdSharingUpdatedRecordFieldChange] = []
+  ) {
+    self.sourceEntityName = sourceEntityName
+    self.publicID = publicID
+    self.localModifiedAt = localModifiedAt
+    self.sharedModifiedAt = sharedModifiedAt
+    self.fieldChanges = fieldChanges
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    sourceEntityName = try container.decode(String.self, forKey: .sourceEntityName)
+    publicID = try container.decode(UUID.self, forKey: .publicID)
+    localModifiedAt = try container.decode(Date.self, forKey: .localModifiedAt)
+    sharedModifiedAt = try container.decode(Date.self, forKey: .sharedModifiedAt)
+    fieldChanges = try container.decodeIfPresent(
+      [HerdSharingUpdatedRecordFieldChange].self,
+      forKey: .fieldChanges
+    ) ?? []
+  }
+
+  var changedFieldCount: Int { fieldChanges.count }
 
   var displayEntityName: String {
     sourceEntityName

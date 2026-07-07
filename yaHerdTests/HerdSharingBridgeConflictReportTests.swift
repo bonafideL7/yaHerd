@@ -21,7 +21,14 @@ final class HerdSharingBridgeConflictReportTests: XCTestCase {
       sourceEntityName: SharedAnimalRecord.entityName,
       publicID: UUID(),
       localModifiedAt: Date(timeIntervalSince1970: 20),
-      sharedModifiedAt: Date(timeIntervalSince1970: 30)
+      sharedModifiedAt: Date(timeIntervalSince1970: 30),
+      fieldChanges: [
+        HerdSharingBridgeFieldChange(
+          fieldName: "name",
+          localValueDescription: "Old Name",
+          sharedValueDescription: "Shared Name"
+        )
+      ]
     )
     let report = HerdSharingBridgeConflictReport(
       existingLocalRecordUpdateCount: 1,
@@ -32,6 +39,7 @@ final class HerdSharingBridgeConflictReportTests: XCTestCase {
     XCTAssertTrue(report.hasConflicts)
     XCTAssertEqual(report.updatedRecordConflictCount, 1)
     XCTAssertEqual(report.updatedRecordConflicts, [detail])
+    XCTAssertEqual(report.updatedRecordConflicts.first?.fieldChanges.first?.fieldName, "name")
     XCTAssertEqual(
       report.summary,
       "1 existing local record(s) were updated from shared data."

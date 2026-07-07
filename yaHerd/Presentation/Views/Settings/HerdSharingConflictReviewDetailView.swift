@@ -78,11 +78,32 @@ struct HerdSharingConflictReviewDetailView: View {
                 LabeledContent("Shared mirrored", value: formattedImportDate(conflict.sharedModifiedAt))
                   .font(.caption2)
 
-                Text(
-                  "This existing SwiftData record was overwritten from the accepted shared bridge record during import."
-                )
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                if conflict.fieldChanges.isEmpty {
+                  Text(
+                    "This existing SwiftData record was overwritten from the accepted shared bridge record during import. No changed scalar fields were captured."
+                  )
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+                } else {
+                  DisclosureGroup("Changed Fields (\(conflict.changedFieldCount))") {
+                    ForEach(conflict.fieldChanges) { fieldChange in
+                      VStack(alignment: .leading, spacing: 2) {
+                        Text(fieldChange.fieldName)
+                          .font(.caption2.weight(.semibold))
+                        Text("Local: \(fieldChange.localValueDescription)")
+                          .font(.caption2)
+                          .foregroundStyle(.secondary)
+                          .textSelection(.enabled)
+                        Text("Shared: \(fieldChange.sharedValueDescription)")
+                          .font(.caption2)
+                          .foregroundStyle(.secondary)
+                          .textSelection(.enabled)
+                      }
+                      .padding(.vertical, 2)
+                    }
+                  }
+                  .font(.caption2)
+                }
               }
               .padding(.vertical, 4)
             }

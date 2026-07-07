@@ -333,6 +333,11 @@ struct HerdCollaborationView: View {
                 Text("Shared mirrored: \(formattedImportDate(conflict.sharedModifiedAt))")
                   .font(.caption2)
                   .foregroundStyle(.secondary)
+                if conflict.changedFieldCount > 0 {
+                  Text("Changed fields: \(conflict.changedFieldCount.formatted())")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
               }
             }
           }
