@@ -454,8 +454,10 @@ private final class RecordingHerdSharingRepository: HerdSharingRepository {
   private(set) var accessCallCount = 0
   private(set) var syncCallCount = 0
   private(set) var acceptSharedDeleteCallCount = 0
+  private(set) var restoreLocalFieldsCallCount = 0
   private(set) var syncedHerdPublicID: UUID?
   private(set) var acceptedSharedDeleteReview: HerdSharingConflictReview?
+  private(set) var restoredLocalFieldSelections: [HerdSharingLocalFieldRestoreSelection] = []
 
   init(
     access: HerdSharingAccess = .localOwnerBridgePending,
@@ -508,6 +510,19 @@ private final class RecordingHerdSharingRepository: HerdSharingRepository {
     return HerdSharingActionResult(
       title: "Shared deletes accepted",
       message: "Deleted shared records."
+    )
+  }
+
+  func restoreLocalFields(
+    _ selections: [HerdSharingLocalFieldRestoreSelection],
+    in review: HerdSharingConflictReview,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult {
+    restoreLocalFieldsCallCount += 1
+    restoredLocalFieldSelections = selections
+    return HerdSharingActionResult(
+      title: "Local fields restored",
+      message: "Restored selected fields."
     )
   }
 

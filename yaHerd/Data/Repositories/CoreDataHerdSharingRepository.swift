@@ -178,6 +178,36 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     )
   }
 
+
+  func restoreLocalFields(
+    _ selections: [HerdSharingLocalFieldRestoreSelection],
+    in review: HerdSharingConflictReview,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult {
+    guard storageMode == .iCloud else {
+      throw HerdSharingActionError.iCloudSyncRequired
+    }
+
+    guard !selections.isEmpty else {
+      return HerdSharingActionResult(
+        title: "No local fields selected",
+        message: "Select one or more changed fields before restoring local values."
+      )
+    }
+
+    let result = try store.restoreLocalFields(
+      selections,
+      from: review,
+      context: context
+    )
+
+    return HerdSharingActionResult(
+      title: "Local fields restored",
+      message:
+        "Restored \(result.restoredFieldCount) of \(result.requestedFieldCount) selected local field value(s). Skipped \(result.skippedFieldCount) unsupported or stale field value(s). Run Sync Shared Data to re-export restored local values."
+    )
+  }
+
   func syncSharedBridgeData(
     herd: HerdSummary?,
     storageMode: HerdStorageMode

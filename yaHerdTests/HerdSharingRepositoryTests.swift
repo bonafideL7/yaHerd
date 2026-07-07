@@ -174,6 +174,15 @@ private final class MissingInvitationTestHerdSharingRepository: HerdSharingRepos
     return HerdSharingActionResult(title: "Unused", message: "Unused")
   }
 
+  func restoreLocalFields(
+    _ selections: [HerdSharingLocalFieldRestoreSelection],
+    in review: HerdSharingConflictReview,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult {
+    XCTFail("Repository should not be called when no local fields are selected.")
+    return HerdSharingActionResult(title: "Unused", message: "Unused")
+  }
+
   func syncSharedBridgeData(
     herd: HerdSummary?,
     storageMode: HerdStorageMode

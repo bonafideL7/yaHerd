@@ -183,12 +183,73 @@ struct HerdSharingConflictStoredValue: Codable, Equatable {
     HerdSharingConflictStoredValue(type: .uuid, encodedValue: value.uuidString)
   }
 
+  var stringValue: String? {
+    guard type == .string else { return nil }
+    return encodedValue
+  }
+
+  var boolValue: Bool? {
+    guard type == .bool, let encodedValue else { return nil }
+    return Bool(encodedValue)
+  }
+
+  var intValue: Int? {
+    guard type == .int, let encodedValue else { return nil }
+    return Int(encodedValue)
+  }
+
+  var doubleValue: Double? {
+    guard let encodedValue else { return nil }
+    switch type {
+    case .double:
+      return Double(encodedValue)
+    case .int:
+      return Double(encodedValue)
+    default:
+      return nil
+    }
+  }
+
+  var dateValue: Date? {
+    guard type == .date, let encodedValue else { return nil }
+    return ISO8601DateFormatter().date(from: encodedValue)
+  }
+
+  var uuidValue: UUID? {
+    guard type == .uuid, let encodedValue else { return nil }
+    return UUID(uuidString: encodedValue)
+  }
+
+  var isNull: Bool { type == .null }
+
   var displayDescription: String {
     guard let encodedValue else { return "nil" }
     return encodedValue
   }
 
   var displayType: String { type.rawValue }
+}
+
+struct HerdSharingLocalFieldRestoreSelection: Codable, Equatable, Hashable, Identifiable {
+  var id: String { "\(sourceEntityName)-\(publicID.uuidString)-\(fieldName)" }
+
+  let sourceEntityName: String
+  let publicID: UUID
+  let fieldName: String
+
+  init(sourceEntityName: String, publicID: UUID, fieldName: String) {
+    self.sourceEntityName = sourceEntityName
+    self.publicID = publicID
+    self.fieldName = fieldName
+  }
+}
+
+struct HerdSharingLocalFieldRestoreResult: Codable, Equatable {
+  let requestedFieldCount: Int
+  let restoredFieldCount: Int
+  let skippedFieldCount: Int
+
+  var restoredAnyFields: Bool { restoredFieldCount > 0 }
 }
 
 struct HerdSharingUpdatedRecordFieldChange: Codable, Equatable, Identifiable {
@@ -262,6 +323,7 @@ struct HerdSharingUpdatedRecordFieldChange: Codable, Equatable, Identifiable {
     try container.encode(sharedValueDescription, forKey: .sharedValueDescription)
   }
 
+  var restoreSelectionID: String { fieldName }
   var localValueDescription: String { localValue.displayDescription }
   var sharedValueDescription: String { sharedValue.displayDescription }
 }
@@ -310,6 +372,40 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
   }
 
   var changedFieldCount: Int { fieldChanges.count }
+
+  var supportedLocalRestoreFieldChanges: [HerdSharingUpdatedRecordFieldChange] {
+    fieldChanges.filter { supportsLocalFieldRestore(fieldName: $0.fieldName) }
+  }
+
+  var supportsLocalFieldRestore: Bool { !supportedLocalRestoreFieldChanges.isEmpty }
+
+  func restoreSelection(for fieldChange: HerdSharingUpdatedRecordFieldChange)
+    -> HerdSharingLocalFieldRestoreSelection
+  {
+    HerdSharingLocalFieldRestoreSelection(
+      sourceEntityName: sourceEntityName,
+      publicID: publicID,
+      fieldName: fieldChange.fieldName
+    )
+  }
+
+  private func supportsLocalFieldRestore(fieldName: String) -> Bool {
+    switch sourceEntityName {
+    case "SharedAnimalRecord":
+      return [
+        "name", "tagNumber", "tagColorID", "sex", "birthDate", "status", "saleDate",
+        "salePrice", "reasonSold", "deathDate", "causeOfDeath", "statusReferenceID",
+        "isSoftDeleted", "softDeletedAt", "softDeleteReason", "location",
+      ].contains(fieldName)
+    case "SharedPastureRecord":
+      return [
+        "name", "sortOrder", "acreage", "usableAcreage", "targetAcresPerHead",
+        "lastGrazedDate",
+      ].contains(fieldName)
+    default:
+      return false
+    }
+  }
 
   var displayEntityName: String {
     sourceEntityName

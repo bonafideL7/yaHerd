@@ -3839,6 +3839,246 @@ final class HerdSharingCoreDataStore {
     return deletedCount
   }
 
+  func restoreLocalFields(
+    _ selections: [HerdSharingLocalFieldRestoreSelection],
+    from review: HerdSharingConflictReview,
+    context: ModelContext
+  ) throws -> HerdSharingLocalFieldRestoreResult {
+    let indexedChanges = Dictionary(
+      uniqueKeysWithValues: review.updatedRecordConflicts.flatMap { conflict in
+        conflict.fieldChanges.map { fieldChange in
+          (
+            restoreSelectionKey(
+              sourceEntityName: conflict.sourceEntityName,
+              publicID: conflict.publicID,
+              fieldName: fieldChange.fieldName
+            ),
+            (conflict, fieldChange)
+          )
+        }
+      }
+    )
+
+    var restoredFieldCount = 0
+
+    for selection in selections {
+      guard
+        let (_, fieldChange) = indexedChanges[
+          restoreSelectionKey(
+            sourceEntityName: selection.sourceEntityName,
+            publicID: selection.publicID,
+            fieldName: selection.fieldName
+          )
+        ]
+      else { continue }
+
+      if try restoreLocalField(
+        sourceEntityName: selection.sourceEntityName,
+        publicID: selection.publicID,
+        fieldName: selection.fieldName,
+        value: fieldChange.localValue,
+        in: context
+      ) {
+        restoredFieldCount += 1
+      }
+    }
+
+    if context.hasChanges {
+      try context.save()
+    }
+
+    return HerdSharingLocalFieldRestoreResult(
+      requestedFieldCount: selections.count,
+      restoredFieldCount: restoredFieldCount,
+      skippedFieldCount: max(0, selections.count - restoredFieldCount)
+    )
+  }
+
+  private func restoreSelectionKey(
+    sourceEntityName: String,
+    publicID: UUID,
+    fieldName: String
+  ) -> String {
+    "\(sourceEntityName)-\(publicID.uuidString)-\(fieldName)"
+  }
+
+  private func restoreLocalField(
+    sourceEntityName: String,
+    publicID: UUID,
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    in context: ModelContext
+  ) throws -> Bool {
+    switch sourceEntityName {
+    case SharedAnimalRecord.entityName:
+      guard let animal = try fetchSwiftDataRecord(
+        Animal.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restoreAnimalLocalField(fieldName: fieldName, value: value, animal: animal)
+    case SharedPastureRecord.entityName:
+      guard let pasture = try fetchSwiftDataRecord(
+        Pasture.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restorePastureLocalField(fieldName: fieldName, value: value, pasture: pasture)
+    default:
+      return false
+    }
+  }
+
+  private func restoreAnimalLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    animal: Animal
+  ) -> Bool {
+    switch fieldName {
+    case "name":
+      guard let stringValue = value.stringValue else { return false }
+      animal.name = stringValue
+    case "tagNumber":
+      guard let stringValue = value.stringValue else { return false }
+      animal.tagNumber = stringValue
+    case "tagColorID":
+      if value.isNull {
+        animal.tagColorID = nil
+      } else {
+        guard let uuidValue = value.uuidValue else { return false }
+        animal.tagColorID = uuidValue
+      }
+    case "sex":
+      guard let rawValue = value.stringValue, let sex = Sex(rawValue: rawValue) else { return false }
+      animal.sex = sex
+    case "birthDate":
+      guard let dateValue = value.dateValue else { return false }
+      animal.birthDate = dateValue
+    case "status":
+      guard let rawValue = value.stringValue, let status = AnimalStatus(rawValue: rawValue) else {
+        return false
+      }
+      animal.status = status
+    case "saleDate":
+      if value.isNull {
+        animal.saleDate = nil
+      } else {
+        guard let dateValue = value.dateValue else { return false }
+        animal.saleDate = dateValue
+      }
+    case "salePrice":
+      if value.isNull {
+        animal.salePrice = nil
+      } else {
+        guard let doubleValue = value.doubleValue else { return false }
+        animal.salePrice = doubleValue
+      }
+    case "reasonSold":
+      if value.isNull {
+        animal.reasonSold = nil
+      } else {
+        guard let stringValue = value.stringValue else { return false }
+        animal.reasonSold = stringValue
+      }
+    case "deathDate":
+      if value.isNull {
+        animal.deathDate = nil
+      } else {
+        guard let dateValue = value.dateValue else { return false }
+        animal.deathDate = dateValue
+      }
+    case "causeOfDeath":
+      if value.isNull {
+        animal.causeOfDeath = nil
+      } else {
+        guard let stringValue = value.stringValue else { return false }
+        animal.causeOfDeath = stringValue
+      }
+    case "statusReferenceID":
+      if value.isNull {
+        animal.statusReferenceID = nil
+      } else {
+        guard let uuidValue = value.uuidValue else { return false }
+        animal.statusReferenceID = uuidValue
+      }
+    case "isSoftDeleted":
+      guard let boolValue = value.boolValue else { return false }
+      animal.isSoftDeleted = boolValue
+    case "softDeletedAt":
+      if value.isNull {
+        animal.softDeletedAt = nil
+      } else {
+        guard let dateValue = value.dateValue else { return false }
+        animal.softDeletedAt = dateValue
+      }
+    case "softDeleteReason":
+      if value.isNull {
+        animal.softDeleteReason = nil
+      } else {
+        guard let stringValue = value.stringValue else { return false }
+        animal.softDeleteReason = stringValue
+      }
+    case "location":
+      guard let rawValue = value.stringValue, let location = AnimalLocation(rawValue: rawValue) else {
+        return false
+      }
+      animal.location = location
+    default:
+      return false
+    }
+
+    return true
+  }
+
+  private func restorePastureLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    pasture: Pasture
+  ) -> Bool {
+    switch fieldName {
+    case "name":
+      guard let stringValue = value.stringValue else { return false }
+      pasture.name = stringValue
+    case "sortOrder":
+      guard let intValue = value.intValue else { return false }
+      pasture.sortOrder = intValue
+    case "acreage":
+      if value.isNull {
+        pasture.acreage = nil
+      } else {
+        guard let doubleValue = value.doubleValue else { return false }
+        pasture.acreage = doubleValue
+      }
+    case "usableAcreage":
+      if value.isNull {
+        pasture.usableAcreage = nil
+      } else {
+        guard let doubleValue = value.doubleValue else { return false }
+        pasture.usableAcreage = doubleValue
+      }
+    case "targetAcresPerHead":
+      if value.isNull {
+        pasture.targetAcresPerHead = nil
+      } else {
+        guard let doubleValue = value.doubleValue else { return false }
+        pasture.targetAcresPerHead = doubleValue
+      }
+    case "lastGrazedDate":
+      if value.isNull {
+        pasture.lastGrazedDate = nil
+      } else {
+        guard let dateValue = value.dateValue else { return false }
+        pasture.lastGrazedDate = dateValue
+      }
+    default:
+      return false
+    }
+
+    return true
+  }
+
   private func deleteSwiftDataRecords(
     from tombstones: [SharedDeletedRecord],
     herd: Herd,
