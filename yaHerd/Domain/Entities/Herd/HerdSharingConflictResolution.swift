@@ -48,11 +48,28 @@ struct HerdSharingConflictResolution: Codable, Equatable, Identifiable {
   let conflictSummary: String
   let preventedDeleteCount: Int
   let existingLocalRecordUpdateCount: Int
+  let updatedRecordConflicts: [HerdSharingUpdatedRecordConflict]
+  let preventedDeleteConflicts: [HerdSharingPreventedDeleteConflict]
+  let restoredLocalFieldSelections: [HerdSharingLocalFieldRestoreSelection]
+
+  enum CodingKeys: String, CodingKey {
+    case reviewID
+    case resolvedAt
+    case choice
+    case sourceDescription
+    case conflictSummary
+    case preventedDeleteCount
+    case existingLocalRecordUpdateCount
+    case updatedRecordConflicts
+    case preventedDeleteConflicts
+    case restoredLocalFieldSelections
+  }
 
   init(
     review: HerdSharingConflictReview,
     resolvedAt: Date = .now,
-    choice: HerdSharingConflictResolutionChoice
+    choice: HerdSharingConflictResolutionChoice,
+    restoredLocalFieldSelections: [HerdSharingLocalFieldRestoreSelection] = []
   ) {
     self.reviewID = review.id
     self.resolvedAt = resolvedAt
@@ -61,5 +78,50 @@ struct HerdSharingConflictResolution: Codable, Equatable, Identifiable {
     self.conflictSummary = review.summary
     self.preventedDeleteCount = review.preventedDeleteCount
     self.existingLocalRecordUpdateCount = review.existingLocalRecordUpdateCount
+    self.updatedRecordConflicts = review.updatedRecordConflicts
+    self.preventedDeleteConflicts = review.preventedDeleteConflicts
+    self.restoredLocalFieldSelections = restoredLocalFieldSelections
   }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    reviewID = try container.decode(String.self, forKey: .reviewID)
+    resolvedAt = try container.decode(Date.self, forKey: .resolvedAt)
+    choice = try container.decode(HerdSharingConflictResolutionChoice.self, forKey: .choice)
+    sourceDescription = try container.decode(String.self, forKey: .sourceDescription)
+    conflictSummary = try container.decode(String.self, forKey: .conflictSummary)
+    preventedDeleteCount = try container.decode(Int.self, forKey: .preventedDeleteCount)
+    existingLocalRecordUpdateCount = try container.decode(
+      Int.self,
+      forKey: .existingLocalRecordUpdateCount
+    )
+    updatedRecordConflicts =
+      try container.decodeIfPresent(
+        [HerdSharingUpdatedRecordConflict].self,
+        forKey: .updatedRecordConflicts
+      ) ?? []
+    preventedDeleteConflicts =
+      try container.decodeIfPresent(
+        [HerdSharingPreventedDeleteConflict].self,
+        forKey: .preventedDeleteConflicts
+      ) ?? []
+    restoredLocalFieldSelections =
+      try container.decodeIfPresent(
+        [HerdSharingLocalFieldRestoreSelection].self,
+        forKey: .restoredLocalFieldSelections
+      ) ?? []
+  }
+
+  var affectedRecordCount: Int {
+    switch choice {
+    case .keepLocalRecords:
+      return existingLocalRecordUpdateCount + preventedDeleteCount
+    case .restoreLocalFields, .acceptSharedUpdates:
+      return max(existingLocalRecordUpdateCount, updatedRecordConflicts.count)
+    case .acceptSharedDeletes:
+      return max(preventedDeleteCount, preventedDeleteConflicts.count)
+    }
+  }
+
+  var restoredLocalFieldCount: Int { restoredLocalFieldSelections.count }
 }
