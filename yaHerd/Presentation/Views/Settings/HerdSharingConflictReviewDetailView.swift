@@ -91,52 +91,22 @@ struct HerdSharingConflictReviewDetailView: View {
                   .foregroundStyle(.secondary)
                 } else {
                   DisclosureGroup("Changed Fields (\(conflict.changedFieldCount))") {
-                    ForEach(conflict.fieldChanges) { fieldChange in
-                      let selection = conflict.restoreSelection(for: fieldChange)
-                      let isRestoreSupported = conflict.supportedLocalRestoreFieldChanges
-                        .contains(fieldChange)
-
-                      VStack(alignment: .leading, spacing: 4) {
-                        HStack(alignment: .firstTextBaseline) {
-                          Text(fieldChange.fieldName)
-                            .font(.caption2.weight(.semibold))
-
-                          Spacer()
-
-                          if isRestoreSupported {
-                            Button {
-                              toggleLocalFieldRestore(selection)
-                            } label: {
-                              Label(
-                                selectedLocalFieldRestoreIDs.contains(selection.id)
-                                  ? "Selected" : "Restore Local",
-                                systemImage: selectedLocalFieldRestoreIDs.contains(selection.id)
-                                  ? "checkmark.circle.fill" : "arrow.uturn.backward.circle"
-                              )
-                            }
-                            .buttonStyle(.borderless)
-                            .font(.caption2)
-                          } else {
-                            Text("Not restorable")
-                              .font(.caption2)
-                              .foregroundStyle(.secondary)
-                          }
+                    if conflict.supportsLocalFieldRestore {
+                      DisclosureGroup(
+                        "Restorable Fields (\(conflict.supportedLocalRestoreFieldChanges.count))"
+                      ) {
+                        ForEach(conflict.supportedLocalRestoreFieldChanges) { fieldChange in
+                          restorableFieldChangeRow(fieldChange, in: conflict)
                         }
-
-                        Text(
-                          "Local (\(fieldChange.localValue.displayType)): \(fieldChange.localValueDescription)"
-                        )
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                        Text(
-                          "Shared (\(fieldChange.sharedValue.displayType)): \(fieldChange.sharedValueDescription)"
-                        )
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
                       }
-                      .padding(.vertical, 2)
+                    }
+
+                    if conflict.hasReviewOnlyFieldChanges {
+                      DisclosureGroup("Review Only Fields (\(conflict.reviewOnlyFieldChanges.count))") {
+                        ForEach(conflict.reviewOnlyFieldChanges) { fieldChange in
+                          reviewOnlyFieldChangeRow(fieldChange)
+                        }
+                      }
                     }
                   }
                   .font(.caption2)
@@ -288,7 +258,7 @@ struct HerdSharingConflictReviewDetailView: View {
       }
 
       Text(
-        "Restore Selected Local Fields writes selected pre-import local values back into SwiftData for supported Animal and Pasture fields. Use the Mark Resolved option when the selected restores fully address the conflict. Accept Shared Updates keeps the imported shared values already written to SwiftData. Keep Local Records preserves local intent and should be followed by shared-data sync. Accept Shared Deletes deletes the affected local SwiftData records by public ID."
+        "Restore Selected Local Fields writes selected pre-import local values back into SwiftData for supported scalar fields. Use the Mark Resolved option when the selected restores fully address the conflict. Accept Shared Updates keeps the imported shared values already written to SwiftData. Keep Local Records preserves local intent and should be followed by shared-data sync. Accept Shared Deletes deletes the affected local SwiftData records by public ID."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -302,11 +272,75 @@ struct HerdSharingConflictReviewDetailView: View {
         .foregroundStyle(.secondary)
 
       Text(
-        "This screen can now restore selected local scalar fields for supported Animal and Pasture conflicts. Relationship fields and complex array values are still shown for review but are not restored from this screen."
+        "Restorable Fields can be written back to SwiftData from this screen. Review Only Fields are shown for comparison but are not written back because they are relationships, arrays, or unsupported values."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
     }
+  }
+
+  @ViewBuilder
+  private func restorableFieldChangeRow(
+    _ fieldChange: HerdSharingUpdatedRecordFieldChange,
+    in conflict: HerdSharingUpdatedRecordConflict
+  ) -> some View {
+    let selection = conflict.restoreSelection(for: fieldChange)
+    let isSelected = selectedLocalFieldRestoreIDs.contains(selection.id)
+
+    fieldChangeValueRows(fieldChange) {
+      Button {
+        toggleLocalFieldRestore(selection)
+      } label: {
+        Label(
+          isSelected ? "Selected" : "Restore Local",
+          systemImage: isSelected ? "checkmark.circle.fill" : "arrow.uturn.backward.circle"
+        )
+      }
+      .buttonStyle(.borderless)
+      .font(.caption2)
+    }
+  }
+
+  @ViewBuilder
+  private func reviewOnlyFieldChangeRow(
+    _ fieldChange: HerdSharingUpdatedRecordFieldChange
+  ) -> some View {
+    fieldChangeValueRows(fieldChange) {
+      Text("Review only")
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+    }
+  }
+
+  @ViewBuilder
+  private func fieldChangeValueRows<Action: View>(
+    _ fieldChange: HerdSharingUpdatedRecordFieldChange,
+    @ViewBuilder action: () -> Action
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      HStack(alignment: .firstTextBaseline) {
+        Text(fieldChange.fieldName)
+          .font(.caption2.weight(.semibold))
+
+        Spacer()
+
+        action()
+      }
+
+      Text(
+        "Local (\(fieldChange.localValue.displayType)): \(fieldChange.localValueDescription)"
+      )
+      .font(.caption2)
+      .foregroundStyle(.secondary)
+      .textSelection(.enabled)
+      Text(
+        "Shared (\(fieldChange.sharedValue.displayType)): \(fieldChange.sharedValueDescription)"
+      )
+      .font(.caption2)
+      .foregroundStyle(.secondary)
+      .textSelection(.enabled)
+    }
+    .padding(.vertical, 2)
   }
 
   private func keepLocalRecords(syncAfterResolution: Bool) async {
