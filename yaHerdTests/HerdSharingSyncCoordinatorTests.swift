@@ -331,7 +331,8 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
     userDefaults.removePersistentDomain(forName: suiteName)
   }
 
-  func testResolveConflictByAcceptingSharedDeletesDeletesRecordsStoresResolutionAndRunsSync() async {
+  func testResolveConflictByAcceptingSharedDeletesDeletesRecordsStoresResolutionAndRunsSync() async
+  {
     let suiteName = "HerdSharingSyncCoordinatorTests.acceptDelete.\(UUID().uuidString)"
     let userDefaults = UserDefaults(suiteName: suiteName)!
     userDefaults.removePersistentDomain(forName: suiteName)
@@ -368,6 +369,99 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
       conflictReviewStore.resolutionHistory.first?.choice,
       Optional(HerdSharingConflictResolutionChoice.acceptSharedDeletes)
     )
+    userDefaults.removePersistentDomain(forName: suiteName)
+  }
+
+  func testRestoreLocalFieldsCanResolveReviewAndRunSync() async {
+    let suiteName = "HerdSharingSyncCoordinatorTests.restoreResolve.\(UUID().uuidString)"
+    let userDefaults = UserDefaults(suiteName: suiteName)!
+    userDefaults.removePersistentDomain(forName: suiteName)
+    let conflictReviewStore = HerdSharingConflictReviewStore(
+      userDefaults: userDefaults,
+      storageKey: "conflicts",
+      maxStoredReviews: 5
+    )
+    let herdRepository = StubHerdRepository(herd: makeHerdSummary())
+    let sharingRepository = RecordingHerdSharingRepository()
+    let conflictReview = makeUpdatedRecordConflictReview()
+    conflictReviewStore.record(conflictReview)
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      conflictReviewStore: conflictReviewStore,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+    let selections = [
+      HerdSharingLocalFieldRestoreSelection(
+        sourceEntityName: "SharedAnimalRecord",
+        publicID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+        fieldName: "tagNumber"
+      )
+    ]
+
+    let restored = await coordinator.restoreLocalFieldsFromConflict(
+      selections,
+      in: conflictReview,
+      syncAfterResolution: true,
+      resolveAfterRestore: true
+    )
+
+    XCTAssertTrue(restored)
+    XCTAssertEqual(sharingRepository.restoreLocalFieldsCallCount, 1)
+    XCTAssertEqual(sharingRepository.restoredLocalFieldSelections, selections)
+    XCTAssertEqual(sharingRepository.syncCallCount, 1)
+    XCTAssertNil(coordinator.lastConflictReview)
+    XCTAssertTrue(conflictReviewStore.reviewHistory.isEmpty)
+    XCTAssertEqual(conflictReviewStore.resolutionHistory.first?.reviewID, conflictReview.id)
+    XCTAssertEqual(
+      conflictReviewStore.resolutionHistory.first?.choice,
+      Optional(HerdSharingConflictResolutionChoice.restoreLocalFields)
+    )
+    userDefaults.removePersistentDomain(forName: suiteName)
+  }
+
+  func testRestoreLocalFieldsWithoutResolveKeepsReviewOpen() async {
+    let suiteName = "HerdSharingSyncCoordinatorTests.restoreOnly.\(UUID().uuidString)"
+    let userDefaults = UserDefaults(suiteName: suiteName)!
+    userDefaults.removePersistentDomain(forName: suiteName)
+    let conflictReviewStore = HerdSharingConflictReviewStore(
+      userDefaults: userDefaults,
+      storageKey: "conflicts",
+      maxStoredReviews: 5
+    )
+    let herdRepository = StubHerdRepository(herd: makeHerdSummary())
+    let sharingRepository = RecordingHerdSharingRepository()
+    let conflictReview = makeUpdatedRecordConflictReview()
+    conflictReviewStore.record(conflictReview)
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      conflictReviewStore: conflictReviewStore,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+    let selections = [
+      HerdSharingLocalFieldRestoreSelection(
+        sourceEntityName: "SharedAnimalRecord",
+        publicID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+        fieldName: "tagNumber"
+      )
+    ]
+
+    let restored = await coordinator.restoreLocalFieldsFromConflict(
+      selections,
+      in: conflictReview,
+      syncAfterResolution: false
+    )
+
+    XCTAssertTrue(restored)
+    XCTAssertEqual(sharingRepository.restoreLocalFieldsCallCount, 1)
+    XCTAssertEqual(coordinator.lastConflictReview, conflictReview)
+    XCTAssertEqual(conflictReviewStore.reviewHistory.first, conflictReview)
+    XCTAssertTrue(conflictReviewStore.resolutionHistory.isEmpty)
     userDefaults.removePersistentDomain(forName: suiteName)
   }
 

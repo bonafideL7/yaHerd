@@ -49,10 +49,11 @@ struct HerdSharingConflictReview: Codable, Equatable, Identifiable {
       Int.self,
       forKey: .existingLocalRecordUpdateCount
     )
-    updatedRecordConflicts = try container.decodeIfPresent(
-      [HerdSharingUpdatedRecordConflict].self,
-      forKey: .updatedRecordConflicts
-    ) ?? []
+    updatedRecordConflicts =
+      try container.decodeIfPresent(
+        [HerdSharingUpdatedRecordConflict].self,
+        forKey: .updatedRecordConflicts
+      ) ?? []
     preventedDeleteConflicts = try container.decode(
       [HerdSharingPreventedDeleteConflict].self,
       forKey: .preventedDeleteConflicts
@@ -107,11 +108,13 @@ struct HerdSharingConflictReview: Codable, Equatable, Identifiable {
     }
 
     if preventedDeleteCount > 0 {
-      return "Choose Keep Local Records to preserve local edits, or Accept Shared Deletes to delete the affected local records by public ID."
+      return
+        "Choose Keep Local Records to preserve local edits, or Accept Shared Deletes to delete the affected local records by public ID."
     }
 
     if updatedRecordConflictCount > 0 {
-      return "Choose Accept Shared Updates if the imported shared values are correct. Keep local records only if the shared update was unexpected and you plan to re-export local values."
+      return
+        "Choose Accept Shared Updates if the imported shared values are correct. Restore selected local fields when only specific pre-import values should be kept, then mark the report resolved after the selected restores fully address the conflict."
     }
 
     return "Review the affected records if the shared update was unexpected."
@@ -365,10 +368,11 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
     publicID = try container.decode(UUID.self, forKey: .publicID)
     localModifiedAt = try container.decode(Date.self, forKey: .localModifiedAt)
     sharedModifiedAt = try container.decode(Date.self, forKey: .sharedModifiedAt)
-    fieldChanges = try container.decodeIfPresent(
-      [HerdSharingUpdatedRecordFieldChange].self,
-      forKey: .fieldChanges
-    ) ?? []
+    fieldChanges =
+      try container.decodeIfPresent(
+        [HerdSharingUpdatedRecordFieldChange].self,
+        forKey: .fieldChanges
+      ) ?? []
   }
 
   var changedFieldCount: Int { fieldChanges.count }

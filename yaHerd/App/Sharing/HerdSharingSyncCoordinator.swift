@@ -298,12 +298,12 @@ final class HerdSharingSyncCoordinator {
     }
   }
 
-
   @discardableResult
   func restoreLocalFieldsFromConflict(
     _ selections: [HerdSharingLocalFieldRestoreSelection],
     in review: HerdSharingConflictReview,
-    syncAfterResolution: Bool
+    syncAfterResolution: Bool,
+    resolveAfterRestore: Bool = false
   ) async -> Bool {
     guard !selections.isEmpty else {
       lastSkippedReason = "Select one or more local field values to restore."
@@ -320,6 +320,15 @@ final class HerdSharingSyncCoordinator {
       lastSuccessMessage = "\(result.title): \(result.message)"
       lastErrorMessage = nil
       lastSkippedReason = nil
+
+      if resolveAfterRestore {
+        guard conflictReviewStore?.resolve(review, choice: .restoreLocalFields) != nil else {
+          lastSkippedReason =
+            "Local fields were restored, but no active conflict report was available to resolve."
+          return false
+        }
+        lastConflictReview = conflictReviewStore?.latestReview
+      }
 
       guard syncAfterResolution else { return true }
 
