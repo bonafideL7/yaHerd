@@ -240,6 +240,39 @@ final class HerdSharingSyncCoordinator {
   }
 
   @discardableResult
+  func resolveConflictByAcceptingSharedDeletes(
+    _ review: HerdSharingConflictReview,
+    syncAfterResolution: Bool
+  ) async -> Bool {
+    guard review.preventedDeleteCount > 0 else {
+      lastSkippedReason = "This conflict report does not contain skipped shared deletes."
+      return false
+    }
+
+    do {
+      let result = try await AcceptPreventedSharedDeletesUseCase(repository: sharingRepository)
+        .execute(
+          review: review,
+          storageMode: storageMode
+        )
+      lastSuccessMessage = "\(result.title): \(result.message)"
+      lastErrorMessage = nil
+      lastSkippedReason = nil
+      _ = conflictReviewStore?.resolve(review, choice: .acceptSharedDeletes)
+      lastConflictReview = conflictReviewStore?.latestReview
+
+      guard syncAfterResolution else { return true }
+
+      _ = await syncNow(trigger: .manual)
+      return true
+    } catch {
+      lastErrorMessage = error.localizedDescription
+      lastSuccessMessage = nil
+      return false
+    }
+  }
+
+  @discardableResult
   func syncNow(trigger: Trigger) async -> Bool {
     cancelPendingAutomaticSync()
     return await performSync(trigger: trigger)

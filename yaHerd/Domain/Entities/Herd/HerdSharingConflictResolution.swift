@@ -7,11 +7,14 @@ import Foundation
 
 enum HerdSharingConflictResolutionChoice: String, Codable, Equatable {
   case keepLocalRecords
+  case acceptSharedDeletes
 
   var displayName: String {
     switch self {
     case .keepLocalRecords:
       "Keep local records"
+    case .acceptSharedDeletes:
+      "Accept shared deletes"
     }
   }
 
@@ -19,6 +22,8 @@ enum HerdSharingConflictResolutionChoice: String, Codable, Equatable {
     switch self {
     case .keepLocalRecords:
       "The local records were intentionally kept. Run shared-data sync so the bridge can re-export the kept local records."
+    case .acceptSharedDeletes:
+      "The skipped shared deletes were accepted and the affected local SwiftData records were deleted. Run shared-data sync so the bridge stays aligned."
     }
   }
 }

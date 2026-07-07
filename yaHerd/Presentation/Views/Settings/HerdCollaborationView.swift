@@ -301,6 +301,23 @@ struct HerdCollaborationView: View {
         }
         .disabled(sharingSyncCoordinator?.isSyncing == true)
 
+        if conflictReview.preventedDeleteCount > 0 {
+          Button(role: .destructive) {
+            Task {
+              if let sharingSyncCoordinator {
+                _ = await sharingSyncCoordinator.resolveConflictByAcceptingSharedDeletes(
+                  conflictReview,
+                  syncAfterResolution: true
+                )
+                viewModel.loadLatestConflictReview(from: conflictReviewStore)
+              }
+            }
+          } label: {
+            Label("Accept Shared Deletes and Sync", systemImage: "trash")
+          }
+          .disabled(sharingSyncCoordinator == nil || sharingSyncCoordinator?.isSyncing == true)
+        }
+
         if !conflictReview.preventedDeleteConflicts.isEmpty {
           DisclosureGroup("Skipped Shared Deletes") {
             ForEach(conflictReview.preventedDeleteConflicts) { conflict in
@@ -388,7 +405,7 @@ struct HerdCollaborationView: View {
       }
 
       Text(
-        "yaHerd now persists conflict reports locally, survives app restarts, keeps a short history of prior reports, provides a detail screen for skipped shared deletes, and can mark a report resolved by keeping local records. This is still not a field-level manual merge UI."
+        "yaHerd now persists conflict reports locally, survives app restarts, keeps a short history of prior reports, provides a detail screen for skipped shared deletes, and can resolve reports by keeping local records or accepting shared deletes. This is still not a field-level manual merge UI."
       )
       .font(.caption)
       .foregroundStyle(.secondary)

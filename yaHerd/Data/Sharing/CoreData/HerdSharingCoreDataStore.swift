@@ -3245,6 +3245,32 @@ final class HerdSharingCoreDataStore {
     finding.sessionIDSnapshot = sharedRecord.parsedSessionIDSnapshot ?? session.publicID
   }
 
+  func acceptPreventedSharedDeletes(
+    _ conflicts: [HerdSharingPreventedDeleteConflict],
+    context: ModelContext
+  ) throws -> Int {
+    var deletedCount = 0
+    let orderedConflicts = conflicts.sorted { lhs, rhs in
+      deletionPriority(for: lhs.sourceEntityName) < deletionPriority(for: rhs.sourceEntityName)
+    }
+
+    for conflict in orderedConflicts {
+      if try deleteSwiftDataRecord(
+        sourceEntityName: conflict.sourceEntityName,
+        publicID: conflict.publicID,
+        in: context
+      ) {
+        deletedCount += 1
+      }
+    }
+
+    if context.hasChanges {
+      try context.save()
+    }
+
+    return deletedCount
+  }
+
   private func deleteSwiftDataRecords(
     from tombstones: [SharedDeletedRecord],
     herd: Herd,
@@ -3431,6 +3457,18 @@ final class HerdSharingCoreDataStore {
     sourceEntityName: String,
     publicID: UUID,
     herd: Herd,
+    in context: ModelContext
+  ) throws -> Bool {
+    try deleteSwiftDataRecord(
+      sourceEntityName: sourceEntityName,
+      publicID: publicID,
+      in: context
+    )
+  }
+
+  private func deleteSwiftDataRecord(
+    sourceEntityName: String,
+    publicID: UUID,
     in context: ModelContext
   ) throws -> Bool {
     switch sourceEntityName {
