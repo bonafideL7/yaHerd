@@ -322,7 +322,11 @@ final class HerdSharingSyncCoordinator {
       lastSkippedReason = nil
 
       if resolveAfterRestore {
-        guard conflictReviewStore?.resolve(review, choice: .restoreLocalFields) != nil else {
+        guard conflictReviewStore?.resolve(
+          review,
+          choice: .restoreLocalFields,
+          restoredLocalFieldSelections: selections
+        ) != nil else {
           lastSkippedReason =
             "Local fields were restored, but no active conflict report was available to resolve."
           return false

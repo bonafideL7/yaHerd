@@ -464,18 +464,37 @@ struct HerdCollaborationView: View {
       if let resolutions = conflictReviewStore?.resolutionHistory, !resolutions.isEmpty {
         DisclosureGroup("Resolved Conflict Reports") {
           ForEach(resolutions) { resolution in
-            VStack(alignment: .leading, spacing: 4) {
-              Text(resolution.choice.displayName)
-                .font(.caption.weight(.semibold))
-              Text(resolution.sourceDescription)
+            NavigationLink {
+              HerdSharingConflictResolutionDetailView(resolution: resolution)
+            } label: {
+              VStack(alignment: .leading, spacing: 4) {
+                Text(resolution.choice.displayName)
+                  .font(.caption.weight(.semibold))
+                Text(resolution.sourceDescription)
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+                Text(formattedSyncDate(resolution.resolvedAt))
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+                Text(resolution.conflictSummary)
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                  Label(
+                    "\(resolution.affectedRecordCount) record(s)",
+                    systemImage: "doc.on.doc"
+                  )
+                  if resolution.restoredLocalFieldCount > 0 {
+                    Label(
+                      "\(resolution.restoredLocalFieldCount) field(s)",
+                      systemImage: "arrow.uturn.backward"
+                    )
+                  }
+                }
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-              Text(formattedSyncDate(resolution.resolvedAt))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-              Text(resolution.conflictSummary)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+              }
             }
           }
         }
@@ -486,7 +505,7 @@ struct HerdCollaborationView: View {
       }
 
       Text(
-        "yaHerd now persists conflict reports locally, survives app restarts, keeps a short history of prior reports, shows updated existing record IDs by entity, provides a detail screen for skipped shared deletes, and can resolve reports by keeping local records or accepting shared deletes. This is still not a field-level manual merge UI."
+        "yaHerd persists conflict reports locally, keeps a short history of prior reports, separates restorable and review-only fields, supports selected local field restore for scalar values, confirms high-risk actions, and keeps an audit detail for resolved conflict reports."
       )
       .font(.caption)
       .foregroundStyle(.secondary)

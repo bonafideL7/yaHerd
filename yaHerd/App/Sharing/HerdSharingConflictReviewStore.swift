@@ -52,14 +52,16 @@ final class HerdSharingConflictReviewStore {
   func resolve(
     _ review: HerdSharingConflictReview,
     choice: HerdSharingConflictResolutionChoice,
-    resolvedAt: Date = .now
+    resolvedAt: Date = .now,
+    restoredLocalFieldSelections: [HerdSharingLocalFieldRestoreSelection] = []
   ) -> HerdSharingConflictResolution? {
     guard review.hasConflicts else { return nil }
 
     let resolution = HerdSharingConflictResolution(
       review: review,
       resolvedAt: resolvedAt,
-      choice: choice
+      choice: choice,
+      restoredLocalFieldSelections: restoredLocalFieldSelections
     )
     resolutionHistory.removeAll { $0.reviewID == resolution.reviewID }
     resolutionHistory.insert(resolution, at: 0)
