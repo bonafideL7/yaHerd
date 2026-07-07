@@ -3954,6 +3954,46 @@ final class HerdSharingCoreDataStore {
         in: context
       ) else { return false }
       return restorePregnancyCheckLocalField(fieldName: fieldName, value: value, check: check)
+    case SharedStatusRecord.entityName:
+      guard let statusRecord = try fetchSwiftDataRecord(
+        StatusRecord.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restoreStatusRecordLocalField(
+        fieldName: fieldName,
+        value: value,
+        statusRecord: statusRecord
+      )
+    case SharedAnimalTagRecord.entityName:
+      guard let tag = try fetchSwiftDataRecord(
+        AnimalTag.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restoreAnimalTagLocalField(fieldName: fieldName, value: value, tag: tag)
+    case SharedWorkingSessionRecord.entityName:
+      guard let session = try fetchSwiftDataRecord(
+        WorkingSession.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restoreWorkingSessionLocalField(fieldName: fieldName, value: value, session: session)
+    case SharedWorkingQueueItemRecord.entityName:
+      guard let queueItem = try fetchSwiftDataRecord(
+        WorkingQueueItem.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restoreWorkingQueueItemLocalField(
+        fieldName: fieldName,
+        value: value,
+        queueItem: queueItem
+      )
     default:
       return false
     }
@@ -4197,6 +4237,154 @@ final class HerdSharingCoreDataStore {
       } else {
         guard let dateValue = value.dateValue else { return false }
         check.dueDate = dateValue
+      }
+    default:
+      return false
+    }
+
+    return true
+  }
+
+  private func restoreStatusRecordLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    statusRecord: StatusRecord
+  ) -> Bool {
+    switch fieldName {
+    case "date":
+      guard let dateValue = value.dateValue else { return false }
+      statusRecord.date = dateValue
+    case "oldStatus":
+      guard let rawValue = value.stringValue, let status = AnimalStatus(rawValue: rawValue) else {
+        return false
+      }
+      statusRecord.oldStatus = status
+    case "newStatus":
+      guard let rawValue = value.stringValue, let status = AnimalStatus(rawValue: rawValue) else {
+        return false
+      }
+      statusRecord.newStatus = status
+    case "oldStatusReferenceID":
+      if value.isNull {
+        statusRecord.oldStatusReferenceID = nil
+      } else {
+        guard let uuidValue = value.uuidValue else { return false }
+        statusRecord.oldStatusReferenceID = uuidValue
+      }
+    case "newStatusReferenceID":
+      if value.isNull {
+        statusRecord.newStatusReferenceID = nil
+      } else {
+        guard let uuidValue = value.uuidValue else { return false }
+        statusRecord.newStatusReferenceID = uuidValue
+      }
+    default:
+      return false
+    }
+
+    return true
+  }
+
+  private func restoreAnimalTagLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    tag: AnimalTag
+  ) -> Bool {
+    switch fieldName {
+    case "number":
+      guard let stringValue = value.stringValue else { return false }
+      tag.number = stringValue
+    case "colorID":
+      if value.isNull {
+        tag.colorID = nil
+      } else {
+        guard let uuidValue = value.uuidValue else { return false }
+        tag.colorID = uuidValue
+      }
+    case "isPrimary":
+      guard let boolValue = value.boolValue else { return false }
+      tag.isPrimary = boolValue
+    case "isActive":
+      guard let boolValue = value.boolValue else { return false }
+      tag.isActive = boolValue
+    case "assignedAt":
+      guard let dateValue = value.dateValue else { return false }
+      tag.assignedAt = dateValue
+    case "removedAt":
+      if value.isNull {
+        tag.removedAt = nil
+      } else {
+        guard let dateValue = value.dateValue else { return false }
+        tag.removedAt = dateValue
+      }
+    default:
+      return false
+    }
+
+    return true
+  }
+
+  private func restoreWorkingSessionLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    session: WorkingSession
+  ) -> Bool {
+    switch fieldName {
+    case "date":
+      guard let dateValue = value.dateValue else { return false }
+      session.date = dateValue
+    case "status":
+      guard let rawValue = value.stringValue, let status = WorkingSessionStatus(rawValue: rawValue) else {
+        return false
+      }
+      session.status = status
+    case "protocolName":
+      guard let stringValue = value.stringValue else { return false }
+      session.protocolName = stringValue
+    case "currentQueueIndex":
+      guard let intValue = value.intValue else { return false }
+      session.currentQueueIndex = intValue
+    case "notes":
+      if value.isNull {
+        session.notes = nil
+      } else {
+        guard let stringValue = value.stringValue else { return false }
+        session.notes = stringValue
+      }
+    default:
+      return false
+    }
+
+    return true
+  }
+
+  private func restoreWorkingQueueItemLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    queueItem: WorkingQueueItem
+  ) -> Bool {
+    switch fieldName {
+    case "queueOrder":
+      guard let intValue = value.intValue else { return false }
+      queueItem.queueOrder = intValue
+    case "status":
+      guard let rawValue = value.stringValue, let status = WorkingQueueStatus(rawValue: rawValue) else {
+        return false
+      }
+      queueItem.status = status
+    case "completedAt":
+      if value.isNull {
+        queueItem.completedAt = nil
+      } else {
+        guard let dateValue = value.dateValue else { return false }
+        queueItem.completedAt = dateValue
+      }
+    case "workNotes":
+      if value.isNull {
+        queueItem.workNotes = nil
+      } else {
+        guard let stringValue = value.stringValue else { return false }
+        queueItem.workNotes = stringValue
       }
     default:
       return false
