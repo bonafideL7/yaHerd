@@ -95,6 +95,8 @@ struct HerdSharingConflictReviewDetailView: View {
                       DisclosureGroup(
                         "Restorable Fields (\(conflict.supportedLocalRestoreFieldChanges.count))"
                       ) {
+                        localFieldRestoreSelectionControls(for: conflict)
+
                         ForEach(conflict.supportedLocalRestoreFieldChanges) { fieldChange in
                           restorableFieldChangeRow(fieldChange, in: conflict)
                         }
@@ -280,6 +282,39 @@ struct HerdSharingConflictReviewDetailView: View {
   }
 
   @ViewBuilder
+  private func localFieldRestoreSelectionControls(
+    for conflict: HerdSharingUpdatedRecordConflict
+  ) -> some View {
+    let selectedCount = selectedRestorableFieldCount(in: conflict)
+    let totalCount = conflict.supportedLocalRestoreFieldChanges.count
+
+    VStack(alignment: .leading, spacing: 6) {
+      Text("\(selectedCount) of \(totalCount) selected")
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+
+      HStack {
+        Button {
+          selectAllLocalFields(in: conflict)
+        } label: {
+          Label("Select All", systemImage: "checklist.checked")
+        }
+        .disabled(totalCount == 0 || selectedCount == totalCount)
+
+        Button {
+          clearLocalFields(in: conflict)
+        } label: {
+          Label("Clear", systemImage: "xmark.circle")
+        }
+        .disabled(selectedCount == 0)
+      }
+      .buttonStyle(.borderless)
+      .font(.caption2)
+    }
+    .padding(.vertical, 2)
+  }
+
+  @ViewBuilder
   private func restorableFieldChangeRow(
     _ fieldChange: HerdSharingUpdatedRecordFieldChange,
     in conflict: HerdSharingUpdatedRecordConflict
@@ -366,6 +401,30 @@ struct HerdSharingConflictReviewDetailView: View {
     } else {
       selectedLocalFieldRestoreIDs.insert(selection.id)
     }
+  }
+
+  private func selectAllLocalFields(in conflict: HerdSharingUpdatedRecordConflict) {
+    selectedLocalFieldRestoreIDs.formUnion(localFieldRestoreIDs(in: conflict))
+  }
+
+  private func clearLocalFields(in conflict: HerdSharingUpdatedRecordConflict) {
+    selectedLocalFieldRestoreIDs.subtract(localFieldRestoreIDs(in: conflict))
+  }
+
+  private func selectedRestorableFieldCount(
+    in conflict: HerdSharingUpdatedRecordConflict
+  ) -> Int {
+    selectedLocalFieldRestoreIDs.intersection(localFieldRestoreIDs(in: conflict)).count
+  }
+
+  private func localFieldRestoreIDs(
+    in conflict: HerdSharingUpdatedRecordConflict
+  ) -> Set<String> {
+    Set(
+      conflict.supportedLocalRestoreFieldChanges.map { fieldChange in
+        conflict.restoreSelection(for: fieldChange).id
+      }
+    )
   }
 
   private func restoreSelectedLocalFields(
