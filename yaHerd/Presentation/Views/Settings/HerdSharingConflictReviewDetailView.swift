@@ -90,11 +90,11 @@ struct HerdSharingConflictReviewDetailView: View {
                       VStack(alignment: .leading, spacing: 2) {
                         Text(fieldChange.fieldName)
                           .font(.caption2.weight(.semibold))
-                        Text("Local: \(fieldChange.localValueDescription)")
+                        Text("Local (\(fieldChange.localValue.displayType)): \(fieldChange.localValueDescription)")
                           .font(.caption2)
                           .foregroundStyle(.secondary)
                           .textSelection(.enabled)
-                        Text("Shared: \(fieldChange.sharedValueDescription)")
+                        Text("Shared (\(fieldChange.sharedValue.displayType)): \(fieldChange.sharedValueDescription)")
                           .font(.caption2)
                           .foregroundStyle(.secondary)
                           .textSelection(.enabled)

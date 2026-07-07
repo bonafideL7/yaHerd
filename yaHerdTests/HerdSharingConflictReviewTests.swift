@@ -180,4 +180,42 @@ final class HerdSharingConflictReviewTests: XCTestCase {
     XCTAssertEqual(conflict.fieldChanges.first?.fieldName, "tagNumber")
   }
 
+  func testUpdatedRecordFieldChangeStoresTypedValues() throws {
+    let change = HerdSharingUpdatedRecordFieldChange(
+      fieldName: "updatedAt",
+      localValue: .date(Date(timeIntervalSince1970: 20)),
+      sharedValue: .date(Date(timeIntervalSince1970: 30))
+    )
+
+    XCTAssertEqual(change.localValue.type, .date)
+    XCTAssertEqual(change.sharedValue.type, .date)
+    XCTAssertEqual(change.localValue.displayType, "date")
+    XCTAssertTrue(change.localValueDescription.contains("1970"))
+
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .secondsSince1970
+    let data = try encoder.encode(change)
+    let decoded = try JSONDecoder().decode(HerdSharingUpdatedRecordFieldChange.self, from: data)
+
+    XCTAssertEqual(decoded, change)
+    XCTAssertEqual(decoded.localValue.type, .date)
+  }
+
+  func testUpdatedRecordFieldChangeDecodesLegacyDisplayValuesAsStrings() throws {
+    let json = """
+    {
+      "fieldName": "tagNumber",
+      "localValueDescription": "12",
+      "sharedValueDescription": "14"
+    }
+    """.data(using: .utf8)!
+
+    let change = try JSONDecoder().decode(HerdSharingUpdatedRecordFieldChange.self, from: json)
+
+    XCTAssertEqual(change.fieldName, "tagNumber")
+    XCTAssertEqual(change.localValue.type, .string)
+    XCTAssertEqual(change.localValueDescription, "12")
+    XCTAssertEqual(change.sharedValueDescription, "14")
+  }
+
 }

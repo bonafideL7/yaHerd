@@ -40,12 +40,59 @@ struct HerdSharingBridgeConflictReport: Equatable {
   }
 }
 
+struct HerdSharingBridgeConflictValue: Equatable {
+  enum ValueType: String, Equatable {
+    case null
+    case string
+    case bool
+    case int
+    case double
+    case date
+    case uuid
+  }
+
+  let type: ValueType
+  let encodedValue: String?
+
+  static let null = HerdSharingBridgeConflictValue(type: .null, encodedValue: nil)
+
+  var displayDescription: String {
+    guard let encodedValue else { return "nil" }
+    return encodedValue
+  }
+}
+
 struct HerdSharingBridgeFieldChange: Equatable, Identifiable {
   var id: String { fieldName }
 
   let fieldName: String
-  let localValueDescription: String
-  let sharedValueDescription: String
+  let localValue: HerdSharingBridgeConflictValue
+  let sharedValue: HerdSharingBridgeConflictValue
+
+  init(
+    fieldName: String,
+    localValue: HerdSharingBridgeConflictValue,
+    sharedValue: HerdSharingBridgeConflictValue
+  ) {
+    self.fieldName = fieldName
+    self.localValue = localValue
+    self.sharedValue = sharedValue
+  }
+
+  init(
+    fieldName: String,
+    localValueDescription: String,
+    sharedValueDescription: String
+  ) {
+    self.init(
+      fieldName: fieldName,
+      localValue: HerdSharingBridgeConflictValue(type: .string, encodedValue: localValueDescription),
+      sharedValue: HerdSharingBridgeConflictValue(type: .string, encodedValue: sharedValueDescription)
+    )
+  }
+
+  var localValueDescription: String { localValue.displayDescription }
+  var sharedValueDescription: String { sharedValue.displayDescription }
 }
 
 struct HerdSharingBridgeConflictDetail: Equatable, Identifiable {

@@ -3502,7 +3502,7 @@ final class HerdSharingCoreDataStore {
     finding.sessionIDSnapshot = sharedRecord.parsedSessionIDSnapshot ?? session.publicID
   }
 
-  private typealias HerdSharingConflictFieldSnapshot = [String: String]
+  private typealias HerdSharingConflictFieldSnapshot = [String: HerdSharingBridgeConflictValue]
 
   private func updatedRecordConflict(
     sourceEntityName: String,
@@ -3544,31 +3544,52 @@ final class HerdSharingCoreDataStore {
   ) -> [HerdSharingBridgeFieldChange] {
     let fieldNames = Set(before.keys).union(after.keys)
     return fieldNames.sorted().compactMap { fieldName in
-      let localValue = before[fieldName] ?? "nil"
-      let sharedValue = after[fieldName] ?? "nil"
+      let localValue = before[fieldName] ?? .null
+      let sharedValue = after[fieldName] ?? .null
       guard localValue != sharedValue else { return nil }
       return HerdSharingBridgeFieldChange(
         fieldName: fieldName,
-        localValueDescription: localValue,
-        sharedValueDescription: sharedValue
+        localValue: localValue,
+        sharedValue: sharedValue
       )
     }
   }
 
-  private func conflictValueDescription(_ value: Any?) -> String {
-    guard let value else { return "nil" }
+  private func conflictValue(_ value: Any?) -> HerdSharingBridgeConflictValue {
+    guard let value else { return .null }
     if let date = value as? Date {
-      return ISO8601DateFormatter().string(from: date)
+      return HerdSharingBridgeConflictValue(
+        type: .date,
+        encodedValue: ISO8601DateFormatter().string(from: date)
+      )
     }
     if let uuid = value as? UUID {
-      return uuid.uuidString
+      return HerdSharingBridgeConflictValue(type: .uuid, encodedValue: uuid.uuidString)
     }
-    return String(describing: value)
+    if let bool = value as? Bool {
+      return HerdSharingBridgeConflictValue(
+        type: .bool,
+        encodedValue: bool ? "true" : "false"
+      )
+    }
+    if let int = value as? Int {
+      return HerdSharingBridgeConflictValue(type: .int, encodedValue: String(int))
+    }
+    if let double = value as? Double {
+      return HerdSharingBridgeConflictValue(type: .double, encodedValue: String(double))
+    }
+    if let float = value as? Float {
+      return HerdSharingBridgeConflictValue(type: .double, encodedValue: String(Double(float)))
+    }
+    if let string = value as? String {
+      return HerdSharingBridgeConflictValue(type: .string, encodedValue: string)
+    }
+    return HerdSharingBridgeConflictValue(type: .string, encodedValue: String(describing: value))
   }
 
   private func conflictFieldSnapshot(_ values: [String: Any?]) -> HerdSharingConflictFieldSnapshot {
     values.reduce(into: HerdSharingConflictFieldSnapshot()) { result, item in
-      result[item.key] = conflictValueDescription(item.value)
+      result[item.key] = conflictValue(item.value)
     }
   }
 
