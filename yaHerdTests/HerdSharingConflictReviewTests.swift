@@ -218,4 +218,78 @@ final class HerdSharingConflictReviewTests: XCTestCase {
     XCTAssertEqual(change.sharedValueDescription, "14")
   }
 
+  func testSupportedLocalFieldRestoreIncludesHealthMovementAndPregnancyScalars() {
+    let healthConflict = HerdSharingUpdatedRecordConflict(
+      sourceEntityName: "SharedHealthRecord",
+      publicID: UUID(),
+      localModifiedAt: Date(timeIntervalSince1970: 10),
+      sharedModifiedAt: Date(timeIntervalSince1970: 20),
+      fieldChanges: [
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "treatment",
+          localValue: .string("Local treatment"),
+          sharedValue: .string("Shared treatment")
+        ),
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "animalPublicID",
+          localValue: .uuid(UUID()),
+          sharedValue: .uuid(UUID())
+        ),
+      ]
+    )
+
+    XCTAssertEqual(
+      healthConflict.supportedLocalRestoreFieldChanges.map(\.fieldName),
+      ["treatment"]
+    )
+
+    let movementConflict = HerdSharingUpdatedRecordConflict(
+      sourceEntityName: "SharedMovementRecord",
+      publicID: UUID(),
+      localModifiedAt: Date(timeIntervalSince1970: 10),
+      sharedModifiedAt: Date(timeIntervalSince1970: 20),
+      fieldChanges: [
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "fromPasture",
+          localValue: .string("North"),
+          sharedValue: .string("South")
+        ),
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "animalPublicID",
+          localValue: .uuid(UUID()),
+          sharedValue: .uuid(UUID())
+        ),
+      ]
+    )
+
+    XCTAssertEqual(
+      movementConflict.supportedLocalRestoreFieldChanges.map(\.fieldName),
+      ["fromPasture"]
+    )
+
+    let pregnancyConflict = HerdSharingUpdatedRecordConflict(
+      sourceEntityName: "SharedPregnancyCheckRecord",
+      publicID: UUID(),
+      localModifiedAt: Date(timeIntervalSince1970: 10),
+      sharedModifiedAt: Date(timeIntervalSince1970: 20),
+      fieldChanges: [
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "result",
+          localValue: .string("pregnant"),
+          sharedValue: .string("open")
+        ),
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "sireAnimalPublicID",
+          localValue: .uuid(UUID()),
+          sharedValue: .uuid(UUID())
+        ),
+      ]
+    )
+
+    XCTAssertEqual(
+      pregnancyConflict.supportedLocalRestoreFieldChanges.map(\.fieldName),
+      ["result"]
+    )
+  }
+
 }

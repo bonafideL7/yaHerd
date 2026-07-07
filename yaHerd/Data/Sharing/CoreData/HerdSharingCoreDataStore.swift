@@ -3926,6 +3926,34 @@ final class HerdSharingCoreDataStore {
         in: context
       ) else { return false }
       return restorePastureLocalField(fieldName: fieldName, value: value, pasture: pasture)
+    case SharedHealthRecord.entityName:
+      guard let healthRecord = try fetchSwiftDataRecord(
+        HealthRecord.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restoreHealthRecordLocalField(
+        fieldName: fieldName,
+        value: value,
+        healthRecord: healthRecord
+      )
+    case SharedMovementRecord.entityName:
+      guard let movement = try fetchSwiftDataRecord(
+        MovementRecord.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restoreMovementRecordLocalField(fieldName: fieldName, value: value, movement: movement)
+    case SharedPregnancyCheckRecord.entityName:
+      guard let check = try fetchSwiftDataRecord(
+        PregnancyCheck.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restorePregnancyCheckLocalField(fieldName: fieldName, value: value, check: check)
     default:
       return false
     }
@@ -4071,6 +4099,104 @@ final class HerdSharingCoreDataStore {
       } else {
         guard let dateValue = value.dateValue else { return false }
         pasture.lastGrazedDate = dateValue
+      }
+    default:
+      return false
+    }
+
+    return true
+  }
+
+  private func restoreHealthRecordLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    healthRecord: HealthRecord
+  ) -> Bool {
+    switch fieldName {
+    case "date":
+      guard let dateValue = value.dateValue else { return false }
+      healthRecord.date = dateValue
+    case "treatment":
+      guard let stringValue = value.stringValue else { return false }
+      healthRecord.treatment = stringValue
+    case "notes":
+      if value.isNull {
+        healthRecord.notes = nil
+      } else {
+        guard let stringValue = value.stringValue else { return false }
+        healthRecord.notes = stringValue
+      }
+    default:
+      return false
+    }
+
+    return true
+  }
+
+  private func restoreMovementRecordLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    movement: MovementRecord
+  ) -> Bool {
+    switch fieldName {
+    case "date":
+      guard let dateValue = value.dateValue else { return false }
+      movement.date = dateValue
+    case "fromPasture":
+      if value.isNull {
+        movement.fromPasture = nil
+      } else {
+        guard let stringValue = value.stringValue else { return false }
+        movement.fromPasture = stringValue
+      }
+    case "toPasture":
+      if value.isNull {
+        movement.toPasture = nil
+      } else {
+        guard let stringValue = value.stringValue else { return false }
+        movement.toPasture = stringValue
+      }
+    default:
+      return false
+    }
+
+    return true
+  }
+
+  private func restorePregnancyCheckLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    check: PregnancyCheck
+  ) -> Bool {
+    switch fieldName {
+    case "date":
+      guard let dateValue = value.dateValue else { return false }
+      check.date = dateValue
+    case "result":
+      guard let rawValue = value.stringValue, let result = PregnancyResult(rawValue: rawValue) else {
+        return false
+      }
+      check.result = result
+    case "technician":
+      if value.isNull {
+        check.technician = nil
+      } else {
+        guard let stringValue = value.stringValue else { return false }
+        check.technician = stringValue
+      }
+    case "estimatedDaysPregnant":
+      if value.isNull {
+        check.estimatedDaysPregnant = nil
+      } else {
+        guard let intValue = value.intValue else { return false }
+        check.estimatedDaysPregnant = intValue
+      }
+    case "dueDate":
+      if value.isNull {
+        check.dueDate = nil
+      } else {
+        guard let dateValue = value.dateValue else { return false }
+        check.dueDate = dateValue
       }
     default:
       return false
