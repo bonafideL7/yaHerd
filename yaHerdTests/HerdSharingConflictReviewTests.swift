@@ -316,6 +316,9 @@ final class HerdSharingConflictReviewTests: XCTestCase {
     XCTAssertTrue(conflict.hasReviewOnlyFieldChanges)
     XCTAssertEqual(conflict.supportedLocalRestoreFieldChanges.map(\.fieldName), ["treatment"])
     XCTAssertEqual(conflict.reviewOnlyFieldChanges.map(\.fieldName), ["animalPublicID"])
+    XCTAssertEqual(conflict.relationshipFieldChanges.map(\.fieldName), ["animalPublicID"])
+    XCTAssertTrue(conflict.complexFieldChanges.isEmpty)
+    XCTAssertTrue(conflict.unsupportedFieldChanges.isEmpty)
   }
 
   func testSupportedLocalFieldRestoreIncludesStatusTagAndWorkingScalars() {
@@ -387,6 +390,7 @@ final class HerdSharingConflictReviewTests: XCTestCase {
       ["protocolName"]
     )
     XCTAssertEqual(sessionConflict.reviewOnlyFieldChanges.map(\.fieldName), ["protocolItems"])
+    XCTAssertEqual(sessionConflict.complexFieldChanges.map(\.fieldName), ["protocolItems"])
 
     let queueItemConflict = HerdSharingUpdatedRecordConflict(
       sourceEntityName: "SharedWorkingQueueItemRecord",
@@ -412,6 +416,7 @@ final class HerdSharingConflictReviewTests: XCTestCase {
       ["workNotes"]
     )
     XCTAssertEqual(queueItemConflict.reviewOnlyFieldChanges.map(\.fieldName), ["sessionPublicID"])
+    XCTAssertEqual(queueItemConflict.relationshipFieldChanges.map(\.fieldName), ["sessionPublicID"])
   }
 
   func testSupportedLocalFieldRestoreIncludesRemainingScalarSharedEntities() {
@@ -468,6 +473,7 @@ final class HerdSharingConflictReviewTests: XCTestCase {
 
     XCTAssertEqual(treatmentConflict.supportedLocalRestoreFieldChanges.map(\.fieldName), ["quantity"])
     XCTAssertEqual(treatmentConflict.reviewOnlyFieldChanges.map(\.fieldName), ["animalPublicID"])
+    XCTAssertEqual(treatmentConflict.relationshipFieldChanges.map(\.fieldName), ["animalPublicID"])
 
     let fieldCheckConflict = HerdSharingUpdatedRecordConflict(
       sourceEntityName: "SharedFieldCheckAnimalCheckRecord",
@@ -490,6 +496,114 @@ final class HerdSharingConflictReviewTests: XCTestCase {
 
     XCTAssertEqual(fieldCheckConflict.supportedLocalRestoreFieldChanges.map(\.fieldName), ["note"])
     XCTAssertEqual(fieldCheckConflict.reviewOnlyFieldChanges.map(\.fieldName), ["sessionPublicID"])
+    XCTAssertEqual(fieldCheckConflict.relationshipFieldChanges.map(\.fieldName), ["sessionPublicID"])
+  }
+
+  func testRelationshipComplexAndUnsupportedFieldCategories() {
+    let conflict = HerdSharingUpdatedRecordConflict(
+      sourceEntityName: "SharedAnimalRecord",
+      publicID: UUID(),
+      localModifiedAt: Date(timeIntervalSince1970: 10),
+      sharedModifiedAt: Date(timeIntervalSince1970: 20),
+      fieldChanges: [
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "name",
+          localValue: .string("Local"),
+          sharedValue: .string("Shared")
+        ),
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "pasturePublicID",
+          localValue: .uuid(UUID()),
+          sharedValue: .uuid(UUID())
+        ),
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "distinguishingFeatures",
+          localValue: .string("[]"),
+          sharedValue: .string("[\"scar\"]")
+        ),
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "unknownField",
+          localValue: .string("local"),
+          sharedValue: .string("shared")
+        ),
+      ]
+    )
+
+    XCTAssertEqual(conflict.supportedLocalRestoreFieldChanges.map(\.fieldName), ["name"])
+    XCTAssertEqual(conflict.relationshipFieldChanges.map(\.fieldName), ["pasturePublicID"])
+    XCTAssertEqual(conflict.complexFieldChanges.map(\.fieldName), ["distinguishingFeatures"])
+    XCTAssertEqual(conflict.unsupportedFieldChanges.map(\.fieldName), ["unknownField"])
+    XCTAssertEqual(
+      conflict.localFieldRestoreSupportCategory(for: conflict.fieldChanges[0]),
+      .restorable
+    )
+    XCTAssertEqual(
+      conflict.localFieldRestoreSupportCategory(for: conflict.fieldChanges[1]),
+      .relationship
+    )
+    XCTAssertEqual(
+      conflict.localFieldRestoreSupportCategory(for: conflict.fieldChanges[2]),
+      .complex
+    )
+    XCTAssertEqual(
+      conflict.localFieldRestoreSupportCategory(for: conflict.fieldChanges[3]),
+      .unsupported
+    )
+  }
+
+  func testKnownRelationshipFieldsRemainReviewOnly() {
+    let relationshipFields = [
+      "animalPublicID",
+      "herdPublicID",
+      "pasturePublicID",
+      "workingSessionPublicID",
+      "sireAnimalPublicID",
+      "sourcePasturePublicID",
+      "destinationPasturePublicID",
+      "fieldCheckSessionPublicID",
+    ]
+
+    let conflict = HerdSharingUpdatedRecordConflict(
+      sourceEntityName: "SharedWorkingQueueItemRecord",
+      publicID: UUID(),
+      localModifiedAt: Date(timeIntervalSince1970: 10),
+      sharedModifiedAt: Date(timeIntervalSince1970: 20),
+      fieldChanges: relationshipFields.map { fieldName in
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: fieldName,
+          localValue: .uuid(UUID()),
+          sharedValue: .uuid(UUID())
+        )
+      }
+    )
+
+    XCTAssertTrue(conflict.supportedLocalRestoreFieldChanges.isEmpty)
+    XCTAssertEqual(conflict.relationshipFieldChanges.map(\.fieldName), relationshipFields)
+    XCTAssertTrue(conflict.complexFieldChanges.isEmpty)
+    XCTAssertTrue(conflict.unsupportedFieldChanges.isEmpty)
+  }
+
+  func testKnownComplexFieldsRemainReviewOnly() {
+    let complexFields = ["protocolItems", "distinguishingFeatures", "items"]
+
+    let conflict = HerdSharingUpdatedRecordConflict(
+      sourceEntityName: "SharedWorkingSessionRecord",
+      publicID: UUID(),
+      localModifiedAt: Date(timeIntervalSince1970: 10),
+      sharedModifiedAt: Date(timeIntervalSince1970: 20),
+      fieldChanges: complexFields.map { fieldName in
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: fieldName,
+          localValue: .string("[]"),
+          sharedValue: .string("[]")
+        )
+      }
+    )
+
+    XCTAssertTrue(conflict.supportedLocalRestoreFieldChanges.isEmpty)
+    XCTAssertTrue(conflict.relationshipFieldChanges.isEmpty)
+    XCTAssertEqual(conflict.complexFieldChanges.map(\.fieldName), complexFields)
+    XCTAssertTrue(conflict.unsupportedFieldChanges.isEmpty)
   }
 
 }
