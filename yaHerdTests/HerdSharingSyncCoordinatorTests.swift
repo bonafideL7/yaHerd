@@ -292,6 +292,45 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
     userDefaults.removePersistentDomain(forName: suiteName)
   }
 
+  func testResolveConflictByAcceptingSharedUpdatesStoresResolutionWithoutRepositoryWrite() async {
+    let suiteName = "HerdSharingSyncCoordinatorTests.acceptUpdates.\(UUID().uuidString)"
+    let userDefaults = UserDefaults(suiteName: suiteName)!
+    userDefaults.removePersistentDomain(forName: suiteName)
+    let conflictReviewStore = HerdSharingConflictReviewStore(
+      userDefaults: userDefaults,
+      storageKey: "conflicts",
+      maxStoredReviews: 5
+    )
+    let herdRepository = StubHerdRepository(herd: makeHerdSummary())
+    let sharingRepository = RecordingHerdSharingRepository()
+    let conflictReview = makeUpdatedRecordConflictReview()
+    conflictReviewStore.record(conflictReview)
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      conflictReviewStore: conflictReviewStore,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+
+    let resolved = await coordinator.resolveConflictByAcceptingSharedUpdates(
+      conflictReview,
+      syncAfterResolution: false
+    )
+
+    XCTAssertTrue(resolved)
+    XCTAssertEqual(sharingRepository.acceptSharedDeleteCallCount, 0)
+    XCTAssertEqual(sharingRepository.syncCallCount, 0)
+    XCTAssertNil(coordinator.lastConflictReview)
+    XCTAssertEqual(conflictReviewStore.resolutionHistory.first?.reviewID, conflictReview.id)
+    XCTAssertEqual(
+      conflictReviewStore.resolutionHistory.first?.choice,
+      Optional(HerdSharingConflictResolutionChoice.acceptSharedUpdates)
+    )
+    userDefaults.removePersistentDomain(forName: suiteName)
+  }
+
   func testResolveConflictByAcceptingSharedDeletesDeletesRecordsStoresResolutionAndRunsSync() async {
     let suiteName = "HerdSharingSyncCoordinatorTests.acceptDelete.\(UUID().uuidString)"
     let userDefaults = UserDefaults(suiteName: suiteName)!
@@ -339,6 +378,31 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
       createdAt: Date(timeIntervalSince1970: 0),
       updatedAt: Date(timeIntervalSince1970: 1),
       schemaVersion: 1
+    )
+  }
+
+  private func makeUpdatedRecordConflictReview() -> HerdSharingConflictReview {
+    HerdSharingConflictReview(
+      title: "Shared-data conflicts detected",
+      sourceDescription: "Test sync",
+      detectedAt: Date(timeIntervalSince1970: 100),
+      existingLocalRecordUpdateCount: 1,
+      updatedRecordConflicts: [
+        HerdSharingUpdatedRecordConflict(
+          sourceEntityName: "SharedAnimalRecord",
+          publicID: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+          localModifiedAt: Date(timeIntervalSince1970: 20),
+          sharedModifiedAt: Date(timeIntervalSince1970: 30),
+          fieldChanges: [
+            HerdSharingUpdatedRecordFieldChange(
+              fieldName: "tagNumber",
+              localValueDescription: "12",
+              sharedValueDescription: "14"
+            )
+          ]
+        )
+      ],
+      preventedDeleteConflicts: []
     )
   }
 

@@ -301,6 +301,28 @@ struct HerdCollaborationView: View {
         }
         .disabled(sharingSyncCoordinator?.isSyncing == true)
 
+        if conflictReview.updatedRecordConflictCount > 0 || conflictReview.existingLocalRecordUpdateCount > 0 {
+          Button {
+            Task {
+              if let sharingSyncCoordinator {
+                _ = await sharingSyncCoordinator.resolveConflictByAcceptingSharedUpdates(
+                  conflictReview,
+                  syncAfterResolution: false
+                )
+                viewModel.loadLatestConflictReview(from: conflictReviewStore)
+              } else {
+                viewModel.resolveConflictByAcceptingSharedUpdates(
+                  conflictReview,
+                  in: conflictReviewStore
+                )
+              }
+            }
+          } label: {
+            Label("Accept Shared Updates", systemImage: "checkmark.circle")
+          }
+          .disabled(sharingSyncCoordinator?.isSyncing == true)
+        }
+
         if conflictReview.preventedDeleteCount > 0 {
           Button(role: .destructive) {
             Task {

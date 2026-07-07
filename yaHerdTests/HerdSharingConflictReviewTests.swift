@@ -85,7 +85,7 @@ final class HerdSharingConflictReviewTests: XCTestCase {
     )
     XCTAssertEqual(
       review.recommendedAction,
-      "Review the updated record IDs by entity. Keep local records only if the shared update was unexpected."
+      "Choose Accept Shared Updates if the imported shared values are correct. Keep local records only if the shared update was unexpected and you plan to re-export local values."
     )
   }
 

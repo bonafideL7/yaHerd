@@ -111,7 +111,7 @@ struct HerdSharingConflictReview: Codable, Equatable, Identifiable {
     }
 
     if updatedRecordConflictCount > 0 {
-      return "Review the updated record IDs by entity. Keep local records only if the shared update was unexpected."
+      return "Choose Accept Shared Updates if the imported shared values are correct. Keep local records only if the shared update was unexpected and you plan to re-export local values."
     }
 
     return "Review the affected records if the shared update was unexpected."
