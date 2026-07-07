@@ -65,4 +65,25 @@ final class HerdSharingBridgeConflictReportTests: XCTestCase {
       "1 shared delete(s) were skipped because local records appear newer."
     )
   }
+  func testBridgeFieldChangeCarriesTypedValues() {
+    let detail = HerdSharingBridgeConflictDetail(
+      kind: .existingLocalRecordUpdate,
+      sourceEntityName: SharedAnimalRecord.entityName,
+      publicID: UUID(),
+      localModifiedAt: Date(timeIntervalSince1970: 20),
+      sharedModifiedAt: Date(timeIntervalSince1970: 30),
+      fieldChanges: [
+        HerdSharingBridgeFieldChange(
+          fieldName: "isArchived",
+          localValue: HerdSharingBridgeConflictValue(type: .bool, encodedValue: "false"),
+          sharedValue: HerdSharingBridgeConflictValue(type: .bool, encodedValue: "true")
+        )
+      ]
+    )
+
+    XCTAssertEqual(detail.fieldChanges.first?.localValue.type, .bool)
+    XCTAssertEqual(detail.fieldChanges.first?.localValueDescription, "false")
+    XCTAssertEqual(detail.fieldChanges.first?.sharedValueDescription, "true")
+  }
+
 }

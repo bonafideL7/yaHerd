@@ -307,8 +307,18 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
           fieldChanges: conflict.fieldChanges.map { fieldChange in
             HerdSharingUpdatedRecordFieldChange(
               fieldName: fieldChange.fieldName,
-              localValueDescription: fieldChange.localValueDescription,
-              sharedValueDescription: fieldChange.sharedValueDescription
+              localValue: HerdSharingConflictStoredValue(
+                type: HerdSharingConflictStoredValue.ValueType(
+                  rawValue: fieldChange.localValue.type.rawValue
+                ) ?? .string,
+                encodedValue: fieldChange.localValue.encodedValue
+              ),
+              sharedValue: HerdSharingConflictStoredValue(
+                type: HerdSharingConflictStoredValue.ValueType(
+                  rawValue: fieldChange.sharedValue.type.rawValue
+                ) ?? .string,
+                encodedValue: fieldChange.sharedValue.encodedValue
+              )
             )
           }
         )

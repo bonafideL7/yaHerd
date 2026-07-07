@@ -135,12 +135,135 @@ struct HerdSharingConflictReview: Codable, Equatable, Identifiable {
   }
 }
 
+struct HerdSharingConflictStoredValue: Codable, Equatable {
+  enum ValueType: String, Codable {
+    case null
+    case string
+    case bool
+    case int
+    case double
+    case date
+    case uuid
+  }
+
+  let type: ValueType
+  let encodedValue: String?
+
+  init(type: ValueType, encodedValue: String?) {
+    self.type = type
+    self.encodedValue = encodedValue
+  }
+
+  static let null = HerdSharingConflictStoredValue(type: .null, encodedValue: nil)
+
+  static func string(_ value: String) -> HerdSharingConflictStoredValue {
+    HerdSharingConflictStoredValue(type: .string, encodedValue: value)
+  }
+
+  static func bool(_ value: Bool) -> HerdSharingConflictStoredValue {
+    HerdSharingConflictStoredValue(type: .bool, encodedValue: value ? "true" : "false")
+  }
+
+  static func int(_ value: Int) -> HerdSharingConflictStoredValue {
+    HerdSharingConflictStoredValue(type: .int, encodedValue: String(value))
+  }
+
+  static func double(_ value: Double) -> HerdSharingConflictStoredValue {
+    HerdSharingConflictStoredValue(type: .double, encodedValue: String(value))
+  }
+
+  static func date(_ value: Date) -> HerdSharingConflictStoredValue {
+    HerdSharingConflictStoredValue(
+      type: .date,
+      encodedValue: ISO8601DateFormatter().string(from: value)
+    )
+  }
+
+  static func uuid(_ value: UUID) -> HerdSharingConflictStoredValue {
+    HerdSharingConflictStoredValue(type: .uuid, encodedValue: value.uuidString)
+  }
+
+  var displayDescription: String {
+    guard let encodedValue else { return "nil" }
+    return encodedValue
+  }
+
+  var displayType: String { type.rawValue }
+}
+
 struct HerdSharingUpdatedRecordFieldChange: Codable, Equatable, Identifiable {
   var id: String { fieldName }
 
   let fieldName: String
-  let localValueDescription: String
-  let sharedValueDescription: String
+  let localValue: HerdSharingConflictStoredValue
+  let sharedValue: HerdSharingConflictStoredValue
+
+  enum CodingKeys: String, CodingKey {
+    case fieldName
+    case localValue
+    case sharedValue
+    case localValueDescription
+    case sharedValueDescription
+  }
+
+  init(
+    fieldName: String,
+    localValue: HerdSharingConflictStoredValue,
+    sharedValue: HerdSharingConflictStoredValue
+  ) {
+    self.fieldName = fieldName
+    self.localValue = localValue
+    self.sharedValue = sharedValue
+  }
+
+  init(
+    fieldName: String,
+    localValueDescription: String,
+    sharedValueDescription: String
+  ) {
+    self.init(
+      fieldName: fieldName,
+      localValue: .string(localValueDescription),
+      sharedValue: .string(sharedValueDescription)
+    )
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    fieldName = try container.decode(String.self, forKey: .fieldName)
+
+    if let localValue = try container.decodeIfPresent(
+      HerdSharingConflictStoredValue.self,
+      forKey: .localValue
+    ),
+      let sharedValue = try container.decodeIfPresent(
+        HerdSharingConflictStoredValue.self,
+        forKey: .sharedValue
+      )
+    {
+      self.localValue = localValue
+      self.sharedValue = sharedValue
+    } else {
+      localValue = .string(
+        try container.decodeIfPresent(String.self, forKey: .localValueDescription) ?? "nil"
+      )
+      sharedValue = .string(
+        try container.decodeIfPresent(String.self, forKey: .sharedValueDescription) ?? "nil"
+      )
+    }
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(fieldName, forKey: .fieldName)
+    try container.encode(localValue, forKey: .localValue)
+    try container.encode(sharedValue, forKey: .sharedValue)
+    try container.encode(localValueDescription, forKey: .localValueDescription)
+    try container.encode(sharedValueDescription, forKey: .sharedValueDescription)
+  }
+
+  var localValueDescription: String { localValue.displayDescription }
+  var sharedValueDescription: String { sharedValue.displayDescription }
 }
 
 struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
