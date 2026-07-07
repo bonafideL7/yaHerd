@@ -119,13 +119,7 @@ struct HerdSharingConflictReviewDetailView: View {
                       }
                     }
 
-                    if conflict.hasReviewOnlyFieldChanges {
-                      DisclosureGroup("Review Only Fields (\(conflict.reviewOnlyFieldChanges.count))") {
-                        ForEach(conflict.reviewOnlyFieldChanges) { fieldChange in
-                          reviewOnlyFieldChangeRow(fieldChange)
-                        }
-                      }
-                    }
+                    reviewOnlyFieldGroups(for: conflict)
                   }
                   .font(.caption2)
                 }
@@ -280,7 +274,7 @@ struct HerdSharingConflictReviewDetailView: View {
       }
 
       Text(
-        "Restore Selected Local Fields writes selected pre-import local values back into SwiftData for supported scalar fields. Use the Mark Resolved option when the selected restores fully address the conflict. Accept Shared Updates keeps the imported shared values already written to SwiftData. Keep Local Records preserves local intent and should be followed by shared-data sync. Accept Shared Deletes deletes the affected local SwiftData records by public ID."
+        "Restore Selected Local Fields writes selected pre-import local values back into SwiftData for supported scalar fields. Relationship and complex fields are review-only because automatic restore can point at missing records or corrupt encoded structures. Use the Mark Resolved option when selected restores fully address the conflict. Accept Shared Updates keeps the imported shared values already written to SwiftData. Keep Local Records preserves local intent and should be followed by shared-data sync. Accept Shared Deletes deletes the affected local SwiftData records by public ID."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -326,7 +320,7 @@ struct HerdSharingConflictReviewDetailView: View {
         .foregroundStyle(.secondary)
 
       Text(
-        "Restorable Fields can be written back to SwiftData from this screen. Review Only Fields are shown for comparison but are not written back because they are relationships, arrays, or unsupported values."
+        "Restorable Fields can be written back to SwiftData from this screen. Relationship, Complex, and Unsupported Fields are shown for comparison only and must be handled manually in the record screen when needed."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -389,11 +383,56 @@ struct HerdSharingConflictReviewDetailView: View {
   }
 
   @ViewBuilder
+  private func reviewOnlyFieldGroups(for conflict: HerdSharingUpdatedRecordConflict) -> some View {
+    if conflict.hasRelationshipFieldChanges {
+      reviewOnlyFieldGroup(
+        title: "Relationship Fields",
+        category: .relationship,
+        fieldChanges: conflict.relationshipFieldChanges
+      )
+    }
+
+    if conflict.hasComplexFieldChanges {
+      reviewOnlyFieldGroup(
+        title: "Complex Fields",
+        category: .complex,
+        fieldChanges: conflict.complexFieldChanges
+      )
+    }
+
+    if conflict.hasUnsupportedFieldChanges {
+      reviewOnlyFieldGroup(
+        title: "Unsupported Fields",
+        category: .unsupported,
+        fieldChanges: conflict.unsupportedFieldChanges
+      )
+    }
+  }
+
+  @ViewBuilder
+  private func reviewOnlyFieldGroup(
+    title: String,
+    category: HerdSharingLocalFieldRestoreSupportCategory,
+    fieldChanges: [HerdSharingUpdatedRecordFieldChange]
+  ) -> some View {
+    DisclosureGroup("\(title) (\(fieldChanges.count))") {
+      Text(category.reviewExplanation)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+
+      ForEach(fieldChanges) { fieldChange in
+        reviewOnlyFieldChangeRow(fieldChange, category: category)
+      }
+    }
+  }
+
+  @ViewBuilder
   private func reviewOnlyFieldChangeRow(
-    _ fieldChange: HerdSharingUpdatedRecordFieldChange
+    _ fieldChange: HerdSharingUpdatedRecordFieldChange,
+    category: HerdSharingLocalFieldRestoreSupportCategory
   ) -> some View {
     fieldChangeValueRows(fieldChange) {
-      Text("Review only")
+      Text(category.displayName)
         .font(.caption2)
         .foregroundStyle(.secondary)
     }

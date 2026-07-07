@@ -331,6 +331,40 @@ struct HerdSharingUpdatedRecordFieldChange: Codable, Equatable, Identifiable {
   var sharedValueDescription: String { sharedValue.displayDescription }
 }
 
+
+enum HerdSharingLocalFieldRestoreSupportCategory: String, Codable, Equatable {
+  case restorable
+  case relationship
+  case complex
+  case unsupported
+
+  var displayName: String {
+    switch self {
+    case .restorable:
+      return "Restorable"
+    case .relationship:
+      return "Relationship"
+    case .complex:
+      return "Complex"
+    case .unsupported:
+      return "Unsupported"
+    }
+  }
+
+  var reviewExplanation: String {
+    switch self {
+    case .restorable:
+      return "This scalar field can be restored from the conflict report."
+    case .relationship:
+      return "Relationship fields are review-only because the linked record may have changed, been deleted, or not exist locally."
+    case .complex:
+      return "Complex fields are review-only because restoring part of the stored structure could corrupt the record."
+    case .unsupported:
+      return "This field is not currently supported for local restore."
+    }
+  }
+}
+
 struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
   var id: String { "\(sourceEntityName)-\(publicID.uuidString)" }
 
@@ -378,15 +412,36 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
   var changedFieldCount: Int { fieldChanges.count }
 
   var supportedLocalRestoreFieldChanges: [HerdSharingUpdatedRecordFieldChange] {
-    fieldChanges.filter { supportsLocalFieldRestore(fieldName: $0.fieldName) }
+    fieldChanges.filter { localFieldRestoreSupportCategory(for: $0) == .restorable }
   }
 
   var reviewOnlyFieldChanges: [HerdSharingUpdatedRecordFieldChange] {
-    fieldChanges.filter { !supportsLocalFieldRestore(fieldName: $0.fieldName) }
+    fieldChanges.filter { localFieldRestoreSupportCategory(for: $0) != .restorable }
+  }
+
+  var relationshipFieldChanges: [HerdSharingUpdatedRecordFieldChange] {
+    fieldChanges.filter { localFieldRestoreSupportCategory(for: $0) == .relationship }
+  }
+
+  var complexFieldChanges: [HerdSharingUpdatedRecordFieldChange] {
+    fieldChanges.filter { localFieldRestoreSupportCategory(for: $0) == .complex }
+  }
+
+  var unsupportedFieldChanges: [HerdSharingUpdatedRecordFieldChange] {
+    fieldChanges.filter { localFieldRestoreSupportCategory(for: $0) == .unsupported }
   }
 
   var supportsLocalFieldRestore: Bool { !supportedLocalRestoreFieldChanges.isEmpty }
   var hasReviewOnlyFieldChanges: Bool { !reviewOnlyFieldChanges.isEmpty }
+  var hasRelationshipFieldChanges: Bool { !relationshipFieldChanges.isEmpty }
+  var hasComplexFieldChanges: Bool { !complexFieldChanges.isEmpty }
+  var hasUnsupportedFieldChanges: Bool { !unsupportedFieldChanges.isEmpty }
+
+  func localFieldRestoreSupportCategory(
+    for fieldChange: HerdSharingUpdatedRecordFieldChange
+  ) -> HerdSharingLocalFieldRestoreSupportCategory {
+    localFieldRestoreSupportCategory(fieldName: fieldChange.fieldName)
+  }
 
   func restoreSelection(for fieldChange: HerdSharingUpdatedRecordFieldChange)
     -> HerdSharingLocalFieldRestoreSelection
@@ -398,80 +453,117 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
     )
   }
 
-  private func supportsLocalFieldRestore(fieldName: String) -> Bool {
+  private func localFieldRestoreSupportCategory(
+    fieldName: String
+  ) -> HerdSharingLocalFieldRestoreSupportCategory {
+    if Self.relationshipFieldNames.contains(fieldName) {
+      return .relationship
+    }
+
+    if Self.complexFieldNames.contains(fieldName) {
+      return .complex
+    }
+
+    if restorableScalarFieldNames.contains(fieldName) {
+      return .restorable
+    }
+
+    return .unsupported
+  }
+
+  private var restorableScalarFieldNames: Set<String> {
     switch sourceEntityName {
     case "SharedAnimalRecord":
       return [
         "name", "tagNumber", "tagColorID", "sex", "birthDate", "status", "saleDate",
         "salePrice", "reasonSold", "deathDate", "causeOfDeath", "statusReferenceID",
         "isSoftDeleted", "softDeletedAt", "softDeleteReason", "location",
-      ].contains(fieldName)
+      ]
     case "SharedPastureRecord":
       return [
         "name", "sortOrder", "acreage", "usableAcreage", "targetAcresPerHead",
         "lastGrazedDate",
-      ].contains(fieldName)
+      ]
     case "SharedTagColorDefinitionRecord":
       return [
         "name", "prefix", "red", "green", "blue", "alpha", "sortOrder",
         "isHidden", "isDefault", "createdAt", "updatedAt",
-      ].contains(fieldName)
+      ]
     case "SharedAnimalStatusReferenceRecord":
-      return ["name", "baseStatus", "createdAt"].contains(fieldName)
+      return ["name", "baseStatus", "createdAt"]
     case "SharedPastureGroupRecord":
-      return ["name", "grazeDays", "restDays"].contains(fieldName)
+      return ["name", "grazeDays", "restDays"]
     case "SharedHealthRecord":
-      return ["date", "treatment", "notes"].contains(fieldName)
+      return ["date", "treatment", "notes"]
     case "SharedMovementRecord":
-      return ["date", "fromPasture", "toPasture"].contains(fieldName)
+      return ["date", "fromPasture", "toPasture"]
     case "SharedPregnancyCheckRecord":
-      return ["date", "result", "technician", "estimatedDaysPregnant", "dueDate"].contains(
-        fieldName
-      )
+      return ["date", "result", "technician", "estimatedDaysPregnant", "dueDate"]
     case "SharedStatusRecord":
       return [
         "date", "oldStatus", "newStatus", "oldStatusReferenceID",
         "newStatusReferenceID",
-      ].contains(fieldName)
+      ]
     case "SharedAnimalTagRecord":
       return [
         "number", "colorID", "isPrimary", "isActive", "assignedAt", "removedAt",
-      ].contains(fieldName)
+      ]
     case "SharedWorkingProtocolTemplateRecord":
-      return ["name"].contains(fieldName)
+      return ["name"]
     case "SharedWorkingSessionRecord":
       return [
         "date", "status", "protocolName", "currentQueueIndex", "notes",
-      ].contains(fieldName)
+      ]
     case "SharedWorkingQueueItemRecord":
       return [
         "queueOrder", "status", "completedAt", "workNotes",
-      ].contains(fieldName)
+      ]
     case "SharedWorkingTreatmentRecord":
-      return ["date", "itemName", "given", "quantity"].contains(fieldName)
+      return ["date", "itemName", "given", "quantity"]
     case "SharedFieldCheckSessionRecord":
       return [
         "startedAt", "completedAt", "notes", "expectedHeadCountSnapshot",
         "quickCowCount", "quickHeiferCount", "quickCalfCount", "quickBullCount",
         "quickSteerCount", "pastureNameSnapshot", "pastureArchivedAt", "pastureID",
-      ].contains(fieldName)
+      ]
     case "SharedFieldCheckAnimalCheckRecord":
       return [
         "animalIDSnapshot", "rosterTagNumber", "rosterTagColorID",
         "damRosterTagNumber", "damRosterTagColorID", "animalName", "animalSex",
         "animalTypeSnapshot", "wasExpectedAtStart", "countedAt", "missingConfirmedAt",
         "note",
-      ].contains(fieldName)
+      ]
     case "SharedFieldCheckFindingRecord":
       return [
         "recordedAt", "type", "severity", "status", "note", "animalIDSnapshot",
         "animalDisplayTagNumberSnapshot", "animalDisplayTagColorIDSnapshot",
         "animalNameSnapshot", "pastureNameSnapshot", "sessionIDSnapshot",
-      ].contains(fieldName)
+      ]
     default:
-      return false
+      return []
     }
   }
+
+  private static let relationshipFieldNames: Set<String> = [
+    "animalPublicID",
+    "herdPublicID",
+    "pasturePublicID",
+    "groupPublicID",
+    "workingSessionPublicID",
+    "sireAnimalPublicID",
+    "sourcePasturePublicID",
+    "destinationPasturePublicID",
+    "collectedFromPasturePublicID",
+    "sessionPublicID",
+    "fieldCheckSessionPublicID",
+  ]
+
+  private static let complexFieldNames: Set<String> = [
+    "distinguishingFeatures",
+    "items",
+    "protocolItems",
+  ]
+
 
   var displayEntityName: String {
     sourceEntityName
