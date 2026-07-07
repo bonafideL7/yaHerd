@@ -249,6 +249,28 @@ final class HerdCollaborationViewModel {
     errorMessage = nil
   }
 
+  func resolveConflictByAcceptingSharedUpdates(
+    _ review: HerdSharingConflictReview,
+    in conflictReviewStore: HerdSharingConflictReviewStore? = nil
+  ) {
+    guard review.updatedRecordConflictCount > 0 || review.existingLocalRecordUpdateCount > 0 else {
+      errorMessage = "This conflict report does not contain imported shared updates."
+      successMessage = nil
+      return
+    }
+
+    guard conflictReviewStore?.resolve(review, choice: .acceptSharedUpdates) != nil else {
+      errorMessage = "No active conflict report was available to resolve."
+      successMessage = nil
+      return
+    }
+
+    latestConflictReview = conflictReviewStore?.latestReview
+    successMessage =
+      "Conflict report resolved by accepting shared updates. Imported shared values were kept in SwiftData."
+    errorMessage = nil
+  }
+
   func clearConflictResolutionHistory(in conflictReviewStore: HerdSharingConflictReviewStore? = nil)
   {
     conflictReviewStore?.clearResolutionHistory()

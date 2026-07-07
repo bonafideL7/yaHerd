@@ -240,6 +240,32 @@ final class HerdSharingSyncCoordinator {
   }
 
   @discardableResult
+  func resolveConflictByAcceptingSharedUpdates(
+    _ review: HerdSharingConflictReview,
+    syncAfterResolution: Bool
+  ) async -> Bool {
+    guard review.updatedRecordConflictCount > 0 || review.existingLocalRecordUpdateCount > 0 else {
+      lastSkippedReason = "This conflict report does not contain imported shared updates."
+      return false
+    }
+
+    guard conflictReviewStore?.resolve(review, choice: .acceptSharedUpdates) != nil else {
+      lastSkippedReason = "No active conflict report was available to resolve."
+      return false
+    }
+
+    lastConflictReview = conflictReviewStore?.latestReview
+    lastSuccessMessage = "Shared updates accepted: imported shared values were kept in SwiftData."
+    lastErrorMessage = nil
+    lastSkippedReason = nil
+
+    guard syncAfterResolution else { return true }
+
+    _ = await syncNow(trigger: .manual)
+    return true
+  }
+
+  @discardableResult
   func resolveConflictByAcceptingSharedDeletes(
     _ review: HerdSharingConflictReview,
     syncAfterResolution: Bool

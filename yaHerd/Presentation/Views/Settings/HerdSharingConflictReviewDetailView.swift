@@ -165,6 +165,25 @@ struct HerdSharingConflictReviewDetailView: View {
       }
       .disabled(!review.hasConflicts)
 
+      Button {
+        Task { await acceptSharedUpdates(syncAfterResolution: true) }
+      } label: {
+        Label("Accept Shared Updates and Sync", systemImage: "checkmark.icloud")
+      }
+      .disabled(
+        review.updatedRecordConflictCount == 0 && review.existingLocalRecordUpdateCount == 0
+          || sharingSyncCoordinator == nil
+          || sharingSyncCoordinator?.isSyncing == true)
+
+      Button {
+        Task { await acceptSharedUpdates(syncAfterResolution: false) }
+      } label: {
+        Label("Accept Shared Updates", systemImage: "checkmark.circle")
+      }
+      .disabled(
+        review.updatedRecordConflictCount == 0 && review.existingLocalRecordUpdateCount == 0
+          || sharingSyncCoordinator == nil)
+
       Button(role: .destructive) {
         Task { await acceptSharedDeletes(syncAfterResolution: true) }
       } label: {
@@ -188,7 +207,7 @@ struct HerdSharingConflictReviewDetailView: View {
       }
 
       Text(
-        "Keep Local Records preserves the local records. Accept Shared Deletes deletes the affected local SwiftData records by public ID, resolves the report, and can immediately run shared-data sync so the bridge stays aligned."
+        "Accept Shared Updates keeps the imported shared values already written to SwiftData. Keep Local Records preserves local intent and should be followed by shared-data sync. Accept Shared Deletes deletes the affected local SwiftData records by public ID."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -202,7 +221,7 @@ struct HerdSharingConflictReviewDetailView: View {
         .foregroundStyle(.secondary)
 
       Text(
-        "This screen can now resolve skipped shared deletes directly. It still does not provide a field-level merge editor for updated records."
+        "This screen can now explicitly accept imported shared updates and skipped shared deletes. It still does not restore individual local field values because the current conflict report stores display values, not typed write-back values."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -226,6 +245,26 @@ struct HerdSharingConflictReviewDetailView: View {
     }
   }
 
+  private func acceptSharedUpdates(syncAfterResolution: Bool) async {
+    guard let sharingSyncCoordinator else {
+      if conflictReviewStore?.resolve(review, choice: .acceptSharedUpdates) != nil {
+        resolutionMessage = acceptedSharedUpdatesMessage(syncAfterResolution: false)
+      } else {
+        resolutionMessage = "The shared updates could not be accepted."
+      }
+      return
+    }
+
+    let resolved = await sharingSyncCoordinator.resolveConflictByAcceptingSharedUpdates(
+      review,
+      syncAfterResolution: syncAfterResolution
+    )
+    resolutionMessage =
+      resolved
+      ? acceptedSharedUpdatesMessage(syncAfterResolution: syncAfterResolution)
+      : "The shared updates could not be accepted."
+  }
+
   private func acceptSharedDeletes(syncAfterResolution: Bool) async {
     guard let sharingSyncCoordinator else {
       resolutionMessage = "Accepting shared deletes requires the sharing sync coordinator."
@@ -247,6 +286,14 @@ struct HerdSharingConflictReviewDetailView: View {
       "Resolved by keeping local records. Shared-data sync was requested."
     } else {
       "Resolved by keeping local records. Run Sync Shared Data when ready."
+    }
+  }
+
+  private func acceptedSharedUpdatesMessage(syncAfterResolution: Bool) -> String {
+    if syncAfterResolution {
+      "Resolved by accepting shared updates. Imported shared values were kept and shared-data sync was requested."
+    } else {
+      "Resolved by accepting shared updates. Imported shared values were kept."
     }
   }
 
