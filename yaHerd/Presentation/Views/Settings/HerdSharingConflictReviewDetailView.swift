@@ -10,6 +10,7 @@ struct HerdSharingConflictReviewDetailView: View {
   @Environment(\.herdSharingSyncCoordinator) private var sharingSyncCoordinator
   @State private var resolutionMessage: String?
   @State private var selectedLocalFieldRestoreIDs: Set<String> = []
+  @State private var pendingConfirmation: ConflictResolutionConfirmation?
 
   let review: HerdSharingConflictReview
 
@@ -23,6 +24,21 @@ struct HerdSharingConflictReviewDetailView: View {
     }
     .navigationTitle("Conflict Report")
     .navigationBarTitleDisplayMode(.inline)
+    .confirmationDialog(
+      pendingConfirmation?.title ?? "Confirm Resolution",
+      isPresented: Binding(
+        get: { pendingConfirmation != nil },
+        set: { isPresented in
+          if !isPresented { pendingConfirmation = nil }
+        }
+      ),
+      titleVisibility: .visible,
+      presenting: pendingConfirmation
+    ) { confirmation in
+      confirmationActions(for: confirmation)
+    } message: { confirmation in
+      Text(confirmation.message)
+    }
   }
 
   private var summarySection: some View {
@@ -175,12 +191,11 @@ struct HerdSharingConflictReviewDetailView: View {
       .disabled(!review.hasConflicts)
 
       Button {
-        Task {
-          await restoreSelectedLocalFields(
-            syncAfterResolution: true,
-            resolveAfterRestore: true
-          )
-        }
+        pendingConfirmation = .restoreSelectedLocalFields(
+          selectedCount: selectedLocalFieldRestoreIDs.count,
+          syncAfterResolution: true,
+          resolveAfterRestore: true
+        )
       } label: {
         Label(
           "Restore Selected Local Fields, Mark Resolved, and Sync",
@@ -192,12 +207,11 @@ struct HerdSharingConflictReviewDetailView: View {
           || sharingSyncCoordinator?.isSyncing == true)
 
       Button {
-        Task {
-          await restoreSelectedLocalFields(
-            syncAfterResolution: false,
-            resolveAfterRestore: true
-          )
-        }
+        pendingConfirmation = .restoreSelectedLocalFields(
+          selectedCount: selectedLocalFieldRestoreIDs.count,
+          syncAfterResolution: false,
+          resolveAfterRestore: true
+        )
       } label: {
         Label(
           "Restore Selected Local Fields and Mark Resolved",
@@ -238,7 +252,10 @@ struct HerdSharingConflictReviewDetailView: View {
           || sharingSyncCoordinator == nil)
 
       Button(role: .destructive) {
-        Task { await acceptSharedDeletes(syncAfterResolution: true) }
+        pendingConfirmation = .acceptSharedDeletes(
+          affectedRecordCount: review.preventedDeleteCount,
+          syncAfterResolution: true
+        )
       } label: {
         Label("Accept Shared Deletes and Sync", systemImage: "trash")
       }
@@ -247,7 +264,10 @@ struct HerdSharingConflictReviewDetailView: View {
           || sharingSyncCoordinator?.isSyncing == true)
 
       Button(role: .destructive) {
-        Task { await acceptSharedDeletes(syncAfterResolution: false) }
+        pendingConfirmation = .acceptSharedDeletes(
+          affectedRecordCount: review.preventedDeleteCount,
+          syncAfterResolution: false
+        )
       } label: {
         Label("Accept Shared Deletes", systemImage: "trash.circle")
       }
@@ -265,6 +285,38 @@ struct HerdSharingConflictReviewDetailView: View {
       .font(.caption)
       .foregroundStyle(.secondary)
     }
+  }
+
+
+  @ViewBuilder
+  private func confirmationActions(
+    for confirmation: ConflictResolutionConfirmation
+  ) -> some View {
+    switch confirmation {
+    case let .acceptSharedDeletes(_, syncAfterResolution):
+      Button(
+        syncAfterResolution ? "Delete Local Records and Sync" : "Delete Local Records",
+        role: .destructive
+      ) {
+        Task { await acceptSharedDeletes(syncAfterResolution: syncAfterResolution) }
+      }
+
+    case let .restoreSelectedLocalFields(_, syncAfterResolution, resolveAfterRestore):
+      Button(
+        syncAfterResolution
+          ? "Restore Fields, Mark Resolved, and Sync"
+          : "Restore Fields and Mark Resolved"
+      ) {
+        Task {
+          await restoreSelectedLocalFields(
+            syncAfterResolution: syncAfterResolution,
+            resolveAfterRestore: resolveAfterRestore
+          )
+        }
+      }
+    }
+
+    Button("Cancel", role: .cancel) {}
   }
 
   private var nextStepsSection: some View {
@@ -573,6 +625,45 @@ struct HerdSharingConflictReviewDetailView: View {
 
   private func formattedDate(_ date: Date) -> String {
     date.formatted(date: .abbreviated, time: .standard)
+  }
+}
+
+
+private enum ConflictResolutionConfirmation: Identifiable {
+  case acceptSharedDeletes(affectedRecordCount: Int, syncAfterResolution: Bool)
+  case restoreSelectedLocalFields(
+    selectedCount: Int,
+    syncAfterResolution: Bool,
+    resolveAfterRestore: Bool
+  )
+
+  var id: String {
+    switch self {
+    case let .acceptSharedDeletes(affectedRecordCount, syncAfterResolution):
+      "accept-shared-deletes-\(affectedRecordCount)-\(syncAfterResolution)"
+    case let .restoreSelectedLocalFields(selectedCount, syncAfterResolution, resolveAfterRestore):
+      "restore-local-fields-\(selectedCount)-\(syncAfterResolution)-\(resolveAfterRestore)"
+    }
+  }
+
+  var title: String {
+    switch self {
+    case .acceptSharedDeletes:
+      "Accept Shared Deletes?"
+    case .restoreSelectedLocalFields:
+      "Restore Local Fields and Resolve?"
+    }
+  }
+
+  var message: String {
+    switch self {
+    case let .acceptSharedDeletes(affectedRecordCount, syncAfterResolution):
+      let syncText = syncAfterResolution ? " Shared-data sync will run afterward." : ""
+      return "This deletes \(affectedRecordCount) local SwiftData record(s) that matched skipped shared deletes. This cannot be undone from this conflict report.\(syncText)"
+    case let .restoreSelectedLocalFields(selectedCount, syncAfterResolution, _):
+      let syncText = syncAfterResolution ? " Shared-data sync will run afterward." : ""
+      return "This restores \(selectedCount) selected pre-import local field value(s) and marks the conflict report resolved. Review-only fields and unselected fields will not be restored.\(syncText)"
+    }
   }
 }
 
