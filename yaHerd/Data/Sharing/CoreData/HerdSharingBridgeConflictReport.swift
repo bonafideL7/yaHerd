@@ -40,6 +40,14 @@ struct HerdSharingBridgeConflictReport: Equatable {
   }
 }
 
+struct HerdSharingBridgeFieldChange: Equatable, Identifiable {
+  var id: String { fieldName }
+
+  let fieldName: String
+  let localValueDescription: String
+  let sharedValueDescription: String
+}
+
 struct HerdSharingBridgeConflictDetail: Equatable, Identifiable {
   enum Kind: String, Equatable {
     case existingLocalRecordUpdate
@@ -52,13 +60,15 @@ struct HerdSharingBridgeConflictDetail: Equatable, Identifiable {
   let publicID: UUID
   let localModifiedAt: Date
   let sharedModifiedAt: Date
+  var fieldChanges: [HerdSharingBridgeFieldChange]
 
   init(
     kind: Kind,
     sourceEntityName: String,
     publicID: UUID,
     localModifiedAt: Date,
-    sharedModifiedAt: Date
+    sharedModifiedAt: Date,
+    fieldChanges: [HerdSharingBridgeFieldChange] = []
   ) {
     id = UUID()
     self.kind = kind
@@ -66,5 +76,6 @@ struct HerdSharingBridgeConflictDetail: Equatable, Identifiable {
     self.publicID = publicID
     self.localModifiedAt = localModifiedAt
     self.sharedModifiedAt = sharedModifiedAt
+    self.fieldChanges = fieldChanges
   }
 }

@@ -303,7 +303,14 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
           sourceEntityName: conflict.sourceEntityName,
           publicID: conflict.publicID,
           localModifiedAt: conflict.localModifiedAt,
-          sharedModifiedAt: conflict.sharedModifiedAt
+          sharedModifiedAt: conflict.sharedModifiedAt,
+          fieldChanges: conflict.fieldChanges.map { fieldChange in
+            HerdSharingUpdatedRecordFieldChange(
+              fieldName: fieldChange.fieldName,
+              localValueDescription: fieldChange.localValueDescription,
+              sharedValueDescription: fieldChange.sharedValueDescription
+            )
+          }
         )
       },
       preventedDeleteConflicts: report.preventedDeleteConflicts.map { conflict in

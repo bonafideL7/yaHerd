@@ -1954,17 +1954,11 @@ final class HerdSharingCoreDataStore {
 
     for (record, publicID) in validSharedRecords {
       let definition: TagColorDefinition
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingDefinition = definitionsByPublicID[publicID] {
         definition = existingDefinition
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedTagColorDefinitionRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: definition)
       } else {
         definition = TagColorDefinition(
           id: publicID,
@@ -1983,6 +1977,18 @@ final class HerdSharingCoreDataStore {
       }
 
       apply(record, to: definition, herd: herd)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedTagColorDefinitionRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: definition)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -2031,17 +2037,11 @@ final class HerdSharingCoreDataStore {
 
     for (record, publicID) in validSharedRecords {
       let reference: AnimalStatusReference
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingReference = referencesByPublicID[publicID] {
         reference = existingReference
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedAnimalStatusReferenceRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: reference)
       } else {
         reference = AnimalStatusReference(
           id: publicID,
@@ -2055,6 +2055,18 @@ final class HerdSharingCoreDataStore {
       }
 
       apply(record, to: reference, herd: herd)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedAnimalStatusReferenceRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: reference)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -2095,17 +2107,11 @@ final class HerdSharingCoreDataStore {
 
     for (record, publicID) in validSharedRecords {
       let group: PastureGroup
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingGroup = groupsByPublicID[publicID] {
         group = existingGroup
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedPastureGroupRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: group)
       } else {
         group = PastureGroup(
           publicID: publicID,
@@ -2119,6 +2125,18 @@ final class HerdSharingCoreDataStore {
       }
 
       apply(record, to: group, herd: herd)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedPastureGroupRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: group)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -2164,17 +2182,11 @@ final class HerdSharingCoreDataStore {
 
     for (record, publicID) in validSharedRecords {
       let pasture: Pasture
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingPasture = pasturesByPublicID[publicID] {
         pasture = existingPasture
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedPastureRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: pasture)
       } else {
         pasture = Pasture(
           publicID: publicID,
@@ -2190,6 +2202,18 @@ final class HerdSharingCoreDataStore {
       }
 
       apply(record, to: pasture, herd: herd, groupsByPublicID: groupsByPublicID)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedPastureRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: pasture)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -2240,17 +2264,11 @@ final class HerdSharingCoreDataStore {
 
     for (record, publicID) in validSharedRecords {
       let animal: Animal
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingAnimal = animalsByPublicID[publicID] {
         animal = existingAnimal
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedAnimalRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: animal)
       } else {
         animal = Animal(
           publicID: publicID,
@@ -2277,6 +2295,18 @@ final class HerdSharingCoreDataStore {
       }
 
       apply(record, to: animal, herd: herd, pasturesByPublicID: pasturesByPublicID)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedAnimalRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: animal)
+          )
+        )
+      }
     }
 
     for (record, publicID) in validSharedRecords {
@@ -2349,17 +2379,11 @@ final class HerdSharingCoreDataStore {
       guard let animal = animalsByPublicID[animalPublicID] else { continue }
 
       let tag: AnimalTag
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingTag = tagsByPublicID[publicID] {
         tag = existingTag
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedAnimalTagRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: tag)
       } else {
         tag = AnimalTag(
           publicID: publicID,
@@ -2377,6 +2401,18 @@ final class HerdSharingCoreDataStore {
       }
 
       apply(record, to: tag, herd: herd, animal: animal)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedAnimalTagRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: tag)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -2432,17 +2468,11 @@ final class HerdSharingCoreDataStore {
       guard let animal = animalsByPublicID[animalPublicID] else { continue }
 
       let movement: MovementRecord
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingMovement = movementsByPublicID[publicID] {
         movement = existingMovement
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedMovementRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: movement)
       } else {
         movement = MovementRecord(
           publicID: publicID,
@@ -2457,6 +2487,18 @@ final class HerdSharingCoreDataStore {
       }
 
       apply(record, to: movement, herd: herd, animal: animal)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedMovementRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: movement)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -2509,17 +2551,11 @@ final class HerdSharingCoreDataStore {
       guard let animal = animalsByPublicID[animalPublicID] else { continue }
 
       let statusRecord: StatusRecord
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingStatusRecord = statusRecordsByPublicID[publicID] {
         statusRecord = existingStatusRecord
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedStatusRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: statusRecord)
       } else {
         statusRecord = StatusRecord(
           publicID: publicID,
@@ -2536,6 +2572,18 @@ final class HerdSharingCoreDataStore {
       }
 
       apply(record, to: statusRecord, herd: herd, animal: animal)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedStatusRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: statusRecord)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -2580,17 +2628,11 @@ final class HerdSharingCoreDataStore {
 
     for (record, publicID) in validSharedRecords {
       let template: WorkingProtocolTemplate
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingTemplate = templatesByPublicID[publicID] {
         template = existingTemplate
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedWorkingProtocolTemplateRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: template)
       } else {
         template = WorkingProtocolTemplate(
           publicID: publicID,
@@ -2603,6 +2645,18 @@ final class HerdSharingCoreDataStore {
       }
 
       apply(record, to: template, herd: herd)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedWorkingProtocolTemplateRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: template)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -2648,17 +2702,11 @@ final class HerdSharingCoreDataStore {
 
     for (record, publicID) in validSharedRecords {
       let session: WorkingSession
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingSession = sessionsByPublicID[publicID] {
         session = existingSession
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedWorkingSessionRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: session)
       } else {
         session = WorkingSession(
           publicID: publicID,
@@ -2675,6 +2723,18 @@ final class HerdSharingCoreDataStore {
       }
 
       apply(record, to: session, herd: herd, pasturesByPublicID: pasturesByPublicID)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedWorkingSessionRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: session)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -2748,17 +2808,11 @@ final class HerdSharingCoreDataStore {
       else { continue }
 
       let queueItem: WorkingQueueItem
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingQueueItem = queueItemsByPublicID[publicID] {
         queueItem = existingQueueItem
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedWorkingQueueItemRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: queueItem)
       } else {
         queueItem = WorkingQueueItem(
           publicID: publicID,
@@ -2787,6 +2841,18 @@ final class HerdSharingCoreDataStore {
         animal: animal,
         pasturesByPublicID: pasturesByPublicID
       )
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedWorkingQueueItemRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: queueItem)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -2864,17 +2930,11 @@ final class HerdSharingCoreDataStore {
       else { continue }
 
       let treatmentRecord: WorkingTreatmentRecord
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingTreatmentRecord = treatmentRecordsByPublicID[publicID] {
         treatmentRecord = existingTreatmentRecord
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedWorkingTreatmentRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: treatmentRecord)
       } else {
         treatmentRecord = WorkingTreatmentRecord(
           publicID: publicID,
@@ -2891,6 +2951,18 @@ final class HerdSharingCoreDataStore {
       }
 
       apply(record, to: treatmentRecord, herd: herd, session: session, animal: animal)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedWorkingTreatmentRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: treatmentRecord)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -2952,17 +3024,11 @@ final class HerdSharingCoreDataStore {
       guard let animal = animalsByPublicID[animalPublicID] else { continue }
 
       let healthRecord: HealthRecord
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingHealthRecord = healthRecordsByPublicID[publicID] {
         healthRecord = existingHealthRecord
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedHealthRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: healthRecord)
       } else {
         healthRecord = HealthRecord(
           publicID: publicID,
@@ -2980,6 +3046,18 @@ final class HerdSharingCoreDataStore {
       apply(
         record, to: healthRecord, herd: herd, animal: animal, sessionsByPublicID: sessionsByPublicID
       )
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedHealthRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: healthRecord)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -3042,17 +3120,11 @@ final class HerdSharingCoreDataStore {
       guard let animal = animalsByPublicID[animalPublicID] else { continue }
 
       let check: PregnancyCheck
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingCheck = checksByPublicID[publicID] {
         check = existingCheck
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedPregnancyCheckRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: check)
       } else {
         check = PregnancyCheck(
           publicID: publicID,
@@ -3073,6 +3145,18 @@ final class HerdSharingCoreDataStore {
       apply(
         record, to: check, herd: herd, animal: animal, animalsByPublicID: animalsByPublicID,
         sessionsByPublicID: sessionsByPublicID)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedPregnancyCheckRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: check)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -3129,17 +3213,11 @@ final class HerdSharingCoreDataStore {
 
     for (record, publicID) in validSharedRecords {
       let session: FieldCheckSession
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingSession = sessionsByPublicID[publicID] {
         session = existingSession
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedFieldCheckSessionRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: session)
       } else {
         session = FieldCheckSession(
           publicID: publicID,
@@ -3163,6 +3241,18 @@ final class HerdSharingCoreDataStore {
       }
 
       apply(record, to: session, herd: herd, pasturesByPublicID: pasturesByPublicID)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedFieldCheckSessionRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: session)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -3231,17 +3321,11 @@ final class HerdSharingCoreDataStore {
       let animal = record.parsedAnimalPublicID.flatMap { animalsByPublicID[$0] }
 
       let check: FieldCheckAnimalCheck
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingCheck = checksByPublicID[publicID] {
         check = existingCheck
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedFieldCheckAnimalCheckRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: check)
       } else {
         check = FieldCheckAnimalCheck(
           publicID: publicID,
@@ -3266,6 +3350,18 @@ final class HerdSharingCoreDataStore {
       }
 
       apply(record, to: check, herd: herd, session: session, animal: animal)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedFieldCheckAnimalCheckRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: check)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -3338,17 +3434,11 @@ final class HerdSharingCoreDataStore {
       let animal = record.parsedAnimalPublicID.flatMap { animalsByPublicID[$0] }
 
       let finding: FieldCheckFinding
+      var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
       if let existingFinding = findingsByPublicID[publicID] {
         finding = existingFinding
         updated += 1
-        updatedRecordConflicts.append(
-          updatedRecordConflict(
-            sourceEntityName: SharedFieldCheckFindingRecord.entityName,
-            publicID: publicID,
-            localModifiedAt: nil,
-            sharedModifiedAt: record.lastMirroredAt
-          )
-        )
+        beforeFieldSnapshot = conflictFieldSnapshot(for: finding)
       } else {
         finding = FieldCheckFinding(
           publicID: publicID,
@@ -3372,6 +3462,18 @@ final class HerdSharingCoreDataStore {
       }
 
       apply(record, to: finding, herd: herd, session: session, animal: animal)
+      if let beforeFieldSnapshot {
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedFieldCheckFindingRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt,
+            before: beforeFieldSnapshot,
+            after: conflictFieldSnapshot(for: finding)
+          )
+        )
+      }
     }
 
     return (inserted, updated, updatedRecordConflicts)
@@ -3398,6 +3500,296 @@ final class HerdSharingCoreDataStore {
     finding.animalNameSnapshot = sharedRecord.animalNameSnapshot ?? ""
     finding.pastureNameSnapshot = sharedRecord.pastureNameSnapshot ?? ""
     finding.sessionIDSnapshot = sharedRecord.parsedSessionIDSnapshot ?? session.publicID
+  }
+
+  private typealias HerdSharingConflictFieldSnapshot = [String: String]
+
+  private func updatedRecordConflict(
+    sourceEntityName: String,
+    publicID: UUID,
+    localModifiedAt: Date?,
+    sharedModifiedAt: Date?,
+    before: HerdSharingConflictFieldSnapshot,
+    after: HerdSharingConflictFieldSnapshot
+  ) -> HerdSharingBridgeConflictDetail {
+    updatedRecordConflict(
+      sourceEntityName: sourceEntityName,
+      publicID: publicID,
+      localModifiedAt: localModifiedAt,
+      sharedModifiedAt: sharedModifiedAt,
+      fieldChanges: conflictFieldChanges(before: before, after: after)
+    )
+  }
+
+  private func updatedRecordConflict(
+    sourceEntityName: String,
+    publicID: UUID,
+    localModifiedAt: Date?,
+    sharedModifiedAt: Date?,
+    fieldChanges: [HerdSharingBridgeFieldChange] = []
+  ) -> HerdSharingBridgeConflictDetail {
+    HerdSharingBridgeConflictDetail(
+      kind: .existingLocalRecordUpdate,
+      sourceEntityName: sourceEntityName,
+      publicID: publicID,
+      localModifiedAt: localModifiedAt ?? .distantPast,
+      sharedModifiedAt: sharedModifiedAt ?? .distantPast,
+      fieldChanges: fieldChanges
+    )
+  }
+
+  private func conflictFieldChanges(
+    before: HerdSharingConflictFieldSnapshot,
+    after: HerdSharingConflictFieldSnapshot
+  ) -> [HerdSharingBridgeFieldChange] {
+    let fieldNames = Set(before.keys).union(after.keys)
+    return fieldNames.sorted().compactMap { fieldName in
+      let localValue = before[fieldName] ?? "nil"
+      let sharedValue = after[fieldName] ?? "nil"
+      guard localValue != sharedValue else { return nil }
+      return HerdSharingBridgeFieldChange(
+        fieldName: fieldName,
+        localValueDescription: localValue,
+        sharedValueDescription: sharedValue
+      )
+    }
+  }
+
+  private func conflictValueDescription(_ value: Any?) -> String {
+    guard let value else { return "nil" }
+    if let date = value as? Date {
+      return ISO8601DateFormatter().string(from: date)
+    }
+    if let uuid = value as? UUID {
+      return uuid.uuidString
+    }
+    return String(describing: value)
+  }
+
+  private func conflictFieldSnapshot(_ values: [String: Any?]) -> HerdSharingConflictFieldSnapshot {
+    values.reduce(into: HerdSharingConflictFieldSnapshot()) { result, item in
+      result[item.key] = conflictValueDescription(item.value)
+    }
+  }
+
+  private func conflictFieldSnapshot(for definition: TagColorDefinition) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "name": definition.name,
+      "prefix": definition.prefix,
+      "red": definition.red,
+      "green": definition.green,
+      "blue": definition.blue,
+      "alpha": definition.alpha,
+      "sortOrder": definition.sortOrder,
+      "isHidden": definition.isHidden,
+      "isDefault": definition.isDefault,
+      "createdAt": definition.createdAt,
+      "updatedAt": definition.updatedAt,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for reference: AnimalStatusReference) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "name": reference.name,
+      "baseStatus": reference.baseStatus,
+      "createdAt": reference.createdAt,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for group: PastureGroup) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "name": group.name,
+      "grazeDays": group.grazeDays,
+      "restDays": group.restDays,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for pasture: Pasture) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "name": pasture.name,
+      "sortOrder": pasture.sortOrder,
+      "acreage": pasture.acreage,
+      "usableAcreage": pasture.usableAcreage,
+      "targetAcresPerHead": pasture.targetAcresPerHead,
+      "lastGrazedDate": pasture.lastGrazedDate,
+      "groupPublicID": pasture.group?.publicID,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for animal: Animal) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "name": animal.name,
+      "tagNumber": animal.tagNumber,
+      "tagColorID": animal.tagColorID,
+      "sex": animal.sex,
+      "birthDate": animal.birthDate,
+      "status": animal.status,
+      "saleDate": animal.saleDate,
+      "salePrice": animal.salePrice,
+      "reasonSold": animal.reasonSold,
+      "deathDate": animal.deathDate,
+      "causeOfDeath": animal.causeOfDeath,
+      "statusReferenceID": animal.statusReferenceID,
+      "isSoftDeleted": animal.isSoftDeleted,
+      "softDeletedAt": animal.softDeletedAt,
+      "softDeleteReason": animal.softDeleteReason,
+      "location": animal.location,
+      "pasturePublicID": animal.pasture?.publicID,
+      "distinguishingFeatures": animal.distinguishingFeatures,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for tag: AnimalTag) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "number": tag.number,
+      "colorID": tag.colorID,
+      "isPrimary": tag.isPrimary,
+      "isActive": tag.isActive,
+      "assignedAt": tag.assignedAt,
+      "removedAt": tag.removedAt,
+      "animalPublicID": tag.animal?.publicID,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for movement: MovementRecord) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "date": movement.date,
+      "fromPasture": movement.fromPasture,
+      "toPasture": movement.toPasture,
+      "animalPublicID": movement.animal?.publicID,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for statusRecord: StatusRecord) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "date": statusRecord.date,
+      "oldStatus": statusRecord.oldStatus,
+      "newStatus": statusRecord.newStatus,
+      "oldStatusReferenceID": statusRecord.oldStatusReferenceID,
+      "newStatusReferenceID": statusRecord.newStatusReferenceID,
+      "animalPublicID": statusRecord.animal?.publicID,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for template: WorkingProtocolTemplate) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "name": template.name,
+      "items": template.items,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for session: WorkingSession) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "date": session.date,
+      "status": session.status,
+      "sourcePasturePublicID": session.sourcePasture?.publicID,
+      "protocolName": session.protocolName,
+      "protocolItems": session.protocolItems,
+      "currentQueueIndex": session.currentQueueIndex,
+      "notes": session.notes,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for queueItem: WorkingQueueItem) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "queueOrder": queueItem.queueOrder,
+      "status": queueItem.status,
+      "completedAt": queueItem.completedAt,
+      "collectedFromPasturePublicID": queueItem.collectedFromPasture?.publicID,
+      "destinationPasturePublicID": queueItem.destinationPasture?.publicID,
+      "workNotes": queueItem.workNotes,
+      "sessionPublicID": queueItem.session?.publicID,
+      "animalPublicID": queueItem.animal?.publicID,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for treatmentRecord: WorkingTreatmentRecord) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "date": treatmentRecord.date,
+      "itemName": treatmentRecord.itemName,
+      "given": treatmentRecord.given,
+      "quantity": treatmentRecord.quantity,
+      "sessionPublicID": treatmentRecord.session?.publicID,
+      "animalPublicID": treatmentRecord.animal?.publicID,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for healthRecord: HealthRecord) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "date": healthRecord.date,
+      "treatment": healthRecord.treatment,
+      "notes": healthRecord.notes,
+      "workingSessionPublicID": healthRecord.workingSession?.publicID,
+      "animalPublicID": healthRecord.animal?.publicID,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for check: PregnancyCheck) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "date": check.date,
+      "result": check.result,
+      "technician": check.technician,
+      "estimatedDaysPregnant": check.estimatedDaysPregnant,
+      "dueDate": check.dueDate,
+      "sireAnimalPublicID": check.sireAnimal?.publicID,
+      "workingSessionPublicID": check.workingSession?.publicID,
+      "animalPublicID": check.animal?.publicID,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for session: FieldCheckSession) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "startedAt": session.startedAt,
+      "completedAt": session.completedAt,
+      "notes": session.notes,
+      "expectedHeadCountSnapshot": session.expectedHeadCountSnapshot,
+      "quickCowCount": session.quickCowCount,
+      "quickHeiferCount": session.quickHeiferCount,
+      "quickCalfCount": session.quickCalfCount,
+      "quickBullCount": session.quickBullCount,
+      "quickSteerCount": session.quickSteerCount,
+      "pastureNameSnapshot": session.pastureNameSnapshot,
+      "pastureArchivedAt": session.pastureArchivedAt,
+      "pastureID": session.pastureID,
+      "pasturePublicID": session.pasture?.publicID,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for check: FieldCheckAnimalCheck) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "animalIDSnapshot": check.animalIDSnapshot,
+      "rosterTagNumber": check.rosterTagNumber,
+      "rosterTagColorID": check.rosterTagColorID,
+      "damRosterTagNumber": check.damRosterTagNumber,
+      "damRosterTagColorID": check.damRosterTagColorID,
+      "animalName": check.animalName,
+      "animalSex": check.animalSex,
+      "animalTypeSnapshot": check.animalTypeSnapshot,
+      "wasExpectedAtStart": check.wasExpectedAtStart,
+      "countedAt": check.countedAt,
+      "missingConfirmedAt": check.missingConfirmedAt,
+      "note": check.note,
+      "sessionPublicID": check.session?.publicID,
+      "animalPublicID": check.animal?.publicID,
+    ])
+  }
+
+  private func conflictFieldSnapshot(for finding: FieldCheckFinding) -> HerdSharingConflictFieldSnapshot {
+    conflictFieldSnapshot([
+      "recordedAt": finding.recordedAt,
+      "type": finding.type,
+      "severity": finding.severity,
+      "status": finding.status,
+      "note": finding.note,
+      "animalIDSnapshot": finding.animalIDSnapshot,
+      "animalDisplayTagNumberSnapshot": finding.animalDisplayTagNumberSnapshot,
+      "animalDisplayTagColorIDSnapshot": finding.animalDisplayTagColorIDSnapshot,
+      "animalNameSnapshot": finding.animalNameSnapshot,
+      "pastureNameSnapshot": finding.pastureNameSnapshot,
+      "sessionIDSnapshot": finding.sessionIDSnapshot,
+      "sessionPublicID": finding.session?.publicID,
+      "animalPublicID": finding.animal?.publicID,
+    ])
   }
 
   func acceptPreventedSharedDeletes(
@@ -3463,21 +3855,6 @@ final class HerdSharingCoreDataStore {
     }
 
     return (deletedCount, preventedDeleteConflicts)
-  }
-
-  private func updatedRecordConflict(
-    sourceEntityName: String,
-    publicID: UUID,
-    localModifiedAt: Date?,
-    sharedModifiedAt: Date?
-  ) -> HerdSharingBridgeConflictDetail {
-    HerdSharingBridgeConflictDetail(
-      kind: .existingLocalRecordUpdate,
-      sourceEntityName: sourceEntityName,
-      publicID: publicID,
-      localModifiedAt: localModifiedAt ?? .distantPast,
-      sharedModifiedAt: sharedModifiedAt ?? Date.now
-    )
   }
 
   private func preventedDeleteConflict(

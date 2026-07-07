@@ -142,4 +142,42 @@ final class HerdSharingConflictReviewTests: XCTestCase {
     )
   }
 
+  func testUpdatedRecordConflictDecodesMissingFieldChangesAsEmpty() throws {
+    let json = """
+    {
+      "sourceEntityName": "SharedAnimalRecord",
+      "publicID": "00000000-0000-0000-0000-000000000004",
+      "localModifiedAt": 20,
+      "sharedModifiedAt": 30
+    }
+    """.data(using: .utf8)!
+
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .secondsSince1970
+
+    let conflict = try decoder.decode(HerdSharingUpdatedRecordConflict.self, from: json)
+
+    XCTAssertEqual(conflict.changedFieldCount, 0)
+    XCTAssertTrue(conflict.fieldChanges.isEmpty)
+  }
+
+  func testUpdatedRecordConflictStoresFieldChanges() {
+    let conflict = HerdSharingUpdatedRecordConflict(
+      sourceEntityName: "SharedAnimalRecord",
+      publicID: UUID(uuidString: "00000000-0000-0000-0000-000000000004")!,
+      localModifiedAt: Date(timeIntervalSince1970: 20),
+      sharedModifiedAt: Date(timeIntervalSince1970: 30),
+      fieldChanges: [
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "tagNumber",
+          localValueDescription: "12",
+          sharedValueDescription: "14"
+        )
+      ]
+    )
+
+    XCTAssertEqual(conflict.changedFieldCount, 1)
+    XCTAssertEqual(conflict.fieldChanges.first?.fieldName, "tagNumber")
+  }
+
 }
