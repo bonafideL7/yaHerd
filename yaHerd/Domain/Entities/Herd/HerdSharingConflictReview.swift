@@ -406,6 +406,14 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
         "name", "sortOrder", "acreage", "usableAcreage", "targetAcresPerHead",
         "lastGrazedDate",
       ].contains(fieldName)
+    case "SharedHealthRecord":
+      return ["date", "treatment", "notes"].contains(fieldName)
+    case "SharedMovementRecord":
+      return ["date", "fromPasture", "toPasture"].contains(fieldName)
+    case "SharedPregnancyCheckRecord":
+      return ["date", "result", "technician", "estimatedDaysPregnant", "dueDate"].contains(
+        fieldName
+      )
     default:
       return false
     }
