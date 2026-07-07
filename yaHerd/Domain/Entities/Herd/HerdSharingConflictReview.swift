@@ -381,7 +381,12 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
     fieldChanges.filter { supportsLocalFieldRestore(fieldName: $0.fieldName) }
   }
 
+  var reviewOnlyFieldChanges: [HerdSharingUpdatedRecordFieldChange] {
+    fieldChanges.filter { !supportsLocalFieldRestore(fieldName: $0.fieldName) }
+  }
+
   var supportsLocalFieldRestore: Bool { !supportedLocalRestoreFieldChanges.isEmpty }
+  var hasReviewOnlyFieldChanges: Bool { !reviewOnlyFieldChanges.isEmpty }
 
   func restoreSelection(for fieldChange: HerdSharingUpdatedRecordFieldChange)
     -> HerdSharingLocalFieldRestoreSelection
@@ -414,6 +419,23 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
       return ["date", "result", "technician", "estimatedDaysPregnant", "dueDate"].contains(
         fieldName
       )
+    case "SharedStatusRecord":
+      return [
+        "date", "oldStatus", "newStatus", "oldStatusReferenceID",
+        "newStatusReferenceID",
+      ].contains(fieldName)
+    case "SharedAnimalTagRecord":
+      return [
+        "number", "colorID", "isPrimary", "isActive", "assignedAt", "removedAt",
+      ].contains(fieldName)
+    case "SharedWorkingSessionRecord":
+      return [
+        "date", "status", "protocolName", "currentQueueIndex", "notes",
+      ].contains(fieldName)
+    case "SharedWorkingQueueItemRecord":
+      return [
+        "queueOrder", "status", "completedAt", "workNotes",
+      ].contains(fieldName)
     default:
       return false
     }
