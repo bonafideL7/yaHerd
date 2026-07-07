@@ -12,10 +12,72 @@ struct HerdSharingConflictReview: Codable, Equatable, Identifiable {
   let sourceDescription: String
   let detectedAt: Date
   let existingLocalRecordUpdateCount: Int
+  var updatedRecordConflicts: [HerdSharingUpdatedRecordConflict] = []
   let preventedDeleteConflicts: [HerdSharingPreventedDeleteConflict]
 
+  enum CodingKeys: String, CodingKey {
+    case title
+    case sourceDescription
+    case detectedAt
+    case existingLocalRecordUpdateCount
+    case updatedRecordConflicts
+    case preventedDeleteConflicts
+  }
+
+  init(
+    title: String,
+    sourceDescription: String,
+    detectedAt: Date,
+    existingLocalRecordUpdateCount: Int,
+    updatedRecordConflicts: [HerdSharingUpdatedRecordConflict] = [],
+    preventedDeleteConflicts: [HerdSharingPreventedDeleteConflict]
+  ) {
+    self.title = title
+    self.sourceDescription = sourceDescription
+    self.detectedAt = detectedAt
+    self.existingLocalRecordUpdateCount = existingLocalRecordUpdateCount
+    self.updatedRecordConflicts = updatedRecordConflicts
+    self.preventedDeleteConflicts = preventedDeleteConflicts
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    title = try container.decode(String.self, forKey: .title)
+    sourceDescription = try container.decode(String.self, forKey: .sourceDescription)
+    detectedAt = try container.decode(Date.self, forKey: .detectedAt)
+    existingLocalRecordUpdateCount = try container.decode(
+      Int.self,
+      forKey: .existingLocalRecordUpdateCount
+    )
+    updatedRecordConflicts = try container.decodeIfPresent(
+      [HerdSharingUpdatedRecordConflict].self,
+      forKey: .updatedRecordConflicts
+    ) ?? []
+    preventedDeleteConflicts = try container.decode(
+      [HerdSharingPreventedDeleteConflict].self,
+      forKey: .preventedDeleteConflicts
+    )
+  }
+
+  var updatedRecordConflictCount: Int { updatedRecordConflicts.count }
   var preventedDeleteCount: Int { preventedDeleteConflicts.count }
-  var hasConflicts: Bool { existingLocalRecordUpdateCount > 0 || preventedDeleteCount > 0 }
+  var hasConflicts: Bool {
+    existingLocalRecordUpdateCount > 0 || updatedRecordConflictCount > 0 || preventedDeleteCount > 0
+  }
+
+  var updatedRecordEntitySummaries: [HerdSharingUpdatedRecordEntitySummary] {
+    Dictionary(grouping: updatedRecordConflicts, by: \.displayEntityName)
+      .map { entityName, conflicts in
+        HerdSharingUpdatedRecordEntitySummary(
+          displayEntityName: entityName,
+          count: conflicts.count
+        )
+      }
+      .sorted { lhs, rhs in
+        if lhs.count != rhs.count { return lhs.count > rhs.count }
+        return lhs.displayEntityName < rhs.displayEntityName
+      }
+  }
 
   var preventedDeleteEntitySummaries: [HerdSharingPreventedDeleteEntitySummary] {
     Dictionary(grouping: preventedDeleteConflicts, by: \.displayEntityName)
@@ -48,6 +110,10 @@ struct HerdSharingConflictReview: Codable, Equatable, Identifiable {
       return "Choose Keep Local Records to preserve local edits, or Accept Shared Deletes to delete the affected local records by public ID."
     }
 
+    if updatedRecordConflictCount > 0 {
+      return "Review the updated record IDs by entity. Keep local records only if the shared update was unexpected."
+    }
+
     return "Review the affected records if the shared update was unexpected."
   }
 
@@ -67,6 +133,28 @@ struct HerdSharingConflictReview: Codable, Equatable, Identifiable {
     }
     return parts.joined(separator: "; ") + "."
   }
+}
+
+struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
+  var id: String { "\(sourceEntityName)-\(publicID.uuidString)" }
+
+  let sourceEntityName: String
+  let publicID: UUID
+  let localModifiedAt: Date
+  let sharedModifiedAt: Date
+
+  var displayEntityName: String {
+    sourceEntityName
+      .replacingOccurrences(of: "Shared", with: "")
+      .replacingOccurrences(of: "Record", with: "")
+  }
+}
+
+struct HerdSharingUpdatedRecordEntitySummary: Equatable, Identifiable {
+  var id: String { displayEntityName }
+
+  let displayEntityName: String
+  let count: Int
 }
 
 struct HerdSharingPreventedDeleteConflict: Codable, Equatable, Identifiable {

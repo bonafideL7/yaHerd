@@ -1752,24 +1752,26 @@ final class HerdSharingCoreDataStore {
       herd: herd,
       in: swiftDataContext
     )
+    let updatedRecordConflicts = tagColorDefinitionResult.updatedRecordConflicts
+      + statusReferenceResult.updatedRecordConflicts
+      + animalTagResult.updatedRecordConflicts
+      + pastureGroupResult.updatedRecordConflicts
+      + pastureResult.updatedRecordConflicts
+      + animalResult.updatedRecordConflicts
+      + movementResult.updatedRecordConflicts
+      + statusRecordResult.updatedRecordConflicts
+      + healthRecordResult.updatedRecordConflicts
+      + pregnancyCheckResult.updatedRecordConflicts
+      + workingProtocolTemplateResult.updatedRecordConflicts
+      + workingSessionResult.updatedRecordConflicts
+      + workingQueueItemResult.updatedRecordConflicts
+      + workingTreatmentRecordResult.updatedRecordConflicts
+      + fieldCheckSessionResult.updatedRecordConflicts
+      + fieldCheckAnimalCheckResult.updatedRecordConflicts
+      + fieldCheckFindingResult.updatedRecordConflicts
     let conflictReport = HerdSharingBridgeConflictReport(
-      existingLocalRecordUpdateCount: tagColorDefinitionResult.updated
-        + statusReferenceResult.updated
-        + animalTagResult.updated
-        + pastureGroupResult.updated
-        + pastureResult.updated
-        + animalResult.updated
-        + movementResult.updated
-        + statusRecordResult.updated
-        + healthRecordResult.updated
-        + pregnancyCheckResult.updated
-        + workingProtocolTemplateResult.updated
-        + workingSessionResult.updated
-        + workingQueueItemResult.updated
-        + workingTreatmentRecordResult.updated
-        + fieldCheckSessionResult.updated
-        + fieldCheckAnimalCheckResult.updated
-        + fieldCheckFindingResult.updated,
+      existingLocalRecordUpdateCount: updatedRecordConflicts.count,
+      updatedRecordConflicts: updatedRecordConflicts,
       preventedDeleteConflicts: deletionResult.preventedDeleteConflicts
     )
 
@@ -1932,13 +1934,13 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedTagColorDefinitionRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedTagColorDefinitionRecord, UUID)? in
       guard let publicID = record.parsedPublicID else { return nil }
       return (record, publicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var definitionsByPublicID: [UUID: TagColorDefinition] = [:]
     for definition in try context.fetch(FetchDescriptor<TagColorDefinition>())
@@ -1948,12 +1950,21 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID) in validSharedRecords {
       let definition: TagColorDefinition
       if let existingDefinition = definitionsByPublicID[publicID] {
         definition = existingDefinition
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedTagColorDefinitionRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         definition = TagColorDefinition(
           id: publicID,
@@ -1974,7 +1985,7 @@ final class HerdSharingCoreDataStore {
       apply(record, to: definition, herd: herd)
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -2000,13 +2011,13 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedAnimalStatusReferenceRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedAnimalStatusReferenceRecord, UUID)? in
       guard let publicID = record.parsedPublicID else { return nil }
       return (record, publicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var referencesByPublicID: [UUID: AnimalStatusReference] = [:]
     for reference in try context.fetch(FetchDescriptor<AnimalStatusReference>())
@@ -2016,12 +2027,21 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID) in validSharedRecords {
       let reference: AnimalStatusReference
       if let existingReference = referencesByPublicID[publicID] {
         reference = existingReference
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedAnimalStatusReferenceRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         reference = AnimalStatusReference(
           id: publicID,
@@ -2037,7 +2057,7 @@ final class HerdSharingCoreDataStore {
       apply(record, to: reference, herd: herd)
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -2055,13 +2075,13 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedPastureGroupRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedPastureGroupRecord, UUID)? in
       guard let publicID = record.parsedPublicID else { return nil }
       return (record, publicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var groupsByPublicID: [UUID: PastureGroup] = [:]
     for group in try context.fetch(FetchDescriptor<PastureGroup>())
@@ -2071,12 +2091,21 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID) in validSharedRecords {
       let group: PastureGroup
       if let existingGroup = groupsByPublicID[publicID] {
         group = existingGroup
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedPastureGroupRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         group = PastureGroup(
           publicID: publicID,
@@ -2092,7 +2121,7 @@ final class HerdSharingCoreDataStore {
       apply(record, to: group, herd: herd)
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -2110,12 +2139,12 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedPastureRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap { record -> (SharedPastureRecord, UUID)? in
       guard let publicID = record.parsedPublicID else { return nil }
       return (record, publicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var pasturesByPublicID: [UUID: Pasture] = [:]
     for pasture in try context.fetch(FetchDescriptor<Pasture>())
@@ -2131,12 +2160,21 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID) in validSharedRecords {
       let pasture: Pasture
       if let existingPasture = pasturesByPublicID[publicID] {
         pasture = existingPasture
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedPastureRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         pasture = Pasture(
           publicID: publicID,
@@ -2154,7 +2192,7 @@ final class HerdSharingCoreDataStore {
       apply(record, to: pasture, herd: herd, groupsByPublicID: groupsByPublicID)
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -2177,12 +2215,12 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedAnimalRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap { record -> (SharedAnimalRecord, UUID)? in
       guard let publicID = record.parsedPublicID else { return nil }
       return (record, publicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var animalsByPublicID: [UUID: Animal] = [:]
     for animal in try context.fetch(FetchDescriptor<Animal>())
@@ -2198,12 +2236,21 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID) in validSharedRecords {
       let animal: Animal
       if let existingAnimal = animalsByPublicID[publicID] {
         animal = existingAnimal
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedAnimalRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         animal = Animal(
           publicID: publicID,
@@ -2238,7 +2285,7 @@ final class HerdSharingCoreDataStore {
       animal.damAnimal = record.parsedDamAnimalPublicID.flatMap { animalsByPublicID[$0] }
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -2272,7 +2319,7 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedAnimalTagRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedAnimalTagRecord, UUID, UUID)? in
       guard let publicID = record.parsedPublicID,
@@ -2280,7 +2327,7 @@ final class HerdSharingCoreDataStore {
       else { return nil }
       return (record, publicID, animalPublicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var animalsByPublicID: [UUID: Animal] = [:]
     for animal in try context.fetch(FetchDescriptor<Animal>())
@@ -2296,6 +2343,7 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID, animalPublicID) in validSharedRecords {
       guard let animal = animalsByPublicID[animalPublicID] else { continue }
@@ -2304,6 +2352,14 @@ final class HerdSharingCoreDataStore {
       if let existingTag = tagsByPublicID[publicID] {
         tag = existingTag
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedAnimalTagRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         tag = AnimalTag(
           publicID: publicID,
@@ -2323,7 +2379,7 @@ final class HerdSharingCoreDataStore {
       apply(record, to: tag, herd: herd, animal: animal)
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -2346,7 +2402,7 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedMovementRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedMovementRecord, UUID, UUID)? in
       guard let publicID = record.parsedPublicID,
@@ -2354,7 +2410,7 @@ final class HerdSharingCoreDataStore {
       else { return nil }
       return (record, publicID, animalPublicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var animalsByPublicID: [UUID: Animal] = [:]
     for animal in try context.fetch(FetchDescriptor<Animal>())
@@ -2370,6 +2426,7 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID, animalPublicID) in validSharedRecords {
       guard let animal = animalsByPublicID[animalPublicID] else { continue }
@@ -2378,6 +2435,14 @@ final class HerdSharingCoreDataStore {
       if let existingMovement = movementsByPublicID[publicID] {
         movement = existingMovement
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedMovementRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         movement = MovementRecord(
           publicID: publicID,
@@ -2394,7 +2459,7 @@ final class HerdSharingCoreDataStore {
       apply(record, to: movement, herd: herd, animal: animal)
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -2414,7 +2479,7 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedStatusRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedStatusRecord, UUID, UUID)? in
       guard let publicID = record.parsedPublicID,
@@ -2422,7 +2487,7 @@ final class HerdSharingCoreDataStore {
       else { return nil }
       return (record, publicID, animalPublicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var animalsByPublicID: [UUID: Animal] = [:]
     for animal in try context.fetch(FetchDescriptor<Animal>())
@@ -2438,6 +2503,7 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID, animalPublicID) in validSharedRecords {
       guard let animal = animalsByPublicID[animalPublicID] else { continue }
@@ -2446,6 +2512,14 @@ final class HerdSharingCoreDataStore {
       if let existingStatusRecord = statusRecordsByPublicID[publicID] {
         statusRecord = existingStatusRecord
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedStatusRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         statusRecord = StatusRecord(
           publicID: publicID,
@@ -2464,7 +2538,7 @@ final class HerdSharingCoreDataStore {
       apply(record, to: statusRecord, herd: herd, animal: animal)
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -2486,13 +2560,13 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedWorkingProtocolTemplateRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedWorkingProtocolTemplateRecord, UUID)? in
       guard let publicID = record.parsedPublicID else { return nil }
       return (record, publicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var templatesByPublicID: [UUID: WorkingProtocolTemplate] = [:]
     for template in try context.fetch(FetchDescriptor<WorkingProtocolTemplate>())
@@ -2502,12 +2576,21 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID) in validSharedRecords {
       let template: WorkingProtocolTemplate
       if let existingTemplate = templatesByPublicID[publicID] {
         template = existingTemplate
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedWorkingProtocolTemplateRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         template = WorkingProtocolTemplate(
           publicID: publicID,
@@ -2522,7 +2605,7 @@ final class HerdSharingCoreDataStore {
       apply(record, to: template, herd: herd)
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -2539,13 +2622,13 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedWorkingSessionRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedWorkingSessionRecord, UUID)? in
       guard let publicID = record.parsedPublicID else { return nil }
       return (record, publicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var sessionsByPublicID: [UUID: WorkingSession] = [:]
     for session in try context.fetch(FetchDescriptor<WorkingSession>())
@@ -2561,12 +2644,21 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID) in validSharedRecords {
       let session: WorkingSession
       if let existingSession = sessionsByPublicID[publicID] {
         session = existingSession
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedWorkingSessionRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         session = WorkingSession(
           publicID: publicID,
@@ -2585,7 +2677,7 @@ final class HerdSharingCoreDataStore {
       apply(record, to: session, herd: herd, pasturesByPublicID: pasturesByPublicID)
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -2611,7 +2703,7 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedWorkingQueueItemRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedWorkingQueueItemRecord, UUID, UUID, UUID)? in
       guard let publicID = record.parsedPublicID,
@@ -2620,7 +2712,7 @@ final class HerdSharingCoreDataStore {
       else { return nil }
       return (record, publicID, sessionPublicID, animalPublicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var queueItemsByPublicID: [UUID: WorkingQueueItem] = [:]
     for queueItem in try context.fetch(FetchDescriptor<WorkingQueueItem>())
@@ -2648,6 +2740,7 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID, sessionPublicID, animalPublicID) in validSharedRecords {
       guard let session = sessionsByPublicID[sessionPublicID],
@@ -2658,6 +2751,14 @@ final class HerdSharingCoreDataStore {
       if let existingQueueItem = queueItemsByPublicID[publicID] {
         queueItem = existingQueueItem
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedWorkingQueueItemRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         queueItem = WorkingQueueItem(
           publicID: publicID,
@@ -2688,7 +2789,7 @@ final class HerdSharingCoreDataStore {
       )
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -2724,7 +2825,7 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedWorkingTreatmentRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedWorkingTreatmentRecord, UUID, UUID, UUID)? in
       guard let publicID = record.parsedPublicID,
@@ -2733,7 +2834,7 @@ final class HerdSharingCoreDataStore {
       else { return nil }
       return (record, publicID, sessionPublicID, animalPublicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var treatmentRecordsByPublicID: [UUID: WorkingTreatmentRecord] = [:]
     for treatmentRecord in try context.fetch(FetchDescriptor<WorkingTreatmentRecord>())
@@ -2755,6 +2856,7 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID, sessionPublicID, animalPublicID) in validSharedRecords {
       guard let session = sessionsByPublicID[sessionPublicID],
@@ -2765,6 +2867,14 @@ final class HerdSharingCoreDataStore {
       if let existingTreatmentRecord = treatmentRecordsByPublicID[publicID] {
         treatmentRecord = existingTreatmentRecord
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedWorkingTreatmentRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         treatmentRecord = WorkingTreatmentRecord(
           publicID: publicID,
@@ -2783,7 +2893,7 @@ final class HerdSharingCoreDataStore {
       apply(record, to: treatmentRecord, herd: herd, session: session, animal: animal)
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -2806,7 +2916,7 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedHealthRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedHealthRecord, UUID, UUID)? in
       guard let publicID = record.parsedPublicID,
@@ -2814,7 +2924,7 @@ final class HerdSharingCoreDataStore {
       else { return nil }
       return (record, publicID, animalPublicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var animalsByPublicID: [UUID: Animal] = [:]
     for animal in try context.fetch(FetchDescriptor<Animal>())
@@ -2836,6 +2946,7 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID, animalPublicID) in validSharedRecords {
       guard let animal = animalsByPublicID[animalPublicID] else { continue }
@@ -2844,6 +2955,14 @@ final class HerdSharingCoreDataStore {
       if let existingHealthRecord = healthRecordsByPublicID[publicID] {
         healthRecord = existingHealthRecord
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedHealthRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         healthRecord = HealthRecord(
           publicID: publicID,
@@ -2863,7 +2982,7 @@ final class HerdSharingCoreDataStore {
       )
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -2887,7 +3006,7 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedPregnancyCheckRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedPregnancyCheckRecord, UUID, UUID)? in
       guard let publicID = record.parsedPublicID,
@@ -2895,7 +3014,7 @@ final class HerdSharingCoreDataStore {
       else { return nil }
       return (record, publicID, animalPublicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var animalsByPublicID: [UUID: Animal] = [:]
     for animal in try context.fetch(FetchDescriptor<Animal>())
@@ -2917,6 +3036,7 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID, animalPublicID) in validSharedRecords {
       guard let animal = animalsByPublicID[animalPublicID] else { continue }
@@ -2925,6 +3045,14 @@ final class HerdSharingCoreDataStore {
       if let existingCheck = checksByPublicID[publicID] {
         check = existingCheck
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedPregnancyCheckRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         check = PregnancyCheck(
           publicID: publicID,
@@ -2947,7 +3075,7 @@ final class HerdSharingCoreDataStore {
         sessionsByPublicID: sessionsByPublicID)
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -2975,13 +3103,13 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedFieldCheckSessionRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedFieldCheckSessionRecord, UUID)? in
       guard let publicID = record.parsedPublicID else { return nil }
       return (record, publicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var sessionsByPublicID: [UUID: FieldCheckSession] = [:]
     for session in try context.fetch(FetchDescriptor<FieldCheckSession>())
@@ -2997,12 +3125,21 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID) in validSharedRecords {
       let session: FieldCheckSession
       if let existingSession = sessionsByPublicID[publicID] {
         session = existingSession
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedFieldCheckSessionRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         session = FieldCheckSession(
           publicID: publicID,
@@ -3028,7 +3165,7 @@ final class HerdSharingCoreDataStore {
       apply(record, to: session, herd: herd, pasturesByPublicID: pasturesByPublicID)
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -3057,7 +3194,7 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedFieldCheckAnimalCheckRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedFieldCheckAnimalCheckRecord, UUID, UUID)? in
       guard let publicID = record.parsedPublicID,
@@ -3065,7 +3202,7 @@ final class HerdSharingCoreDataStore {
       else { return nil }
       return (record, publicID, sessionPublicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var checksByPublicID: [UUID: FieldCheckAnimalCheck] = [:]
     for check in try context.fetch(FetchDescriptor<FieldCheckAnimalCheck>())
@@ -3087,6 +3224,7 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID, sessionPublicID) in validSharedRecords {
       guard let session = sessionsByPublicID[sessionPublicID] else { continue }
@@ -3096,6 +3234,14 @@ final class HerdSharingCoreDataStore {
       if let existingCheck = checksByPublicID[publicID] {
         check = existingCheck
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedFieldCheckAnimalCheckRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         check = FieldCheckAnimalCheck(
           publicID: publicID,
@@ -3122,7 +3268,7 @@ final class HerdSharingCoreDataStore {
       apply(record, to: check, herd: herd, session: session, animal: animal)
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -3155,7 +3301,7 @@ final class HerdSharingCoreDataStore {
     from sharedRecords: [SharedFieldCheckFindingRecord],
     herd: Herd,
     in context: ModelContext
-  ) throws -> (inserted: Int, updated: Int) {
+  ) throws -> (inserted: Int, updated: Int, updatedRecordConflicts: [HerdSharingBridgeConflictDetail]) {
     let validSharedRecords = sharedRecords.compactMap {
       record -> (SharedFieldCheckFindingRecord, UUID, UUID)? in
       guard let publicID = record.parsedPublicID,
@@ -3163,7 +3309,7 @@ final class HerdSharingCoreDataStore {
       else { return nil }
       return (record, publicID, sessionPublicID)
     }
-    guard !validSharedRecords.isEmpty else { return (0, 0) }
+    guard !validSharedRecords.isEmpty else { return (0, 0, []) }
 
     var findingsByPublicID: [UUID: FieldCheckFinding] = [:]
     for finding in try context.fetch(FetchDescriptor<FieldCheckFinding>())
@@ -3185,6 +3331,7 @@ final class HerdSharingCoreDataStore {
 
     var inserted = 0
     var updated = 0
+    var updatedRecordConflicts: [HerdSharingBridgeConflictDetail] = []
 
     for (record, publicID, sessionPublicID) in validSharedRecords {
       guard let session = sessionsByPublicID[sessionPublicID] else { continue }
@@ -3194,6 +3341,14 @@ final class HerdSharingCoreDataStore {
       if let existingFinding = findingsByPublicID[publicID] {
         finding = existingFinding
         updated += 1
+        updatedRecordConflicts.append(
+          updatedRecordConflict(
+            sourceEntityName: SharedFieldCheckFindingRecord.entityName,
+            publicID: publicID,
+            localModifiedAt: nil,
+            sharedModifiedAt: record.lastMirroredAt
+          )
+        )
       } else {
         finding = FieldCheckFinding(
           publicID: publicID,
@@ -3219,7 +3374,7 @@ final class HerdSharingCoreDataStore {
       apply(record, to: finding, herd: herd, session: session, animal: animal)
     }
 
-    return (inserted, updated)
+    return (inserted, updated, updatedRecordConflicts)
   }
 
   private func apply(
@@ -3308,6 +3463,21 @@ final class HerdSharingCoreDataStore {
     }
 
     return (deletedCount, preventedDeleteConflicts)
+  }
+
+  private func updatedRecordConflict(
+    sourceEntityName: String,
+    publicID: UUID,
+    localModifiedAt: Date?,
+    sharedModifiedAt: Date?
+  ) -> HerdSharingBridgeConflictDetail {
+    HerdSharingBridgeConflictDetail(
+      kind: .existingLocalRecordUpdate,
+      sourceEntityName: sourceEntityName,
+      publicID: publicID,
+      localModifiedAt: localModifiedAt ?? .distantPast,
+      sharedModifiedAt: sharedModifiedAt ?? Date.now
+    )
   }
 
   private func preventedDeleteConflict(

@@ -298,6 +298,14 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       sourceDescription: sourceDescription,
       detectedAt: .now,
       existingLocalRecordUpdateCount: report.existingLocalRecordUpdateCount,
+      updatedRecordConflicts: report.updatedRecordConflicts.map { conflict in
+        HerdSharingUpdatedRecordConflict(
+          sourceEntityName: conflict.sourceEntityName,
+          publicID: conflict.publicID,
+          localModifiedAt: conflict.localModifiedAt,
+          sharedModifiedAt: conflict.sharedModifiedAt
+        )
+      },
       preventedDeleteConflicts: report.preventedDeleteConflicts.map { conflict in
         HerdSharingPreventedDeleteConflict(
           sourceEntityName: conflict.sourceEntityName,
