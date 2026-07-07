@@ -13,6 +13,7 @@ struct HerdCollaborationView: View {
   @Environment(\.herdCollaborationWritePolicy) private var writePolicy
   @Environment(\.herdSharingConflictReviewStore) private var conflictReviewStore
   @State private var viewModel = HerdCollaborationViewModel()
+  @State private var pendingConflictConfirmation: HerdCollaborationConflictConfirmation?
 
   private let preferences: AppPreferencesProviding
 
@@ -71,6 +72,21 @@ struct HerdCollaborationView: View {
         writePolicy: writePolicy
       )
     }
+    .confirmationDialog(
+      pendingConflictConfirmation?.title ?? "Confirm Resolution",
+      isPresented: Binding(
+        get: { pendingConflictConfirmation != nil },
+        set: { isPresented in
+          if !isPresented { pendingConflictConfirmation = nil }
+        }
+      ),
+      titleVisibility: .visible,
+      presenting: pendingConflictConfirmation
+    ) { confirmation in
+      conflictConfirmationActions(for: confirmation)
+    } message: { confirmation in
+      Text(confirmation.message)
+    }
     .sheet(item: $viewModel.systemShare) { systemShare in
       HerdCloudSharingControllerView(systemShare: systemShare)
         .ignoresSafeArea()
@@ -85,6 +101,29 @@ struct HerdCollaborationView: View {
     } message: {
       Text(viewModel.errorMessage ?? "")
     }
+  }
+
+
+  @ViewBuilder
+  private func conflictConfirmationActions(
+    for confirmation: HerdCollaborationConflictConfirmation
+  ) -> some View {
+    switch confirmation {
+    case let .acceptSharedDeletes(review, _):
+      Button("Delete Local Records and Sync", role: .destructive) {
+        Task {
+          if let sharingSyncCoordinator {
+            _ = await sharingSyncCoordinator.resolveConflictByAcceptingSharedDeletes(
+              review,
+              syncAfterResolution: true
+            )
+            viewModel.loadLatestConflictReview(from: conflictReviewStore)
+          }
+        }
+      }
+    }
+
+    Button("Cancel", role: .cancel) {}
   }
 
   private func currentHerdSection(
@@ -325,15 +364,10 @@ struct HerdCollaborationView: View {
 
         if conflictReview.preventedDeleteCount > 0 {
           Button(role: .destructive) {
-            Task {
-              if let sharingSyncCoordinator {
-                _ = await sharingSyncCoordinator.resolveConflictByAcceptingSharedDeletes(
-                  conflictReview,
-                  syncAfterResolution: true
-                )
-                viewModel.loadLatestConflictReview(from: conflictReviewStore)
-              }
-            }
+            pendingConflictConfirmation = .acceptSharedDeletes(
+              review: conflictReview,
+              affectedRecordCount: conflictReview.preventedDeleteCount
+            )
           } label: {
             Label("Accept Shared Deletes and Sync", systemImage: "trash")
           }
@@ -693,6 +727,31 @@ struct HerdCollaborationView: View {
       if !isPresented {
         viewModel.clearMessages()
       }
+    }
+  }
+}
+
+private enum HerdCollaborationConflictConfirmation: Identifiable {
+  case acceptSharedDeletes(review: HerdSharingConflictReview, affectedRecordCount: Int)
+
+  var id: String {
+    switch self {
+    case let .acceptSharedDeletes(review, affectedRecordCount):
+      "accept-shared-deletes-\(review.id)-\(affectedRecordCount)"
+    }
+  }
+
+  var title: String {
+    switch self {
+    case .acceptSharedDeletes:
+      "Accept Shared Deletes?"
+    }
+  }
+
+  var message: String {
+    switch self {
+    case let .acceptSharedDeletes(_, affectedRecordCount):
+      "This deletes \(affectedRecordCount) local SwiftData record(s) that matched skipped shared deletes, then runs shared-data sync. This cannot be undone from the conflict report."
     }
   }
 }
