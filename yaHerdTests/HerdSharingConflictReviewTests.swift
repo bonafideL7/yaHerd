@@ -414,4 +414,82 @@ final class HerdSharingConflictReviewTests: XCTestCase {
     XCTAssertEqual(queueItemConflict.reviewOnlyFieldChanges.map(\.fieldName), ["sessionPublicID"])
   }
 
+  func testSupportedLocalFieldRestoreIncludesRemainingScalarSharedEntities() {
+    let tagColorConflict = HerdSharingUpdatedRecordConflict(
+      sourceEntityName: "SharedTagColorDefinitionRecord",
+      publicID: UUID(),
+      localModifiedAt: Date(timeIntervalSince1970: 10),
+      sharedModifiedAt: Date(timeIntervalSince1970: 20),
+      fieldChanges: [
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "name",
+          localValue: .string("Yellow"),
+          sharedValue: .string("Orange")
+        )
+      ]
+    )
+
+    XCTAssertEqual(tagColorConflict.supportedLocalRestoreFieldChanges.map(\.fieldName), ["name"])
+
+    let pastureGroupConflict = HerdSharingUpdatedRecordConflict(
+      sourceEntityName: "SharedPastureGroupRecord",
+      publicID: UUID(),
+      localModifiedAt: Date(timeIntervalSince1970: 10),
+      sharedModifiedAt: Date(timeIntervalSince1970: 20),
+      fieldChanges: [
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "grazeDays",
+          localValue: .int(7),
+          sharedValue: .int(10)
+        )
+      ]
+    )
+
+    XCTAssertEqual(pastureGroupConflict.supportedLocalRestoreFieldChanges.map(\.fieldName), ["grazeDays"])
+
+    let treatmentConflict = HerdSharingUpdatedRecordConflict(
+      sourceEntityName: "SharedWorkingTreatmentRecord",
+      publicID: UUID(),
+      localModifiedAt: Date(timeIntervalSince1970: 10),
+      sharedModifiedAt: Date(timeIntervalSince1970: 20),
+      fieldChanges: [
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "quantity",
+          localValue: .double(2.0),
+          sharedValue: .double(3.0)
+        ),
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "animalPublicID",
+          localValue: .uuid(UUID()),
+          sharedValue: .uuid(UUID())
+        ),
+      ]
+    )
+
+    XCTAssertEqual(treatmentConflict.supportedLocalRestoreFieldChanges.map(\.fieldName), ["quantity"])
+    XCTAssertEqual(treatmentConflict.reviewOnlyFieldChanges.map(\.fieldName), ["animalPublicID"])
+
+    let fieldCheckConflict = HerdSharingUpdatedRecordConflict(
+      sourceEntityName: "SharedFieldCheckAnimalCheckRecord",
+      publicID: UUID(),
+      localModifiedAt: Date(timeIntervalSince1970: 10),
+      sharedModifiedAt: Date(timeIntervalSince1970: 20),
+      fieldChanges: [
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "note",
+          localValue: .string("Local note"),
+          sharedValue: .string("Shared note")
+        ),
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "sessionPublicID",
+          localValue: .uuid(UUID()),
+          sharedValue: .uuid(UUID())
+        ),
+      ]
+    )
+
+    XCTAssertEqual(fieldCheckConflict.supportedLocalRestoreFieldChanges.map(\.fieldName), ["note"])
+    XCTAssertEqual(fieldCheckConflict.reviewOnlyFieldChanges.map(\.fieldName), ["sessionPublicID"])
+  }
+
 }

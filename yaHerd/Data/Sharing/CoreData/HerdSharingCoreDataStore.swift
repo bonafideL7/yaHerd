@@ -3974,6 +3974,50 @@ final class HerdSharingCoreDataStore {
         in: context
       ) else { return false }
       return restoreAnimalTagLocalField(fieldName: fieldName, value: value, tag: tag)
+    case SharedTagColorDefinitionRecord.entityName:
+      guard let definition = try fetchSwiftDataRecord(
+        TagColorDefinition.self,
+        publicID: publicID,
+        keyPath: \.id,
+        in: context
+      ) else { return false }
+      return restoreTagColorDefinitionLocalField(
+        fieldName: fieldName,
+        value: value,
+        definition: definition
+      )
+    case SharedAnimalStatusReferenceRecord.entityName:
+      guard let reference = try fetchSwiftDataRecord(
+        AnimalStatusReference.self,
+        publicID: publicID,
+        keyPath: \.id,
+        in: context
+      ) else { return false }
+      return restoreAnimalStatusReferenceLocalField(
+        fieldName: fieldName,
+        value: value,
+        reference: reference
+      )
+    case SharedPastureGroupRecord.entityName:
+      guard let group = try fetchSwiftDataRecord(
+        PastureGroup.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restorePastureGroupLocalField(fieldName: fieldName, value: value, group: group)
+    case SharedWorkingProtocolTemplateRecord.entityName:
+      guard let template = try fetchSwiftDataRecord(
+        WorkingProtocolTemplate.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restoreWorkingProtocolTemplateLocalField(
+        fieldName: fieldName,
+        value: value,
+        template: template
+      )
     case SharedWorkingSessionRecord.entityName:
       guard let session = try fetchSwiftDataRecord(
         WorkingSession.self,
@@ -3994,9 +4038,154 @@ final class HerdSharingCoreDataStore {
         value: value,
         queueItem: queueItem
       )
+    case SharedWorkingTreatmentRecord.entityName:
+      guard let treatmentRecord = try fetchSwiftDataRecord(
+        WorkingTreatmentRecord.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restoreWorkingTreatmentRecordLocalField(
+        fieldName: fieldName,
+        value: value,
+        treatmentRecord: treatmentRecord
+      )
+    case SharedFieldCheckSessionRecord.entityName:
+      guard let session = try fetchSwiftDataRecord(
+        FieldCheckSession.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restoreFieldCheckSessionLocalField(fieldName: fieldName, value: value, session: session)
+    case SharedFieldCheckAnimalCheckRecord.entityName:
+      guard let check = try fetchSwiftDataRecord(
+        FieldCheckAnimalCheck.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restoreFieldCheckAnimalCheckLocalField(fieldName: fieldName, value: value, check: check)
+    case SharedFieldCheckFindingRecord.entityName:
+      guard let finding = try fetchSwiftDataRecord(
+        FieldCheckFinding.self,
+        publicID: publicID,
+        keyPath: \.publicID,
+        in: context
+      ) else { return false }
+      return restoreFieldCheckFindingLocalField(fieldName: fieldName, value: value, finding: finding)
     default:
       return false
     }
+  }
+
+
+  private func restoreTagColorDefinitionLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    definition: TagColorDefinition
+  ) -> Bool {
+    switch fieldName {
+    case "name":
+      guard let stringValue = value.stringValue else { return false }
+      definition.name = stringValue
+    case "prefix":
+      guard let stringValue = value.stringValue else { return false }
+      definition.prefix = stringValue
+    case "red":
+      guard let doubleValue = value.doubleValue else { return false }
+      definition.red = doubleValue
+    case "green":
+      guard let doubleValue = value.doubleValue else { return false }
+      definition.green = doubleValue
+    case "blue":
+      guard let doubleValue = value.doubleValue else { return false }
+      definition.blue = doubleValue
+    case "alpha":
+      guard let doubleValue = value.doubleValue else { return false }
+      definition.alpha = doubleValue
+    case "sortOrder":
+      guard let intValue = value.intValue else { return false }
+      definition.sortOrder = intValue
+    case "isHidden":
+      guard let boolValue = value.boolValue else { return false }
+      definition.isHidden = boolValue
+    case "isDefault":
+      guard let boolValue = value.boolValue else { return false }
+      definition.isDefault = boolValue
+    case "createdAt":
+      guard let dateValue = value.dateValue else { return false }
+      definition.createdAt = dateValue
+    case "updatedAt":
+      guard let dateValue = value.dateValue else { return false }
+      definition.updatedAt = dateValue
+    default:
+      return false
+    }
+
+    return true
+  }
+
+  private func restoreAnimalStatusReferenceLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    reference: AnimalStatusReference
+  ) -> Bool {
+    switch fieldName {
+    case "name":
+      guard let stringValue = value.stringValue else { return false }
+      reference.name = stringValue
+    case "baseStatus":
+      guard let rawValue = value.stringValue, let status = AnimalStatus(rawValue: rawValue) else {
+        return false
+      }
+      reference.baseStatus = status
+    case "createdAt":
+      guard let dateValue = value.dateValue else { return false }
+      reference.createdAt = dateValue
+    default:
+      return false
+    }
+
+    return true
+  }
+
+  private func restorePastureGroupLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    group: PastureGroup
+  ) -> Bool {
+    switch fieldName {
+    case "name":
+      guard let stringValue = value.stringValue else { return false }
+      group.name = stringValue
+    case "grazeDays":
+      guard let intValue = value.intValue else { return false }
+      group.grazeDays = intValue
+    case "restDays":
+      guard let intValue = value.intValue else { return false }
+      group.restDays = intValue
+    default:
+      return false
+    }
+
+    return true
+  }
+
+  private func restoreWorkingProtocolTemplateLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    template: WorkingProtocolTemplate
+  ) -> Bool {
+    switch fieldName {
+    case "name":
+      guard let stringValue = value.stringValue else { return false }
+      template.name = stringValue
+    default:
+      return false
+    }
+
+    return true
   }
 
   private func restoreAnimalLocalField(
@@ -4385,6 +4574,232 @@ final class HerdSharingCoreDataStore {
       } else {
         guard let stringValue = value.stringValue else { return false }
         queueItem.workNotes = stringValue
+      }
+    default:
+      return false
+    }
+
+    return true
+  }
+
+
+  private func restoreWorkingTreatmentRecordLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    treatmentRecord: WorkingTreatmentRecord
+  ) -> Bool {
+    switch fieldName {
+    case "date":
+      guard let dateValue = value.dateValue else { return false }
+      treatmentRecord.date = dateValue
+    case "itemName":
+      guard let stringValue = value.stringValue else { return false }
+      treatmentRecord.itemName = stringValue
+    case "given":
+      guard let boolValue = value.boolValue else { return false }
+      treatmentRecord.given = boolValue
+    case "quantity":
+      if value.isNull {
+        treatmentRecord.quantity = nil
+      } else {
+        guard let doubleValue = value.doubleValue else { return false }
+        treatmentRecord.quantity = doubleValue
+      }
+    default:
+      return false
+    }
+
+    return true
+  }
+
+  private func restoreFieldCheckSessionLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    session: FieldCheckSession
+  ) -> Bool {
+    switch fieldName {
+    case "startedAt":
+      guard let dateValue = value.dateValue else { return false }
+      session.startedAt = dateValue
+    case "completedAt":
+      if value.isNull {
+        session.completedAt = nil
+      } else {
+        guard let dateValue = value.dateValue else { return false }
+        session.completedAt = dateValue
+      }
+    case "notes":
+      guard let stringValue = value.stringValue else { return false }
+      session.notes = stringValue
+    case "expectedHeadCountSnapshot":
+      guard let intValue = value.intValue else { return false }
+      session.expectedHeadCountSnapshot = intValue
+    case "quickCowCount":
+      guard let intValue = value.intValue else { return false }
+      session.quickCowCount = intValue
+    case "quickHeiferCount":
+      guard let intValue = value.intValue else { return false }
+      session.quickHeiferCount = intValue
+    case "quickCalfCount":
+      guard let intValue = value.intValue else { return false }
+      session.quickCalfCount = intValue
+    case "quickBullCount":
+      guard let intValue = value.intValue else { return false }
+      session.quickBullCount = intValue
+    case "quickSteerCount":
+      guard let intValue = value.intValue else { return false }
+      session.quickSteerCount = intValue
+    case "pastureNameSnapshot":
+      guard let stringValue = value.stringValue else { return false }
+      session.pastureNameSnapshot = stringValue
+    case "pastureArchivedAt":
+      if value.isNull {
+        session.pastureArchivedAt = nil
+      } else {
+        guard let dateValue = value.dateValue else { return false }
+        session.pastureArchivedAt = dateValue
+      }
+    case "pastureID":
+      if value.isNull {
+        session.pastureID = nil
+      } else {
+        guard let uuidValue = value.uuidValue else { return false }
+        session.pastureID = uuidValue
+      }
+    default:
+      return false
+    }
+
+    return true
+  }
+
+  private func restoreFieldCheckAnimalCheckLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    check: FieldCheckAnimalCheck
+  ) -> Bool {
+    switch fieldName {
+    case "animalIDSnapshot":
+      if value.isNull {
+        check.animalIDSnapshot = nil
+      } else {
+        guard let uuidValue = value.uuidValue else { return false }
+        check.animalIDSnapshot = uuidValue
+      }
+    case "rosterTagNumber":
+      guard let stringValue = value.stringValue else { return false }
+      check.rosterTagNumber = stringValue
+    case "rosterTagColorID":
+      if value.isNull {
+        check.rosterTagColorID = nil
+      } else {
+        guard let uuidValue = value.uuidValue else { return false }
+        check.rosterTagColorID = uuidValue
+      }
+    case "damRosterTagNumber":
+      guard let stringValue = value.stringValue else { return false }
+      check.damRosterTagNumber = stringValue
+    case "damRosterTagColorID":
+      if value.isNull {
+        check.damRosterTagColorID = nil
+      } else {
+        guard let uuidValue = value.uuidValue else { return false }
+        check.damRosterTagColorID = uuidValue
+      }
+    case "animalName":
+      guard let stringValue = value.stringValue else { return false }
+      check.animalName = stringValue
+    case "animalSex":
+      guard let rawValue = value.stringValue, let sex = Sex(rawValue: rawValue) else { return false }
+      check.animalSex = sex
+    case "animalTypeSnapshot":
+      guard let rawValue = value.stringValue, let animalType = AnimalType(rawValue: rawValue) else {
+        return false
+      }
+      check.animalTypeSnapshot = animalType
+    case "wasExpectedAtStart":
+      guard let boolValue = value.boolValue else { return false }
+      check.wasExpectedAtStart = boolValue
+    case "countedAt":
+      if value.isNull {
+        check.countedAt = nil
+      } else {
+        guard let dateValue = value.dateValue else { return false }
+        check.countedAt = dateValue
+      }
+    case "missingConfirmedAt":
+      if value.isNull {
+        check.missingConfirmedAt = nil
+      } else {
+        guard let dateValue = value.dateValue else { return false }
+        check.missingConfirmedAt = dateValue
+      }
+    case "note":
+      guard let stringValue = value.stringValue else { return false }
+      check.note = stringValue
+    default:
+      return false
+    }
+
+    return true
+  }
+
+  private func restoreFieldCheckFindingLocalField(
+    fieldName: String,
+    value: HerdSharingConflictStoredValue,
+    finding: FieldCheckFinding
+  ) -> Bool {
+    switch fieldName {
+    case "recordedAt":
+      guard let dateValue = value.dateValue else { return false }
+      finding.recordedAt = dateValue
+    case "type":
+      guard let rawValue = value.stringValue, let type = FieldCheckFindingType(rawValue: rawValue) else {
+        return false
+      }
+      finding.type = type
+    case "severity":
+      guard let rawValue = value.stringValue, let severity = FieldCheckFindingSeverity(rawValue: rawValue) else {
+        return false
+      }
+      finding.severity = severity
+    case "status":
+      guard let rawValue = value.stringValue, let status = FieldCheckFindingStatus(rawValue: rawValue) else {
+        return false
+      }
+      finding.status = status
+    case "note":
+      guard let stringValue = value.stringValue else { return false }
+      finding.note = stringValue
+    case "animalIDSnapshot":
+      if value.isNull {
+        finding.animalIDSnapshot = nil
+      } else {
+        guard let uuidValue = value.uuidValue else { return false }
+        finding.animalIDSnapshot = uuidValue
+      }
+    case "animalDisplayTagNumberSnapshot":
+      guard let stringValue = value.stringValue else { return false }
+      finding.animalDisplayTagNumberSnapshot = stringValue
+    case "animalDisplayTagColorIDSnapshot":
+      if value.isNull {
+        finding.animalDisplayTagColorIDSnapshot = nil
+      } else {
+        guard let uuidValue = value.uuidValue else { return false }
+        finding.animalDisplayTagColorIDSnapshot = uuidValue
+      }
+    case "animalNameSnapshot":
+      guard let stringValue = value.stringValue else { return false }
+      finding.animalNameSnapshot = stringValue
+    case "pastureNameSnapshot":
+      guard let stringValue = value.stringValue else { return false }
+      finding.pastureNameSnapshot = stringValue
+    case "sessionIDSnapshot":
+      if value.isNull {
+        finding.sessionIDSnapshot = nil
+      } else {
+        guard let uuidValue = value.uuidValue else { return false }
+        finding.sessionIDSnapshot = uuidValue
       }
     default:
       return false

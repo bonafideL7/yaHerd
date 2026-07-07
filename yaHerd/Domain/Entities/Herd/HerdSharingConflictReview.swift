@@ -411,6 +411,15 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
         "name", "sortOrder", "acreage", "usableAcreage", "targetAcresPerHead",
         "lastGrazedDate",
       ].contains(fieldName)
+    case "SharedTagColorDefinitionRecord":
+      return [
+        "name", "prefix", "red", "green", "blue", "alpha", "sortOrder",
+        "isHidden", "isDefault", "createdAt", "updatedAt",
+      ].contains(fieldName)
+    case "SharedAnimalStatusReferenceRecord":
+      return ["name", "baseStatus", "createdAt"].contains(fieldName)
+    case "SharedPastureGroupRecord":
+      return ["name", "grazeDays", "restDays"].contains(fieldName)
     case "SharedHealthRecord":
       return ["date", "treatment", "notes"].contains(fieldName)
     case "SharedMovementRecord":
@@ -428,6 +437,8 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
       return [
         "number", "colorID", "isPrimary", "isActive", "assignedAt", "removedAt",
       ].contains(fieldName)
+    case "SharedWorkingProtocolTemplateRecord":
+      return ["name"].contains(fieldName)
     case "SharedWorkingSessionRecord":
       return [
         "date", "status", "protocolName", "currentQueueIndex", "notes",
@@ -435,6 +446,27 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
     case "SharedWorkingQueueItemRecord":
       return [
         "queueOrder", "status", "completedAt", "workNotes",
+      ].contains(fieldName)
+    case "SharedWorkingTreatmentRecord":
+      return ["date", "itemName", "given", "quantity"].contains(fieldName)
+    case "SharedFieldCheckSessionRecord":
+      return [
+        "startedAt", "completedAt", "notes", "expectedHeadCountSnapshot",
+        "quickCowCount", "quickHeiferCount", "quickCalfCount", "quickBullCount",
+        "quickSteerCount", "pastureNameSnapshot", "pastureArchivedAt", "pastureID",
+      ].contains(fieldName)
+    case "SharedFieldCheckAnimalCheckRecord":
+      return [
+        "animalIDSnapshot", "rosterTagNumber", "rosterTagColorID",
+        "damRosterTagNumber", "damRosterTagColorID", "animalName", "animalSex",
+        "animalTypeSnapshot", "wasExpectedAtStart", "countedAt", "missingConfirmedAt",
+        "note",
+      ].contains(fieldName)
+    case "SharedFieldCheckFindingRecord":
+      return [
+        "recordedAt", "type", "severity", "status", "note", "animalIDSnapshot",
+        "animalDisplayTagNumberSnapshot", "animalDisplayTagColorIDSnapshot",
+        "animalNameSnapshot", "pastureNameSnapshot", "sessionIDSnapshot",
       ].contains(fieldName)
     default:
       return false
