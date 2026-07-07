@@ -74,10 +74,14 @@ struct HerdSharingConflictReviewDetailView: View {
                   .font(.caption.weight(.semibold))
                   .textSelection(.enabled)
 
-                LabeledContent("Local modified", value: formattedImportDate(conflict.localModifiedAt))
-                  .font(.caption2)
-                LabeledContent("Shared mirrored", value: formattedImportDate(conflict.sharedModifiedAt))
-                  .font(.caption2)
+                LabeledContent(
+                  "Local modified", value: formattedImportDate(conflict.localModifiedAt)
+                )
+                .font(.caption2)
+                LabeledContent(
+                  "Shared mirrored", value: formattedImportDate(conflict.sharedModifiedAt)
+                )
+                .font(.caption2)
 
                 if conflict.fieldChanges.isEmpty {
                   Text(
@@ -119,14 +123,18 @@ struct HerdSharingConflictReviewDetailView: View {
                           }
                         }
 
-                        Text("Local (\(fieldChange.localValue.displayType)): \(fieldChange.localValueDescription)")
-                          .font(.caption2)
-                          .foregroundStyle(.secondary)
-                          .textSelection(.enabled)
-                        Text("Shared (\(fieldChange.sharedValue.displayType)): \(fieldChange.sharedValueDescription)")
-                          .font(.caption2)
-                          .foregroundStyle(.secondary)
-                          .textSelection(.enabled)
+                        Text(
+                          "Local (\(fieldChange.localValue.displayType)): \(fieldChange.localValueDescription)"
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        Text(
+                          "Shared (\(fieldChange.sharedValue.displayType)): \(fieldChange.sharedValueDescription)"
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
                       }
                       .padding(.vertical, 2)
                     }
@@ -195,18 +203,46 @@ struct HerdSharingConflictReviewDetailView: View {
       .disabled(!review.hasConflicts)
 
       Button {
-        Task { await restoreSelectedLocalFields(syncAfterResolution: true) }
+        Task {
+          await restoreSelectedLocalFields(
+            syncAfterResolution: true,
+            resolveAfterRestore: true
+          )
+        }
       } label: {
-        Label("Restore Selected Local Fields and Sync", systemImage: "arrow.uturn.backward.icloud")
+        Label(
+          "Restore Selected Local Fields, Mark Resolved, and Sync",
+          systemImage: "arrow.uturn.backward.icloud"
+        )
       }
       .disabled(
         selectedLocalFieldRestoreIDs.isEmpty || sharingSyncCoordinator == nil
           || sharingSyncCoordinator?.isSyncing == true)
 
       Button {
-        Task { await restoreSelectedLocalFields(syncAfterResolution: false) }
+        Task {
+          await restoreSelectedLocalFields(
+            syncAfterResolution: false,
+            resolveAfterRestore: true
+          )
+        }
       } label: {
-        Label("Restore Selected Local Fields", systemImage: "arrow.uturn.backward.circle")
+        Label(
+          "Restore Selected Local Fields and Mark Resolved",
+          systemImage: "checkmark.circle"
+        )
+      }
+      .disabled(selectedLocalFieldRestoreIDs.isEmpty || sharingSyncCoordinator == nil)
+
+      Button {
+        Task {
+          await restoreSelectedLocalFields(
+            syncAfterResolution: false,
+            resolveAfterRestore: false
+          )
+        }
+      } label: {
+        Label("Restore Selected Local Fields Only", systemImage: "arrow.uturn.backward.circle")
       }
       .disabled(selectedLocalFieldRestoreIDs.isEmpty || sharingSyncCoordinator == nil)
 
@@ -252,7 +288,7 @@ struct HerdSharingConflictReviewDetailView: View {
       }
 
       Text(
-        "Restore Selected Local Fields writes selected pre-import local values back into SwiftData for supported Animal and Pasture fields. Accept Shared Updates keeps the imported shared values already written to SwiftData. Keep Local Records preserves local intent and should be followed by shared-data sync. Accept Shared Deletes deletes the affected local SwiftData records by public ID."
+        "Restore Selected Local Fields writes selected pre-import local values back into SwiftData for supported Animal and Pasture fields. Use the Mark Resolved option when the selected restores fully address the conflict. Accept Shared Updates keeps the imported shared values already written to SwiftData. Keep Local Records preserves local intent and should be followed by shared-data sync. Accept Shared Deletes deletes the affected local SwiftData records by public ID."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -298,7 +334,10 @@ struct HerdSharingConflictReviewDetailView: View {
     }
   }
 
-  private func restoreSelectedLocalFields(syncAfterResolution: Bool) async {
+  private func restoreSelectedLocalFields(
+    syncAfterResolution: Bool,
+    resolveAfterRestore: Bool
+  ) async {
     guard let sharingSyncCoordinator else {
       resolutionMessage = "Restoring local fields requires the sharing sync coordinator."
       return
@@ -313,13 +352,15 @@ struct HerdSharingConflictReviewDetailView: View {
     let restored = await sharingSyncCoordinator.restoreLocalFieldsFromConflict(
       selections,
       in: review,
-      syncAfterResolution: syncAfterResolution
+      syncAfterResolution: syncAfterResolution,
+      resolveAfterRestore: resolveAfterRestore
     )
     resolutionMessage =
       restored
       ? restoredLocalFieldsMessage(
         count: selections.count,
-        syncAfterResolution: syncAfterResolution
+        syncAfterResolution: syncAfterResolution,
+        resolveAfterRestore: resolveAfterRestore
       )
       : "The selected local fields could not be restored."
 
@@ -372,11 +413,17 @@ struct HerdSharingConflictReviewDetailView: View {
     }
   }
 
-  private func restoredLocalFieldsMessage(count: Int, syncAfterResolution: Bool) -> String {
-    if syncAfterResolution {
-      "Restored \(count) selected local field value(s). Shared-data sync was requested."
+  private func restoredLocalFieldsMessage(
+    count: Int,
+    syncAfterResolution: Bool,
+    resolveAfterRestore: Bool
+  ) -> String {
+    if resolveAfterRestore && syncAfterResolution {
+      "Restored \(count) selected local field value(s), marked the conflict resolved, and requested shared-data sync."
+    } else if resolveAfterRestore {
+      "Restored \(count) selected local field value(s) and marked the conflict resolved. Run Sync Shared Data when ready."
     } else {
-      "Restored \(count) selected local field value(s). Run Sync Shared Data when ready."
+      "Restored \(count) selected local field value(s). The conflict report remains open for more review."
     }
   }
 

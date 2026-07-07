@@ -37,4 +37,13 @@ final class HerdSharingConflictResolutionTests: XCTestCase {
     XCTAssertEqual(resolution.choice.displayName, "Keep local records")
     XCTAssertTrue(resolution.choice.summary.contains("local records were intentionally kept"))
   }
+  func testRestoreLocalFieldsResolutionChoiceHasUserFacingText() {
+    XCTAssertEqual(
+      HerdSharingConflictResolutionChoice.restoreLocalFields.displayName, "Restore local fields")
+    XCTAssertTrue(
+      HerdSharingConflictResolutionChoice.restoreLocalFields.summary.contains(
+        "Selected pre-import local field values")
+    )
+  }
+
 }
