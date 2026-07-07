@@ -151,6 +151,33 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     )
   }
 
+  func acceptPreventedSharedDeletes(
+    in review: HerdSharingConflictReview,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult {
+    guard storageMode == .iCloud else {
+      throw HerdSharingActionError.iCloudSyncRequired
+    }
+
+    guard review.preventedDeleteCount > 0 else {
+      return HerdSharingActionResult(
+        title: "No shared deletes to accept",
+        message: "This conflict report does not contain skipped shared deletes."
+      )
+    }
+
+    let deletedCount = try store.acceptPreventedSharedDeletes(
+      review.preventedDeleteConflicts,
+      context: context
+    )
+
+    return HerdSharingActionResult(
+      title: "Shared deletes accepted",
+      message:
+        "Deleted \(deletedCount) of \(review.preventedDeleteCount) local SwiftData record(s) from skipped shared deletes. Run Sync Shared Data to keep the Core Data sharing bridge aligned."
+    )
+  }
+
   func syncSharedBridgeData(
     herd: HerdSummary?,
     storageMode: HerdStorageMode

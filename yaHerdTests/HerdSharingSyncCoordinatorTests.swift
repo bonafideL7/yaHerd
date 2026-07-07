@@ -292,6 +292,46 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
     userDefaults.removePersistentDomain(forName: suiteName)
   }
 
+  func testResolveConflictByAcceptingSharedDeletesDeletesRecordsStoresResolutionAndRunsSync() async {
+    let suiteName = "HerdSharingSyncCoordinatorTests.acceptDelete.\(UUID().uuidString)"
+    let userDefaults = UserDefaults(suiteName: suiteName)!
+    userDefaults.removePersistentDomain(forName: suiteName)
+    let conflictReviewStore = HerdSharingConflictReviewStore(
+      userDefaults: userDefaults,
+      storageKey: "conflicts",
+      maxStoredReviews: 5
+    )
+    let herdRepository = StubHerdRepository(herd: makeHerdSummary())
+    let sharingRepository = RecordingHerdSharingRepository()
+    let conflictReview = makeConflictReview()
+    conflictReviewStore.record(conflictReview)
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      conflictReviewStore: conflictReviewStore,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+
+    let resolved = await coordinator.resolveConflictByAcceptingSharedDeletes(
+      conflictReview,
+      syncAfterResolution: true
+    )
+
+    XCTAssertTrue(resolved)
+    XCTAssertEqual(sharingRepository.acceptSharedDeleteCallCount, 1)
+    XCTAssertEqual(sharingRepository.acceptedSharedDeleteReview, Optional(conflictReview))
+    XCTAssertEqual(sharingRepository.syncCallCount, 1)
+    XCTAssertNil(coordinator.lastConflictReview)
+    XCTAssertEqual(conflictReviewStore.resolutionHistory.first?.reviewID, conflictReview.id)
+    XCTAssertEqual(
+      conflictReviewStore.resolutionHistory.first?.choice,
+      Optional(HerdSharingConflictResolutionChoice.acceptSharedDeletes)
+    )
+    userDefaults.removePersistentDomain(forName: suiteName)
+  }
+
   private func makeHerdSummary() -> HerdSummary {
     HerdSummary(
       publicID: UUID(),
@@ -349,7 +389,9 @@ private final class RecordingHerdSharingRepository: HerdSharingRepository {
   private let conflictReview: HerdSharingConflictReview?
   private(set) var accessCallCount = 0
   private(set) var syncCallCount = 0
+  private(set) var acceptSharedDeleteCallCount = 0
   private(set) var syncedHerdPublicID: UUID?
+  private(set) var acceptedSharedDeleteReview: HerdSharingConflictReview?
 
   init(
     access: HerdSharingAccess = .localOwnerBridgePending,
@@ -391,6 +433,18 @@ private final class RecordingHerdSharingRepository: HerdSharingRepository {
   func importSharedBridgeData(storageMode: HerdStorageMode) async throws -> HerdSharingActionResult
   {
     HerdSharingActionResult(title: "Unused", message: "Unused")
+  }
+
+  func acceptPreventedSharedDeletes(
+    in review: HerdSharingConflictReview,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult {
+    acceptSharedDeleteCallCount += 1
+    acceptedSharedDeleteReview = review
+    return HerdSharingActionResult(
+      title: "Shared deletes accepted",
+      message: "Deleted shared records."
+    )
   }
 
   func syncSharedBridgeData(

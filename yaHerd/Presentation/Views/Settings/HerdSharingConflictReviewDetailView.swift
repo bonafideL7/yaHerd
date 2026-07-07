@@ -120,6 +120,22 @@ struct HerdSharingConflictReviewDetailView: View {
       }
       .disabled(!review.hasConflicts)
 
+      Button(role: .destructive) {
+        Task { await acceptSharedDeletes(syncAfterResolution: true) }
+      } label: {
+        Label("Accept Shared Deletes and Sync", systemImage: "trash")
+      }
+      .disabled(
+        review.preventedDeleteCount == 0 || sharingSyncCoordinator == nil
+          || sharingSyncCoordinator?.isSyncing == true)
+
+      Button(role: .destructive) {
+        Task { await acceptSharedDeletes(syncAfterResolution: false) }
+      } label: {
+        Label("Accept Shared Deletes", systemImage: "trash.circle")
+      }
+      .disabled(review.preventedDeleteCount == 0 || sharingSyncCoordinator == nil)
+
       if let resolutionMessage {
         Text(resolutionMessage)
           .font(.caption)
@@ -127,7 +143,7 @@ struct HerdSharingConflictReviewDetailView: View {
       }
 
       Text(
-        "Keep Local Records resolves this local conflict report and preserves the resolution in Settings history. The sync option immediately runs shared-data sync so the kept local records can be exported back through the Core Data sharing bridge."
+        "Keep Local Records preserves the local records. Accept Shared Deletes deletes the affected local SwiftData records by public ID, resolves the report, and can immediately run shared-data sync so the bridge stays aligned."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -141,7 +157,7 @@ struct HerdSharingConflictReviewDetailView: View {
         .foregroundStyle(.secondary)
 
       Text(
-        "This screen can resolve the report by keeping local records. It still does not provide a field-level merge editor. To accept a collaborator's delete instead, delete the affected record through the normal yaHerd screen and run Sync Shared Data."
+        "This screen can now resolve skipped shared deletes directly. It still does not provide a field-level merge editor for updated records."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -165,11 +181,35 @@ struct HerdSharingConflictReviewDetailView: View {
     }
   }
 
+  private func acceptSharedDeletes(syncAfterResolution: Bool) async {
+    guard let sharingSyncCoordinator else {
+      resolutionMessage = "Accepting shared deletes requires the sharing sync coordinator."
+      return
+    }
+
+    let resolved = await sharingSyncCoordinator.resolveConflictByAcceptingSharedDeletes(
+      review,
+      syncAfterResolution: syncAfterResolution
+    )
+    resolutionMessage =
+      resolved
+      ? acceptedDeleteMessage(syncAfterResolution: syncAfterResolution)
+      : "The shared deletes could not be accepted."
+  }
+
   private func resolvedMessage(syncAfterResolution: Bool) -> String {
     if syncAfterResolution {
       "Resolved by keeping local records. Shared-data sync was requested."
     } else {
       "Resolved by keeping local records. Run Sync Shared Data when ready."
+    }
+  }
+
+  private func acceptedDeleteMessage(syncAfterResolution: Bool) -> String {
+    if syncAfterResolution {
+      "Resolved by accepting shared deletes. Affected local records were deleted and shared-data sync was requested."
+    } else {
+      "Resolved by accepting shared deletes. Affected local records were deleted. Run Sync Shared Data when ready."
     }
   }
 

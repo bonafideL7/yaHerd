@@ -166,6 +166,14 @@ private final class MissingInvitationTestHerdSharingRepository: HerdSharingRepos
     HerdSharingActionResult(title: "Unused", message: "Unused")
   }
 
+  func acceptPreventedSharedDeletes(
+    in review: HerdSharingConflictReview,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult {
+    XCTFail("Repository should not be called when the invitation is missing.")
+    return HerdSharingActionResult(title: "Unused", message: "Unused")
+  }
+
   func syncSharedBridgeData(
     herd: HerdSummary?,
     storageMode: HerdStorageMode

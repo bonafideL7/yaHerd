@@ -45,7 +45,7 @@ struct HerdSharingConflictReview: Codable, Equatable, Identifiable {
     }
 
     if preventedDeleteCount > 0 {
-      return "Review skipped shared deletes before making more edits to the affected records."
+      return "Choose Keep Local Records to preserve local edits, or Accept Shared Deletes to delete the affected local records by public ID."
     }
 
     return "Review the affected records if the shared update was unexpected."
