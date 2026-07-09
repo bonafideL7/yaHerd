@@ -29,7 +29,7 @@ enum FieldCheckHistoricalSnapshotMigrator {
         }
 
         if changed || context.hasChanges {
-            try context.save()
+            try PersistenceLog.save(context, operation: "FieldCheckHistoricalSnapshotMigrator")
         }
 
         migrationState.set(currentMigrationVersion, forKey: migrationVersionKey)

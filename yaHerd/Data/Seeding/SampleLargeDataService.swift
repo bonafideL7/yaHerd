@@ -18,7 +18,12 @@ struct SampleLargeDataService {
     
     static func seedIfNeeded(context: ModelContext) {
         let descriptor = FetchDescriptor<Animal>()
-        if let existing = try? context.fetch(descriptor), !existing.isEmpty {
+        do {
+            let existing = try context.fetch(descriptor)
+            if !existing.isEmpty { return }
+        } catch {
+            PersistenceLog.decodeFailure("SampleLargeDataService.seedIfNeeded.fetchAnimals", error: error)
+            assertionFailure("Failed to inspect existing large sample data: \(error.localizedDescription)")
             return
         }
         
@@ -132,7 +137,7 @@ struct SampleLargeDataService {
         }
         
         do {
-            try context.save()
+            try PersistenceLog.save(context, operation: "SampleLargeDataService.seedIfNeeded")
         } catch {
             assertionFailure("Failed to save SampleLargeDataService seed data: \(error.localizedDescription)")
         }

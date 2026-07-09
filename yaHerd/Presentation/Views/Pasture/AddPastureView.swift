@@ -92,7 +92,7 @@ struct AddPastureView: View {
             onSave?()
             dismiss()
         } catch {
-            model.errorMessage = error.localizedDescription
+            model.errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

@@ -74,7 +74,7 @@ struct SwiftDataPastureRepository: PastureRepository {
         )
         try ensureUniquePasturePublicID(pasture)
         try context.insertIntoDefaultHerd(pasture)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataPastureRepository")
         return PastureMapper.makeDetail(from: pasture)
     }
 
@@ -92,7 +92,7 @@ struct SwiftDataPastureRepository: PastureRepository {
         pasture.acreage = normalizedInput.acreage
         pasture.usableAcreage = normalizedInput.usableAcreage
         pasture.targetAcresPerHead = normalizedInput.targetAcresPerHead
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataPastureRepository")
 
         return PastureMapper.makeDetail(from: pasture)
     }
@@ -114,7 +114,7 @@ struct SwiftDataPastureRepository: PastureRepository {
             pasture.sortOrder = ids.count + offset
         }
 
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataPastureRepository")
     }
 
     func delete(ids: [UUID]) throws {
@@ -125,7 +125,7 @@ struct SwiftDataPastureRepository: PastureRepository {
             context.delete(pasture)
         }
 
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataPastureRepository")
     }
 
     func fetchPastureGroups() throws -> [PastureGroupSummary] {
@@ -155,7 +155,7 @@ struct SwiftDataPastureRepository: PastureRepository {
         )
         try ensureUniquePastureGroupPublicID(group)
         try context.insertIntoDefaultHerd(group)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataPastureRepository")
         return PastureMapper.makeGroupDetail(from: group)
     }
 
@@ -172,7 +172,7 @@ struct SwiftDataPastureRepository: PastureRepository {
         group.name = normalizedInput.name
         group.grazeDays = normalizedInput.grazeDays
         group.restDays = normalizedInput.restDays
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataPastureRepository")
         return PastureMapper.makeGroupDetail(from: group)
     }
 
@@ -183,7 +183,7 @@ struct SwiftDataPastureRepository: PastureRepository {
         for group in groupsToDelete {
             context.delete(group)
         }
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataPastureRepository")
     }
 
     func assignPasture(id pastureID: UUID, toGroupID groupID: UUID?) throws {
@@ -202,7 +202,7 @@ struct SwiftDataPastureRepository: PastureRepository {
         }
 
         pasture.group = group
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataPastureRepository")
     }
 
     func groupNameExists(_ name: String, excluding id: UUID?) throws -> Bool {

@@ -141,7 +141,7 @@ struct WorkingSessionDetailView: View {
             let useCase = DeleteWorkingSessionUseCase(repository: repository)
             try useCase.execute(sessionID: sessionID)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
         }
     }

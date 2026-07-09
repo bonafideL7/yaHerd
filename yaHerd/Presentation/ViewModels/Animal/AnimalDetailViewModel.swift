@@ -36,7 +36,7 @@ final class AnimalDetailViewModel {
                 draftTags = loadedDetail.activeTags + loadedDetail.inactiveTags
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -79,7 +79,7 @@ final class AnimalDetailViewModel {
             pendingScrollTarget = nil
             isEditing = false
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -92,7 +92,7 @@ final class AnimalDetailViewModel {
             detail = updated
             form.syncPrimaryTag(from: updated)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -106,7 +106,7 @@ final class AnimalDetailViewModel {
             detail = updated
             form.syncPrimaryTag(from: updated)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -116,7 +116,7 @@ final class AnimalDetailViewModel {
             detail = updated
             form.syncPrimaryTag(from: updated)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -126,7 +126,7 @@ final class AnimalDetailViewModel {
             detail = updated
             form.syncPrimaryTag(from: updated)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -218,7 +218,7 @@ final class AnimalDetailViewModel {
             try ArchiveAnimalsUseCase(repository: repository).execute(ids: [animalID])
             load(animalID: animalID, using: repository, pastureRepository: pastureRepository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -231,7 +231,7 @@ final class AnimalDetailViewModel {
             try RestoreAnimalsUseCase(repository: repository).execute(ids: [animalID])
             load(animalID: animalID, using: repository, pastureRepository: pastureRepository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -240,7 +240,7 @@ final class AnimalDetailViewModel {
             try DeleteAnimalsUseCase(repository: repository).execute(ids: [animalID])
             didDelete = true
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

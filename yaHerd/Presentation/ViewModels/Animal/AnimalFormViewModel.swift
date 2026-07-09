@@ -27,7 +27,7 @@ final class AnimalFormViewModel {
             pastureOptions = options.pastures
             statusReferenceOptions = options.statusReferences
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

@@ -16,7 +16,7 @@ final class FieldCheckSessionSetupViewModel {
                 .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

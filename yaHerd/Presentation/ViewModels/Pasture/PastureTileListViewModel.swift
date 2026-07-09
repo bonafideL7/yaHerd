@@ -19,7 +19,7 @@ final class PastureTileListViewModel {
             items = try LoadPasturesUseCase(repository: repository).execute()
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -93,7 +93,7 @@ final class PastureTileListViewModel {
             try persistPastureOrder(using: repository)
         } catch {
             items = originalItems
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -123,7 +123,7 @@ final class PastureTileListViewModel {
             clearPendingDeletion()
         } catch {
             items = originalItems
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

@@ -138,7 +138,7 @@ struct AddAnimalView: View {
             try onSave?(createdAnimal)
             dismiss()
         } catch {
-            viewModel.errorMessage = error.localizedDescription
+            viewModel.errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
         }
     }

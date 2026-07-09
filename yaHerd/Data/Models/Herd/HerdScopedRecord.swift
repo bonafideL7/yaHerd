@@ -39,7 +39,11 @@ extension ModelContext {
     }
 
     func insertIntoDefaultHerdIfAvailable<Record: PersistentModel & HerdScopedRecord>(_ record: Record) {
-        try? assignDefaultHerd(to: record)
+        do {
+            try assignDefaultHerd(to: record)
+        } catch {
+            PersistenceLog.decodeFailure("ModelContext.insertIntoDefaultHerdIfAvailable", error: error)
+        }
         insert(record)
     }
 }

@@ -355,6 +355,7 @@ struct AnimalListView: View {
         .animation(.snappy, value: batchMode)
         .animation(.snappy, value: selectedAnimalIDs.count)
         .animation(.snappy, value: currentFilterChips.count)
+        .profileBodyRecomputation("AnimalListView")
     }
 
     private var herdList: some View {
@@ -636,7 +637,7 @@ struct AnimalListView: View {
                 reload()
             }
         } catch {
-            viewModel.errorMessage = error.localizedDescription
+            viewModel.errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

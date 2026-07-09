@@ -46,7 +46,7 @@ final class FieldChecksViewModel {
             openFindings = try repository.fetchOpenFindings(limit: 0)
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 }

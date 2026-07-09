@@ -26,7 +26,7 @@ final class SwiftDataHerdRepository: HerdRepository {
 
         let herd = try currentHerd()
         herd.rename(to: trimmedName)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataHerdRepository")
         return herd.toSummary()
     }
 

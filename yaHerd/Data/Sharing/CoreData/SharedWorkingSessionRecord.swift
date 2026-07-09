@@ -38,7 +38,12 @@ extension SharedWorkingSessionRecord {
         statusRawValue = session.status.rawValue
         sourcePasturePublicID = session.sourcePasture?.publicID.uuidString
         protocolName = session.protocolName
-        protocolItemsJSON = try? JSONEncoder().encode(session.protocolItems)
+        do {
+            protocolItemsJSON = try JSONEncoder().encode(session.protocolItems)
+        } catch {
+            protocolItemsJSON = nil
+            PersistenceLog.decodeFailure("SharedWorkingSessionRecord.protocolItemsJSON.encode", error: error)
+        }
         currentQueueIndex = NSNumber(value: session.currentQueueIndex)
         notes = session.notes
         lastMirroredAt = mirroredAt
@@ -63,6 +68,11 @@ extension SharedWorkingSessionRecord {
 
     var parsedProtocolItems: [WorkingProtocolItem] {
         guard let protocolItemsJSON else { return [] }
-        return (try? JSONDecoder().decode([WorkingProtocolItem].self, from: protocolItemsJSON)) ?? []
+        do {
+            return try JSONDecoder().decode([WorkingProtocolItem].self, from: protocolItemsJSON)
+        } catch {
+            PersistenceLog.decodeFailure("SharedWorkingSessionRecord.parsedProtocolItems.decode", error: error)
+            return []
+        }
     }
 }

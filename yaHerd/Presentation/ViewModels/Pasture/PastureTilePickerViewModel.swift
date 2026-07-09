@@ -25,7 +25,7 @@ final class PastureTilePickerViewModel {
         } catch {
             pastures = []
             recentPastures = []
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             return nil
         }
     }

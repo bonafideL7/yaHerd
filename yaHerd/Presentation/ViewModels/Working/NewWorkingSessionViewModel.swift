@@ -25,11 +25,16 @@ final class NewWorkingSessionViewModel: ObservableObject {
             templates = try workingRepository.fetchTemplates()
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
     func templateDetail(id: UUID) -> WorkingProtocolTemplateDetailSnapshot? {
-        try? workingRepository.fetchTemplateDetail(id: id)
+        do {
+            return try workingRepository.fetchTemplateDetail(id: id)
+        } catch {
+            errorMessage = UserVisibleErrorMessage.make(error)
+            return nil
+        }
     }
 }

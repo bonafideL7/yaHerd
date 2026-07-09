@@ -53,6 +53,11 @@ extension SharedAnimalRecord {
 
     var parsedDistinguishingFeatures: [DistinguishingFeature] {
         guard let distinguishingFeaturesJSON else { return [] }
-        return (try? JSONDecoder().decode([DistinguishingFeature].self, from: distinguishingFeaturesJSON)) ?? []
+        do {
+            return try JSONDecoder().decode([DistinguishingFeature].self, from: distinguishingFeaturesJSON)
+        } catch {
+            PersistenceLog.decodeFailure("SharedAnimalRecord.parsedDistinguishingFeatures.decode", error: error)
+            return []
+        }
     }
 }

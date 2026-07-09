@@ -295,7 +295,7 @@ struct WorkingSessionAnimalEditView: View {
             try useCase.execute(queueItemID: snapshot.id, sessionID: snapshot.sessionID, input: input)
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
         }
     }
@@ -307,7 +307,7 @@ struct WorkingSessionAnimalEditView: View {
             try useCase.execute(queueItemID: snapshot.id, sessionID: snapshot.sessionID)
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
         }
     }

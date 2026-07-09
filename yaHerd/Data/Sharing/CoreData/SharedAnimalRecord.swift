@@ -73,8 +73,13 @@ extension SharedAnimalRecord {
     pasturePublicID = animal.pasture?.publicID.uuidString
     sireAnimalPublicID = animal.sireAnimal?.publicID.uuidString
     damAnimalPublicID = animal.damAnimal?.publicID.uuidString
-    distinguishingFeaturesJSON = try? JSONEncoder().encode(
-      animal.distinguishingFeatures.normalizedDistinguishingFeatureOrder)
+    do {
+      distinguishingFeaturesJSON = try JSONEncoder().encode(
+        animal.distinguishingFeatures.normalizedDistinguishingFeatureOrder)
+    } catch {
+      distinguishingFeaturesJSON = nil
+      PersistenceLog.decodeFailure("SharedAnimalRecord.distinguishingFeaturesJSON.encode", error: error)
+    }
     lastMirroredAt = mirroredAt
   }
 }

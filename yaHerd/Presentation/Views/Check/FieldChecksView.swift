@@ -154,6 +154,7 @@ struct FieldChecksView: View {
         } message: {
             Text(model.errorMessage ?? "Unknown error")
         }
+        .profileBodyRecomputation("FieldChecksView")
     }
 
     @ViewBuilder

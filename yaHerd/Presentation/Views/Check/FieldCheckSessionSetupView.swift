@@ -142,7 +142,7 @@ struct FieldCheckSessionSetupView: View {
             )
             startedRoute = StartedFieldCheckRoute(id: sessionID)
         } catch {
-            model.errorMessage = error.localizedDescription
+            model.errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

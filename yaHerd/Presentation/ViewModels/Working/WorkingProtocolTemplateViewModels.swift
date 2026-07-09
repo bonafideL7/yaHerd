@@ -20,7 +20,7 @@ final class WorkingProtocolTemplatesViewModel: ObservableObject {
             templates = try repository.fetchTemplates()
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 }
@@ -47,7 +47,7 @@ final class WorkingProtocolTemplateDetailViewModel: ObservableObject {
             template = try repository.fetchTemplateDetail(id: templateID)
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 }

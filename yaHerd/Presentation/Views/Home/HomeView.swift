@@ -90,6 +90,7 @@ struct HomeView: View {
         } message: {
             Text(homeErrorMessage ?? "Unknown error")
         }
+        .profileBodyRecomputation("HomeView")
     }
 
     var addMenu: some View {

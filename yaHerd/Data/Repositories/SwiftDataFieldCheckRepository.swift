@@ -70,7 +70,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             try context.insertIntoDefaultHerd(check)
         }
 
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
         return session.publicID
     }
 
@@ -85,7 +85,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             normalizedQuickAnimalTypeCounts(counts, for: session),
             to: session
         )
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
     func updateNotes(sessionID: UUID, notes: String) throws {
@@ -95,7 +95,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try ensureSessionIsEditable(session)
 
         session.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
     func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool) throws {
@@ -110,7 +110,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             check.countedAt = nil
         }
         normalizeQuickAnimalTypeCounts(for: check.session)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
     func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool) throws {
@@ -125,7 +125,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             check.missingConfirmedAt = nil
         }
         normalizeQuickAnimalTypeCounts(for: check.session)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
     func addTrackedAnimalToSession(sessionID: UUID, animalID: UUID, checkedAt: Date) throws {
@@ -152,7 +152,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
                 try AnimalMovementStore.move(animal, to: destinationPasture, in: context, date: checkedAt, save: false)
             }
             normalizeQuickAnimalTypeCounts(for: session)
-            try context.save()
+            try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
             return
         }
 
@@ -170,7 +170,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try context.insertIntoDefaultHerd(check)
         session.expectedHeadCountSnapshot += 1
         normalizeQuickAnimalTypeCounts(for: session)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
     func addFinding(sessionID: UUID, input: FieldCheckFindingInput) throws {
@@ -200,7 +200,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try ensureUniqueFindingPublicID(finding)
         try context.insertIntoDefaultHerd(finding)
         applyFindingSideEffects(input: input, linkedAnimalID: input.animalID ?? animal?.publicID, session: session)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
     func updateFinding(sessionID: UUID, findingID: UUID, input: FieldCheckFindingInput) throws {
@@ -244,7 +244,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             syncMissingStatus(forAnimalID: affectedAnimalID, in: session)
         }
 
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
     func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus) throws {
@@ -258,7 +258,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         if FieldCheckFindingRules.shouldMarkAnimalMissing(for: finding.type) {
             syncMissingStatus(forAnimalID: linkedAnimalID, in: session)
         }
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
     func deleteFinding(sessionID: UUID, findingID: UUID) throws {
@@ -273,7 +273,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
             syncMissingStatus(forAnimalID: linkedAnimalID, in: session, excludingFindingID: finding.publicID)
         }
         context.delete(finding)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
     func completeSession(id: UUID) throws {
@@ -285,7 +285,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         _ = backfillHistoricalSnapshots(in: session)
         normalizeQuickAnimalTypeCounts(for: session)
         session.completedAt = .now
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
     func reopenSession(id: UUID) throws {
@@ -294,7 +294,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         }
         try saveIfNeeded(backfillHistoricalSnapshots(in: session))
         session.completedAt = nil
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
     func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) throws {
@@ -628,7 +628,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
 
     private func saveIfNeeded(_ shouldSave: Bool) throws {
         guard shouldSave else { return }
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
     private func fallbackAnimalType(for sex: Sex) -> AnimalType {

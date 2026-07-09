@@ -13,8 +13,14 @@ struct SampleDataService {
         
         // Avoid reseeding sample animals/pastures
         let descriptor = FetchDescriptor<Animal>()
-        if let existing = try? context.fetch(descriptor),
-           !existing.isEmpty { return }
+        do {
+            let existing = try context.fetch(descriptor)
+            if !existing.isEmpty { return }
+        } catch {
+            PersistenceLog.decodeFailure("SampleDataService.seedSampleDataIfNeeded.fetchAnimals", error: error)
+            assertionFailure("Failed to inspect existing sample data: \(error.localizedDescription)")
+            return
+        }
         
         // Resolve the default "Green" tag color id from the seeded tag color library.
         let greenTagColorID = tagColorIDsByName(context: context)["Green"]
@@ -205,12 +211,23 @@ struct SampleDataService {
             )
         }
         
-        do { try context.save() } catch { assertionFailure("Failed to save seeded data: \(error.localizedDescription)") }
+        do {
+            try PersistenceLog.save(context, operation: "SampleDataService.seedSampleDataIfNeeded")
+        } catch {
+            assertionFailure("Failed to save seeded data: \(error.localizedDescription)")
+        }
     }
     
     private static func seedProtocolTemplatesIfNeeded(context: ModelContext) {
         let desc = FetchDescriptor<WorkingProtocolTemplate>()
-        let existing = (try? context.fetch(desc)) ?? []
+        let existing: [WorkingProtocolTemplate]
+        do {
+            existing = try context.fetch(desc)
+        } catch {
+            PersistenceLog.decodeFailure("SampleDataService.seedProtocolTemplatesIfNeeded.fetchTemplates", error: error)
+            assertionFailure("Failed to inspect existing protocol templates: \(error.localizedDescription)")
+            return
+        }
         guard existing.isEmpty else { return }
         
         let spring = WorkingProtocolTemplate(
@@ -231,7 +248,11 @@ struct SampleDataService {
         
         context.insertIntoDefaultHerdIfAvailable(spring)
         context.insertIntoDefaultHerdIfAvailable(fall)
-        do { try context.save() } catch { assertionFailure("Failed to save seeded data: \(error.localizedDescription)") }
+        do {
+            try PersistenceLog.save(context, operation: "SampleDataService.seedProtocolTemplatesIfNeeded")
+        } catch {
+            assertionFailure("Failed to save seeded data: \(error.localizedDescription)")
+        }
     }
     
     // MARK: - Helpers
@@ -246,7 +267,13 @@ struct SampleDataService {
 
 extension SampleDataService {
     static func tagColorIDsByName(context: ModelContext) -> [String: UUID] {
-        var existingColors = (try? context.fetch(FetchDescriptor<TagColorDefinition>())) ?? []
+        var existingColors: [TagColorDefinition]
+        do {
+            existingColors = try context.fetch(FetchDescriptor<TagColorDefinition>())
+        } catch {
+            PersistenceLog.decodeFailure("SampleDataService.tagColorIDsByName.fetchExistingColors", error: error)
+            existingColors = []
+        }
 
         for defaultColor in TagColorDefaults.seedDefaultColors() {
             let defaultKey = TagColorLibraryRules.normalizedNameKey(defaultColor.name)
@@ -270,9 +297,19 @@ extension SampleDataService {
             fallbackDefault?.setDefault(true)
         }
 
-        try? context.save()
+        do {
+            try PersistenceLog.save(context, operation: "SampleDataService.tagColorIDsByName")
+        } catch {
+            PersistenceLog.decodeFailure("SampleDataService.tagColorIDsByName.save", error: error)
+        }
 
-        let refreshedColors = (try? context.fetch(FetchDescriptor<TagColorDefinition>())) ?? existingColors
+        let refreshedColors: [TagColorDefinition]
+        do {
+            refreshedColors = try context.fetch(FetchDescriptor<TagColorDefinition>())
+        } catch {
+            PersistenceLog.decodeFailure("SampleDataService.tagColorIDsByName.fetchRefreshedColors", error: error)
+            refreshedColors = existingColors
+        }
         var colorIDs: [String: UUID] = [:]
         for color in refreshedColors {
             colorIDs[color.name] = color.id

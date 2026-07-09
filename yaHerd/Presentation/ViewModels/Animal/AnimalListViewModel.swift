@@ -47,7 +47,7 @@ final class AnimalListViewModel {
             pastureOptions = try LoadPastureOptionsUseCase(repository: pastureRepository).execute()
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -109,7 +109,7 @@ final class AnimalListViewModel {
             }
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -123,7 +123,7 @@ final class AnimalListViewModel {
             updateArchiveState(ids: [animalID], isArchived: false)
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -138,7 +138,7 @@ final class AnimalListViewModel {
             moveItems(ids: ids, toPastureID: pastureID)
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

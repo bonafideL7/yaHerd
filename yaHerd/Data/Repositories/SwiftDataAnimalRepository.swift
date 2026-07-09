@@ -104,7 +104,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             let tag = animal.ensurePrimaryTagRecord()
             try ensureUniqueAnimalTagPublicID(tag)
         }
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataAnimalRepository")
         return try makeDetail(from: animal)
     }
 
@@ -164,7 +164,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             )
         )
 
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataAnimalRepository")
         return try makeDetail(from: animal)
     }
 
@@ -172,7 +172,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         for animal in try fetchAnimals(ids: ids) {
             context.delete(animal)
         }
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataAnimalRepository")
     }
 
     func archive(ids: [UUID]) throws {
@@ -196,7 +196,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         }
         let tag = animal.addTag(number: input.number, colorID: input.colorID, isPrimary: input.isPrimary)
         try ensureUniqueAnimalTagPublicID(tag)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataAnimalRepository")
         return try makeDetail(from: animal)
     }
 
@@ -209,7 +209,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         }
         animal.updateTag(tag, number: input.number, colorID: input.colorID, isPrimary: input.isPrimary)
         try ensureUniqueAnimalTagPublicID(tag)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataAnimalRepository")
         return try makeDetail(from: animal)
     }
 
@@ -221,7 +221,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             throw AnimalValidationError.animalTagNotFound
         }
         animal.promoteTagToPrimary(tag)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataAnimalRepository")
         return try makeDetail(from: animal)
     }
 
@@ -233,7 +233,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             throw AnimalValidationError.animalTagNotFound
         }
         animal.retireTag(tag)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataAnimalRepository")
         return try makeDetail(from: animal)
     }
 
@@ -244,7 +244,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
         }
         let record = HealthRecord(date: input.date, treatment: input.treatment, notes: input.notes, animal: animal)
         try context.insertIntoDefaultHerd(record)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataAnimalRepository")
         return try makeDetail(from: animal)
     }
 
@@ -263,7 +263,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
             animal: animal
         )
         try context.insertIntoDefaultHerd(check)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataAnimalRepository")
         return try makeDetail(from: animal)
     }
 
@@ -293,7 +293,7 @@ struct SwiftDataAnimalRepository: AnimalRepository {
                 animal.restoreArchivedRecord()
             }
         }
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataAnimalRepository")
     }
 
     private func fetchAnimal(id: UUID?) throws -> Animal? {

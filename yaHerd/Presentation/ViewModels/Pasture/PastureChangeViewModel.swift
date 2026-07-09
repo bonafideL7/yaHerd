@@ -12,7 +12,7 @@ final class PastureChangeViewModel {
             try MoveAnimalsUseCase(repository: repository).execute(ids: [animalID], toPastureID: selectedPastureID)
             return true
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             return false
         }
     }
