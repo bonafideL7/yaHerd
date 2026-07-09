@@ -5,12 +5,26 @@ import Observation
 @Observable
 final class DashboardViewModel {
     private(set) var snapshot: DashboardSnapshot?
+    private(set) var hasLoaded = false
+    private var isLoading = false
     var errorMessage: String?
     var isPresentingAddAnimal = false
     var isPresentingAddPasture = false
     var isPresentingNewWorkingSession = false
 
+    func loadIfNeeded(configuration: DashboardConfiguration, using repository: any DashboardRecordReading) {
+        guard !hasLoaded else { return }
+        load(configuration: configuration, using: repository)
+    }
+
     func load(configuration: DashboardConfiguration, using repository: any DashboardRecordReading) {
+        guard !isLoading else { return }
+        isLoading = true
+        defer {
+            isLoading = false
+            hasLoaded = true
+        }
+
         do {
             snapshot = try LoadDashboardUseCase(repository: repository).execute(configuration: configuration)
             errorMessage = nil

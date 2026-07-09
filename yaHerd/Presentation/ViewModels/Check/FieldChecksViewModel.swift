@@ -8,6 +8,7 @@ final class FieldChecksViewModel {
     private(set) var openFindings: [FieldCheckFindingSnapshot] = []
     var errorMessage: String?
     var hasLoaded = false
+    private var isLoading = false
 
     var activeSessions: [FieldCheckSessionSummary] {
         sessions.filter { !$0.isCompleted }
@@ -27,8 +28,18 @@ final class FieldChecksViewModel {
         )
     }
 
+    func loadIfNeeded(using repository: any FieldCheckOverviewReading) {
+        guard !hasLoaded else { return }
+        load(using: repository)
+    }
+
     func load(using repository: any FieldCheckOverviewReading) {
-        defer { hasLoaded = true }
+        guard !isLoading else { return }
+        isLoading = true
+        defer {
+            isLoading = false
+            hasLoaded = true
+        }
 
         do {
             sessions = try LoadFieldChecksUseCase(repository: repository).execute()

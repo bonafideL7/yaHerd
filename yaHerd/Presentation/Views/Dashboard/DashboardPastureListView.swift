@@ -56,10 +56,7 @@ struct DashboardPastureListView: View {
         }
         .navigationTitle("Pastures")
         .task {
-            viewModel.load(configuration: configuration, using: repository)
-        }
-        .onAppear {
-            viewModel.load(configuration: configuration, using: repository)
+            viewModel.loadIfNeeded(configuration: configuration, using: repository)
         }
         .alert("Dashboard Error", isPresented: errorBinding) {
             Button("OK", role: .cancel) {

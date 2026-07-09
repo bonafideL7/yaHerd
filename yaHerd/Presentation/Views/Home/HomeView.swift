@@ -63,10 +63,7 @@ struct HomeView: View {
             FieldCheckSessionSetupView()
         }
         .task {
-            loadHomeData()
-        }
-        .onAppear {
-            loadHomeData()
+            loadHomeDataIfNeeded()
         }
         .onChange(of: isPresentingAddAnimal) { _, isPresented in
             if !isPresented { loadHomeData() }
@@ -146,14 +143,25 @@ struct HomeView: View {
         )
     }
 
+    func loadHomeDataIfNeeded() {
+        viewModel.loadIfNeeded(
+            configuration: configuration,
+            useCase: makeLoadHomeUseCase()
+        )
+    }
+
     func loadHomeData() {
         viewModel.load(
             configuration: configuration,
-            useCase: LoadHomeUseCase(
-                dashboardRepository: dashboardRecordReader,
-                fieldCheckRepository: fieldCheckOverviewReader,
-                workingRepository: workingProtocolTemplateReader
-            )
+            useCase: makeLoadHomeUseCase()
+        )
+    }
+
+    private func makeLoadHomeUseCase() -> LoadHomeUseCase {
+        LoadHomeUseCase(
+            dashboardRepository: dashboardRecordReader,
+            fieldCheckRepository: fieldCheckOverviewReader,
+            workingRepository: workingProtocolTemplateReader
         )
     }
 

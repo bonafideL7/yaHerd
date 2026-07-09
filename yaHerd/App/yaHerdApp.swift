@@ -58,7 +58,7 @@ struct yaHerdApp: App {
                 schema: schema,
                 syncMode: syncMode
             )
-            try DefaultHerdBootstrapper.ensureDefaultHerd(in: container.mainContext)
+            try Self.runStartupMigrations(in: container.mainContext, storageScope: syncMode.rawValue)
 
             AppLaunchDiagnostics.record(
                 requestedSyncMode: syncMode,
@@ -91,7 +91,7 @@ struct yaHerdApp: App {
                         schema: schema,
                         syncMode: .localOnly
                     )
-                    try DefaultHerdBootstrapper.ensureDefaultHerd(in: localContainer.mainContext)
+                    try Self.runStartupMigrations(in: localContainer.mainContext, storageScope: SyncMode.localOnly.rawValue)
 
                     let startupMessage = """
                     iCloud Sync could not be enabled, so yaHerd returned to Local Only mode. Your local data is still on this device. Original error: \(primaryError.localizedDescription)
@@ -122,7 +122,7 @@ struct yaHerdApp: App {
                         let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer(
                             schema: schema
                         )
-                        try DefaultHerdBootstrapper.ensureDefaultHerd(in: fallbackContainer.mainContext)
+                        try Self.runStartupMigrations(in: fallbackContainer.mainContext, storageScope: "recovery")
 
                         let startupMessage = """
                         Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved.
@@ -176,7 +176,7 @@ struct yaHerdApp: App {
                 let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer(
                     schema: schema
                 )
-                try DefaultHerdBootstrapper.ensureDefaultHerd(in: fallbackContainer.mainContext)
+                try Self.runStartupMigrations(in: fallbackContainer.mainContext, storageScope: "recovery")
 
                 let startupMessage = """
                 Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved. Original error: \(primaryError.localizedDescription)
@@ -218,6 +218,17 @@ struct yaHerdApp: App {
                 return .storageUnavailable(startupMessage)
             }
         }
+    }
+
+    private static func runStartupMigrations(in context: ModelContext, storageScope: String) throws {
+        try DefaultHerdBootstrapper.ensureDefaultHerdForAppLaunch(
+            in: context,
+            storageScope: storageScope
+        )
+        try FieldCheckHistoricalSnapshotMigrator.runIfNeeded(
+            in: context,
+            storageScope: storageScope
+        )
     }
 
     static func makeSchema() -> Schema {

@@ -195,29 +195,19 @@ struct AnimalListView: View {
     private var repository: any AnimalListRepository { animalListRepository }
 
     private var filteredAndSortedAnimals: [AnimalSummary] {
-        AnimalListDerivations.filteredAndSortedAnimals(
-            items: viewModel.items,
-            searchText: searchTextValue,
-            sortOrder: sortOrderValue,
-            filter: filterValue,
-            showRemovedStatuses: showRemovedStatusesValue,
-            showArchivedRecords: showArchivedRecordsValue
-        ) { tagNumber, colorID in
-            tagColorLibrary.formattedTag(tagNumber: tagNumber, colorID: colorID)
-        }
+        viewModel.filteredAndSortedAnimals
     }
 
     private var groupedAnimals: [AnimalSection] {
-        AnimalListDerivations.groupedAnimals(filteredAndSortedAnimals, sortOrder: sortOrderValue)
+        viewModel.groupedAnimals
     }
 
     private var shouldUseSections: Bool {
-        AnimalListDerivations.shouldUseSections(for: sortOrderValue)
+        viewModel.shouldUseSections
     }
 
     private var currentSectionIDs: Set<String> {
-        guard shouldUseSections else { return [] }
-        return Set(groupedAnimals.map(\.id))
+        viewModel.currentSectionIDs
     }
 
     private var canCollapseSections: Bool {
@@ -225,21 +215,15 @@ struct AnimalListView: View {
     }
 
     private var emptyStateConfiguration: AnimalListEmptyStateConfiguration {
-        AnimalListDerivations.emptyStateConfiguration(
-            items: viewModel.items,
-            searchText: searchTextValue,
-            filter: filterValue,
-            showRemovedStatuses: showRemovedStatusesValue,
-            showArchivedRecords: showArchivedRecordsValue
-        )
+        viewModel.emptyStateConfiguration
     }
 
     private var hasHiddenOffHerdAnimals: Bool {
-        AnimalListDerivations.hasHiddenOffHerdAnimals(items: viewModel.items)
+        viewModel.hasHiddenOffHerdAnimals
     }
 
     private var hasHiddenArchivedRecords: Bool {
-        AnimalListDerivations.hasHiddenArchivedRecords(items: viewModel.items)
+        viewModel.hasHiddenArchivedRecords
     }
 
     private var inlineHelperText: String {
@@ -346,7 +330,27 @@ struct AnimalListView: View {
         } message: { animal in
             Text("This permanently deletes \(deleteConfirmationLabel(for: animal)) and cannot be undone.")
         }
-        .onAppear(perform: reload)
+        .task {
+            reloadIfNeeded()
+        }
+        .onChange(of: searchTextValue) { _, _ in
+            refreshDerivedState(debounced: true)
+        }
+        .onChange(of: sortOrderValue) { _, _ in
+            refreshDerivedState()
+        }
+        .onChange(of: filterValue) { _, _ in
+            refreshDerivedState()
+        }
+        .onChange(of: showRemovedStatusesValue) { _, _ in
+            refreshDerivedState()
+        }
+        .onChange(of: showArchivedRecordsValue) { _, _ in
+            refreshDerivedState()
+        }
+        .onReceive(tagColorLibrary.$colors) { _ in
+            refreshDerivedState()
+        }
         .scrollDismissesKeyboard(.interactively)
         .animation(.snappy, value: batchMode)
         .animation(.snappy, value: selectedAnimalIDs.count)
@@ -493,6 +497,7 @@ struct AnimalListView: View {
             using: repository,
             pastureRepository: pastureReferenceDataReader
         )
+        refreshDerivedState()
         selectedAnimalIDs.removeAll()
         batchMode = false
     }
@@ -507,8 +512,27 @@ struct AnimalListView: View {
         reload()
     }
 
+    private func reloadIfNeeded() {
+        viewModel.loadIfNeeded(using: repository, pastureRepository: pastureReferenceDataReader)
+        refreshDerivedState()
+    }
+
     private func reload() {
         viewModel.load(using: repository, pastureRepository: pastureReferenceDataReader)
+        refreshDerivedState()
+    }
+
+    private func refreshDerivedState(debounced: Bool = false) {
+        viewModel.updateDerivedState(
+            searchText: searchTextValue,
+            sortOrder: sortOrderValue,
+            filter: filterValue,
+            showRemovedStatuses: showRemovedStatusesValue,
+            showArchivedRecords: showArchivedRecordsValue,
+            debounced: debounced
+        ) { tagNumber, colorID in
+            tagColorLibrary.formattedTag(tagNumber: tagNumber, colorID: colorID)
+        }
     }
 
     private func toggleBatchMode() {
@@ -644,6 +668,7 @@ struct AnimalListView: View {
             using: repository,
             pastureRepository: pastureReferenceDataReader
         )
+        refreshDerivedState()
     }
 
     private func deleteConfirmationLabel(for animal: AnimalSummary) -> String {
@@ -659,5 +684,6 @@ struct AnimalListView: View {
 
     private func restoreArchivedRecord(_ animal: AnimalSummary) {
         viewModel.restore(animalID: animal.id, using: repository, pastureRepository: pastureReferenceDataReader)
+        refreshDerivedState()
     }
 }
