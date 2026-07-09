@@ -36,10 +36,12 @@ final class DashboardPastureListViewModel {
         configuration: DashboardConfiguration,
         using repository: any DashboardReadWriting
     ) {
+        let date = Date.now
         do {
             try MarkPastureGrazedTodayUseCase(repository: repository)
-                .execute(pastureID: pastureID)
-            load(configuration: configuration, using: repository)
+                .execute(pastureID: pastureID, now: date)
+            applyPastureGrazedToday(pastureID: pastureID, date: date)
+            errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -47,5 +49,19 @@ final class DashboardPastureListViewModel {
 
     func filteredItems(_ filter: DashboardPastureFilter) -> [DashboardPastureItem] {
         DashboardService().filterPastures(items, filter: filter)
+    }
+
+    private func applyPastureGrazedToday(pastureID: UUID, date: Date) {
+        items = items.map { pasture in
+            guard pasture.id == pastureID else { return pasture }
+            return DashboardPastureItem(
+                id: pasture.id,
+                name: pasture.name,
+                activeAnimalCount: pasture.activeAnimalCount,
+                metrics: pasture.metrics,
+                lastGrazedDate: date,
+                restDays: pasture.restDays
+            )
+        }
     }
 }

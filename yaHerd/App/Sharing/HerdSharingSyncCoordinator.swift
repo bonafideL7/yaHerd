@@ -178,9 +178,11 @@ final class HerdSharingSyncCoordinator {
     lastAccessRefreshTriggerDescription = trigger.displayName
     lastAccessRefreshStartedAt = now
     lastAccessRefreshSkippedReason = nil
+    let performanceStartedAt = Date()
     defer {
       isRefreshingSharingAccess = false
       lastAccessRefreshFinishedAt = .now
+      PerformanceLog.logDuration("HerdSharingSyncCoordinator.refreshSharingAccessNow.\(trigger.displayName)", startedAt: performanceStartedAt)
     }
 
     do {
@@ -373,9 +375,11 @@ final class HerdSharingSyncCoordinator {
     lastTriggerDescription = trigger.displayName
     lastStartedAt = .now
     lastSkippedReason = nil
+    let performanceStartedAt = Date()
     defer {
       isSyncing = false
       lastFinishedAt = .now
+      PerformanceLog.logDuration("HerdSharingSyncCoordinator.performSync.\(trigger.displayName)", startedAt: performanceStartedAt)
       if let queuedMutationReason {
         self.queuedMutationReason = nil
         requestAutomaticSync(trigger: .dataMutation(queuedMutationReason))

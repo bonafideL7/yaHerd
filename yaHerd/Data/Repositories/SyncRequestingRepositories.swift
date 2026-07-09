@@ -195,6 +195,12 @@ struct SyncRequestingDashboardRepository: DashboardRepository {
   let writePolicy: HerdCollaborationWritePolicy
 
   func fetchDashboardRecords() throws -> DashboardRecords { try base.fetchDashboardRecords() }
+  func fetchDashboardAnimalRecords(kind: DashboardAnimalListKind) throws -> [DashboardAnimalRecord] {
+    try base.fetchDashboardAnimalRecords(kind: kind)
+  }
+  func fetchDashboardPastureRecords() throws -> [DashboardPastureRecord] {
+    try base.fetchDashboardPastureRecords()
+  }
 
   func markPastureGrazedToday(id: UUID, on date: Date) throws {
     try writePolicy.validateCanWrite(reason: .dashboard)

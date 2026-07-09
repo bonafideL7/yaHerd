@@ -10,8 +10,8 @@ struct LoadDashboardPastureListUseCase {
     }
 
     func execute(configuration: DashboardConfiguration) throws -> [DashboardPastureItem] {
-        let records = try repository.fetchDashboardRecords()
-        let snapshot = service.makeSnapshot(records: records, configuration: configuration)
-        return snapshot.pastures
+        let pastures = try repository.fetchDashboardPastureRecords()
+        let records = DashboardRecords(animals: [], pastures: pastures, workingSessions: [])
+        return service.makeSnapshot(records: records, configuration: configuration).pastures
     }
 }

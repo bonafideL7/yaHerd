@@ -49,13 +49,20 @@ enum DashboardMapper {
     }
 
     static func makePastureRecord(from pasture: Pasture) -> DashboardPastureRecord {
+        makePastureRecord(
+            from: pasture,
+            activeAnimalCount: pasture.animals.filter { $0.isActiveInHerd }.count
+        )
+    }
+
+    static func makePastureRecord(from pasture: Pasture, activeAnimalCount: Int) -> DashboardPastureRecord {
         DashboardPastureRecord(
             id: pasture.publicID,
             name: pasture.name,
             acreage: pasture.acreage,
             usableAcreage: pasture.usableAcreage,
             targetAcresPerHead: pasture.targetAcresPerHead,
-            activeAnimalCount: pasture.animals.filter { $0.isActiveInHerd }.count,
+            activeAnimalCount: activeAnimalCount,
             lastGrazedDate: pasture.lastGrazedDate,
             restDays: pasture.group?.restDays
         )
