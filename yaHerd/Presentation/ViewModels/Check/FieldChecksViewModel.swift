@@ -38,13 +38,13 @@ final class FieldChecksViewModel {
         isLoading = true
         defer {
             isLoading = false
-            hasLoaded = true
         }
 
         do {
             sessions = try LoadFieldChecksUseCase(repository: repository).execute()
             openFindings = try repository.fetchOpenFindings(limit: 0)
             errorMessage = nil
+            hasLoaded = true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }

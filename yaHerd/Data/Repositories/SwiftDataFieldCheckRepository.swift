@@ -315,12 +315,21 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         var sessionsByID: [UUID: FieldCheckSession] = [:]
 
         for pastureID in pastureIDs {
-            let descriptor = FetchDescriptor<FieldCheckSession>(
+            let snapshotDescriptor = FetchDescriptor<FieldCheckSession>(
                 predicate: #Predicate<FieldCheckSession> { session in
-                    session.pastureID == pastureID || session.pasture?.publicID == pastureID
+                    session.pastureID == pastureID
                 }
             )
-            for session in try context.fetch(descriptor) {
+            for session in try context.fetch(snapshotDescriptor) {
+                sessionsByID[session.publicID] = session
+            }
+
+            let relationshipDescriptor = FetchDescriptor<FieldCheckSession>(
+                predicate: #Predicate<FieldCheckSession> { session in
+                    session.pasture?.publicID == pastureID
+                }
+            )
+            for session in try context.fetch(relationshipDescriptor) {
                 sessionsByID[session.publicID] = session
             }
         }

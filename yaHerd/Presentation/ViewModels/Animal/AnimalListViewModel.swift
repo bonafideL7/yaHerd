@@ -39,13 +39,13 @@ final class AnimalListViewModel {
         isLoading = true
         defer {
             isLoading = false
-            hasLoaded = true
         }
 
         do {
             items = try LoadAnimalsUseCase(repository: repository).execute()
             pastureOptions = try LoadPastureOptionsUseCase(repository: pastureRepository).execute()
             errorMessage = nil
+            hasLoaded = true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
@@ -108,6 +108,7 @@ final class AnimalListViewModel {
                 updateArchiveState(ids: [animalID], isArchived: true)
             }
             errorMessage = nil
+            hasLoaded = true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
@@ -122,6 +123,7 @@ final class AnimalListViewModel {
             try RestoreAnimalsUseCase(repository: repository).execute(ids: [animalID])
             updateArchiveState(ids: [animalID], isArchived: false)
             errorMessage = nil
+            hasLoaded = true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
@@ -137,6 +139,7 @@ final class AnimalListViewModel {
             try MoveAnimalsUseCase(repository: repository).execute(ids: ids, toPastureID: pastureID)
             moveItems(ids: ids, toPastureID: pastureID)
             errorMessage = nil
+            hasLoaded = true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }

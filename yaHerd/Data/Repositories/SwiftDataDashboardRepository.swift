@@ -6,29 +6,28 @@ struct SwiftDataDashboardRepository: DashboardRepository {
 
     func fetchDashboardRecords() throws -> DashboardRecords {
         try PerformanceLog.measure("SwiftDataDashboardRepository.fetchDashboardRecords") {
-            let animalDescriptor = FetchDescriptor<Animal>(
-                predicate: #Predicate<Animal> { animal in
-                    !animal.isSoftDeleted
-                }
-            )
+            // Keep these fetches intentionally simple. SwiftData can compile some enum predicates,
+            // but they can still fail at runtime with SwiftDataError error 1 on existing stores.
+            // Filter enum-backed values in Swift until these model fields are stored as raw strings.
+            let animalDescriptor = FetchDescriptor<Animal>()
             let pastureDescriptor = FetchDescriptor<Pasture>(sortBy: [SortDescriptor(\Pasture.name)])
             let workingDescriptor = FetchDescriptor<WorkingSession>(
-                predicate: #Predicate<WorkingSession> { session in
-                    session.status == WorkingSessionStatus.active
-                },
                 sortBy: [SortDescriptor(\WorkingSession.date, order: .reverse)]
             )
 
             let animalModels = try context.fetch(animalDescriptor)
-            let pastureActiveAnimalCounts = activeAnimalCountsByPastureID(from: animalModels)
-            let animals = animalModels.map(DashboardMapper.makeAnimalRecord)
+            let visibleAnimalModels = animalModels.filter { !$0.isSoftDeleted }
+            let pastureActiveAnimalCounts = activeAnimalCountsByPastureID(from: visibleAnimalModels)
+            let animals = visibleAnimalModels.map(DashboardMapper.makeAnimalRecord)
             let pastures = try context.fetch(pastureDescriptor).map { pasture in
                 DashboardMapper.makePastureRecord(
                     from: pasture,
                     activeAnimalCount: pastureActiveAnimalCounts[pasture.publicID, default: 0]
                 )
             }
-            let sessions = try context.fetch(workingDescriptor).map(DashboardMapper.makeWorkingSessionRecord)
+            let sessions = try context.fetch(workingDescriptor)
+                .filter { $0.status == .active }
+                .map(DashboardMapper.makeWorkingSessionRecord)
 
             return DashboardRecords(
                 animals: animals,
@@ -40,46 +39,26 @@ struct SwiftDataDashboardRepository: DashboardRepository {
 
     func fetchDashboardAnimalRecords(kind: DashboardAnimalListKind) throws -> [DashboardAnimalRecord] {
         try PerformanceLog.measure("SwiftDataDashboardRepository.fetchDashboardAnimalRecords.\(kind.rawValue)") {
-            let descriptor: FetchDescriptor<Animal>
-            switch kind {
-            case .active:
-                descriptor = FetchDescriptor<Animal>(
-                    predicate: #Predicate<Animal> { animal in
-                        animal.status == AnimalStatus.active && !animal.isSoftDeleted
-                    }
-                )
-            case .workingPen:
-                descriptor = FetchDescriptor<Animal>(
-                    predicate: #Predicate<Animal> { animal in
-                        animal.status == AnimalStatus.active
-                            && !animal.isSoftDeleted
-                            && animal.locationRaw == AnimalLocation.workingPen
-                    }
-                )
-            case .unassigned:
-                descriptor = FetchDescriptor<Animal>(
-                    predicate: #Predicate<Animal> { animal in
-                        animal.status == AnimalStatus.active
-                            && !animal.isSoftDeleted
-                            && animal.locationRaw == AnimalLocation.pasture
-                            && animal.pasture == nil
-                    }
-                )
+            let descriptor = FetchDescriptor<Animal>()
+            let animals = try context.fetch(descriptor).filter { animal in
+                switch kind {
+                case .active:
+                    return animal.isActiveInHerd
+                case .workingPen:
+                    return animal.isActiveInHerd && animal.location == .workingPen
+                case .unassigned:
+                    return animal.isActiveInHerd && animal.location == .pasture && animal.pasture == nil
+                }
             }
-
-            return try context.fetch(descriptor).map(DashboardMapper.makeAnimalRecord)
+            return animals.map(DashboardMapper.makeAnimalRecord)
         }
     }
 
     func fetchDashboardPastureRecords() throws -> [DashboardPastureRecord] {
         try PerformanceLog.measure("SwiftDataDashboardRepository.fetchDashboardPastureRecords") {
-            let activeAnimalDescriptor = FetchDescriptor<Animal>(
-                predicate: #Predicate<Animal> { animal in
-                    animal.status == AnimalStatus.active && !animal.isSoftDeleted
-                }
-            )
+            let animalDescriptor = FetchDescriptor<Animal>()
             let pastureActiveAnimalCounts = activeAnimalCountsByPastureID(
-                from: try context.fetch(activeAnimalDescriptor)
+                from: try context.fetch(animalDescriptor).filter { !$0.isSoftDeleted }
             )
             let descriptor = FetchDescriptor<Pasture>(sortBy: [SortDescriptor(\Pasture.name)])
             return try context.fetch(descriptor).map { pasture in
