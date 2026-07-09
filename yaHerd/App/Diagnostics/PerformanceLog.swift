@@ -1,15 +1,27 @@
 import Foundation
 import OSLog
+import os
 
 enum PerformanceLog {
+    private static let subsystem = Bundle.main.bundleIdentifier ?? "yaHerd"
     private static let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "yaHerd",
+        subsystem: subsystem,
         category: "Performance"
+    )
+    private static let signpostLog = OSLog(
+        subsystem: subsystem,
+        category: "PointsOfInterest"
     )
 
     @discardableResult
     static func measure<T>(_ operation: String, _ work: () throws -> T) rethrows -> T {
         let startedAt = Date()
+        let signpostID = OSSignpostID(log: signpostLog)
+        os_signpost(.begin, log: signpostLog, name: "yaHerd Operation", signpostID: signpostID, "%{public}@", operation as NSString)
+        defer {
+            os_signpost(.end, log: signpostLog, name: "yaHerd Operation", signpostID: signpostID, "%{public}@", operation as NSString)
+        }
+
         do {
             let result = try work()
             logDuration(operation, startedAt: startedAt, failed: false)
@@ -23,6 +35,12 @@ enum PerformanceLog {
     @discardableResult
     static func measureAsync<T>(_ operation: String, _ work: () async throws -> T) async rethrows -> T {
         let startedAt = Date()
+        let signpostID = OSSignpostID(log: signpostLog)
+        os_signpost(.begin, log: signpostLog, name: "yaHerd Async Operation", signpostID: signpostID, "%{public}@", operation as NSString)
+        defer {
+            os_signpost(.end, log: signpostLog, name: "yaHerd Async Operation", signpostID: signpostID, "%{public}@", operation as NSString)
+        }
+
         do {
             let result = try await work()
             logDuration(operation, startedAt: startedAt, failed: false)

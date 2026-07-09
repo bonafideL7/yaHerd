@@ -14,7 +14,7 @@ final class PastureGroupListViewModel {
             groups = try LoadPastureGroupsUseCase(repository: repository).execute()
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -36,7 +36,7 @@ final class PastureGroupListViewModel {
             groupPendingDeletion = nil
             load(using: repository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

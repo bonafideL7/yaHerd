@@ -31,7 +31,7 @@ struct AnimalMovementStore {
         try context.insertIntoDefaultHerd(movement)
 
         if save {
-            try context.save()
+            try PersistenceLog.save(context, operation: "AnimalMovementStore.move")
         }
 
         return true
@@ -52,7 +52,7 @@ struct AnimalMovementStore {
         }
 
         if save, changedAny {
-            try context.save()
+            try PersistenceLog.save(context, operation: "AnimalMovementStore.move")
         }
     }
 }

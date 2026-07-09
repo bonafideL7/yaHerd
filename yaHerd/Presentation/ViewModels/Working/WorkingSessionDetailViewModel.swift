@@ -22,7 +22,7 @@ final class WorkingSessionDetailViewModel: ObservableObject {
             session = try repository.fetchSessionDetail(id: sessionID)
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 }

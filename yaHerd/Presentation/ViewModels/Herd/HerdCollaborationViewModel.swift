@@ -48,7 +48,7 @@ final class HerdCollaborationViewModel {
         herd: nil,
         storageMode: storageMode
       )
-      errorMessage = error.localizedDescription
+      errorMessage = UserVisibleErrorMessage.make(error)
     }
   }
 
@@ -80,7 +80,7 @@ final class HerdCollaborationViewModel {
     } catch {
       sharingAccess = nil
       writePolicy?.clearAccess()
-      sharingAccessMessage = error.localizedDescription
+      sharingAccessMessage = UserVisibleErrorMessage.make(error)
     }
   }
 
@@ -103,7 +103,7 @@ final class HerdCollaborationViewModel {
       successMessage = "Herd name saved."
       errorMessage = nil
     } catch {
-      errorMessage = error.localizedDescription
+      errorMessage = UserVisibleErrorMessage.make(error)
       successMessage = nil
     }
   }
@@ -126,7 +126,7 @@ final class HerdCollaborationViewModel {
       recordConflictReview(result.conflictReview, in: conflictReviewStore)
       errorMessage = nil
     } catch {
-      errorMessage = error.localizedDescription
+      errorMessage = UserVisibleErrorMessage.make(error)
       successMessage = nil
       systemShare = nil
     }
@@ -153,7 +153,7 @@ final class HerdCollaborationViewModel {
       errorMessage = nil
       return true
     } catch {
-      errorMessage = error.localizedDescription
+      errorMessage = UserVisibleErrorMessage.make(error)
       successMessage = nil
       return false
     }
@@ -166,6 +166,7 @@ final class HerdCollaborationViewModel {
     conflictReviewStore: HerdSharingConflictReviewStore? = nil
   ) async -> Bool {
     isSharingActionInProgress = true
+    ReliabilityLog.syncEvent("HerdCollaborationViewModel.importSharedBridgeData", detail: storageMode.displayName)
     defer { isSharingActionInProgress = false }
 
     do {
@@ -177,7 +178,8 @@ final class HerdCollaborationViewModel {
       errorMessage = nil
       return true
     } catch {
-      errorMessage = error.localizedDescription
+      ReliabilityLog.syncFailure("HerdCollaborationViewModel.importSharedBridgeData", error: error)
+      errorMessage = UserVisibleErrorMessage.importFailed(error)
       successMessage = nil
       return false
     }
@@ -190,6 +192,7 @@ final class HerdCollaborationViewModel {
     conflictReviewStore: HerdSharingConflictReviewStore? = nil
   ) async -> Bool {
     isSharingActionInProgress = true
+    ReliabilityLog.syncEvent("HerdCollaborationViewModel.syncSharedBridgeData", detail: storageMode.displayName)
     defer { isSharingActionInProgress = false }
 
     do {
@@ -202,7 +205,8 @@ final class HerdCollaborationViewModel {
       errorMessage = nil
       return true
     } catch {
-      errorMessage = error.localizedDescription
+      ReliabilityLog.syncFailure("HerdCollaborationViewModel.syncSharedBridgeData", error: error)
+      errorMessage = UserVisibleErrorMessage.syncFailed(error)
       successMessage = nil
       return false
     }

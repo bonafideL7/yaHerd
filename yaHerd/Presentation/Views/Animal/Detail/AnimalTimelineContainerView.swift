@@ -11,11 +11,18 @@ struct AnimalTimelineContainerView: View {
 
     @State private var events: [AnimalTimelineEvent] = []
     @State private var hasLoaded = false
+    @State private var errorMessage: String?
 
     var body: some View {
         Group {
             if hasLoaded {
-                if events.isEmpty {
+                if let errorMessage {
+                    ContentUnavailableView(
+                        "Timeline Unavailable",
+                        systemImage: "clock.arrow.circlepath",
+                        description: Text(errorMessage)
+                    )
+                } else if events.isEmpty {
                     ContentUnavailableView("Timeline Unavailable", systemImage: "clock.arrow.circlepath")
                 } else {
                     AnimalTimelineView(events: events)
@@ -26,7 +33,13 @@ struct AnimalTimelineContainerView: View {
         }
         .task {
             guard !hasLoaded else { return }
-            events = (try? timelineReader.fetchTimeline(id: animalID)) ?? []
+            do {
+                events = try timelineReader.fetchTimeline(id: animalID)
+                errorMessage = nil
+            } catch {
+                events = []
+                errorMessage = UserVisibleErrorMessage.make(error)
+            }
             hasLoaded = true
         }
     }

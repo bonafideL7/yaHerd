@@ -29,7 +29,7 @@ final class WorkingQueueItemEditorViewModel: ObservableObject {
             pastures = try LoadPastureOptionsUseCase(repository: pastureRepository).execute()
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 }

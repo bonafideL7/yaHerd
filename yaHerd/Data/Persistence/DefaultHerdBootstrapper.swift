@@ -187,6 +187,6 @@ enum DefaultHerdBootstrapper {
         }
 
         guard changed || context.hasChanges else { return }
-        try context.save()
+        try PersistenceLog.save(context, operation: "DefaultHerdBootstrapper")
     }
 }

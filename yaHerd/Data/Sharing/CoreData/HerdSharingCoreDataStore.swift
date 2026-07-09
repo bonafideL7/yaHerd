@@ -52,6 +52,12 @@ final class HerdSharingCoreDataStore {
 
   func loadIfNeeded() async throws {
     guard !isLoaded else { return }
+    let profilingStartedAt = Date()
+    ReliabilityLog.syncEvent("HerdSharingCoreDataStore.loadIfNeeded.started")
+    defer {
+      PerformanceLog.logDuration("HerdSharingCoreDataStore.loadIfNeeded", startedAt: profilingStartedAt)
+      ReliabilityLog.syncEvent("HerdSharingCoreDataStore.loadIfNeeded.finished")
+    }
 
     let directoryURL = persistentContainer.persistentStoreDescriptions
       .compactMap(\.url)
@@ -112,7 +118,7 @@ final class HerdSharingCoreDataStore {
     record.mirror(herd)
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return record
@@ -166,7 +172,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -220,7 +226,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -274,7 +280,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -335,7 +341,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -389,7 +395,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -451,7 +457,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -513,7 +519,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -575,7 +581,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -637,7 +643,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -699,7 +705,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -754,7 +760,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -809,7 +815,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -880,7 +886,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -953,7 +959,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -1008,7 +1014,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -1079,7 +1085,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -1150,7 +1156,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return mirroredRecords
@@ -1208,6 +1214,12 @@ final class HerdSharingCoreDataStore {
     fieldCheckAnimalChecks: [FieldCheckAnimalCheck],
     fieldCheckFindings: [FieldCheckFinding]
   ) async throws -> HerdSharingBridgeExportResult {
+    let profilingStartedAt = Date()
+    ReliabilityLog.syncEvent("HerdSharingCoreDataStore.syncBridgeRecordsFromSwiftData.started")
+    defer {
+      PerformanceLog.logDuration("HerdSharingCoreDataStore.syncBridgeRecordsFromSwiftData", startedAt: profilingStartedAt)
+      ReliabilityLog.syncEvent("HerdSharingCoreDataStore.syncBridgeRecordsFromSwiftData.finished")
+    }
     try await loadIfNeeded()
 
     let target = try writableBridgeStore(for: herd)
@@ -1440,6 +1452,12 @@ final class HerdSharingCoreDataStore {
     fieldCheckAnimalChecks: [FieldCheckAnimalCheck],
     fieldCheckFindings: [FieldCheckFinding]
   ) async throws -> HerdSystemShare {
+    let profilingStartedAt = Date()
+    ReliabilityLog.syncEvent("HerdSharingCoreDataStore.makeSystemShare.started")
+    defer {
+      PerformanceLog.logDuration("HerdSharingCoreDataStore.makeSystemShare", startedAt: profilingStartedAt)
+      ReliabilityLog.syncEvent("HerdSharingCoreDataStore.makeSystemShare.finished")
+    }
     let record = try await mirrorHerdIntoPrivateStore(herd)
     let sharedTagColorDefinitions = try mirrorTagColorDefinitionsIntoPrivateStore(
       tagColorDefinitions,
@@ -1578,6 +1596,12 @@ final class HerdSharingCoreDataStore {
   }
 
   func acceptShareInvitation(metadata: CKShare.Metadata) async throws {
+    let profilingStartedAt = Date()
+    ReliabilityLog.syncEvent("HerdSharingCoreDataStore.acceptShareInvitation.started")
+    defer {
+      PerformanceLog.logDuration("HerdSharingCoreDataStore.acceptShareInvitation", startedAt: profilingStartedAt)
+      ReliabilityLog.syncEvent("HerdSharingCoreDataStore.acceptShareInvitation.finished")
+    }
     try await loadIfNeeded()
 
     guard let sharedStore else {
@@ -1603,6 +1627,12 @@ final class HerdSharingCoreDataStore {
   func importSharedRecordsIntoSwiftData(context swiftDataContext: ModelContext) async throws
     -> HerdSharingBridgeImportResult
   {
+    let profilingStartedAt = Date()
+    ReliabilityLog.syncEvent("HerdSharingCoreDataStore.importSharedRecordsIntoSwiftData.started")
+    defer {
+      PerformanceLog.logDuration("HerdSharingCoreDataStore.importSharedRecordsIntoSwiftData", startedAt: profilingStartedAt)
+      ReliabilityLog.syncEvent("HerdSharingCoreDataStore.importSharedRecordsIntoSwiftData.finished")
+    }
     try await loadIfNeeded()
 
     guard let sharedStore else {
@@ -1776,7 +1806,7 @@ final class HerdSharingCoreDataStore {
     )
 
     if swiftDataContext.hasChanges {
-      try swiftDataContext.save()
+      try PersistenceLog.save(swiftDataContext, operation: "HerdSharingCoreDataStore.swiftDataImport")
     }
 
     return HerdSharingBridgeImportResult(
@@ -3833,7 +3863,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return deletedCount
@@ -3884,7 +3914,7 @@ final class HerdSharingCoreDataStore {
     }
 
     if context.hasChanges {
-      try context.save()
+      try PersistenceLog.save(context, operation: "HerdSharingCoreDataStore")
     }
 
     return HerdSharingLocalFieldRestoreResult(
@@ -5140,10 +5170,19 @@ final class HerdSharingCoreDataStore {
     return lhsDate > rhsDate
   }
 
+  private func fetchCoreDataRecords<T: NSFetchRequestResult>(
+    _ request: NSFetchRequest<T>,
+    operation: String
+  ) throws -> [T] {
+    try PerformanceLog.measure("CoreData.fetch.\(operation)") {
+      try persistentContainer.viewContext.fetch(request)
+    }
+  }
+
   private func fetchSharedHerdRecords(in store: NSPersistentStore) throws -> [SharedHerdRecord] {
     let request = SharedHerdRecord.fetchRequest()
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedHerdRecords")
   }
 
   private func fetchSharedHerdRecord(
@@ -5154,7 +5193,7 @@ final class HerdSharingCoreDataStore {
     request.fetchLimit = 1
     request.predicate = NSPredicate(format: "publicID == %@", publicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request).first
+    return try fetchCoreDataRecords(request, operation: "fetchSharedHerdRecord").first
   }
 
   private func fetchSharedTagColorDefinitionRecords(
@@ -5164,7 +5203,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedTagColorDefinitionRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedTagColorDefinitionRecords")
   }
 
   private func fetchSharedAnimalStatusReferenceRecords(
@@ -5174,7 +5213,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedAnimalStatusReferenceRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedAnimalStatusReferenceRecords")
   }
 
   private func fetchSharedAnimalTagRecords(
@@ -5184,7 +5223,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedAnimalTagRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedAnimalTagRecords")
   }
 
   private func fetchSharedPastureGroupRecords(
@@ -5194,7 +5233,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedPastureGroupRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedPastureGroupRecords")
   }
 
   private func fetchSharedPastureRecords(
@@ -5204,7 +5243,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedPastureRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedPastureRecords")
   }
 
   private func fetchSharedAnimalRecords(
@@ -5214,7 +5253,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedAnimalRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedAnimalRecords")
   }
 
   private func fetchSharedMovementRecords(
@@ -5224,7 +5263,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedMovementRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedMovementRecords")
   }
 
   private func fetchSharedStatusRecords(
@@ -5234,7 +5273,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedStatusRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedStatusRecords")
   }
 
   private func fetchSharedHealthRecords(
@@ -5244,7 +5283,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedHealthRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedHealthRecords")
   }
 
   private func fetchSharedPregnancyCheckRecords(
@@ -5254,7 +5293,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedPregnancyCheckRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedPregnancyCheckRecords")
   }
 
   private func fetchSharedWorkingProtocolTemplateRecords(
@@ -5264,7 +5303,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedWorkingProtocolTemplateRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedWorkingProtocolTemplateRecords")
   }
 
   private func fetchSharedWorkingSessionRecords(
@@ -5274,7 +5313,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedWorkingSessionRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedWorkingSessionRecords")
   }
 
   private func fetchSharedWorkingQueueItemRecords(
@@ -5284,7 +5323,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedWorkingQueueItemRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedWorkingQueueItemRecords")
   }
 
   private func fetchSharedWorkingTreatmentRecords(
@@ -5294,7 +5333,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedWorkingTreatmentRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedWorkingTreatmentRecords")
   }
 
   private func fetchSharedFieldCheckSessionRecords(
@@ -5304,7 +5343,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedFieldCheckSessionRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedFieldCheckSessionRecords")
   }
 
   private func fetchSharedFieldCheckAnimalCheckRecords(
@@ -5314,7 +5353,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedFieldCheckAnimalCheckRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedFieldCheckAnimalCheckRecords")
   }
 
   private func fetchSharedFieldCheckFindingRecords(
@@ -5324,7 +5363,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedFieldCheckFindingRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedFieldCheckFindingRecords")
   }
 
   private func fetchSharedDeletedRecords(
@@ -5334,7 +5373,7 @@ final class HerdSharingCoreDataStore {
     let request = SharedDeletedRecord.fetchRequest()
     request.predicate = NSPredicate(format: "herdPublicID == %@", herdPublicID.uuidString)
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request)
+    return try fetchCoreDataRecords(request, operation: "fetchSharedDeletedRecords")
   }
 
   private func fetchSharedDeletedRecord(
@@ -5352,7 +5391,7 @@ final class HerdSharingCoreDataStore {
       herdPublicID.uuidString
     )
     request.affectedStores = [store]
-    return try persistentContainer.viewContext.fetch(request).first
+    return try fetchCoreDataRecords(request, operation: "fetchSharedDeletedRecord").first
   }
 
   private func store(named fileName: String) -> NSPersistentStore? {

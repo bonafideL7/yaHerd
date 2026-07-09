@@ -16,7 +16,7 @@ final class AnimalParentPickerViewModel {
         do {
             items = try LoadAnimalParentOptionsUseCase(repository: repository).execute(excluding: excludedAnimalID)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

@@ -18,8 +18,14 @@ struct SwiftDataWorkingRepository: WorkingRepository {
     }
 
     func fetchSessionDetail(id: UUID) throws -> WorkingSessionDetailSnapshot? {
-        guard let session = try? lookup.fetchSession(id: id) else { return nil }
-        return WorkingMapper.makeSessionDetail(from: session)
+        do {
+            let session = try lookup.fetchSession(id: id)
+            return WorkingMapper.makeSessionDetail(from: session)
+        } catch WorkingRepositoryError.sessionNotFound {
+            return nil
+        } catch {
+            throw error
+        }
     }
 
     func fetchTemplates() throws -> [WorkingProtocolTemplateSummary] {
@@ -30,8 +36,14 @@ struct SwiftDataWorkingRepository: WorkingRepository {
     }
 
     func fetchTemplateDetail(id: UUID) throws -> WorkingProtocolTemplateDetailSnapshot? {
-        guard let template = try? lookup.fetchTemplate(id: id) else { return nil }
-        return WorkingMapper.makeTemplateDetail(from: template)
+        do {
+            let template = try lookup.fetchTemplate(id: id)
+            return WorkingMapper.makeTemplateDetail(from: template)
+        } catch WorkingRepositoryError.templateNotFound {
+            return nil
+        } catch {
+            throw error
+        }
     }
 
     func fetchQueueItemEditor(sessionID: UUID, queueItemID: UUID) throws -> WorkingQueueItemEditorSnapshot? {
@@ -76,7 +88,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         )
         try idStore.ensureUniqueSessionPublicID(session)
         try context.insertIntoDefaultHerd(session)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataWorkingRepository")
         return session.publicID
     }
 
@@ -108,7 +120,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
             order += 1
         }
 
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataWorkingRepository")
     }
 
     func complete(queueItemID: UUID, inSessionID sessionID: UUID, treatmentEntries: [WorkingTreatmentEntryInput], pregnancyCheck: WorkingPregnancyCheckInput?, markCastrated: Bool, observationNotes: String) throws {
@@ -127,7 +139,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
             observationNotes: observationNotes
         )
         try workDataWriter.replaceWorkData(session: session, animal: animal, input: input, recordDate: completedAt)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataWorkingRepository")
     }
 
     func saveEdits(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID, input: WorkingSessionAnimalEditInput) throws {
@@ -142,7 +154,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         queueItem.destinationPasture = try lookup.fetchPasture(id: input.destinationPastureID)
 
         try workDataWriter.replaceWorkData(session: session, animal: animal, input: input.workData, recordDate: completedAt ?? now)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataWorkingRepository")
     }
 
     func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) throws {
@@ -152,7 +164,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         try workDataWriter.deleteAllWorkData(session: session, animal: animal)
         queueItem.status = .queued
         queueItem.completedAt = nil
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataWorkingRepository")
     }
 
     func deleteSession(id: UUID) throws {
@@ -169,7 +181,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
 
         try sessionCleanupWriter.deleteLinkedRecords(session: session)
         context.delete(session)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataWorkingRepository")
     }
 
     func saveDestinations(sessionID: UUID, assignments: [WorkingQueueDestinationAssignment]) throws {
@@ -182,7 +194,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
             item.destinationPasture = try lookup.fetchPasture(id: destinationPastureID)
         }
 
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataWorkingRepository")
     }
 
     func finishSession(id: UUID) throws {
@@ -199,7 +211,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
             )
         }
         session.status = .finished
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataWorkingRepository")
     }
 
     func createTemplate(name: String, items: [WorkingProtocolItem]) throws -> UUID {
@@ -211,7 +223,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         let template = WorkingProtocolTemplate(name: normalizedName, items: items)
         try idStore.ensureUniqueTemplatePublicID(template)
         try context.insertIntoDefaultHerd(template)
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataWorkingRepository")
         return template.publicID
     }
 
@@ -224,7 +236,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
 
         template.name = normalizedName
         template.items = items
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataWorkingRepository")
     }
 
     func deleteTemplates(ids: [UUID]) throws {
@@ -232,7 +244,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         for template in templates {
             context.delete(template)
         }
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataWorkingRepository")
     }
 
     private var lookup: SwiftDataWorkingLookupStore {

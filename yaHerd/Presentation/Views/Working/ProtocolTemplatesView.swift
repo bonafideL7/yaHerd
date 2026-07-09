@@ -76,7 +76,7 @@ struct ProtocolTemplatesView: View {
             try useCase.execute(offsets.map { viewModel.templates[$0].id })
             viewModel.load()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
         }
     }
@@ -149,7 +149,7 @@ private struct ProtocolTemplateAddView: View {
             _ = try useCase.execute(name: trimmed, items: cleaned)
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
         }
     }
@@ -247,7 +247,7 @@ private struct ProtocolTemplateDetailView: View {
             try useCase.execute(templateID: template.id, name: trimmedName, items: cleaned)
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
         }
     }

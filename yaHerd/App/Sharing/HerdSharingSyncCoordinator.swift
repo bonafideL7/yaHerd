@@ -98,6 +98,7 @@ final class HerdSharingSyncCoordinator {
   func requestAutomaticSync(trigger: Trigger) {
     guard storageMode == .iCloud else {
       lastSkippedReason = "iCloud Sync is not enabled."
+      ReliabilityLog.syncEvent("HerdSharingSyncCoordinator.requestAutomaticSync.skipped", trigger: trigger.displayName, detail: lastSkippedReason)
       return
     }
 
@@ -108,6 +109,7 @@ final class HerdSharingSyncCoordinator {
       } else {
         lastSkippedReason = "A shared-data sync is already running."
       }
+      ReliabilityLog.syncEvent("HerdSharingSyncCoordinator.requestAutomaticSync.skipped", trigger: trigger.displayName, detail: lastSkippedReason)
       return
     }
 
@@ -118,6 +120,7 @@ final class HerdSharingSyncCoordinator {
     {
       lastSkippedReason =
         "Skipped automatic shared-data sync because the previous automatic sync request was recent."
+      ReliabilityLog.syncEvent("HerdSharingSyncCoordinator.requestAutomaticSync.throttled", trigger: trigger.displayName, detail: lastSkippedReason)
       return
     }
 
@@ -125,6 +128,7 @@ final class HerdSharingSyncCoordinator {
       lastAutomaticSyncRequestedAt = now
     }
     lastSkippedReason = nil
+    ReliabilityLog.syncEvent("HerdSharingSyncCoordinator.requestAutomaticSync.scheduled", trigger: trigger.displayName)
     pendingAutomaticSyncTask?.cancel()
 
     let debounceNanoseconds = automaticDebounceNanoseconds
@@ -175,6 +179,7 @@ final class HerdSharingSyncCoordinator {
 
     lastAccessRefreshRequestedAt = now
     isRefreshingSharingAccess = true
+    ReliabilityLog.syncEvent("HerdSharingSyncCoordinator.refreshSharingAccessNow.started", trigger: trigger.displayName)
     lastAccessRefreshTriggerDescription = trigger.displayName
     lastAccessRefreshStartedAt = now
     lastAccessRefreshSkippedReason = nil
@@ -203,7 +208,8 @@ final class HerdSharingSyncCoordinator {
       lastAccessRefreshErrorMessage = "No Herd share root is available yet."
       return false
     } catch {
-      lastAccessRefreshErrorMessage = error.localizedDescription
+      ReliabilityLog.syncFailure("HerdSharingSyncCoordinator.refreshSharingAccessNow", trigger: trigger.displayName, error: error)
+      lastAccessRefreshErrorMessage = UserVisibleErrorMessage.syncFailed(error)
       return false
     }
   }
@@ -294,7 +300,7 @@ final class HerdSharingSyncCoordinator {
       _ = await syncNow(trigger: .manual)
       return true
     } catch {
-      lastErrorMessage = error.localizedDescription
+      lastErrorMessage = UserVisibleErrorMessage.syncFailed(error)
       lastSuccessMessage = nil
       return false
     }
@@ -341,7 +347,7 @@ final class HerdSharingSyncCoordinator {
       _ = await syncNow(trigger: .manual)
       return true
     } catch {
-      lastErrorMessage = error.localizedDescription
+      lastErrorMessage = UserVisibleErrorMessage.syncFailed(error)
       lastSuccessMessage = nil
       return false
     }
@@ -372,6 +378,7 @@ final class HerdSharingSyncCoordinator {
     }
 
     isSyncing = true
+    ReliabilityLog.syncEvent("HerdSharingSyncCoordinator.performSync.started", trigger: trigger.displayName)
     lastTriggerDescription = trigger.displayName
     lastStartedAt = .now
     lastSkippedReason = nil
@@ -398,11 +405,13 @@ final class HerdSharingSyncCoordinator {
         storageMode: storageMode
       )
       lastSuccessMessage = "\(result.title): \(result.message)"
+      ReliabilityLog.syncEvent("HerdSharingSyncCoordinator.performSync.succeeded", trigger: trigger.displayName, detail: result.title)
       recordConflictReview(result.conflictReview)
       lastErrorMessage = nil
       return true
     } catch {
-      lastErrorMessage = error.localizedDescription
+      ReliabilityLog.syncFailure("HerdSharingSyncCoordinator.performSync", trigger: trigger.displayName, error: error)
+      lastErrorMessage = UserVisibleErrorMessage.syncFailed(error)
       lastSuccessMessage = nil
       return false
     }

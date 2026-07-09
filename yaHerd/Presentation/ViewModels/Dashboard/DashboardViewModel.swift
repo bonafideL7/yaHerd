@@ -29,7 +29,7 @@ final class DashboardViewModel {
             snapshot = try LoadDashboardUseCase(repository: repository).execute(configuration: configuration)
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -44,7 +44,7 @@ final class DashboardViewModel {
             applyPastureGrazedToday(pastureID: pastureID, date: date)
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

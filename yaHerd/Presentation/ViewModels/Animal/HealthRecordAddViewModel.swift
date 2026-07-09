@@ -23,7 +23,7 @@ final class HealthRecordAddViewModel {
             )
             return true
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             return false
         }
     }

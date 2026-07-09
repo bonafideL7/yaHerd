@@ -130,7 +130,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
         if persistedColors.isEmpty {
             let colorsToSeed = legacyColorsFromUserDefaults() ?? TagColorDefaults.seedDefaultColors()
             try seed(colorsToSeed)
-            try context.save()
+            try PersistenceLog.save(context, operation: "SwiftDataTagColorRepository")
             UserDefaults.standard.removeObject(forKey: legacyStorageKey)
         }
 
@@ -175,7 +175,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
         }
 
         if didChange {
-            try context.save()
+            try PersistenceLog.save(context, operation: "SwiftDataTagColorRepository")
         }
     }
 
@@ -220,7 +220,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
         }
 
         if didChange {
-            try context.save()
+            try PersistenceLog.save(context, operation: "SwiftDataTagColorRepository")
         }
     }
 
@@ -273,7 +273,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
         }
 
         if didChange {
-            try context.save()
+            try PersistenceLog.save(context, operation: "SwiftDataTagColorRepository")
         }
     }
 
@@ -287,7 +287,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
         }
 
         if didChange {
-            try context.save()
+            try PersistenceLog.save(context, operation: "SwiftDataTagColorRepository")
         }
     }
 
@@ -370,7 +370,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
     }
 
     private func saveAndNormalize() throws {
-        try context.save()
+        try PersistenceLog.save(context, operation: "SwiftDataTagColorRepository")
         try removeRetiredDefaultColors()
         try reconcileColorNames(in: fetchPersistedColors())
         try ensureDefaultColorExists()
@@ -399,7 +399,11 @@ final class SwiftDataTagColorRepository: TagColorRepository {
             return nil
         }
 
-        guard let legacyColors = try? JSONDecoder().decode([LegacyTagColorDefinition].self, from: data) else {
+        let legacyColors: [LegacyTagColorDefinition]
+        do {
+            legacyColors = try JSONDecoder().decode([LegacyTagColorDefinition].self, from: data)
+        } catch {
+            PersistenceLog.decodeFailure("SwiftDataTagColorRepository.legacyColorsFromUserDefaults", error: error)
             return nil
         }
 

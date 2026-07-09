@@ -43,6 +43,7 @@ struct DashboardView: View {
         } message: {
             Text(dashboardErrorMessage ?? "Unknown error")
         }
+        .profileBodyRecomputation("DashboardView")
     }
 
     private var dashboardErrorMessage: String? {

@@ -27,7 +27,7 @@ final class DashboardPastureListViewModel {
                 .execute(configuration: configuration)
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -43,7 +43,7 @@ final class DashboardPastureListViewModel {
             applyPastureGrazedToday(pastureID: pastureID, date: date)
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

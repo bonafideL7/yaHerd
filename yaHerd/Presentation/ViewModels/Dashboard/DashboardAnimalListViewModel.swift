@@ -35,7 +35,7 @@ final class DashboardAnimalListViewModel {
                 .execute(kind: kind, configuration: configuration)
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 }

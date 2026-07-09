@@ -176,7 +176,7 @@ struct SyncDiagnosticsView: View {
                 await refreshDiagnostics()
             } catch {
                 await MainActor.run {
-                    resetResultMessage = "Delete failed: \(error.localizedDescription)"
+                    resetResultMessage = "Delete failed: \(UserVisibleErrorMessage.make(error))"
                     isDeletingSyncData = false
                 }
             }
@@ -280,7 +280,7 @@ struct SyncDiagnosticsView: View {
             counts = try diagnosticsRepository.fetchCounts()
             countError = nil
         } catch {
-            countError = "Could not read local data counts: \(error.localizedDescription)"
+            countError = "Could not read local data counts: \(UserVisibleErrorMessage.make(error))"
         }
     }
 }

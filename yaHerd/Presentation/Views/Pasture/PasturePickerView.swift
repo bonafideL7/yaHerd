@@ -61,7 +61,7 @@ struct PasturePickerView: View {
                 do {
                     pastureOptions = try LoadPastureOptionsUseCase(repository: pastureReferenceReader).execute()
                 } catch {
-                    model.errorMessage = error.localizedDescription
+                    model.errorMessage = UserVisibleErrorMessage.make(error)
                     showingError = true
                 }
             }

@@ -54,6 +54,13 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     herd: HerdSummary,
     storageMode: HerdStorageMode
   ) async throws -> HerdSharingActionResult {
+    let profilingStartedAt = Date()
+    ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.startSharing.started", detail: storageMode.displayName)
+    defer {
+      PerformanceLog.logDuration("CoreDataHerdSharingRepository.startSharing", startedAt: profilingStartedAt)
+      ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.startSharing.finished")
+    }
+
     guard storageMode == .iCloud else {
       throw HerdSharingActionError.iCloudSyncRequired
     }
@@ -107,6 +114,13 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     _ invitation: HerdShareInvitation,
     storageMode: HerdStorageMode
   ) async throws -> HerdSharingActionResult {
+    let profilingStartedAt = Date()
+    ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.acceptShareInvitation.started", detail: storageMode.displayName)
+    defer {
+      PerformanceLog.logDuration("CoreDataHerdSharingRepository.acceptShareInvitation", startedAt: profilingStartedAt)
+      ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.acceptShareInvitation.finished")
+    }
+
     guard storageMode == .iCloud else {
       throw HerdSharingActionError.iCloudSyncRequired
     }
@@ -135,6 +149,13 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
 
   func importSharedBridgeData(storageMode: HerdStorageMode) async throws -> HerdSharingActionResult
   {
+    let profilingStartedAt = Date()
+    ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.importSharedBridgeData.started", detail: storageMode.displayName)
+    defer {
+      PerformanceLog.logDuration("CoreDataHerdSharingRepository.importSharedBridgeData", startedAt: profilingStartedAt)
+      ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.importSharedBridgeData.finished")
+    }
+
     guard storageMode == .iCloud else {
       throw HerdSharingActionError.iCloudSyncRequired
     }
@@ -212,6 +233,13 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     herd: HerdSummary?,
     storageMode: HerdStorageMode
   ) async throws -> HerdSharingActionResult {
+    let profilingStartedAt = Date()
+    ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.syncSharedBridgeData.started", detail: storageMode.displayName)
+    defer {
+      PerformanceLog.logDuration("CoreDataHerdSharingRepository.syncSharedBridgeData", startedAt: profilingStartedAt)
+      ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.syncSharedBridgeData.finished")
+    }
+
     guard storageMode == .iCloud else {
       throw HerdSharingActionError.iCloudSyncRequired
     }

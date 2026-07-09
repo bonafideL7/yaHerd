@@ -99,7 +99,7 @@ struct WorkingCollectAnimalsView: View {
             availableAnimals = try animalSummaryReader.fetchAnimals()
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
         }
     }
@@ -111,7 +111,7 @@ struct WorkingCollectAnimalsView: View {
             try useCase.execute(sessionID: sessionID, animalIDs: Array(selectedAnimalIDs))
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
         }
     }

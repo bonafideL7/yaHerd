@@ -176,7 +176,7 @@ struct NewWorkingSessionView: View {
             )
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
         }
     }

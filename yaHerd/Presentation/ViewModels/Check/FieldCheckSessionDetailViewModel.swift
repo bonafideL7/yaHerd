@@ -18,7 +18,7 @@ final class FieldCheckSessionDetailViewModel {
             notesDraft = loadedDetail?.notes ?? ""
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -31,7 +31,7 @@ final class FieldCheckSessionDetailViewModel {
             }
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -45,7 +45,7 @@ final class FieldCheckSessionDetailViewModel {
             try repository.updateNotes(sessionID: sessionID, notes: notesDraft)
             refresh(sessionID: sessionID, using: repository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -54,7 +54,7 @@ final class FieldCheckSessionDetailViewModel {
             try repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: counts)
             refresh(sessionID: sessionID, using: repository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -63,7 +63,7 @@ final class FieldCheckSessionDetailViewModel {
             try repository.setAnimalCheckCounted(sessionID: sessionID, animalCheckID: animalCheckID, isCounted: isCounted)
             refresh(sessionID: sessionID, using: repository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -72,7 +72,7 @@ final class FieldCheckSessionDetailViewModel {
             try repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: animalCheckID, isMissing: isMissing)
             refresh(sessionID: sessionID, using: repository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -82,7 +82,7 @@ final class FieldCheckSessionDetailViewModel {
             refresh(sessionID: sessionID, using: repository)
             return true
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             return false
         }
     }
@@ -92,7 +92,7 @@ final class FieldCheckSessionDetailViewModel {
             try repository.addFinding(sessionID: sessionID, input: input)
             refresh(sessionID: sessionID, using: repository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -101,7 +101,7 @@ final class FieldCheckSessionDetailViewModel {
             try repository.updateFinding(sessionID: sessionID, findingID: findingID, input: input)
             refresh(sessionID: sessionID, using: repository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -110,7 +110,7 @@ final class FieldCheckSessionDetailViewModel {
             try repository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: status)
             refresh(sessionID: sessionID, using: repository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -119,7 +119,7 @@ final class FieldCheckSessionDetailViewModel {
             try repository.deleteFinding(sessionID: sessionID, findingID: findingID)
             refresh(sessionID: sessionID, using: repository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -129,7 +129,7 @@ final class FieldCheckSessionDetailViewModel {
             try repository.completeSession(id: sessionID)
             refresh(sessionID: sessionID, using: repository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -138,7 +138,7 @@ final class FieldCheckSessionDetailViewModel {
             try repository.reopenSession(id: sessionID)
             refresh(sessionID: sessionID, using: repository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 }
@@ -184,7 +184,7 @@ final class FieldCheckAnimalDetailViewModel {
             sessionDetail = try LoadFieldCheckDetailUseCase(repository: fieldCheckRepository).execute(id: sessionID)
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -200,7 +200,7 @@ final class FieldCheckAnimalDetailViewModel {
             sessionDetail = try LoadFieldCheckDetailUseCase(repository: fieldCheckRepository).execute(id: sessionID)
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -217,7 +217,7 @@ final class FieldCheckAnimalDetailViewModel {
             try fieldCheckRepository.setAnimalCheckCounted(sessionID: sessionID, animalCheckID: animalCheckID, isCounted: isCounted)
             refresh(animalID: animalID, sessionID: sessionID, animalRepository: animalRepository, fieldCheckRepository: fieldCheckRepository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -234,7 +234,7 @@ final class FieldCheckAnimalDetailViewModel {
             try fieldCheckRepository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: animalCheckID, isMissing: isMissing)
             refresh(animalID: animalID, sessionID: sessionID, animalRepository: animalRepository, fieldCheckRepository: fieldCheckRepository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -262,7 +262,7 @@ final class FieldCheckAnimalDetailViewModel {
                 fieldCheckRepository: fieldCheckRepository
             )
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -278,7 +278,7 @@ final class FieldCheckAnimalDetailViewModel {
             try fieldCheckRepository.updateFinding(sessionID: sessionID, findingID: findingID, input: input)
             refresh(animalID: animalID, sessionID: sessionID, animalRepository: animalRepository, fieldCheckRepository: fieldCheckRepository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -294,7 +294,7 @@ final class FieldCheckAnimalDetailViewModel {
             try fieldCheckRepository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: status)
             refresh(animalID: animalID, sessionID: sessionID, animalRepository: animalRepository, fieldCheckRepository: fieldCheckRepository)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -314,7 +314,7 @@ final class FieldCheckAnimalDetailViewModel {
                 fieldCheckRepository: fieldCheckRepository
             )
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 }
@@ -334,7 +334,7 @@ final class FieldCheckTrackedAnimalPickerViewModel {
             animals = try LoadAnimalsUseCase(repository: repository).execute()
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

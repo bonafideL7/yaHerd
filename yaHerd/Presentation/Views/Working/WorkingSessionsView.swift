@@ -135,7 +135,7 @@ struct WorkingSessionsView: View {
             try useCase.execute(sessionID: session.id)
             viewModel.load()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
         }
     }

@@ -28,7 +28,12 @@ extension SharedWorkingProtocolTemplateRecord {
         publicID = template.publicID.uuidString
         self.herdPublicID = herdPublicID.uuidString
         name = template.name
-        itemsJSON = try? JSONEncoder().encode(template.items)
+        do {
+            itemsJSON = try JSONEncoder().encode(template.items)
+        } catch {
+            itemsJSON = nil
+            PersistenceLog.decodeFailure("SharedWorkingProtocolTemplateRecord.itemsJSON.encode", error: error)
+        }
         lastMirroredAt = mirroredAt
     }
 }
@@ -41,6 +46,11 @@ extension SharedWorkingProtocolTemplateRecord {
 
     var parsedItems: [WorkingProtocolItem] {
         guard let itemsJSON else { return [] }
-        return (try? JSONDecoder().decode([WorkingProtocolItem].self, from: itemsJSON)) ?? []
+        do {
+            return try JSONDecoder().decode([WorkingProtocolItem].self, from: itemsJSON)
+        } catch {
+            PersistenceLog.decodeFailure("SharedWorkingProtocolTemplateRecord.parsedItems.decode", error: error)
+            return []
+        }
     }
 }

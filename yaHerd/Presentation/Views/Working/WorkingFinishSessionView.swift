@@ -127,7 +127,7 @@ struct WorkingFinishSessionView: View {
             try finishUseCase.execute(sessionID: session.id)
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
         }
     }

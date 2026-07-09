@@ -26,7 +26,7 @@ final class HomeViewModel {
             snapshot = try useCase.execute(configuration: configuration)
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 }

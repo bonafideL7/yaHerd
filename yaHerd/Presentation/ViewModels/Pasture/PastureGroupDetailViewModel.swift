@@ -49,7 +49,7 @@ final class PastureGroupDetailViewModel {
             errorMessage = nil
         } catch {
             hasLoaded = true
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
@@ -76,7 +76,7 @@ final class PastureGroupDetailViewModel {
                 load(groupID: detail.id, using: repository)
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

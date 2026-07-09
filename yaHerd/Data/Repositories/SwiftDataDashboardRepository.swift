@@ -102,7 +102,7 @@ struct SwiftDataDashboardRepository: DashboardRepository {
 
             guard let pasture = try context.fetch(descriptor).first else { return }
             pasture.lastGrazedDate = date
-            try context.save()
+            try PersistenceLog.save(context, operation: "SwiftDataDashboardRepository")
         }
     }
     private func activeAnimalCountsByPastureID(from animals: [Animal]) -> [UUID: Int] {
