@@ -5,13 +5,15 @@ struct SwiftDataPastureRepository: PastureRepository {
     let context: ModelContext
 
     func fetchPastures() throws -> [PastureSummary] {
-        let descriptor = FetchDescriptor<Pasture>(
-            sortBy: [
-                SortDescriptor(\Pasture.sortOrder),
-                SortDescriptor(\Pasture.name)
-            ]
-        )
-        return try context.fetch(descriptor).map(PastureMapper.makeSummary)
+        try PerformanceLog.measure("SwiftDataPastureRepository.fetchPastures") {
+            let descriptor = FetchDescriptor<Pasture>(
+                sortBy: [
+                    SortDescriptor(\Pasture.sortOrder),
+                    SortDescriptor(\Pasture.name)
+                ]
+            )
+            return try context.fetch(descriptor).map(PastureMapper.makeSummary)
+        }
     }
 
     func fetchPastureDetail(id: UUID) throws -> PastureDetailSnapshot? {
@@ -20,13 +22,20 @@ struct SwiftDataPastureRepository: PastureRepository {
     }
 
     func fetchResidentAnimals(pastureID: UUID) throws -> [AnimalSummary] {
-        guard let pasture = try fetchModel(id: pastureID) else { return [] }
-        return pasture.animals
-            .filter(\.isActiveInHerd)
-            .map(AnimalMapper.makeSummary)
-            .sorted { lhs, rhs in
-                lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
-            }
+        try PerformanceLog.measure("SwiftDataPastureRepository.fetchResidentAnimals") {
+            let descriptor = FetchDescriptor<Animal>(
+                predicate: #Predicate<Animal> { animal in
+                    animal.pasture?.publicID == pastureID
+                        && animal.status == AnimalStatus.active
+                        && !animal.isSoftDeleted
+                }
+            )
+            return try context.fetch(descriptor)
+                .map(AnimalMapper.makeSummary)
+                .sorted { lhs, rhs in
+                    lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
+                }
+        }
     }
 
     func fetchPastureOptions() throws -> [PastureOption] {
@@ -98,8 +107,7 @@ struct SwiftDataPastureRepository: PastureRepository {
             pasture.sortOrder = index
         }
 
-        let remainingPastures = try fetchAllPastures()
-            .filter { !requestedIDs.contains($0.publicID) }
+        let remainingPastures = try fetchPastures(excluding: requestedIDs)
             .sorted(by: pastureSortComparison)
 
         for (offset, pasture) in remainingPastures.enumerated() {
@@ -208,11 +216,12 @@ struct SwiftDataPastureRepository: PastureRepository {
     }
 
     private func fetchModel(id: UUID) throws -> Pasture? {
-        let descriptor = FetchDescriptor<Pasture>(
+        var descriptor = FetchDescriptor<Pasture>(
             predicate: #Predicate<Pasture> { pasture in
                 pasture.publicID == id
             }
         )
+        descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
 
@@ -220,31 +229,34 @@ struct SwiftDataPastureRepository: PastureRepository {
         guard Set(ids).count == ids.count else {
             throw PastureRepositoryError.duplicatePastureIDs
         }
+        guard !ids.isEmpty else { return [] }
 
-        var models: [Pasture] = []
-        var missingIDs: [UUID] = []
-
-        for id in ids {
-            if let pasture = try fetchModel(id: id) {
-                models.append(pasture)
-            } else {
-                missingIDs.append(id)
+        let descriptor = FetchDescriptor<Pasture>(
+            predicate: #Predicate<Pasture> { pasture in
+                ids.contains(pasture.publicID)
             }
+        )
+        let fetchedPastures = try context.fetch(descriptor)
+        var pasturesByID: [UUID: Pasture] = [:]
+        for pasture in fetchedPastures {
+            pasturesByID[pasture.publicID] = pasture
         }
 
+        let missingIDs = ids.filter { pasturesByID[$0] == nil }
         guard missingIDs.isEmpty else {
             throw PastureRepositoryError.pastureIDsNotFound(missingIDs)
         }
 
-        return models
+        return ids.compactMap { pasturesByID[$0] }
     }
 
     private func fetchGroupModel(id: UUID) throws -> PastureGroup? {
-        let descriptor = FetchDescriptor<PastureGroup>(
+        var descriptor = FetchDescriptor<PastureGroup>(
             predicate: #Predicate<PastureGroup> { group in
                 group.publicID == id
             }
         )
+        descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
 
@@ -252,27 +264,43 @@ struct SwiftDataPastureRepository: PastureRepository {
         guard Set(ids).count == ids.count else {
             throw PastureRepositoryError.duplicatePastureGroupIDs
         }
+        guard !ids.isEmpty else { return [] }
 
-        var models: [PastureGroup] = []
-        var missingIDs: [UUID] = []
-
-        for id in ids {
-            if let group = try fetchGroupModel(id: id) {
-                models.append(group)
-            } else {
-                missingIDs.append(id)
+        let descriptor = FetchDescriptor<PastureGroup>(
+            predicate: #Predicate<PastureGroup> { group in
+                ids.contains(group.publicID)
             }
+        )
+        let fetchedGroups = try context.fetch(descriptor)
+        var groupsByID: [UUID: PastureGroup] = [:]
+        for group in fetchedGroups {
+            groupsByID[group.publicID] = group
         }
 
+        let missingIDs = ids.filter { groupsByID[$0] == nil }
         guard missingIDs.isEmpty else {
             throw PastureRepositoryError.pastureGroupIDsNotFound(missingIDs)
         }
 
-        return models
+        return ids.compactMap { groupsByID[$0] }
     }
 
-    private func fetchAllPastures() throws -> [Pasture] {
+    private func fetchPastures(excluding ids: Set<UUID>) throws -> [Pasture] {
+        guard !ids.isEmpty else {
+            let descriptor = FetchDescriptor<Pasture>(
+                sortBy: [
+                    SortDescriptor(\Pasture.sortOrder),
+                    SortDescriptor(\Pasture.name)
+                ]
+            )
+            return try context.fetch(descriptor)
+        }
+
+        let idsToExclude = Array(ids)
         let descriptor = FetchDescriptor<Pasture>(
+            predicate: #Predicate<Pasture> { pasture in
+                !idsToExclude.contains(pasture.publicID)
+            },
             sortBy: [
                 SortDescriptor(\Pasture.sortOrder),
                 SortDescriptor(\Pasture.name)

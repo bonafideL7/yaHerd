@@ -13,7 +13,8 @@ struct LoadDashboardAnimalListUseCase {
         kind: DashboardAnimalListKind,
         configuration: DashboardConfiguration
     ) throws -> [DashboardAnimalItem] {
-        let records = try repository.fetchDashboardRecords()
+        let animals = try repository.fetchDashboardAnimalRecords(kind: kind)
+        let records = DashboardRecords(animals: animals, pastures: [], workingSessions: [])
         return service.makeAnimalList(kind: kind, records: records, configuration: configuration)
     }
 }

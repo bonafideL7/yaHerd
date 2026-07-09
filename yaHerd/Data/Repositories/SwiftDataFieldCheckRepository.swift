@@ -5,28 +5,34 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     let context: ModelContext
 
     func fetchSessions() throws -> [FieldCheckSessionSummary] {
-        let descriptor = FetchDescriptor<FieldCheckSession>(sortBy: [SortDescriptor(\.startedAt, order: .reverse)])
-        let sessions = try context.fetch(descriptor)
-        return sessions.map(FieldCheckMapper.makeSessionSummary)
+        try PerformanceLog.measure("SwiftDataFieldCheckRepository.fetchSessions") {
+            let descriptor = FetchDescriptor<FieldCheckSession>(sortBy: [SortDescriptor(\.startedAt, order: .reverse)])
+            let sessions = try context.fetch(descriptor)
+            return sessions.map(FieldCheckMapper.makeSessionSummary)
+        }
     }
 
     func fetchSessionDetail(id: UUID) throws -> FieldCheckSessionDetailSnapshot? {
-        guard let session = try fetchSession(id: id) else { return nil }
-        return FieldCheckMapper.makeSessionDetail(from: session)
+        try PerformanceLog.measure("SwiftDataFieldCheckRepository.fetchSessionDetail") {
+            guard let session = try fetchSession(id: id) else { return nil }
+            return FieldCheckMapper.makeSessionDetail(from: session)
+        }
     }
 
     func fetchOpenFindings(limit: Int) throws -> [FieldCheckFindingSnapshot] {
-        var descriptor = FetchDescriptor<FieldCheckFinding>(
-            predicate: #Predicate<FieldCheckFinding> { finding in
-                finding.statusRawValue != "resolved"
-            },
-            sortBy: [SortDescriptor(\.recordedAt, order: .reverse)]
-        )
-        if limit > 0 {
-            descriptor.fetchLimit = limit
-        }
+        try PerformanceLog.measure("SwiftDataFieldCheckRepository.fetchOpenFindings") {
+            var descriptor = FetchDescriptor<FieldCheckFinding>(
+                predicate: #Predicate<FieldCheckFinding> { finding in
+                    finding.statusRawValue != "resolved"
+                },
+                sortBy: [SortDescriptor(\.recordedAt, order: .reverse)]
+            )
+            if limit > 0 {
+                descriptor.fetchLimit = limit
+            }
 
-        return try context.fetch(descriptor).map(FieldCheckMapper.makeFindingSnapshot)
+            return try context.fetch(descriptor).map(FieldCheckMapper.makeFindingSnapshot)
+        }
     }
 
     func createSession(input: FieldCheckSessionStartInput) throws -> UUID {
@@ -294,23 +300,32 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) throws {
         guard !ids.isEmpty else { return }
 
-        let deletedPastureIDs = Set(ids)
-        let descriptor = FetchDescriptor<FieldCheckSession>()
-        let sessions = try context.fetch(descriptor)
+        let sessions = try fetchSessions(matchingPastureIDs: ids)
 
         // Do not save here. Pasture deletion uses the same ModelContext and commits
         // the archive marker and pasture deletion together.
-        for session in sessions where sessionMatchesDeletedPasture(session, ids: deletedPastureIDs) {
+        for session in sessions {
             backfillPastureSnapshotIfNeeded(in: session)
             session.pastureArchivedAt = archivedAt
         }
     }
 
 
-    private func sessionMatchesDeletedPasture(_ session: FieldCheckSession, ids: Set<UUID>) -> Bool {
-        if let pastureID = session.pastureID, ids.contains(pastureID) { return true }
-        if let pasture = session.pasture, ids.contains(pasture.publicID) { return true }
-        return false
+    private func fetchSessions(matchingPastureIDs pastureIDs: [UUID]) throws -> [FieldCheckSession] {
+        var sessionsByID: [UUID: FieldCheckSession] = [:]
+
+        for pastureID in pastureIDs {
+            let descriptor = FetchDescriptor<FieldCheckSession>(
+                predicate: #Predicate<FieldCheckSession> { session in
+                    session.pastureID == pastureID || session.pasture?.publicID == pastureID
+                }
+            )
+            for session in try context.fetch(descriptor) {
+                sessionsByID[session.publicID] = session
+            }
+        }
+
+        return Array(sessionsByID.values)
     }
 
     private func backfillPastureSnapshotIfNeeded(in session: FieldCheckSession) {
@@ -673,20 +688,22 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     }
 
     private func fetchSession(id: UUID) throws -> FieldCheckSession? {
-        let descriptor = FetchDescriptor<FieldCheckSession>(
+        var descriptor = FetchDescriptor<FieldCheckSession>(
             predicate: #Predicate<FieldCheckSession> { session in
                 session.publicID == id
             }
         )
+        descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
 
     private func fetchAnimalCheck(id: UUID, sessionID: UUID) throws -> FieldCheckAnimalCheck {
-        let descriptor = FetchDescriptor<FieldCheckAnimalCheck>(
+        var descriptor = FetchDescriptor<FieldCheckAnimalCheck>(
             predicate: #Predicate<FieldCheckAnimalCheck> { check in
                 check.publicID == id && check.session?.publicID == sessionID
             }
         )
+        descriptor.fetchLimit = 1
         guard let check = try context.fetch(descriptor).first else {
             throw FieldCheckRepositoryError.animalCheckNotFound
         }
@@ -694,11 +711,12 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     }
 
     private func fetchFinding(id: UUID, sessionID: UUID) throws -> FieldCheckFinding {
-        let descriptor = FetchDescriptor<FieldCheckFinding>(
+        var descriptor = FetchDescriptor<FieldCheckFinding>(
             predicate: #Predicate<FieldCheckFinding> { finding in
                 finding.publicID == id && finding.session?.publicID == sessionID
             }
         )
+        descriptor.fetchLimit = 1
         guard let finding = try context.fetch(descriptor).first else {
             throw FieldCheckRepositoryError.findingNotFound
         }
@@ -707,21 +725,23 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
 
     private func fetchPasture(id: UUID?) throws -> Pasture? {
         guard let id else { return nil }
-        let descriptor = FetchDescriptor<Pasture>(
+        var descriptor = FetchDescriptor<Pasture>(
             predicate: #Predicate<Pasture> { pasture in
                 pasture.publicID == id
             }
         )
+        descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
 
     private func fetchAnimal(id: UUID?) throws -> Animal? {
         guard let id else { return nil }
-        let descriptor = FetchDescriptor<Animal>(
+        var descriptor = FetchDescriptor<Animal>(
             predicate: #Predicate<Animal> { animal in
                 animal.publicID == id
             }
         )
+        descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
 

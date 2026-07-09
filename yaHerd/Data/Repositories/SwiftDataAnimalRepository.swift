@@ -5,9 +5,11 @@ struct SwiftDataAnimalRepository: AnimalRepository {
     let context: ModelContext
 
     func fetchAnimals() throws -> [AnimalSummary] {
-        let descriptor = FetchDescriptor<Animal>()
-        return try context.fetch(descriptor)
-            .map(AnimalMapper.makeSummary)
+        try PerformanceLog.measure("SwiftDataAnimalRepository.fetchAnimals") {
+            let descriptor = FetchDescriptor<Animal>()
+            return try context.fetch(descriptor)
+                .map(AnimalMapper.makeSummary)
+        }
     }
 
     func fetchAnimalDetail(id: UUID) throws -> AnimalDetailSnapshot? {
@@ -296,26 +298,35 @@ struct SwiftDataAnimalRepository: AnimalRepository {
 
     private func fetchAnimal(id: UUID?) throws -> Animal? {
         guard let id else { return nil }
-        let descriptor = FetchDescriptor<Animal>(
+        var descriptor = FetchDescriptor<Animal>(
             predicate: #Predicate<Animal> { animal in
                 animal.publicID == id
             }
         )
+        descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
 
     private func fetchAnimals(ids: [UUID]) throws -> [Animal] {
-        var animals: [Animal] = []
-        var seenIDs = Set<UUID>()
-
-        for id in ids {
-            guard seenIDs.insert(id).inserted else { continue }
-            if let animal = try fetchAnimal(id: id) {
-                animals.append(animal)
-            }
+        let uniqueIDs = ids.reduce(into: [UUID]()) { result, id in
+            guard !result.contains(id) else { return }
+            result.append(id)
         }
+        guard !uniqueIDs.isEmpty else { return [] }
 
-        return animals
+        return try PerformanceLog.measure("SwiftDataAnimalRepository.fetchAnimalsByIDs") {
+            let descriptor = FetchDescriptor<Animal>(
+                predicate: #Predicate<Animal> { animal in
+                    uniqueIDs.contains(animal.publicID)
+                }
+            )
+            let fetchedAnimals = try context.fetch(descriptor)
+            var animalsByID: [UUID: Animal] = [:]
+            for animal in fetchedAnimals {
+                animalsByID[animal.publicID] = animal
+            }
+            return uniqueIDs.compactMap { animalsByID[$0] }
+        }
     }
 
     private func animalPublicIDExists(_ id: UUID, excluding animal: Animal) throws -> Bool {
@@ -338,11 +349,12 @@ struct SwiftDataAnimalRepository: AnimalRepository {
 
     private func fetchPasture(id: UUID?) throws -> Pasture? {
         guard let id else { return nil }
-        let descriptor = FetchDescriptor<Pasture>(
+        var descriptor = FetchDescriptor<Pasture>(
             predicate: #Predicate<Pasture> { pasture in
                 pasture.publicID == id
             }
         )
+        descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
 
@@ -370,11 +382,12 @@ struct SwiftDataAnimalRepository: AnimalRepository {
 
     private func fetchStatusReferenceName(id: UUID?) throws -> String? {
         guard let id else { return nil }
-        let descriptor = FetchDescriptor<AnimalStatusReference>(
+        var descriptor = FetchDescriptor<AnimalStatusReference>(
             predicate: #Predicate<AnimalStatusReference> { reference in
                 reference.id == id
             }
         )
+        descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first?.name
     }
 
@@ -412,19 +425,32 @@ private extension SwiftDataAnimalRepository {
             to: .now
         ) ?? .now
 
-        let descriptor = FetchDescriptor<Animal>(
-            predicate: #Predicate<Animal> { animal in
-                animal.pasture?.publicID == pastureID
-            }
-        )
+        let descriptor: FetchDescriptor<Animal>
+        if let excludedAnimalID {
+            descriptor = FetchDescriptor<Animal>(
+                predicate: #Predicate<Animal> { animal in
+                    animal.pasture?.publicID == pastureID
+                        && !animal.isSoftDeleted
+                        && animal.status == AnimalStatus.active
+                        && animal.sex == Sex.male
+                        && animal.birthDate <= oldestBullBirthDate
+                        && animal.publicID != excludedAnimalID
+                }
+            )
+        } else {
+            descriptor = FetchDescriptor<Animal>(
+                predicate: #Predicate<Animal> { animal in
+                    animal.pasture?.publicID == pastureID
+                        && !animal.isSoftDeleted
+                        && animal.status == AnimalStatus.active
+                        && animal.sex == Sex.male
+                        && animal.birthDate <= oldestBullBirthDate
+                }
+            )
+        }
 
         let matches = try context.fetch(descriptor).filter { animal in
-            !animal.isSoftDeleted
-                && animal.status == .active
-                && animal.sex == .male
-                && animal.birthDate <= oldestBullBirthDate
-                && animal.publicID != excludingAnimalID
-                && animal.animalType == .bull
+            animal.animalType == .bull
         }
 
         return matches.count == 1 ? matches[0] : nil

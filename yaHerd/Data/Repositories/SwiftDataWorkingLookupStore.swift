@@ -5,9 +5,10 @@ struct SwiftDataWorkingLookupStore {
     let context: ModelContext
 
     func fetchSession(id: UUID) throws -> WorkingSession {
-        let descriptor = FetchDescriptor<WorkingSession>(predicate: #Predicate<WorkingSession> { session in
+        var descriptor = FetchDescriptor<WorkingSession>(predicate: #Predicate<WorkingSession> { session in
             session.publicID == id
         })
+        descriptor.fetchLimit = 1
         guard let session = try context.fetch(descriptor).first else {
             throw WorkingRepositoryError.sessionNotFound
         }
@@ -15,9 +16,10 @@ struct SwiftDataWorkingLookupStore {
     }
 
     func fetchQueueItem(id: UUID, sessionID: UUID) throws -> WorkingQueueItem {
-        let descriptor = FetchDescriptor<WorkingQueueItem>(predicate: #Predicate<WorkingQueueItem> { item in
+        var descriptor = FetchDescriptor<WorkingQueueItem>(predicate: #Predicate<WorkingQueueItem> { item in
             item.publicID == id && item.session?.publicID == sessionID
         })
+        descriptor.fetchLimit = 1
         guard let item = try context.fetch(descriptor).first else {
             throw WorkingRepositoryError.queueItemNotFound
         }
@@ -25,9 +27,10 @@ struct SwiftDataWorkingLookupStore {
     }
 
     func fetchTemplate(id: UUID) throws -> WorkingProtocolTemplate {
-        let descriptor = FetchDescriptor<WorkingProtocolTemplate>(predicate: #Predicate<WorkingProtocolTemplate> { template in
+        var descriptor = FetchDescriptor<WorkingProtocolTemplate>(predicate: #Predicate<WorkingProtocolTemplate> { template in
             template.publicID == id
         })
+        descriptor.fetchLimit = 1
         guard let template = try context.fetch(descriptor).first else {
             throw WorkingRepositoryError.templateNotFound
         }
@@ -57,27 +60,60 @@ struct SwiftDataWorkingLookupStore {
     }
 
     func fetchAnimals(ids: [UUID]) throws -> [Animal] {
-        var animals: [Animal] = []
-        var seenIDs = Set<UUID>()
-
-        for id in ids {
-            guard seenIDs.insert(id).inserted else { continue }
-            let descriptor = FetchDescriptor<Animal>(predicate: #Predicate<Animal> { animal in
-                animal.publicID == id
-            })
-            if let animal = try context.fetch(descriptor).first {
-                animals.append(animal)
-            }
+        let uniqueIDs = ids.reduce(into: [UUID]()) { result, id in
+            guard !result.contains(id) else { return }
+            result.append(id)
         }
+        guard !uniqueIDs.isEmpty else { return [] }
 
-        return animals
+        return try PerformanceLog.measure("SwiftDataWorkingLookupStore.fetchAnimalsByIDs") {
+            let descriptor = FetchDescriptor<Animal>(
+                predicate: #Predicate<Animal> { animal in
+                    uniqueIDs.contains(animal.publicID)
+                }
+            )
+            let fetchedAnimals = try context.fetch(descriptor)
+            var animalsByID: [UUID: Animal] = [:]
+            for animal in fetchedAnimals {
+                animalsByID[animal.publicID] = animal
+            }
+            return uniqueIDs.compactMap { animalsByID[$0] }
+        }
+    }
+
+    func fetchTemplates(ids: [UUID]) throws -> [WorkingProtocolTemplate] {
+        let uniqueIDs = ids.reduce(into: [UUID]()) { result, id in
+            guard !result.contains(id) else { return }
+            result.append(id)
+        }
+        guard !uniqueIDs.isEmpty else { return [] }
+
+        return try PerformanceLog.measure("SwiftDataWorkingLookupStore.fetchTemplatesByIDs") {
+            let descriptor = FetchDescriptor<WorkingProtocolTemplate>(
+                predicate: #Predicate<WorkingProtocolTemplate> { template in
+                    uniqueIDs.contains(template.publicID)
+                }
+            )
+            let fetchedTemplates = try context.fetch(descriptor)
+            var templatesByID: [UUID: WorkingProtocolTemplate] = [:]
+            for template in fetchedTemplates {
+                templatesByID[template.publicID] = template
+            }
+
+            guard templatesByID.count == uniqueIDs.count else {
+                throw WorkingRepositoryError.templateNotFound
+            }
+
+            return uniqueIDs.compactMap { templatesByID[$0] }
+        }
     }
 
     func fetchPasture(id: UUID?) throws -> Pasture? {
         guard let id else { return nil }
-        let descriptor = FetchDescriptor<Pasture>(predicate: #Predicate<Pasture> { pasture in
+        var descriptor = FetchDescriptor<Pasture>(predicate: #Predicate<Pasture> { pasture in
             pasture.publicID == id
         })
+        descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
     }
 

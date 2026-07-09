@@ -38,9 +38,11 @@ final class DashboardViewModel {
         configuration: DashboardConfiguration,
         using repository: any DashboardReadWriting
     ) {
+        let date = Date.now
         do {
-            try MarkPastureGrazedTodayUseCase(repository: repository).execute(pastureID: pastureID)
-            load(configuration: configuration, using: repository)
+            try MarkPastureGrazedTodayUseCase(repository: repository).execute(pastureID: pastureID, now: date)
+            applyPastureGrazedToday(pastureID: pastureID, date: date)
+            errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -66,5 +68,39 @@ final class DashboardViewModel {
             }
             .prefix(10)
             .map { $0 }
+    }
+
+    private func applyPastureGrazedToday(pastureID: UUID, date: Date) {
+        guard let snapshot else { return }
+
+        let updatedPastures = snapshot.pastures.map { pasture in
+            guard pasture.id == pastureID else { return pasture }
+            return DashboardPastureItem(
+                id: pasture.id,
+                name: pasture.name,
+                activeAnimalCount: pasture.activeAnimalCount,
+                metrics: pasture.metrics,
+                lastGrazedDate: date,
+                restDays: pasture.restDays
+            )
+        }
+
+        let updatedOverview = DashboardOverview(
+            activeAnimalCount: snapshot.overview.activeAnimalCount,
+            workingPenCount: snapshot.overview.workingPenCount,
+            unassignedAnimalCount: snapshot.overview.unassignedAnimalCount,
+            pastureCount: snapshot.overview.pastureCount,
+            underutilizedPastureCount: updatedPastures.filter(\.isUnderutilized).count,
+            rotationReadyPastureCount: updatedPastures.filter(\.isRotationReady).count
+        )
+
+        self.snapshot = DashboardSnapshot(
+            activeSession: snapshot.activeSession,
+            alerts: snapshot.alerts,
+            overview: updatedOverview,
+            analytics: snapshot.analytics,
+            searchableAnimals: snapshot.searchableAnimals,
+            pastures: updatedPastures
+        )
     }
 }

@@ -367,141 +367,196 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
   private func fetchSwiftDataTagColorDefinitions(for herd: HerdSummary) throws
     -> [TagColorDefinition]
   {
-    let descriptor = FetchDescriptor<TagColorDefinition>()
-    return try context.fetch(descriptor).filter { definition in
-      definition.herd?.publicID == herd.publicID
+    let herdID = herd.publicID
+    return try PerformanceLog.measure("CoreDataHerdSharingRepository.fetchTagColorDefinitions") {
+      let descriptor = FetchDescriptor<TagColorDefinition>(
+        predicate: #Predicate<TagColorDefinition> { definition in
+          definition.herd?.publicID == herdID
+        }
+      )
+      return try context.fetch(descriptor)
     }
   }
 
   private func fetchSwiftDataStatusReferences(for herd: HerdSummary) throws
     -> [AnimalStatusReference]
   {
-    let descriptor = FetchDescriptor<AnimalStatusReference>()
-    return try context.fetch(descriptor).filter { statusReference in
-      statusReference.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<AnimalStatusReference>(
+      predicate: #Predicate<AnimalStatusReference> { statusReference in
+        statusReference.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
 
   private func fetchSwiftDataPastureGroups(for herd: HerdSummary) throws -> [PastureGroup] {
-    let descriptor = FetchDescriptor<PastureGroup>()
-    return try context.fetch(descriptor).filter { pastureGroup in
-      pastureGroup.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<PastureGroup>(
+      predicate: #Predicate<PastureGroup> { pastureGroup in
+        pastureGroup.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
 
   private func fetchSwiftDataPastures(for herd: HerdSummary) throws -> [Pasture] {
-    let descriptor = FetchDescriptor<Pasture>()
-    return try context.fetch(descriptor).filter { pasture in
-      pasture.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<Pasture>(
+      predicate: #Predicate<Pasture> { pasture in
+        pasture.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
 
   private func fetchSwiftDataAnimals(for herd: HerdSummary) throws -> [Animal] {
-    let descriptor = FetchDescriptor<Animal>()
-    return try context.fetch(descriptor).filter { animal in
-      animal.herd?.publicID == herd.publicID
+    let herdID = herd.publicID
+    return try PerformanceLog.measure("CoreDataHerdSharingRepository.fetchAnimals") {
+      let descriptor = FetchDescriptor<Animal>(
+        predicate: #Predicate<Animal> { animal in
+          animal.herd?.publicID == herdID
+        }
+      )
+      return try context.fetch(descriptor)
     }
   }
 
   private func fetchSwiftDataAnimalTags(for herd: HerdSummary) throws -> [AnimalTag] {
-    let descriptor = FetchDescriptor<AnimalTag>()
-    return try context.fetch(descriptor).filter { tag in
-      tag.herd?.publicID == herd.publicID || tag.animal?.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<AnimalTag>(
+      predicate: #Predicate<AnimalTag> { tag in
+        tag.herd?.publicID == herdID || tag.animal?.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
 
   private func fetchSwiftDataMovements(for herd: HerdSummary) throws -> [MovementRecord] {
-    let descriptor = FetchDescriptor<MovementRecord>()
-    return try context.fetch(descriptor).filter { movement in
-      movement.herd?.publicID == herd.publicID || movement.animal?.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<MovementRecord>(
+      predicate: #Predicate<MovementRecord> { movement in
+        movement.herd?.publicID == herdID || movement.animal?.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
 
   private func fetchSwiftDataStatusRecords(for herd: HerdSummary) throws -> [StatusRecord] {
-    let descriptor = FetchDescriptor<StatusRecord>()
-    return try context.fetch(descriptor).filter { statusRecord in
-      statusRecord.herd?.publicID == herd.publicID
-        || statusRecord.animal?.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<StatusRecord>(
+      predicate: #Predicate<StatusRecord> { statusRecord in
+        statusRecord.herd?.publicID == herdID || statusRecord.animal?.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
 
   private func fetchSwiftDataHealthRecords(for herd: HerdSummary) throws -> [HealthRecord] {
-    let descriptor = FetchDescriptor<HealthRecord>()
-    return try context.fetch(descriptor).filter { healthRecord in
-      healthRecord.herd?.publicID == herd.publicID
-        || healthRecord.animal?.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<HealthRecord>(
+      predicate: #Predicate<HealthRecord> { healthRecord in
+        healthRecord.herd?.publicID == herdID || healthRecord.animal?.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
 
   private func fetchSwiftDataPregnancyChecks(for herd: HerdSummary) throws -> [PregnancyCheck] {
-    let descriptor = FetchDescriptor<PregnancyCheck>()
-    return try context.fetch(descriptor).filter { pregnancyCheck in
-      pregnancyCheck.herd?.publicID == herd.publicID
-        || pregnancyCheck.animal?.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<PregnancyCheck>(
+      predicate: #Predicate<PregnancyCheck> { pregnancyCheck in
+        pregnancyCheck.herd?.publicID == herdID || pregnancyCheck.animal?.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
 
   private func fetchSwiftDataWorkingProtocolTemplates(for herd: HerdSummary) throws
     -> [WorkingProtocolTemplate]
   {
-    let descriptor = FetchDescriptor<WorkingProtocolTemplate>()
-    return try context.fetch(descriptor).filter { template in
-      template.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<WorkingProtocolTemplate>(
+      predicate: #Predicate<WorkingProtocolTemplate> { template in
+        template.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
 
   private func fetchSwiftDataWorkingSessions(for herd: HerdSummary) throws -> [WorkingSession] {
-    let descriptor = FetchDescriptor<WorkingSession>()
-    return try context.fetch(descriptor).filter { session in
-      session.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<WorkingSession>(
+      predicate: #Predicate<WorkingSession> { session in
+        session.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
 
   private func fetchSwiftDataWorkingQueueItems(for herd: HerdSummary) throws -> [WorkingQueueItem] {
-    let descriptor = FetchDescriptor<WorkingQueueItem>()
-    return try context.fetch(descriptor).filter { queueItem in
-      queueItem.herd?.publicID == herd.publicID
-        || queueItem.session?.herd?.publicID == herd.publicID
-        || queueItem.animal?.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<WorkingQueueItem>(
+      predicate: #Predicate<WorkingQueueItem> { queueItem in
+        queueItem.herd?.publicID == herdID
+          || queueItem.session?.herd?.publicID == herdID
+          || queueItem.animal?.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
 
   private func fetchSwiftDataWorkingTreatmentRecords(for herd: HerdSummary) throws
     -> [WorkingTreatmentRecord]
   {
-    let descriptor = FetchDescriptor<WorkingTreatmentRecord>()
-    return try context.fetch(descriptor).filter { treatmentRecord in
-      treatmentRecord.herd?.publicID == herd.publicID
-        || treatmentRecord.session?.herd?.publicID == herd.publicID
-        || treatmentRecord.animal?.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<WorkingTreatmentRecord>(
+      predicate: #Predicate<WorkingTreatmentRecord> { treatmentRecord in
+        treatmentRecord.herd?.publicID == herdID
+          || treatmentRecord.session?.herd?.publicID == herdID
+          || treatmentRecord.animal?.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
 
   private func fetchSwiftDataFieldCheckSessions(for herd: HerdSummary) throws -> [FieldCheckSession]
   {
-    let descriptor = FetchDescriptor<FieldCheckSession>()
-    return try context.fetch(descriptor).filter { session in
-      session.herd?.publicID == herd.publicID || session.pasture?.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<FieldCheckSession>(
+      predicate: #Predicate<FieldCheckSession> { session in
+        session.herd?.publicID == herdID || session.pasture?.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
 
   private func fetchSwiftDataFieldCheckAnimalChecks(for herd: HerdSummary) throws
     -> [FieldCheckAnimalCheck]
   {
-    let descriptor = FetchDescriptor<FieldCheckAnimalCheck>()
-    return try context.fetch(descriptor).filter { check in
-      check.herd?.publicID == herd.publicID || check.session?.herd?.publicID == herd.publicID
-        || check.animal?.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<FieldCheckAnimalCheck>(
+      predicate: #Predicate<FieldCheckAnimalCheck> { check in
+        check.herd?.publicID == herdID
+          || check.session?.herd?.publicID == herdID
+          || check.animal?.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
 
   private func fetchSwiftDataFieldCheckFindings(for herd: HerdSummary) throws -> [FieldCheckFinding]
   {
-    let descriptor = FetchDescriptor<FieldCheckFinding>()
-    return try context.fetch(descriptor).filter { finding in
-      finding.herd?.publicID == herd.publicID || finding.session?.herd?.publicID == herd.publicID
-        || finding.animal?.herd?.publicID == herd.publicID
-    }
+    let herdID = herd.publicID
+    let descriptor = FetchDescriptor<FieldCheckFinding>(
+      predicate: #Predicate<FieldCheckFinding> { finding in
+        finding.herd?.publicID == herdID
+          || finding.session?.herd?.publicID == herdID
+          || finding.animal?.herd?.publicID == herdID
+      }
+    )
+    return try context.fetch(descriptor)
   }
+
 
 }

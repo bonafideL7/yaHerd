@@ -11,8 +11,10 @@ struct SwiftDataWorkingRepository: WorkingRepository {
     }
 
     func fetchSessions() throws -> [WorkingSessionSummary] {
-        let descriptor = FetchDescriptor<WorkingSession>(sortBy: [SortDescriptor(\.date, order: .reverse)])
-        return try context.fetch(descriptor).map(WorkingMapper.makeSessionSummary)
+        try PerformanceLog.measure("SwiftDataWorkingRepository.fetchSessions") {
+            let descriptor = FetchDescriptor<WorkingSession>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+            return try context.fetch(descriptor).map(WorkingMapper.makeSessionSummary)
+        }
     }
 
     func fetchSessionDetail(id: UUID) throws -> WorkingSessionDetailSnapshot? {
@@ -21,8 +23,10 @@ struct SwiftDataWorkingRepository: WorkingRepository {
     }
 
     func fetchTemplates() throws -> [WorkingProtocolTemplateSummary] {
-        let descriptor = FetchDescriptor<WorkingProtocolTemplate>(sortBy: [SortDescriptor(\.name)])
-        return try context.fetch(descriptor).map(WorkingMapper.makeTemplateSummary)
+        try PerformanceLog.measure("SwiftDataWorkingRepository.fetchTemplates") {
+            let descriptor = FetchDescriptor<WorkingProtocolTemplate>(sortBy: [SortDescriptor(\.name)])
+            return try context.fetch(descriptor).map(WorkingMapper.makeTemplateSummary)
+        }
     }
 
     func fetchTemplateDetail(id: UUID) throws -> WorkingProtocolTemplateDetailSnapshot? {
@@ -224,8 +228,8 @@ struct SwiftDataWorkingRepository: WorkingRepository {
     }
 
     func deleteTemplates(ids: [UUID]) throws {
-        for id in ids {
-            let template = try lookup.fetchTemplate(id: id)
+        let templates = try lookup.fetchTemplates(ids: ids)
+        for template in templates {
             context.delete(template)
         }
         try context.save()

@@ -102,10 +102,12 @@ final class AnimalListViewModel {
         do {
             if hardDelete {
                 try DeleteAnimalsUseCase(repository: repository).execute(ids: [animalID])
+                removeItems(ids: [animalID])
             } else {
                 try ArchiveAnimalsUseCase(repository: repository).execute(ids: [animalID])
+                updateArchiveState(ids: [animalID], isArchived: true)
             }
-            load(using: repository, pastureRepository: pastureRepository)
+            errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -118,7 +120,8 @@ final class AnimalListViewModel {
     ) {
         do {
             try RestoreAnimalsUseCase(repository: repository).execute(ids: [animalID])
-            load(using: repository, pastureRepository: pastureRepository)
+            updateArchiveState(ids: [animalID], isArchived: false)
+            errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -132,7 +135,8 @@ final class AnimalListViewModel {
     ) {
         do {
             try MoveAnimalsUseCase(repository: repository).execute(ids: ids, toPastureID: pastureID)
-            load(using: repository, pastureRepository: pastureRepository)
+            moveItems(ids: ids, toPastureID: pastureID)
+            errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -141,6 +145,31 @@ final class AnimalListViewModel {
     func pastureName(for id: UUID?) -> String? {
         guard let id else { return nil }
         return pastureOptions.first(where: { $0.id == id })?.name
+    }
+
+    private func removeItems(ids: [UUID]) {
+        let idsToRemove = Set(ids)
+        items.removeAll { idsToRemove.contains($0.id) }
+    }
+
+    private func updateArchiveState(ids: [UUID], isArchived: Bool) {
+        let idsToUpdate = Set(ids)
+        items = items.map { animal in
+            guard idsToUpdate.contains(animal.id) else { return animal }
+            return animal.replacingArchiveState(isArchived)
+        }
+    }
+
+    private func moveItems(ids: [UUID], toPastureID pastureID: UUID?) {
+        let idsToUpdate = Set(ids)
+        let destinationName = pastureName(for: pastureID)
+        items = items.map { animal in
+            guard idsToUpdate.contains(animal.id) else { return animal }
+            return animal.replacingPasture(
+                pastureID: pastureID,
+                pastureName: destinationName
+            )
+        }
     }
 
     private func applyDerivedState(
@@ -176,5 +205,56 @@ final class AnimalListViewModel {
         )
         hasHiddenOffHerdAnimals = AnimalListDerivations.hasHiddenOffHerdAnimals(items: items)
         hasHiddenArchivedRecords = AnimalListDerivations.hasHiddenArchivedRecords(items: items)
+    }
+}
+
+
+private extension AnimalSummary {
+    func replacingArchiveState(_ isArchived: Bool) -> AnimalSummary {
+        AnimalSummary(
+            id: id,
+            name: name,
+            displayTagNumber: displayTagNumber,
+            displayTagColorID: displayTagColorID,
+            damDisplayTagNumber: damDisplayTagNumber,
+            damDisplayTagColorID: damDisplayTagColorID,
+            sex: sex,
+            animalType: animalType,
+            firstDistinguishingFeature: firstDistinguishingFeature,
+            birthDate: birthDate,
+            status: status,
+            isArchived: isArchived,
+            pastureID: pastureID,
+            pastureName: pastureName,
+            location: location,
+            lastPregnancyCheckDate: lastPregnancyCheckDate,
+            lastPregnancyStatus: lastPregnancyStatus,
+            expectedCalvingDate: expectedCalvingDate,
+            lastTreatmentDate: lastTreatmentDate
+        )
+    }
+
+    func replacingPasture(pastureID: UUID?, pastureName: String?) -> AnimalSummary {
+        AnimalSummary(
+            id: id,
+            name: name,
+            displayTagNumber: displayTagNumber,
+            displayTagColorID: displayTagColorID,
+            damDisplayTagNumber: damDisplayTagNumber,
+            damDisplayTagColorID: damDisplayTagColorID,
+            sex: sex,
+            animalType: animalType,
+            firstDistinguishingFeature: firstDistinguishingFeature,
+            birthDate: birthDate,
+            status: status,
+            isArchived: isArchived,
+            pastureID: pastureID,
+            pastureName: pastureName,
+            location: .pasture,
+            lastPregnancyCheckDate: lastPregnancyCheckDate,
+            lastPregnancyStatus: lastPregnancyStatus,
+            expectedCalvingDate: expectedCalvingDate,
+            lastTreatmentDate: lastTreatmentDate
+        )
     }
 }
