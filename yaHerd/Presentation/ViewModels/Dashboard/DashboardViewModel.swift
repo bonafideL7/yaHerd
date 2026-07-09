@@ -22,12 +22,12 @@ final class DashboardViewModel {
         isLoading = true
         defer {
             isLoading = false
-            hasLoaded = true
         }
 
         do {
             snapshot = try LoadDashboardUseCase(repository: repository).execute(configuration: configuration)
             errorMessage = nil
+            hasLoaded = true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
@@ -43,6 +43,7 @@ final class DashboardViewModel {
             try MarkPastureGrazedTodayUseCase(repository: repository).execute(pastureID: pastureID, now: date)
             applyPastureGrazedToday(pastureID: pastureID, date: date)
             errorMessage = nil
+            hasLoaded = true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }

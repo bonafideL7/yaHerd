@@ -35,10 +35,10 @@ struct SwiftDataAnimalRepository: AnimalRepository {
 
     func fetchParentOptions(excluding excludedAnimalID: UUID?) throws -> [AnimalParentOption] {
         let descriptor: FetchDescriptor<Animal>
-        if let excludedAnimalID {
+        if let excludedID = excludedAnimalID {
             descriptor = FetchDescriptor<Animal>(
                 predicate: #Predicate<Animal> { animal in
-                    !animal.isSoftDeleted && animal.publicID != excludedAnimalID
+                    !animal.isSoftDeleted && animal.publicID != excludedID
                 }
             )
         } else {
@@ -425,32 +425,15 @@ private extension SwiftDataAnimalRepository {
             to: .now
         ) ?? .now
 
-        let descriptor: FetchDescriptor<Animal>
-        if let excludedAnimalID {
-            descriptor = FetchDescriptor<Animal>(
-                predicate: #Predicate<Animal> { animal in
-                    animal.pasture?.publicID == pastureID
-                        && !animal.isSoftDeleted
-                        && animal.status == AnimalStatus.active
-                        && animal.sex == Sex.male
-                        && animal.birthDate <= oldestBullBirthDate
-                        && animal.publicID != excludedAnimalID
-                }
-            )
-        } else {
-            descriptor = FetchDescriptor<Animal>(
-                predicate: #Predicate<Animal> { animal in
-                    animal.pasture?.publicID == pastureID
-                        && !animal.isSoftDeleted
-                        && animal.status == AnimalStatus.active
-                        && animal.sex == Sex.male
-                        && animal.birthDate <= oldestBullBirthDate
-                }
-            )
-        }
-
+        // Avoid enum-backed SwiftData predicates here. These fields are safer to filter in Swift.
+        let descriptor = FetchDescriptor<Animal>()
         let matches = try context.fetch(descriptor).filter { animal in
-            animal.animalType == .bull
+            animal.pasture?.publicID == pastureID
+                && animal.isActiveInHerd
+                && animal.sex == .male
+                && animal.birthDate <= oldestBullBirthDate
+                && animal.publicID != excludingAnimalID
+                && animal.animalType == .bull
         }
 
         return matches.count == 1 ? matches[0] : nil

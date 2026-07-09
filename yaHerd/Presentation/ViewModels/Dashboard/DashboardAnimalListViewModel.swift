@@ -27,13 +27,13 @@ final class DashboardAnimalListViewModel {
         isLoading = true
         defer {
             isLoading = false
-            hasLoaded = true
         }
 
         do {
             items = try LoadDashboardAnimalListUseCase(repository: repository)
                 .execute(kind: kind, configuration: configuration)
             errorMessage = nil
+            hasLoaded = true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }

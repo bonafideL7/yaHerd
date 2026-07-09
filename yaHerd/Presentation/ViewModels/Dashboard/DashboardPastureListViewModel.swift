@@ -19,13 +19,13 @@ final class DashboardPastureListViewModel {
         isLoading = true
         defer {
             isLoading = false
-            hasLoaded = true
         }
 
         do {
             items = try LoadDashboardPastureListUseCase(repository: repository)
                 .execute(configuration: configuration)
             errorMessage = nil
+            hasLoaded = true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
@@ -42,6 +42,7 @@ final class DashboardPastureListViewModel {
                 .execute(pastureID: pastureID, now: date)
             applyPastureGrazedToday(pastureID: pastureID, date: date)
             errorMessage = nil
+            hasLoaded = true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }

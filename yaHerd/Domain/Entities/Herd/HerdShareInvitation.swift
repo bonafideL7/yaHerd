@@ -27,7 +27,7 @@ struct HerdShareInvitation: Identifiable {
             receivedAt: receivedAt,
             containerIdentifier: metadata.containerIdentifier,
             shareRecordName: metadata.share.recordID.recordName,
-            rootRecordName: metadata.rootRecordID.recordName,
+            rootRecordName: metadata.hierarchicalRootRecordID?.recordName,
             ownerDisplayName: metadata.ownerIdentity.nameComponents?.formatted()
         )
     }

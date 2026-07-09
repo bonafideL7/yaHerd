@@ -23,14 +23,11 @@ struct SwiftDataPastureRepository: PastureRepository {
 
     func fetchResidentAnimals(pastureID: UUID) throws -> [AnimalSummary] {
         try PerformanceLog.measure("SwiftDataPastureRepository.fetchResidentAnimals") {
-            let descriptor = FetchDescriptor<Animal>(
-                predicate: #Predicate<Animal> { animal in
-                    animal.pasture?.publicID == pastureID
-                        && animal.status == AnimalStatus.active
-                        && !animal.isSoftDeleted
-                }
-            )
+            let descriptor = FetchDescriptor<Animal>()
             return try context.fetch(descriptor)
+                .filter { animal in
+                    animal.pasture?.publicID == pastureID && animal.isActiveInHerd
+                }
                 .map(AnimalMapper.makeSummary)
                 .sorted { lhs, rhs in
                     lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
