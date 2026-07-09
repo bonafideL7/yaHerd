@@ -33,10 +33,7 @@ struct DashboardView: View {
             loadDashboardData()
         }
         .task {
-            loadDashboardData()
-        }
-        .onAppear {
-            loadDashboardData()
+            loadDashboardDataIfNeeded()
         }
         .alert("Dashboard Error", isPresented: errorBinding) {
             Button("OK", role: .cancel) {
@@ -62,6 +59,11 @@ struct DashboardView: View {
                 }
             }
         )
+    }
+
+    private func loadDashboardDataIfNeeded() {
+        viewModel.loadIfNeeded(configuration: configuration, using: dashboardRecordReader)
+        fieldChecksModel.loadIfNeeded(using: fieldCheckOverviewReader)
     }
 
     private func loadDashboardData() {

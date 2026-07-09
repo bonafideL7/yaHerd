@@ -7,27 +7,26 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     func fetchSessions() throws -> [FieldCheckSessionSummary] {
         let descriptor = FetchDescriptor<FieldCheckSession>(sortBy: [SortDescriptor(\.startedAt, order: .reverse)])
         let sessions = try context.fetch(descriptor)
-        try saveIfNeeded(backfillHistoricalSnapshots(in: sessions))
         return sessions.map(FieldCheckMapper.makeSessionSummary)
     }
 
     func fetchSessionDetail(id: UUID) throws -> FieldCheckSessionDetailSnapshot? {
         guard let session = try fetchSession(id: id) else { return nil }
-        try saveIfNeeded(backfillHistoricalSnapshots(in: session))
         return FieldCheckMapper.makeSessionDetail(from: session)
     }
 
     func fetchOpenFindings(limit: Int) throws -> [FieldCheckFindingSnapshot] {
-        let descriptor = FetchDescriptor<FieldCheckFinding>(sortBy: [SortDescriptor(\.recordedAt, order: .reverse)])
-        let findings = try context.fetch(descriptor)
-            .filter { $0.status != .resolved }
-
-        try saveIfNeeded(backfillHistoricalSnapshots(for: findings))
-
+        var descriptor = FetchDescriptor<FieldCheckFinding>(
+            predicate: #Predicate<FieldCheckFinding> { finding in
+                finding.statusRawValue != "resolved"
+            },
+            sortBy: [SortDescriptor(\.recordedAt, order: .reverse)]
+        )
         if limit > 0 {
-            return Array(findings.prefix(limit)).map(FieldCheckMapper.makeFindingSnapshot)
+            descriptor.fetchLimit = limit
         }
-        return findings.map(FieldCheckMapper.makeFindingSnapshot)
+
+        return try context.fetch(descriptor).map(FieldCheckMapper.makeFindingSnapshot)
     }
 
     func createSession(input: FieldCheckSessionStartInput) throws -> UUID {
