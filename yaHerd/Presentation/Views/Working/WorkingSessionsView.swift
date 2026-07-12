@@ -14,8 +14,12 @@ struct WorkingSessionsView: View {
     @State private var showingDeleteAlert: Bool = false
     @State private var errorMessage: String?
     @State private var showingError = false
+    @State private var startedRoute: StartedWorkingSessionRoute?
 
-    init() {
+    private let onSessionStarted: ((UUID) -> Void)?
+
+    init(onSessionStarted: ((UUID) -> Void)? = nil) {
+        self.onSessionStarted = onSessionStarted
         _viewModel = StateObject(wrappedValue: WorkingSessionsViewModel(repository: EmptyWorkingRepository()))
     }
 
@@ -40,11 +44,7 @@ struct WorkingSessionsView: View {
             if !activeSessions.isEmpty {
                 Section("Active") {
                     ForEach(activeSessions) { session in
-                        NavigationLink {
-                            WorkingSessionDetailView(sessionID: session.id)
-                        } label: {
-                            WorkingSessionRow(session: session)
-                        }
+                        workingSessionNavigationRow(session)
                     }
                     .onDelete { offsets in
                         requestDelete(from: activeSessions, offsets: offsets)
@@ -55,11 +55,7 @@ struct WorkingSessionsView: View {
             if !finishedSessions.isEmpty {
                 Section("History") {
                     ForEach(finishedSessions) { session in
-                        NavigationLink {
-                            WorkingSessionDetailView(sessionID: session.id)
-                        } label: {
-                            WorkingSessionRow(session: session)
-                        }
+                        workingSessionNavigationRow(session)
                     }
                     .onDelete { offsets in
                         requestDelete(from: finishedSessions, offsets: offsets)
@@ -95,8 +91,11 @@ struct WorkingSessionsView: View {
                 viewModel.load()
             }
         }
-        .sheet(isPresented: $showingNewSession) {
-            NewWorkingSessionView()
+        .navigationDestination(isPresented: $showingNewSession) {
+            WorkingSessionPastureStartListView(onSessionCreated: handleSessionStarted)
+        }
+        .navigationDestination(item: $startedRoute) { route in
+            WorkingSessionDetailView(sessionID: route.id)
         }
         .alert("Delete working session?", isPresented: $showingDeleteAlert, presenting: pendingSession) { session in
             Button("Delete", role: .destructive) { deleteSession(session) }
@@ -115,6 +114,33 @@ struct WorkingSessionsView: View {
         }
         .onChange(of: viewModel.errorMessage) { _, newValue in
             if newValue != nil { showingError = true }
+        }
+    }
+
+
+    @ViewBuilder
+    private func workingSessionNavigationRow(_ session: WorkingSessionSummary) -> some View {
+        if let onSessionStarted {
+            Button {
+                onSessionStarted(session.id)
+            } label: {
+                WorkingSessionRow(session: session)
+            }
+        } else {
+            NavigationLink {
+                WorkingSessionDetailView(sessionID: session.id)
+            } label: {
+                WorkingSessionRow(session: session)
+            }
+        }
+    }
+
+    private func handleSessionStarted(_ sessionID: UUID) {
+        showingNewSession = false
+        if let onSessionStarted {
+            onSessionStarted(sessionID)
+        } else {
+            startedRoute = StartedWorkingSessionRoute(id: sessionID)
         }
     }
 
@@ -175,3 +201,7 @@ private struct WorkingSessionRow: View {
     }
 }
 
+
+private struct StartedWorkingSessionRoute: Identifiable, Hashable {
+    let id: UUID
+}

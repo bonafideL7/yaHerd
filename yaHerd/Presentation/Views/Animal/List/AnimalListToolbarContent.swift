@@ -11,6 +11,8 @@ struct AnimalListToolbarContent: ToolbarContent {
     let onReverseSortDirection: () -> Void
     let onCollapseAllSections: () -> Void
     let onToggleBatchMode: () -> Void
+    let onOpenFieldChecks: () -> Void
+    let onOpenWorkSessions: () -> Void
     let onOpenSettings: () -> Void
 
     @ToolbarContentBuilder
@@ -58,15 +60,11 @@ struct AnimalListToolbarContent: ToolbarContent {
 
                 Divider()
 
-                NavigationLink {
-                    FieldChecksView(mode: .all)
-                } label: {
+                Button(action: onOpenFieldChecks) {
                     Label("Pasture Checks", systemImage: "checklist")
                 }
 
-                NavigationLink {
-                    WorkingSessionsView()
-                } label: {
+                Button(action: onOpenWorkSessions) {
                     Label("Working Sessions", systemImage: "wrench.and.screwdriver")
                 }
 

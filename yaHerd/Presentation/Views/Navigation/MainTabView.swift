@@ -16,11 +16,17 @@ struct MainTabView: View {
     @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
     
     @State private var selectedTab: MainTab = .home
+    @State private var homePath = NavigationPath()
     @State private var isShowingSettings = false
     @State private var isPresentingAddAnimal = false
     @State private var isPresentingAddPasture = false
     @State private var isPresentingNewWorkingSession = false
     @State private var isStartingFieldCheck = false
+    @State private var homeRefreshToken = 0
+    @State private var isolatedFieldCheckRoute: FieldCheckAreaLaunchConfiguration?
+    @State private var isolatedWorkRoute: WorkAreaLaunchConfiguration?
+    @State private var stackedFieldCheckRoute: FieldCheckAreaLaunchConfiguration?
+    @State private var stackedWorkRoute: WorkAreaLaunchConfiguration?
     @State private var animalSearchText = ""
     @State private var herdMode: HerdViewMode = .animals
     @State private var animalSortOrder: AnimalSortOrder = .tagAscending
@@ -88,14 +94,17 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             Tab("Home", systemImage: "house", value: MainTab.home) {
-                NavigationStack {
+                NavigationStack(path: $homePath) {
                     HomeView(
                         isPresentingAddAnimal: $isPresentingAddAnimal,
                         isPresentingAddPasture: $isPresentingAddPasture,
                         isPresentingNewWorkingSession: $isPresentingNewWorkingSession,
                         isStartingFieldCheck: $isStartingFieldCheck,
+                        refreshToken: homeRefreshToken,
                         openAnimalList: openAnimalList,
-                        openPastureList: openPastureList
+                        openPastureList: openPastureList,
+                        openFieldCheckArea: openFieldCheckArea,
+                        openWorkArea: openWorkArea
                     )
                     .yaherdInlineLargeNavigationTitle("Home")
                     .appSettingsToolbar(isPresented: $isShowingSettings)
@@ -114,7 +123,7 @@ struct MainTabView: View {
             
             Tab(value: MainTab.animals) {
                 NavigationStack {
-                    herdContent
+                    herdNavigationContent
                 }
             } label: {
                 Label {
@@ -126,7 +135,7 @@ struct MainTabView: View {
             
             Tab("Search", systemImage: "magnifyingglass", value: MainTab.search, role: .search) {
                 NavigationStack {
-                    herdContent
+                    herdNavigationContent
                 }
                 .searchable(
                     text: $animalSearchText,
@@ -143,6 +152,16 @@ struct MainTabView: View {
         .sheet(isPresented: $isShowingSettings) {
             SettingsSheetView()
         }
+        .fullScreenCover(item: $isolatedFieldCheckRoute, onDismiss: refreshHomeData) { route in
+            IsolatedFieldCheckAreaView(route: route) {
+                isolatedFieldCheckRoute = nil
+            }
+        }
+        .fullScreenCover(item: $isolatedWorkRoute, onDismiss: refreshHomeData) { route in
+            IsolatedWorkAreaView(route: route) {
+                isolatedWorkRoute = nil
+            }
+        }
         .task {
             refreshSharingAccessForActiveSurface()
         }
@@ -153,6 +172,10 @@ struct MainTabView: View {
         }
         .onChange(of: selectedTab) { oldValue, newValue in
             refreshSharingAccessForActiveSurface(tab: newValue)
+
+            if newValue == .home {
+                refreshHomeData()
+            }
 
             if newValue == .search {
                 herdMode = .animals
@@ -170,6 +193,20 @@ struct MainTabView: View {
         }
     }
     
+    private var herdNavigationContent: some View {
+        herdContent
+            .navigationDestination(item: $stackedFieldCheckRoute) { route in
+                FieldChecksView(mode: route.mode ?? .all, onSessionLaunch: { configuration in
+                    openFieldCheckArea(.session(configuration))
+                })
+            }
+            .navigationDestination(item: $stackedWorkRoute) { route in
+                WorkingSessionsView { sessionID in
+                    openWorkArea(.session(sessionID))
+                }
+            }
+    }
+
     private var herdContent: some View {
         HerdView(
             searchText: $animalSearchText,
@@ -182,6 +219,8 @@ struct MainTabView: View {
             showingFilters: $animalShowingFilters,
             pastureFilter: $pastureFilter,
             usesShellBottomAccessory: true,
+            onOpenFieldChecks: { stackedFieldCheckRoute = .sessions(.all) },
+            onOpenWorkSessions: { stackedWorkRoute = .sessions },
             onOpenSettings: { isShowingSettings = true }
         )
     }
@@ -271,6 +310,22 @@ struct MainTabView: View {
         animalFilter = AnimalFilter()
         animalShowRemovedStatuses = false
         animalShowArchivedRecords = false
+    }
+
+    private func refreshHomeData() {
+        homeRefreshToken += 1
+    }
+
+    private func openFieldCheckArea(_ configuration: FieldCheckAreaLaunchConfiguration) {
+        homePath = NavigationPath()
+        selectedTab = .home
+        isolatedFieldCheckRoute = configuration
+    }
+
+    private func openWorkArea(_ configuration: WorkAreaLaunchConfiguration) {
+        homePath = NavigationPath()
+        selectedTab = .home
+        isolatedWorkRoute = configuration
     }
 
     private func openAnimalList(_ configuration: AnimalListLaunchConfiguration) {

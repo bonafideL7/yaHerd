@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct FieldCheckSessionSetupView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.fieldCheckSessionSetupRepository) private var setupRepository
     @Environment(\.pastureReferenceDataReader) private var pastureReferenceDataReader
 
@@ -11,9 +12,11 @@ struct FieldCheckSessionSetupView: View {
     @State private var startedRoute: StartedFieldCheckRoute?
 
     private let suggestedPastureID: UUID?
+    private let onSessionStarted: ((UUID) -> Void)?
 
-    init(suggestedPastureID: UUID? = nil) {
+    init(suggestedPastureID: UUID? = nil, onSessionStarted: ((UUID) -> Void)? = nil) {
         self.suggestedPastureID = suggestedPastureID
+        self.onSessionStarted = onSessionStarted
         _selectedPastureID = State(initialValue: suggestedPastureID)
     }
 
@@ -140,7 +143,12 @@ struct FieldCheckSessionSetupView: View {
                 notes: notes,
                 using: setupRepository
             )
-            startedRoute = StartedFieldCheckRoute(id: sessionID)
+            if let onSessionStarted {
+                dismiss()
+                onSessionStarted(sessionID)
+            } else {
+                startedRoute = StartedFieldCheckRoute(id: sessionID)
+            }
         } catch {
             model.errorMessage = UserVisibleErrorMessage.make(error)
         }

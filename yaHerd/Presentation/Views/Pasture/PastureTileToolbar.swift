@@ -4,6 +4,8 @@ struct PastureTileToolbar: View {
     @Binding var filter: PastureListFilter
     let isManaging: Bool
     let onToggleManageMode: () -> Void
+    let onOpenFieldChecks: () -> Void
+    let onOpenWorkSessions: () -> Void
     let onOpenSettings: () -> Void
 
     var body: some View {
@@ -45,15 +47,11 @@ struct PastureTileToolbar: View {
                     Label("Pasture Groups", systemImage: "rectangle.3.group")
                 }
 
-                NavigationLink {
-                    FieldChecksView(mode: .all)
-                } label: {
+                Button(action: onOpenFieldChecks) {
                     Label("Pasture Checks", systemImage: "checklist")
                 }
 
-                NavigationLink {
-                    WorkingSessionsView()
-                } label: {
+                Button(action: onOpenWorkSessions) {
                     Label("Working Sessions", systemImage: "wrench.and.screwdriver")
                 }
 

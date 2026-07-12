@@ -23,9 +23,32 @@ struct NewWorkingSessionView: View {
     @State private var errorMessage: String?
     @State private var showingError = false
 
+    private let suggestedPastureID: UUID?
+    private let wrapsInNavigationStack: Bool
+    private let onSessionCreated: ((UUID) -> Void)?
+
+    init(
+        suggestedPastureID: UUID? = nil,
+        wrapsInNavigationStack: Bool = true,
+        onSessionCreated: ((UUID) -> Void)? = nil
+    ) {
+        self.suggestedPastureID = suggestedPastureID
+        self.wrapsInNavigationStack = wrapsInNavigationStack
+        self.onSessionCreated = onSessionCreated
+    }
+
     var body: some View {
-        NavigationStack {
-            Form {
+        if wrapsInNavigationStack {
+            NavigationStack {
+                content
+            }
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
+        Form {
                 Section("Session") {
                     DatePicker("Date", selection: $date)
 
@@ -84,55 +107,62 @@ struct NewWorkingSessionView: View {
                         Label("Add Item", systemImage: "plus")
                     }
                 }
-            }
-            .navigationTitle("New Session")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
-                        createSession()
-                    }
+        }
+        .navigationTitle("New Session")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Create") {
+                    createSession()
                 }
+            }
+            if wrapsInNavigationStack {
                 ToolbarItem(placement: .cancellationAction) {
                     ToolbarCancelButton { dismiss() }
                 }
             }
-            .sheet(isPresented: $showingPasturePicker) {
-                NavigationStack {
-                    List(viewModel.pastures) { pasture in
-                        Button {
-                            sourcePasture = pasture
-                            showingPasturePicker = false
-                        } label: {
-                            HStack {
-                                Text(pasture.name)
-                                Spacer()
-                                if sourcePasture?.id == pasture.id {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(.secondary)
-                                }
+        }
+        .sheet(isPresented: $showingPasturePicker) {
+            NavigationStack {
+                List(viewModel.pastures) { pasture in
+                    Button {
+                        sourcePasture = pasture
+                        showingPasturePicker = false
+                    } label: {
+                        HStack {
+                            Text(pasture.name)
+                            Spacer()
+                            if sourcePasture?.id == pasture.id {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.secondary)
                             }
                         }
-                        .buttonStyle(.plain)
                     }
-                    .navigationTitle("Choose Pasture")
-                    .navigationBarTitleDisplayMode(.inline)
+                    .buttonStyle(.plain)
                 }
-            }
-            .task {
-                viewModel.configure(pastureRepository: pastureRepository, workingRepository: repository)
-                viewModel.load()
-                seedDefaultsIfNeeded()
-            }
-            .alert("Can’t Create", isPresented: $showingError) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(errorMessage ?? viewModel.errorMessage ?? "")
-            }
-            .onChange(of: viewModel.errorMessage) { _, newValue in
-                if newValue != nil { showingError = true }
+                .navigationTitle("Choose Pasture")
+                .navigationBarTitleDisplayMode(.inline)
             }
         }
+        .task {
+            viewModel.configure(pastureRepository: pastureRepository, workingRepository: repository)
+            viewModel.load()
+            seedSuggestedPastureIfNeeded()
+            seedDefaultsIfNeeded()
+        }
+        .alert("Can’t Create", isPresented: $showingError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? viewModel.errorMessage ?? "")
+        }
+        .onChange(of: viewModel.errorMessage) { _, newValue in
+            if newValue != nil { showingError = true }
+        }
+    }
+
+    private func seedSuggestedPastureIfNeeded() {
+        guard sourcePasture == nil, let suggestedPastureID else { return }
+        sourcePasture = viewModel.pastures.first { $0.id == suggestedPastureID }
     }
 
     private func seedDefaultsIfNeeded() {
@@ -168,13 +198,14 @@ struct NewWorkingSessionView: View {
 
         do {
             let useCase = CreateWorkingSessionUseCase(repository: repository)
-            _ = try useCase.execute(
+            let sessionID = try useCase.execute(
                 date: date,
                 sourcePastureID: sourcePasture?.id,
                 protocolName: trimmedName,
                 protocolItems: cleanedItems
             )
             dismiss()
+            onSessionCreated?(sessionID)
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true

@@ -50,6 +50,8 @@ struct AnimalListView: View {
     private let usesExternalSearchField: Bool
     private let hidesControlsUntilSearch: Bool
     private let usesShellBottomAccessory: Bool
+    private let onOpenFieldChecks: () -> Void
+    private let onOpenWorkSessions: () -> Void
     private let onOpenSettings: () -> Void
 
     init(
@@ -64,6 +66,8 @@ struct AnimalListView: View {
         hidesControlsUntilSearch: Bool = false,
         showsSearchControls: Bool = false,
         usesShellBottomAccessory: Bool = false,
+        onOpenFieldChecks: @escaping () -> Void = {},
+        onOpenWorkSessions: @escaping () -> Void = {},
         onOpenSettings: @escaping () -> Void = {}
     ) {
         self.externalSearchText = searchText
@@ -77,6 +81,8 @@ struct AnimalListView: View {
         self.hidesControlsUntilSearch = hidesControlsUntilSearch
         self.showsSearchControls = showsSearchControls
         self.usesShellBottomAccessory = usesShellBottomAccessory
+        self.onOpenFieldChecks = onOpenFieldChecks
+        self.onOpenWorkSessions = onOpenWorkSessions
         self.onOpenSettings = onOpenSettings
     }
 
@@ -272,6 +278,8 @@ struct AnimalListView: View {
                 onReverseSortDirection: reverseSortDirection,
                 onCollapseAllSections: collapseAllSections,
                 onToggleBatchMode: toggleBatchMode,
+                onOpenFieldChecks: onOpenFieldChecks,
+                onOpenWorkSessions: onOpenWorkSessions,
                 onOpenSettings: onOpenSettings
             )
         }

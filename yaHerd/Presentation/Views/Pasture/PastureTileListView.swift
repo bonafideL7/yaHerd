@@ -9,15 +9,21 @@ struct PastureTileListView: View {
     @Binding private var isManaging: Bool
 
     private let externalFilter: Binding<PastureListFilter>?
+    private let onOpenFieldChecks: () -> Void
+    private let onOpenWorkSessions: () -> Void
     private let onOpenSettings: () -> Void
 
     init(
         isManaging: Binding<Bool>,
         filter: Binding<PastureListFilter>? = nil,
+        onOpenFieldChecks: @escaping () -> Void = {},
+        onOpenWorkSessions: @escaping () -> Void = {},
         onOpenSettings: @escaping () -> Void = {}
     ) {
         self._isManaging = isManaging
         self.externalFilter = filter
+        self.onOpenFieldChecks = onOpenFieldChecks
+        self.onOpenWorkSessions = onOpenWorkSessions
         self.onOpenSettings = onOpenSettings
     }
 
@@ -86,6 +92,8 @@ struct PastureTileListView: View {
                     filter: filterBinding,
                     isManaging: isManaging,
                     onToggleManageMode: toggleManageMode,
+                    onOpenFieldChecks: onOpenFieldChecks,
+                    onOpenWorkSessions: onOpenWorkSessions,
                     onOpenSettings: onOpenSettings
                 )
             }

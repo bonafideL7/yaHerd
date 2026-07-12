@@ -17,23 +17,32 @@ struct HomeView: View {
     @Binding var isPresentingNewWorkingSession: Bool
     @Binding var isStartingFieldCheck: Bool
 
+    let refreshToken: Int
     let openAnimalList: (AnimalListLaunchConfiguration) -> Void
     let openPastureList: (PastureListLaunchConfiguration) -> Void
+    let openFieldCheckArea: (FieldCheckAreaLaunchConfiguration) -> Void
+    let openWorkArea: (WorkAreaLaunchConfiguration) -> Void
 
     init(
         isPresentingAddAnimal: Binding<Bool>,
         isPresentingAddPasture: Binding<Bool>,
         isPresentingNewWorkingSession: Binding<Bool>,
         isStartingFieldCheck: Binding<Bool>,
+        refreshToken: Int = 0,
         openAnimalList: @escaping (AnimalListLaunchConfiguration) -> Void = { _ in },
-        openPastureList: @escaping (PastureListLaunchConfiguration) -> Void = { _ in }
+        openPastureList: @escaping (PastureListLaunchConfiguration) -> Void = { _ in },
+        openFieldCheckArea: @escaping (FieldCheckAreaLaunchConfiguration) -> Void = { _ in },
+        openWorkArea: @escaping (WorkAreaLaunchConfiguration) -> Void = { _ in }
     ) {
         self._isPresentingAddAnimal = isPresentingAddAnimal
         self._isPresentingAddPasture = isPresentingAddPasture
         self._isPresentingNewWorkingSession = isPresentingNewWorkingSession
         self._isStartingFieldCheck = isStartingFieldCheck
+        self.refreshToken = refreshToken
         self.openAnimalList = openAnimalList
         self.openPastureList = openPastureList
+        self.openFieldCheckArea = openFieldCheckArea
+        self.openWorkArea = openWorkArea
     }
 
     let configuration = DashboardConfiguration()
@@ -60,10 +69,24 @@ struct HomeView: View {
                 .padding(.bottom, 24)
         }
         .navigationDestination(isPresented: $isStartingFieldCheck) {
-            FieldCheckSessionSetupView()
+            HomePastureCheckStartListView(pastures: pastureCheckStartPastures) { sessionID in
+                isStartingFieldCheck = false
+                openFieldCheckArea(.session(FieldCheckSessionLaunchConfiguration(sessionID: sessionID)))
+            }
         }
-        .task {
-            loadHomeDataIfNeeded()
+        .navigationDestination(isPresented: $isPresentingNewWorkingSession) {
+            WorkingSessionPastureStartListView { sessionID in
+                isPresentingNewWorkingSession = false
+                openWorkArea(.session(sessionID))
+            }
+        }
+        .task(id: refreshToken) {
+            loadHomeDataForCurrentState()
+        }
+        .onAppear {
+            if viewModel.hasLoaded {
+                loadHomeData()
+            }
         }
         .onChange(of: isPresentingAddAnimal) { _, isPresented in
             if !isPresented { loadHomeData() }
@@ -79,9 +102,6 @@ struct HomeView: View {
         }
         .sheet(isPresented: $isPresentingAddPasture) {
             AddPastureView()
-        }
-        .sheet(isPresented: $isPresentingNewWorkingSession) {
-            NewWorkingSessionView()
         }
         .alert("Home Error", isPresented: errorBinding) {
             Button("OK", role: .cancel) {
@@ -142,6 +162,14 @@ struct HomeView: View {
                 }
             }
         )
+    }
+
+    func loadHomeDataForCurrentState() {
+        if viewModel.hasLoaded {
+            loadHomeData()
+        } else {
+            loadHomeDataIfNeeded()
+        }
     }
 
     func loadHomeDataIfNeeded() {
