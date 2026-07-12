@@ -64,3 +64,78 @@ struct PastureListLaunchConfiguration: Hashable {
         }
     }
 }
+
+
+struct FieldCheckSessionLaunchConfiguration: Identifiable, Hashable {
+    let token: UUID
+    let sessionID: UUID
+    var opensFindings: Bool
+    var opensFlaggedRoster: Bool
+    var opensRemainingRoster: Bool
+    var opensMissingRoster: Bool
+
+    var id: UUID { token }
+
+    init(
+        sessionID: UUID,
+        opensFindings: Bool = false,
+        opensFlaggedRoster: Bool = false,
+        opensRemainingRoster: Bool = false,
+        opensMissingRoster: Bool = false,
+        token: UUID = UUID()
+    ) {
+        self.token = token
+        self.sessionID = sessionID
+        self.opensFindings = opensFindings
+        self.opensFlaggedRoster = opensFlaggedRoster
+        self.opensRemainingRoster = opensRemainingRoster
+        self.opensMissingRoster = opensMissingRoster
+    }
+}
+
+
+struct FieldCheckAreaLaunchConfiguration: Identifiable, Hashable {
+    let token: UUID
+    let mode: FieldChecksViewMode?
+    let session: FieldCheckSessionLaunchConfiguration?
+
+    var id: UUID { token }
+
+    init(
+        mode: FieldChecksViewMode? = nil,
+        session: FieldCheckSessionLaunchConfiguration? = nil,
+        token: UUID = UUID()
+    ) {
+        self.token = token
+        self.mode = mode
+        self.session = session
+    }
+
+    static func sessions(_ mode: FieldChecksViewMode = .all) -> FieldCheckAreaLaunchConfiguration {
+        FieldCheckAreaLaunchConfiguration(mode: mode)
+    }
+
+    static func session(_ configuration: FieldCheckSessionLaunchConfiguration) -> FieldCheckAreaLaunchConfiguration {
+        FieldCheckAreaLaunchConfiguration(session: configuration)
+    }
+}
+
+struct WorkAreaLaunchConfiguration: Identifiable, Hashable {
+    let token: UUID
+    let sessionID: UUID?
+
+    var id: UUID { token }
+
+    init(sessionID: UUID? = nil, token: UUID = UUID()) {
+        self.token = token
+        self.sessionID = sessionID
+    }
+
+    static var sessions: WorkAreaLaunchConfiguration {
+        WorkAreaLaunchConfiguration()
+    }
+
+    static func session(_ sessionID: UUID) -> WorkAreaLaunchConfiguration {
+        WorkAreaLaunchConfiguration(sessionID: sessionID)
+    }
+}

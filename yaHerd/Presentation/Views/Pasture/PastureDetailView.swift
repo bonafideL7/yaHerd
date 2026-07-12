@@ -5,6 +5,7 @@ struct PastureDetailView: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @State private var isStockingExpanded = false
     @State private var model = PastureDetailViewModel()
+    @State private var isolatedFieldCheckRoute: FieldCheckAreaLaunchConfiguration?
 
     private let pastureID: UUID
 
@@ -61,6 +62,13 @@ struct PastureDetailView: View {
         .task(id: pastureID) {
             model.load(pastureID: pastureID, using: repository)
         }
+        .fullScreenCover(item: $isolatedFieldCheckRoute, onDismiss: {
+            model.load(pastureID: pastureID, using: repository)
+        }) { route in
+            IsolatedFieldCheckAreaView(route: route) {
+                isolatedFieldCheckRoute = nil
+            }
+        }
         .alert("Can’t Save", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -107,7 +115,9 @@ struct PastureDetailView: View {
         if !model.isEditing {
             Section("Checks") {
                 NavigationLink {
-                    FieldCheckSessionSetupView(suggestedPastureID: detail.id)
+                    FieldCheckSessionSetupView(suggestedPastureID: detail.id) { sessionID in
+                        isolatedFieldCheckRoute = .session(FieldCheckSessionLaunchConfiguration(sessionID: sessionID))
+                    }
                 } label: {
                     Label("Start Pasture Check", systemImage: "checklist")
                 }

@@ -29,9 +29,25 @@ struct FieldChecksView: View {
     @State private var showingStartPastureCheck = false
 
     private let mode: FieldChecksViewMode
+    private let onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)?
 
-    init(mode: FieldChecksViewMode = .all) {
+    init(mode: FieldChecksViewMode = .all, onSessionStarted: ((UUID) -> Void)? = nil) {
         self.mode = mode
+        if let onSessionStarted {
+            self.onSessionLaunch = { configuration in
+                onSessionStarted(configuration.sessionID)
+            }
+        } else {
+            self.onSessionLaunch = nil
+        }
+    }
+
+    init(
+        mode: FieldChecksViewMode = .all,
+        onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)?
+    ) {
+        self.mode = mode
+        self.onSessionLaunch = onSessionLaunch
     }
 
     private var currentPastureSessions: [FieldCheckSessionSummary] {
@@ -134,7 +150,10 @@ struct FieldChecksView: View {
         }
         .navigationTitle(mode.title)
         .navigationDestination(isPresented: $showingStartPastureCheck) {
-            FieldCheckSessionSetupView()
+            FieldCheckPastureStartListView { sessionID in
+                showingStartPastureCheck = false
+                openSession(FieldCheckSessionLaunchConfiguration(sessionID: sessionID))
+            }
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -223,9 +242,9 @@ struct FieldChecksView: View {
         if !needsAttentionSessions.isEmpty {
             Section {
                 ForEach(needsAttentionSessions) { session in
-                    NavigationLink {
-                        attentionDestination(for: session)
-                    } label: {
+                    fieldCheckNavigationRow(
+                        configuration: attentionLaunchConfiguration(for: session)
+                    ) {
                         FieldCheckSessionSummaryRow(session: session, emphasis: emphasis(for: session))
                     }
                 }
@@ -242,9 +261,9 @@ struct FieldChecksView: View {
         if !openCheckSessions.isEmpty {
             Section("Open Checks") {
                 ForEach(openCheckSessions) { session in
-                    NavigationLink {
-                        FieldCheckSessionDetailView(sessionID: session.id, opensRemainingRoster: true)
-                    } label: {
+                    fieldCheckNavigationRow(
+                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensRemainingRoster: true)
+                    ) {
                         FieldCheckSessionSummaryRow(session: session)
                     }
                 }
@@ -257,9 +276,9 @@ struct FieldChecksView: View {
         if !model.activeSessions.isEmpty {
             Section {
                 ForEach(model.activeSessions.sorted { $0.startedAt > $1.startedAt }) { session in
-                    NavigationLink {
-                        FieldCheckSessionDetailView(sessionID: session.id, opensRemainingRoster: true)
-                    } label: {
+                    fieldCheckNavigationRow(
+                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensRemainingRoster: true)
+                    ) {
                         FieldCheckSessionSummaryRow(session: session, emphasis: emphasis(for: session))
                     }
                 }
@@ -276,9 +295,9 @@ struct FieldChecksView: View {
         if !openFindingSessions.isEmpty {
             Section {
                 ForEach(openFindingSessions) { session in
-                    NavigationLink {
-                        FieldCheckSessionDetailView(sessionID: session.id, opensFindings: true)
-                    } label: {
+                    fieldCheckNavigationRow(
+                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensFindings: true)
+                    ) {
                         FieldCheckSessionSummaryRow(session: session, emphasis: .findings)
                     }
                 }
@@ -295,9 +314,9 @@ struct FieldChecksView: View {
         if !flaggedSessions.isEmpty {
             Section {
                 ForEach(flaggedSessions) { session in
-                    NavigationLink {
-                        FieldCheckSessionDetailView(sessionID: session.id, opensFlaggedRoster: true)
-                    } label: {
+                    fieldCheckNavigationRow(
+                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensFlaggedRoster: true)
+                    ) {
                         FieldCheckSessionSummaryRow(session: session, emphasis: .flagged)
                     }
                 }
@@ -314,9 +333,9 @@ struct FieldChecksView: View {
         if !missingSessions.isEmpty {
             Section {
                 ForEach(missingSessions) { session in
-                    NavigationLink {
-                        FieldCheckSessionDetailView(sessionID: session.id, opensMissingRoster: true)
-                    } label: {
+                    fieldCheckNavigationRow(
+                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensMissingRoster: true)
+                    ) {
                         FieldCheckSessionSummaryRow(session: session, emphasis: .missing)
                     }
                 }
@@ -333,9 +352,9 @@ struct FieldChecksView: View {
         if !archivedPastureSessions.isEmpty {
             Section {
                 ForEach(archivedPastureSessions) { session in
-                    NavigationLink {
-                        FieldCheckSessionDetailView(sessionID: session.id)
-                    } label: {
+                    fieldCheckNavigationRow(
+                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id)
+                    ) {
                         FieldCheckSessionSummaryRow(session: session)
                     }
                 }
@@ -352,9 +371,9 @@ struct FieldChecksView: View {
         if !recentCheckSessions.isEmpty {
             Section("Recent Checks") {
                 ForEach(recentCheckSessions) { session in
-                    NavigationLink {
-                        FieldCheckSessionDetailView(sessionID: session.id)
-                    } label: {
+                    fieldCheckNavigationRow(
+                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id)
+                    ) {
                         FieldCheckSessionSummaryRow(session: session)
                     }
                 }
@@ -362,16 +381,52 @@ struct FieldChecksView: View {
         }
     }
 
-    @ViewBuilder
-    private func attentionDestination(for session: FieldCheckSessionSummary) -> some View {
+    private func attentionLaunchConfiguration(for session: FieldCheckSessionSummary) -> FieldCheckSessionLaunchConfiguration {
         if session.openFindingsCount > 0 {
-            FieldCheckSessionDetailView(sessionID: session.id, opensFindings: true)
+            return FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensFindings: true)
         } else if session.missingAnimalCount > 0 {
-            FieldCheckSessionDetailView(sessionID: session.id, opensMissingRoster: true)
+            return FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensMissingRoster: true)
         } else if session.flaggedAnimalCount > 0 {
-            FieldCheckSessionDetailView(sessionID: session.id, opensFlaggedRoster: true)
+            return FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensFlaggedRoster: true)
         } else {
-            FieldCheckSessionDetailView(sessionID: session.id, opensRemainingRoster: true)
+            return FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensRemainingRoster: true)
+        }
+    }
+
+    @ViewBuilder
+    private func fieldCheckNavigationRow<Label: View>(
+        configuration: FieldCheckSessionLaunchConfiguration,
+        @ViewBuilder label: () -> Label
+    ) -> some View {
+        if onSessionLaunch != nil {
+            Button {
+                openSession(configuration)
+            } label: {
+                label()
+            }
+        } else {
+            NavigationLink {
+                fieldCheckSessionDestination(configuration)
+            } label: {
+                label()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func fieldCheckSessionDestination(_ configuration: FieldCheckSessionLaunchConfiguration) -> some View {
+        FieldCheckSessionDetailView(
+            sessionID: configuration.sessionID,
+            opensFindings: configuration.opensFindings,
+            opensFlaggedRoster: configuration.opensFlaggedRoster,
+            opensRemainingRoster: configuration.opensRemainingRoster,
+            opensMissingRoster: configuration.opensMissingRoster
+        )
+    }
+
+    private func openSession(_ configuration: FieldCheckSessionLaunchConfiguration) {
+        if let onSessionLaunch {
+            onSessionLaunch(configuration)
         }
     }
 

@@ -13,7 +13,9 @@ extension HomeView {
     @ViewBuilder
     var pastureCheckActionCard: some View {
         NavigationLink {
-            HomePastureCheckStartListView(pastures: pastureCheckStartPastures)
+            HomePastureCheckStartListView(pastures: pastureCheckStartPastures) { sessionID in
+                openFieldCheckArea(.session(FieldCheckSessionLaunchConfiguration(sessionID: sessionID)))
+            }
         } label: {
             HomeActionCardView(
                 title: "Pasture Check",
@@ -29,8 +31,10 @@ extension HomeView {
 
     @ViewBuilder
     var startWorkingSessionActionCard: some View {
-        Button {
-            isPresentingNewWorkingSession = true
+        NavigationLink {
+            WorkingSessionPastureStartListView { sessionID in
+                openWorkArea(.session(sessionID))
+            }
         } label: {
             HomeActionCardView(
                 title: "Work animals",
