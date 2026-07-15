@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import SwiftData
 import XCTest
 
 @testable import yaHerd
@@ -114,6 +115,75 @@ final class HerdSharingRepositoryTests: XCTestCase {
     }
   }
 
+  func testWritableParticipantImportsCollaboratorChangesBeforeMirroringLocalData() async throws {
+    let container = try TestSupport.makeModelContainer()
+    let context = container.mainContext
+    let herdID = UUID()
+    let localHerd = Herd(
+      publicID: herdID,
+      name: "Stale local herd",
+      createdAt: Date(timeIntervalSince1970: 1),
+      updatedAt: Date(timeIntervalSince1970: 2)
+    )
+    context.insert(localHerd)
+    try context.save()
+
+    let syncStore = RecordingHerdSharingBridgeSyncStore(herdID: herdID)
+    let repository = CoreDataHerdSharingRepository(
+      context: context,
+      syncStore: syncStore
+    )
+
+    let result = try await repository.syncSharedBridgeData(
+      herd: localHerd.toSummary(),
+      storageMode: .iCloud
+    )
+
+    XCTAssertEqual(syncStore.operationOrder, ["access", "import", "export"])
+    XCTAssertEqual(syncStore.exportedHerd?.name, "Downloaded collaborator herd")
+    XCTAssertEqual(syncStore.exportedHerd?.updatedAt, Date(timeIntervalSince1970: 10))
+    XCTAssertTrue(result.message.hasPrefix("Imported"))
+  }
+
+  func testWritableParticipantDoesNotMirrorStaleLocalDataWhenSharedImportFails() async throws {
+    let container = try TestSupport.makeModelContainer()
+    let context = container.mainContext
+    let herdID = UUID()
+    let localHerd = Herd(
+      publicID: herdID,
+      name: "Stale local herd",
+      createdAt: Date(timeIntervalSince1970: 1),
+      updatedAt: Date(timeIntervalSince1970: 2)
+    )
+    context.insert(localHerd)
+    try context.save()
+
+    let syncStore = RecordingHerdSharingBridgeSyncStore(
+      herdID: herdID,
+      importError: .bridgeImportFailed("Shared records could not be merged safely.")
+    )
+    let repository = CoreDataHerdSharingRepository(
+      context: context,
+      syncStore: syncStore
+    )
+
+    do {
+      _ = try await repository.syncSharedBridgeData(
+        herd: localHerd.toSummary(),
+        storageMode: .iCloud
+      )
+      XCTFail("Expected the failed shared import to stop the writable sync.")
+    } catch let error as HerdSharingActionError {
+      XCTAssertEqual(
+        error,
+        .bridgeImportFailed("Shared records could not be merged safely.")
+      )
+    }
+
+    XCTAssertEqual(syncStore.operationOrder, ["access", "import"])
+    XCTAssertNil(syncStore.exportedHerd)
+  }
+
   private func makeRepository() throws -> CoreDataHerdSharingRepository {
     let container = try TestSupport.makeModelContainer()
     return CoreDataHerdSharingRepository(context: container.mainContext)
@@ -126,6 +196,129 @@ final class HerdSharingRepositoryTests: XCTestCase {
       createdAt: Date(timeIntervalSince1970: 0),
       updatedAt: Date(timeIntervalSince1970: 1),
       schemaVersion: 1
+    )
+  }
+}
+
+@MainActor
+private final class RecordingHerdSharingBridgeSyncStore: HerdSharingBridgeSyncStore {
+  let herdID: UUID
+  let importError: HerdSharingActionError?
+  private(set) var operationOrder: [String] = []
+  private(set) var exportedHerd: HerdSummary?
+
+  init(herdID: UUID, importError: HerdSharingActionError? = nil) {
+    self.herdID = herdID
+    self.importError = importError
+  }
+
+  func fetchSharingAccess(for herd: HerdSummary) async throws -> HerdSharingAccess {
+    operationOrder.append("access")
+    return .acceptedSharedStore(permission: .readWrite, participantCount: 2)
+  }
+
+  func importSharedRecordsIntoSwiftData(context: ModelContext) async throws
+    -> HerdSharingBridgeImportResult
+  {
+    operationOrder.append("import")
+    if let importError {
+      throw importError
+    }
+
+    let herd = try XCTUnwrap(
+      context.fetch(FetchDescriptor<Herd>()).first { candidate in
+        candidate.publicID == herdID
+      }
+    )
+    herd.name = "Downloaded collaborator herd"
+    herd.updatedAt = Date(timeIntervalSince1970: 10)
+    try context.save()
+
+    return HerdSharingBridgeImportResult(
+      herdName: herd.name,
+      insertedTagColorDefinitionCount: 0,
+      updatedTagColorDefinitionCount: 0,
+      insertedStatusReferenceCount: 0,
+      updatedStatusReferenceCount: 0,
+      insertedAnimalTagCount: 0,
+      updatedAnimalTagCount: 0,
+      insertedPastureGroupCount: 0,
+      updatedPastureGroupCount: 0,
+      insertedPastureCount: 0,
+      updatedPastureCount: 0,
+      insertedAnimalCount: 0,
+      updatedAnimalCount: 0,
+      insertedMovementCount: 0,
+      updatedMovementCount: 0,
+      insertedStatusRecordCount: 0,
+      updatedStatusRecordCount: 0,
+      insertedHealthRecordCount: 0,
+      updatedHealthRecordCount: 0,
+      insertedPregnancyCheckCount: 0,
+      updatedPregnancyCheckCount: 0,
+      insertedWorkingProtocolTemplateCount: 0,
+      updatedWorkingProtocolTemplateCount: 0,
+      insertedWorkingSessionCount: 0,
+      updatedWorkingSessionCount: 0,
+      insertedWorkingQueueItemCount: 0,
+      updatedWorkingQueueItemCount: 0,
+      insertedWorkingTreatmentRecordCount: 0,
+      updatedWorkingTreatmentRecordCount: 0,
+      insertedFieldCheckSessionCount: 0,
+      updatedFieldCheckSessionCount: 0,
+      insertedFieldCheckAnimalCheckCount: 0,
+      updatedFieldCheckAnimalCheckCount: 0,
+      insertedFieldCheckFindingCount: 0,
+      updatedFieldCheckFindingCount: 0,
+      deletedRecordCount: 0,
+      conflictReport: .empty
+    )
+  }
+
+  func syncBridgeRecordsFromSwiftData(
+    herd: HerdSummary,
+    tagColorDefinitions _: [TagColorDefinition],
+    statusReferences _: [AnimalStatusReference],
+    animalTags _: [AnimalTag],
+    pastureGroups _: [PastureGroup],
+    pastures _: [Pasture],
+    animals _: [Animal],
+    movements _: [MovementRecord],
+    statusRecords _: [StatusRecord],
+    healthRecords _: [HealthRecord],
+    pregnancyChecks _: [PregnancyCheck],
+    workingProtocolTemplates _: [WorkingProtocolTemplate],
+    workingSessions _: [WorkingSession],
+    workingQueueItems _: [WorkingQueueItem],
+    workingTreatmentRecords _: [WorkingTreatmentRecord],
+    fieldCheckSessions _: [FieldCheckSession],
+    fieldCheckAnimalChecks _: [FieldCheckAnimalCheck],
+    fieldCheckFindings _: [FieldCheckFinding]
+  ) async throws -> HerdSharingBridgeExportResult {
+    operationOrder.append("export")
+    exportedHerd = herd
+    return HerdSharingBridgeExportResult(
+      herdName: herd.name,
+      writeTargetDescription: "accepted shared store",
+      didUpdateExistingCloudKitShare: false,
+      exportedTagColorDefinitionCount: 0,
+      exportedStatusReferenceCount: 0,
+      exportedAnimalTagCount: 0,
+      exportedPastureGroupCount: 0,
+      exportedPastureCount: 0,
+      exportedAnimalCount: 0,
+      exportedMovementCount: 0,
+      exportedStatusRecordCount: 0,
+      exportedHealthRecordCount: 0,
+      exportedPregnancyCheckCount: 0,
+      exportedWorkingProtocolTemplateCount: 0,
+      exportedWorkingSessionCount: 0,
+      exportedWorkingQueueItemCount: 0,
+      exportedWorkingTreatmentRecordCount: 0,
+      exportedFieldCheckSessionCount: 0,
+      exportedFieldCheckAnimalCheckCount: 0,
+      exportedFieldCheckFindingCount: 0,
+      exportedDeletedRecordCount: 0
     )
   }
 }
