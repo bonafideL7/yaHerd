@@ -10,6 +10,7 @@ struct HerdCollaborationView: View {
   @Environment(\.herdRepository) private var herdRepository
   @Environment(\.herdSharingRepository) private var herdSharingRepository
   @Environment(\.cloudKitShareInvitationCoordinator) private var shareInvitationCoordinator
+  @Environment(\.cloudKitShareAdapter) private var cloudKitShareAdapter
   @Environment(\.herdSharingSyncCoordinator) private var sharingSyncCoordinator
   @Environment(\.herdCollaborationWritePolicy) private var writePolicy
   @Environment(\.herdSharingConflictReviewStore) private var conflictReviewStore
@@ -103,12 +104,25 @@ struct HerdCollaborationView: View {
     } message: { confirmation in
       Text(confirmation.message)
     }
-    .sheet(item: $viewModel.systemShare) { systemShare in
-      HerdCloudSharingControllerView(systemShare: systemShare)
-        .ignoresSafeArea()
-        .onDisappear {
-          viewModel.dismissSystemShare()
+    .sheet(item: $viewModel.sharePresentation) { request in
+      Group {
+        if let systemShare = cloudKitShareAdapter?.systemShare(for: request) {
+          HerdCloudSharingControllerView(systemShare: systemShare)
+            .ignoresSafeArea()
+        } else {
+          ContentUnavailableView(
+            "Share Session Unavailable",
+            systemImage: "person.2.slash",
+            description: Text(
+              "The system sharing session expired before it could be presented. Start sharing again."
+            )
+          )
         }
+      }
+      .onDisappear {
+        cloudKitShareAdapter?.discardSystemShare(for: request)
+        viewModel.dismissSharePresentation()
+      }
     }
     .alert("Herd Collaboration", isPresented: errorBinding) {
       Button("OK", role: .cancel) {

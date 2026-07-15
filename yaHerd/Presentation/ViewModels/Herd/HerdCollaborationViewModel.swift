@@ -19,7 +19,7 @@ final class HerdCollaborationViewModel {
   var successMessage: String?
   var latestConflictReview: HerdSharingConflictReview?
   var latestReconciliationReview: HerdSharingReconciliationReview?
-  var systemShare: HerdSystemShare?
+  var sharePresentation: HerdSharePresentationRequest?
 
   var canStartSharing: Bool {
     readiness?.shareActionEnabled == true && herd != nil && !isSharingActionInProgress
@@ -122,15 +122,15 @@ final class HerdCollaborationViewModel {
         herd: herd,
         storageMode: storageMode
       )
-      systemShare = result.systemShare
-      successMessage = result.systemShare == nil ? "\(result.title): \(result.message)" : nil
+      sharePresentation = result.sharePresentation
+      successMessage = result.sharePresentation == nil ? "\(result.title): \(result.message)" : nil
       recordConflictReview(result.conflictReview, in: conflictReviewStore)
       recordReconciliationReview(result.reconciliationReview)
       errorMessage = nil
     } catch {
       errorMessage = UserVisibleErrorMessage.make(error)
       successMessage = nil
-      systemShare = nil
+      sharePresentation = nil
     }
   }
 
@@ -220,8 +220,8 @@ final class HerdCollaborationViewModel {
     }
   }
 
-  func dismissSystemShare() {
-    systemShare = nil
+  func dismissSharePresentation() {
+    sharePresentation = nil
   }
 
   func resetDraftName() {

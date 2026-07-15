@@ -265,7 +265,7 @@ private struct RunningAppView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var tagColorLibrary: TagColorLibraryStore
     @StateObject private var recoveryModeController: RecoveryModeController
-    @State private var cloudKitShareInvitationCoordinator = CloudKitShareInvitationCoordinator()
+    @State private var cloudKitShareInvitationCoordinator: CloudKitShareInvitationCoordinator
     @State private var herdSharingSyncCoordinator: HerdSharingSyncCoordinator
     @State private var showsPendingCloudKitShareInvitation = false
 
@@ -278,6 +278,11 @@ private struct RunningAppView: View {
         self._tagColorLibrary = StateObject(
             wrappedValue: TagColorLibraryStore(
                 repository: runtime.dependencies.tagColorRepository
+            )
+        )
+        self._cloudKitShareInvitationCoordinator = State(
+            initialValue: CloudKitShareInvitationCoordinator(
+                shareAdapter: runtime.dependencies.cloudKitShareAdapter
             )
         )
         self._recoveryModeController = StateObject(
@@ -320,6 +325,7 @@ private struct RunningAppView: View {
             .environment(\.herdRepository, runtime.dependencies.herdRepository)
             .environment(\.herdSharingRepository, runtime.dependencies.herdSharingRepository)
             .environment(\.cloudKitShareInvitationCoordinator, cloudKitShareInvitationCoordinator)
+            .environment(\.cloudKitShareAdapter, runtime.dependencies.cloudKitShareAdapter)
             .environment(\.herdSharingSyncCoordinator, herdSharingSyncCoordinator)
             .environment(\.herdCollaborationWritePolicy, runtime.dependencies.herdCollaborationWritePolicy)
             .environment(\.herdSharingConflictReviewStore, runtime.dependencies.herdSharingConflictReviewStore)

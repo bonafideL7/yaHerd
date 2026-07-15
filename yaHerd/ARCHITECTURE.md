@@ -240,6 +240,12 @@ Pasture currently has focused coverage for validators, metrics/policies, use cas
 
 See the repository-level `MIGRATIONS.md` for the required release workflow, fixture-store rules, and the model changes that require custom migration.
 
+## Sharing platform boundary
+
+Domain collaboration types are provider-neutral. `HerdShareInvitation` and `HerdSharePresentationRequest` carry only application identifiers, participant capabilities, invitation state, URLs, and opaque `HerdShareToken` values. They never retain `CKShare`, `CKContainer`, `CKShare.Metadata`, Core Data objects, or presentation callbacks.
+
+`CloudKitShareAdapter` under `Data/Sharing/CloudKit` is the translation and lifetime boundary. It converts incoming `CKShare.Metadata` into a neutral invitation while retaining the metadata behind an opaque token, and it retains prepared `CKShare` sessions behind neutral presentation requests. `CoreDataHerdSharingRepository` resolves those tokens only when accepting an invitation or preparing the system sharing UI. `Scripts/verify-architecture.sh` rejects platform-framework imports and platform types under `Domain`.
+
 ## Sharing bridge risk boundary
 
 The SwiftData/Core Data CloudKit sharing bridge is treated as a separate high-risk boundary. Store lifecycle, import orchestration, export orchestration, operation journaling, and reconciliation are split into focused files under `Data/Sharing/CoreData`. Import precedes export, each direction uses one persistent-store commit, retries are idempotent, and duplicate application-managed public IDs are explicitly detected. See `SHARING_BRIDGE_RELIABILITY.md` at the repository root for release requirements and the two-device test matrix.
