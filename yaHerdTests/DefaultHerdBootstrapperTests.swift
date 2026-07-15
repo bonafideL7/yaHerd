@@ -15,7 +15,7 @@ final class DefaultHerdBootstrapperTests: XCTestCase {
             schema: schema,
             isStoredInMemoryOnly: true
         )
-        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let container = try ModelContainer(for: schema, migrationPlan: YaHerdMigrationPlan.self, configurations: [configuration])
         let context = container.mainContext
 
         let pasture = Pasture(name: "North")

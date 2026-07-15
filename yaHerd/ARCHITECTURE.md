@@ -229,3 +229,13 @@ Pasture currently has focused coverage for validators, metrics/policies, use cas
 8. keep reference-data ownership with the feature that owns the data
 9. add focused tests when introducing or refactoring feature behavior
 10. avoid duplicate mappers for the same domain snapshot or summary
+
+## SwiftData schema evolution
+
+- `Data/Persistence/Schema/YaHerdSchemaV1.swift` contains the frozen 1.0 persistent models.
+- `Data/Persistence/Schema/YaHerdCurrentModels.swift` exposes the current schema's models to the rest of the app through type aliases.
+- `Data/Persistence/Schema/YaHerdMigrationPlan.swift` is the ordered schema and migration-stage history.
+- `ModelContainerFactory` is the only production entry point for opening SwiftData stores and always supplies the migration plan.
+- Startup bootstrap and repair utilities run only after the store opens and are not substitutes for schema migration stages.
+
+See the repository-level `MIGRATIONS.md` for the required release workflow, fixture-store rules, and the model changes that require custom migration.

@@ -8,23 +8,25 @@
 import Foundation
 import SwiftData
 
-@Model
-final class AnimalStatusReference {
-    var id: UUID = UUID()
-    @Relationship(deleteRule: .nullify) var herd: Herd?
-    var name: String = ""
-    var baseStatus: AnimalStatus = AnimalStatus.active
-    var createdAt: Date = Date.now
+extension YaHerdSchemaV1 {
+    @Model
+    final class AnimalStatusReference {
+        var id: UUID = UUID()
+        @Relationship(deleteRule: .nullify) var herd: Herd?
+        var name: String = ""
+        var baseStatus: AnimalStatus = AnimalStatus.active
+        var createdAt: Date = Date.now
 
-    init(
-        id: UUID = UUID(),
-        name: String,
-        baseStatus: AnimalStatus,
-        createdAt: Date = Date.now
-    ) {
-        self.id = id
-        self.name = name
-        self.baseStatus = baseStatus
-        self.createdAt = createdAt
+        init(
+            id: UUID = UUID(),
+            name: String,
+            baseStatus: AnimalStatus,
+            createdAt: Date = Date.now
+        ) {
+            self.id = id
+            self.name = name
+            self.baseStatus = baseStatus
+            self.createdAt = createdAt
+        }
     }
 }
