@@ -7,6 +7,8 @@ import SwiftUI
 
 struct SyncDiagnosticsView: View {
     @Environment(\.syncDiagnosticsRepository) private var diagnosticsRepository
+    @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(\.recoveryModeController) private var recoveryModeController
 
     private let preferences: AppPreferencesProviding
     private let checker: ICloudAvailabilityChecking
@@ -34,6 +36,16 @@ struct SyncDiagnosticsView: View {
 
     var body: some View {
         List {
+            if dataAccessMode.isRecoveryMode {
+                Section("Recovery Mode") {
+                    Label("Read-only: changes cannot be saved", systemImage: "externaldrive.badge.exclamationmark")
+                        .foregroundStyle(.red)
+                    Button("Export Storage and Attempt Repair") {
+                        recoveryModeController?.isPresentingCenter = true
+                    }
+                }
+            }
+
             Section("Launch State") {
                 LabeledContent("Stored Preference", value: preferences.syncMode.displayName)
                 LabeledContent("Requested at Launch", value: launchSnapshot.requestedSyncMode.displayName)
@@ -89,7 +101,7 @@ struct SyncDiagnosticsView: View {
                         Label("Run Schema Check", systemImage: "checkmark.icloud")
                     }
                 }
-                .disabled(isRunningSchemaCheck)
+                .disabled(isRunningSchemaCheck || dataAccessMode.isRecoveryMode)
 
                 Text("Writes, reads, and deletes a small diagnostic CloudKit record in the active CloudKit environment. In TestFlight, this should be Production.")
                     .font(.caption)
@@ -114,7 +126,7 @@ struct SyncDiagnosticsView: View {
                         Label("Delete iCloud Sync Data", systemImage: "trash")
                     }
                 }
-                .disabled(isDeletingSyncData)
+                .disabled(isDeletingSyncData || dataAccessMode.isRecoveryMode)
 
                 Text("Deletes yaHerd CloudKit herd data zones and synced app settings from iCloud in the active environment. Local data on this device is not deleted. Sync Mode switches back to Local Only and an app restart is required.")
                     .font(.caption)
@@ -258,6 +270,11 @@ struct SyncDiagnosticsView: View {
     private func refreshDiagnostics() async {
         launchSnapshot = AppLaunchDiagnostics.snapshot()
         loadCounts()
+
+        guard !dataAccessMode.isRecoveryMode else {
+            iCloudStatusText = "Disabled in recovery mode"
+            return
+        }
 
         let status = await checker.checkAvailability()
         switch status {

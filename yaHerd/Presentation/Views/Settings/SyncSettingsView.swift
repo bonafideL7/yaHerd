@@ -6,6 +6,9 @@
 import SwiftUI
 
 struct SyncSettingsView: View {
+    @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(\.recoveryModeController) private var recoveryModeController
+
     private let preferences: AppPreferencesProviding
     @State private var syncMode: SyncMode
 
@@ -16,6 +19,21 @@ struct SyncSettingsView: View {
 
     var body: some View {
         List {
+            if dataAccessMode.isRecoveryMode {
+                Section("Recovery Mode") {
+                    Label("Read-only in-memory store", systemImage: "externaldrive.badge.exclamationmark")
+                        .foregroundStyle(.red)
+
+                    Text("Changes cannot be saved. iCloud sync and all collaboration operations are disabled for this launch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Button("Open Storage Recovery") {
+                        recoveryModeController?.isPresentingCenter = true
+                    }
+                }
+            }
+
             Section("Current Storage") {
                 LabeledContent("Mode", value: syncMode.displayName)
 
@@ -32,6 +50,7 @@ struct SyncSettingsView: View {
                     } label: {
                         Label("Enable iCloud Sync", systemImage: "icloud.and.arrow.up")
                     }
+                    .disabled(dataAccessMode.isRecoveryMode)
 
                     Text("yaHerd stays offline-first. Enabling iCloud adds sync mirroring to the same local store, so data remains available without signal.")
                         .font(.caption)

@@ -20,6 +20,7 @@ struct ToolbarSaveButton: View {
             accessibilityLabel: accessibilityLabel,
             action: action
         )
+        .disabledWhenDataReadOnly()
     }
 }
 
@@ -106,6 +107,7 @@ struct ToolbarEditButton: View {
             isProminent: false,
             action: action
         )
+        .disabledWhenDataReadOnly()
     }
 }
 

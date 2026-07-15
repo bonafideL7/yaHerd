@@ -6,8 +6,28 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(\.recoveryModeController) private var recoveryModeController
+
     var body: some View {
         List {
+            if dataAccessMode.isRecoveryMode {
+                Section("Storage Recovery") {
+                    Button {
+                        recoveryModeController?.isPresentingCenter = true
+                    } label: {
+                        SettingsRow(
+                            title: "Recovery Mode — Read Only",
+                            subtitle: "Changes cannot be saved. Export diagnostics or attempt store repair.",
+                            systemImage: "externaldrive.badge.exclamationmark"
+                        )
+                    }
+
+                    Text("Data editing, sharing, and synchronization are disabled for this launch.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
             Section("Setup") {                    
                 NavigationLink {
                     DashboardRulesView()
@@ -104,6 +124,7 @@ private struct SettingsRow: View {
 }
 
 private struct HerdSetupView: View {
+    @Environment(\.appDataAccessMode) private var dataAccessMode
     @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
     
     var body: some View {
@@ -123,6 +144,7 @@ private struct HerdSetupView: View {
             Section("Animal List Swipe") {
                 Toggle("Use hard delete for swipe actions", isOn: $hardDeleteOnSwipe)
                     .tint(.red)
+                    .disabled(dataAccessMode.isRecoveryMode)
                 
                 Text("When off, swiping an animal archives the record. When on, swiping asks for confirmation before permanently deleting it.")
                     .font(.caption)
@@ -134,12 +156,14 @@ private struct HerdSetupView: View {
 }
 
 struct DashboardRulesView: View {
+    @Environment(\.appDataAccessMode) private var dataAccessMode
     @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
 
     var body: some View {
         Form {
             Section("Navigation") {
                 Toggle("Show Dashboard", isOn: $isDashboardEnabled)
+                    .disabled(dataAccessMode.isRecoveryMode)
                 
                 Text("When off, the Dashboard tab is hidden.")
                     .font(.caption)
@@ -151,6 +175,7 @@ struct DashboardRulesView: View {
 }
 
 struct PastureDefaultsView: View {
+    @Environment(\.appDataAccessMode) private var dataAccessMode
     @AppStorage("targetAcresPerHeadDefault") private var targetAcresPerHeadDefault = 3.0
     @AppStorage("usableAcreagePercentDefault") private var usableAcreagePercentDefault = 100
 
@@ -163,12 +188,14 @@ struct PastureDefaultsView: View {
                     in: 0.25...25.0,
                     step: 0.25
                 )
+                .disabled(dataAccessMode.isRecoveryMode)
 
                 Stepper(
                     "Usable acreage: \(usableAcreagePercentDefault)%",
                     value: $usableAcreagePercentDefault,
                     in: 10...100
                 )
+                .disabled(dataAccessMode.isRecoveryMode)
 
                 Text("Defaults are applied to newly created pasture records only.")
                     .font(.caption)

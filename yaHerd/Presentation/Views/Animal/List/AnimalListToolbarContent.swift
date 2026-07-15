@@ -5,6 +5,8 @@
 import SwiftUI
 
 struct AnimalListToolbarContent: ToolbarContent {
+    @Environment(\.appDataAccessMode) private var dataAccessMode
+
     let sortOrder: AnimalSortOrder
     let batchMode: Bool
     let canCollapseSections: Bool
@@ -57,6 +59,7 @@ struct AnimalListToolbarContent: ToolbarContent {
                 Button(action: onToggleBatchMode) {
                     Label("Select Animals", systemImage: "checklist")
                 }
+                .disabled(!dataAccessMode.allowsDataMutations)
 
                 Divider()
 

@@ -66,11 +66,13 @@ struct WorkingFinishSessionView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Return") { returnAnimals() }
                         .disabled(session == nil)
+                        .disabledWhenDataReadOnly()
                 }
 
                 ToolbarItem(placement: .topBarLeading) {
                     Button("All to Source") { assignAllToSource() }
                         .disabled(session?.sourcePastureID == nil)
+                        .disabledWhenDataReadOnly()
                 }
 
                 ToolbarItem(placement: .cancellationAction) {

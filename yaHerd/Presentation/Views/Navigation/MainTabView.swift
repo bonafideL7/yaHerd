@@ -13,6 +13,7 @@ private enum MainTab: Hashable {
 struct MainTabView: View {
     @EnvironmentObject private var nav: NavigationCoordinator
     @Environment(\.herdSharingSyncCoordinator) private var herdSharingSyncCoordinator
+    @Environment(\.appDataAccessMode) private var dataAccessMode
     @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
     
     @State private var selectedTab: MainTab = .home
@@ -269,7 +270,9 @@ struct MainTabView: View {
         tab: MainTab? = nil,
         mode: HerdViewMode? = nil
     ) {
-        guard let herdSharingSyncCoordinator else { return }
+        guard dataAccessMode.allowsDataMutations,
+            let herdSharingSyncCoordinator
+        else { return }
 
         let activeTab = tab ?? selectedTab
         let activeMode = mode ?? herdMode

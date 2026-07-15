@@ -33,6 +33,7 @@ struct PastureGroupDetailView: View {
                                     PastureGroupAssignmentRowView(row: row)
                                 }
                                 .buttonStyle(.plain)
+                                .disabledWhenDataReadOnly()
                             }
                         }
                     }

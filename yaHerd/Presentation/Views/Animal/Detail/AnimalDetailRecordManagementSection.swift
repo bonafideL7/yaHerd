@@ -25,6 +25,7 @@ struct AnimalDetailRecordManagementSection: View {
                 Button(action: onRestore) {
                     Label("Restore Archived Record", systemImage: "arrow.uturn.backward.circle.fill")
                 }
+                .disabledWhenDataReadOnly()
             } else {
                 Button(role: .destructive) {
                     showingArchiveConfirmation = true
@@ -33,6 +34,7 @@ struct AnimalDetailRecordManagementSection: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .foregroundStyle(.orange)
+                .disabledWhenDataReadOnly()
                 .confirmationDialog(
                     "Archive this record?",
                     isPresented: $showingArchiveConfirmation,
@@ -56,6 +58,7 @@ struct AnimalDetailRecordManagementSection: View {
             Button("Permanently Delete", role: .destructive) {
                 showingHardDeleteConfirmation = true
             }
+            .disabledWhenDataReadOnly()
             .alert("Permanently delete this animal?", isPresented: $showingHardDeleteConfirmation) {
                 Button("Delete Permanently", role: .destructive, action: onDelete)
                 Button("Cancel", role: .cancel) {}

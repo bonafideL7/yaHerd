@@ -20,5 +20,6 @@ struct AnimalListFloatingAddButton: View {
         .padding(.trailing, 24)
         .padding(.bottom, bottomPadding)
         .accessibilityLabel("Add Animal")
+        .disabledWhenDataReadOnly()
     }
 }

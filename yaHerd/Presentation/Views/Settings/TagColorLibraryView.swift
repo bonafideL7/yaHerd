@@ -70,6 +70,7 @@ struct TagColorLibraryView: View {
                             Label("Edit Color", systemImage: "pencil")
                         }
                     }
+                    .disabledWhenDataReadOnly()
                 }
                 .onDelete(perform: tagColorLibrary.delete)
                 .onMove(perform: tagColorLibrary.move)
@@ -81,6 +82,7 @@ struct TagColorLibraryView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 EditButton()
+                    .disabledWhenDataReadOnly()
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -98,6 +100,7 @@ struct TagColorLibraryView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .disabledWhenDataReadOnly()
             }
         }
         .sheet(isPresented: $showingAdd) {

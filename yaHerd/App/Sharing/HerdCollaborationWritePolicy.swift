@@ -7,11 +7,14 @@ import Foundation
 import SwiftUI
 
 enum HerdCollaborationWritePolicyError: LocalizedError, Equatable {
+  case recoveryModeReadOnly(reason: SharedDataMutationReason)
   case readOnlySharedHerd(
     reason: SharedDataMutationReason, permission: HerdSharingAccess.Permission)
 
   var errorDescription: String? {
     switch self {
+    case .recoveryModeReadOnly(let reason):
+      "yaHerd is running in read-only recovery mode. The \(reason.displayName) change was blocked because data changes cannot be saved."
     case .readOnlySharedHerd(let reason, let permission):
       "This shared herd is \(permission.descriptionForWritePolicy) for the current iCloud account. yaHerd blocked the local \(reason.displayName) edit so it cannot create unsyncable SwiftData changes."
     }
@@ -20,6 +23,7 @@ enum HerdCollaborationWritePolicyError: LocalizedError, Equatable {
 
 final class HerdCollaborationWritePolicy {
   private let lock = NSLock()
+  private let dataAccessMode: AppDataAccessMode
   private var access: HerdSharingAccess?
   private var accessRefreshRequestHandler: ((SharedDataMutationReason) -> Void)?
   private var lastAccessRefreshRequestedAt: Date?
@@ -27,11 +31,16 @@ final class HerdCollaborationWritePolicy {
   private(set) var lastBlockedMutationReason: SharedDataMutationReason?
   private(set) var lastAccessRefreshRequestedReason: SharedDataMutationReason?
 
+  init(dataAccessMode: AppDataAccessMode = .readWrite) {
+    self.dataAccessMode = dataAccessMode
+  }
+
   var snapshot: HerdCollaborationWritePolicySnapshot {
     lock.lock()
     defer { lock.unlock() }
 
     return HerdCollaborationWritePolicySnapshot(
+      dataAccessMode: dataAccessMode,
       access: access,
       lastUpdatedAt: lastUpdatedAt,
       lastBlockedMutationReason: lastBlockedMutationReason,
@@ -72,6 +81,13 @@ final class HerdCollaborationWritePolicy {
   }
 
   func validateCanWrite(reason: SharedDataMutationReason) throws {
+    guard dataAccessMode.allowsDataMutations else {
+      lock.lock()
+      lastBlockedMutationReason = reason
+      lock.unlock()
+      throw HerdCollaborationWritePolicyError.recoveryModeReadOnly(reason: reason)
+    }
+
     let refreshRequestHandler: ((SharedDataMutationReason) -> Void)?
 
     lock.lock()
@@ -122,16 +138,21 @@ final class HerdCollaborationWritePolicy {
 }
 
 struct HerdCollaborationWritePolicySnapshot: Equatable {
+  let dataAccessMode: AppDataAccessMode
   let access: HerdSharingAccess?
   let lastUpdatedAt: Date?
   let lastBlockedMutationReason: SharedDataMutationReason?
   let lastAccessRefreshRequestedReason: SharedDataMutationReason?
 
   var allowsLocalMutations: Bool {
-    access?.allowsLocalMutations ?? true
+    dataAccessMode.allowsDataMutations && (access?.allowsLocalMutations ?? true)
   }
 
   var statusDescription: String {
+    if dataAccessMode.isRecoveryMode {
+      return "Local edits are blocked because yaHerd is running in read-only recovery mode. Data changes cannot be saved."
+    }
+
     guard let access else {
       if let lastAccessRefreshRequestedReason {
         return "Sharing access has not been loaded yet. yaHerd requested a CloudKit access "

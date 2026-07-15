@@ -80,6 +80,7 @@ struct WorkingCollectAnimalsView: View {
                         collectSelected()
                     }
                     .disabled(selectedAnimalIDs.isEmpty || session == nil)
+                    .disabledWhenDataReadOnly()
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     ToolbarCancelButton { dismiss() }

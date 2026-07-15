@@ -243,3 +243,6 @@ See the repository-level `MIGRATIONS.md` for the required release workflow, fixt
 ## Sharing bridge risk boundary
 
 The SwiftData/Core Data CloudKit sharing bridge is treated as a separate high-risk boundary. Store lifecycle, import orchestration, export orchestration, operation journaling, and reconciliation are split into focused files under `Data/Sharing/CoreData`. Import precedes export, each direction uses one persistent-store commit, retries are idempotent, and duplicate application-managed public IDs are explicitly detected. See `SHARING_BRIDGE_RELIABILITY.md` at the repository root for release requirements and the two-device test matrix.
+## Recovery-mode boundary
+
+Persistent-store failure is handled by a separate `AppDataAccessMode.recoveryReadOnly` runtime state. The recovery container is in memory with saving disabled, all mutation-capable repositories are wrapped by `HerdCollaborationWritePolicy`, and the CloudKit sharing repository and automatic synchronization are not attached. `RecoveryModeBannerOverlay` provides the persistent cross-presentation warning, while `RecoveryModeController` owns diagnostics, diagnostic-store export, and the acknowledged production-store open/repair attempt. Recovery mode never transitions to writable state during the current launch. See the repository-level `RECOVERY_MODE.md` for invariants and release tests.

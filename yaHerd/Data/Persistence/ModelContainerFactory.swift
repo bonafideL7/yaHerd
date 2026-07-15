@@ -53,7 +53,8 @@ enum ModelContainerFactory {
         let fallbackConfiguration = ModelConfiguration(
             recoveryStoreName,
             schema: schema,
-            isStoredInMemoryOnly: true
+            isStoredInMemoryOnly: true,
+            allowsSave: false
         )
 
         return try makeContainer(

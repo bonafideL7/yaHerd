@@ -30,6 +30,7 @@ struct AnimalListBatchActionBar: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(selectedCount == 0)
+            .disabledWhenDataReadOnly()
         }
         .padding(12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))

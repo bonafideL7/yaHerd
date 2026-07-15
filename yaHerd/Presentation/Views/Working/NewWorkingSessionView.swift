@@ -115,6 +115,7 @@ struct NewWorkingSessionView: View {
                 Button("Create") {
                     createSession()
                 }
+                .disabledWhenDataReadOnly()
             }
             if wrapsInNavigationStack {
                 ToolbarItem(placement: .cancellationAction) {

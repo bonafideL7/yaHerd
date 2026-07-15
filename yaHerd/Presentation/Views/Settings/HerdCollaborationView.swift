@@ -12,6 +12,8 @@ struct HerdCollaborationView: View {
   @Environment(\.herdSharingSyncCoordinator) private var sharingSyncCoordinator
   @Environment(\.herdCollaborationWritePolicy) private var writePolicy
   @Environment(\.herdSharingConflictReviewStore) private var conflictReviewStore
+  @Environment(\.appDataAccessMode) private var dataAccessMode
+  @Environment(\.recoveryModeController) private var recoveryModeController
   @State private var viewModel = HerdCollaborationViewModel()
   @State private var pendingConflictConfirmation: HerdCollaborationConflictConfirmation?
 
@@ -22,6 +24,14 @@ struct HerdCollaborationView: View {
   }
 
   var body: some View {
+    if dataAccessMode.isRecoveryMode {
+      recoveryModeView
+    } else {
+      collaborationView
+    }
+  }
+
+  private var collaborationView: some View {
     List {
       if let herdRepository, let herdSharingRepository {
         currentHerdSection(
@@ -102,6 +112,31 @@ struct HerdCollaborationView: View {
     } message: {
       Text(viewModel.errorMessage ?? "")
     }
+  }
+
+
+  private var recoveryModeView: some View {
+    List {
+      Section {
+        ContentUnavailableView {
+          Label("Collaboration Disabled", systemImage: "externaldrive.badge.exclamationmark")
+        } description: {
+          Text("Sharing, invitation acceptance, bridge import, and synchronization are disabled while yaHerd is running in read-only recovery mode.")
+        } actions: {
+          Button("Open Storage Recovery") {
+            recoveryModeController?.isPresentingCenter = true
+          }
+          .buttonStyle(.borderedProminent)
+        }
+      }
+
+      Section("Why") {
+        Text("Persistent storage did not open. Allowing CloudKit operations against the in-memory recovery store could overwrite durable local or collaborator data.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+    }
+    .navigationTitle("Herd Collaboration")
   }
 
   @ViewBuilder

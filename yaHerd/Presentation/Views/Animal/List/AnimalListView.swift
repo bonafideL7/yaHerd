@@ -15,6 +15,7 @@ struct AnimalListView: View {
     @Environment(\.pastureReferenceDataReader) private var pastureReferenceDataReader
     @Environment(\.sampleDataSeeder) private var sampleDataSeeder
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.appDataAccessMode) private var dataAccessMode
 
     @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
 
@@ -285,7 +286,7 @@ struct AnimalListView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomOverlay }
         .overlay(alignment: .bottomTrailing) {
-            if !batchMode && !inlineEntry.isActive {
+            if dataAccessMode.allowsDataMutations && !batchMode && !inlineEntry.isActive {
                 AnimalListFloatingAddButton(
                     bottomPadding: floatingAddButtonBottomPadding,
                     action: beginNewInlineEntry
@@ -596,7 +597,7 @@ struct AnimalListView: View {
     }
 
     private func beginNewInlineEntry() {
-        guard !batchMode else { return }
+        guard dataAccessMode.allowsDataMutations, !batchMode else { return }
 
         withAnimation(.snappy) {
             inlineEntry.beginNew()
@@ -604,7 +605,10 @@ struct AnimalListView: View {
     }
 
     private func beginInlineEditing(_ animal: AnimalSummary) {
-        guard !batchMode else { return }
+        guard dataAccessMode.allowsDataMutations, !batchMode else {
+            openInlineDetails(animal.id)
+            return
+        }
 
         withAnimation(.snappy) {
             inlineEntry.beginEditing(animal, tagColorLibrary: tagColorLibrary)

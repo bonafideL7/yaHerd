@@ -7,6 +7,7 @@ import SwiftUI
 
 struct WorkingSessionsView: View {
     @Environment(\.workingSessionsRepository) private var repository
+    @Environment(\.appDataAccessMode) private var dataAccessMode
     @StateObject private var viewModel: WorkingSessionsViewModel
 
     @State private var showingNewSession = false
@@ -49,6 +50,7 @@ struct WorkingSessionsView: View {
                     .onDelete { offsets in
                         requestDelete(from: activeSessions, offsets: offsets)
                     }
+                    .deleteDisabled(dataAccessMode.isRecoveryMode)
                 }
             }
 
@@ -60,6 +62,7 @@ struct WorkingSessionsView: View {
                     .onDelete { offsets in
                         requestDelete(from: finishedSessions, offsets: offsets)
                     }
+                    .deleteDisabled(dataAccessMode.isRecoveryMode)
                 }
             }
         }
@@ -71,6 +74,7 @@ struct WorkingSessionsView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .disabled(!dataAccessMode.allowsDataMutations)
             }
 
             ToolbarItem(placement: .topBarTrailing) {
@@ -99,6 +103,7 @@ struct WorkingSessionsView: View {
         }
         .alert("Delete working session?", isPresented: $showingDeleteAlert, presenting: pendingSession) { session in
             Button("Delete", role: .destructive) { deleteSession(session) }
+                .disabledWhenDataReadOnly()
             Button("Cancel", role: .cancel) {}
         } message: { session in
             if session.status == .active {

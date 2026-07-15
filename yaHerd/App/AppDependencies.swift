@@ -17,14 +17,17 @@ final class AppDependencies {
   let herdSharingConflictReviewStore: HerdSharingConflictReviewStore
 
   private let context: ModelContext
+  private let dataAccessMode: AppDataAccessMode
 
   init(
     context: ModelContext,
-    tagColorDuplicateResolutionPolicy: TagColorDuplicateResolutionPolicy = .stableSortOrderWins
+    tagColorDuplicateResolutionPolicy: TagColorDuplicateResolutionPolicy = .stableSortOrderWins,
+    dataAccessMode: AppDataAccessMode = .readWrite
   ) {
     self.context = context
+    self.dataAccessMode = dataAccessMode
     let mutationSyncScheduler = HerdSharingMutationSyncScheduler()
-    let writePolicy = HerdCollaborationWritePolicy()
+    let writePolicy = HerdCollaborationWritePolicy(dataAccessMode: dataAccessMode)
     let conflictReviewStore = HerdSharingConflictReviewStore()
     self.herdSharingMutationSyncScheduler = mutationSyncScheduler
     self.herdCollaborationWritePolicy = writePolicy
@@ -73,7 +76,11 @@ final class AppDependencies {
       scheduler: mutationSyncScheduler,
       writePolicy: writePolicy
     )
-    self.herdSharingRepository = CoreDataHerdSharingRepository(context: context)
+    if dataAccessMode.isRecoveryMode {
+      self.herdSharingRepository = RecoveryModeHerdSharingRepository()
+    } else {
+      self.herdSharingRepository = CoreDataHerdSharingRepository(context: context)
+    }
     self.tagColorRepository = SyncRequestingTagColorRepository(
       base: tagColorRepository,
       scheduler: mutationSyncScheduler,
@@ -87,6 +94,7 @@ final class AppDependencies {
   }
 
   func seedDefaultsIfNeeded() {
+    guard dataAccessMode.allowsDataMutations else { return }
     SampleDataService.seedDefaultsIfNeeded(context: context)
   }
 }

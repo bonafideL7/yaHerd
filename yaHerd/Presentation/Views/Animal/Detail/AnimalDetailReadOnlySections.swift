@@ -95,6 +95,7 @@ struct AnimalDetailOffspringSection: View {
                             Image(systemName: "plus.circle.fill")
                         }
                     }
+                    .disabledWhenDataReadOnly()
                 }
 
                 if detail.maternalOffspring.isEmpty {

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PastureTileToolbar: View {
+    @Environment(\.appDataAccessMode) private var dataAccessMode
     @Binding var filter: PastureListFilter
     let isManaging: Bool
     let onToggleManageMode: () -> Void
@@ -22,6 +23,7 @@ struct PastureTileToolbar: View {
                 Button(action: onToggleManageMode) {
                     Label("Manage Pastures", systemImage: "line.3.horizontal.decrease.circle")
                 }
+                .disabled(!dataAccessMode.allowsDataMutations)
 
                 Divider()
 

@@ -35,11 +35,14 @@ struct AnimalListEmptyStateView: View {
                 Button("Add Animal", action: onAddAnimal)
                     .buttonStyle(.borderedProminent)
                     .foregroundStyle(colorScheme == .dark ? .black : .white)
+                    .disabledWhenDataReadOnly()
 
                 Button("Add Sample Data", action: onAddSampleData)
                     .buttonStyle(.bordered)
+                    .disabledWhenDataReadOnly()
                 Button("Add Large Sample Data", action: onAddLargeSampleData)
                     .buttonStyle(.bordered)
+                    .disabledWhenDataReadOnly()
             } else {
                 if filtersAreActive {
                     Button("Clear Filters", action: onClearFilters)

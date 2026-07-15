@@ -4,6 +4,7 @@ struct FieldCheckSessionSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.fieldCheckSessionSetupRepository) private var setupRepository
     @Environment(\.pastureReferenceDataReader) private var pastureReferenceDataReader
+    @Environment(\.appDataAccessMode) private var dataAccessMode
 
     @State private var model = FieldCheckSessionSetupViewModel()
     @State private var selectedPastureID: UUID?
@@ -26,10 +27,14 @@ struct FieldCheckSessionSetupView: View {
     }
 
     private var canStart: Bool {
-        selectedPasture != nil
+        dataAccessMode.allowsDataMutations && selectedPasture != nil
     }
 
     private var startStatusText: String? {
+        if !dataAccessMode.allowsDataMutations {
+            return "Recovery mode is read-only. New checks cannot be saved."
+        }
+
         if !model.hasLoaded {
             return "Loading pastures…"
         }
@@ -136,6 +141,8 @@ struct FieldCheckSessionSetupView: View {
     }
 
     private func startSession() {
+        guard dataAccessMode.allowsDataMutations else { return }
+
         do {
             let sessionID = try model.createSession(
                 pastureID: selectedPasture?.id,

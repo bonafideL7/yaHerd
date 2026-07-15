@@ -72,6 +72,8 @@ struct yaHerdApp: App {
                         tagColorDuplicateResolutionPolicy: syncMode.tagColorDuplicateResolutionPolicy
                     ),
                     syncMode: syncMode,
+                    dataAccessMode: .readWrite,
+                    recoveryContext: nil,
                     storageError: nil
                 )
             )
@@ -107,6 +109,8 @@ struct yaHerdApp: App {
                                 tagColorDuplicateResolutionPolicy: SyncMode.localOnly.tagColorDuplicateResolutionPolicy
                             ),
                             syncMode: .localOnly,
+                            dataAccessMode: .readWrite,
+                            recoveryContext: nil,
                             storageError: startupMessage
                         )
                     )
@@ -115,7 +119,6 @@ struct yaHerdApp: App {
 
                     do {
                         let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer()
-                        try Self.runStartupDataMigrations(in: fallbackContainer.mainContext, storageScope: "recovery")
 
                         let startupMessage = """
                         Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved.
@@ -135,10 +138,16 @@ struct yaHerdApp: App {
                             AppRuntime(
                                 modelContainer: fallbackContainer,
                                 dependencies: AppDependencies(
-                            context: fallbackContainer.mainContext,
-                            tagColorDuplicateResolutionPolicy: SyncMode.localOnly.tagColorDuplicateResolutionPolicy
-                        ),
+                                    context: fallbackContainer.mainContext,
+                                    tagColorDuplicateResolutionPolicy: SyncMode.localOnly.tagColorDuplicateResolutionPolicy,
+                                    dataAccessMode: .recoveryReadOnly
+                                ),
                                 syncMode: .localOnly,
+                                dataAccessMode: .recoveryReadOnly,
+                                recoveryContext: RecoveryModeContext(
+                                    requestedSyncMode: syncMode,
+                                    startupError: startupMessage
+                                ),
                                 storageError: startupMessage
                             )
                         )
@@ -167,7 +176,6 @@ struct yaHerdApp: App {
 
             do {
                 let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer()
-                try Self.runStartupDataMigrations(in: fallbackContainer.mainContext, storageScope: "recovery")
 
                 let startupMessage = """
                 Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved. Original error: \(primaryError.localizedDescription)
@@ -185,9 +193,15 @@ struct yaHerdApp: App {
                         modelContainer: fallbackContainer,
                         dependencies: AppDependencies(
                             context: fallbackContainer.mainContext,
-                            tagColorDuplicateResolutionPolicy: SyncMode.localOnly.tagColorDuplicateResolutionPolicy
+                            tagColorDuplicateResolutionPolicy: SyncMode.localOnly.tagColorDuplicateResolutionPolicy,
+                            dataAccessMode: .recoveryReadOnly
                         ),
                         syncMode: .localOnly,
+                        dataAccessMode: .recoveryReadOnly,
+                        recoveryContext: RecoveryModeContext(
+                            requestedSyncMode: syncMode,
+                            startupError: startupMessage
+                        ),
                         storageError: startupMessage
                     )
                 )
@@ -242,12 +256,15 @@ private struct AppRuntime {
     let modelContainer: ModelContainer
     let dependencies: AppDependencies
     let syncMode: SyncMode
+    let dataAccessMode: AppDataAccessMode
+    let recoveryContext: RecoveryModeContext?
     let storageError: String?
 }
 
 private struct RunningAppView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var tagColorLibrary: TagColorLibraryStore
+    @StateObject private var recoveryModeController: RecoveryModeController
     @State private var cloudKitShareInvitationCoordinator = CloudKitShareInvitationCoordinator()
     @State private var herdSharingSyncCoordinator: HerdSharingSyncCoordinator
     @State private var showsPendingCloudKitShareInvitation = false
@@ -263,6 +280,16 @@ private struct RunningAppView: View {
                 repository: runtime.dependencies.tagColorRepository
             )
         )
+        self._recoveryModeController = StateObject(
+            wrappedValue: RecoveryModeController(
+                context: runtime.recoveryContext ?? RecoveryModeContext(
+                    requestedSyncMode: runtime.syncMode,
+                    startupError: "Recovery mode is not active."
+                ),
+                diagnosticsRepository: runtime.dependencies.syncDiagnosticsRepository,
+                automaticallyRefreshDiagnostics: runtime.dataAccessMode.isRecoveryMode
+            )
+        )
         let sharingSyncCoordinator = HerdSharingSyncCoordinator(
             herdRepository: runtime.dependencies.herdRepository,
             sharingRepository: runtime.dependencies.herdSharingRepository,
@@ -270,20 +297,24 @@ private struct RunningAppView: View {
             writePolicy: runtime.dependencies.herdCollaborationWritePolicy,
             conflictReviewStore: runtime.dependencies.herdSharingConflictReviewStore
         )
-        runtime.dependencies.herdSharingMutationSyncScheduler.attach(
-            coordinator: sharingSyncCoordinator
-        )
-        runtime.dependencies.herdCollaborationWritePolicy.setAccessRefreshRequestHandler { [weak sharingSyncCoordinator] reason in
-            Task { @MainActor in
-                await sharingSyncCoordinator?.refreshSharingAccessNow(trigger: .writePolicyPreflight(reason))
+        if runtime.dataAccessMode.allowsDataMutations {
+            runtime.dependencies.herdSharingMutationSyncScheduler.attach(
+                coordinator: sharingSyncCoordinator
+            )
+            runtime.dependencies.herdCollaborationWritePolicy.setAccessRefreshRequestHandler { [weak sharingSyncCoordinator] reason in
+                Task { @MainActor in
+                    await sharingSyncCoordinator?.refreshSharingAccessNow(trigger: .writePolicyPreflight(reason))
+                }
             }
         }
         self._herdSharingSyncCoordinator = State(initialValue: sharingSyncCoordinator)
     }
 
     var body: some View {
-        RootAppView(storageError: runtime.storageError)
+        RootAppView(storageError: runtime.storageError, dataAccessMode: runtime.dataAccessMode)
             .environmentObject(tagColorLibrary)
+            .environment(\.appDataAccessMode, runtime.dataAccessMode)
+            .environment(\.recoveryModeController, runtime.dataAccessMode.isRecoveryMode ? recoveryModeController : nil)
             .environment(\.dashboardRecordReader, runtime.dependencies.dashboardRepository)
             .environment(\.fieldCheckOverviewReader, runtime.dependencies.fieldCheckRepository)
             .environment(\.workingProtocolTemplateReader, runtime.dependencies.workingRepository)
@@ -329,11 +360,19 @@ private struct RunningAppView: View {
             .environment(\.sampleDataSeeder, runtime.dependencies.sampleDataSeeder)
             .modelContainer(runtime.modelContainer)
             .task {
-                await herdSharingSyncCoordinator.refreshSharingAccessNow(trigger: .appLaunch)
-                herdSharingSyncCoordinator.requestAutomaticSync(trigger: .appLaunch)
+                if runtime.dataAccessMode.isRecoveryMode {
+                    RecoveryModeBannerOverlay.shared.show(controller: recoveryModeController)
+                } else {
+                    await herdSharingSyncCoordinator.refreshSharingAccessNow(trigger: .appLaunch)
+                    herdSharingSyncCoordinator.requestAutomaticSync(trigger: .appLaunch)
+                }
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
+                    guard runtime.dataAccessMode.allowsDataMutations else {
+                        RecoveryModeBannerOverlay.shared.show(controller: recoveryModeController)
+                        return
+                    }
                     appSettingsSynchronizer.refreshFromICloudIfStarted()
                     tagColorLibrary.refresh()
                     Task {
@@ -343,6 +382,10 @@ private struct RunningAppView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .yaHerdCloudKitShareAccepted)) { notification in
+                guard runtime.dataAccessMode.allowsDataMutations else {
+                    recoveryModeController.isPresentingCenter = true
+                    return
+                }
                 if let metadata = notification.userInfo?[CloudKitShareNotificationUserInfoKey.metadata] as? CKShare.Metadata {
                     cloudKitShareInvitationCoordinator.recordAcceptedShare(metadata: metadata)
                 }
@@ -368,19 +411,30 @@ private struct RunningAppView: View {
 
 private struct RootAppView: View {
     let storageError: String?
+    let dataAccessMode: AppDataAccessMode
     @State private var showsStorageError: Bool
 
-    init(storageError: String?) {
+    init(storageError: String?, dataAccessMode: AppDataAccessMode) {
         self.storageError = storageError
-        self._showsStorageError = State(initialValue: storageError != nil)
+        self.dataAccessMode = dataAccessMode
+        self._showsStorageError = State(
+            initialValue: storageError != nil && !dataAccessMode.isRecoveryMode
+        )
     }
 
     var body: some View {
         MainTabView()
-            .alert("Storage Recovery Mode", isPresented: $showsStorageError) {
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if dataAccessMode.isRecoveryMode {
+                    Color.clear
+                        .frame(height: RecoveryModePersistentBanner.reservedHeight)
+                        .accessibilityHidden(true)
+                }
+            }
+            .alert("Storage Mode Changed", isPresented: $showsStorageError) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(storageError ?? "Persistent storage could not be opened.")
+                Text(storageError ?? "The requested storage mode could not be opened.")
             }
     }
 }

@@ -5,6 +5,8 @@
 import SwiftUI
 
 struct AnimalListEmptyStateContainer: View {
+    @Environment(\.appDataAccessMode) private var dataAccessMode
+
     let configuration: AnimalListEmptyStateConfiguration
     let hasItems: Bool
     let filtersAreActive: Bool
@@ -24,7 +26,11 @@ struct AnimalListEmptyStateContainer: View {
         ZStack {
             Color.clear
                 .contentShape(Rectangle())
-                .onTapGesture(perform: onAddAnimal)
+                .onTapGesture {
+                    if dataAccessMode.allowsDataMutations {
+                        onAddAnimal()
+                    }
+                }
 
             AnimalListEmptyStateView(
                 configuration: configuration,
