@@ -5,21 +5,24 @@
 
 import Foundation
 
+enum AppPreferenceKey {
+    static let syncMode = "syncMode"
+}
+
+@MainActor
 protocol AppPreferencesProviding: AnyObject {
     var syncMode: SyncMode { get set }
 }
 
+@MainActor
 protocol AppSettingsSyncing: AnyObject {
     func startIfNeeded(syncMode: SyncMode)
     func stop()
     func deleteCloudSettings() -> Int
 }
 
+@MainActor
 final class AppPreferences: AppPreferencesProviding {
-    private enum Keys {
-        static let syncMode = "syncMode"
-    }
-
     private let userDefaults: UserDefaults
 
     init(userDefaults: UserDefaults = .standard) {
@@ -28,16 +31,16 @@ final class AppPreferences: AppPreferencesProviding {
 
     var syncMode: SyncMode {
         get {
-            let rawValue = userDefaults.string(forKey: Keys.syncMode)
+            let rawValue = userDefaults.string(forKey: AppPreferenceKey.syncMode)
             return SyncMode(rawValue: rawValue ?? "") ?? .localOnly
         }
         set {
-            userDefaults.set(newValue.rawValue, forKey: Keys.syncMode)
+            userDefaults.set(newValue.rawValue, forKey: AppPreferenceKey.syncMode)
         }
     }
 }
 
-enum SyncedAppSettingKey: String, CaseIterable {
+enum SyncedAppSettingKey: String, CaseIterable, Sendable {
     case allowHardDelete
     case isDashboardEnabled
     case targetAcresPerHeadDefault
@@ -45,13 +48,14 @@ enum SyncedAppSettingKey: String, CaseIterable {
     case recentPastureNames
 }
 
+@MainActor
 final class AppSettingsSynchronizer: AppSettingsSyncing {
     static let shared = AppSettingsSynchronizer()
 
     private let userDefaults: UserDefaults
     private let cloudStore: NSUbiquitousKeyValueStore
     private let keys: [SyncedAppSettingKey]
-    private var observerTokens: [NSObjectProtocol] = []
+    private var observationTasks: [Task<Void, Never>] = []
     private var isApplyingCloudValues = false
     private var isStarted = false
 
@@ -65,7 +69,7 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
         self.keys = keys
     }
 
-    deinit {
+    isolated deinit {
         stop()
     }
 
@@ -85,13 +89,10 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
     }
 
     func stop() {
-        guard isStarted || !observerTokens.isEmpty else { return }
+        guard isStarted || !observationTasks.isEmpty else { return }
 
-        for token in observerTokens {
-            NotificationCenter.default.removeObserver(token)
-        }
-
-        observerTokens.removeAll()
+        observationTasks.forEach { $0.cancel() }
+        observationTasks.removeAll()
         isStarted = false
         isApplyingCloudValues = false
     }
@@ -156,27 +157,37 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
     }
 
     private func observeChanges() {
-        let localToken = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.saveLocalSettingsToICloud()
+        let localChangesTask = Task { @MainActor [weak self] in
+            let changes = NotificationCenter.default.notifications(
+                named: UserDefaults.didChangeNotification
+            )
+            .map { _ in () }
+
+            for await _ in changes {
+                guard !Task.isCancelled else { return }
+                self?.saveLocalSettingsToICloud()
+            }
         }
 
-        let cloudToken = NotificationCenter.default.addObserver(
-            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
-            object: cloudStore,
-            queue: .main
-        ) { [weak self] notification in
-            self?.handleCloudChange(notification)
+        let cloudChangesTask = Task { @MainActor [weak self] in
+            let changes = NotificationCenter.default.notifications(
+                named: NSUbiquitousKeyValueStore.didChangeExternallyNotification
+            )
+            .map { notification -> [String]? in
+                notification.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String]
+            }
+
+            for await changedKeys in changes {
+                guard !Task.isCancelled else { return }
+                self?.handleCloudChange(changedKeys: changedKeys)
+            }
         }
 
-        observerTokens.append(contentsOf: [localToken, cloudToken])
+        observationTasks = [localChangesTask, cloudChangesTask]
     }
 
-    private func handleCloudChange(_ notification: Notification) {
-        guard let changedKeys = notification.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String] else {
+    private func handleCloudChange(changedKeys: [String]?) {
+        guard let changedKeys else {
             applyCloudSettingsToLocalDefaults()
             return
         }

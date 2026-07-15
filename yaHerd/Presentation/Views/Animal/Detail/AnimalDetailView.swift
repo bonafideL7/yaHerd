@@ -200,7 +200,8 @@ struct AnimalDetailView: View {
 
     private func scrollFormIfNeeded(using proxy: ScrollViewProxy) {
         guard viewModel.isEditing, let target = viewModel.pendingScrollTarget else { return }
-        DispatchQueue.main.async {
+        Task { @MainActor in
+            await Task.yield()
             withAnimation {
                 proxy.scrollTo(target, anchor: .top)
             }

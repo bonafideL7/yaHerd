@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct CreateInlineAnimalUseCase {
     let repository: any AnimalCreating
 

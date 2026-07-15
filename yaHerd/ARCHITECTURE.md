@@ -246,3 +246,7 @@ The SwiftData/Core Data CloudKit sharing bridge is treated as a separate high-ri
 ## Recovery-mode boundary
 
 Persistent-store failure is handled by a separate `AppDataAccessMode.recoveryReadOnly` runtime state. The recovery container is in memory with saving disabled, all mutation-capable repositories are wrapped by `HerdCollaborationWritePolicy`, and the CloudKit sharing repository and automatic synchronization are not attached. `RecoveryModeBannerOverlay` provides the persistent cross-presentation warning, while `RecoveryModeController` owns diagnostics, diagnostic-store export, and the acknowledged production-store open/repair attempt. Recovery mode never transitions to writable state during the current launch. See the repository-level `RECOVERY_MODE.md` for invariants and release tests.
+
+## Concurrency boundary
+
+The app and test targets compile in Swift 6 mode with complete strict-concurrency checking and main-actor default isolation. Domain repository protocols are explicitly `@MainActor` because production repositories use `ModelContainer.mainContext`. Observable UI state, navigation, sharing coordinators, mutation scheduling, and collaboration write validation use the same actor. Application sources may not introduce `@unchecked Sendable`, lock-backed state managers, or `Task.detached`; the CI gate in `Scripts/verify-concurrency.sh` enforces those restrictions. See `CONCURRENCY.md` at the repository root.

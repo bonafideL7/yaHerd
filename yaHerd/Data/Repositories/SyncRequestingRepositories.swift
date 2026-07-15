@@ -5,6 +5,7 @@
 
 import Foundation
 
+@MainActor
 struct SyncRequestingAnimalRepository: AnimalRepository {
   let base: any AnimalRepository
   let scheduler: HerdSharingMutationSyncScheduler
@@ -108,6 +109,7 @@ struct SyncRequestingAnimalRepository: AnimalRepository {
   }
 }
 
+@MainActor
 struct SyncRequestingPastureRepository: PastureRepository {
   let base: any PastureRepository
   let scheduler: HerdSharingMutationSyncScheduler
@@ -189,6 +191,7 @@ struct SyncRequestingPastureRepository: PastureRepository {
   }
 }
 
+@MainActor
 struct SyncRequestingDashboardRepository: DashboardRepository {
   let base: any DashboardRepository
   let scheduler: HerdSharingMutationSyncScheduler
@@ -209,6 +212,7 @@ struct SyncRequestingDashboardRepository: DashboardRepository {
   }
 }
 
+@MainActor
 struct SyncRequestingFieldCheckRepository: FieldCheckRepository {
   let base: any FieldCheckRepository
   let scheduler: HerdSharingMutationSyncScheduler
@@ -381,6 +385,7 @@ final class SyncRequestingTagColorRepository: TagColorRepository {
   }
 }
 
+@MainActor
 struct SyncRequestingWorkingRepository: WorkingRepository {
   let base: any WorkingRepository
   let scheduler: HerdSharingMutationSyncScheduler

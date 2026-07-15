@@ -116,7 +116,8 @@ struct AnimalFormView: View {
                         .focused($isNameFieldFocused)
                         .onAppear {
                             if isShowingNameField && trimmedName.isEmpty {
-                                DispatchQueue.main.async {
+                                Task { @MainActor in
+                                    await Task.yield()
                                     isNameFieldFocused = true
                                 }
                             }

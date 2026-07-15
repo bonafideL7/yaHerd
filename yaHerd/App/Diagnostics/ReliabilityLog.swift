@@ -50,6 +50,7 @@ enum PersistenceLog {
         try PerformanceLog.measure("SwiftData.fetch.\(operation)", work)
     }
 
+    @MainActor
     static func save(_ context: ModelContext, operation: String) throws {
         do {
             try PerformanceLog.measure("SwiftData.save.\(operation)") {
@@ -62,6 +63,7 @@ enum PersistenceLog {
         }
     }
 
+    @MainActor
     static func save(_ context: NSManagedObjectContext, operation: String) throws {
         do {
             try PerformanceLog.measure("CoreData.save.\(operation)") {

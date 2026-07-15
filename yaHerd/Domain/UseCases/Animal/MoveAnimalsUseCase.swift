@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct MoveAnimalsUseCase {
     let repository: any AnimalPastureMoving
 

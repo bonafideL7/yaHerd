@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct LoadDashboardAnimalListUseCase {
     let repository: any DashboardRecordReading
     let service: DashboardService

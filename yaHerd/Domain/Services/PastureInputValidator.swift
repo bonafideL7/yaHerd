@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct PastureInputValidator {
     private let nameExists: (String, UUID?) throws -> Bool
 

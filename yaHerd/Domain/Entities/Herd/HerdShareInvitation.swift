@@ -6,6 +6,7 @@
 import CloudKit
 import Foundation
 
+@MainActor
 struct HerdShareInvitation: Identifiable {
     let id: UUID
     let metadata: CKShare.Metadata

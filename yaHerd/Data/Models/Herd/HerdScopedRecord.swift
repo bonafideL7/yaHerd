@@ -27,6 +27,7 @@ extension FieldCheckSession: HerdScopedRecord {}
 extension FieldCheckAnimalCheck: HerdScopedRecord {}
 extension FieldCheckFinding: HerdScopedRecord {}
 
+@MainActor
 extension ModelContext {
     func assignDefaultHerd<Record: HerdScopedRecord>(to record: Record) throws {
         guard record.herd == nil else { return }

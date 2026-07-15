@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 
+@MainActor
 struct SwiftDataFieldCheckRepository: FieldCheckRepository {
     let context: ModelContext
 

@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct LoadAnimalDetailUseCase {
     let repository: any AnimalDetailReading
 

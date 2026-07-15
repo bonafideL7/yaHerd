@@ -5,6 +5,7 @@
 
 import SwiftUI
 
+@MainActor
 struct HerdCollaborationView: View {
   @Environment(\.herdRepository) private var herdRepository
   @Environment(\.herdSharingRepository) private var herdSharingRepository
@@ -19,7 +20,11 @@ struct HerdCollaborationView: View {
 
   private let preferences: AppPreferencesProviding
 
-  init(preferences: AppPreferencesProviding = AppPreferences()) {
+  init() {
+    self.preferences = AppPreferences(userDefaults: .standard)
+  }
+
+  init(preferences: AppPreferencesProviding) {
     self.preferences = preferences
   }
 
@@ -146,7 +151,7 @@ struct HerdCollaborationView: View {
     switch confirmation {
     case .acceptSharedDeletes(let review, _):
       Button("Delete Local Records and Sync", role: .destructive) {
-        Task {
+        Task { @MainActor in
           if let sharingSyncCoordinator {
             _ = await sharingSyncCoordinator.resolveConflictByAcceptingSharedDeletes(
               review,
@@ -275,7 +280,7 @@ struct HerdCollaborationView: View {
       }
 
       Button {
-        Task {
+        Task { @MainActor in
           if let sharingSyncCoordinator {
             await sharingSyncCoordinator.refreshSharingAccessNow(
               trigger: .manual,
@@ -436,7 +441,7 @@ struct HerdCollaborationView: View {
         }
 
         Button {
-          Task {
+          Task { @MainActor in
             if let sharingSyncCoordinator {
               _ = await sharingSyncCoordinator.resolveConflictByKeepingLocalRecords(
                 conflictReview,
@@ -461,7 +466,7 @@ struct HerdCollaborationView: View {
           || conflictReview.existingLocalRecordUpdateCount > 0
         {
           Button {
-            Task {
+            Task { @MainActor in
               if let sharingSyncCoordinator {
                 _ = await sharingSyncCoordinator.resolveConflictByAcceptingSharedUpdates(
                   conflictReview,
@@ -645,7 +650,7 @@ struct HerdCollaborationView: View {
         LabeledContent("Root Record", value: summary.displayRootRecordName)
 
         Button {
-          Task {
+          Task { @MainActor in
             let accepted = await viewModel.acceptPendingInvitation(
               invitation,
               using: sharingRepository,
@@ -699,7 +704,7 @@ struct HerdCollaborationView: View {
   ) -> some View {
     Section("Shared Bridge Import") {
       Button {
-        Task {
+        Task { @MainActor in
           let imported = await viewModel.importSharedBridgeData(
             using: sharingRepository,
             storageMode: preferences.syncMode.herdStorageMode,
@@ -738,7 +743,7 @@ struct HerdCollaborationView: View {
   ) -> some View {
     Section("Shared Bridge Sync") {
       Button {
-        Task {
+        Task { @MainActor in
           let synced: Bool
           if let sharingSyncCoordinator {
             synced = await sharingSyncCoordinator.syncNow(trigger: .manual)
@@ -808,7 +813,7 @@ struct HerdCollaborationView: View {
   private func shareActionSection(sharingRepository: any HerdSharingRepository) -> some View {
     Section("Share Actions") {
       Button {
-        Task {
+        Task { @MainActor in
           await viewModel.startSharing(
             using: sharingRepository,
             storageMode: preferences.syncMode.herdStorageMode,

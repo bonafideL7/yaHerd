@@ -19,6 +19,8 @@ enum MissingAnimalListDependencyError: LocalizedError {
 }
 
 private struct MissingAnimalListRepository: AnimalListRepository {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchAnimals() throws -> [AnimalSummary] {
         throw MissingAnimalListDependencyError.animalListRepository
     }
@@ -53,12 +55,16 @@ private struct MissingAnimalListRepository: AnimalListRepository {
 }
 
 private struct MissingPastureReferenceDataReader: PastureReferenceDataReader {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchPastureOptions() throws -> [PastureOption] {
         throw MissingAnimalListDependencyError.pastureReferenceDataReader
     }
 }
 
 private struct MissingSampleDataSeeder: SampleDataSeeding {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func seedSampleDataIfNeeded() {
         assertionFailure(MissingAnimalListDependencyError.sampleDataSeeder.localizedDescription)
     }

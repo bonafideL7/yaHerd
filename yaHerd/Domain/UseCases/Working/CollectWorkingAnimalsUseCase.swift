@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct CollectWorkingAnimalsUseCase {
     let repository: any WorkingAnimalCollecting
 

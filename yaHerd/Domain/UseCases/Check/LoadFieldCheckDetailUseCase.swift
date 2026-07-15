@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct LoadFieldCheckDetailUseCase {
     let repository: any FieldCheckSessionDetailReading
 

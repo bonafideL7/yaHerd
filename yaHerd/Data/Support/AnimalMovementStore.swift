@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 
+@MainActor
 struct AnimalMovementStore {
     @discardableResult
     static func move(

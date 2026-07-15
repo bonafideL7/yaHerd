@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct CreateWorkingProtocolTemplateUseCase {
     let repository: any WorkingProtocolTemplateCreating
 
@@ -8,6 +9,7 @@ struct CreateWorkingProtocolTemplateUseCase {
     }
 }
 
+@MainActor
 struct UpdateWorkingProtocolTemplateUseCase {
     let repository: any WorkingProtocolTemplateUpdating
 
@@ -16,6 +18,7 @@ struct UpdateWorkingProtocolTemplateUseCase {
     }
 }
 
+@MainActor
 struct DeleteWorkingProtocolTemplatesUseCase {
     let repository: any WorkingProtocolTemplateDeleting
 

@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct PrepareOffspringDraftUseCase {
     let repository: any AnimalOffspringDraftReading
 

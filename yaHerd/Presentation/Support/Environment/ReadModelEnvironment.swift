@@ -19,12 +19,16 @@ enum MissingReadModelDependencyError: LocalizedError {
 }
 
 private struct MissingDashboardRecordReader: DashboardRecordReading {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchDashboardRecords() throws -> DashboardRecords {
         throw MissingReadModelDependencyError.dashboardRecordReader
     }
 }
 
 private struct MissingFieldCheckOverviewReader: FieldCheckOverviewReading {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchSessions() throws -> [FieldCheckSessionSummary] {
         throw MissingReadModelDependencyError.fieldCheckReader
     }
@@ -35,6 +39,8 @@ private struct MissingFieldCheckOverviewReader: FieldCheckOverviewReading {
 }
 
 private struct MissingWorkingProtocolTemplateReader: WorkingProtocolTemplateListReader {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchTemplates() throws -> [WorkingProtocolTemplateSummary] {
         throw MissingReadModelDependencyError.workingProtocolTemplateReader
     }

@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct DeleteWorkingSessionUseCase {
     let repository: any WorkingSessionDeleting
 
@@ -8,6 +9,7 @@ struct DeleteWorkingSessionUseCase {
     }
 }
 
+@MainActor
 struct SaveWorkingDestinationsUseCase {
     let repository: any WorkingDestinationSaving
 
@@ -16,6 +18,7 @@ struct SaveWorkingDestinationsUseCase {
     }
 }
 
+@MainActor
 struct FinishWorkingSessionUseCase {
     let repository: any WorkingSessionFinishing
 

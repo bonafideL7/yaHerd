@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct DeleteAnimalsUseCase {
     let repository: any AnimalDeleting
 

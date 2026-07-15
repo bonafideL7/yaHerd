@@ -8,6 +8,7 @@ import Foundation
 import Observation
 import SwiftUI
 
+@MainActor
 @Observable
 final class CloudKitShareInvitationCoordinator {
     private(set) var pendingInvitation: HerdShareInvitation?

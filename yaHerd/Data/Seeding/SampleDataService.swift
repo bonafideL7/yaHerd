@@ -1,6 +1,7 @@
 import SwiftData
 import Foundation
 
+@MainActor
 struct SampleDataService {
     
     static func seedDefaultsIfNeeded(context: ModelContext) {

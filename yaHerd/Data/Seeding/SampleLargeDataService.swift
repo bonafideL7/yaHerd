@@ -14,6 +14,7 @@ import Foundation
 ///
 /// Generated as a best-effort normalization for the "Large" sample seed.
 
+@MainActor
 struct SampleLargeDataService {
     
     static func seedIfNeeded(context: ModelContext) {

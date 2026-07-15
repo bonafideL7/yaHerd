@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct PastureGroupInputValidator {
     static let grazeDaysRange = 1...30
     static let restDaysRange = 7...90

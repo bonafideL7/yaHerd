@@ -1,5 +1,6 @@
 import SwiftData
 
+@MainActor
 final class AppSampleDataSeeder: SampleDataSeeding {
     private let context: ModelContext
 

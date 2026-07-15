@@ -6,25 +6,39 @@
 import CloudKit
 import Foundation
 
-struct SyncDataResetSummary: Equatable {
+struct SyncDataResetSummary: Equatable, Sendable {
     let deletedCloudKitRecordCount: Int
     let deletedCloudKitZoneCount: Int
     let deletedCloudSettingsCount: Int
 }
 
+@MainActor
 protocol SyncDataResetting {
     func deleteICloudSyncData() async throws -> SyncDataResetSummary
 }
 
+@MainActor
 final class SyncDataResetService: SyncDataResetting {
     private let preferences: AppPreferencesProviding
     private let settingsSynchronizer: AppSettingsSyncing
     private let cloudKitContainerIdentifier: String
 
+    convenience init() {
+        self.init(preferences: AppPreferences())
+    }
+
+    convenience init(preferences: AppPreferencesProviding) {
+        self.init(
+            preferences: preferences,
+            settingsSynchronizer: AppSettingsSynchronizer.shared,
+            cloudKitContainerIdentifier: ModelContainerFactory.cloudKitContainerIdentifier
+        )
+    }
+
     init(
-        preferences: AppPreferencesProviding = AppPreferences(),
-        settingsSynchronizer: AppSettingsSyncing = AppSettingsSynchronizer.shared,
-        cloudKitContainerIdentifier: String = ModelContainerFactory.cloudKitContainerIdentifier
+        preferences: AppPreferencesProviding,
+        settingsSynchronizer: AppSettingsSyncing,
+        cloudKitContainerIdentifier: String
     ) {
         self.preferences = preferences
         self.settingsSynchronizer = settingsSynchronizer
@@ -34,10 +48,8 @@ final class SyncDataResetService: SyncDataResetting {
     func deleteICloudSyncData() async throws -> SyncDataResetSummary {
         let cloudKitSummary = try await deletePrivateCloudKitData()
 
-        let deletedCloudSettingsCount = await MainActor.run {
-            preferences.syncMode = .localOnly
-            return settingsSynchronizer.deleteCloudSettings()
-        }
+        preferences.syncMode = .localOnly
+        let deletedCloudSettingsCount = settingsSynchronizer.deleteCloudSettings()
 
         return SyncDataResetSummary(
             deletedCloudKitRecordCount: cloudKitSummary.deletedRecordCount,
@@ -69,31 +81,15 @@ final class SyncDataResetService: SyncDataResetting {
     }
 
     private func fetchAllRecordZones(in database: CKDatabase) async throws -> [CKRecordZone] {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[CKRecordZone], Error>) in
-            database.fetchAllRecordZones { zones, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: zones ?? [])
-                }
-            }
-        }
+        try await database.allRecordZones()
     }
 
     private func deleteRecordZone(_ zoneID: CKRecordZone.ID, in database: CKDatabase) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            database.delete(withRecordZoneID: zoneID) { _, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: ())
-                }
-            }
-        }
+        _ = try await database.deleteRecordZone(withID: zoneID)
     }
 }
 
-private struct CloudKitDeleteSummary: Equatable {
+private struct CloudKitDeleteSummary: Equatable, Sendable {
     let deletedRecordCount: Int
     let deletedZoneCount: Int
 }

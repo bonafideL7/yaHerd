@@ -171,14 +171,14 @@ struct HerdSharingConflictReviewDetailView: View {
   private var resolutionSection: some View {
     Section("Resolution") {
       Button {
-        Task { await keepLocalRecords(syncAfterResolution: true) }
+        Task { @MainActor in await keepLocalRecords(syncAfterResolution: true) }
       } label: {
         Label("Keep Local Records and Sync", systemImage: "arrow.triangle.2.circlepath.icloud")
       }
       .disabled(!review.hasConflicts || sharingSyncCoordinator?.isSyncing == true)
 
       Button {
-        Task { await keepLocalRecords(syncAfterResolution: false) }
+        Task { @MainActor in await keepLocalRecords(syncAfterResolution: false) }
       } label: {
         Label("Mark Kept Locally", systemImage: "checkmark.circle")
       }
@@ -215,7 +215,7 @@ struct HerdSharingConflictReviewDetailView: View {
       .disabled(selectedLocalFieldRestoreIDs.isEmpty || sharingSyncCoordinator == nil)
 
       Button {
-        Task {
+        Task { @MainActor in
           await restoreSelectedLocalFields(
             syncAfterResolution: false,
             resolveAfterRestore: false
@@ -227,7 +227,7 @@ struct HerdSharingConflictReviewDetailView: View {
       .disabled(selectedLocalFieldRestoreIDs.isEmpty || sharingSyncCoordinator == nil)
 
       Button {
-        Task { await acceptSharedUpdates(syncAfterResolution: true) }
+        Task { @MainActor in await acceptSharedUpdates(syncAfterResolution: true) }
       } label: {
         Label("Accept Shared Updates and Sync", systemImage: "checkmark.icloud")
       }
@@ -237,7 +237,7 @@ struct HerdSharingConflictReviewDetailView: View {
           || sharingSyncCoordinator?.isSyncing == true)
 
       Button {
-        Task { await acceptSharedUpdates(syncAfterResolution: false) }
+        Task { @MainActor in await acceptSharedUpdates(syncAfterResolution: false) }
       } label: {
         Label("Accept Shared Updates", systemImage: "checkmark.circle")
       }
@@ -292,7 +292,7 @@ struct HerdSharingConflictReviewDetailView: View {
         syncAfterResolution ? "Delete Local Records and Sync" : "Delete Local Records",
         role: .destructive
       ) {
-        Task { await acceptSharedDeletes(syncAfterResolution: syncAfterResolution) }
+        Task { @MainActor in await acceptSharedDeletes(syncAfterResolution: syncAfterResolution) }
       }
 
     case let .restoreSelectedLocalFields(_, syncAfterResolution, resolveAfterRestore):
@@ -301,7 +301,7 @@ struct HerdSharingConflictReviewDetailView: View {
           ? "Restore Fields, Mark Resolved, and Sync"
           : "Restore Fields and Mark Resolved"
       ) {
-        Task {
+        Task { @MainActor in
           await restoreSelectedLocalFields(
             syncAfterResolution: syncAfterResolution,
             resolveAfterRestore: resolveAfterRestore

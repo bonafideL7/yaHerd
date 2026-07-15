@@ -1,6 +1,7 @@
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class PastureInputValidatorTests: XCTestCase {
     func testValidateNormalizesNameAndReturnsInput() throws {
         let validator = PastureInputValidator { _, _ in false }

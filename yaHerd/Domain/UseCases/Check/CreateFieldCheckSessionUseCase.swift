@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct CreateFieldCheckSessionUseCase {
     let repository: any FieldCheckSessionCreating
 
