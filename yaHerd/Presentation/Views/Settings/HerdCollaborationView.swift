@@ -606,7 +606,7 @@ struct HerdCollaborationView: View {
         viewModel.isSharingActionInProgress || preferences.syncMode.herdStorageMode != .iCloud)
 
       Text(
-        "Use this after accepting a share or after the Core Data bridge receives remote shared changes. This pass imports the shared herd root, support records, pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working protocol templates, working sessions, queue items, treatment records, and field checks into SwiftData so the normal app screens can display them."
+        "Use this after accepting a share or after the Core Data bridge receives remote changes. yaHerd imports the current herd from the owner's private bridge store or an accepted shared store based on your access, then merges the bridge records into SwiftData."
       )
       .font(.caption)
       .foregroundStyle(.secondary)

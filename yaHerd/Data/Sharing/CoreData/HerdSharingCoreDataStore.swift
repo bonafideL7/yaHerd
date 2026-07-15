@@ -1627,82 +1627,123 @@ final class HerdSharingCoreDataStore {
   func importSharedRecordsIntoSwiftData(context swiftDataContext: ModelContext) async throws
     -> HerdSharingBridgeImportResult
   {
+    try await performBridgeImport(
+      for: nil,
+      access: nil,
+      context: swiftDataContext
+    )
+  }
+
+  func importBridgeRecordsIntoSwiftData(
+    for herd: HerdSummary,
+    access: HerdSharingAccess,
+    context swiftDataContext: ModelContext
+  ) async throws -> HerdSharingBridgeImportResult {
+    try await performBridgeImport(
+      for: herd,
+      access: access,
+      context: swiftDataContext
+    )
+  }
+
+  private func performBridgeImport(
+    for requestedHerd: HerdSummary?,
+    access: HerdSharingAccess?,
+    context swiftDataContext: ModelContext
+  ) async throws -> HerdSharingBridgeImportResult {
     let profilingStartedAt = Date()
     ReliabilityLog.syncEvent("HerdSharingCoreDataStore.importSharedRecordsIntoSwiftData.started")
     defer {
-      PerformanceLog.logDuration("HerdSharingCoreDataStore.importSharedRecordsIntoSwiftData", startedAt: profilingStartedAt)
+      PerformanceLog.logDuration(
+        "HerdSharingCoreDataStore.importSharedRecordsIntoSwiftData",
+        startedAt: profilingStartedAt
+      )
       ReliabilityLog.syncEvent("HerdSharingCoreDataStore.importSharedRecordsIntoSwiftData.finished")
     }
     try await loadIfNeeded()
 
-    guard let sharedStore else {
-      throw HerdSharingActionError.sharingStoreUnavailable(
-        "The shared CloudKit bridge store was not loaded.")
-    }
-
-    let herdRecords = try fetchSharedHerdRecords(in: sharedStore)
-    guard let herdRecord = herdRecords.sorted(by: sharedHerdRecordSort).first else {
-      throw HerdSharingActionError.bridgeImportFailed(
-        "No shared herd records were found in the Core Data sharing bridge.")
+    let source = try bridgeImportSource(for: requestedHerd, access: access)
+    let herdRecord: SharedHerdRecord
+    if let requestedHerd {
+      guard
+        let matchingRecord = try fetchSharedHerdRecord(
+          publicID: requestedHerd.publicID,
+          in: source.store
+        )
+      else {
+        throw HerdSharingActionError.bridgeImportFailed(
+          "No bridge herd record for \(requestedHerd.name) was found in the \(source.description)."
+        )
+      }
+      herdRecord = matchingRecord
+    } else {
+      let herdRecords = try fetchSharedHerdRecords(in: source.store)
+      guard let firstRecord = herdRecords.sorted(by: sharedHerdRecordSort).first else {
+        throw HerdSharingActionError.bridgeImportFailed(
+          "No accepted shared herd records were found in the Core Data sharing bridge."
+        )
+      }
+      herdRecord = firstRecord
     }
 
     guard let herdPublicID = herdRecord.parsedPublicID else {
       throw HerdSharingActionError.bridgeImportFailed(
-        "The shared herd record is missing a valid public ID.")
+        "The bridge herd record is missing a valid public ID."
+      )
     }
 
     let herd = try upsertSwiftDataHerd(from: herdRecord, in: swiftDataContext)
     let sharedTagColorDefinitionRecords = try fetchSharedTagColorDefinitionRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let tagColorDefinitionResult = try upsertSwiftDataTagColorDefinitions(
       from: sharedTagColorDefinitionRecords,
       herd: herd,
       in: swiftDataContext
     )
     let sharedStatusReferenceRecords = try fetchSharedAnimalStatusReferenceRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let statusReferenceResult = try upsertSwiftDataStatusReferences(
       from: sharedStatusReferenceRecords,
       herd: herd,
       in: swiftDataContext
     )
     let sharedPastureGroupRecords = try fetchSharedPastureGroupRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let pastureGroupResult = try upsertSwiftDataPastureGroups(
       from: sharedPastureGroupRecords,
       herd: herd,
       in: swiftDataContext
     )
     let sharedPastureRecords = try fetchSharedPastureRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let pastureResult = try upsertSwiftDataPastures(
       from: sharedPastureRecords,
       herd: herd,
       in: swiftDataContext
     )
     let sharedAnimalRecords = try fetchSharedAnimalRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let animalResult = try upsertSwiftDataAnimals(
       from: sharedAnimalRecords,
       herd: herd,
       in: swiftDataContext
     )
     let sharedAnimalTagRecords = try fetchSharedAnimalTagRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let animalTagResult = try upsertSwiftDataAnimalTags(
       from: sharedAnimalTagRecords,
       herd: herd,
       in: swiftDataContext
     )
     let sharedMovementRecords = try fetchSharedMovementRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let movementResult = try upsertSwiftDataMovements(
       from: sharedMovementRecords,
       herd: herd,
       in: swiftDataContext
     )
     let sharedStatusRecords = try fetchSharedStatusRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let statusRecordResult = try upsertSwiftDataStatusRecords(
       from: sharedStatusRecords,
       herd: herd,
@@ -1710,7 +1751,7 @@ final class HerdSharingCoreDataStore {
     )
     let sharedWorkingProtocolTemplates = try fetchSharedWorkingProtocolTemplateRecords(
       herdPublicID: herdPublicID,
-      in: sharedStore
+      in: source.store
     )
     let workingProtocolTemplateResult = try upsertSwiftDataWorkingProtocolTemplates(
       from: sharedWorkingProtocolTemplates,
@@ -1718,56 +1759,56 @@ final class HerdSharingCoreDataStore {
       in: swiftDataContext
     )
     let sharedWorkingSessions = try fetchSharedWorkingSessionRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let workingSessionResult = try upsertSwiftDataWorkingSessions(
       from: sharedWorkingSessions,
       herd: herd,
       in: swiftDataContext
     )
     let sharedWorkingQueueItems = try fetchSharedWorkingQueueItemRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let workingQueueItemResult = try upsertSwiftDataWorkingQueueItems(
       from: sharedWorkingQueueItems,
       herd: herd,
       in: swiftDataContext
     )
     let sharedWorkingTreatmentRecords = try fetchSharedWorkingTreatmentRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let workingTreatmentRecordResult = try upsertSwiftDataWorkingTreatmentRecords(
       from: sharedWorkingTreatmentRecords,
       herd: herd,
       in: swiftDataContext
     )
     let sharedHealthRecords = try fetchSharedHealthRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let healthRecordResult = try upsertSwiftDataHealthRecords(
       from: sharedHealthRecords,
       herd: herd,
       in: swiftDataContext
     )
     let sharedPregnancyChecks = try fetchSharedPregnancyCheckRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let pregnancyCheckResult = try upsertSwiftDataPregnancyChecks(
       from: sharedPregnancyChecks,
       herd: herd,
       in: swiftDataContext
     )
     let sharedFieldCheckSessions = try fetchSharedFieldCheckSessionRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let fieldCheckSessionResult = try upsertSwiftDataFieldCheckSessions(
       from: sharedFieldCheckSessions,
       herd: herd,
       in: swiftDataContext
     )
     let sharedFieldCheckAnimalChecks = try fetchSharedFieldCheckAnimalCheckRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let fieldCheckAnimalCheckResult = try upsertSwiftDataFieldCheckAnimalChecks(
       from: sharedFieldCheckAnimalChecks,
       herd: herd,
       in: swiftDataContext
     )
     let sharedFieldCheckFindings = try fetchSharedFieldCheckFindingRecords(
-      herdPublicID: herdPublicID, in: sharedStore)
+      herdPublicID: herdPublicID, in: source.store)
     let fieldCheckFindingResult = try upsertSwiftDataFieldCheckFindings(
       from: sharedFieldCheckFindings,
       herd: herd,
@@ -1775,7 +1816,7 @@ final class HerdSharingCoreDataStore {
     )
     let sharedDeletedRecords = try fetchSharedDeletedRecords(
       herdPublicID: herdPublicID,
-      in: sharedStore
+      in: source.store
     )
     let deletionResult = try deleteSwiftDataRecords(
       from: sharedDeletedRecords,
@@ -1848,6 +1889,41 @@ final class HerdSharingCoreDataStore {
       deletedRecordCount: deletionResult.deletedCount,
       conflictReport: conflictReport
     )
+  }
+
+  private func bridgeImportSource(
+    for herd: HerdSummary?,
+    access: HerdSharingAccess?
+  ) throws -> (store: NSPersistentStore, description: String) {
+    guard let herd, let access else {
+      guard let sharedStore else {
+        throw HerdSharingActionError.sharingStoreUnavailable(
+          "The shared CloudKit bridge store was not loaded."
+        )
+      }
+      return (sharedStore, "accepted shared store")
+    }
+
+    switch access.bridgeLocation {
+    case .ownerPrivateStore:
+      guard let privateStore else {
+        throw HerdSharingActionError.sharingStoreUnavailable(
+          "The private sharing bridge store was not loaded."
+        )
+      }
+      return (privateStore, "owner private store")
+    case .acceptedSharedStore:
+      guard let sharedStore else {
+        throw HerdSharingActionError.sharingStoreUnavailable(
+          "The shared CloudKit bridge store was not loaded."
+        )
+      }
+      return (sharedStore, "accepted shared store")
+    case .bridgeRecordMissing:
+      throw HerdSharingActionError.bridgeImportFailed(
+        "No bridge record exists for \(herd.name)."
+      )
+    }
   }
 
   private func shareRecords(

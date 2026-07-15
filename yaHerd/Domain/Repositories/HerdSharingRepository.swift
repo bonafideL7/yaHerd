@@ -25,7 +25,10 @@ protocol HerdSharingRepository: AnyObject {
     storageMode: HerdStorageMode
   ) async throws -> HerdSharingActionResult
 
-  func importSharedBridgeData(storageMode: HerdStorageMode) async throws -> HerdSharingActionResult
+  func importSharedBridgeData(
+    herd: HerdSummary?,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult
 
   func acceptPreventedSharedDeletes(
     in review: HerdSharingConflictReview,

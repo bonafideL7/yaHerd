@@ -10,8 +10,11 @@ import SwiftData
 protocol HerdSharingBridgeSyncStore: AnyObject {
   func fetchSharingAccess(for herd: HerdSummary) async throws -> HerdSharingAccess
 
-  func importSharedRecordsIntoSwiftData(context: ModelContext) async throws
-    -> HerdSharingBridgeImportResult
+  func importBridgeRecordsIntoSwiftData(
+    for herd: HerdSummary,
+    access: HerdSharingAccess,
+    context: ModelContext
+  ) async throws -> HerdSharingBridgeImportResult
 
   func syncBridgeRecordsFromSwiftData(
     herd: HerdSummary,
@@ -186,8 +189,10 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     }
   }
 
-  func importSharedBridgeData(storageMode: HerdStorageMode) async throws -> HerdSharingActionResult
-  {
+  func importSharedBridgeData(
+    herd: HerdSummary?,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult {
     let profilingStartedAt = Date()
     ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.importSharedBridgeData.started", detail: storageMode.displayName)
     defer {
@@ -199,7 +204,17 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       throw HerdSharingActionError.iCloudSyncRequired
     }
 
-    let importResult = try await store.importSharedRecordsIntoSwiftData(context: context)
+    let importResult: HerdSharingBridgeImportResult
+    if let herd {
+      let access = try await syncStore.fetchSharingAccess(for: herd)
+      importResult = try await syncStore.importBridgeRecordsIntoSwiftData(
+        for: herd,
+        access: access,
+        context: context
+      )
+    } else {
+      importResult = try await store.importSharedRecordsIntoSwiftData(context: context)
+    }
     return HerdSharingActionResult(
       title: "Shared data imported",
       message:
@@ -289,17 +304,21 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
 
     let access = try await syncStore.fetchSharingAccess(for: herd)
     guard access.canExportLocalChangesToBridge else {
-      return try await importOnlySyncResult(access: access)
+      return try await importOnlySyncResult(herd: herd, access: access)
     }
 
-    // A writable participant must merge downloaded collaborator values before any SwiftData
-    // snapshot is fetched. Exporting first would overwrite the accepted shared store and erase
-    // the original local-versus-shared values needed for conflict review.
+    // Any existing shared bridge record must be imported before SwiftData snapshots are fetched.
+    // Owner shares live in the private bridge store, while accepted shares live in the shared
+    // bridge store. Exporting first can overwrite collaborator changes in either location.
     let importResult: HerdSharingBridgeImportResult?
-    if access.bridgeLocation == .acceptedSharedStore {
-      importResult = try await syncStore.importSharedRecordsIntoSwiftData(context: context)
-    } else {
+    if access.bridgeLocation == .bridgeRecordMissing {
       importResult = nil
+    } else {
+      importResult = try await syncStore.importBridgeRecordsIntoSwiftData(
+        for: herd,
+        access: access,
+        context: context
+      )
     }
 
     let mergedHerd = try fetchMergedSwiftDataHerd(matching: herd)
@@ -353,7 +372,7 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       )
     } else {
       importMessage =
-        "No accepted shared-store import was required for the \(access.locationDescription)."
+        "No existing bridge record was available to import from the \(access.locationDescription)."
       conflictReview = nil
     }
 
@@ -371,10 +390,15 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
   }
 
   private func importOnlySyncResult(
+    herd: HerdSummary,
     access: HerdSharingAccess
   ) async throws -> HerdSharingActionResult {
     do {
-      let importResult = try await store.importSharedRecordsIntoSwiftData(context: context)
+      let importResult = try await syncStore.importBridgeRecordsIntoSwiftData(
+        for: herd,
+        access: access,
+        context: context
+      )
       return HerdSharingActionResult(
         title: "Shared data imported",
         message:
@@ -388,7 +412,7 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       return HerdSharingActionResult(
         title: "Shared data not exported",
         message:
-          "Your CloudKit share access is \(access.permissionDescription) in the \(access.locationDescription), so yaHerd did not export local SwiftData changes back into the shared bridge. No accepted shared-store records were available to import yet."
+          "Your CloudKit share access is \(access.permissionDescription) in the \(access.locationDescription), so yaHerd did not export local SwiftData changes back into the shared bridge. No matching bridge records were available to import yet."
       )
     }
   }
