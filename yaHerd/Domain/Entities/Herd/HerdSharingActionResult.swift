@@ -6,20 +6,20 @@
 struct HerdSharingActionResult: Equatable {
   let title: String
   let message: String
-  let systemShare: HerdSystemShare?
+  let sharePresentation: HerdSharePresentationRequest?
   let conflictReview: HerdSharingConflictReview?
   let reconciliationReview: HerdSharingReconciliationReview?
 
   init(
     title: String,
     message: String,
-    systemShare: HerdSystemShare? = nil,
+    sharePresentation: HerdSharePresentationRequest? = nil,
     conflictReview: HerdSharingConflictReview? = nil,
     reconciliationReview: HerdSharingReconciliationReview? = nil
   ) {
     self.title = title
     self.message = message
-    self.systemShare = systemShare
+    self.sharePresentation = sharePresentation
     self.conflictReview = conflictReview
     self.reconciliationReview = reconciliationReview
   }
@@ -27,7 +27,7 @@ struct HerdSharingActionResult: Equatable {
   static func == (lhs: HerdSharingActionResult, rhs: HerdSharingActionResult) -> Bool {
     lhs.title == rhs.title
       && lhs.message == rhs.message
-      && (lhs.systemShare == nil) == (rhs.systemShare == nil)
+      && lhs.sharePresentation == rhs.sharePresentation
       && lhs.conflictReview == rhs.conflictReview
       && lhs.reconciliationReview == rhs.reconciliationReview
   }

@@ -428,7 +428,7 @@ extension HerdSharingCoreDataStore {
     fieldCheckSessions: [FieldCheckSession],
     fieldCheckAnimalChecks: [FieldCheckAnimalCheck],
     fieldCheckFindings: [FieldCheckFinding]
-  ) async throws -> HerdSystemShare {
+  ) async throws -> CloudKitSystemShare {
     let profilingStartedAt = Date()
     ReliabilityLog.syncEvent("HerdSharingCoreDataStore.makeSystemShare.started")
     defer {
@@ -545,7 +545,7 @@ extension HerdSharingCoreDataStore {
       )).map { $0 as NSManagedObject }
     let share = try await shareRecords(recordsToShare, title: herd.name)
 
-    return HerdSystemShare(
+    return CloudKitSystemShare(
       title: herd.name,
       share: share,
       container: cloudKitContainer,

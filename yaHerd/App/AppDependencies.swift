@@ -15,6 +15,7 @@ final class AppDependencies {
   let herdSharingMutationSyncScheduler: HerdSharingMutationSyncScheduler
   let herdCollaborationWritePolicy: HerdCollaborationWritePolicy
   let herdSharingConflictReviewStore: HerdSharingConflictReviewStore
+  let cloudKitShareAdapter: CloudKitShareAdapter
 
   private let context: ModelContext
   private let dataAccessMode: AppDataAccessMode
@@ -29,9 +30,11 @@ final class AppDependencies {
     let mutationSyncScheduler = HerdSharingMutationSyncScheduler()
     let writePolicy = HerdCollaborationWritePolicy(dataAccessMode: dataAccessMode)
     let conflictReviewStore = HerdSharingConflictReviewStore()
+    let cloudKitShareAdapter = CloudKitShareAdapter()
     self.herdSharingMutationSyncScheduler = mutationSyncScheduler
     self.herdCollaborationWritePolicy = writePolicy
     self.herdSharingConflictReviewStore = conflictReviewStore
+    self.cloudKitShareAdapter = cloudKitShareAdapter
 
     let animalRepository = SwiftDataAnimalRepository(context: context)
     let pastureRepository = SwiftDataPastureRepository(context: context)
@@ -79,7 +82,10 @@ final class AppDependencies {
     if dataAccessMode.isRecoveryMode {
       self.herdSharingRepository = RecoveryModeHerdSharingRepository()
     } else {
-      self.herdSharingRepository = CoreDataHerdSharingRepository(context: context)
+      self.herdSharingRepository = CoreDataHerdSharingRepository(
+        context: context,
+        shareAdapter: cloudKitShareAdapter
+      )
     }
     self.tagColorRepository = SyncRequestingTagColorRepository(
       base: tagColorRepository,

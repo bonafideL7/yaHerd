@@ -45,12 +45,14 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
   private let context: ModelContext
   private let store: HerdSharingCoreDataStore
   private let syncStore: any HerdSharingBridgeSyncStore
+  private let shareAdapter: CloudKitShareAdapter
   private let operationGate = HerdSharingBridgeOperationGate()
 
   init(
     context: ModelContext,
     store: HerdSharingCoreDataStore? = nil,
-    syncStore: (any HerdSharingBridgeSyncStore)? = nil
+    syncStore: (any HerdSharingBridgeSyncStore)? = nil,
+    shareAdapter: CloudKitShareAdapter? = nil
   ) {
     self.context = context
     let resolvedStore = store ?? HerdSharingCoreDataStore()
@@ -60,6 +62,7 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     } else {
       self.syncStore = resolvedStore
     }
+    self.shareAdapter = shareAdapter ?? CloudKitShareAdapter()
   }
 
   func fetchSharingReadiness(
@@ -151,11 +154,12 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       fieldCheckAnimalChecks: fieldCheckAnimalChecks,
       fieldCheckFindings: fieldCheckFindings
     )
+    let sharePresentation = shareAdapter.registerSystemShare(systemShare)
     return HerdSharingActionResult(
       title: "Share sheet ready",
       message:
         "Invite people through the system CloudKit sharing sheet. SwiftData remains the app data store; Core Data now mirrors the herd root, \(tagColorDefinitions.count) tag color definitions, \(statusReferences.count) custom status references, \(pastureGroups.count) pasture groups, \(pastures.count) pastures, \(animals.count) animal records, \(animalTags.count) animal tags, \(movements.count) movement records, \(statusRecords.count) status history records, \(healthRecords.count) health records, \(pregnancyChecks.count) pregnancy checks, \(workingProtocolTemplates.count) working protocol templates, \(workingSessions.count) working sessions, \(workingQueueItems.count) working queue items, \(workingTreatmentRecords.count) working treatment records, \(fieldCheckSessions.count) field check sessions, \(fieldCheckAnimalChecks.count) field check animal checks, and \(fieldCheckFindings.count) field check findings for CloudKit sharing.",
-      systemShare: systemShare
+      sharePresentation: sharePresentation
     )
   }
 
@@ -180,7 +184,9 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     await operationGate.acquire()
     defer { operationGate.release() }
 
-    try await store.acceptShareInvitation(metadata: invitation.metadata)
+    let metadata = try shareAdapter.metadata(for: invitation)
+    try await store.acceptShareInvitation(metadata: metadata)
+    shareAdapter.discardInvitation(invitation)
 
     do {
       let importResult = try await store.importSharedRecordsIntoSwiftData(context: context)
