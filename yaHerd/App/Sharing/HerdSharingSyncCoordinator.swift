@@ -57,6 +57,7 @@ final class HerdSharingSyncCoordinator {
   private let minimumAutomaticSyncInterval: TimeInterval
 
   private var pendingAutomaticSyncTask: Task<Void, Never>?
+  private var pendingAccessRefreshTask: Task<Void, Never>?
   private var lastAutomaticSyncRequestedAt: Date?
   private var lastAccessRefreshRequestedAt: Date?
   private var queuedMutationReason: SharedDataMutationReason?
@@ -135,7 +136,7 @@ final class HerdSharingSyncCoordinator {
     pendingAutomaticSyncTask = Task { @MainActor [weak self, debounceNanoseconds] in
       if debounceNanoseconds > 0 {
         do {
-          try await Task.sleep(nanoseconds: debounceNanoseconds)
+          try await Task.sleep(for: .nanoseconds(debounceNanoseconds))
         } catch {
           return
         }
@@ -150,8 +151,11 @@ final class HerdSharingSyncCoordinator {
   }
 
   func requestSharingAccessRefreshForMutationPreflight(reason: SharedDataMutationReason) {
-    Task { @MainActor [weak self] in
-      await self?.refreshSharingAccessNow(trigger: .writePolicyPreflight(reason))
+    pendingAccessRefreshTask?.cancel()
+    pendingAccessRefreshTask = Task { @MainActor [weak self] in
+      guard let self else { return }
+      defer { pendingAccessRefreshTask = nil }
+      _ = await refreshSharingAccessNow(trigger: .writePolicyPreflight(reason))
     }
   }
 
@@ -217,6 +221,11 @@ final class HerdSharingSyncCoordinator {
   func cancelPendingAutomaticSync() {
     pendingAutomaticSyncTask?.cancel()
     pendingAutomaticSyncTask = nil
+  }
+
+  func cancelPendingAccessRefresh() {
+    pendingAccessRefreshTask?.cancel()
+    pendingAccessRefreshTask = nil
   }
 
   func clearConflictReview() {

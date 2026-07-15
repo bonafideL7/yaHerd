@@ -19,12 +19,16 @@ enum MissingFieldCheckDependencyError: LocalizedError {
 }
 
 private struct MissingFieldCheckSessionSetupRepository: FieldCheckSessionSetupRepository {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func createSession(input: FieldCheckSessionStartInput) throws -> UUID {
         throw MissingFieldCheckDependencyError.fieldCheckSessionSetupRepository
     }
 }
 
 private struct MissingFieldCheckSessionDetailRepository: FieldCheckSessionDetailRepository {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchSessionDetail(id: UUID) throws -> FieldCheckSessionDetailSnapshot? {
         throw MissingFieldCheckDependencyError.fieldCheckSessionDetailRepository
     }
@@ -75,6 +79,8 @@ private struct MissingFieldCheckSessionDetailRepository: FieldCheckSessionDetail
 }
 
 private struct MissingFieldCheckAnimalDetailRepository: FieldCheckAnimalDetailRepository {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchSessionDetail(id: UUID) throws -> FieldCheckSessionDetailSnapshot? {
         throw MissingFieldCheckDependencyError.fieldCheckAnimalDetailRepository
     }

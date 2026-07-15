@@ -6,6 +6,7 @@
 import CloudKit
 import Foundation
 
+@MainActor
 final class HerdSystemShare: Identifiable {
     let id = UUID()
     let title: String

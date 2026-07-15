@@ -6,16 +6,18 @@
 import CloudKit
 import Foundation
 
-struct CloudKitSchemaCheckResult: Equatable {
+struct CloudKitSchemaCheckResult: Equatable, Sendable {
     let environmentDescription: String
     let passed: Bool
     let message: String
 }
 
+@MainActor
 protocol CloudKitSchemaChecking {
     func runCheck() async -> CloudKitSchemaCheckResult
 }
 
+@MainActor
 struct CloudKitSchemaChecker: CloudKitSchemaChecking {
     private let containerIdentifier: String
 
@@ -33,9 +35,9 @@ struct CloudKitSchemaChecker: CloudKitSchemaChecking {
         record["source"] = "yaHerd" as CKRecordValue
 
         do {
-            let savedRecord = try await save(record, in: database)
-            _ = try await fetch(recordID: savedRecord.recordID, in: database)
-            try await delete(recordID: savedRecord.recordID, in: database)
+            let savedRecord = try await database.save(record)
+            _ = try await database.record(for: savedRecord.recordID)
+            _ = try await database.deleteRecord(withID: savedRecord.recordID)
 
             return CloudKitSchemaCheckResult(
                 environmentDescription: environmentDescription,
@@ -52,7 +54,9 @@ struct CloudKitSchemaChecker: CloudKitSchemaChecking {
     }
 
     private func currentEnvironmentDescription() -> String {
-        guard let environment = Bundle.main.object(forInfoDictionaryKey: "com.apple.developer.icloud-container-environment") as? String else {
+        guard let environment = Bundle.main.object(
+            forInfoDictionaryKey: "com.apple.developer.icloud-container-environment"
+        ) as? String else {
             #if DEBUG
             return "Development (Debug build inferred)"
             #else
@@ -61,46 +65,6 @@ struct CloudKitSchemaChecker: CloudKitSchemaChecking {
         }
 
         return environment
-    }
-
-    private func save(_ record: CKRecord, in database: CKDatabase) async throws -> CKRecord {
-        try await withCheckedThrowingContinuation { continuation in
-            database.save(record) { savedRecord, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let savedRecord {
-                    continuation.resume(returning: savedRecord)
-                } else {
-                    continuation.resume(throwing: CloudKitSchemaCheckError.missingSavedRecord)
-                }
-            }
-        }
-    }
-
-    private func fetch(recordID: CKRecord.ID, in database: CKDatabase) async throws -> CKRecord {
-        try await withCheckedThrowingContinuation { continuation in
-            database.fetch(withRecordID: recordID) { record, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let record {
-                    continuation.resume(returning: record)
-                } else {
-                    continuation.resume(throwing: CloudKitSchemaCheckError.missingFetchedRecord)
-                }
-            }
-        }
-    }
-
-    private func delete(recordID: CKRecord.ID, in database: CKDatabase) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            database.delete(withRecordID: recordID) { _, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
-                }
-            }
-        }
     }
 
     private static func describe(_ error: Error) -> String {
@@ -114,19 +78,5 @@ struct CloudKitSchemaChecker: CloudKitSchemaChecking {
         }
 
         return parts.joined(separator: " | ")
-    }
-}
-
-private enum CloudKitSchemaCheckError: LocalizedError {
-    case missingSavedRecord
-    case missingFetchedRecord
-
-    var errorDescription: String? {
-        switch self {
-        case .missingSavedRecord:
-            return "CloudKit did not return the saved diagnostic record."
-        case .missingFetchedRecord:
-            return "CloudKit did not return the fetched diagnostic record."
-        }
     }
 }

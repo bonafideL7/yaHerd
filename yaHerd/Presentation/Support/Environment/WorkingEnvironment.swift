@@ -16,6 +16,8 @@ enum MissingWorkingDependencyError: LocalizedError {
 }
 
 private struct MissingWorkingRepository: WorkingRepository {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     private func missing(_ name: String) -> MissingWorkingDependencyError {
         .repository(name)
     }
@@ -93,6 +95,8 @@ private struct MissingWorkingRepository: WorkingRepository {
 }
 
 private struct MissingWorkingAnimalSummaryReader: AnimalSummaryReading {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchAnimals() throws -> [AnimalSummary] {
         throw MissingWorkingDependencyError.animalSummaryReader
     }

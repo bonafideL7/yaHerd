@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct AssignPastureToGroupUseCase {
     let repository: any PastureGroupAssignRepository
 

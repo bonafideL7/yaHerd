@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct CreateWorkingSessionUseCase {
     let repository: any WorkingSessionCreating
 

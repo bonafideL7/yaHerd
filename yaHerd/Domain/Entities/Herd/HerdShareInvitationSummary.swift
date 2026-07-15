@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct HerdShareInvitationSummary: Equatable, Identifiable {
+struct HerdShareInvitationSummary: Equatable, Identifiable, Sendable {
     let id: UUID
     let receivedAt: Date
     let containerIdentifier: String?

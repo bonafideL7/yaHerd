@@ -5,6 +5,7 @@
 
 import SwiftUI
 
+@MainActor
 struct SyncDiagnosticsView: View {
     @Environment(\.syncDiagnosticsRepository) private var diagnosticsRepository
     @Environment(\.appDataAccessMode) private var dataAccessMode
@@ -24,10 +25,16 @@ struct SyncDiagnosticsView: View {
     @State private var isRunningSchemaCheck = false
     @State private var schemaCheckResult: CloudKitSchemaCheckResult?
 
+    init() {
+        self.preferences = AppPreferences(userDefaults: .standard)
+        self.checker = ICloudAvailabilityChecker()
+        self.schemaChecker = CloudKitSchemaChecker()
+    }
+
     init(
-        preferences: AppPreferencesProviding = AppPreferences(),
-        checker: ICloudAvailabilityChecking = ICloudAvailabilityChecker(),
-        schemaChecker: CloudKitSchemaChecking = CloudKitSchemaChecker()
+        preferences: AppPreferencesProviding,
+        checker: ICloudAvailabilityChecking,
+        schemaChecker: CloudKitSchemaChecking
     ) {
         self.preferences = preferences
         self.checker = checker
@@ -175,22 +182,18 @@ struct SyncDiagnosticsView: View {
         isDeletingSyncData = true
         resetResultMessage = nil
 
-        Task {
+        Task { @MainActor in
             do {
                 let resetService = SyncDataResetService(preferences: preferences)
                 let summary = try await resetService.deleteICloudSyncData()
 
-                await MainActor.run {
-                    resetResultMessage = "Deleted \(summary.deletedCloudKitZoneCount.formatted()) CloudKit zones and \(summary.deletedCloudSettingsCount.formatted()) synced settings from iCloud. Local data was not deleted. Force quit and reopen yaHerd. Sync Mode is now Local Only."
-                    isDeletingSyncData = false
-                }
+                resetResultMessage = "Deleted \(summary.deletedCloudKitZoneCount.formatted()) CloudKit zones and \(summary.deletedCloudSettingsCount.formatted()) synced settings from iCloud. Local data was not deleted. Force quit and reopen yaHerd. Sync Mode is now Local Only."
+                isDeletingSyncData = false
 
                 await refreshDiagnostics()
             } catch {
-                await MainActor.run {
-                    resetResultMessage = "Delete failed: \(UserVisibleErrorMessage.make(error))"
-                    isDeletingSyncData = false
-                }
+                resetResultMessage = "Delete failed: \(UserVisibleErrorMessage.make(error))"
+                isDeletingSyncData = false
             }
         }
     }
@@ -199,12 +202,10 @@ struct SyncDiagnosticsView: View {
         isRunningSchemaCheck = true
         schemaCheckResult = nil
 
-        Task {
+        Task { @MainActor in
             let result = await schemaChecker.runCheck()
-            await MainActor.run {
-                schemaCheckResult = result
-                isRunningSchemaCheck = false
-            }
+            schemaCheckResult = result
+            isRunningSchemaCheck = false
         }
     }
 

@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct DeletePasturesUseCase {
     let pastureRepository: any PastureDeleteRepository
     let animalRepository: any AnimalPastureMoving

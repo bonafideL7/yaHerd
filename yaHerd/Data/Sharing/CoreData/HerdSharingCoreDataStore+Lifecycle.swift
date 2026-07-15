@@ -34,21 +34,20 @@ extension HerdSharingCoreDataStore {
     let expectedStoreCount = container.persistentStoreDescriptions.count
 
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      var firstError: Error?
-      var completedStoreCount = 0
+      guard expectedStoreCount > 0 else {
+        continuation.resume()
+        return
+      }
+
+      let tracker = PersistentStoreLoadTracker(
+        expectedStoreCount: expectedStoreCount,
+        continuation: continuation
+      )
 
       container.loadPersistentStores { _, error in
-        if let error, firstError == nil {
-          firstError = error
-        }
-
-        completedStoreCount += 1
-        guard completedStoreCount == expectedStoreCount else { return }
-
-        if let firstError {
-          continuation.resume(throwing: firstError)
-        } else {
-          continuation.resume()
+        let errorDescription = error.map { String(describing: $0) }
+        Task { @MainActor in
+          await tracker.recordStoreCompletion(errorDescription: errorDescription)
         }
       }
     }
@@ -87,5 +86,45 @@ extension HerdSharingCoreDataStore {
       in: .userDomainMask
     )[0]
     return applicationSupportURL.appendingPathComponent(storeDirectoryName, isDirectory: true)
+  }
+}
+
+private actor PersistentStoreLoadTracker {
+  private let expectedStoreCount: Int
+  private let continuation: CheckedContinuation<Void, Error>
+  private var completedStoreCount = 0
+  private var firstErrorDescription: String?
+  private var didResume = false
+
+  init(
+    expectedStoreCount: Int,
+    continuation: CheckedContinuation<Void, Error>
+  ) {
+    self.expectedStoreCount = expectedStoreCount
+    self.continuation = continuation
+  }
+
+  func recordStoreCompletion(errorDescription: String?) {
+    guard !didResume else { return }
+
+    if firstErrorDescription == nil {
+      firstErrorDescription = errorDescription
+    }
+    completedStoreCount += 1
+
+    guard completedStoreCount >= expectedStoreCount else { return }
+    didResume = true
+
+    if let firstErrorDescription {
+      continuation.resume(
+        throwing: NSError(
+          domain: "HerdSharingCoreDataStore.PersistentStoreLoad",
+          code: 1,
+          userInfo: [NSLocalizedDescriptionKey: firstErrorDescription]
+        )
+      )
+    } else {
+      continuation.resume()
+    }
   }
 }

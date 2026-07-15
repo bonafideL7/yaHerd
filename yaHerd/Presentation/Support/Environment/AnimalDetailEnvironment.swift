@@ -28,6 +28,8 @@ enum MissingAnimalDetailDependencyError: LocalizedError {
 }
 
 private struct MissingAnimalEditorRepository: AnimalEditorRepository {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchStatusReferenceOptions() throws -> [AnimalStatusReferenceOption] {
         throw MissingAnimalDetailDependencyError.animalEditorRepository
     }
@@ -42,6 +44,8 @@ private struct MissingAnimalEditorRepository: AnimalEditorRepository {
 }
 
 private struct MissingAnimalDetailRepository: AnimalDetailRepository {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchAnimalDetail(id: UUID) throws -> AnimalDetailSnapshot? {
         throw MissingAnimalDetailDependencyError.animalDetailRepository
     }
@@ -88,24 +92,32 @@ private struct MissingAnimalDetailRepository: AnimalDetailRepository {
 }
 
 private struct MissingAnimalTimelineReader: AnimalTimelineReading {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchTimeline(id: UUID) throws -> [AnimalTimelineEvent] {
         throw MissingAnimalDetailDependencyError.animalTimelineReader
     }
 }
 
 private struct MissingAnimalParentOptionReader: AnimalParentOptionReading {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchParentOptions(excluding excludedAnimalID: UUID?) throws -> [AnimalParentOption] {
         throw MissingAnimalDetailDependencyError.animalParentOptionReader
     }
 }
 
 private struct MissingAnimalHealthRecordAdder: AnimalHealthRecordAdding {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func addHealthRecord(animalID: UUID, input: HealthRecordInput) throws -> AnimalDetailSnapshot {
         throw MissingAnimalDetailDependencyError.animalHealthRecordAdder
     }
 }
 
 private struct MissingAnimalPregnancyCheckAdder: AnimalPregnancyCheckAdding {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func addPregnancyCheck(animalID: UUID, input: PregnancyCheckInput) throws -> AnimalDetailSnapshot {
         throw MissingAnimalDetailDependencyError.animalPregnancyCheckAdder
     }

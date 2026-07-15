@@ -180,7 +180,8 @@ struct MainTabView: View {
 
             if newValue == .search {
                 herdMode = .animals
-                DispatchQueue.main.async {
+                Task { @MainActor in
+                    await Task.yield()
                     animalSearchFieldIsFocused = false
                 }
             }
@@ -291,7 +292,7 @@ struct MainTabView: View {
             }
         }
 
-        Task {
+        Task { @MainActor in
             await herdSharingSyncCoordinator.refreshSharingAccessNow(
                 trigger: .screenOpened(surfaceName)
             )

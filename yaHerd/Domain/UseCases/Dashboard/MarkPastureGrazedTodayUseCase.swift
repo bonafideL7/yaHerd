@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct MarkPastureGrazedTodayUseCase {
     let repository: any PastureGrazingMarking
 

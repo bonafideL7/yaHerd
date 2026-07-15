@@ -1,6 +1,7 @@
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class PastureUseCaseTests: XCTestCase {
     func testCreatePastureNormalizesInputBeforeCreate() throws {
         let repository = PastureCreateRepositorySpy()

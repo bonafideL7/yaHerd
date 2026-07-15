@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct RetireAnimalTagUseCase {
     let repository: any AnimalTagRetiring
 

@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct LoadAnimalParentOptionsUseCase {
     let repository: any AnimalParentOptionReading
 

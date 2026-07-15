@@ -21,8 +21,13 @@ enum HerdCollaborationWritePolicyError: LocalizedError, Equatable {
   }
 }
 
+/// Main-actor policy for repository mutations backed by the app's main `ModelContext`.
+///
+/// Validation must remain synchronous so a repository can reject a mutation before touching
+/// SwiftData. Main-actor isolation provides the required actor serialization without a lock or an
+/// unsafe sendability declaration.
+@MainActor
 final class HerdCollaborationWritePolicy {
-  private let lock = NSLock()
   private let dataAccessMode: AppDataAccessMode
   private var access: HerdSharingAccess?
   private var accessRefreshRequestHandler: ((SharedDataMutationReason) -> Void)?
@@ -36,10 +41,7 @@ final class HerdCollaborationWritePolicy {
   }
 
   var snapshot: HerdCollaborationWritePolicySnapshot {
-    lock.lock()
-    defer { lock.unlock() }
-
-    return HerdCollaborationWritePolicySnapshot(
+    HerdCollaborationWritePolicySnapshot(
       dataAccessMode: dataAccessMode,
       access: access,
       lastUpdatedAt: lastUpdatedAt,
@@ -49,58 +51,46 @@ final class HerdCollaborationWritePolicy {
   }
 
   func update(access: HerdSharingAccess) {
-    lock.lock()
     self.access = access
     lastUpdatedAt = .now
     lastAccessRefreshRequestedReason = nil
     if access.allowsLocalMutations {
       lastBlockedMutationReason = nil
     }
-    lock.unlock()
   }
 
   func setAccessRefreshRequestHandler(_ handler: @escaping (SharedDataMutationReason) -> Void) {
-    lock.lock()
     accessRefreshRequestHandler = handler
-    lock.unlock()
   }
 
   func clearAccessRefreshRequestHandler() {
-    lock.lock()
     accessRefreshRequestHandler = nil
-    lock.unlock()
   }
 
   func clearAccess() {
-    lock.lock()
     access = nil
     lastUpdatedAt = .now
     lastBlockedMutationReason = nil
     lastAccessRefreshRequestedReason = nil
-    lock.unlock()
   }
 
   func validateCanWrite(reason: SharedDataMutationReason) throws {
     guard dataAccessMode.allowsDataMutations else {
-      lock.lock()
       lastBlockedMutationReason = reason
-      lock.unlock()
       throw HerdCollaborationWritePolicyError.recoveryModeReadOnly(reason: reason)
     }
 
-    let refreshRequestHandler: ((SharedDataMutationReason) -> Void)?
-
-    lock.lock()
     let currentAccess = access
+    let refreshRequestHandler: ((SharedDataMutationReason) -> Void)?
     if currentAccess == nil {
       refreshRequestHandler = accessRefreshRequestHandlerIfNeeded(for: reason)
     } else {
       refreshRequestHandler = nil
     }
+
     if currentAccess?.allowsLocalMutations == false {
       lastBlockedMutationReason = reason
     }
-    lock.unlock()
 
     refreshRequestHandler?(reason)
 

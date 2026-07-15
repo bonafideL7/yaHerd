@@ -5,16 +5,15 @@
 
 import SwiftUI
 
+@MainActor
 struct SyncSettingsView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(\.recoveryModeController) private var recoveryModeController
 
-    private let preferences: AppPreferencesProviding
-    @State private var syncMode: SyncMode
+    @AppStorage(AppPreferenceKey.syncMode) private var storedSyncMode = SyncMode.localOnly.rawValue
 
-    init(preferences: AppPreferencesProviding = AppPreferences()) {
-        self.preferences = preferences
-        self._syncMode = State(initialValue: preferences.syncMode)
+    private var syncMode: SyncMode {
+        SyncMode(rawValue: storedSyncMode) ?? .localOnly
     }
 
     var body: some View {
@@ -79,8 +78,5 @@ struct SyncSettingsView: View {
             }
         }
         .navigationTitle("Sync")
-        .onAppear {
-            syncMode = preferences.syncMode
-        }
     }
 }

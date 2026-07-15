@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 
+@MainActor
 struct SwiftDataWorkingRepository: WorkingRepository {
     let context: ModelContext
     private let dateProvider: any DateProviding

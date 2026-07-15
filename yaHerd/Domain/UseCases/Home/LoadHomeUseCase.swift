@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct LoadHomeUseCase {
     let dashboardRepository: any DashboardRecordReading
     let fieldCheckRepository: any FieldCheckOverviewReading

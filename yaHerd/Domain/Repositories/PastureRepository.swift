@@ -22,97 +22,129 @@ enum PastureRepositoryError: LocalizedError, Equatable {
     }
 }
 
+@MainActor
 protocol PastureListReader {
     func fetchPastures() throws -> [PastureSummary]
 }
 
+@MainActor
 protocol PastureDetailReader {
     func fetchPastureDetail(id: UUID) throws -> PastureDetailSnapshot?
 }
 
+@MainActor
 protocol PastureResidentAnimalReader {
     func fetchResidentAnimals(pastureID: UUID) throws -> [AnimalSummary]
 }
 
+@MainActor
 protocol PastureExistenceChecking {
     func validatePastureIDsExist(_ ids: [UUID]) throws
 }
 
+@MainActor
 protocol PastureReferenceDataReader {
     func fetchPastureOptions() throws -> [PastureOption]
 }
 
+@MainActor
 protocol PastureNameChecking {
     func nameExists(_ name: String, excluding id: UUID?) throws -> Bool
 }
 
+@MainActor
 protocol PastureCreating {
     @discardableResult
     func create(input: PastureInput) throws -> PastureDetailSnapshot
 }
 
+@MainActor
 protocol PastureUpdating {
     @discardableResult
     func update(id: UUID, input: PastureInput) throws -> PastureDetailSnapshot
 }
 
+@MainActor
 protocol PastureOrdering {
     func reorder(ids: [UUID]) throws
 }
 
+@MainActor
 protocol PastureDeleting {
     func delete(ids: [UUID]) throws
 }
 
+@MainActor
 protocol PastureGroupListReader {
     func fetchPastureGroups() throws -> [PastureGroupSummary]
 }
 
+@MainActor
 protocol PastureGroupDetailReader {
     func fetchPastureGroupDetail(id: UUID) throws -> PastureGroupDetailSnapshot?
 }
 
+@MainActor
 protocol PastureGroupExistenceChecking {
     func validatePastureGroupIDsExist(_ ids: [UUID]) throws
 }
 
+@MainActor
 protocol PastureGroupNameChecking {
     func groupNameExists(_ name: String, excluding id: UUID?) throws -> Bool
 }
 
+@MainActor
 protocol PastureGroupCreating {
     @discardableResult
     func createGroup(input: PastureGroupInput) throws -> PastureGroupDetailSnapshot
 }
 
+@MainActor
 protocol PastureGroupUpdating {
     @discardableResult
     func updateGroup(id: UUID, input: PastureGroupInput) throws -> PastureGroupDetailSnapshot
 }
 
+@MainActor
 protocol PastureGroupDeleting {
     func deleteGroups(ids: [UUID]) throws
 }
 
+@MainActor
 protocol PastureGroupAssignmentWriting {
     func assignPasture(id pastureID: UUID, toGroupID groupID: UUID?) throws
 }
 
+@MainActor
 protocol PastureCreateRepository: PastureNameChecking, PastureCreating {}
+@MainActor
 protocol PastureUpdateRepository: PastureNameChecking, PastureUpdating {}
+@MainActor
 protocol PastureGroupCreateRepository: PastureGroupNameChecking, PastureGroupCreating {}
+@MainActor
 protocol PastureGroupUpdateRepository: PastureGroupNameChecking, PastureGroupUpdating {}
+@MainActor
 protocol PastureGroupDeleteRepository: PastureGroupDeleting, PastureGroupExistenceChecking {}
+@MainActor
 protocol PastureGroupAssignRepository: PastureGroupAssignmentWriting, PastureExistenceChecking, PastureGroupExistenceChecking {}
+@MainActor
 protocol PastureDetailRepository: PastureDetailReader, PastureResidentAnimalReader {}
+@MainActor
 protocol PastureDeleteRepository: PastureDeleting, PastureExistenceChecking, PastureResidentAnimalReader {}
 
+@MainActor
 protocol PastureListRepository: PastureListReader, PastureOrdering, PastureDeleteRepository {}
+@MainActor
 protocol PastureDetailEditingRepository: PastureDetailRepository, PastureUpdateRepository {}
+@MainActor
 protocol PastureGroupListRepository: PastureGroupListReader, PastureGroupDeleteRepository {}
+@MainActor
 protocol PastureGroupDetailRepository: PastureGroupDetailReader, PastureListReader, PastureGroupAssignRepository {}
+@MainActor
 protocol PastureGroupEditorRepository: PastureGroupCreateRepository, PastureGroupUpdateRepository {}
 
+@MainActor
 protocol PastureRepository: PastureListRepository,
                             PastureDetailEditingRepository,
                             PastureReferenceDataReader,

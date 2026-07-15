@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct ReorderPasturesUseCase {
     let repository: any PastureOrdering
 

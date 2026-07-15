@@ -59,8 +59,9 @@ final class AnimalInlineEntryViewModel {
 
     func requestFocus() {
         guard isActive else { return }
-        DispatchQueue.main.async {
-            self.focusRequestID = UUID()
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            self?.focusRequestID = UUID()
         }
     }
 

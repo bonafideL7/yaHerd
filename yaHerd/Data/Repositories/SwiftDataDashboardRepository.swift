@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 
+@MainActor
 struct SwiftDataDashboardRepository: DashboardRepository {
     let context: ModelContext
 

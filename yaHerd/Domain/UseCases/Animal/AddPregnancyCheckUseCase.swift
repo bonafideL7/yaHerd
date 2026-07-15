@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct AddPregnancyCheckUseCase {
     let repository: any AnimalPregnancyCheckAdding
 

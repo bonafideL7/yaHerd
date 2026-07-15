@@ -5,6 +5,7 @@
 
 import SwiftUI
 
+@MainActor
 struct EnableICloudSyncView: View {
     @Environment(\.scenePhase) private var scenePhase
 
@@ -18,10 +19,16 @@ struct EnableICloudSyncView: View {
     @State private var didEnableSync = false
     @State private var showsRestartInstructions = false
 
+    init() {
+        self.checker = ICloudAvailabilityChecker()
+        self.preferences = AppPreferences(userDefaults: .standard)
+        self.settingsOpener = SystemSettingsOpener()
+    }
+
     init(
-        checker: ICloudAvailabilityChecking = ICloudAvailabilityChecker(),
-        preferences: AppPreferencesProviding = AppPreferences(),
-        settingsOpener: SystemSettingsOpening = SystemSettingsOpener()
+        checker: ICloudAvailabilityChecking,
+        preferences: AppPreferencesProviding,
+        settingsOpener: SystemSettingsOpening
     ) {
         self.checker = checker
         self.preferences = preferences
@@ -117,7 +124,7 @@ struct EnableICloudSyncView: View {
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active, !didEnableSync else { return }
 
-            Task {
+            Task { @MainActor in
                 await refreshICloudAvailability()
             }
         }

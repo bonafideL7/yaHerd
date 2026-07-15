@@ -9,6 +9,7 @@ import SwiftData
 /// Creates the single local herd scope used by the current app and attaches
 /// existing unscoped records to it. This is the first migration step toward
 /// sharing a herd as one CloudKit collaboration unit.
+@MainActor
 enum DefaultHerdBootstrapper {
     static let defaultHerdName = "My Herd"
     private static let currentMigrationVersion = 1

@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct CompleteWorkingQueueItemUseCase {
     let repository: any WorkingQueueItemCompleting
 
@@ -8,6 +9,7 @@ struct CompleteWorkingQueueItemUseCase {
     }
 }
 
+@MainActor
 struct SaveWorkingQueueItemEditsUseCase {
     let repository: any WorkingQueueItemEditSaving
 
@@ -16,6 +18,7 @@ struct SaveWorkingQueueItemEditsUseCase {
     }
 }
 
+@MainActor
 struct DeleteWorkingQueueItemDataUseCase {
     let repository: any WorkingQueueItemDataDeleting
 

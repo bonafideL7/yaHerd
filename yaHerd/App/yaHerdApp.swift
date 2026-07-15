@@ -302,9 +302,7 @@ private struct RunningAppView: View {
                 coordinator: sharingSyncCoordinator
             )
             runtime.dependencies.herdCollaborationWritePolicy.setAccessRefreshRequestHandler { [weak sharingSyncCoordinator] reason in
-                Task { @MainActor in
-                    await sharingSyncCoordinator?.refreshSharingAccessNow(trigger: .writePolicyPreflight(reason))
-                }
+                sharingSyncCoordinator?.requestSharingAccessRefreshForMutationPreflight(reason: reason)
             }
         }
         self._herdSharingSyncCoordinator = State(initialValue: sharingSyncCoordinator)
@@ -375,7 +373,7 @@ private struct RunningAppView: View {
                     }
                     appSettingsSynchronizer.refreshFromICloudIfStarted()
                     tagColorLibrary.refresh()
-                    Task {
+                    Task { @MainActor in
                         await herdSharingSyncCoordinator.refreshSharingAccessNow(trigger: .appForeground)
                         herdSharingSyncCoordinator.requestAutomaticSync(trigger: .appForeground)
                     }
@@ -389,7 +387,7 @@ private struct RunningAppView: View {
                 if let metadata = notification.userInfo?[CloudKitShareNotificationUserInfoKey.metadata] as? CKShare.Metadata {
                     cloudKitShareInvitationCoordinator.recordAcceptedShare(metadata: metadata)
                 }
-                Task {
+                Task { @MainActor in
                     await herdSharingSyncCoordinator.refreshSharingAccessNow(
                         trigger: .shareInvitationAccepted,
                         minimumInterval: 0

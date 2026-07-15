@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct LoadPastureGroupsUseCase {
     let repository: any PastureGroupListReader
 

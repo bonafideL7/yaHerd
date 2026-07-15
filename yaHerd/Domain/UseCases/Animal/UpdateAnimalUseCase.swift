@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 struct UpdateAnimalUseCase {
     let repository: any AnimalUpdating
 

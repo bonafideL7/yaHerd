@@ -102,7 +102,7 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
     coordinator.requestAutomaticSync(trigger: .appLaunch)
     coordinator.requestAutomaticSync(trigger: .appForeground)
 
-    try await Task.sleep(nanoseconds: 50_000_000)
+    try await Task.sleep(for: .milliseconds(50))
 
     XCTAssertEqual(sharingRepository.syncCallCount, 1)
     XCTAssertEqual(coordinator.lastTriggerDescription, "app foreground")
@@ -120,9 +120,9 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
     )
 
     coordinator.requestAutomaticSync(trigger: .appForeground)
-    try await Task.sleep(nanoseconds: 20_000_000)
+    try await Task.sleep(for: .milliseconds(20))
     coordinator.requestSharedDataSyncAfterMutation(reason: .animal)
-    try await Task.sleep(nanoseconds: 20_000_000)
+    try await Task.sleep(for: .milliseconds(20))
 
     XCTAssertEqual(sharingRepository.syncCallCount, 2)
     XCTAssertEqual(coordinator.lastTriggerDescription, "animal change")
@@ -214,14 +214,55 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
       automaticDebounceNanoseconds: 0,
       minimumAutomaticSyncInterval: 0
     )
-    let scheduler = HerdSharingMutationSyncScheduler()
+    let scheduler = HerdSharingMutationSyncScheduler(mutationDebounceNanoseconds: 0)
 
     scheduler.attach(coordinator: coordinator)
     scheduler.requestSharedDataSyncAfterMutation(reason: .pasture)
-    try await Task.sleep(nanoseconds: 20_000_000)
+    try await Task.sleep(for: .milliseconds(20))
 
     XCTAssertEqual(sharingRepository.syncCallCount, 1)
     XCTAssertEqual(coordinator.lastTriggerDescription, "pasture change")
+  }
+
+  func testMutationSchedulerCoalescesToLatestReason() async throws {
+    let herdRepository = StubHerdRepository(herd: makeHerdSummary())
+    let sharingRepository = RecordingHerdSharingRepository()
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+    let scheduler = HerdSharingMutationSyncScheduler(mutationDebounceNanoseconds: 10_000_000)
+
+    scheduler.attach(coordinator: coordinator)
+    scheduler.requestSharedDataSyncAfterMutation(reason: .animal)
+    scheduler.requestSharedDataSyncAfterMutation(reason: .working)
+    try await Task.sleep(for: .milliseconds(50))
+
+    XCTAssertEqual(sharingRepository.syncCallCount, 1)
+    XCTAssertEqual(coordinator.lastTriggerDescription, "working change")
+  }
+
+  func testMutationSchedulerRetainsPendingReasonUntilCoordinatorAttaches() async throws {
+    let herdRepository = StubHerdRepository(herd: makeHerdSummary())
+    let sharingRepository = RecordingHerdSharingRepository()
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+    let scheduler = HerdSharingMutationSyncScheduler(mutationDebounceNanoseconds: 0)
+
+    scheduler.requestSharedDataSyncAfterMutation(reason: .fieldCheck)
+    scheduler.attach(coordinator: coordinator)
+    try await Task.sleep(for: .milliseconds(20))
+
+    XCTAssertEqual(sharingRepository.syncCallCount, 1)
+    XCTAssertEqual(coordinator.lastTriggerDescription, "field check change")
   }
 
   func testResolveConflictByKeepingLocalRecordsStoresResolutionAndClearsActiveReview() async {

@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 protocol DashboardRecordReading {
     func fetchDashboardRecords() throws -> DashboardRecords
     func fetchDashboardAnimalRecords(kind: DashboardAnimalListKind) throws -> [DashboardAnimalRecord]
@@ -24,10 +25,13 @@ extension DashboardRecordReading {
     }
 }
 
+@MainActor
 protocol PastureGrazingMarking {
     func markPastureGrazedToday(id: UUID, on date: Date) throws
 }
 
+@MainActor
 protocol DashboardReadWriting: DashboardRecordReading, PastureGrazingMarking {}
 
+@MainActor
 protocol DashboardRepository: DashboardReadWriting {}

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 
+@MainActor
 enum FieldCheckHistoricalSnapshotMigrator {
     private static let currentMigrationVersion = 1
     private static let migrationVersionKeyPrefix = "FieldCheckHistoricalSnapshotMigrator.completedMigrationVersion"

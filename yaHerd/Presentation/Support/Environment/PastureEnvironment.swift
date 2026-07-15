@@ -37,6 +37,8 @@ enum MissingPastureDependencyError: LocalizedError {
 }
 
 private struct MissingPastureListRepository: PastureListRepository {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchPastures() throws -> [PastureSummary] {
         throw MissingPastureDependencyError.pastureListRepository
     }
@@ -59,6 +61,8 @@ private struct MissingPastureListRepository: PastureListRepository {
 }
 
 private struct MissingPastureCreateRepository: PastureCreateRepository {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func nameExists(_ name: String, excluding id: UUID?) throws -> Bool {
         throw MissingPastureDependencyError.pastureCreateRepository
     }
@@ -69,6 +73,8 @@ private struct MissingPastureCreateRepository: PastureCreateRepository {
 }
 
 private struct MissingPastureDetailEditingRepository: PastureDetailEditingRepository {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchPastureDetail(id: UUID) throws -> PastureDetailSnapshot? {
         throw MissingPastureDependencyError.pastureDetailRepository
     }
@@ -87,6 +93,8 @@ private struct MissingPastureDetailEditingRepository: PastureDetailEditingReposi
 }
 
 private struct MissingPastureGroupListRepository: PastureGroupListRepository {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchPastureGroups() throws -> [PastureGroupSummary] {
         throw MissingPastureDependencyError.pastureGroupListRepository
     }
@@ -101,6 +109,8 @@ private struct MissingPastureGroupListRepository: PastureGroupListRepository {
 }
 
 private struct MissingPastureGroupDetailRepository: PastureGroupDetailRepository {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchPastureGroupDetail(id: UUID) throws -> PastureGroupDetailSnapshot? {
         throw MissingPastureDependencyError.pastureGroupDetailRepository
     }
@@ -123,6 +133,8 @@ private struct MissingPastureGroupDetailRepository: PastureGroupDetailRepository
 }
 
 private struct MissingPastureGroupEditorRepository: PastureGroupEditorRepository {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func groupNameExists(_ name: String, excluding id: UUID?) throws -> Bool {
         throw MissingPastureDependencyError.pastureGroupEditorRepository
     }
@@ -137,18 +149,24 @@ private struct MissingPastureGroupEditorRepository: PastureGroupEditorRepository
 }
 
 private struct MissingPastureReferenceReader: PastureReferenceDataReader {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func fetchPastureOptions() throws -> [PastureOption] {
         throw MissingPastureDependencyError.pastureReferenceDataReader
     }
 }
 
 private struct MissingAnimalPastureMover: AnimalPastureMoving {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func move(ids: [UUID], toPastureID: UUID?) throws {
         throw MissingPastureDependencyError.animalPastureMover
     }
 }
 
 private struct MissingFieldCheckPastureArchiveWriter: FieldCheckPastureArchiveWriter {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
     func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) throws {
         throw MissingPastureDependencyError.fieldCheckPastureArchiveWriter
     }
