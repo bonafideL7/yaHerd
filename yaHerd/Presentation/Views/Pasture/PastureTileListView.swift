@@ -4,6 +4,7 @@ struct PastureTileListView: View {
     @Environment(\.pastureListRepository) private var repository
     @Environment(\.animalPastureMover) private var animalMover
     @Environment(\.fieldCheckPastureArchiveWriter) private var fieldCheckArchiveWriter
+    @Environment(\.appDataAccessMode) private var dataAccessMode
 
     @State private var model = PastureTileListViewModel()
     @Binding private var isManaging: Bool
@@ -104,7 +105,7 @@ struct PastureTileListView: View {
                 .allowsHitTesting(false)
         }
         .overlay(alignment: .bottomTrailing) {
-            if !isManaging {
+            if dataAccessMode.allowsDataMutations && !isManaging {
                 PastureAddButton(onAddPasture: model.requestAddPasture)
                     .padding(.trailing, 24)
                     .padding(.bottom, 24)
@@ -152,6 +153,7 @@ struct PastureTileListView: View {
     }
 
     private func toggleManageMode() {
+        guard dataAccessMode.allowsDataMutations || isManaging else { return }
         withAnimation(.snappy) {
             isManaging.toggle()
         }

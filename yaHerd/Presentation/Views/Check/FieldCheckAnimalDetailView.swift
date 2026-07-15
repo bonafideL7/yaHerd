@@ -5,6 +5,7 @@ struct FieldCheckAnimalDetailView: View {
     @Environment(\.fieldCheckAnimalDetailRepository) private var fieldCheckRepository
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.appDataAccessMode) private var dataAccessMode
 
     @State private var model = FieldCheckAnimalDetailViewModel()
     @State private var isLineageExpanded = false
@@ -24,7 +25,7 @@ struct FieldCheckAnimalDetailView: View {
     }
 
     private var isSessionEditable: Bool {
-        model.sessionDetail?.isCompleted == false
+        dataAccessMode.allowsDataMutations && model.sessionDetail?.isCompleted == false
     }
 
     private var errorBinding: Binding<Bool> {
@@ -305,7 +306,7 @@ struct FieldCheckAnimalDetailView: View {
             onEdit: allowsEditing ? {
                 editingFinding = finding
             } : nil,
-            onStatusChange: { status in
+            onStatusChange: allowsEditing ? { status in
                 model.updateFindingStatus(
                     animalID: animalID,
                     sessionID: sessionID,
@@ -314,7 +315,7 @@ struct FieldCheckAnimalDetailView: View {
                     animalRepository: animalRepository,
                     fieldCheckRepository: fieldCheckRepository
                 )
-            }
+            } : nil
         )
 
         if allowsEditing {

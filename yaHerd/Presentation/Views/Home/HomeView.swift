@@ -147,6 +147,7 @@ struct HomeView: View {
                 .shadow(color: .black.opacity(0.16), radius: 16, y: 8)
         }
         .accessibilityLabel("Add")
+        .disabledWhenDataReadOnly()
     }
 
     var homeErrorMessage: String? {

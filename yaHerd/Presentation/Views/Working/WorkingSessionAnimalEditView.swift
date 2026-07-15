@@ -176,6 +176,7 @@ struct WorkingSessionAnimalEditView: View {
                     Text("Delete this animal's work data")
                 }
                 .disabled(snapshot?.animalID == nil)
+                .disabledWhenDataReadOnly()
             } footer: {
                 Text("Deletes treatments, preg checks, and session-tied records for this animal in this session. It does not delete movement or status history.")
             }

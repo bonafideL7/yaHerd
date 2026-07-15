@@ -8,6 +8,7 @@ struct HerdSharingReadiness: Equatable {
         case shareRootMissing
         case iCloudSyncRequired
         case sharingAdapterAvailable
+        case recoveryModeReadOnly
     }
 
     let state: State
@@ -28,6 +29,12 @@ struct HerdSharingReadiness: Equatable {
         state: .iCloudSyncRequired,
         title: "iCloud Sync required",
         message: "Enable iCloud Sync before exposing a share action. Local-only stores cannot invite other iCloud users."
+    )
+
+    static let recoveryModeReadOnly = HerdSharingReadiness(
+        state: .recoveryModeReadOnly,
+        title: "Recovery mode is read-only",
+        message: "Sharing and synchronization are disabled because persistent storage did not open. Export storage diagnostics before attempting repair."
     )
 
     static let sharingAdapterAvailable = HerdSharingReadiness(

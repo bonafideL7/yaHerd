@@ -24,6 +24,7 @@ struct PastureGroupListView: View {
                             Button("Delete", role: .destructive) {
                                 model.requestDelete(group)
                             }
+                            .disabledWhenDataReadOnly()
                         }
                     }
                 }
@@ -36,6 +37,7 @@ struct PastureGroupListView: View {
                     Image(systemName: "plus")
                 }
                 .accessibilityLabel("Add Pasture Group")
+                .disabledWhenDataReadOnly()
             }
         }
         .sheet(isPresented: $model.isPresentingAddGroup) {

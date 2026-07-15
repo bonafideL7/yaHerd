@@ -126,5 +126,6 @@ private struct AnimalDetailStatusActionButtons: View {
         } label: {
             Label(title, systemImage: status.systemImage)
         }
+        .disabledWhenDataReadOnly()
     }
 }

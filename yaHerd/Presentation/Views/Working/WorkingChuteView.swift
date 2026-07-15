@@ -151,6 +151,7 @@ struct WorkingChuteView: View {
                     complete()
                 }
                 .disabled(snapshot?.animalID == nil)
+                .disabledWhenDataReadOnly()
             }
         }
         .task {

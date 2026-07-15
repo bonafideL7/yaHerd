@@ -7,6 +7,7 @@ import SwiftUI
 
 struct ProtocolTemplatesView: View {
     @Environment(\.workingProtocolTemplatesRepository) private var repository
+    @Environment(\.appDataAccessMode) private var dataAccessMode
     @StateObject private var viewModel = WorkingProtocolTemplatesViewModel(repository: EmptyWorkingRepository())
 
     @State private var showingAdd = false
@@ -34,6 +35,7 @@ struct ProtocolTemplatesView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .deleteDisabled(!dataAccessMode.allowsDataMutations)
                 }
                 .onDelete(perform: delete)
             }
@@ -46,6 +48,7 @@ struct ProtocolTemplatesView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .disabledWhenDataReadOnly()
             }
         }
         .task {

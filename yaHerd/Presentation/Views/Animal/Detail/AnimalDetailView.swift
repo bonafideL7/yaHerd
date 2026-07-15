@@ -11,6 +11,7 @@ struct AnimalDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.animalDetailRepository) private var repository
     @Environment(\.pastureReferenceDataReader) private var pastureReferenceDataReader
+    @Environment(\.appDataAccessMode) private var dataAccessMode
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
 
@@ -252,11 +253,14 @@ struct AnimalDetailView: View {
         AnimalDetailDistinguishingFeaturesSection(detail: detail)
         AnimalDetailOffspringSection(
             detail: detail,
-            canAddOffspring: viewModel.canAddOffspring && viewModel.preparedOffspringEditor != nil,
+            canAddOffspring: dataAccessMode.allowsDataMutations
+                && viewModel.canAddOffspring
+                && viewModel.preparedOffspringEditor != nil,
             onAddOffspring: { showingAddOffspring = true }
         )
         AnimalDetailLineageSection(isExpanded: $isLineageExpanded, detail: detail)
         AnimalDetailStatusSection(detail: detail) { status in
+            guard dataAccessMode.allowsDataMutations else { return }
             viewModel.beginEditingStatus(status)
         }
         AnimalDetailRecordManagementSection(

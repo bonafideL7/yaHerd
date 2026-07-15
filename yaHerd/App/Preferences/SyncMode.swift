@@ -5,7 +5,7 @@
 
 import Foundation
 
-enum SyncMode: String, CaseIterable, Identifiable {
+enum SyncMode: String, CaseIterable, Identifiable, Sendable {
     case localOnly
     case iCloud
 

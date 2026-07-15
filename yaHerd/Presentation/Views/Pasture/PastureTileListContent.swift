@@ -13,6 +13,7 @@ struct PastureEmptyStateView: View {
             Button("Add Pasture", action: onAddPasture)
                 .buttonStyle(.borderedProminent)
                 .foregroundStyle(colorScheme == .dark ? .black : .white)
+                .disabledWhenDataReadOnly()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -47,6 +48,7 @@ struct PastureAddButton: View {
                 .shadow(color: .black.opacity(0.16), radius: 16, y: 8)
         }
         .accessibilityLabel("Add Pasture")
+        .disabledWhenDataReadOnly()
     }
 }
 

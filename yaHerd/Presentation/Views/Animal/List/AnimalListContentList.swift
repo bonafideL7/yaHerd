@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct AnimalListContentList: View {
+    @Environment(\.appDataAccessMode) private var dataAccessMode
+
     let groupedAnimals: [AnimalSection]
     let shouldUseSections: Bool
     let batchMode: Bool
@@ -52,7 +54,7 @@ struct AnimalListContentList: View {
                 inlineEntryRow(mode: .new)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
-            } else if !batchMode {
+            } else if !batchMode && dataAccessMode.allowsDataMutations {
                 AnimalListInlineTapRow(onTap: onStartNewInlineEntry)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
@@ -110,37 +112,48 @@ struct AnimalListContentList: View {
                     .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
                     .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
             } else {
-                editableAnimalRow(animal)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: !(animal.isArchived || hardDeleteOnSwipe)) {
-                        trailingSwipeActions(for: animal)
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                        if animal.isArchived {
-                            Button {
-                                onRestoreArchivedRecord(animal)
-                            } label: {
-                                Label("Restore", systemImage: "arrow.uturn.backward")
-                            }
-                            .tint(.blue)
+                if dataAccessMode.allowsDataMutations {
+                    editableAnimalRow(animal)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: !(animal.isArchived || hardDeleteOnSwipe)) {
+                            trailingSwipeActions(for: animal)
                         }
-                    }
-                    .listRowBackground(Color.clear)
-                    .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
-                    .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            if animal.isArchived {
+                                Button {
+                                    onRestoreArchivedRecord(animal)
+                                } label: {
+                                    Label("Restore", systemImage: "arrow.uturn.backward")
+                                }
+                                .tint(.blue)
+                            }
+                        }
+                        .listRowBackground(Color.clear)
+                        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+                        .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
+                } else {
+                    editableAnimalRow(animal)
+                        .listRowBackground(Color.clear)
+                        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
+                        .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width }
+                }
             }
         }
     }
 
     private func editableAnimalRow(_ animal: AnimalSummary) -> some View {
         Button {
-            onStartEditingAnimal(animal)
+            if dataAccessMode.allowsDataMutations {
+                onStartEditingAnimal(animal)
+            } else {
+                onOpenInlineDetails(animal.id)
+            }
         } label: {
             AnimalListRowContent(animal: animal)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityHint("Double-tap to edit this animal inline")
+        .accessibilityHint(dataAccessMode.allowsDataMutations ? "Double-tap to edit this animal inline" : "Double-tap to view this animal")
     }
 
     private func inlineEntryRow(mode: AnimalListInlineEntryRow.Mode, animalID: UUID? = nil) -> some View {

@@ -25,6 +25,7 @@ enum FieldChecksViewMode: Hashable {
 
 struct FieldChecksView: View {
     @Environment(\.fieldCheckOverviewReader) private var fieldCheckOverviewReader
+    @Environment(\.appDataAccessMode) private var dataAccessMode
     @State private var model = FieldChecksViewModel()
     @State private var showingStartPastureCheck = false
 
@@ -163,6 +164,7 @@ struct FieldChecksView: View {
                     Label("Start", systemImage: "plus")
                 }
                 .accessibilityLabel("Start Pasture Check")
+                .disabled(!dataAccessMode.allowsDataMutations)
             }
         }
         .task {
@@ -181,7 +183,9 @@ struct FieldChecksView: View {
         switch mode {
         case .all:
             FieldChecksEmptyState {
-                showingStartPastureCheck = true
+                if dataAccessMode.allowsDataMutations {
+                    showingStartPastureCheck = true
+                }
             }
         case .inProgress:
             ContentUnavailableView(
@@ -568,6 +572,7 @@ private struct FieldChecksEmptyState: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .disabledWhenDataReadOnly()
         }
         .padding(32)
         .frame(maxWidth: 420)

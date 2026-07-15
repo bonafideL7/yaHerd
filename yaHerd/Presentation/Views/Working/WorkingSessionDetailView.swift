@@ -7,6 +7,7 @@ import SwiftUI
 
 struct WorkingSessionDetailView: View {
     @Environment(\.workingSessionDetailRepository) private var repository
+    @Environment(\.appDataAccessMode) private var dataAccessMode
     @StateObject private var viewModel: WorkingSessionDetailViewModel
 
     @State private var showingCollect = false
@@ -73,12 +74,12 @@ struct WorkingSessionDetailView: View {
                     if session.status == .active {
                         ToolbarItem(placement: .primaryAction) {
                             Button("Collect") { showingCollect = true }
-                                .disabled(session.sourcePastureID == nil)
+                                .disabled(session.sourcePastureID == nil || !dataAccessMode.allowsDataMutations)
                         }
 
                         ToolbarItem(placement: .topBarTrailing) {
                             Button("Finish") { showingFinish = true }
-                                .disabled(session.queueItems.isEmpty)
+                                .disabled(session.queueItems.isEmpty || !dataAccessMode.allowsDataMutations)
                         }
                     }
 
@@ -88,7 +89,9 @@ struct WorkingSessionDetailView: View {
                         } label: {
                             Image(systemName: "trash")
                         }
+                        .disabledWhenDataReadOnly()
                         .accessibilityLabel("Delete Session")
+                        .disabled(!dataAccessMode.allowsDataMutations)
                     }
                 }
                 .sheet(isPresented: $showingCollect, onDismiss: reload) {
@@ -101,6 +104,7 @@ struct WorkingSessionDetailView: View {
                     Button("Delete", role: .destructive) {
                         deleteSession(sessionID: session.id)
                     }
+                    .disabledWhenDataReadOnly()
                     Button("Cancel", role: .cancel) {}
                 } message: {
                     if session.status == .active {

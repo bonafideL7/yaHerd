@@ -7,6 +7,7 @@ import Foundation
 
 enum HerdSharingActionError: LocalizedError, Equatable {
   case shareRootMissing
+  case recoveryModeReadOnly
   case iCloudSyncRequired
   case shareInvitationMissing
   case sharingStoreUnavailable(String)
@@ -19,6 +20,8 @@ enum HerdSharingActionError: LocalizedError, Equatable {
     switch self {
     case .shareRootMissing:
       "The app could not find a Herd root record to share."
+    case .recoveryModeReadOnly:
+      "Sharing and synchronization are disabled while yaHerd is running in read-only recovery mode. Data changes cannot be saved."
     case .iCloudSyncRequired:
       "Enable iCloud Sync before sharing this herd with other iCloud users."
     case .shareInvitationMissing:

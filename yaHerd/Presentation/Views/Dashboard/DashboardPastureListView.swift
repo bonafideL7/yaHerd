@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DashboardPastureListView: View {
 
+    @Environment(\.appDataAccessMode) private var dataAccessMode
     @State private var viewModel = DashboardPastureListViewModel()
     @State private var filter: DashboardPastureFilter = .all
 
@@ -35,20 +36,26 @@ struct DashboardPastureListView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(filteredPastures) { pasture in
-                        NavigationLink(value: DashboardRoute.pasture(pasture.id)) {
-                            pastureRow(pasture)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button {
-                                viewModel.markPastureGrazedToday(
-                                    pastureID: pasture.id,
-                                    configuration: configuration,
-                                    using: repository
-                                )
-                            } label: {
-                                Label("Grazed today", systemImage: "calendar")
+                        if dataAccessMode.allowsDataMutations {
+                            NavigationLink(value: DashboardRoute.pasture(pasture.id)) {
+                                pastureRow(pasture)
                             }
-                            .tint(.green)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button {
+                                    viewModel.markPastureGrazedToday(
+                                        pastureID: pasture.id,
+                                        configuration: configuration,
+                                        using: repository
+                                    )
+                                } label: {
+                                    Label("Grazed today", systemImage: "calendar")
+                                }
+                                .tint(.green)
+                            }
+                        } else {
+                            NavigationLink(value: DashboardRoute.pasture(pasture.id)) {
+                                pastureRow(pasture)
+                            }
                         }
                     }
                 }

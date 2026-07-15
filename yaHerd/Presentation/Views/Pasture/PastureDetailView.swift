@@ -121,6 +121,7 @@ struct PastureDetailView: View {
                 } label: {
                     Label("Start Pasture Check", systemImage: "checklist")
                 }
+                .disabledWhenDataReadOnly()
             }
         }
     }
