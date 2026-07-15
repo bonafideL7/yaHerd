@@ -239,3 +239,7 @@ Pasture currently has focused coverage for validators, metrics/policies, use cas
 - Startup bootstrap and repair utilities run only after the store opens and are not substitutes for schema migration stages.
 
 See the repository-level `MIGRATIONS.md` for the required release workflow, fixture-store rules, and the model changes that require custom migration.
+
+## Sharing bridge risk boundary
+
+The SwiftData/Core Data CloudKit sharing bridge is treated as a separate high-risk boundary. Store lifecycle, import orchestration, export orchestration, operation journaling, and reconciliation are split into focused files under `Data/Sharing/CoreData`. Import precedes export, each direction uses one persistent-store commit, retries are idempotent, and duplicate application-managed public IDs are explicitly detected. See `SHARING_BRIDGE_RELIABILITY.md` at the repository root for release requirements and the two-device test matrix.

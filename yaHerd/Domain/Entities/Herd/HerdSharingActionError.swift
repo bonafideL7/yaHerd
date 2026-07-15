@@ -13,6 +13,7 @@ enum HerdSharingActionError: LocalizedError, Equatable {
   case readOnlyShareCannotWrite
   case cloudKitSharingFailed(String)
   case bridgeImportFailed(String)
+  case bridgeConsistencyFailed(String)
 
   var errorDescription: String? {
     switch self {
@@ -30,6 +31,8 @@ enum HerdSharingActionError: LocalizedError, Equatable {
       "CloudKit sharing failed. \(message)"
     case .bridgeImportFailed(let message):
       "Shared herd import failed. \(message)"
+    case .bridgeConsistencyFailed(let message):
+      "Shared herd consistency check failed. \(message)"
     }
   }
 }

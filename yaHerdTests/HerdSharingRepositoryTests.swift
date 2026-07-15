@@ -357,7 +357,8 @@ private final class RecordingHerdSharingBridgeSyncStore: HerdSharingBridgeSyncSt
       insertedFieldCheckFindingCount: 0,
       updatedFieldCheckFindingCount: 0,
       deletedRecordCount: 0,
-      conflictReport: .empty
+      conflictReport: .empty,
+      reconciliationReport: .empty
     )
   }
 
@@ -404,7 +405,8 @@ private final class RecordingHerdSharingBridgeSyncStore: HerdSharingBridgeSyncSt
       exportedFieldCheckSessionCount: 0,
       exportedFieldCheckAnimalCheckCount: 0,
       exportedFieldCheckFindingCount: 0,
-      exportedDeletedRecordCount: 0
+      exportedDeletedRecordCount: 0,
+      reconciliationReport: .empty
     )
   }
 }
