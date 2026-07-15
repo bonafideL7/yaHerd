@@ -18,13 +18,11 @@ struct yaHerdApp: App {
     private let appSettingsSynchronizer: AppSettingsSynchronizer
 
     init() {
-        let schema = Self.makeSchema()
         let preferences = AppPreferences()
         let appSettingsSynchronizer = AppSettingsSynchronizer.shared
 
         self.appSettingsSynchronizer = appSettingsSynchronizer
         self.bootstrapState = Self.bootstrap(
-            schema: schema,
             preferences: preferences,
             appSettingsSynchronizer: appSettingsSynchronizer
         )
@@ -47,7 +45,6 @@ struct yaHerdApp: App {
     }
 
     private static func bootstrap(
-        schema: Schema,
         preferences: AppPreferencesProviding,
         appSettingsSynchronizer: AppSettingsSynchronizer
     ) -> AppBootstrapState {
@@ -55,10 +52,9 @@ struct yaHerdApp: App {
 
         do {
             let container = try ModelContainerFactory.makeContainer(
-                schema: schema,
                 syncMode: syncMode
             )
-            try Self.runStartupMigrations(in: container.mainContext, storageScope: syncMode.rawValue)
+            try Self.runStartupDataMigrations(in: container.mainContext, storageScope: syncMode.rawValue)
 
             AppLaunchDiagnostics.record(
                 requestedSyncMode: syncMode,
@@ -88,10 +84,9 @@ struct yaHerdApp: App {
 
                 do {
                     let localContainer = try ModelContainerFactory.makeContainer(
-                        schema: schema,
                         syncMode: .localOnly
                     )
-                    try Self.runStartupMigrations(in: localContainer.mainContext, storageScope: SyncMode.localOnly.rawValue)
+                    try Self.runStartupDataMigrations(in: localContainer.mainContext, storageScope: SyncMode.localOnly.rawValue)
 
                     let startupMessage = """
                     iCloud Sync could not be enabled, so yaHerd returned to Local Only mode. Your local data is still on this device. Original error: \(primaryError.localizedDescription)
@@ -119,10 +114,8 @@ struct yaHerdApp: App {
                     let localRecoveryError = error
 
                     do {
-                        let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer(
-                            schema: schema
-                        )
-                        try Self.runStartupMigrations(in: fallbackContainer.mainContext, storageScope: "recovery")
+                        let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer()
+                        try Self.runStartupDataMigrations(in: fallbackContainer.mainContext, storageScope: "recovery")
 
                         let startupMessage = """
                         Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved.
@@ -173,10 +166,8 @@ struct yaHerdApp: App {
             appSettingsSynchronizer.stop()
 
             do {
-                let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer(
-                    schema: schema
-                )
-                try Self.runStartupMigrations(in: fallbackContainer.mainContext, storageScope: "recovery")
+                let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer()
+                try Self.runStartupDataMigrations(in: fallbackContainer.mainContext, storageScope: "recovery")
 
                 let startupMessage = """
                 Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved. Original error: \(primaryError.localizedDescription)
@@ -220,7 +211,7 @@ struct yaHerdApp: App {
         }
     }
 
-    private static func runStartupMigrations(in context: ModelContext, storageScope: String) throws {
+    private static func runStartupDataMigrations(in context: ModelContext, storageScope: String) throws {
         try DefaultHerdBootstrapper.ensureDefaultHerdForAppLaunch(
             in: context,
             storageScope: storageScope
@@ -232,26 +223,7 @@ struct yaHerdApp: App {
     }
 
     static func makeSchema() -> Schema {
-        Schema([
-            Herd.self,
-            Animal.self,
-            AnimalTag.self,
-            TagColorDefinition.self,
-            AnimalStatusReference.self,
-            Pasture.self,
-            PastureGroup.self,
-            HealthRecord.self,
-            PregnancyCheck.self,
-            MovementRecord.self,
-            StatusRecord.self,
-            WorkingSession.self,
-            WorkingQueueItem.self,
-            WorkingTreatmentRecord.self,
-            WorkingProtocolTemplate.self,
-            FieldCheckSession.self,
-            FieldCheckAnimalCheck.self,
-            FieldCheckFinding.self
-        ])
+        ModelContainerFactory.schema
     }
 }
 

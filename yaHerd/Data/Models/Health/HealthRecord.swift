@@ -9,31 +9,32 @@
 import SwiftData
 import Foundation
 
-@Model
-final class HealthRecord {
-    var publicID: UUID = UUID()
-    @Relationship(deleteRule: .nullify) var herd: Herd?
-    var date: Date = Date.now
-    var treatment: String = ""
-    var notes: String?
+extension YaHerdSchemaV1 {
+    @Model
+    final class HealthRecord {
+        var publicID: UUID = UUID()
+        @Relationship(deleteRule: .nullify) var herd: Herd?
+        var date: Date = Date.now
+        var treatment: String = ""
+        var notes: String?
 
-    @Relationship(deleteRule: .nullify) var workingSession: WorkingSession?
-    @Relationship(deleteRule: .nullify) var animal: Animal?
+        @Relationship(deleteRule: .nullify) var workingSession: WorkingSession?
+        @Relationship(deleteRule: .nullify) var animal: Animal?
 
-    init(
-        publicID: UUID = UUID(),
-        date: Date,
-        treatment: String,
-        notes: String? = nil,
-        workingSession: WorkingSession? = nil,
-        animal: Animal
-    ) {
-        self.publicID = publicID
-        self.date = date
-        self.treatment = treatment
-        self.notes = notes
-        self.workingSession = workingSession
-        self.animal = animal
+        init(
+            publicID: UUID = UUID(),
+            date: Date,
+            treatment: String,
+            notes: String? = nil,
+            workingSession: WorkingSession? = nil,
+            animal: Animal
+        ) {
+            self.publicID = publicID
+            self.date = date
+            self.treatment = treatment
+            self.notes = notes
+            self.workingSession = workingSession
+            self.animal = animal
+        }
     }
 }
-

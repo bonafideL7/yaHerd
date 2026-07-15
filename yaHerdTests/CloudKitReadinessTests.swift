@@ -13,18 +13,19 @@ import SwiftData
 final class CloudKitReadinessTests: XCTestCase {
     func testSwiftDataSchemaCanCreateCloudKitBackedContainer() throws {
         let schema = yaHerdApp.makeSchema()
-        
+
         let configuration = ModelConfiguration(
             "yaHerdCloudKitReadinessStore",
             schema: schema,
             cloudKitDatabase: .automatic
         )
-        
+
         let container = try ModelContainer(
             for: schema,
+            migrationPlan: YaHerdMigrationPlan.self,
             configurations: [configuration]
         )
-        
+
         XCTAssertNotNil(container)
     }
 }

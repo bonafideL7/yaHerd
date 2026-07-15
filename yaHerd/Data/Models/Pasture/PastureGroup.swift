@@ -8,34 +8,36 @@
 import SwiftData
 import Foundation
 
-@Model
-final class PastureGroup {
-    var publicID: UUID = UUID()
-    @Relationship(deleteRule: .nullify) var herd: Herd?
-    var name: String = ""
-    var grazeDays: Int = 7
-    var restDays: Int = 21
+extension YaHerdSchemaV1 {
+    @Model
+    final class PastureGroup {
+        var publicID: UUID = UUID()
+        @Relationship(deleteRule: .nullify) var herd: Herd?
+        var name: String = ""
+        var grazeDays: Int = 7
+        var restDays: Int = 21
 
-    @Relationship(
-        deleteRule: .nullify,
-        inverse: \Pasture.group
-    )
-    var pastureStorage: [Pasture]?
+        @Relationship(
+            deleteRule: .nullify,
+            inverse: \Pasture.group
+        )
+        var pastureStorage: [Pasture]?
 
-    var pastures: [Pasture] {
-        get { pastureStorage ?? [] }
-        set { pastureStorage = newValue }
-    }
+        var pastures: [Pasture] {
+            get { pastureStorage ?? [] }
+            set { pastureStorage = newValue }
+        }
 
-    init(
-        publicID: UUID = UUID(),
-        name: String,
-        grazeDays: Int = 7,
-        restDays: Int = 21
-    ) {
-        self.publicID = publicID
-        self.name = name
-        self.grazeDays = grazeDays
-        self.restDays = restDays
+        init(
+            publicID: UUID = UUID(),
+            name: String,
+            grazeDays: Int = 7,
+            restDays: Int = 21
+        ) {
+            self.publicID = publicID
+            self.name = name
+            self.grazeDays = grazeDays
+            self.restDays = restDays
+        }
     }
 }

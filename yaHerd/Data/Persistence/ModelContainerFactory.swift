@@ -3,6 +3,7 @@
 //  yaHerd
 //
 
+import Foundation
 import SwiftData
 
 enum ModelContainerFactory {
@@ -10,32 +11,65 @@ enum ModelContainerFactory {
     static let recoveryStoreName = "yaHerdRecoveryStore"
     static let cloudKitContainerIdentifier = "iCloud.ltd.yaherd"
 
-    static func makeContainer(
-        schema: Schema,
-        syncMode: SyncMode
-    ) throws -> ModelContainer {
+    static var schema: Schema {
+        Schema(versionedSchema: YaHerdMigrationPlan.currentSchema)
+    }
+
+    static func makeContainer(syncMode: SyncMode) throws -> ModelContainer {
+        let schema = self.schema
         let configuration = ModelConfiguration(
             storeName,
             schema: schema,
             cloudKitDatabase: cloudKitDatabase(for: syncMode)
         )
 
-        return try ModelContainer(
-            for: schema,
-            configurations: [configuration]
+        return try makeContainer(
+            schema: schema,
+            configuration: configuration
         )
     }
 
-    static func makeRecoveryContainer(schema: Schema) throws -> ModelContainer {
+    static func makeContainer(
+        syncMode: SyncMode,
+        storeURL: URL
+    ) throws -> ModelContainer {
+        let schema = self.schema
+        let configuration = ModelConfiguration(
+            storeName,
+            schema: schema,
+            url: storeURL,
+            allowsSave: true,
+            cloudKitDatabase: cloudKitDatabase(for: syncMode)
+        )
+
+        return try makeContainer(
+            schema: schema,
+            configuration: configuration
+        )
+    }
+
+    static func makeRecoveryContainer() throws -> ModelContainer {
+        let schema = self.schema
         let fallbackConfiguration = ModelConfiguration(
             recoveryStoreName,
             schema: schema,
             isStoredInMemoryOnly: true
         )
 
-        return try ModelContainer(
+        return try makeContainer(
+            schema: schema,
+            configuration: fallbackConfiguration
+        )
+    }
+
+    private static func makeContainer(
+        schema: Schema,
+        configuration: ModelConfiguration
+    ) throws -> ModelContainer {
+        try ModelContainer(
             for: schema,
-            configurations: [fallbackConfiguration]
+            migrationPlan: YaHerdMigrationPlan.self,
+            configurations: [configuration]
         )
     }
 

@@ -45,7 +45,7 @@ final class SwiftDataHerdRepositoryTests: XCTestCase {
             schema: schema,
             isStoredInMemoryOnly: true
         )
-        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let container = try ModelContainer(for: schema, migrationPlan: YaHerdMigrationPlan.self, configurations: [configuration])
         return SwiftDataHerdRepository(context: container.mainContext)
     }
 }

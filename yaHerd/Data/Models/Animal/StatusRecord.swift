@@ -9,33 +9,35 @@
 import SwiftData
 import Foundation
 
-@Model
-final class StatusRecord {
-    var publicID: UUID = UUID()
-    @Relationship(deleteRule: .nullify) var herd: Herd?
-    var date: Date = Date.now
-    var oldStatus: AnimalStatus = AnimalStatus.active
-    var newStatus: AnimalStatus = AnimalStatus.active
-    var oldStatusReferenceID: UUID?
-    var newStatusReferenceID: UUID?
+extension YaHerdSchemaV1 {
+    @Model
+    final class StatusRecord {
+        var publicID: UUID = UUID()
+        @Relationship(deleteRule: .nullify) var herd: Herd?
+        var date: Date = Date.now
+        var oldStatus: AnimalStatus = AnimalStatus.active
+        var newStatus: AnimalStatus = AnimalStatus.active
+        var oldStatusReferenceID: UUID?
+        var newStatusReferenceID: UUID?
 
-    @Relationship(deleteRule: .nullify) var animal: Animal?
+        @Relationship(deleteRule: .nullify) var animal: Animal?
 
-    init(
-        publicID: UUID = UUID(),
-        date: Date,
-        oldStatus: AnimalStatus,
-        newStatus: AnimalStatus,
-        oldStatusReferenceID: UUID? = nil,
-        newStatusReferenceID: UUID? = nil,
-        animal: Animal
-    ) {
-        self.publicID = publicID
-        self.date = date
-        self.oldStatus = oldStatus
-        self.newStatus = newStatus
-        self.oldStatusReferenceID = oldStatusReferenceID
-        self.newStatusReferenceID = newStatusReferenceID
-        self.animal = animal
+        init(
+            publicID: UUID = UUID(),
+            date: Date,
+            oldStatus: AnimalStatus,
+            newStatus: AnimalStatus,
+            oldStatusReferenceID: UUID? = nil,
+            newStatusReferenceID: UUID? = nil,
+            animal: Animal
+        ) {
+            self.publicID = publicID
+            self.date = date
+            self.oldStatus = oldStatus
+            self.newStatus = newStatus
+            self.oldStatusReferenceID = oldStatusReferenceID
+            self.newStatusReferenceID = newStatusReferenceID
+            self.animal = animal
+        }
     }
 }
