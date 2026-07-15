@@ -43,9 +43,14 @@ struct HerdSharingBridgeImportResult: Equatable {
   let updatedFieldCheckFindingCount: Int
   let deletedRecordCount: Int
   let conflictReport: HerdSharingBridgeConflictReport
+  let reconciliationReport: HerdSharingBridgeReconciliationReport
 
   var conflictSummary: String {
     conflictReport.summary
+  }
+
+  var reconciliationSummary: String {
+    reconciliationReport.summary
   }
 
   var importedTagColorDefinitionCount: Int {

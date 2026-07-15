@@ -31,6 +31,7 @@ struct HerdCollaborationView: View {
         readinessSection
         sharingAccessSection(sharingRepository: herdSharingRepository)
         coreDataBoundarySection
+        reconciliationSection
         conflictPolicySection
         shareInvitationSection(
           herdRepository: herdRepository,
@@ -103,13 +104,12 @@ struct HerdCollaborationView: View {
     }
   }
 
-
   @ViewBuilder
   private func conflictConfirmationActions(
     for confirmation: HerdCollaborationConflictConfirmation
   ) -> some View {
     switch confirmation {
-    case let .acceptSharedDeletes(review, _):
+    case .acceptSharedDeletes(let review, _):
       Button("Delete Local Records and Sync", role: .destructive) {
         Task {
           if let sharingSyncCoordinator {
@@ -291,6 +291,88 @@ struct HerdCollaborationView: View {
     }
   }
 
+  private var reconciliationSection: some View {
+    Section("Bridge Reconciliation") {
+      if let review = viewModel.latestReconciliationReview {
+        LabeledContent("Last Checked", value: formattedSyncDate(review.detectedAt))
+        LabeledContent("Entity Types", value: review.entities.count.formatted())
+        LabeledContent(
+          "Unresolved Differences",
+          value: review.unresolvedDifferenceCount.formatted()
+        )
+        LabeledContent(
+          "Duplicate Public IDs",
+          value: review.duplicatePublicIDCount.formatted()
+        )
+        LabeledContent(
+          "Deletion Tombstones",
+          value: review.deletionTombstoneCount.formatted()
+        )
+
+        if review.hasUnresolvedDifferences {
+          Text(review.summary)
+            .font(.caption)
+            .foregroundStyle(.orange)
+        } else {
+          Text(review.summary)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+
+        if !review.unresolvedEntities.isEmpty {
+          DisclosureGroup("Unresolved Entity Differences") {
+            ForEach(review.unresolvedEntities) { entity in
+              VStack(alignment: .leading, spacing: 4) {
+                Text(entity.entityName)
+                  .font(.caption.weight(.semibold))
+                Text(
+                  "SwiftData \(entity.localRecordCount) · Bridge \(entity.bridgeRecordCount)"
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+                reconciliationIDs(
+                  title: "Local only",
+                  ids: entity.missingInBridge
+                )
+                reconciliationIDs(
+                  title: "Bridge only",
+                  ids: entity.missingInSwiftData
+                )
+                reconciliationIDs(
+                  title: "Duplicate SwiftData IDs",
+                  ids: entity.duplicateLocalPublicIDs
+                )
+                reconciliationIDs(
+                  title: "Duplicate bridge IDs",
+                  ids: entity.duplicateBridgePublicIDs
+                )
+              }
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.vertical, 4)
+            }
+          }
+        }
+      } else {
+        Text("Run Import Shared Data or Sync Shared Data to generate a reconciliation report.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func reconciliationIDs(title: String, ids: [UUID]) -> some View {
+    if !ids.isEmpty {
+      let visibleIDs = ids.prefix(10).map(\.uuidString).joined(separator: ", ")
+      let remainingCount = max(0, ids.count - 10)
+      let remainingDescription = remainingCount > 0 ? " (+\(remainingCount) more)" : ""
+      Text("\(title): \(visibleIDs)\(remainingDescription)")
+        .font(.caption2.monospaced())
+        .textSelection(.enabled)
+    }
+  }
+
   private var conflictPolicySection: some View {
     Section("Conflict Handling") {
       LabeledContent("Existing local records", value: "Reported on import")
@@ -340,7 +422,9 @@ struct HerdCollaborationView: View {
         }
         .disabled(sharingSyncCoordinator?.isSyncing == true)
 
-        if conflictReview.updatedRecordConflictCount > 0 || conflictReview.existingLocalRecordUpdateCount > 0 {
+        if conflictReview.updatedRecordConflictCount > 0
+          || conflictReview.existingLocalRecordUpdateCount > 0
+        {
           Button {
             Task {
               if let sharingSyncCoordinator {
@@ -755,7 +839,7 @@ private enum HerdCollaborationConflictConfirmation: Identifiable {
 
   var id: String {
     switch self {
-    case let .acceptSharedDeletes(review, affectedRecordCount):
+    case .acceptSharedDeletes(let review, let affectedRecordCount):
       "accept-shared-deletes-\(review.id)-\(affectedRecordCount)"
     }
   }
@@ -769,7 +853,7 @@ private enum HerdCollaborationConflictConfirmation: Identifiable {
 
   var message: String {
     switch self {
-    case let .acceptSharedDeletes(_, affectedRecordCount):
+    case .acceptSharedDeletes(_, let affectedRecordCount):
       "This deletes \(affectedRecordCount) local SwiftData record(s) that matched skipped shared deletes, then runs shared-data sync. This cannot be undone from the conflict report."
     }
   }

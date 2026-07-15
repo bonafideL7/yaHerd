@@ -45,6 +45,7 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
   private let context: ModelContext
   private let store: HerdSharingCoreDataStore
   private let syncStore: any HerdSharingBridgeSyncStore
+  private let operationGate = HerdSharingBridgeOperationGate()
 
   init(
     context: ModelContext,
@@ -97,9 +98,11 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     storageMode: HerdStorageMode
   ) async throws -> HerdSharingActionResult {
     let profilingStartedAt = Date()
-    ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.startSharing.started", detail: storageMode.displayName)
+    ReliabilityLog.syncEvent(
+      "CoreDataHerdSharingRepository.startSharing.started", detail: storageMode.displayName)
     defer {
-      PerformanceLog.logDuration("CoreDataHerdSharingRepository.startSharing", startedAt: profilingStartedAt)
+      PerformanceLog.logDuration(
+        "CoreDataHerdSharingRepository.startSharing", startedAt: profilingStartedAt)
       ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.startSharing.finished")
     }
 
@@ -107,25 +110,29 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       throw HerdSharingActionError.iCloudSyncRequired
     }
 
-    let tagColorDefinitions = try fetchSwiftDataTagColorDefinitions(for: herd)
-    let statusReferences = try fetchSwiftDataStatusReferences(for: herd)
-    let pastureGroups = try fetchSwiftDataPastureGroups(for: herd)
-    let pastures = try fetchSwiftDataPastures(for: herd)
-    let animals = try fetchSwiftDataAnimals(for: herd)
-    let animalTags = try fetchSwiftDataAnimalTags(for: herd)
-    let movements = try fetchSwiftDataMovements(for: herd)
-    let statusRecords = try fetchSwiftDataStatusRecords(for: herd)
-    let healthRecords = try fetchSwiftDataHealthRecords(for: herd)
-    let pregnancyChecks = try fetchSwiftDataPregnancyChecks(for: herd)
-    let workingProtocolTemplates = try fetchSwiftDataWorkingProtocolTemplates(for: herd)
-    let workingSessions = try fetchSwiftDataWorkingSessions(for: herd)
-    let workingQueueItems = try fetchSwiftDataWorkingQueueItems(for: herd)
-    let workingTreatmentRecords = try fetchSwiftDataWorkingTreatmentRecords(for: herd)
-    let fieldCheckSessions = try fetchSwiftDataFieldCheckSessions(for: herd)
-    let fieldCheckAnimalChecks = try fetchSwiftDataFieldCheckAnimalChecks(for: herd)
-    let fieldCheckFindings = try fetchSwiftDataFieldCheckFindings(for: herd)
+    await operationGate.acquire()
+    defer { operationGate.release() }
+
+    let mergedHerd = try fetchMergedSwiftDataHerd(matching: herd)
+    let tagColorDefinitions = try fetchSwiftDataTagColorDefinitions(for: mergedHerd)
+    let statusReferences = try fetchSwiftDataStatusReferences(for: mergedHerd)
+    let pastureGroups = try fetchSwiftDataPastureGroups(for: mergedHerd)
+    let pastures = try fetchSwiftDataPastures(for: mergedHerd)
+    let animals = try fetchSwiftDataAnimals(for: mergedHerd)
+    let animalTags = try fetchSwiftDataAnimalTags(for: mergedHerd)
+    let movements = try fetchSwiftDataMovements(for: mergedHerd)
+    let statusRecords = try fetchSwiftDataStatusRecords(for: mergedHerd)
+    let healthRecords = try fetchSwiftDataHealthRecords(for: mergedHerd)
+    let pregnancyChecks = try fetchSwiftDataPregnancyChecks(for: mergedHerd)
+    let workingProtocolTemplates = try fetchSwiftDataWorkingProtocolTemplates(for: mergedHerd)
+    let workingSessions = try fetchSwiftDataWorkingSessions(for: mergedHerd)
+    let workingQueueItems = try fetchSwiftDataWorkingQueueItems(for: mergedHerd)
+    let workingTreatmentRecords = try fetchSwiftDataWorkingTreatmentRecords(for: mergedHerd)
+    let fieldCheckSessions = try fetchSwiftDataFieldCheckSessions(for: mergedHerd)
+    let fieldCheckAnimalChecks = try fetchSwiftDataFieldCheckAnimalChecks(for: mergedHerd)
+    let fieldCheckFindings = try fetchSwiftDataFieldCheckFindings(for: mergedHerd)
     let systemShare = try await store.makeSystemShare(
-      for: herd,
+      for: mergedHerd,
       tagColorDefinitions: tagColorDefinitions,
       statusReferences: statusReferences,
       animalTags: animalTags,
@@ -157,15 +164,21 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     storageMode: HerdStorageMode
   ) async throws -> HerdSharingActionResult {
     let profilingStartedAt = Date()
-    ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.acceptShareInvitation.started", detail: storageMode.displayName)
+    ReliabilityLog.syncEvent(
+      "CoreDataHerdSharingRepository.acceptShareInvitation.started", detail: storageMode.displayName
+    )
     defer {
-      PerformanceLog.logDuration("CoreDataHerdSharingRepository.acceptShareInvitation", startedAt: profilingStartedAt)
+      PerformanceLog.logDuration(
+        "CoreDataHerdSharingRepository.acceptShareInvitation", startedAt: profilingStartedAt)
       ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.acceptShareInvitation.finished")
     }
 
     guard storageMode == .iCloud else {
       throw HerdSharingActionError.iCloudSyncRequired
     }
+
+    await operationGate.acquire()
+    defer { operationGate.release() }
 
     try await store.acceptShareInvitation(metadata: invitation.metadata)
 
@@ -174,10 +187,13 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       return HerdSharingActionResult(
         title: "Invitation accepted",
         message:
-          "Imported \(importResult.importedTagColorDefinitionCount) tag color definitions, \(importResult.importedStatusReferenceCount) custom status references, \(importResult.importedPastureGroupCount) pasture groups, \(importResult.importedPastureCount) pastures, \(importResult.importedAnimalCount) animal records, \(importResult.importedAnimalTagCount) animal tags, \(importResult.importedMovementCount) movement records, \(importResult.importedStatusRecordCount) status history records, \(importResult.importedHealthRecordCount) health records, \(importResult.importedPregnancyCheckCount) pregnancy checks, \(importResult.importedWorkingProtocolTemplateCount) working protocol templates, \(importResult.importedWorkingSessionCount) working sessions, \(importResult.importedWorkingQueueItemCount) queue items, \(importResult.importedWorkingTreatmentRecordCount) treatment records, \(importResult.importedFieldCheckSessionCount) field check sessions, \(importResult.importedFieldCheckAnimalCheckCount) field check animal checks, and \(importResult.importedFieldCheckFindingCount) field check findings from the Core Data sharing bridge into SwiftData for \(importResult.herdName). Applied \(importResult.deletedRecordCount) shared deletions. Conflict report: \(importResult.conflictSummary)",
+          "Imported \(importResult.importedTagColorDefinitionCount) tag color definitions, \(importResult.importedStatusReferenceCount) custom status references, \(importResult.importedPastureGroupCount) pasture groups, \(importResult.importedPastureCount) pastures, \(importResult.importedAnimalCount) animal records, \(importResult.importedAnimalTagCount) animal tags, \(importResult.importedMovementCount) movement records, \(importResult.importedStatusRecordCount) status history records, \(importResult.importedHealthRecordCount) health records, \(importResult.importedPregnancyCheckCount) pregnancy checks, \(importResult.importedWorkingProtocolTemplateCount) working protocol templates, \(importResult.importedWorkingSessionCount) working sessions, \(importResult.importedWorkingQueueItemCount) queue items, \(importResult.importedWorkingTreatmentRecordCount) treatment records, \(importResult.importedFieldCheckSessionCount) field check sessions, \(importResult.importedFieldCheckAnimalCheckCount) field check animal checks, and \(importResult.importedFieldCheckFindingCount) field check findings from the Core Data sharing bridge into SwiftData for \(importResult.herdName). Applied \(importResult.deletedRecordCount) shared deletions. Conflict report: \(importResult.conflictSummary) Reconciliation: \(importResult.reconciliationSummary)",
         conflictReview: makeConflictReview(
           from: importResult,
           sourceDescription: "Invitation accepted"
+        ),
+        reconciliationReview: makeReconciliationReview(
+          from: importResult.reconciliationReport
         )
       )
     } catch HerdSharingActionError.bridgeImportFailed(_) {
@@ -194,15 +210,21 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     storageMode: HerdStorageMode
   ) async throws -> HerdSharingActionResult {
     let profilingStartedAt = Date()
-    ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.importSharedBridgeData.started", detail: storageMode.displayName)
+    ReliabilityLog.syncEvent(
+      "CoreDataHerdSharingRepository.importSharedBridgeData.started",
+      detail: storageMode.displayName)
     defer {
-      PerformanceLog.logDuration("CoreDataHerdSharingRepository.importSharedBridgeData", startedAt: profilingStartedAt)
+      PerformanceLog.logDuration(
+        "CoreDataHerdSharingRepository.importSharedBridgeData", startedAt: profilingStartedAt)
       ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.importSharedBridgeData.finished")
     }
 
     guard storageMode == .iCloud else {
       throw HerdSharingActionError.iCloudSyncRequired
     }
+
+    await operationGate.acquire()
+    defer { operationGate.release() }
 
     let importResult: HerdSharingBridgeImportResult
     if let herd {
@@ -218,10 +240,13 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     return HerdSharingActionResult(
       title: "Shared data imported",
       message:
-        "Imported \(importResult.insertedTagColorDefinitionCount) new/\(importResult.updatedTagColorDefinitionCount) existing tag color definitions, \(importResult.insertedStatusReferenceCount) new/\(importResult.updatedStatusReferenceCount) existing custom status references, \(importResult.insertedPastureGroupCount) new/\(importResult.updatedPastureGroupCount) existing pasture groups, \(importResult.insertedPastureCount) new/\(importResult.updatedPastureCount) existing pastures, \(importResult.insertedAnimalCount) new/\(importResult.updatedAnimalCount) existing animals, \(importResult.insertedAnimalTagCount) new/\(importResult.updatedAnimalTagCount) existing animal tags, \(importResult.insertedMovementCount) new/\(importResult.updatedMovementCount) existing movement records, \(importResult.insertedStatusRecordCount) new/\(importResult.updatedStatusRecordCount) existing status history records, \(importResult.insertedHealthRecordCount) new/\(importResult.updatedHealthRecordCount) existing health records, \(importResult.insertedPregnancyCheckCount) new/\(importResult.updatedPregnancyCheckCount) existing pregnancy checks, \(importResult.insertedWorkingProtocolTemplateCount) new/\(importResult.updatedWorkingProtocolTemplateCount) existing working protocol templates, \(importResult.insertedWorkingSessionCount) new/\(importResult.updatedWorkingSessionCount) existing working sessions, \(importResult.insertedWorkingQueueItemCount) new/\(importResult.updatedWorkingQueueItemCount) existing queue items, \(importResult.insertedWorkingTreatmentRecordCount) new/\(importResult.updatedWorkingTreatmentRecordCount) existing treatment records, \(importResult.insertedFieldCheckSessionCount) new/\(importResult.updatedFieldCheckSessionCount) existing field check sessions, \(importResult.insertedFieldCheckAnimalCheckCount) new/\(importResult.updatedFieldCheckAnimalCheckCount) existing field check animal checks, and \(importResult.insertedFieldCheckFindingCount) new/\(importResult.updatedFieldCheckFindingCount) existing field check findings from the Core Data sharing bridge into SwiftData for \(importResult.herdName). Applied \(importResult.deletedRecordCount) shared deletions. Conflict report: \(importResult.conflictSummary)",
+        "Imported \(importResult.insertedTagColorDefinitionCount) new/\(importResult.updatedTagColorDefinitionCount) existing tag color definitions, \(importResult.insertedStatusReferenceCount) new/\(importResult.updatedStatusReferenceCount) existing custom status references, \(importResult.insertedPastureGroupCount) new/\(importResult.updatedPastureGroupCount) existing pasture groups, \(importResult.insertedPastureCount) new/\(importResult.updatedPastureCount) existing pastures, \(importResult.insertedAnimalCount) new/\(importResult.updatedAnimalCount) existing animals, \(importResult.insertedAnimalTagCount) new/\(importResult.updatedAnimalTagCount) existing animal tags, \(importResult.insertedMovementCount) new/\(importResult.updatedMovementCount) existing movement records, \(importResult.insertedStatusRecordCount) new/\(importResult.updatedStatusRecordCount) existing status history records, \(importResult.insertedHealthRecordCount) new/\(importResult.updatedHealthRecordCount) existing health records, \(importResult.insertedPregnancyCheckCount) new/\(importResult.updatedPregnancyCheckCount) existing pregnancy checks, \(importResult.insertedWorkingProtocolTemplateCount) new/\(importResult.updatedWorkingProtocolTemplateCount) existing working protocol templates, \(importResult.insertedWorkingSessionCount) new/\(importResult.updatedWorkingSessionCount) existing working sessions, \(importResult.insertedWorkingQueueItemCount) new/\(importResult.updatedWorkingQueueItemCount) existing queue items, \(importResult.insertedWorkingTreatmentRecordCount) new/\(importResult.updatedWorkingTreatmentRecordCount) existing treatment records, \(importResult.insertedFieldCheckSessionCount) new/\(importResult.updatedFieldCheckSessionCount) existing field check sessions, \(importResult.insertedFieldCheckAnimalCheckCount) new/\(importResult.updatedFieldCheckAnimalCheckCount) existing field check animal checks, and \(importResult.insertedFieldCheckFindingCount) new/\(importResult.updatedFieldCheckFindingCount) existing field check findings from the Core Data sharing bridge into SwiftData for \(importResult.herdName). Applied \(importResult.deletedRecordCount) shared deletions. Conflict report: \(importResult.conflictSummary) Reconciliation: \(importResult.reconciliationSummary)",
       conflictReview: makeConflictReview(
         from: importResult,
         sourceDescription: "Manual shared-data import"
+      ),
+      reconciliationReview: makeReconciliationReview(
+        from: importResult.reconciliationReport
       )
     )
   }
@@ -241,6 +266,9 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       )
     }
 
+    await operationGate.acquire()
+    defer { operationGate.release() }
+
     let deletedCount = try store.acceptPreventedSharedDeletes(
       review.preventedDeleteConflicts,
       context: context
@@ -252,7 +280,6 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
         "Deleted \(deletedCount) of \(review.preventedDeleteCount) local SwiftData record(s) from skipped shared deletes. Run Sync Shared Data to keep the Core Data sharing bridge aligned."
     )
   }
-
 
   func restoreLocalFields(
     _ selections: [HerdSharingLocalFieldRestoreSelection],
@@ -269,6 +296,9 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
         message: "Select one or more changed fields before restoring local values."
       )
     }
+
+    await operationGate.acquire()
+    defer { operationGate.release() }
 
     let result = try store.restoreLocalFields(
       selections,
@@ -288,9 +318,11 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     storageMode: HerdStorageMode
   ) async throws -> HerdSharingActionResult {
     let profilingStartedAt = Date()
-    ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.syncSharedBridgeData.started", detail: storageMode.displayName)
+    ReliabilityLog.syncEvent(
+      "CoreDataHerdSharingRepository.syncSharedBridgeData.started", detail: storageMode.displayName)
     defer {
-      PerformanceLog.logDuration("CoreDataHerdSharingRepository.syncSharedBridgeData", startedAt: profilingStartedAt)
+      PerformanceLog.logDuration(
+        "CoreDataHerdSharingRepository.syncSharedBridgeData", startedAt: profilingStartedAt)
       ReliabilityLog.syncEvent("CoreDataHerdSharingRepository.syncSharedBridgeData.finished")
     }
 
@@ -301,6 +333,9 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     guard let herd else {
       throw HerdSharingActionError.shareRootMissing
     }
+
+    await operationGate.acquire()
+    defer { operationGate.release() }
 
     let access = try await syncStore.fetchSharingAccess(for: herd)
     guard access.canExportLocalChangesToBridge else {
@@ -365,7 +400,7 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     let conflictReview: HerdSharingConflictReview?
     if let importResult {
       importMessage =
-        "Imported \(importResult.insertedTagColorDefinitionCount) new/\(importResult.updatedTagColorDefinitionCount) existing tag color definitions, \(importResult.insertedStatusReferenceCount) new/\(importResult.updatedStatusReferenceCount) existing custom status references, \(importResult.insertedPastureGroupCount) new/\(importResult.updatedPastureGroupCount) existing pasture groups, \(importResult.insertedPastureCount) new/\(importResult.updatedPastureCount) existing pastures, \(importResult.insertedAnimalCount) new/\(importResult.updatedAnimalCount) existing animals, \(importResult.insertedAnimalTagCount) new/\(importResult.updatedAnimalTagCount) existing animal tags, \(importResult.insertedMovementCount) new/\(importResult.updatedMovementCount) existing movement records, \(importResult.insertedStatusRecordCount) new/\(importResult.updatedStatusRecordCount) existing status history records, \(importResult.insertedHealthRecordCount) new/\(importResult.updatedHealthRecordCount) existing health records, \(importResult.insertedPregnancyCheckCount) new/\(importResult.updatedPregnancyCheckCount) existing pregnancy checks, \(importResult.insertedWorkingProtocolTemplateCount) new/\(importResult.updatedWorkingProtocolTemplateCount) existing working protocol templates, \(importResult.insertedWorkingSessionCount) new/\(importResult.updatedWorkingSessionCount) existing working sessions, \(importResult.insertedWorkingQueueItemCount) new/\(importResult.updatedWorkingQueueItemCount) existing queue items, \(importResult.insertedWorkingTreatmentRecordCount) new/\(importResult.updatedWorkingTreatmentRecordCount) existing treatment records, \(importResult.insertedFieldCheckSessionCount) new/\(importResult.updatedFieldCheckSessionCount) existing field check sessions, \(importResult.insertedFieldCheckAnimalCheckCount) new/\(importResult.updatedFieldCheckAnimalCheckCount) existing field check animal checks, and \(importResult.insertedFieldCheckFindingCount) new/\(importResult.updatedFieldCheckFindingCount) existing field check findings from shared bridge records. Applied \(importResult.deletedRecordCount) shared deletions. Conflict report: \(importResult.conflictSummary)"
+        "Imported \(importResult.insertedTagColorDefinitionCount) new/\(importResult.updatedTagColorDefinitionCount) existing tag color definitions, \(importResult.insertedStatusReferenceCount) new/\(importResult.updatedStatusReferenceCount) existing custom status references, \(importResult.insertedPastureGroupCount) new/\(importResult.updatedPastureGroupCount) existing pasture groups, \(importResult.insertedPastureCount) new/\(importResult.updatedPastureCount) existing pastures, \(importResult.insertedAnimalCount) new/\(importResult.updatedAnimalCount) existing animals, \(importResult.insertedAnimalTagCount) new/\(importResult.updatedAnimalTagCount) existing animal tags, \(importResult.insertedMovementCount) new/\(importResult.updatedMovementCount) existing movement records, \(importResult.insertedStatusRecordCount) new/\(importResult.updatedStatusRecordCount) existing status history records, \(importResult.insertedHealthRecordCount) new/\(importResult.updatedHealthRecordCount) existing health records, \(importResult.insertedPregnancyCheckCount) new/\(importResult.updatedPregnancyCheckCount) existing pregnancy checks, \(importResult.insertedWorkingProtocolTemplateCount) new/\(importResult.updatedWorkingProtocolTemplateCount) existing working protocol templates, \(importResult.insertedWorkingSessionCount) new/\(importResult.updatedWorkingSessionCount) existing working sessions, \(importResult.insertedWorkingQueueItemCount) new/\(importResult.updatedWorkingQueueItemCount) existing queue items, \(importResult.insertedWorkingTreatmentRecordCount) new/\(importResult.updatedWorkingTreatmentRecordCount) existing treatment records, \(importResult.insertedFieldCheckSessionCount) new/\(importResult.updatedFieldCheckSessionCount) existing field check sessions, \(importResult.insertedFieldCheckAnimalCheckCount) new/\(importResult.updatedFieldCheckAnimalCheckCount) existing field check animal checks, and \(importResult.insertedFieldCheckFindingCount) new/\(importResult.updatedFieldCheckFindingCount) existing field check findings from shared bridge records. Applied \(importResult.deletedRecordCount) shared deletions. Conflict report: \(importResult.conflictSummary) Reconciliation: \(importResult.reconciliationSummary)"
       conflictReview = makeConflictReview(
         from: importResult,
         sourceDescription: "Shared-data sync"
@@ -384,8 +419,11 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     return HerdSharingActionResult(
       title: "Shared data synced",
       message:
-        "\(importMessage) Exported \(exportResult.exportedRecordCount) bridge records for \(exportResult.herdName) into the \(exportResult.writeTargetDescription). \(cloudKitMessage)",
-      conflictReview: conflictReview
+        "\(importMessage) Exported \(exportResult.exportedRecordCount) bridge records for \(exportResult.herdName) into the \(exportResult.writeTargetDescription). \(cloudKitMessage) Reconciliation after export: \(exportResult.reconciliationSummary)",
+      conflictReview: conflictReview,
+      reconciliationReview: makeReconciliationReview(
+        from: exportResult.reconciliationReport
+      )
     )
   }
 
@@ -402,10 +440,13 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       return HerdSharingActionResult(
         title: "Shared data imported",
         message:
-          "Your CloudKit share access is \(access.permissionDescription) in the \(access.locationDescription), so yaHerd did not export local SwiftData changes back into the shared bridge. Imported \(importResult.importedTagColorDefinitionCount) tag color definitions, \(importResult.importedStatusReferenceCount) custom status references, \(importResult.importedPastureGroupCount) pasture groups, \(importResult.importedPastureCount) pastures, \(importResult.importedAnimalCount) animals, \(importResult.importedAnimalTagCount) animal tags, \(importResult.importedMovementCount) movement records, \(importResult.importedStatusRecordCount) status history records, \(importResult.importedHealthRecordCount) health records, \(importResult.importedPregnancyCheckCount) pregnancy checks, \(importResult.importedWorkingProtocolTemplateCount) working protocol templates, \(importResult.importedWorkingSessionCount) working sessions, \(importResult.importedWorkingQueueItemCount) queue items, \(importResult.importedWorkingTreatmentRecordCount) treatment records, \(importResult.importedFieldCheckSessionCount) field check sessions, \(importResult.importedFieldCheckAnimalCheckCount) field check animal checks, and \(importResult.importedFieldCheckFindingCount) field check findings from shared bridge records. Applied \(importResult.deletedRecordCount) shared deletions. Conflict report: \(importResult.conflictSummary)",
+          "Your CloudKit share access is \(access.permissionDescription) in the \(access.locationDescription), so yaHerd did not export local SwiftData changes back into the shared bridge. Imported \(importResult.importedTagColorDefinitionCount) tag color definitions, \(importResult.importedStatusReferenceCount) custom status references, \(importResult.importedPastureGroupCount) pasture groups, \(importResult.importedPastureCount) pastures, \(importResult.importedAnimalCount) animals, \(importResult.importedAnimalTagCount) animal tags, \(importResult.importedMovementCount) movement records, \(importResult.importedStatusRecordCount) status history records, \(importResult.importedHealthRecordCount) health records, \(importResult.importedPregnancyCheckCount) pregnancy checks, \(importResult.importedWorkingProtocolTemplateCount) working protocol templates, \(importResult.importedWorkingSessionCount) working sessions, \(importResult.importedWorkingQueueItemCount) queue items, \(importResult.importedWorkingTreatmentRecordCount) treatment records, \(importResult.importedFieldCheckSessionCount) field check sessions, \(importResult.importedFieldCheckAnimalCheckCount) field check animal checks, and \(importResult.importedFieldCheckFindingCount) field check findings from shared bridge records. Applied \(importResult.deletedRecordCount) shared deletions. Conflict report: \(importResult.conflictSummary) Reconciliation: \(importResult.reconciliationSummary)",
         conflictReview: makeConflictReview(
           from: importResult,
           sourceDescription: "Read-only shared-data import"
+        ),
+        reconciliationReview: makeReconciliationReview(
+          from: importResult.reconciliationReport
         )
       )
     } catch HerdSharingActionError.bridgeImportFailed(_) {
@@ -415,6 +456,25 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
           "Your CloudKit share access is \(access.permissionDescription) in the \(access.locationDescription), so yaHerd did not export local SwiftData changes back into the shared bridge. No matching bridge records were available to import yet."
       )
     }
+  }
+
+  private func makeReconciliationReview(
+    from report: HerdSharingBridgeReconciliationReport
+  ) -> HerdSharingReconciliationReview {
+    HerdSharingReconciliationReview(
+      entities: report.entities.map { entity in
+        HerdSharingEntityReconciliation(
+          entityName: entity.step.displayName,
+          localRecordCount: entity.localRecordCount,
+          bridgeRecordCount: entity.bridgeRecordCount,
+          missingInBridge: entity.missingInBridge,
+          missingInSwiftData: entity.missingInSwiftData,
+          duplicateLocalPublicIDs: entity.duplicateLocalPublicIDs,
+          duplicateBridgePublicIDs: entity.duplicateBridgePublicIDs
+        )
+      },
+      deletionTombstoneCount: report.deletionTombstoneCount
+    )
   }
 
   private func makeConflictReview(
@@ -478,10 +538,15 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
 
   private func fetchMergedSwiftDataHerd(matching herd: HerdSummary) throws -> HerdSummary {
     let herdID = herd.publicID
-    let matchingHerd = try context.fetch(FetchDescriptor<Herd>()).first { candidate in
+    let matchingHerds = try context.fetch(FetchDescriptor<Herd>()).filter { candidate in
       candidate.publicID == herdID
     }
-    return matchingHerd?.toSummary() ?? herd
+    guard matchingHerds.count <= 1 else {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "Multiple SwiftData herd roots use public ID \(herdID.uuidString). Repair the duplicate before sharing or synchronization."
+      )
+    }
+    return matchingHerds.first?.toSummary() ?? herd
   }
 
   private func fetchSwiftDataStatusReferences(for herd: HerdSummary) throws
@@ -615,7 +680,6 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
         || finding.animal?.herd?.publicID == herdID
     }
   }
-
 
   private func uniqueModels<T>(_ items: [T], by id: (T) -> UUID) -> [T] {
     var seen = Set<UUID>()

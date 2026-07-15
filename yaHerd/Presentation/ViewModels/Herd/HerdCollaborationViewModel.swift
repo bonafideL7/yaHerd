@@ -18,6 +18,7 @@ final class HerdCollaborationViewModel {
   var errorMessage: String?
   var successMessage: String?
   var latestConflictReview: HerdSharingConflictReview?
+  var latestReconciliationReview: HerdSharingReconciliationReview?
   var systemShare: HerdSystemShare?
 
   var canStartSharing: Bool {
@@ -124,6 +125,7 @@ final class HerdCollaborationViewModel {
       systemShare = result.systemShare
       successMessage = result.systemShare == nil ? "\(result.title): \(result.message)" : nil
       recordConflictReview(result.conflictReview, in: conflictReviewStore)
+      recordReconciliationReview(result.reconciliationReview)
       errorMessage = nil
     } catch {
       errorMessage = UserVisibleErrorMessage.make(error)
@@ -150,6 +152,7 @@ final class HerdCollaborationViewModel {
         )
       successMessage = "\(result.title): \(result.message)"
       recordConflictReview(result.conflictReview, in: conflictReviewStore)
+      recordReconciliationReview(result.reconciliationReview)
       errorMessage = nil
       return true
     } catch {
@@ -166,7 +169,8 @@ final class HerdCollaborationViewModel {
     conflictReviewStore: HerdSharingConflictReviewStore? = nil
   ) async -> Bool {
     isSharingActionInProgress = true
-    ReliabilityLog.syncEvent("HerdCollaborationViewModel.importSharedBridgeData", detail: storageMode.displayName)
+    ReliabilityLog.syncEvent(
+      "HerdCollaborationViewModel.importSharedBridgeData", detail: storageMode.displayName)
     defer { isSharingActionInProgress = false }
 
     do {
@@ -176,6 +180,7 @@ final class HerdCollaborationViewModel {
       )
       successMessage = "\(result.title): \(result.message)"
       recordConflictReview(result.conflictReview, in: conflictReviewStore)
+      recordReconciliationReview(result.reconciliationReview)
       errorMessage = nil
       return true
     } catch {
@@ -193,7 +198,8 @@ final class HerdCollaborationViewModel {
     conflictReviewStore: HerdSharingConflictReviewStore? = nil
   ) async -> Bool {
     isSharingActionInProgress = true
-    ReliabilityLog.syncEvent("HerdCollaborationViewModel.syncSharedBridgeData", detail: storageMode.displayName)
+    ReliabilityLog.syncEvent(
+      "HerdCollaborationViewModel.syncSharedBridgeData", detail: storageMode.displayName)
     defer { isSharingActionInProgress = false }
 
     do {
@@ -203,6 +209,7 @@ final class HerdCollaborationViewModel {
       )
       successMessage = "\(result.title): \(result.message)"
       recordConflictReview(result.conflictReview, in: conflictReviewStore)
+      recordReconciliationReview(result.reconciliationReview)
       errorMessage = nil
       return true
     } catch {
@@ -279,6 +286,13 @@ final class HerdCollaborationViewModel {
   func clearConflictResolutionHistory(in conflictReviewStore: HerdSharingConflictReviewStore? = nil)
   {
     conflictReviewStore?.clearResolutionHistory()
+  }
+
+  private func recordReconciliationReview(
+    _ review: HerdSharingReconciliationReview?
+  ) {
+    guard let review else { return }
+    latestReconciliationReview = review
   }
 
   private func recordConflictReview(

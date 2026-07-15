@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct HerdSharingBridgeConflictReport: Equatable {
+struct HerdSharingBridgeConflictReport: Codable, Equatable {
   static let empty = HerdSharingBridgeConflictReport(
     existingLocalRecordUpdateCount: 0,
     updatedRecordConflicts: [],
@@ -38,10 +38,36 @@ struct HerdSharingBridgeConflictReport: Equatable {
     }
     return parts.joined(separator: "; ") + "."
   }
+
+  /// Preserves conflict evidence from an interrupted prior attempt while preferring a freshly
+  /// captured snapshot for any record that was compared again.
+  func recoveringMissingConflicts(
+    from interruptedReport: HerdSharingBridgeConflictReport?
+  ) -> HerdSharingBridgeConflictReport {
+    guard let interruptedReport else { return self }
+
+    let freshUpdateKeys = Set(updatedRecordConflicts.map(\.recordKey))
+    let recoveredUpdates = interruptedReport.updatedRecordConflicts.filter {
+      !freshUpdateKeys.contains($0.recordKey)
+    }
+    let mergedUpdates = updatedRecordConflicts + recoveredUpdates
+
+    let freshDeleteKeys = Set(preventedDeleteConflicts.map(\.recordKey))
+    let recoveredDeletes = interruptedReport.preventedDeleteConflicts.filter {
+      !freshDeleteKeys.contains($0.recordKey)
+    }
+    let mergedDeletes = preventedDeleteConflicts + recoveredDeletes
+
+    return HerdSharingBridgeConflictReport(
+      existingLocalRecordUpdateCount: mergedUpdates.count,
+      updatedRecordConflicts: mergedUpdates,
+      preventedDeleteConflicts: mergedDeletes
+    )
+  }
 }
 
-struct HerdSharingBridgeConflictValue: Equatable {
-  enum ValueType: String, Equatable {
+struct HerdSharingBridgeConflictValue: Codable, Equatable {
+  enum ValueType: String, Codable, Equatable {
     case null
     case string
     case bool
@@ -62,7 +88,7 @@ struct HerdSharingBridgeConflictValue: Equatable {
   }
 }
 
-struct HerdSharingBridgeFieldChange: Equatable, Identifiable {
+struct HerdSharingBridgeFieldChange: Codable, Equatable, Identifiable {
   var id: String { fieldName }
 
   let fieldName: String
@@ -86,8 +112,10 @@ struct HerdSharingBridgeFieldChange: Equatable, Identifiable {
   ) {
     self.init(
       fieldName: fieldName,
-      localValue: HerdSharingBridgeConflictValue(type: .string, encodedValue: localValueDescription),
-      sharedValue: HerdSharingBridgeConflictValue(type: .string, encodedValue: sharedValueDescription)
+      localValue: HerdSharingBridgeConflictValue(
+        type: .string, encodedValue: localValueDescription),
+      sharedValue: HerdSharingBridgeConflictValue(
+        type: .string, encodedValue: sharedValueDescription)
     )
   }
 
@@ -95,8 +123,8 @@ struct HerdSharingBridgeFieldChange: Equatable, Identifiable {
   var sharedValueDescription: String { sharedValue.displayDescription }
 }
 
-struct HerdSharingBridgeConflictDetail: Equatable, Identifiable {
-  enum Kind: String, Equatable {
+struct HerdSharingBridgeConflictDetail: Codable, Equatable, Identifiable {
+  enum Kind: String, Codable, Equatable {
     case existingLocalRecordUpdate
     case preventedSharedDelete
   }
@@ -108,6 +136,10 @@ struct HerdSharingBridgeConflictDetail: Equatable, Identifiable {
   let localModifiedAt: Date
   let sharedModifiedAt: Date
   var fieldChanges: [HerdSharingBridgeFieldChange]
+
+  fileprivate var recordKey: String {
+    "\(kind.rawValue)|\(sourceEntityName)|\(publicID.uuidString)"
+  }
 
   init(
     kind: Kind,
