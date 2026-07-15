@@ -590,8 +590,10 @@ private final class RecordingHerdSharingRepository: HerdSharingRepository {
     HerdSharingActionResult(title: "Unused", message: "Unused")
   }
 
-  func importSharedBridgeData(storageMode: HerdStorageMode) async throws -> HerdSharingActionResult
-  {
+  func importSharedBridgeData(
+    herd: HerdSummary?,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult {
     HerdSharingActionResult(title: "Unused", message: "Unused")
   }
 

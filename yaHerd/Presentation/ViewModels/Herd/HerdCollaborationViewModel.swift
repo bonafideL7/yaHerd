@@ -171,6 +171,7 @@ final class HerdCollaborationViewModel {
 
     do {
       let result = try await ImportSharedHerdDataUseCase(repository: sharingRepository).execute(
+        herd: herd,
         storageMode: storageMode
       )
       successMessage = "\(result.title): \(result.message)"

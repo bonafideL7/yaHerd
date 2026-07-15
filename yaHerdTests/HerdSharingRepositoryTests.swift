@@ -145,7 +145,77 @@ final class HerdSharingRepositoryTests: XCTestCase {
     XCTAssertTrue(result.message.hasPrefix("Imported"))
   }
 
-  func testWritableParticipantDoesNotMirrorStaleLocalDataWhenSharedImportFails() async throws {
+  func testOwnerImportsPrivateBridgeChangesBeforeMirroringLocalData() async throws {
+    let container = try TestSupport.makeModelContainer()
+    let context = container.mainContext
+    let herdID = UUID()
+    let localHerd = Herd(
+      publicID: herdID,
+      name: "Stale owner herd",
+      createdAt: Date(timeIntervalSince1970: 1),
+      updatedAt: Date(timeIntervalSince1970: 2)
+    )
+    context.insert(localHerd)
+    try context.save()
+
+    let ownerAccess = HerdSharingAccess.ownerPrivateStore(participantCount: 2)
+    let syncStore = RecordingHerdSharingBridgeSyncStore(
+      herdID: herdID,
+      access: ownerAccess
+    )
+    let repository = CoreDataHerdSharingRepository(
+      context: context,
+      syncStore: syncStore
+    )
+
+    let result = try await repository.syncSharedBridgeData(
+      herd: localHerd.toSummary(),
+      storageMode: .iCloud
+    )
+
+    XCTAssertEqual(syncStore.operationOrder, ["access", "import", "export"])
+    XCTAssertEqual(syncStore.importedAccess, ownerAccess)
+    XCTAssertEqual(syncStore.importedHerd?.publicID, herdID)
+    XCTAssertEqual(syncStore.exportedHerd?.name, "Downloaded collaborator herd")
+    XCTAssertEqual(syncStore.exportedHerd?.updatedAt, Date(timeIntervalSince1970: 10))
+    XCTAssertTrue(result.message.hasPrefix("Imported"))
+  }
+
+  func testManualOwnerImportPassesPrivateBridgeAccessToStore() async throws {
+    let container = try TestSupport.makeModelContainer()
+    let context = container.mainContext
+    let herdID = UUID()
+    let localHerd = Herd(
+      publicID: herdID,
+      name: "Stale owner herd",
+      createdAt: Date(timeIntervalSince1970: 1),
+      updatedAt: Date(timeIntervalSince1970: 2)
+    )
+    context.insert(localHerd)
+    try context.save()
+
+    let ownerAccess = HerdSharingAccess.ownerPrivateStore(participantCount: 2)
+    let syncStore = RecordingHerdSharingBridgeSyncStore(
+      herdID: herdID,
+      access: ownerAccess
+    )
+    let repository = CoreDataHerdSharingRepository(
+      context: context,
+      syncStore: syncStore
+    )
+
+    _ = try await repository.importSharedBridgeData(
+      herd: localHerd.toSummary(),
+      storageMode: .iCloud
+    )
+
+    XCTAssertEqual(syncStore.operationOrder, ["access", "import"])
+    XCTAssertEqual(syncStore.importedAccess, ownerAccess)
+    XCTAssertEqual(syncStore.importedHerd?.publicID, herdID)
+    XCTAssertNil(syncStore.exportedHerd)
+  }
+
+  func testOwnerDoesNotMirrorStaleLocalDataWhenPrivateBridgeImportFails() async throws {
     let container = try TestSupport.makeModelContainer()
     let context = container.mainContext
     let herdID = UUID()
@@ -160,6 +230,7 @@ final class HerdSharingRepositoryTests: XCTestCase {
 
     let syncStore = RecordingHerdSharingBridgeSyncStore(
       herdID: herdID,
+      access: .ownerPrivateStore(participantCount: 2),
       importError: .bridgeImportFailed("Shared records could not be merged safely.")
     )
     let repository = CoreDataHerdSharingRepository(
@@ -203,24 +274,39 @@ final class HerdSharingRepositoryTests: XCTestCase {
 @MainActor
 private final class RecordingHerdSharingBridgeSyncStore: HerdSharingBridgeSyncStore {
   let herdID: UUID
+  let access: HerdSharingAccess
   let importError: HerdSharingActionError?
   private(set) var operationOrder: [String] = []
+  private(set) var importedHerd: HerdSummary?
+  private(set) var importedAccess: HerdSharingAccess?
   private(set) var exportedHerd: HerdSummary?
 
-  init(herdID: UUID, importError: HerdSharingActionError? = nil) {
+  init(
+    herdID: UUID,
+    access: HerdSharingAccess = .acceptedSharedStore(
+      permission: .readWrite,
+      participantCount: 2
+    ),
+    importError: HerdSharingActionError? = nil
+  ) {
     self.herdID = herdID
+    self.access = access
     self.importError = importError
   }
 
   func fetchSharingAccess(for herd: HerdSummary) async throws -> HerdSharingAccess {
     operationOrder.append("access")
-    return .acceptedSharedStore(permission: .readWrite, participantCount: 2)
+    return access
   }
 
-  func importSharedRecordsIntoSwiftData(context: ModelContext) async throws
-    -> HerdSharingBridgeImportResult
-  {
+  func importBridgeRecordsIntoSwiftData(
+    for herd: HerdSummary,
+    access: HerdSharingAccess,
+    context: ModelContext
+  ) async throws -> HerdSharingBridgeImportResult {
     operationOrder.append("import")
+    importedHerd = herd
+    importedAccess = access
     if let importError {
       throw importError
     }
@@ -354,8 +440,10 @@ private final class MissingInvitationTestHerdSharingRepository: HerdSharingRepos
     return HerdSharingActionResult(title: "Unused", message: "Unused")
   }
 
-  func importSharedBridgeData(storageMode: HerdStorageMode) async throws -> HerdSharingActionResult
-  {
+  func importSharedBridgeData(
+    herd: HerdSummary?,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult {
     HerdSharingActionResult(title: "Unused", message: "Unused")
   }
 
