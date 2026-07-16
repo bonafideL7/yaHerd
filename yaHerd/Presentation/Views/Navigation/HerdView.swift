@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum HerdViewMode: Hashable {
+enum HerdViewMode: String, Hashable, Codable {
     case animals
     case pastures
 }
@@ -19,6 +19,8 @@ struct HerdView: View {
     private let showingFilters: Binding<Bool>?
     private let pastureFilter: Binding<PastureListFilter>?
     private let usesShellBottomAccessory: Bool
+    private let onOpenAnimal: (UUID) -> Void
+    private let onOpenPasture: (UUID) -> Void
     private let onOpenFieldChecks: () -> Void
     private let onOpenWorkSessions: () -> Void
     private let onOpenSettings: () -> Void
@@ -34,6 +36,8 @@ struct HerdView: View {
         showingFilters: Binding<Bool>? = nil,
         pastureFilter: Binding<PastureListFilter>? = nil,
         usesShellBottomAccessory: Bool = false,
+        onOpenAnimal: @escaping (UUID) -> Void = { _ in },
+        onOpenPasture: @escaping (UUID) -> Void = { _ in },
         onOpenFieldChecks: @escaping () -> Void = {},
         onOpenWorkSessions: @escaping () -> Void = {},
         onOpenSettings: @escaping () -> Void = {}
@@ -48,6 +52,8 @@ struct HerdView: View {
         self.showingFilters = showingFilters
         self.pastureFilter = pastureFilter
         self.usesShellBottomAccessory = usesShellBottomAccessory
+        self.onOpenAnimal = onOpenAnimal
+        self.onOpenPasture = onOpenPasture
         self.onOpenFieldChecks = onOpenFieldChecks
         self.onOpenWorkSessions = onOpenWorkSessions
         self.onOpenSettings = onOpenSettings
@@ -68,6 +74,7 @@ struct HerdView: View {
                     usesExternalSearchField: true,
                     hidesControlsUntilSearch: true,
                     usesShellBottomAccessory: usesShellBottomAccessory,
+                    onOpenAnimal: onOpenAnimal,
                     onOpenFieldChecks: onOpenFieldChecks,
                     onOpenWorkSessions: onOpenWorkSessions,
                     onOpenSettings: onOpenSettings
@@ -76,6 +83,7 @@ struct HerdView: View {
                 PastureTileListView(
                     isManaging: $isManagingPastures,
                     filter: pastureFilter,
+                    onOpenPasture: onOpenPasture,
                     onOpenFieldChecks: onOpenFieldChecks,
                     onOpenWorkSessions: onOpenWorkSessions,
                     onOpenSettings: onOpenSettings

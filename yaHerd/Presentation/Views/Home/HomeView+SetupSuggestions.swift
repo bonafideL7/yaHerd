@@ -93,7 +93,7 @@ extension HomeView {
                 tint: .green,
                 actionTitle: "Add",
                 cardWidth: cardWidth,
-                onAction: { isPresentingAddPasture = true },
+                onAction: { presentAddPasture() },
                 onDismiss: { dismissSetupSuggestion(.addFirstPasture) }
             )
         case .addFirstAnimal:
@@ -104,7 +104,7 @@ extension HomeView {
                 tint: .blue,
                 actionTitle: "Add",
                 cardWidth: cardWidth,
-                onAction: { isPresentingAddAnimal = true },
+                onAction: { presentAddAnimal() },
                 onDismiss: { dismissSetupSuggestion(.addFirstAnimal) }
             )
         case .startFirstPastureCheck:
@@ -115,7 +115,7 @@ extension HomeView {
                 tint: .purple,
                 actionTitle: "Start",
                 cardWidth: cardWidth,
-                onAction: { isStartingFieldCheck = true },
+                onAction: { presentFieldCheckStart() },
                 onDismiss: { dismissSetupSuggestion(.startFirstPastureCheck) }
             )
         case .createWorkingProtocol:

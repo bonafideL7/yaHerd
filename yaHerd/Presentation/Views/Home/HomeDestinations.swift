@@ -56,6 +56,8 @@ struct HomePastureCheckStartListView: View {
 }
 
 struct HomeAlertsView: View {
+    @Environment(AppNavigationState.self) private var navigation
+
     let alerts: [DashboardAlert]
     let openAnimalList: (AnimalListLaunchConfiguration) -> Void
     let openPastureList: (PastureListLaunchConfiguration) -> Void
@@ -85,17 +87,19 @@ struct HomeAlertsView: View {
     func alertRow(_ alert: DashboardAlert) -> some View {
         switch alert.destination {
         case .some(.animal(let animalID)):
-            NavigationLink {
-                AnimalDetailView(animalID: animalID)
+            Button {
+                navigation.openAnimal(animalID)
             } label: {
-                alertLabel(alert)
+                alertLabel(alert, showsChevron: true)
             }
+            .buttonStyle(.plain)
         case .some(.pasture(let pastureID)):
-            NavigationLink {
-                PastureDetailView(pastureID: pastureID)
+            Button {
+                navigation.openPasture(pastureID)
             } label: {
-                alertLabel(alert)
+                alertLabel(alert, showsChevron: true)
             }
+            .buttonStyle(.plain)
         case .some(.animalList(let kind)):
             Button {
                 openAnimalList(.dashboard(kind))

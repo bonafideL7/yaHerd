@@ -70,6 +70,8 @@ struct AnimalDetailDistinguishingFeaturesSection: View {
 }
 
 struct AnimalDetailOffspringSection: View {
+    @Environment(AppNavigationState.self) private var navigation
+
     let detail: AnimalDetailSnapshot
     let canAddOffspring: Bool
     let onAddOffspring: () -> Void
@@ -79,9 +81,12 @@ struct AnimalDetailOffspringSection: View {
             Section {
                 if !detail.maternalOffspring.isEmpty {
                     ForEach(detail.maternalOffspring) { offspring in
-                        NavigationLink(value: offspring.id) {
+                        Button {
+                            navigation.openAnimal(offspring.id)
+                        } label: {
                             AnimalListRowContent(animal: offspring)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
 

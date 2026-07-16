@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum FieldChecksViewMode: Hashable {
+enum FieldChecksViewMode: String, Hashable, Codable {
     case all
     case inProgress
     case openFindings

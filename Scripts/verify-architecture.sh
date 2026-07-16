@@ -185,6 +185,74 @@ if missing_setting_cases:
 
 
 
+navigation_state_path = Path("yaHerd/App/Navigation/AppNavigationState.swift")
+main_tab_path = Path("yaHerd/Presentation/Views/Navigation/MainTabView.swift")
+app_root_path = Path("yaHerd/App/yaHerdApp.swift")
+
+if Path("yaHerd/App/Navigation/NavigationCoordinator.swift").exists():
+    failures.append(
+        "NavigationCoordinator.swift must not be restored; AppNavigationState owns actual stack state"
+    )
+
+for path in Path("yaHerd").rglob("*.swift"):
+    source = path.read_text()
+    if "globalPath" in source or "NavigationCoordinator" in source:
+        failures.append(
+            f"{path}: disconnected NavigationCoordinator/globalPath navigation is not allowed"
+        )
+
+if not navigation_state_path.exists():
+    failures.append("Missing AppNavigationState.swift")
+else:
+    navigation_source = navigation_state_path.read_text()
+    required_navigation_types = {
+        "AppNavigationState",
+        "HerdRouter",
+        "WorkflowRouter",
+        "HerdRoute",
+        "WorkflowRoute",
+        "AppNavigationSnapshot",
+        "AppNavigationRequest",
+    }
+    for type_name in required_navigation_types:
+        if not re.search(rf"\b(?:class|final\s+class|struct|enum)\s+{type_name}\b", navigation_source):
+            failures.append(f"AppNavigationState.swift is missing {type_name}")
+
+    for route_name in ("HerdRoute", "WorkflowRoute", "AppNavigationRequest"):
+        declaration = re.search(rf"enum\s+{route_name}\s*:\s*([^{{]+)", navigation_source)
+        if declaration is None or "Codable" not in declaration.group(1):
+            failures.append(f"{route_name} must remain a typed Codable route")
+
+main_tab_source = main_tab_path.read_text()
+if len(main_tab_source.splitlines()) > 120:
+    failures.append(
+        "MainTabView.swift exceeds 120 lines; move navigation behavior into routers or feature roots"
+    )
+if "@State" in main_tab_source or "NavigationPath" in main_tab_source:
+    failures.append(
+        "MainTabView must not own navigation paths or modal/search workflow state"
+    )
+if 'Tab("Search"' in main_tab_source or "role: .search" in main_tab_source:
+    failures.append(
+        "Search must remain inside the single herd navigation hierarchy, not a duplicate tab tree"
+    )
+
+app_root_source = app_root_path.read_text()
+project_source = Path("yaHerd.xcodeproj/project.pbxproj").read_text()
+if project_source.count("CFBundleURLSchemes") < 2 or project_source.count("yaherd,") < 2:
+    failures.append("The yaHerd URL scheme must remain registered in both app build configurations")
+
+for required_fragment in (
+    '@SceneStorage("navigation.restoration.v1")',
+    ".environment(navigation)",
+    ".onOpenURL",
+):
+    if required_fragment not in app_root_source:
+        failures.append(
+            f"yaHerdApp.swift is missing navigation restoration/routing fragment: {required_fragment}"
+        )
+
+
 use_case_root = Path("yaHerd/Domain/UseCases")
 for path in use_case_root.rglob("*.swift"):
     source = path.read_text()

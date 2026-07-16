@@ -1,6 +1,6 @@
 import Foundation
 
-enum PastureListFilter: CaseIterable, Hashable {
+enum PastureListFilter: String, CaseIterable, Codable, Hashable {
     case all
     case overCapacity
     case underutilized

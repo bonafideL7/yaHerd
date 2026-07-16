@@ -289,3 +289,21 @@ Persistent-store failure is handled by a separate `AppDataAccessMode.recoveryRea
 ## Concurrency boundary
 
 The app and test targets compile in Swift 6 mode with complete strict-concurrency checking and main-actor default isolation. Domain repository protocols are explicitly `@MainActor` because production repositories use `ModelContainer.mainContext`. Observable UI state, navigation, sharing coordinators, mutation scheduling, and collaboration write validation use the same actor. Application sources may not introduce `@unchecked Sendable`, lock-backed state managers, or `Task.detached`; the CI gate in `Scripts/verify-concurrency.sh` enforces those restrictions. See `CONCURRENCY.md` at the repository root.
+
+## Application navigation boundary
+
+`MainTabView` is a tab composition view, not the owner of application workflow state. App-scoped navigation lives in `AppNavigationState` and is divided into:
+
+- `selectedTab`
+- `HerdRouter` for the single herd navigation stack, list mode, search criteria, filters, sorting, and typed herd routes
+- `WorkflowRouter` for resumable field-check and working-session routes
+- `presentedSheet`
+- `fullScreenWorkflow`
+
+`HerdRoute`, `WorkflowRoute`, `AppPresentedSheet`, `AppFullScreenWorkflow`, and `AppNavigationRequest` are typed `Codable` values. `RootAppView` persists an `AppNavigationSnapshot` in scene storage and restores it when the scene starts. The same request model is used by URL routes and app-level notification routing.
+
+The supported URL shape is `yaherd://<destination>/<identifier>`, including animal, pasture, field-check, work-session, and search destinations. A field-check URL may include a `finding` query item to reopen a specific finding editor.
+
+Search is part of the herd feature hierarchy. Do not add a second Search tab containing another `HerdView`; that creates duplicate view trees and competing navigation ownership. The herd tab owns one `NavigationStack`, one search state, and one route path.
+
+Do not add app-level modal state, workflow routes, search/filter state, or `NavigationPath` values back to `MainTabView`. Add behavior to the appropriate router or presentation modifier. `NavigationCoordinator.globalPath` was removed because it was not connected to the actual stacks.

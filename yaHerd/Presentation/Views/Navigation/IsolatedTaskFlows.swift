@@ -1,16 +1,8 @@
 import SwiftUI
 
 struct IsolatedFieldCheckAreaView: View {
-    let route: FieldCheckAreaLaunchConfiguration
+    @Environment(AppNavigationState.self) private var navigation
     let onReturnHome: () -> Void
-
-    @State private var activeSession: FieldCheckSessionLaunchConfiguration?
-
-    init(route: FieldCheckAreaLaunchConfiguration, onReturnHome: @escaping () -> Void) {
-        self.route = route
-        self.onReturnHome = onReturnHome
-        _activeSession = State(initialValue: route.session)
-    }
 
     var body: some View {
         NavigationStack {
@@ -25,33 +17,31 @@ struct IsolatedFieldCheckAreaView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let session = activeSession {
+        switch navigation.workflowRouter.route {
+        case .fieldCheckSession(let session):
             FieldCheckSessionDetailView(
                 sessionID: session.sessionID,
                 opensFindings: session.opensFindings,
                 opensFlaggedRoster: session.opensFlaggedRoster,
                 opensRemainingRoster: session.opensRemainingRoster,
-                opensMissingRoster: session.opensMissingRoster
+                opensMissingRoster: session.opensMissingRoster,
+                focusedFindingID: session.focusedFindingID
             )
-        } else {
-            FieldChecksView(mode: route.mode ?? .all, onSessionLaunch: { configuration in
-                activeSession = configuration
+        case .fieldCheckSessions(let mode):
+            FieldChecksView(mode: mode, onSessionLaunch: { configuration in
+                navigation.workflowRouter.route = .fieldCheckSession(configuration)
+            })
+        default:
+            FieldChecksView(mode: .all, onSessionLaunch: { configuration in
+                navigation.workflowRouter.route = .fieldCheckSession(configuration)
             })
         }
     }
 }
 
 struct IsolatedWorkAreaView: View {
-    let route: WorkAreaLaunchConfiguration
+    @Environment(AppNavigationState.self) private var navigation
     let onReturnHome: () -> Void
-
-    @State private var activeSessionID: UUID?
-
-    init(route: WorkAreaLaunchConfiguration, onReturnHome: @escaping () -> Void) {
-        self.route = route
-        self.onReturnHome = onReturnHome
-        _activeSessionID = State(initialValue: route.sessionID)
-    }
 
     var body: some View {
         NavigationStack {
@@ -66,11 +56,16 @@ struct IsolatedWorkAreaView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let sessionID = activeSessionID {
+        switch navigation.workflowRouter.route {
+        case .workingSession(let sessionID):
             WorkingSessionDetailView(sessionID: sessionID)
-        } else {
+        case .workingSessions:
             WorkingSessionsView { sessionID in
-                activeSessionID = sessionID
+                navigation.workflowRouter.route = .workingSession(sessionID)
+            }
+        default:
+            WorkingSessionsView { sessionID in
+                navigation.workflowRouter.route = .workingSession(sessionID)
             }
         }
     }

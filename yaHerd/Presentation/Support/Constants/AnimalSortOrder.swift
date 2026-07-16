@@ -8,7 +8,7 @@
 
 import Foundation
 
-enum AnimalSortOrder: String, CaseIterable {
+enum AnimalSortOrder: String, CaseIterable, Codable, Hashable {
     case tagAscending
     case tagDescending
     case birthDateNewest

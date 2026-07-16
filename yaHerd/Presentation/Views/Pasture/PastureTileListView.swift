@@ -11,6 +11,7 @@ struct PastureTileListView: View {
     @Binding private var isManaging: Bool
 
     private let externalFilter: Binding<PastureListFilter>?
+    private let onOpenPasture: ((UUID) -> Void)?
     private let onOpenFieldChecks: () -> Void
     private let onOpenWorkSessions: () -> Void
     private let onOpenSettings: () -> Void
@@ -18,12 +19,14 @@ struct PastureTileListView: View {
     init(
         isManaging: Binding<Bool>,
         filter: Binding<PastureListFilter>? = nil,
+        onOpenPasture: ((UUID) -> Void)? = nil,
         onOpenFieldChecks: @escaping () -> Void = {},
         onOpenWorkSessions: @escaping () -> Void = {},
         onOpenSettings: @escaping () -> Void = {}
     ) {
         self._isManaging = isManaging
         self.externalFilter = filter
+        self.onOpenPasture = onOpenPasture
         self.onOpenFieldChecks = onOpenFieldChecks
         self.onOpenWorkSessions = onOpenWorkSessions
         self.onOpenSettings = onOpenSettings
@@ -77,7 +80,7 @@ struct PastureTileListView: View {
                     items: filteredItems,
                     filter: filterValue,
                     totalCount: model.items.count,
-                    onSelect: model.select,
+                    onSelect: openPasture,
                     onBeginManaging: toggleManageMode,
                     onClearFilter: {
                         filterBinding.wrappedValue = .all
@@ -181,4 +184,12 @@ struct PastureTileListView: View {
             }
         )
     }
+    private func openPasture(_ pasture: PastureSummary) {
+        if let onOpenPasture {
+            onOpenPasture(pasture.id)
+        } else {
+            model.select(pasture)
+        }
+    }
+
 }
