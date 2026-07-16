@@ -18,17 +18,21 @@ struct FieldCheckSessionDetailView: View {
     @State private var pendingFindingAnimalID: UUID?
     @State private var selectedAnimalID: UUID?
     @State private var selectedPane: FieldCheckSessionPane
+    @State private var hasAppliedInitialFindingRoute = false
 
     private let sessionID: UUID
+    private let focusedFindingID: UUID?
 
     init(
         sessionID: UUID,
         opensFindings: Bool = false,
         opensFlaggedRoster: Bool = false,
         opensRemainingRoster: Bool = false,
-        opensMissingRoster: Bool = false
+        opensMissingRoster: Bool = false,
+        focusedFindingID: UUID? = nil
     ) {
         self.sessionID = sessionID
+        self.focusedFindingID = focusedFindingID
 
         let initialPane: FieldCheckSessionPane = opensFindings ? .findings : .roster
 
@@ -46,6 +50,16 @@ struct FieldCheckSessionDetailView: View {
         _selectedPane = State(initialValue: initialPane)
         _rosterFilter = State(initialValue: initialRosterFilter)
         _showingFindings = State(initialValue: false)
+    }
+
+    private func applyInitialFindingRouteIfNeeded() {
+        guard !hasAppliedInitialFindingRoute,
+              let focusedFindingID,
+              let finding = model.detail?.findings.first(where: { $0.id == focusedFindingID })
+        else { return }
+
+        hasAppliedInitialFindingRoute = true
+        editingFinding = finding
     }
 
     private var navigationSubtitleText: String {
@@ -259,6 +273,7 @@ struct FieldCheckSessionDetailView: View {
         .task(id: sessionID) {
             model.load(sessionID: sessionID, using: repository)
             syncSelectedPane()
+            applyInitialFindingRouteIfNeeded()
         }
         .onDisappear {
             if dataAccessMode.allowsDataMutations && model.detail?.isCompleted == false {

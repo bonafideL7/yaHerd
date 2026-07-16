@@ -32,10 +32,8 @@ extension HomeView {
                 }
                 .buttonStyle(.plain)
             } else {
-                NavigationLink {
-                    FieldChecksView(mode: .inProgress, onSessionLaunch: { configuration in
-                        openFieldCheckArea(.session(configuration))
-                    })
+                Button {
+                    openFieldChecks(.inProgress)
                 } label: {
                     HomeListRow(
                         title: "Open pasture checks",
@@ -53,7 +51,15 @@ extension HomeView {
         if shouldShowOpenFindingsRow {
             if openFindings.count == 1, let finding = openFindings.first {
                 Button {
-                    openFieldCheckArea(.session(FieldCheckSessionLaunchConfiguration(sessionID: finding.sessionID, opensFindings: true)))
+                    openFieldCheckArea(
+                        .session(
+                            FieldCheckSessionLaunchConfiguration(
+                                sessionID: finding.sessionID,
+                                opensFindings: true,
+                                focusedFindingID: finding.id
+                            )
+                        )
+                    )
                 } label: {
                     HomeListRow(
                         title: "Resolve open field finding",
@@ -66,10 +72,8 @@ extension HomeView {
                 }
                 .buttonStyle(.plain)
             } else {
-                NavigationLink {
-                    FieldChecksView(mode: .openFindings, onSessionLaunch: { configuration in
-                        openFieldCheckArea(.session(configuration))
-                    })
+                Button {
+                    openFieldChecks(.openFindings)
                 } label: {
                     HomeListRow(
                         title: "Open field findings",
@@ -100,10 +104,8 @@ extension HomeView {
                 }
                 .buttonStyle(.plain)
             } else {
-                NavigationLink {
-                    FieldChecksView(mode: .flaggedAnimals, onSessionLaunch: { configuration in
-                        openFieldCheckArea(.session(configuration))
-                    })
+                Button {
+                    openFieldChecks(.flaggedAnimals)
                 } label: {
                     HomeListRow(
                         title: "Flagged animals from checks",
@@ -134,10 +136,8 @@ extension HomeView {
                 }
                 .buttonStyle(.plain)
             } else {
-                NavigationLink {
-                    FieldChecksView(mode: .missingAnimals, onSessionLaunch: { configuration in
-                        openFieldCheckArea(.session(configuration))
-                    })
+                Button {
+                    openFieldChecks(.missingAnimals)
                 } label: {
                     HomeListRow(
                         title: "Missing animals from checks",

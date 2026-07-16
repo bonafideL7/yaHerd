@@ -7,12 +7,9 @@ struct HomeView: View {
     private var workingProtocolTemplateReader: any WorkingProtocolTemplateListReader { homeDependencies.workingProtocolTemplateReader }
     @EnvironmentObject var tagColorLibrary: TagColorLibraryStore
     @Environment(ApplicationSettings.self) var applicationSettings
+    @Environment(AppNavigationState.self) private var navigation
 
     @State var viewModel = HomeViewModel()
-    @Binding var isPresentingAddAnimal: Bool
-    @Binding var isPresentingAddPasture: Bool
-    @Binding var isPresentingNewWorkingSession: Bool
-    @Binding var isStartingFieldCheck: Bool
 
     let refreshToken: Int
     let openAnimalList: (AnimalListLaunchConfiguration) -> Void
@@ -21,20 +18,12 @@ struct HomeView: View {
     let openWorkArea: (WorkAreaLaunchConfiguration) -> Void
 
     init(
-        isPresentingAddAnimal: Binding<Bool>,
-        isPresentingAddPasture: Binding<Bool>,
-        isPresentingNewWorkingSession: Binding<Bool>,
-        isStartingFieldCheck: Binding<Bool>,
         refreshToken: Int = 0,
         openAnimalList: @escaping (AnimalListLaunchConfiguration) -> Void = { _ in },
         openPastureList: @escaping (PastureListLaunchConfiguration) -> Void = { _ in },
         openFieldCheckArea: @escaping (FieldCheckAreaLaunchConfiguration) -> Void = { _ in },
         openWorkArea: @escaping (WorkAreaLaunchConfiguration) -> Void = { _ in }
     ) {
-        self._isPresentingAddAnimal = isPresentingAddAnimal
-        self._isPresentingAddPasture = isPresentingAddPasture
-        self._isPresentingNewWorkingSession = isPresentingNewWorkingSession
-        self._isStartingFieldCheck = isStartingFieldCheck
         self.refreshToken = refreshToken
         self.openAnimalList = openAnimalList
         self.openPastureList = openPastureList
@@ -65,18 +54,6 @@ struct HomeView: View {
                 .padding(.trailing, 24)
                 .padding(.bottom, 24)
         }
-        .navigationDestination(isPresented: $isStartingFieldCheck) {
-            HomePastureCheckStartListView(pastures: pastureCheckStartPastures) { sessionID in
-                isStartingFieldCheck = false
-                openFieldCheckArea(.session(FieldCheckSessionLaunchConfiguration(sessionID: sessionID)))
-            }
-        }
-        .navigationDestination(isPresented: $isPresentingNewWorkingSession) {
-            WorkingSessionPastureStartListView { sessionID in
-                isPresentingNewWorkingSession = false
-                openWorkArea(.session(sessionID))
-            }
-        }
         .task(id: refreshToken) {
             loadHomeDataForCurrentState()
         }
@@ -84,21 +61,6 @@ struct HomeView: View {
             if viewModel.hasLoaded {
                 loadHomeData()
             }
-        }
-        .onChange(of: isPresentingAddAnimal) { _, isPresented in
-            if !isPresented { loadHomeData() }
-        }
-        .onChange(of: isPresentingAddPasture) { _, isPresented in
-            if !isPresented { loadHomeData() }
-        }
-        .onChange(of: isPresentingNewWorkingSession) { _, isPresented in
-            if !isPresented { loadHomeData() }
-        }
-        .sheet(isPresented: $isPresentingAddAnimal) {
-            AddAnimalView()
-        }
-        .sheet(isPresented: $isPresentingAddPasture) {
-            AddPastureView()
         }
         .alert("Home Error", isPresented: errorBinding) {
             Button("OK", role: .cancel) {
@@ -113,25 +75,25 @@ struct HomeView: View {
     var addMenu: some View {
         Menu {
             Button {
-                isPresentingAddAnimal = true
+                navigation.present(.addAnimal)
             } label: {
                 Label("Add Animal", systemImage: "tag")
             }
 
             Button {
-                isPresentingAddPasture = true
+                navigation.present(.addPasture)
             } label: {
                 Label("Add Pasture", systemImage: "leaf")
             }
 
             Button {
-                isPresentingNewWorkingSession = true
+                navigation.present(.startWorkingSession)
             } label: {
                 Label("New Working Session", systemImage: "wrench.and.screwdriver")
             }
 
             Button {
-                isStartingFieldCheck = true
+                navigation.present(.startFieldCheck)
             } label: {
                 Label("Start Pasture Check", systemImage: "checklist")
             }
@@ -182,6 +144,26 @@ struct HomeView: View {
             configuration: configuration,
             useCase: makeLoadHomeUseCase()
         )
+    }
+
+    func openFieldChecks(_ mode: FieldChecksViewMode) {
+        navigation.openFieldChecks(mode)
+    }
+
+    func openWorkingSessionHistory() {
+        navigation.openWorkingSessions()
+    }
+
+    func presentAddAnimal() {
+        navigation.present(.addAnimal)
+    }
+
+    func presentAddPasture() {
+        navigation.present(.addPasture)
+    }
+
+    func presentFieldCheckStart() {
+        navigation.present(.startFieldCheck)
     }
 
     private func makeLoadHomeUseCase() -> LoadHomeUseCase {

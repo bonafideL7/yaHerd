@@ -1,6 +1,6 @@
 import Foundation
 
-struct AnimalListLaunchConfiguration: Hashable {
+struct AnimalListLaunchConfiguration: Hashable, Codable {
     var searchText: String = ""
     var sortOrder: AnimalSortOrder = .tagAscending
     var filter: AnimalFilter = AnimalFilter()
@@ -45,7 +45,7 @@ struct AnimalListLaunchConfiguration: Hashable {
     }
 }
 
-struct PastureListLaunchConfiguration: Hashable {
+struct PastureListLaunchConfiguration: Hashable, Codable {
     var filter: PastureListFilter = .all
 
     static let all = PastureListLaunchConfiguration()
@@ -66,13 +66,14 @@ struct PastureListLaunchConfiguration: Hashable {
 }
 
 
-struct FieldCheckSessionLaunchConfiguration: Identifiable, Hashable {
+struct FieldCheckSessionLaunchConfiguration: Identifiable, Hashable, Codable {
     let token: UUID
     let sessionID: UUID
     var opensFindings: Bool
     var opensFlaggedRoster: Bool
     var opensRemainingRoster: Bool
     var opensMissingRoster: Bool
+    var focusedFindingID: UUID?
 
     var id: UUID { token }
 
@@ -82,6 +83,7 @@ struct FieldCheckSessionLaunchConfiguration: Identifiable, Hashable {
         opensFlaggedRoster: Bool = false,
         opensRemainingRoster: Bool = false,
         opensMissingRoster: Bool = false,
+        focusedFindingID: UUID? = nil,
         token: UUID = UUID()
     ) {
         self.token = token
@@ -90,11 +92,12 @@ struct FieldCheckSessionLaunchConfiguration: Identifiable, Hashable {
         self.opensFlaggedRoster = opensFlaggedRoster
         self.opensRemainingRoster = opensRemainingRoster
         self.opensMissingRoster = opensMissingRoster
+        self.focusedFindingID = focusedFindingID
     }
 }
 
 
-struct FieldCheckAreaLaunchConfiguration: Identifiable, Hashable {
+struct FieldCheckAreaLaunchConfiguration: Identifiable, Hashable, Codable {
     let token: UUID
     let mode: FieldChecksViewMode?
     let session: FieldCheckSessionLaunchConfiguration?
@@ -120,7 +123,7 @@ struct FieldCheckAreaLaunchConfiguration: Identifiable, Hashable {
     }
 }
 
-struct WorkAreaLaunchConfiguration: Identifiable, Hashable {
+struct WorkAreaLaunchConfiguration: Identifiable, Hashable, Codable {
     let token: UUID
     let sessionID: UUID?
 

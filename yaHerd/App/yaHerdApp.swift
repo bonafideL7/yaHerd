@@ -12,7 +12,6 @@ import SwiftData
 @main
 struct yaHerdApp: App {
     @UIApplicationDelegateAdaptor(CloudKitShareAppDelegate.self) private var cloudKitShareAppDelegate
-    @StateObject private var nav = NavigationCoordinator()
 
     private let bootstrapState: AppBootstrapState
     private let applicationSettings: ApplicationSettings
@@ -39,7 +38,6 @@ struct yaHerdApp: App {
                     applicationSettings: applicationSettings,
                     appSettingsSynchronizer: appSettingsSynchronizer
                 )
-                .environmentObject(nav)
 
             case .storageUnavailable(let message):
                 StartupStorageFailureView(message: message)
@@ -402,7 +400,11 @@ private struct RunningAppView: View {
 private struct RootAppView: View {
     let storageError: String?
     let dataAccessMode: AppDataAccessMode
+
     @State private var showsStorageError: Bool
+    @State private var navigation = AppNavigationState()
+    @State private var hasRestoredNavigation = false
+    @SceneStorage("navigation.restoration.v1") private var navigationRestorationPayload = ""
 
     init(storageError: String?, dataAccessMode: AppDataAccessMode) {
         self.storageError = storageError
@@ -414,12 +416,32 @@ private struct RootAppView: View {
 
     var body: some View {
         MainTabView()
+            .environment(navigation)
             .safeAreaInset(edge: .top, spacing: 0) {
                 if dataAccessMode.isRecoveryMode {
                     Color.clear
                         .frame(height: RecoveryModePersistentBanner.reservedHeight)
                         .accessibilityHidden(true)
                 }
+            }
+            .task {
+                guard !hasRestoredNavigation else { return }
+                navigation.restore(from: navigationRestorationPayload)
+                hasRestoredNavigation = true
+                navigationRestorationPayload = navigation.restorationPayload() ?? ""
+            }
+            .onChange(of: navigation.snapshot) { _, _ in
+                guard hasRestoredNavigation,
+                      let payload = navigation.restorationPayload()
+                else { return }
+                navigationRestorationPayload = payload
+            }
+            .onOpenURL { url in
+                navigation.handle(url: url)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .yaHerdNavigationRequest)) { notification in
+                guard let request = notification.object as? AppNavigationRequest else { return }
+                navigation.handle(request)
             }
             .alert("Storage Mode Changed", isPresented: $showsStorageError) {
                 Button("OK", role: .cancel) {}

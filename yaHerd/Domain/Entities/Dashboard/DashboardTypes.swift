@@ -3,7 +3,7 @@ import Foundation
 struct DashboardConfiguration: Equatable, Hashable {}
 
 
-enum DashboardAnimalListKind: String, Hashable {
+enum DashboardAnimalListKind: String, Hashable, Codable {
     case active
     case workingPen
     case unassigned

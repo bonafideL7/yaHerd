@@ -54,6 +54,7 @@ struct AnimalListView: View {
     private let usesExternalSearchField: Bool
     private let hidesControlsUntilSearch: Bool
     private let usesShellBottomAccessory: Bool
+    private let onOpenAnimal: ((UUID) -> Void)?
     private let onOpenFieldChecks: () -> Void
     private let onOpenWorkSessions: () -> Void
     private let onOpenSettings: () -> Void
@@ -70,6 +71,7 @@ struct AnimalListView: View {
         hidesControlsUntilSearch: Bool = false,
         showsSearchControls: Bool = false,
         usesShellBottomAccessory: Bool = false,
+        onOpenAnimal: ((UUID) -> Void)? = nil,
         onOpenFieldChecks: @escaping () -> Void = {},
         onOpenWorkSessions: @escaping () -> Void = {},
         onOpenSettings: @escaping () -> Void = {}
@@ -85,6 +87,7 @@ struct AnimalListView: View {
         self.hidesControlsUntilSearch = hidesControlsUntilSearch
         self.showsSearchControls = showsSearchControls
         self.usesShellBottomAccessory = usesShellBottomAccessory
+        self.onOpenAnimal = onOpenAnimal
         self.onOpenFieldChecks = onOpenFieldChecks
         self.onOpenWorkSessions = onOpenWorkSessions
         self.onOpenSettings = onOpenSettings
@@ -268,7 +271,6 @@ struct AnimalListView: View {
                 herdList
             }
         }
-        .navigationDestination(for: UUID.self) { AnimalDetailView(animalID: $0) }
         .navigationDestination(isPresented: $isShowingInlineDetail) {
             if let detailAnimalID {
                 AnimalDetailView(animalID: detailAnimalID)
@@ -657,8 +659,12 @@ struct AnimalListView: View {
     }
 
     private func openInlineDetails(_ animalID: UUID) {
-        detailAnimalID = animalID
-        isShowingInlineDetail = true
+        if let onOpenAnimal {
+            onOpenAnimal(animalID)
+        } else {
+            detailAnimalID = animalID
+            isShowingInlineDetail = true
+        }
     }
 
     private func performPrimarySwipeAction(for animal: AnimalSummary) {
