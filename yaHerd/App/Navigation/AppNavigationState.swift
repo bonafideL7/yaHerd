@@ -206,7 +206,6 @@ final class AppNavigationState {
     let workflowRouter = WorkflowRouter()
     var presentedSheet: AppPresentedSheet?
     var fullScreenWorkflow: AppFullScreenWorkflow?
-    var homeRefreshToken = 0
 
     var snapshot: AppNavigationSnapshot {
         AppNavigationSnapshot(
@@ -243,10 +242,6 @@ final class AppNavigationState {
 
     func dismissSheet() {
         presentedSheet = nil
-    }
-
-    func refreshHome() {
-        homeRefreshToken &+= 1
     }
 
     func openAnimalList(_ configuration: AnimalListLaunchConfiguration) {
@@ -297,7 +292,6 @@ final class AppNavigationState {
     func closeFullScreenWorkflow() {
         fullScreenWorkflow = nil
         workflowRouter.reset()
-        refreshHome()
     }
 
     func handle(_ request: AppNavigationRequest) {

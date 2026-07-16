@@ -6,7 +6,6 @@ struct HomeTabRootView: View {
     var body: some View {
         NavigationStack {
             HomeView(
-                refreshToken: navigation.homeRefreshToken,
                 openAnimalList: { navigation.openAnimalList($0) },
                 openPastureList: { navigation.openPastureList($0) },
                 openFieldCheckArea: { navigation.openFieldCheckArea($0) },

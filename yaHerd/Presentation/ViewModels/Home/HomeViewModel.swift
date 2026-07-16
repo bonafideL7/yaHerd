@@ -7,15 +7,34 @@ final class HomeViewModel {
     private(set) var snapshot: HomeSnapshot?
     private(set) var hasLoaded = false
     private var isLoading = false
+    private var lastAppliedMutationSequence: UInt64 = 0
     var errorMessage: String?
 
-    func loadIfNeeded(configuration: DashboardConfiguration, useCase: LoadHomeUseCase) {
-        guard !hasLoaded else { return }
-        load(configuration: configuration, useCase: useCase)
+    func observe(
+        configuration: DashboardConfiguration,
+        useCase: LoadHomeUseCase,
+        mutationStream: any ApplicationMutationStreaming
+    ) async {
+        let startingSequence = mutationStream.currentSequence
+        if !hasLoaded || lastAppliedMutationSequence < startingSequence {
+            if load(configuration: configuration, useCase: useCase) {
+                lastAppliedMutationSequence = startingSequence
+            }
+        }
+
+        for await event in mutationStream.events(after: startingSequence) {
+            guard !Task.isCancelled else { return }
+            guard event.affectedAreas.contains(.home) else { continue }
+
+            if load(configuration: configuration, useCase: useCase) {
+                lastAppliedMutationSequence = event.sequence
+            }
+        }
     }
 
-    func load(configuration: DashboardConfiguration, useCase: LoadHomeUseCase) {
-        guard !isLoading else { return }
+    @discardableResult
+    func load(configuration: DashboardConfiguration, useCase: LoadHomeUseCase) -> Bool {
+        guard !isLoading else { return false }
         isLoading = true
         defer {
             isLoading = false
@@ -25,8 +44,10 @@ final class HomeViewModel {
             snapshot = try useCase.execute(configuration: configuration)
             errorMessage = nil
             hasLoaded = true
+            return true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
+            return false
         }
     }
 }

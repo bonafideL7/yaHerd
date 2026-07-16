@@ -25,9 +25,22 @@
 		A1B2C3D42F00111100000001 /* yaHerdTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = yaHerdTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		8D2190483009470D00DE8E34 /* Exceptions for "yaHerd" folder in "yaHerd" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 8D40A2892EDAA29E00C89DD2 /* yaHerd */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		8D40A28C2EDAA29E00C89DD2 /* yaHerd */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8D2190483009470D00DE8E34 /* Exceptions for "yaHerd" folder in "yaHerd" target */,
+			);
 			path = yaHerd;
 			sourceTree = "<group>";
 		};
@@ -340,6 +353,7 @@
 				DEVELOPMENT_TEAM = 4N9V8MB838;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = yaHerd/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = yaHerd;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -374,6 +388,7 @@
 				DEVELOPMENT_TEAM = 4N9V8MB838;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = yaHerd/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = yaHerd;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

@@ -12,6 +12,7 @@ final class AppDependencies {
     let syncDiagnosticsRepository: any SyncDiagnosticsRepository
     let herdRepository: any HerdRepository
     let herdSharingRepository: any HerdSharingRepository
+    let applicationMutationCenter: ApplicationMutationCenter
     let herdSharingMutationSyncScheduler: HerdSharingMutationSyncScheduler
     let herdCollaborationWritePolicy: HerdCollaborationWritePolicy
     let herdSharingConflictReviewStore: HerdSharingConflictReviewStore
@@ -28,39 +29,44 @@ final class AppDependencies {
         self.context = context
         self.dataAccessMode = dataAccessMode
 
+        let mutationCenter = ApplicationMutationCenter()
         let mutationSyncScheduler = HerdSharingMutationSyncScheduler()
+        let mutationPipeline = ApplicationMutationPipeline(
+            center: mutationCenter,
+            sharingScheduler: mutationSyncScheduler
+        )
         let writePolicy = HerdCollaborationWritePolicy(dataAccessMode: dataAccessMode)
         let conflictReviewStore = HerdSharingConflictReviewStore()
         let cloudKitShareAdapter = CloudKitShareAdapter()
 
         let animalRepository = SyncRequestingAnimalRepository(
             base: SwiftDataAnimalRepository(context: context),
-            scheduler: mutationSyncScheduler,
+            mutationRecorder: mutationPipeline,
             writePolicy: writePolicy
         )
         let pastureRepository = SyncRequestingPastureRepository(
             base: SwiftDataPastureRepository(context: context),
-            scheduler: mutationSyncScheduler,
+            mutationRecorder: mutationPipeline,
             writePolicy: writePolicy
         )
         let dashboardRepository = SyncRequestingDashboardRepository(
             base: SwiftDataDashboardRepository(context: context),
-            scheduler: mutationSyncScheduler,
+            mutationRecorder: mutationPipeline,
             writePolicy: writePolicy
         )
         let workingRepository = SyncRequestingWorkingRepository(
             base: SwiftDataWorkingRepository(context: context),
-            scheduler: mutationSyncScheduler,
+            mutationRecorder: mutationPipeline,
             writePolicy: writePolicy
         )
         let fieldCheckRepository = SyncRequestingFieldCheckRepository(
             base: SwiftDataFieldCheckRepository(context: context),
-            scheduler: mutationSyncScheduler,
+            mutationRecorder: mutationPipeline,
             writePolicy: writePolicy
         )
         let herdRepository = SyncRequestingHerdRepository(
             base: SwiftDataHerdRepository(context: context),
-            scheduler: mutationSyncScheduler,
+            mutationRecorder: mutationPipeline,
             writePolicy: writePolicy
         )
         let tagColorRepository = SyncRequestingTagColorRepository(
@@ -68,24 +74,28 @@ final class AppDependencies {
                 context: context,
                 duplicateResolutionPolicy: tagColorDuplicateResolutionPolicy
             ),
-            scheduler: mutationSyncScheduler,
+            mutationRecorder: mutationPipeline,
             writePolicy: writePolicy
         )
         let sampleDataSeeder = SyncRequestingSampleDataSeeder(
             base: AppSampleDataSeeder(context: context),
-            scheduler: mutationSyncScheduler,
+            mutationRecorder: mutationPipeline,
             writePolicy: writePolicy
         )
         let syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(context: context)
-        let herdSharingRepository: any HerdSharingRepository
+        let baseHerdSharingRepository: any HerdSharingRepository
         if dataAccessMode.isRecoveryMode {
-            herdSharingRepository = RecoveryModeHerdSharingRepository()
+            baseHerdSharingRepository = RecoveryModeHerdSharingRepository()
         } else {
-            herdSharingRepository = CoreDataHerdSharingRepository(
+            baseHerdSharingRepository = CoreDataHerdSharingRepository(
                 context: context,
                 shareAdapter: cloudKitShareAdapter
             )
         }
+        let herdSharingRepository = MutationPublishingHerdSharingRepository(
+            base: baseHerdSharingRepository,
+            mutationCenter: mutationCenter
+        )
 
         self.animalFeatureDependencies = AnimalFeatureDependencies(
             repository: animalRepository,
@@ -110,13 +120,15 @@ final class AppDependencies {
         self.homeFeatureDependencies = HomeFeatureDependencies(
             dashboardReader: dashboardRepository,
             fieldCheckOverviewReader: fieldCheckRepository,
-            workingProtocolTemplateReader: workingRepository
+            workingProtocolTemplateReader: workingRepository,
+            mutationStream: mutationCenter
         )
 
         self.tagColorRepository = tagColorRepository
         self.syncDiagnosticsRepository = syncDiagnosticsRepository
         self.herdRepository = herdRepository
         self.herdSharingRepository = herdSharingRepository
+        self.applicationMutationCenter = mutationCenter
         self.herdSharingMutationSyncScheduler = mutationSyncScheduler
         self.herdCollaborationWritePolicy = writePolicy
         self.herdSharingConflictReviewStore = conflictReviewStore
