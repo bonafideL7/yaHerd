@@ -7,6 +7,7 @@ import Foundation
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class HerdShareInvitationSummaryTests: XCTestCase {
   func testDisplayValuesFallbackWhenInvitationDetailsAreSparse() {
     let summary = HerdShareInvitationSummary(

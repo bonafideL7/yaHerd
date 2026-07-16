@@ -12,9 +12,15 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -c protocol.version=2 fetch -q --no-tags --depth=1 origin "${GITHUB_REF}"
+          git checkout -q --force FETCH_HEAD
 
-      - name: Select Xcode 26
+      - name: Validate architecture and Swift 6 build
         shell: bash
         run: |
           set -euo pipefail
@@ -24,11 +30,5 @@ jobs:
             exit 1
           fi
           sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
-          xcodebuild -version
-          swift --version
-
-      - name: Verify architecture boundaries
-        run: Scripts/verify-architecture.sh
-
-      - name: Verify Swift 6 concurrency
-        run: Scripts/verify-concurrency.sh
+          bash Scripts/verify-architecture.sh
+          bash Scripts/verify-concurrency.sh

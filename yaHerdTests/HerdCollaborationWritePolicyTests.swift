@@ -7,6 +7,7 @@ import XCTest
 
 @testable import yaHerd
 
+@MainActor
 final class HerdCollaborationWritePolicyTests: XCTestCase {
   func testNoKnownSharedAccessAllowsLocalWrites() throws {
     let policy = HerdCollaborationWritePolicy()

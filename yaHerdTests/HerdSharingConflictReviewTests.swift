@@ -7,6 +7,7 @@ import XCTest
 
 @testable import yaHerd
 
+@MainActor
 final class HerdSharingConflictReviewTests: XCTestCase {
   func testSummaryReportsExistingLocalUpdatesAndSkippedDeletes() {
     let review = HerdSharingConflictReview(

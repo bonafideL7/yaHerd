@@ -48,7 +48,9 @@ nonisolated struct CollaborationDependencies {
 }
 
 private struct CollaborationDependenciesKey: EnvironmentKey {
-    static let defaultValue = CollaborationDependencies()
+    static var defaultValue: CollaborationDependencies {
+        CollaborationDependencies()
+    }
 }
 
 extension EnvironmentValues {

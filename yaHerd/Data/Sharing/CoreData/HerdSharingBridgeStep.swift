@@ -84,12 +84,14 @@ enum HerdSharingBridgeStep: String, CaseIterable, Codable, Equatable, Hashable {
   }
 }
 
-struct HerdSharingBridgeFailureInjector {
+struct HerdSharingBridgeFailureInjector: Sendable {
   static let disabled = HerdSharingBridgeFailureInjector { _ in nil }
 
-  private let injectedError: (HerdSharingBridgeStep) -> Error?
+  private let injectedError: @Sendable (HerdSharingBridgeStep) -> (any Error)?
 
-  init(_ injectedError: @escaping (HerdSharingBridgeStep) -> Error?) {
+  init(
+    _ injectedError: @escaping @Sendable (HerdSharingBridgeStep) -> (any Error)?
+  ) {
     self.injectedError = injectedError
   }
 

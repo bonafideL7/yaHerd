@@ -8,6 +8,7 @@ import XCTest
 
 @testable import yaHerd
 
+@MainActor
 final class RecoveryModeTests: XCTestCase {
   func testRecoveryWritePolicyBlocksMutationBeforeSharingAccessRefresh() {
     let policy = HerdCollaborationWritePolicy(dataAccessMode: .recoveryReadOnly)

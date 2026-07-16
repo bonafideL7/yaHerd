@@ -74,7 +74,6 @@ private struct MissingHomeWorkingProtocolTemplateReader: WorkingProtocolTemplate
     }
 }
 
-
 private struct MissingHomeMutationStream: ApplicationMutationStreaming {
     nonisolated init(environmentFallback _: Void = ()) {}
 
@@ -88,12 +87,14 @@ private struct MissingHomeMutationStream: ApplicationMutationStreaming {
 }
 
 private struct HomeFeatureDependenciesKey: EnvironmentKey {
-    static let defaultValue = HomeFeatureDependencies(
-        dashboardReader: MissingHomeDashboardReader(),
-        fieldCheckOverviewReader: MissingHomeFieldCheckOverviewReader(),
-        workingProtocolTemplateReader: MissingHomeWorkingProtocolTemplateReader(),
-        mutationStream: MissingHomeMutationStream()
-    )
+    static var defaultValue: HomeFeatureDependencies {
+        HomeFeatureDependencies(
+            dashboardReader: MissingHomeDashboardReader(),
+            fieldCheckOverviewReader: MissingHomeFieldCheckOverviewReader(),
+            workingProtocolTemplateReader: MissingHomeWorkingProtocolTemplateReader(),
+            mutationStream: MissingHomeMutationStream()
+        )
+    }
 }
 
 extension EnvironmentValues {

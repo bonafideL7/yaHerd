@@ -1,6 +1,7 @@
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class ValidationServiceTests: XCTestCase {
     func testValidateAnimalRejectsSelfParent() {
         let animalID = UUID()

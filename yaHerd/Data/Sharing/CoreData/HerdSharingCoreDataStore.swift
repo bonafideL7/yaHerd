@@ -59,6 +59,8 @@ final class HerdSharingCoreDataStore {
       ),
     ]
     persistentContainer.viewContext.automaticallyMergesChangesFromParent = true
-    persistentContainer.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+    persistentContainer.viewContext.mergePolicy = NSMergePolicy(
+      merge: .mergeByPropertyObjectTrumpMergePolicyType
+    )
   }
 }

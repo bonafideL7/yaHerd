@@ -1,6 +1,7 @@
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class FieldCheckLinkedAnimalPickerRulesTests: XCTestCase {
     func testAnimalOptionsExcludeUnlinkedRosterEntriesAndSortByTag() {
         let unlinked = makeAnimal(tag: "999", animalID: nil)

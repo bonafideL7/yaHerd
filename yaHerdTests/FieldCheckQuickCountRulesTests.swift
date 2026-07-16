@@ -1,6 +1,7 @@
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class FieldCheckQuickCountRulesTests: XCTestCase {
     func testNormalizedCountsClampToRemainingRosterCapacityByAnimalType() {
         let rosterEntries = [

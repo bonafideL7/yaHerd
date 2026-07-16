@@ -106,8 +106,8 @@ struct HierarchicalIncrementCounter<ID: Hashable>: View {
                 title: activeTitle,
                 count: activeCount,
                 total: activeTotal,
-                increment: increment,
-                confirmTotal: confirmTotal
+                increment: { increment() },
+                confirmTotal: { confirmTotal() }
             )
             .presentationDetents([.medium, .large])
         }
@@ -215,7 +215,7 @@ struct FieldCheckAnimalQuickCountCounter: View {
             buckets: buckets,
             allCount: Binding(
                 get: { totalQuickCount },
-                set: applyTotalQuickCount
+                set: { newValue in applyTotalQuickCount(newValue) }
             ),
             bucketCounts: $animalTypeCounts
         )

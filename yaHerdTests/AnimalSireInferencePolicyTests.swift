@@ -1,6 +1,7 @@
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class AnimalSireInferencePolicyTests: XCTestCase {
     func testReturnsOnlyEligibleBullInPasture() {
         let pastureID = UUID()

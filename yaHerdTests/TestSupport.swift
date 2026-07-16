@@ -2,6 +2,7 @@ import Foundation
 import SwiftData
 @testable import yaHerd
 
+@MainActor
 enum TestSupport {
     static func makeSchema() -> Schema {
         yaHerdApp.makeSchema()

@@ -135,17 +135,19 @@ private struct MissingPastureFieldCheckArchiveWriter: FieldCheckPastureArchiveWr
 }
 
 private struct PastureFeatureDependenciesKey: EnvironmentKey {
-    static let defaultValue = PastureFeatureDependencies(
-        listRepository: MissingPastureRepository(),
-        createRepository: MissingPastureRepository(),
-        detailRepository: MissingPastureRepository(),
-        groupListRepository: MissingPastureRepository(),
-        groupDetailRepository: MissingPastureRepository(),
-        groupEditorRepository: MissingPastureRepository(),
-        referenceReader: MissingPastureRepository(),
-        animalMover: MissingPastureAnimalMover(),
-        fieldCheckArchiveWriter: MissingPastureFieldCheckArchiveWriter()
-    )
+    static var defaultValue: PastureFeatureDependencies {
+        PastureFeatureDependencies(
+            listRepository: MissingPastureRepository(),
+            createRepository: MissingPastureRepository(),
+            detailRepository: MissingPastureRepository(),
+            groupListRepository: MissingPastureRepository(),
+            groupDetailRepository: MissingPastureRepository(),
+            groupEditorRepository: MissingPastureRepository(),
+            referenceReader: MissingPastureRepository(),
+            animalMover: MissingPastureAnimalMover(),
+            fieldCheckArchiveWriter: MissingPastureFieldCheckArchiveWriter()
+        )
+    }
 }
 
 extension EnvironmentValues {
