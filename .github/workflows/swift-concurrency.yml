@@ -1,0 +1,34 @@
+name: Swift 6 Concurrency
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  strict-concurrency:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' -print | sort -V | tail -1)"
+          if [[ -z "$XCODE_PATH" ]]; then
+            echo "Xcode 26 is required for the iOS 26 target and Swift 6 concurrency gate." >&2
+            exit 1
+          fi
+          sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+          swift --version
+
+      - name: Verify architecture boundaries
+        run: Scripts/verify-architecture.sh
+
+      - name: Verify Swift 6 concurrency
+        run: Scripts/verify-concurrency.sh

@@ -6,6 +6,7 @@ cd "$ROOT_DIR"
 
 python3 - <<'PYTHON'
 from pathlib import Path
+import plistlib
 import re
 import sys
 
@@ -239,8 +240,49 @@ if 'Tab("Search"' in main_tab_source or "role: .search" in main_tab_source:
 
 app_root_source = app_root_path.read_text()
 project_source = Path("yaHerd.xcodeproj/project.pbxproj").read_text()
-if project_source.count("CFBundleURLSchemes") < 2 or project_source.count("yaherd,") < 2:
-    failures.append("The yaHerd URL scheme must remain registered in both app build configurations")
+
+
+def plist_registers_yaherd_url_scheme(path: Path) -> bool:
+    try:
+        with path.open("rb") as file:
+            plist = plistlib.load(file)
+    except (OSError, plistlib.InvalidFileException):
+        return False
+
+    return any(
+        isinstance(scheme, str) and scheme.casefold() == "yaherd"
+        for url_type in plist.get("CFBundleURLTypes", [])
+        if isinstance(url_type, dict)
+        for scheme in url_type.get("CFBundleURLSchemes", [])
+    )
+
+
+info_plist_candidates = (
+    Path("Info/Info.plist"),
+    Path("Info.plist"),
+    Path("yaHerd/Info.plist"),
+)
+url_scheme_registered_in_plist = any(
+    plist_registers_yaherd_url_scheme(path)
+    for path in info_plist_candidates
+    if path.exists()
+)
+
+# Xcode may either use a checked-in Info.plist shared by Debug and Release,
+# or generate the plist from per-configuration project settings. Accept both.
+url_scheme_registered_in_generated_settings = (
+    project_source.count("CFBundleURLSchemes") >= 2
+    and len(re.findall(r"(?m)^\s*yaherd,?\s*$", project_source)) >= 2
+)
+
+if not (
+    url_scheme_registered_in_plist
+    or url_scheme_registered_in_generated_settings
+):
+    failures.append(
+        "The yaHerd URL scheme must remain registered in the app Info.plist "
+        "or in both generated app build configurations"
+    )
 
 for required_fragment in (
     '@SceneStorage("navigation.restoration.v1")',
@@ -252,6 +294,76 @@ for required_fragment in (
             f"yaHerdApp.swift is missing navigation restoration/routing fragment: {required_fragment}"
         )
 
+
+
+mutation_center_path = Path("yaHerd/App/Mutation/ApplicationMutationCenter.swift")
+mutation_repository_path = Path("yaHerd/App/Mutation/MutationCoordinatingRepositories.swift")
+home_view_path = Path("yaHerd/Presentation/Views/Home/HomeView.swift")
+
+for required_path in (mutation_center_path, mutation_repository_path, home_view_path):
+    if not required_path.exists():
+        failures.append(f"Missing automatic application mutation component: {required_path}")
+
+manual_home_refresh_fragments = {
+    "homeRefreshToken",
+    "refreshHome()",
+    "refreshToken:",
+}
+for path in Path("yaHerd").rglob("*.swift"):
+    source = path.read_text()
+    for fragment in manual_home_refresh_fragments:
+        if fragment in source:
+            failures.append(
+                f"{path}: manual home refresh fragment {fragment!r} is prohibited; publish a successful mutation instead"
+            )
+
+if home_view_path.exists():
+    home_view_source = home_view_path.read_text()
+    if ".task(id:" in home_view_source or ".onAppear" in home_view_source:
+        failures.append(
+            "HomeView must subscribe to ApplicationMutationStreaming instead of task(id:) or onAppear reloads"
+        )
+    if "mutationStream: homeDependencies.mutationStream" not in home_view_source:
+        failures.append(
+            "HomeView must observe the feature mutation stream for automatic invalidation"
+        )
+
+if mutation_repository_path.exists():
+    mutation_repository_source = mutation_repository_path.read_text()
+    function_pattern = re.compile(r"\bfunc\s+([A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*\)[^{]*\{")
+    for function_match in function_pattern.finditer(mutation_repository_source):
+        body_start = function_match.end() - 1
+        depth = 0
+        body_end = None
+        for index in range(body_start, len(mutation_repository_source)):
+            character = mutation_repository_source[index]
+            if character == "{":
+                depth += 1
+            elif character == "}":
+                depth -= 1
+                if depth == 0:
+                    body_end = index
+                    break
+        if body_end is None:
+            continue
+        body = mutation_repository_source[body_start + 1:body_end]
+        is_guarded_mutation = (
+            "validateCanWrite" in body or "writePolicy.canWrite" in body
+        )
+        if not is_guarded_mutation:
+            continue
+        record_index = body.find("mutationRecorder.recordSuccessfulMutation")
+        last_base_call_index = body.rfind("base.")
+        if record_index == -1:
+            line = mutation_repository_source.count("\n", 0, function_match.start()) + 1
+            failures.append(
+                f"{mutation_repository_path}:{line}: {function_match.group(1)} must publish a successful application mutation"
+            )
+        elif record_index < last_base_call_index:
+            line = mutation_repository_source.count("\n", 0, function_match.start()) + 1
+            failures.append(
+                f"{mutation_repository_path}:{line}: {function_match.group(1)} publishes before persistence succeeds"
+            )
 
 use_case_root = Path("yaHerd/Domain/UseCases")
 for path in use_case_root.rglob("*.swift"):

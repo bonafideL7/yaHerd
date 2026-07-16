@@ -11,20 +11,17 @@ struct HomeView: View {
 
     @State var viewModel = HomeViewModel()
 
-    let refreshToken: Int
     let openAnimalList: (AnimalListLaunchConfiguration) -> Void
     let openPastureList: (PastureListLaunchConfiguration) -> Void
     let openFieldCheckArea: (FieldCheckAreaLaunchConfiguration) -> Void
     let openWorkArea: (WorkAreaLaunchConfiguration) -> Void
 
     init(
-        refreshToken: Int = 0,
         openAnimalList: @escaping (AnimalListLaunchConfiguration) -> Void = { _ in },
         openPastureList: @escaping (PastureListLaunchConfiguration) -> Void = { _ in },
         openFieldCheckArea: @escaping (FieldCheckAreaLaunchConfiguration) -> Void = { _ in },
         openWorkArea: @escaping (WorkAreaLaunchConfiguration) -> Void = { _ in }
     ) {
-        self.refreshToken = refreshToken
         self.openAnimalList = openAnimalList
         self.openPastureList = openPastureList
         self.openFieldCheckArea = openFieldCheckArea
@@ -54,13 +51,12 @@ struct HomeView: View {
                 .padding(.trailing, 24)
                 .padding(.bottom, 24)
         }
-        .task(id: refreshToken) {
-            loadHomeDataForCurrentState()
-        }
-        .onAppear {
-            if viewModel.hasLoaded {
-                loadHomeData()
-            }
+        .task {
+            await viewModel.observe(
+                configuration: configuration,
+                useCase: makeLoadHomeUseCase(),
+                mutationStream: homeDependencies.mutationStream
+            )
         }
         .alert("Home Error", isPresented: errorBinding) {
             Button("OK", role: .cancel) {
@@ -121,28 +117,6 @@ struct HomeView: View {
                     viewModel.errorMessage = nil
                 }
             }
-        )
-    }
-
-    func loadHomeDataForCurrentState() {
-        if viewModel.hasLoaded {
-            loadHomeData()
-        } else {
-            loadHomeDataIfNeeded()
-        }
-    }
-
-    func loadHomeDataIfNeeded() {
-        viewModel.loadIfNeeded(
-            configuration: configuration,
-            useCase: makeLoadHomeUseCase()
-        )
-    }
-
-    func loadHomeData() {
-        viewModel.load(
-            configuration: configuration,
-            useCase: makeLoadHomeUseCase()
         )
     }
 

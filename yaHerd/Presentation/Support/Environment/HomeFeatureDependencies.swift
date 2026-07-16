@@ -5,27 +5,32 @@ nonisolated struct HomeFeatureDependencies {
     let dashboardReader: any DashboardRecordReading
     let fieldCheckOverviewReader: any FieldCheckOverviewReading
     let workingProtocolTemplateReader: any WorkingProtocolTemplateListReader
+    let mutationStream: any ApplicationMutationStreaming
 
     nonisolated init(
         dashboardReader: any DashboardRecordReading,
         fieldCheckOverviewReader: any FieldCheckOverviewReading,
-        workingProtocolTemplateReader: any WorkingProtocolTemplateListReader
+        workingProtocolTemplateReader: any WorkingProtocolTemplateListReader,
+        mutationStream: any ApplicationMutationStreaming
     ) {
         self.dashboardReader = dashboardReader
         self.fieldCheckOverviewReader = fieldCheckOverviewReader
         self.workingProtocolTemplateReader = workingProtocolTemplateReader
+        self.mutationStream = mutationStream
     }
 
     @MainActor
     static func preview(
         dashboardReader: (any DashboardRecordReading)? = nil,
         fieldCheckOverviewReader: (any FieldCheckOverviewReading)? = nil,
-        workingProtocolTemplateReader: (any WorkingProtocolTemplateListReader)? = nil
+        workingProtocolTemplateReader: (any WorkingProtocolTemplateListReader)? = nil,
+        mutationStream: (any ApplicationMutationStreaming)? = nil
     ) -> Self {
         Self(
             dashboardReader: dashboardReader ?? MissingHomeDashboardReader(),
             fieldCheckOverviewReader: fieldCheckOverviewReader ?? MissingHomeFieldCheckOverviewReader(),
-            workingProtocolTemplateReader: workingProtocolTemplateReader ?? MissingHomeWorkingProtocolTemplateReader()
+            workingProtocolTemplateReader: workingProtocolTemplateReader ?? MissingHomeWorkingProtocolTemplateReader(),
+            mutationStream: mutationStream ?? MissingHomeMutationStream()
         )
     }
 }
@@ -69,11 +74,25 @@ private struct MissingHomeWorkingProtocolTemplateReader: WorkingProtocolTemplate
     }
 }
 
+
+private struct MissingHomeMutationStream: ApplicationMutationStreaming {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
+    var currentSequence: UInt64 { 0 }
+
+    func events(after sequence: UInt64) -> AsyncStream<ApplicationMutationEvent> {
+        AsyncStream { continuation in
+            continuation.finish()
+        }
+    }
+}
+
 private struct HomeFeatureDependenciesKey: EnvironmentKey {
     static let defaultValue = HomeFeatureDependencies(
         dashboardReader: MissingHomeDashboardReader(),
         fieldCheckOverviewReader: MissingHomeFieldCheckOverviewReader(),
-        workingProtocolTemplateReader: MissingHomeWorkingProtocolTemplateReader()
+        workingProtocolTemplateReader: MissingHomeWorkingProtocolTemplateReader(),
+        mutationStream: MissingHomeMutationStream()
     )
 }
 

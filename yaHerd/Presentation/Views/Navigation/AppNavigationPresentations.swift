@@ -7,7 +7,7 @@ private struct AppNavigationPresentationModifier: ViewModifier {
         @Bindable var navigation = navigation
 
         content
-            .sheet(item: $navigation.presentedSheet, onDismiss: { navigation.refreshHome() }) { sheet in
+            .sheet(item: $navigation.presentedSheet) { sheet in
                 sheetContent(sheet)
             }
             .fullScreenCover(item: $navigation.fullScreenWorkflow) { workflow in

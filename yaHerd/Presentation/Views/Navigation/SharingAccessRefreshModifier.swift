@@ -11,9 +11,6 @@ private struct SharingAccessRefreshModifier: ViewModifier {
                 refresh()
             }
             .onChange(of: navigation.selectedTab) { _, selectedTab in
-                if selectedTab == .home {
-                    navigation.refreshHome()
-                }
                 refresh(tab: selectedTab)
             }
             .onChange(of: navigation.herdRouter.mode) { _, mode in

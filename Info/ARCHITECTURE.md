@@ -307,3 +307,13 @@ The supported URL shape is `yaherd://<destination>/<identifier>`, including anim
 Search is part of the herd feature hierarchy. Do not add a second Search tab containing another `HerdView`; that creates duplicate view trees and competing navigation ownership. The herd tab owns one `NavigationStack`, one search state, and one route path.
 
 Do not add app-level modal state, workflow routes, search/filter state, or `NavigationPath` values back to `MainTabView`. Add behavior to the appropriate router or presentation modifier. `NavigationCoordinator.globalPath` was removed because it was not connected to the actual stacks.
+
+## Application mutation and home invalidation
+
+Successful commands publish one typed `ApplicationMutationEvent` through `ApplicationMutationPipeline`. The pipeline sends the same successful command to `ApplicationMutationCenter` for feature invalidation and to `HerdSharingMutationSyncScheduler` for collaboration export. Publication occurs only after the repository command returns successfully.
+
+`HomeViewModel` subscribes to `ApplicationMutationStreaming` and reloads when an event affects `.home`. Home does not use navigation-owned refresh counters, sheet-dismiss reloads, tab-selection reloads, `task(id:)`, or `onAppear` refresh calls. The stream retains recent events so a home screen that was off-screen can catch up when it becomes active again.
+
+CloudKit bridge imports are wrapped by `MutationPublishingHerdSharingRepository`, so accepted invitations, manual imports, synchronization, accepted shared deletions, and conflict-field restoration also invalidate feature data after SwiftData has been updated.
+
+`Scripts/verify-architecture.sh` rejects manual home-refresh tokens and verifies that every collaboration-aware repository mutation publishes only after its persistence call succeeds.
