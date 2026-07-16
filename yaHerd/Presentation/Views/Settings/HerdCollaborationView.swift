@@ -7,13 +7,14 @@ import SwiftUI
 
 @MainActor
 struct HerdCollaborationView: View {
-  @Environment(\.herdRepository) private var herdRepository
-  @Environment(\.herdSharingRepository) private var herdSharingRepository
-  @Environment(\.cloudKitShareInvitationCoordinator) private var shareInvitationCoordinator
-  @Environment(\.cloudKitShareAdapter) private var cloudKitShareAdapter
-  @Environment(\.herdSharingSyncCoordinator) private var sharingSyncCoordinator
-  @Environment(\.herdCollaborationWritePolicy) private var writePolicy
-  @Environment(\.herdSharingConflictReviewStore) private var conflictReviewStore
+  @Environment(\.collaborationDependencies) private var collaborationDependencies
+  private var herdRepository: (any HerdRepository)? { collaborationDependencies.herdRepository }
+  private var herdSharingRepository: (any HerdSharingRepository)? { collaborationDependencies.sharingRepository }
+  private var shareInvitationCoordinator: CloudKitShareInvitationCoordinator? { collaborationDependencies.invitationCoordinator }
+  private var cloudKitShareAdapter: CloudKitShareAdapter? { collaborationDependencies.shareAdapter }
+  private var sharingSyncCoordinator: HerdSharingSyncCoordinator? { collaborationDependencies.syncCoordinator }
+  private var writePolicy: HerdCollaborationWritePolicy? { collaborationDependencies.writePolicy }
+  private var conflictReviewStore: HerdSharingConflictReviewStore? { collaborationDependencies.conflictReviewStore }
   @Environment(\.appDataAccessMode) private var dataAccessMode
   @Environment(\.recoveryModeController) private var recoveryModeController
   @State private var viewModel = HerdCollaborationViewModel()

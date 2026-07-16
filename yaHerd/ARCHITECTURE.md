@@ -49,6 +49,23 @@ Cross-feature orchestration belongs in use cases, not data repositories. Reposit
 
 The ceremonial-use-case cleanup reduced the application layer from 59 Swift use-case files to 25 focused files. Removed types were single-call CRUD/query wrappers; callers now use the same narrow Domain repository contracts directly. `Scripts/verify-architecture.sh` rejects new one-call forwarding use cases.
 
+## Dependency injection boundary
+
+`yaHerdApp` injects dependencies by feature boundary instead of exposing one environment value per repository capability. The approved presentation containers are:
+
+- `HomeFeatureDependencies`
+- `AnimalFeatureDependencies`
+- `PastureFeatureDependencies`
+- `FieldCheckFeatureDependencies`
+- `WorkingSessionFeatureDependencies`
+- `CollaborationDependencies`
+
+Each container preserves narrow Domain protocol types internally. A single concrete repository may satisfy several capability properties, but views receive one feature-scoped value rather than a long list of unrelated environment keys. Cross-feature ports are placed in the consuming feature container: for example, Animal receives pasture reference reading, Working receives animal summaries and pasture references, and Pasture receives animal movement and field-check archival capabilities used by its delete workflow.
+
+Feature previews and focused tests should override only their feature container. The `preview(...)` factories supply fail-fast missing implementations for unspecified capabilities, so a preview can provide only the ports exercised by that screen. App-wide services such as recovery access mode remain separate global environment values because they apply to every feature.
+
+Do not add new root-level repository environment keys. Add a capability to the relevant feature container, or introduce a new feature container when the dependency belongs to a distinct feature boundary. `Scripts/verify-architecture.sh` enforces the approved root environment values and rejects the removed per-capability keys.
+
 ## Dashboard reference implementation
 
 The dashboard flow follows the same layered split as the rest of the app:
@@ -244,6 +261,7 @@ Pasture currently has focused coverage for validators, metrics/policies, use cas
 10. add focused tests when introducing or refactoring feature behavior
 11. avoid duplicate mappers for the same domain snapshot or summary
 12. reject one-call pass-through use cases in `Scripts/verify-architecture.sh`
+13. inject presentation dependencies through feature containers rather than individual repository environment keys
 
 ## SwiftData schema evolution
 

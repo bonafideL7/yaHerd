@@ -10,8 +10,9 @@ import SwiftUI
 struct AddAnimalView: View {
     private let title: String
     private let onSave: ((AnimalDetailSnapshot) throws -> Void)?
-    @Environment(\.animalEditorRepository) private var repository
-    @Environment(\.pastureReferenceDataReader) private var pastureReferenceDataReader
+    @Environment(\.animalFeatureDependencies) private var animalDependencies
+    private var repository: any AnimalEditorRepository { animalDependencies.editorRepository }
+    private var pastureReferenceDataReader: any PastureReferenceDataReader { animalDependencies.pastureReferenceReader }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.dismiss) private var dismiss
 

@@ -9,7 +9,8 @@ import SwiftUI
 
 struct AnimalParentPickerView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.animalParentOptionReader) private var parentOptionReader
+    @Environment(\.animalFeatureDependencies) private var animalDependencies
+    private var parentOptionReader: any AnimalParentOptionReading { animalDependencies.parentOptionReader }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @State private var viewModel = AnimalParentPickerViewModel()

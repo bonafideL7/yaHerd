@@ -12,7 +12,8 @@ private enum MainTab: Hashable {
 
 struct MainTabView: View {
     @EnvironmentObject private var nav: NavigationCoordinator
-    @Environment(\.herdSharingSyncCoordinator) private var herdSharingSyncCoordinator
+    @Environment(\.collaborationDependencies) private var collaborationDependencies
+    private var herdSharingSyncCoordinator: HerdSharingSyncCoordinator? { collaborationDependencies.syncCoordinator }
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
     

@@ -6,8 +6,9 @@
 import SwiftUI
 
 struct HerdSharingConflictReviewDetailView: View {
-  @Environment(\.herdSharingConflictReviewStore) private var conflictReviewStore
-  @Environment(\.herdSharingSyncCoordinator) private var sharingSyncCoordinator
+  @Environment(\.collaborationDependencies) private var collaborationDependencies
+  private var conflictReviewStore: HerdSharingConflictReviewStore? { collaborationDependencies.conflictReviewStore }
+  private var sharingSyncCoordinator: HerdSharingSyncCoordinator? { collaborationDependencies.syncCoordinator }
   @State private var resolutionMessage: String?
   @State private var selectedLocalFieldRestoreIDs: Set<String> = []
   @State private var pendingConfirmation: ConflictResolutionConfirmation?

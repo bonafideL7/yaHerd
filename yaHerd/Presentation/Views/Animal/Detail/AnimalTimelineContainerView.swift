@@ -5,7 +5,8 @@
 import SwiftUI
 
 struct AnimalTimelineContainerView: View {
-    @Environment(\.animalTimelineReader) private var timelineReader
+    @Environment(\.animalFeatureDependencies) private var animalDependencies
+    private var timelineReader: any AnimalTimelineReading { animalDependencies.timelineReader }
 
     let animalID: UUID
 

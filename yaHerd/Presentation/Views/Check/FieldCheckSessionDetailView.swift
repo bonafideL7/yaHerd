@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct FieldCheckSessionDetailView: View {
-    @Environment(\.fieldCheckSessionDetailRepository) private var repository
+    @Environment(\.fieldCheckFeatureDependencies) private var fieldCheckDependencies
+    private var repository: any FieldCheckSessionDetailRepository { fieldCheckDependencies.sessionDetailRepository }
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @State private var model = FieldCheckSessionDetailViewModel()
     @State private var rosterFilter: FieldCheckRosterFilter = .remaining

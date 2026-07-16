@@ -30,6 +30,82 @@ for path in root.rglob("*.swift"):
 
 
 
+app_source = Path("yaHerd/App/yaHerdApp.swift").read_text()
+allowed_root_environment_values = {
+    "appDataAccessMode",
+    "recoveryModeController",
+    "homeFeatureDependencies",
+    "animalFeatureDependencies",
+    "pastureFeatureDependencies",
+    "fieldCheckFeatureDependencies",
+    "workingSessionFeatureDependencies",
+    "collaborationDependencies",
+}
+root_environment_values = re.findall(r"\.environment\(\\\.([A-Za-z0-9_]+)", app_source)
+for environment_value in root_environment_values:
+    if environment_value not in allowed_root_environment_values:
+        failures.append(
+            f"yaHerd/App/yaHerdApp.swift: root injects ungrouped environment dependency {environment_value}"
+        )
+
+if len(root_environment_values) > len(allowed_root_environment_values):
+    failures.append(
+        "yaHerd/App/yaHerdApp.swift: root dependency injection exceeds the approved feature-boundary values"
+    )
+
+legacy_dependency_keys = {
+    "animalListRepository", "animalEditorRepository", "animalDetailRepository",
+    "animalTimelineReader", "animalParentOptionReader", "animalHealthRecordAdder",
+    "animalPregnancyCheckAdder", "pastureReferenceDataReader", "sampleDataSeeder",
+    "pastureListRepository", "pastureCreateRepository", "pastureDetailRepository",
+    "pastureGroupListRepository", "pastureGroupDetailRepository",
+    "pastureGroupEditorRepository", "pastureReferenceReader", "animalPastureMover",
+    "fieldCheckPastureArchiveWriter", "fieldCheckOverviewReader",
+    "fieldCheckSessionSetupRepository", "fieldCheckSessionDetailRepository",
+    "fieldCheckAnimalDetailRepository", "workingSessionsRepository",
+    "workingSessionDetailRepository", "newWorkingSessionRepository",
+    "workingCollectAnimalsRepository", "workingQueueRepository",
+    "workingQueueItemEditingRepository", "workingChuteRepository",
+    "workingFinishSessionRepository", "workingProtocolTemplatesRepository",
+    "workingProtocolTemplateCreator", "workingProtocolTemplateEditorRepository",
+    "workingAnimalSummaryReader", "workingProtocolTemplateReader",
+    "dashboardRecordReader", "herdRepository", "herdSharingRepository",
+    "cloudKitShareInvitationCoordinator", "cloudKitShareAdapter",
+    "herdSharingSyncCoordinator", "herdCollaborationWritePolicy",
+    "herdSharingConflictReviewStore", "syncDiagnosticsRepository",
+}
+for path in Path("yaHerd").rglob("*.swift"):
+    source = path.read_text()
+    for match in re.finditer(r"@Environment\(\\\.([A-Za-z0-9_]+)\)", source):
+        if match.group(1) in legacy_dependency_keys:
+            line_number = source.count("\n", 0, match.start()) + 1
+            failures.append(
+                f"{path}:{line_number}: inject feature dependencies through a feature container, not {match.group(1)}"
+            )
+
+feature_environment_root = Path("yaHerd/Presentation/Support/Environment")
+feature_dependency_keys = set()
+for path in feature_environment_root.glob("*.swift"):
+    source = path.read_text()
+    feature_dependency_keys.update(
+        re.findall(r"var\s+([A-Za-z0-9_]+Dependencies)\s*:", source)
+    )
+required_feature_dependency_keys = {
+    "homeFeatureDependencies",
+    "animalFeatureDependencies",
+    "pastureFeatureDependencies",
+    "fieldCheckFeatureDependencies",
+    "workingSessionFeatureDependencies",
+    "collaborationDependencies",
+}
+missing_feature_dependency_keys = required_feature_dependency_keys - feature_dependency_keys
+if missing_feature_dependency_keys:
+    failures.append(
+        "Missing feature dependency environment values: "
+        + ", ".join(sorted(missing_feature_dependency_keys))
+    )
+
+
 use_case_root = Path("yaHerd/Domain/UseCases")
 for path in use_case_root.rglob("*.swift"):
     source = path.read_text()

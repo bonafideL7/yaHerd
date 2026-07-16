@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct PastureDetailView: View {
-    @Environment(\.pastureDetailRepository) private var repository
+    @Environment(\.pastureFeatureDependencies) private var pastureDependencies
+    private var repository: any PastureDetailEditingRepository { pastureDependencies.detailRepository }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @State private var isStockingExpanded = false
     @State private var model = PastureDetailViewModel()

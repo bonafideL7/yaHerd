@@ -7,8 +7,9 @@ import SwiftUI
 
 struct NewWorkingSessionView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.newWorkingSessionRepository) private var repository
-    @Environment(\.pastureReferenceDataReader) private var pastureRepository
+    @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
+    private var repository: any NewWorkingSessionRepository { workingDependencies.newSessionRepository }
+    private var pastureRepository: any PastureReferenceDataReader { workingDependencies.pastureReferenceReader }
 
     @StateObject private var viewModel = NewWorkingSessionViewModel(pastureRepository: EmptyPastureRepository(), workingRepository: EmptyWorkingRepository())
 

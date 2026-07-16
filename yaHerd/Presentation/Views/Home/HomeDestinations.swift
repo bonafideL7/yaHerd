@@ -143,7 +143,8 @@ struct HomeAlertsView: View {
 }
 
 struct WorkingSessionPastureStartListView: View {
-    @Environment(\.pastureReferenceDataReader) private var pastureRepository
+    @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
+    private var pastureRepository: any PastureReferenceDataReader { workingDependencies.pastureReferenceReader }
 
     @State private var pastures: [PastureOption] = []
     @State private var isLoading = true
@@ -233,7 +234,8 @@ struct WorkingSessionPastureStartListView: View {
 }
 
 struct FieldCheckPastureStartListView: View {
-    @Environment(\.pastureReferenceDataReader) private var pastureRepository
+    @Environment(\.fieldCheckFeatureDependencies) private var fieldCheckDependencies
+    private var pastureRepository: any PastureReferenceDataReader { fieldCheckDependencies.pastureReferenceReader }
 
     @State private var pastures: [PastureOption] = []
     @State private var isLoading = true

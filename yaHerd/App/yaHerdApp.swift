@@ -313,55 +313,30 @@ private struct RunningAppView: View {
         self._herdSharingSyncCoordinator = State(initialValue: sharingSyncCoordinator)
     }
 
+    private var collaborationDependencies: CollaborationDependencies {
+        CollaborationDependencies(
+            herdRepository: runtime.dependencies.herdRepository,
+            sharingRepository: runtime.dependencies.herdSharingRepository,
+            invitationCoordinator: cloudKitShareInvitationCoordinator,
+            shareAdapter: runtime.dependencies.cloudKitShareAdapter,
+            syncCoordinator: herdSharingSyncCoordinator,
+            writePolicy: runtime.dependencies.herdCollaborationWritePolicy,
+            conflictReviewStore: runtime.dependencies.herdSharingConflictReviewStore,
+            diagnosticsRepository: runtime.dependencies.syncDiagnosticsRepository
+        )
+    }
+
     var body: some View {
         RootAppView(storageError: runtime.storageError, dataAccessMode: runtime.dataAccessMode)
             .environmentObject(tagColorLibrary)
             .environment(\.appDataAccessMode, runtime.dataAccessMode)
             .environment(\.recoveryModeController, runtime.dataAccessMode.isRecoveryMode ? recoveryModeController : nil)
-            .environment(\.dashboardRecordReader, runtime.dependencies.dashboardRepository)
-            .environment(\.fieldCheckOverviewReader, runtime.dependencies.fieldCheckRepository)
-            .environment(\.workingProtocolTemplateReader, runtime.dependencies.workingRepository)
-            .environment(\.syncDiagnosticsRepository, runtime.dependencies.syncDiagnosticsRepository)
-            .environment(\.herdRepository, runtime.dependencies.herdRepository)
-            .environment(\.herdSharingRepository, runtime.dependencies.herdSharingRepository)
-            .environment(\.cloudKitShareInvitationCoordinator, cloudKitShareInvitationCoordinator)
-            .environment(\.cloudKitShareAdapter, runtime.dependencies.cloudKitShareAdapter)
-            .environment(\.herdSharingSyncCoordinator, herdSharingSyncCoordinator)
-            .environment(\.herdCollaborationWritePolicy, runtime.dependencies.herdCollaborationWritePolicy)
-            .environment(\.herdSharingConflictReviewStore, runtime.dependencies.herdSharingConflictReviewStore)
-            .environment(\.animalListRepository, runtime.dependencies.animalRepository)
-            .environment(\.animalEditorRepository, runtime.dependencies.animalRepository)
-            .environment(\.animalDetailRepository, runtime.dependencies.animalRepository)
-            .environment(\.animalTimelineReader, runtime.dependencies.animalRepository)
-            .environment(\.animalParentOptionReader, runtime.dependencies.animalRepository)
-            .environment(\.animalHealthRecordAdder, runtime.dependencies.animalRepository)
-            .environment(\.animalPregnancyCheckAdder, runtime.dependencies.animalRepository)
-            .environment(\.pastureListRepository, runtime.dependencies.pastureRepository)
-            .environment(\.pastureCreateRepository, runtime.dependencies.pastureRepository)
-            .environment(\.pastureDetailRepository, runtime.dependencies.pastureRepository)
-            .environment(\.pastureGroupListRepository, runtime.dependencies.pastureRepository)
-            .environment(\.pastureGroupDetailRepository, runtime.dependencies.pastureRepository)
-            .environment(\.pastureGroupEditorRepository, runtime.dependencies.pastureRepository)
-            .environment(\.pastureReferenceReader, runtime.dependencies.pastureRepository)
-            .environment(\.animalPastureMover, runtime.dependencies.animalRepository)
-            .environment(\.fieldCheckPastureArchiveWriter, runtime.dependencies.fieldCheckRepository)
-            .environment(\.fieldCheckSessionSetupRepository, runtime.dependencies.fieldCheckRepository)
-            .environment(\.fieldCheckSessionDetailRepository, runtime.dependencies.fieldCheckRepository)
-            .environment(\.fieldCheckAnimalDetailRepository, runtime.dependencies.fieldCheckRepository)
-            .environment(\.workingSessionsRepository, runtime.dependencies.workingRepository)
-            .environment(\.workingSessionDetailRepository, runtime.dependencies.workingRepository)
-            .environment(\.newWorkingSessionRepository, runtime.dependencies.workingRepository)
-            .environment(\.workingCollectAnimalsRepository, runtime.dependencies.workingRepository)
-            .environment(\.workingQueueRepository, runtime.dependencies.workingRepository)
-            .environment(\.workingQueueItemEditingRepository, runtime.dependencies.workingRepository)
-            .environment(\.workingChuteRepository, runtime.dependencies.workingRepository)
-            .environment(\.workingFinishSessionRepository, runtime.dependencies.workingRepository)
-            .environment(\.workingProtocolTemplatesRepository, runtime.dependencies.workingRepository)
-            .environment(\.workingProtocolTemplateCreator, runtime.dependencies.workingRepository)
-            .environment(\.workingProtocolTemplateEditorRepository, runtime.dependencies.workingRepository)
-            .environment(\.workingAnimalSummaryReader, runtime.dependencies.animalRepository)
-            .environment(\.pastureReferenceDataReader, runtime.dependencies.pastureRepository)
-            .environment(\.sampleDataSeeder, runtime.dependencies.sampleDataSeeder)
+            .environment(\.homeFeatureDependencies, runtime.dependencies.homeFeatureDependencies)
+            .environment(\.animalFeatureDependencies, runtime.dependencies.animalFeatureDependencies)
+            .environment(\.pastureFeatureDependencies, runtime.dependencies.pastureFeatureDependencies)
+            .environment(\.fieldCheckFeatureDependencies, runtime.dependencies.fieldCheckFeatureDependencies)
+            .environment(\.workingSessionFeatureDependencies, runtime.dependencies.workingSessionFeatureDependencies)
+            .environment(\.collaborationDependencies, collaborationDependencies)
             .modelContainer(runtime.modelContainer)
             .task {
                 if runtime.dataAccessMode.isRecoveryMode {

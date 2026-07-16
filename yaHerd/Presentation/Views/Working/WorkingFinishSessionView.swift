@@ -2,8 +2,9 @@ import SwiftUI
 
 struct WorkingFinishSessionView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.workingFinishSessionRepository) private var repository
-    @Environment(\.pastureReferenceDataReader) private var pastureRepository
+    @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
+    private var repository: any WorkingFinishSessionRepository { workingDependencies.finishSessionRepository }
+    private var pastureRepository: any PastureReferenceDataReader { workingDependencies.pastureReferenceReader }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @StateObject private var viewModel: WorkingFinishSessionViewModel
 

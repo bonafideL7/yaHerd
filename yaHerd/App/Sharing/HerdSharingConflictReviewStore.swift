@@ -5,7 +5,6 @@
 
 import Foundation
 import Observation
-import SwiftUI
 
 @MainActor
 @Observable
@@ -140,16 +139,5 @@ final class HerdSharingConflictReviewStore {
       assertionFailure(
         "Failed to persist herd sharing conflict reviews: \(error.localizedDescription)")
     }
-  }
-}
-
-private struct HerdSharingConflictReviewStoreKey: EnvironmentKey {
-  static let defaultValue: HerdSharingConflictReviewStore? = nil
-}
-
-extension EnvironmentValues {
-  var herdSharingConflictReviewStore: HerdSharingConflictReviewStore? {
-    get { self[HerdSharingConflictReviewStoreKey.self] }
-    set { self[HerdSharingConflictReviewStoreKey.self] = newValue }
   }
 }
