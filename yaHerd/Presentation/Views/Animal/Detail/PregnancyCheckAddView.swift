@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct PregnancyCheckAddView: View {
-    @Environment(\.animalPregnancyCheckAdder) private var pregnancyCheckAdder
+    @Environment(\.animalFeatureDependencies) private var animalDependencies
+    private var pregnancyCheckAdder: any AnimalPregnancyCheckAdding { animalDependencies.pregnancyCheckAdder }
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 

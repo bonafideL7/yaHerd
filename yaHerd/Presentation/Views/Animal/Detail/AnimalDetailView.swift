@@ -9,8 +9,9 @@ import SwiftUI
 
 struct AnimalDetailView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.animalDetailRepository) private var repository
-    @Environment(\.pastureReferenceDataReader) private var pastureReferenceDataReader
+    @Environment(\.animalFeatureDependencies) private var animalDependencies
+    private var repository: any AnimalDetailRepository { animalDependencies.detailRepository }
+    private var pastureReferenceDataReader: any PastureReferenceDataReader { animalDependencies.pastureReferenceReader }
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false

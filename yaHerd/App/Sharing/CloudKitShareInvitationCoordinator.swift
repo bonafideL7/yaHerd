@@ -6,7 +6,6 @@
 import CloudKit
 import Foundation
 import Observation
-import SwiftUI
 
 @MainActor
 @Observable
@@ -41,16 +40,5 @@ final class CloudKitShareInvitationCoordinator {
       shareAdapter.discardInvitation(pendingInvitation)
     }
     pendingInvitation = nil
-  }
-}
-
-private struct CloudKitShareInvitationCoordinatorKey: EnvironmentKey {
-  static let defaultValue: CloudKitShareInvitationCoordinator? = nil
-}
-
-extension EnvironmentValues {
-  var cloudKitShareInvitationCoordinator: CloudKitShareInvitationCoordinator? {
-    get { self[CloudKitShareInvitationCoordinatorKey.self] }
-    set { self[CloudKitShareInvitationCoordinatorKey.self] = newValue }
   }
 }

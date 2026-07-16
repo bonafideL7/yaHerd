@@ -1,8 +1,9 @@
 import SwiftUI
 
 struct DashboardView: View {
-    @Environment(\.dashboardRecordReader) private var dashboardRecordReader
-    @Environment(\.fieldCheckOverviewReader) private var fieldCheckOverviewReader
+    @Environment(\.homeFeatureDependencies) private var homeDependencies
+    private var dashboardRecordReader: any DashboardRecordReading { homeDependencies.dashboardReader }
+    private var fieldCheckOverviewReader: any FieldCheckOverviewReading { homeDependencies.fieldCheckOverviewReader }
 
     @State private var viewModel = DashboardViewModel()
     @State private var fieldChecksModel = FieldChecksViewModel()

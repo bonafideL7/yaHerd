@@ -6,7 +6,8 @@
 import SwiftUI
 
 struct WorkingSessionsView: View {
-    @Environment(\.workingSessionsRepository) private var repository
+    @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
+    private var repository: any WorkingSessionsRepository { workingDependencies.sessionsRepository }
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @StateObject private var viewModel: WorkingSessionsViewModel
 

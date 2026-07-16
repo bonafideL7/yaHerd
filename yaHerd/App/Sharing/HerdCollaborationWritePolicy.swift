@@ -4,7 +4,6 @@
 //
 
 import Foundation
-import SwiftUI
 
 enum HerdCollaborationWritePolicyError: LocalizedError, Equatable {
   case recoveryModeReadOnly(reason: SharedDataMutationReason)
@@ -183,16 +182,5 @@ extension HerdSharingAccess.Permission {
     case .unknown:
       "not writable"
     }
-  }
-}
-
-private struct HerdCollaborationWritePolicyKey: EnvironmentKey {
-  static let defaultValue: HerdCollaborationWritePolicy? = nil
-}
-
-extension EnvironmentValues {
-  var herdCollaborationWritePolicy: HerdCollaborationWritePolicy? {
-    get { self[HerdCollaborationWritePolicyKey.self] }
-    set { self[HerdCollaborationWritePolicyKey.self] = newValue }
   }
 }

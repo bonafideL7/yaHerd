@@ -2,105 +2,129 @@ import SwiftData
 
 @MainActor
 final class AppDependencies {
-  let animalRepository: any AnimalRepository
-  let pastureRepository: any PastureRepository
-  let dashboardRepository: any DashboardRepository
-  let workingRepository: any WorkingRepository
-  let fieldCheckRepository: any FieldCheckRepository
-  let tagColorRepository: any TagColorRepository
-  let syncDiagnosticsRepository: any SyncDiagnosticsRepository
-  let herdRepository: any HerdRepository
-  let herdSharingRepository: any HerdSharingRepository
-  let sampleDataSeeder: any SampleDataSeeding
-  let herdSharingMutationSyncScheduler: HerdSharingMutationSyncScheduler
-  let herdCollaborationWritePolicy: HerdCollaborationWritePolicy
-  let herdSharingConflictReviewStore: HerdSharingConflictReviewStore
-  let cloudKitShareAdapter: CloudKitShareAdapter
+    let animalFeatureDependencies: AnimalFeatureDependencies
+    let pastureFeatureDependencies: PastureFeatureDependencies
+    let fieldCheckFeatureDependencies: FieldCheckFeatureDependencies
+    let workingSessionFeatureDependencies: WorkingSessionFeatureDependencies
+    let homeFeatureDependencies: HomeFeatureDependencies
 
-  private let context: ModelContext
-  private let dataAccessMode: AppDataAccessMode
+    let tagColorRepository: any TagColorRepository
+    let syncDiagnosticsRepository: any SyncDiagnosticsRepository
+    let herdRepository: any HerdRepository
+    let herdSharingRepository: any HerdSharingRepository
+    let herdSharingMutationSyncScheduler: HerdSharingMutationSyncScheduler
+    let herdCollaborationWritePolicy: HerdCollaborationWritePolicy
+    let herdSharingConflictReviewStore: HerdSharingConflictReviewStore
+    let cloudKitShareAdapter: CloudKitShareAdapter
 
-  init(
-    context: ModelContext,
-    tagColorDuplicateResolutionPolicy: TagColorDuplicateResolutionPolicy = .stableSortOrderWins,
-    dataAccessMode: AppDataAccessMode = .readWrite
-  ) {
-    self.context = context
-    self.dataAccessMode = dataAccessMode
-    let mutationSyncScheduler = HerdSharingMutationSyncScheduler()
-    let writePolicy = HerdCollaborationWritePolicy(dataAccessMode: dataAccessMode)
-    let conflictReviewStore = HerdSharingConflictReviewStore()
-    let cloudKitShareAdapter = CloudKitShareAdapter()
-    self.herdSharingMutationSyncScheduler = mutationSyncScheduler
-    self.herdCollaborationWritePolicy = writePolicy
-    self.herdSharingConflictReviewStore = conflictReviewStore
-    self.cloudKitShareAdapter = cloudKitShareAdapter
+    private let context: ModelContext
+    private let dataAccessMode: AppDataAccessMode
 
-    let animalRepository = SwiftDataAnimalRepository(context: context)
-    let pastureRepository = SwiftDataPastureRepository(context: context)
-    let dashboardRepository = SwiftDataDashboardRepository(context: context)
-    let workingRepository = SwiftDataWorkingRepository(context: context)
-    let fieldCheckRepository = SwiftDataFieldCheckRepository(context: context)
-    let herdRepository = SwiftDataHerdRepository(context: context)
-    let tagColorRepository = SwiftDataTagColorRepository(
-      context: context,
-      duplicateResolutionPolicy: tagColorDuplicateResolutionPolicy
-    )
-    let sampleDataSeeder = AppSampleDataSeeder(context: context)
+    init(
+        context: ModelContext,
+        tagColorDuplicateResolutionPolicy: TagColorDuplicateResolutionPolicy = .stableSortOrderWins,
+        dataAccessMode: AppDataAccessMode = .readWrite
+    ) {
+        self.context = context
+        self.dataAccessMode = dataAccessMode
 
-    self.animalRepository = SyncRequestingAnimalRepository(
-      base: animalRepository,
-      scheduler: mutationSyncScheduler,
-      writePolicy: writePolicy
-    )
-    self.pastureRepository = SyncRequestingPastureRepository(
-      base: pastureRepository,
-      scheduler: mutationSyncScheduler,
-      writePolicy: writePolicy
-    )
-    self.dashboardRepository = SyncRequestingDashboardRepository(
-      base: dashboardRepository,
-      scheduler: mutationSyncScheduler,
-      writePolicy: writePolicy
-    )
-    self.workingRepository = SyncRequestingWorkingRepository(
-      base: workingRepository,
-      scheduler: mutationSyncScheduler,
-      writePolicy: writePolicy
-    )
-    self.fieldCheckRepository = SyncRequestingFieldCheckRepository(
-      base: fieldCheckRepository,
-      scheduler: mutationSyncScheduler,
-      writePolicy: writePolicy
-    )
-    self.syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(context: context)
-    self.herdRepository = SyncRequestingHerdRepository(
-      base: herdRepository,
-      scheduler: mutationSyncScheduler,
-      writePolicy: writePolicy
-    )
-    if dataAccessMode.isRecoveryMode {
-      self.herdSharingRepository = RecoveryModeHerdSharingRepository()
-    } else {
-      self.herdSharingRepository = CoreDataHerdSharingRepository(
-        context: context,
-        shareAdapter: cloudKitShareAdapter
-      )
+        let mutationSyncScheduler = HerdSharingMutationSyncScheduler()
+        let writePolicy = HerdCollaborationWritePolicy(dataAccessMode: dataAccessMode)
+        let conflictReviewStore = HerdSharingConflictReviewStore()
+        let cloudKitShareAdapter = CloudKitShareAdapter()
+
+        let animalRepository = SyncRequestingAnimalRepository(
+            base: SwiftDataAnimalRepository(context: context),
+            scheduler: mutationSyncScheduler,
+            writePolicy: writePolicy
+        )
+        let pastureRepository = SyncRequestingPastureRepository(
+            base: SwiftDataPastureRepository(context: context),
+            scheduler: mutationSyncScheduler,
+            writePolicy: writePolicy
+        )
+        let dashboardRepository = SyncRequestingDashboardRepository(
+            base: SwiftDataDashboardRepository(context: context),
+            scheduler: mutationSyncScheduler,
+            writePolicy: writePolicy
+        )
+        let workingRepository = SyncRequestingWorkingRepository(
+            base: SwiftDataWorkingRepository(context: context),
+            scheduler: mutationSyncScheduler,
+            writePolicy: writePolicy
+        )
+        let fieldCheckRepository = SyncRequestingFieldCheckRepository(
+            base: SwiftDataFieldCheckRepository(context: context),
+            scheduler: mutationSyncScheduler,
+            writePolicy: writePolicy
+        )
+        let herdRepository = SyncRequestingHerdRepository(
+            base: SwiftDataHerdRepository(context: context),
+            scheduler: mutationSyncScheduler,
+            writePolicy: writePolicy
+        )
+        let tagColorRepository = SyncRequestingTagColorRepository(
+            base: SwiftDataTagColorRepository(
+                context: context,
+                duplicateResolutionPolicy: tagColorDuplicateResolutionPolicy
+            ),
+            scheduler: mutationSyncScheduler,
+            writePolicy: writePolicy
+        )
+        let sampleDataSeeder = SyncRequestingSampleDataSeeder(
+            base: AppSampleDataSeeder(context: context),
+            scheduler: mutationSyncScheduler,
+            writePolicy: writePolicy
+        )
+        let syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(context: context)
+        let herdSharingRepository: any HerdSharingRepository
+        if dataAccessMode.isRecoveryMode {
+            herdSharingRepository = RecoveryModeHerdSharingRepository()
+        } else {
+            herdSharingRepository = CoreDataHerdSharingRepository(
+                context: context,
+                shareAdapter: cloudKitShareAdapter
+            )
+        }
+
+        self.animalFeatureDependencies = AnimalFeatureDependencies(
+            repository: animalRepository,
+            pastureReferenceReader: pastureRepository,
+            sampleDataSeeder: sampleDataSeeder
+        )
+        self.pastureFeatureDependencies = PastureFeatureDependencies(
+            pastureRepository: pastureRepository,
+            animalMover: animalRepository,
+            fieldCheckArchiveWriter: fieldCheckRepository
+        )
+        self.fieldCheckFeatureDependencies = FieldCheckFeatureDependencies(
+            repository: fieldCheckRepository,
+            animalRepository: animalRepository,
+            pastureReferenceReader: pastureRepository
+        )
+        self.workingSessionFeatureDependencies = WorkingSessionFeatureDependencies(
+            repository: workingRepository,
+            animalSummaryReader: animalRepository,
+            pastureReferenceReader: pastureRepository
+        )
+        self.homeFeatureDependencies = HomeFeatureDependencies(
+            dashboardReader: dashboardRepository,
+            fieldCheckOverviewReader: fieldCheckRepository,
+            workingProtocolTemplateReader: workingRepository
+        )
+
+        self.tagColorRepository = tagColorRepository
+        self.syncDiagnosticsRepository = syncDiagnosticsRepository
+        self.herdRepository = herdRepository
+        self.herdSharingRepository = herdSharingRepository
+        self.herdSharingMutationSyncScheduler = mutationSyncScheduler
+        self.herdCollaborationWritePolicy = writePolicy
+        self.herdSharingConflictReviewStore = conflictReviewStore
+        self.cloudKitShareAdapter = cloudKitShareAdapter
     }
-    self.tagColorRepository = SyncRequestingTagColorRepository(
-      base: tagColorRepository,
-      scheduler: mutationSyncScheduler,
-      writePolicy: writePolicy
-    )
-    self.sampleDataSeeder = SyncRequestingSampleDataSeeder(
-      base: sampleDataSeeder,
-      scheduler: mutationSyncScheduler,
-      writePolicy: writePolicy
-    )
-  }
 
-  func seedDefaultsIfNeeded() {
-    guard dataAccessMode.allowsDataMutations else { return }
-    SampleDataService.seedDefaultsIfNeeded(context: context)
-  }
+    func seedDefaultsIfNeeded() {
+        guard dataAccessMode.allowsDataMutations else { return }
+        SampleDataService.seedDefaultsIfNeeded(context: context)
+    }
 }

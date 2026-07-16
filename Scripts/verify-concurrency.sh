@@ -85,6 +85,14 @@ for relative_path in (
         failures.append(f'{path}: repository-backed validator must be @MainActor')
 
 environment_root = Path('yaHerd/Presentation/Support/Environment')
+for path in environment_root.glob('*Dependencies.swift'):
+    text = path.read_text()
+    for match in re.finditer(r'^(?:@MainActor\s*)?struct\s+(\w+Dependencies)\b', text, re.MULTILINE):
+        line = text.count('\n', 0, match.start()) + 1
+        failures.append(
+            f'{path}:{line}: {match.group(1)} must be declared nonisolated so EnvironmentKey.defaultValue can construct it under MainActor default isolation'
+        )
+
 for path in environment_root.glob('*.swift'):
     text = path.read_text()
     for match in re.finditer(r'^private struct (Missing\w+):[^\n]+\{', text, re.MULTILINE):

@@ -7,8 +7,9 @@ import SwiftUI
 
 struct WorkingCollectAnimalsView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.workingCollectAnimalsRepository) private var repository
-    @Environment(\.workingAnimalSummaryReader) private var animalSummaryReader
+    @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
+    private var repository: any WorkingCollectAnimalsRepository { workingDependencies.collectAnimalsRepository }
+    private var animalSummaryReader: any AnimalSummaryReading { workingDependencies.animalSummaryReader }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     let sessionID: UUID

@@ -1,9 +1,10 @@
 import SwiftUI
 
 struct PastureTileListView: View {
-    @Environment(\.pastureListRepository) private var repository
-    @Environment(\.animalPastureMover) private var animalMover
-    @Environment(\.fieldCheckPastureArchiveWriter) private var fieldCheckArchiveWriter
+    @Environment(\.pastureFeatureDependencies) private var pastureDependencies
+    private var repository: any PastureListRepository { pastureDependencies.listRepository }
+    private var animalMover: any AnimalPastureMoving { pastureDependencies.animalMover }
+    private var fieldCheckArchiveWriter: any FieldCheckPastureArchiveWriter { pastureDependencies.fieldCheckArchiveWriter }
     @Environment(\.appDataAccessMode) private var dataAccessMode
 
     @State private var model = PastureTileListViewModel()

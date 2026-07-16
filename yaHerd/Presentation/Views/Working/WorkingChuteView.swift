@@ -2,8 +2,9 @@ import SwiftUI
 
 struct WorkingChuteView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.workingChuteRepository) private var repository
-    @Environment(\.pastureReferenceDataReader) private var pastureRepository
+    @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
+    private var repository: any WorkingChuteRepository { workingDependencies.chuteRepository }
+    private var pastureRepository: any PastureReferenceDataReader { workingDependencies.pastureReferenceReader }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @StateObject private var viewModel: WorkingQueueItemEditorViewModel
 

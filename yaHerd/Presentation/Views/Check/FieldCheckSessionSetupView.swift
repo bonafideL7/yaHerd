@@ -2,8 +2,9 @@ import SwiftUI
 
 struct FieldCheckSessionSetupView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.fieldCheckSessionSetupRepository) private var setupRepository
-    @Environment(\.pastureReferenceDataReader) private var pastureReferenceDataReader
+    @Environment(\.fieldCheckFeatureDependencies) private var fieldCheckDependencies
+    private var setupRepository: any FieldCheckSessionSetupRepository { fieldCheckDependencies.sessionSetupRepository }
+    private var pastureReferenceDataReader: any PastureReferenceDataReader { fieldCheckDependencies.pastureReferenceReader }
     @Environment(\.appDataAccessMode) private var dataAccessMode
 
     @State private var model = FieldCheckSessionSetupViewModel()

@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct WorkingQueueView: View {
-    @Environment(\.workingQueueRepository) private var repository
+    @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
+    private var repository: any WorkingQueueRepository { workingDependencies.queueRepository }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @StateObject private var viewModel: WorkingSessionDetailViewModel
     private let sessionID: UUID

@@ -354,7 +354,8 @@ private struct FieldCheckAnimalPickerStatusPills: View {
 
 struct FieldCheckTrackedAnimalPickerView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.animalListRepository) private var animalRepository
+    @Environment(\.fieldCheckFeatureDependencies) private var fieldCheckDependencies
+    private var animalRepository: any AnimalListRepository { fieldCheckDependencies.animalListRepository }
 
     @State private var model = FieldCheckTrackedAnimalPickerViewModel()
     @State private var pendingAnimal: AnimalSummary?

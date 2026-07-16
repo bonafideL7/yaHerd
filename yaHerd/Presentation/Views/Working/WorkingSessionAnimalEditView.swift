@@ -3,8 +3,9 @@ import SwiftUI
 struct WorkingSessionAnimalEditView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-    @Environment(\.workingQueueItemEditingRepository) private var repository
-    @Environment(\.pastureReferenceDataReader) private var pastureRepository
+    @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
+    private var repository: any WorkingQueueItemEditingRepository { workingDependencies.queueItemEditingRepository }
+    private var pastureRepository: any PastureReferenceDataReader { workingDependencies.pastureReferenceReader }
     @StateObject private var viewModel: WorkingQueueItemEditorViewModel
 
     @State private var status: WorkingQueueStatus = .queued

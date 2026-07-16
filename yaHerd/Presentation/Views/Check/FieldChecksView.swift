@@ -24,7 +24,8 @@ enum FieldChecksViewMode: Hashable {
 }
 
 struct FieldChecksView: View {
-    @Environment(\.fieldCheckOverviewReader) private var fieldCheckOverviewReader
+    @Environment(\.fieldCheckFeatureDependencies) private var fieldCheckDependencies
+    private var fieldCheckOverviewReader: any FieldCheckOverviewReading { fieldCheckDependencies.overviewReader }
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @State private var model = FieldChecksViewModel()
     @State private var showingStartPastureCheck = false

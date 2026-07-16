@@ -6,7 +6,8 @@
 import SwiftUI
 
 struct ProtocolTemplatesView: View {
-    @Environment(\.workingProtocolTemplatesRepository) private var repository
+    @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
+    private var repository: any WorkingProtocolTemplatesRepository { workingDependencies.protocolTemplatesRepository }
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @StateObject private var viewModel = WorkingProtocolTemplatesViewModel(repository: EmptyWorkingRepository())
 
@@ -86,7 +87,8 @@ struct ProtocolTemplatesView: View {
 
 private struct ProtocolTemplateAddView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.workingProtocolTemplateCreator) private var repository
+    @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
+    private var repository: any WorkingProtocolTemplateCreating { workingDependencies.protocolTemplateCreator }
 
     @State private var name: String = ""
     @State private var items: [WorkingProtocolItem] = [WorkingProtocolItem(name: "")]
@@ -157,7 +159,8 @@ private struct ProtocolTemplateAddView: View {
 }
 
 private struct ProtocolTemplateDetailView: View {
-    @Environment(\.workingProtocolTemplateEditorRepository) private var repository
+    @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
+    private var repository: any WorkingProtocolTemplateEditorRepository { workingDependencies.protocolTemplateEditorRepository }
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: WorkingProtocolTemplateDetailViewModel
 

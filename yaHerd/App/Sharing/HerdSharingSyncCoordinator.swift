@@ -5,7 +5,6 @@
 
 import Foundation
 import Observation
-import SwiftUI
 
 @MainActor
 @Observable
@@ -431,16 +430,5 @@ final class HerdSharingSyncCoordinator {
     } else if lastConflictReview == nil {
       lastConflictReview = conflictReviewStore?.latestReview
     }
-  }
-}
-
-private struct HerdSharingSyncCoordinatorKey: EnvironmentKey {
-  static let defaultValue: HerdSharingSyncCoordinator? = nil
-}
-
-extension EnvironmentValues {
-  var herdSharingSyncCoordinator: HerdSharingSyncCoordinator? {
-    get { self[HerdSharingSyncCoordinatorKey.self] }
-    set { self[HerdSharingSyncCoordinatorKey.self] = newValue }
   }
 }

@@ -1,8 +1,9 @@
 import SwiftUI
 
 struct FieldCheckAnimalDetailView: View {
-    @Environment(\.animalDetailRepository) private var animalRepository
-    @Environment(\.fieldCheckAnimalDetailRepository) private var fieldCheckRepository
+    @Environment(\.fieldCheckFeatureDependencies) private var fieldCheckDependencies
+    private var animalRepository: any AnimalDetailRepository { fieldCheckDependencies.animalRepository }
+    private var fieldCheckRepository: any FieldCheckAnimalDetailRepository { fieldCheckDependencies.animalDetailRepository }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appDataAccessMode) private var dataAccessMode

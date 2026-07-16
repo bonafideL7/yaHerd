@@ -7,7 +7,8 @@ import SwiftUI
 
 @MainActor
 struct SyncDiagnosticsView: View {
-    @Environment(\.syncDiagnosticsRepository) private var diagnosticsRepository
+    @Environment(\.collaborationDependencies) private var collaborationDependencies
+    private var diagnosticsRepository: (any SyncDiagnosticsRepository)? { collaborationDependencies.diagnosticsRepository }
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(\.recoveryModeController) private var recoveryModeController
 

@@ -1,9 +1,10 @@
 import SwiftUI
 
 struct HomeView: View {
-    @Environment(\.dashboardRecordReader) private var dashboardRecordReader
-    @Environment(\.fieldCheckOverviewReader) private var fieldCheckOverviewReader
-    @Environment(\.workingProtocolTemplateReader) private var workingProtocolTemplateReader
+    @Environment(\.homeFeatureDependencies) private var homeDependencies
+    private var dashboardRecordReader: any DashboardRecordReading { homeDependencies.dashboardReader }
+    private var fieldCheckOverviewReader: any FieldCheckOverviewReading { homeDependencies.fieldCheckOverviewReader }
+    private var workingProtocolTemplateReader: any WorkingProtocolTemplateListReader { homeDependencies.workingProtocolTemplateReader }
     @EnvironmentObject var tagColorLibrary: TagColorLibraryStore
 
     @AppStorage("isDashboardEnabled") var isDashboardEnabled = false

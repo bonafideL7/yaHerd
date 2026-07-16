@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct HealthRecordAddView: View {
-    @Environment(\.animalHealthRecordAdder) private var healthRecordAdder
+    @Environment(\.animalFeatureDependencies) private var animalDependencies
+    private var healthRecordAdder: any AnimalHealthRecordAdding { animalDependencies.healthRecordAdder }
     @Environment(\.dismiss) private var dismiss
 
     let animalID: UUID

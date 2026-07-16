@@ -2,8 +2,9 @@ import SwiftUI
 
 struct PasturePickerView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.animalPastureMover) private var animalMover
-    @Environment(\.pastureReferenceReader) private var pastureReferenceReader
+    @Environment(\.pastureFeatureDependencies) private var pastureDependencies
+    private var animalMover: any AnimalPastureMoving { pastureDependencies.animalMover }
+    private var pastureReferenceReader: any PastureReferenceDataReader { pastureDependencies.referenceReader }
 
     @State private var pastureOptions: [PastureOption] = []
 

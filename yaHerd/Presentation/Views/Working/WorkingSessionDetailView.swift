@@ -6,7 +6,8 @@
 import SwiftUI
 
 struct WorkingSessionDetailView: View {
-    @Environment(\.workingSessionDetailRepository) private var repository
+    @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
+    private var repository: any WorkingSessionDetailRepository { workingDependencies.sessionDetailRepository }
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @StateObject private var viewModel: WorkingSessionDetailViewModel
 
