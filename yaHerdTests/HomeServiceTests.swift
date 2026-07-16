@@ -1,6 +1,7 @@
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class HomeServiceTests: XCTestCase {
     func testPastureCheckStartPasturesComeFromDashboardPastures() {
         let now = date(year: 2026, month: 1, day: 10)

@@ -1,6 +1,7 @@
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class FieldCheckSessionLockRulesTests: XCTestCase {
     func testSessionDataIsEditableOnlyWhenItIsNotCompleted() {
         XCTAssertTrue(FieldCheckSessionLockRules.canEditSessionData(completedAt: nil))

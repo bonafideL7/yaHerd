@@ -1,6 +1,7 @@
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class FieldCheckMapperNeedsAttentionTests: XCTestCase {
     func testAnimalNeedsAttentionIsDerivedFromUnresolvedLinkedFindings() {
         let animalID = UUID()

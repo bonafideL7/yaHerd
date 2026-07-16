@@ -1,6 +1,7 @@
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class FieldCheckAnimalAttentionRulesTests: XCTestCase {
     func testShouldNeedAttentionWhenUnresolvedFindingExistsForAnimal() {
         let animalID = UUID()

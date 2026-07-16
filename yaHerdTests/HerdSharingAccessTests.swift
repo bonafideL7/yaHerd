@@ -7,6 +7,7 @@ import XCTest
 
 @testable import yaHerd
 
+@MainActor
 final class HerdSharingAccessTests: XCTestCase {
   func testOwnerCanExportLocalChangesToBridge() {
     let access = HerdSharingAccess.ownerPrivateStore(participantCount: 2)

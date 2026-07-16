@@ -1,6 +1,7 @@
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class PastureMetricsAndPolicyTests: XCTestCase {
     func testMetricsPreferUsableAcreageOverTotalAcreage() {
         let metrics = PastureMetrics(acreage: 20, usableAcreage: 12, activeAnimals: 6, targetAcresPerHead: 2)

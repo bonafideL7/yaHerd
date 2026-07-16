@@ -7,6 +7,7 @@ import XCTest
 
 @testable import yaHerd
 
+@MainActor
 final class HerdSharingCoreDataModelFactoryTests: XCTestCase {
   func testSharingBridgeModelIncludesCoreSharedEntities() {
     let model = HerdSharingCoreDataModelFactory.makeModel()

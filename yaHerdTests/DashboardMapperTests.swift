@@ -1,6 +1,7 @@
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class DashboardMapperTests: XCTestCase {
     func testMakeAnimalRecordPreservesUnknownSexAndCalculatesExpectedCalvingDate() {
         let animal = Animal(

@@ -2,6 +2,7 @@ import XCTest
 import SwiftData
 @testable import yaHerd
 
+@MainActor
 final class SwiftDataPastureRepositoryTests: XCTestCase {
     func testNameExistsIsCaseInsensitiveAndIgnoresExcludedID() throws {
         let container = try TestSupport.makeModelContainer()

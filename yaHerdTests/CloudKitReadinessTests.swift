@@ -10,6 +10,7 @@ import XCTest
 import SwiftData
 @testable import yaHerd
 
+@MainActor
 final class CloudKitReadinessTests: XCTestCase {
     func testSwiftDataSchemaCanCreateCloudKitBackedContainer() throws {
         let schema = yaHerdApp.makeSchema()

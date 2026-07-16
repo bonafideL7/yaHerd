@@ -163,15 +163,17 @@ private struct MissingFieldCheckPastureReferenceReader: PastureReferenceDataRead
 }
 
 private struct FieldCheckFeatureDependenciesKey: EnvironmentKey {
-    static let defaultValue = FieldCheckFeatureDependencies(
-        overviewReader: MissingFieldCheckRepository(),
-        sessionSetupRepository: MissingFieldCheckRepository(),
-        sessionDetailRepository: MissingFieldCheckRepository(),
-        animalDetailRepository: MissingFieldCheckRepository(),
-        animalListRepository: MissingFieldCheckAnimalRepository(),
-        animalRepository: MissingFieldCheckAnimalRepository(),
-        pastureReferenceReader: MissingFieldCheckPastureReferenceReader()
-    )
+    static var defaultValue: FieldCheckFeatureDependencies {
+        FieldCheckFeatureDependencies(
+            overviewReader: MissingFieldCheckRepository(),
+            sessionSetupRepository: MissingFieldCheckRepository(),
+            sessionDetailRepository: MissingFieldCheckRepository(),
+            animalDetailRepository: MissingFieldCheckRepository(),
+            animalListRepository: MissingFieldCheckAnimalRepository(),
+            animalRepository: MissingFieldCheckAnimalRepository(),
+            pastureReferenceReader: MissingFieldCheckPastureReferenceReader()
+        )
+    }
 }
 
 extension EnvironmentValues {

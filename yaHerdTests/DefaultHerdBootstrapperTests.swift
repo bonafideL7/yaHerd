@@ -7,6 +7,7 @@ import SwiftData
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class DefaultHerdBootstrapperTests: XCTestCase {
     func testEnsureDefaultHerdCreatesOneHerdAndScopesExistingRecords() throws {
         let schema = yaHerdApp.makeSchema()

@@ -2,6 +2,7 @@ import XCTest
 import SwiftData
 @testable import yaHerd
 
+@MainActor
 final class FieldCheckHistoricalSnapshotTests: XCTestCase {
     func testSessionDetailUsesCheckStartSnapshotsAfterPastureAndAnimalChange() throws {
         let container = try TestSupport.makeModelContainer()

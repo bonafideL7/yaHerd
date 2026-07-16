@@ -1,6 +1,7 @@
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class DashboardPresentationDataTests: XCTestCase {
     func testPastureUtilizationStatusLabelsIncludeOverCapacityDangerAndWarning() {
         let overCapacityID = UUID()

@@ -19,8 +19,12 @@ require_setting() {
 
 require_setting 'SWIFT_VERSION = 6.0;' 4
 require_setting 'SWIFT_STRICT_CONCURRENCY = complete;' 2
-require_setting 'SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;' 2
 require_setting 'SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;' 2
+
+if grep -q 'SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;' "$PROJECT_FILE"; then
+  echo 'Module-wide MainActor default isolation is prohibited; isolate UI and persistence boundaries explicitly.' >&2
+  exit 1
+fi
 
 if grep -R --line-number --include='*.swift' '@unchecked Sendable' yaHerd; then
   echo '@unchecked Sendable is prohibited in application sources.' >&2
@@ -125,12 +129,31 @@ if ! command -v xcodebuild >/dev/null 2>&1; then
   exit 0
 fi
 
+BUILD_LOG="$(mktemp)"
+trap 'rm -f "$BUILD_LOG"' EXIT
+
+set +e
 xcodebuild \
+  -quiet \
   -project yaHerd.xcodeproj \
   -scheme yaHerd \
   -configuration Debug \
   -sdk iphonesimulator \
   -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath .build/DerivedData \
+  ARCHS=arm64 \
+  ONLY_ACTIVE_ARCH=YES \
   CODE_SIGNING_ALLOWED=NO \
-  build-for-testing
+  build-for-testing >"$BUILD_LOG" 2>&1
+build_status=$?
+set -e
+
+if [[ "$build_status" -ne 0 ]]; then
+  echo 'Swift 6 build failed:' >&2
+  grep -E -i 'error:|fatal|signal|killed|command .* failed|failed to|unable to|BUILD FAILED|Testing failed' "$BUILD_LOG" | tail -n 120 >&2 || true
+  echo 'Final build log:' >&2
+  tail -n 60 "$BUILD_LOG" >&2
+  exit "$build_status"
+fi
+
+cat "$BUILD_LOG"

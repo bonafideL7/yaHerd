@@ -2,6 +2,7 @@ import XCTest
 import SwiftData
 @testable import yaHerd
 
+@MainActor
 final class SwiftDataFieldCheckRepositoryPastureArchiveTests: XCTestCase {
     func testArchivingDeletedPasturePreservesFieldCheckHistoryAfterPastureIsDeleted() throws {
         let container = try TestSupport.makeModelContainer()

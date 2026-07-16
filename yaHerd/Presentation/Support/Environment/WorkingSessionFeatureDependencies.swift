@@ -183,21 +183,23 @@ private struct MissingWorkingPastureReferenceReader: PastureReferenceDataReader 
 }
 
 private struct WorkingSessionFeatureDependenciesKey: EnvironmentKey {
-    static let defaultValue = WorkingSessionFeatureDependencies(
-        sessionsRepository: MissingWorkingRepository(),
-        sessionDetailRepository: MissingWorkingRepository(),
-        newSessionRepository: MissingWorkingRepository(),
-        collectAnimalsRepository: MissingWorkingRepository(),
-        queueRepository: MissingWorkingRepository(),
-        queueItemEditingRepository: MissingWorkingRepository(),
-        chuteRepository: MissingWorkingRepository(),
-        finishSessionRepository: MissingWorkingRepository(),
-        protocolTemplatesRepository: MissingWorkingRepository(),
-        protocolTemplateCreator: MissingWorkingRepository(),
-        protocolTemplateEditorRepository: MissingWorkingRepository(),
-        animalSummaryReader: MissingWorkingAnimalSummaryReader(),
-        pastureReferenceReader: MissingWorkingPastureReferenceReader()
-    )
+    static var defaultValue: WorkingSessionFeatureDependencies {
+        WorkingSessionFeatureDependencies(
+            sessionsRepository: MissingWorkingRepository(),
+            sessionDetailRepository: MissingWorkingRepository(),
+            newSessionRepository: MissingWorkingRepository(),
+            collectAnimalsRepository: MissingWorkingRepository(),
+            queueRepository: MissingWorkingRepository(),
+            queueItemEditingRepository: MissingWorkingRepository(),
+            chuteRepository: MissingWorkingRepository(),
+            finishSessionRepository: MissingWorkingRepository(),
+            protocolTemplatesRepository: MissingWorkingRepository(),
+            protocolTemplateCreator: MissingWorkingRepository(),
+            protocolTemplateEditorRepository: MissingWorkingRepository(),
+            animalSummaryReader: MissingWorkingAnimalSummaryReader(),
+            pastureReferenceReader: MissingWorkingPastureReferenceReader()
+        )
+    }
 }
 
 extension EnvironmentValues {

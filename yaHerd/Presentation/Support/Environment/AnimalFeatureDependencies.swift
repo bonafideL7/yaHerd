@@ -144,17 +144,19 @@ private struct MissingAnimalSampleDataSeeder: SampleDataSeeding {
 }
 
 private struct AnimalFeatureDependenciesKey: EnvironmentKey {
-    static let defaultValue = AnimalFeatureDependencies(
-        listRepository: MissingAnimalRepository(),
-        editorRepository: MissingAnimalRepository(),
-        detailRepository: MissingAnimalRepository(),
-        timelineReader: MissingAnimalRepository(),
-        parentOptionReader: MissingAnimalRepository(),
-        healthRecordAdder: MissingAnimalRepository(),
-        pregnancyCheckAdder: MissingAnimalRepository(),
-        pastureReferenceReader: MissingAnimalPastureReferenceReader(),
-        sampleDataSeeder: MissingAnimalSampleDataSeeder()
-    )
+    static var defaultValue: AnimalFeatureDependencies {
+        AnimalFeatureDependencies(
+            listRepository: MissingAnimalRepository(),
+            editorRepository: MissingAnimalRepository(),
+            detailRepository: MissingAnimalRepository(),
+            timelineReader: MissingAnimalRepository(),
+            parentOptionReader: MissingAnimalRepository(),
+            healthRecordAdder: MissingAnimalRepository(),
+            pregnancyCheckAdder: MissingAnimalRepository(),
+            pastureReferenceReader: MissingAnimalPastureReferenceReader(),
+            sampleDataSeeder: MissingAnimalSampleDataSeeder()
+        )
+    }
 }
 
 extension EnvironmentValues {

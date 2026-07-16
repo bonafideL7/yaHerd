@@ -2,6 +2,7 @@ import XCTest
 import SwiftData
 @testable import yaHerd
 
+@MainActor
 final class SwiftDataFieldCheckRepositoryQuickCountTests: XCTestCase {
     func testCountingAnimalNormalizesStoredQuickCountForSameAnimalType() throws {
         let container = try TestSupport.makeModelContainer()

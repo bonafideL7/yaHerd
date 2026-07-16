@@ -7,6 +7,7 @@ import XCTest
 
 @testable import yaHerd
 
+@MainActor
 final class HerdSharingBridgeConflictReportTests: XCTestCase {
   func testEmptyReportHasNoConflicts() {
     let report = HerdSharingBridgeConflictReport.empty

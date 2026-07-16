@@ -1,6 +1,7 @@
 import XCTest
 @testable import yaHerd
 
+@MainActor
 final class AnimalEditorDraftTests: XCTestCase {
     func testHasChangesIsFalseForUnchangedActiveAnimalWithoutStatusDates() {
         let detail = makeDetailSnapshot(status: .active, saleDate: nil, deathDate: nil)
