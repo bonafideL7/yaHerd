@@ -14,7 +14,9 @@ struct AnimalDetailView: View {
     private var pastureReferenceDataReader: any PastureReferenceDataReader { animalDependencies.pastureReferenceReader }
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-    @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
+    @Environment(ApplicationSettings.self) private var applicationSettings
+
+    private var hardDeleteOnSwipe: Bool { applicationSettings.allowHardDelete }
 
     @State private var viewModel = AnimalDetailViewModel()
     @State private var activeParentPicker: ParentPickerType?

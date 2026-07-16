@@ -6,11 +6,7 @@ struct HomeView: View {
     private var fieldCheckOverviewReader: any FieldCheckOverviewReading { homeDependencies.fieldCheckOverviewReader }
     private var workingProtocolTemplateReader: any WorkingProtocolTemplateListReader { homeDependencies.workingProtocolTemplateReader }
     @EnvironmentObject var tagColorLibrary: TagColorLibraryStore
-
-    @AppStorage("isDashboardEnabled") var isDashboardEnabled = false
-    @AppStorage("syncMode") var syncModeRawValue = SyncMode.localOnly.rawValue
-    @AppStorage("homeDismissedSetupSuggestionIDs") var dismissedSetupSuggestionIDsRaw = ""
-    @AppStorage("homeSetupSuggestionsExpanded") var isSetupSuggestionsExpanded = true
+    @Environment(ApplicationSettings.self) var applicationSettings
 
     @State var viewModel = HomeViewModel()
     @Binding var isPresentingAddAnimal: Bool
@@ -197,9 +193,9 @@ struct HomeView: View {
     }
 
     func dismissSetupSuggestion(_ id: HomeSetupSuggestionID) {
-        var ids = dismissedSetupSuggestionIDs
+        var ids = applicationSettings.homeDismissedSetupSuggestionIDs
         ids.insert(id.rawValue)
-        dismissedSetupSuggestionIDsRaw = ids.sorted().joined(separator: ",")
+        applicationSettings.homeDismissedSetupSuggestionIDs = ids
     }
 
 }

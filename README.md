@@ -20,3 +20,7 @@ When persistent SwiftData storage cannot be opened, yaHerd enters a visibly read
 ## Swift 6 concurrency
 
 The app and test targets use Swift 6, complete strict-concurrency checking, main-actor default isolation, and warnings-as-errors. Main-context repositories and collaboration state are explicitly main-actor isolated. The CI policy and review rules are documented in [CONCURRENCY.md](CONCURRENCY.md).
+
+## Application settings
+
+User-facing preferences are exposed through one typed, observable `ApplicationSettings` service with validation, local-versus-iCloud classification, key migration, and an in-memory test store. See [APPLICATION_SETTINGS.md](APPLICATION_SETTINGS.md).

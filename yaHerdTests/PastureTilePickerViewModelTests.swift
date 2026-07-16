@@ -11,8 +11,8 @@ final class PastureTilePickerViewModelTests: XCTestCase {
 
         let migrationValue = viewModel.load(
             using: repository,
-            recentPastureIDsRaw: south.id.uuidString,
-            legacyRecentPastureNamesRaw: ""
+            recentPastureIDs: [south.id],
+            legacyRecentPastureNames: []
         )
 
         XCTAssertNil(migrationValue)
@@ -29,11 +29,11 @@ final class PastureTilePickerViewModelTests: XCTestCase {
 
         let migrationValue = viewModel.load(
             using: repository,
-            recentPastureIDsRaw: "",
-            legacyRecentPastureNamesRaw: "South|North|Unknown"
+            recentPastureIDs: [],
+            legacyRecentPastureNames: ["South", "North", "Unknown"]
         )
 
-        XCTAssertEqual(migrationValue, "\(south.id.uuidString)|\(north.id.uuidString)")
+        XCTAssertEqual(migrationValue, [south.id, north.id])
         XCTAssertEqual(viewModel.recentPastures, [south, north])
     }
 
@@ -45,7 +45,7 @@ final class PastureTilePickerViewModelTests: XCTestCase {
         let fifth = PastureTestSupport.makeSummary(id: UUID(), name: "Fifth")
         let repository = PastureListReaderStub(result: .success([first, second, third, fourth, fifth]))
         let viewModel = PastureTilePickerViewModel()
-        _ = viewModel.load(using: repository, recentPastureIDsRaw: "", legacyRecentPastureNamesRaw: "")
+        _ = viewModel.load(using: repository, recentPastureIDs: [], legacyRecentPastureNames: [])
 
         _ = viewModel.select(first)
         _ = viewModel.select(second)
@@ -54,12 +54,7 @@ final class PastureTilePickerViewModelTests: XCTestCase {
         let encoded = viewModel.select(fifth)
 
         XCTAssertEqual(viewModel.recentPastures, [fifth, fourth, third, second])
-        XCTAssertEqual(
-            encoded,
-            [fifth.id, fourth.id, third.id, second.id]
-                .map(\.uuidString)
-                .joined(separator: "|")
-        )
+        XCTAssertEqual(encoded, [fifth.id, fourth.id, third.id, second.id])
     }
 
     func testSelectingExistingRecentPastureMovesItToFrontWithoutDuplicating() {
@@ -69,14 +64,14 @@ final class PastureTilePickerViewModelTests: XCTestCase {
         let viewModel = PastureTilePickerViewModel()
         _ = viewModel.load(
             using: repository,
-            recentPastureIDsRaw: "\(north.id.uuidString)|\(south.id.uuidString)",
-            legacyRecentPastureNamesRaw: ""
+            recentPastureIDs: [north.id, south.id],
+            legacyRecentPastureNames: []
         )
 
         let encoded = viewModel.select(south)
 
         XCTAssertEqual(viewModel.recentPastures, [south, north])
-        XCTAssertEqual(encoded, "\(south.id.uuidString)|\(north.id.uuidString)")
+        XCTAssertEqual(encoded, [south.id, north.id])
     }
 
     func testLoadFailureClearsPasturesAndSetsErrorMessage() {
@@ -85,8 +80,8 @@ final class PastureTilePickerViewModelTests: XCTestCase {
 
         let migrationValue = viewModel.load(
             using: repository,
-            recentPastureIDsRaw: UUID().uuidString,
-            legacyRecentPastureNamesRaw: "North"
+            recentPastureIDs: [UUID()],
+            legacyRecentPastureNames: ["North"]
         )
 
         XCTAssertNil(migrationValue)

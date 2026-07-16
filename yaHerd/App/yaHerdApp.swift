@@ -15,15 +15,17 @@ struct yaHerdApp: App {
     @StateObject private var nav = NavigationCoordinator()
 
     private let bootstrapState: AppBootstrapState
+    private let applicationSettings: ApplicationSettings
     private let appSettingsSynchronizer: AppSettingsSynchronizer
 
     init() {
-        let preferences = AppPreferences()
-        let appSettingsSynchronizer = AppSettingsSynchronizer.shared
+        let applicationSettings = ApplicationSettings()
+        let appSettingsSynchronizer = AppSettingsSynchronizer(settings: applicationSettings)
 
+        self.applicationSettings = applicationSettings
         self.appSettingsSynchronizer = appSettingsSynchronizer
         self.bootstrapState = Self.bootstrap(
-            preferences: preferences,
+            applicationSettings: applicationSettings,
             appSettingsSynchronizer: appSettingsSynchronizer
         )
     }
@@ -34,6 +36,7 @@ struct yaHerdApp: App {
             case .ready(let runtime):
                 RunningAppView(
                     runtime: runtime,
+                    applicationSettings: applicationSettings,
                     appSettingsSynchronizer: appSettingsSynchronizer
                 )
                 .environmentObject(nav)
@@ -45,10 +48,10 @@ struct yaHerdApp: App {
     }
 
     private static func bootstrap(
-        preferences: AppPreferencesProviding,
+        applicationSettings: ApplicationSettings,
         appSettingsSynchronizer: AppSettingsSynchronizer
     ) -> AppBootstrapState {
-        let syncMode = preferences.syncMode
+        let syncMode = applicationSettings.syncMode
 
         do {
             let container = try ModelContainerFactory.makeContainer(
@@ -81,7 +84,7 @@ struct yaHerdApp: App {
             let primaryError = error
 
             if syncMode == .iCloud {
-                preferences.syncMode = .localOnly
+                applicationSettings.syncMode = .localOnly
                 appSettingsSynchronizer.stop()
 
                 do {
@@ -270,10 +273,16 @@ private struct RunningAppView: View {
     @State private var showsPendingCloudKitShareInvitation = false
 
     private let runtime: AppRuntime
+    private let applicationSettings: ApplicationSettings
     private let appSettingsSynchronizer: AppSettingsSynchronizer
 
-    init(runtime: AppRuntime, appSettingsSynchronizer: AppSettingsSynchronizer) {
+    init(
+        runtime: AppRuntime,
+        applicationSettings: ApplicationSettings,
+        appSettingsSynchronizer: AppSettingsSynchronizer
+    ) {
         self.runtime = runtime
+        self.applicationSettings = applicationSettings
         self.appSettingsSynchronizer = appSettingsSynchronizer
         self._tagColorLibrary = StateObject(
             wrappedValue: TagColorLibraryStore(
@@ -322,12 +331,14 @@ private struct RunningAppView: View {
             syncCoordinator: herdSharingSyncCoordinator,
             writePolicy: runtime.dependencies.herdCollaborationWritePolicy,
             conflictReviewStore: runtime.dependencies.herdSharingConflictReviewStore,
-            diagnosticsRepository: runtime.dependencies.syncDiagnosticsRepository
+            diagnosticsRepository: runtime.dependencies.syncDiagnosticsRepository,
+            settingsSynchronizer: appSettingsSynchronizer
         )
     }
 
     var body: some View {
         RootAppView(storageError: runtime.storageError, dataAccessMode: runtime.dataAccessMode)
+            .environment(applicationSettings)
             .environmentObject(tagColorLibrary)
             .environment(\.appDataAccessMode, runtime.dataAccessMode)
             .environment(\.recoveryModeController, runtime.dataAccessMode.isRecoveryMode ? recoveryModeController : nil)

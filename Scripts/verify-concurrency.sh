@@ -42,7 +42,7 @@ if grep -R --line-number --include='*.swift' -E '\[[^]]*cloudStore[^]]*\]' yaHer
   exit 1
 fi
 
-actor_default_arguments="$(grep -R --line-number --include='*.swift' -E 'AppPreferencesProviding[[:space:]]*=[[:space:]]*AppPreferences\(|AppSettingsSyncing[[:space:]]*=[[:space:]]*AppSettingsSynchronizer\.shared|CloudKitSchemaChecking[[:space:]]*=[[:space:]]*CloudKitSchemaChecker\(' yaHerd || true)"
+actor_default_arguments="$(grep -R --line-number --include='*.swift' -E 'ApplicationSettings[[:space:]]*=[[:space:]]*ApplicationSettings\(|AppSettingsSyncing[[:space:]]*=[[:space:]]*AppSettingsSynchronizer\(|CloudKitSchemaChecking[[:space:]]*=[[:space:]]*CloudKitSchemaChecker\(' yaHerd || true)"
 if [[ -n "$actor_default_arguments" ]]; then
   echo "$actor_default_arguments" >&2
   echo 'Main-actor dependencies must not be constructed in default argument expressions; use an explicit @MainActor convenience initializer.' >&2

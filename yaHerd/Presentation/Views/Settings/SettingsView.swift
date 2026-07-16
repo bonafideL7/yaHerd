@@ -125,9 +125,10 @@ private struct SettingsRow: View {
 
 private struct HerdSetupView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
-    @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
+    @Environment(ApplicationSettings.self) private var applicationSettings
     
     var body: some View {
+        @Bindable var applicationSettings = applicationSettings
         List {
             Section("Tags") {
                 NavigationLink {
@@ -142,7 +143,7 @@ private struct HerdSetupView: View {
             }
             
             Section("Animal List Swipe") {
-                Toggle("Use hard delete for swipe actions", isOn: $hardDeleteOnSwipe)
+                Toggle("Use hard delete for swipe actions", isOn: $applicationSettings.allowHardDelete)
                     .tint(.red)
                     .disabled(dataAccessMode.isRecoveryMode)
                 
@@ -157,12 +158,13 @@ private struct HerdSetupView: View {
 
 struct DashboardRulesView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
-    @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
+    @Environment(ApplicationSettings.self) private var applicationSettings
 
     var body: some View {
+        @Bindable var applicationSettings = applicationSettings
         Form {
             Section("Navigation") {
-                Toggle("Show Dashboard", isOn: $isDashboardEnabled)
+                Toggle("Show Dashboard", isOn: $applicationSettings.isDashboardEnabled)
                     .disabled(dataAccessMode.isRecoveryMode)
                 
                 Text("When off, the Dashboard tab is hidden.")
@@ -176,23 +178,23 @@ struct DashboardRulesView: View {
 
 struct PastureDefaultsView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
-    @AppStorage("targetAcresPerHeadDefault") private var targetAcresPerHeadDefault = 3.0
-    @AppStorage("usableAcreagePercentDefault") private var usableAcreagePercentDefault = 100
+    @Environment(ApplicationSettings.self) private var applicationSettings
 
     var body: some View {
+        @Bindable var applicationSettings = applicationSettings
         Form {
             Section("New Pasture Defaults") {
                 Stepper(
-                    "Target acres/head: \(targetAcresPerHeadDefault, format: .number.precision(.fractionLength(2)))",
-                    value: $targetAcresPerHeadDefault,
+                    "Target acres/head: \(applicationSettings.targetAcresPerHeadDefault, format: .number.precision(.fractionLength(2)))",
+                    value: $applicationSettings.targetAcresPerHeadDefault,
                     in: 0.25...25.0,
                     step: 0.25
                 )
                 .disabled(dataAccessMode.isRecoveryMode)
 
                 Stepper(
-                    "Usable acreage: \(usableAcreagePercentDefault)%",
-                    value: $usableAcreagePercentDefault,
+                    "Usable acreage: \(applicationSettings.usableAcreagePercentDefault)%",
+                    value: $applicationSettings.usableAcreagePercentDefault,
                     in: 10...100
                 )
                 .disabled(dataAccessMode.isRecoveryMode)

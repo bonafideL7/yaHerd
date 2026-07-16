@@ -11,8 +11,8 @@ struct SyncDiagnosticsView: View {
     private var diagnosticsRepository: (any SyncDiagnosticsRepository)? { collaborationDependencies.diagnosticsRepository }
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(\.recoveryModeController) private var recoveryModeController
+    @Environment(ApplicationSettings.self) private var applicationSettings
 
-    private let preferences: AppPreferencesProviding
     private let checker: ICloudAvailabilityChecking
     private let schemaChecker: CloudKitSchemaChecking
 
@@ -27,17 +27,14 @@ struct SyncDiagnosticsView: View {
     @State private var schemaCheckResult: CloudKitSchemaCheckResult?
 
     init() {
-        self.preferences = AppPreferences(userDefaults: .standard)
         self.checker = ICloudAvailabilityChecker()
         self.schemaChecker = CloudKitSchemaChecker()
     }
 
     init(
-        preferences: AppPreferencesProviding,
         checker: ICloudAvailabilityChecking,
         schemaChecker: CloudKitSchemaChecking
     ) {
-        self.preferences = preferences
         self.checker = checker
         self.schemaChecker = schemaChecker
     }
@@ -55,7 +52,7 @@ struct SyncDiagnosticsView: View {
             }
 
             Section("Launch State") {
-                LabeledContent("Stored Preference", value: preferences.syncMode.displayName)
+                LabeledContent("Stored Preference", value: applicationSettings.syncMode.displayName)
                 LabeledContent("Requested at Launch", value: launchSnapshot.requestedSyncMode.displayName)
                 LabeledContent("Actual Launch", value: launchSnapshot.actualStorageMode.displayName)
                 LabeledContent("CloudKit Opened", value: launchSnapshot.cloudKitOpened ? "Yes" : "No")
@@ -185,7 +182,13 @@ struct SyncDiagnosticsView: View {
 
         Task { @MainActor in
             do {
-                let resetService = SyncDataResetService(preferences: preferences)
+                guard let settingsSynchronizer = collaborationDependencies.settingsSynchronizer else {
+                    throw SyncDiagnosticsSettingsError.settingsSynchronizerUnavailable
+                }
+                let resetService = SyncDataResetService(
+                    applicationSettings: applicationSettings,
+                    settingsSynchronizer: settingsSynchronizer
+                )
                 let summary = try await resetService.deleteICloudSyncData()
 
                 resetResultMessage = "Deleted \(summary.deletedCloudKitZoneCount.formatted()) CloudKit zones and \(summary.deletedCloudSettingsCount.formatted()) synced settings from iCloud. Local data was not deleted. Force quit and reopen yaHerd. Sync Mode is now Local Only."
@@ -249,7 +252,7 @@ struct SyncDiagnosticsView: View {
     }
 
     private var explanation: String {
-        if preferences.syncMode == .iCloud, launchSnapshot.actualStorageMode == .iCloud, launchSnapshot.cloudKitOpened {
+        if applicationSettings.syncMode == .iCloud, launchSnapshot.actualStorageMode == .iCloud, launchSnapshot.cloudKitOpened {
             return "This install opened the SwiftData store with CloudKit mirroring enabled. If another install does not show the same state, that install is not participating in sync."
         }
 
@@ -261,7 +264,7 @@ struct SyncDiagnosticsView: View {
             return "This install could not open persistent storage or an in-memory recovery store. Data was not loaded for that launch."
         }
 
-        if preferences.syncMode == .iCloud, launchSnapshot.actualStorageMode != .iCloud {
+        if applicationSettings.syncMode == .iCloud, launchSnapshot.actualStorageMode != .iCloud {
             return "The stored preference says iCloud Sync, but this launch did not open CloudKit. Sync will not work from this install until the app opens in iCloud Sync mode."
         }
 
@@ -301,5 +304,13 @@ struct SyncDiagnosticsView: View {
         } catch {
             countError = "Could not read local data counts: \(UserVisibleErrorMessage.make(error))"
         }
+    }
+}
+
+private enum SyncDiagnosticsSettingsError: LocalizedError {
+    case settingsSynchronizerUnavailable
+
+    var errorDescription: String? {
+        "The application settings synchronizer is unavailable."
     }
 }

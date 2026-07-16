@@ -7,7 +7,7 @@ extension HomeView {
             VStack(alignment: .leading, spacing: 0) {
                 Button {
                     withAnimation(.snappy) {
-                        isSetupSuggestionsExpanded.toggle()
+                        applicationSettings.isHomeSetupSuggestionsExpanded.toggle()
                     }
                 } label: {
                     HStack(spacing: 12) {
@@ -23,7 +23,7 @@ extension HomeView {
 
                         Spacer(minLength: 12)
 
-                        Image(systemName: isSetupSuggestionsExpanded ? "chevron.up" : "chevron.down")
+                        Image(systemName: applicationSettings.isHomeSetupSuggestionsExpanded ? "chevron.up" : "chevron.down")
                             .font(.headline.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .frame(width: 34, height: 34)
@@ -35,16 +35,16 @@ extension HomeView {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Setup Suggestions")
-                .accessibilityValue(isSetupSuggestionsExpanded ? "Expanded, \(setupSuggestionsSummaryText)" : "Collapsed, \(setupSuggestionsSummaryText)")
-                .accessibilityHint(isSetupSuggestionsExpanded ? "Double tap to collapse" : "Double tap to expand")
+                .accessibilityValue(applicationSettings.isHomeSetupSuggestionsExpanded ? "Expanded, \(setupSuggestionsSummaryText)" : "Collapsed, \(setupSuggestionsSummaryText)")
+                .accessibilityHint(applicationSettings.isHomeSetupSuggestionsExpanded ? "Double tap to collapse" : "Double tap to expand")
 
-                if isSetupSuggestionsExpanded {
+                if applicationSettings.isHomeSetupSuggestionsExpanded {
                     setupSuggestionsCarousel
                         .padding(.top, 2)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
-            .padding(.bottom, isSetupSuggestionsExpanded ? 8 : 0)
+            .padding(.bottom, applicationSettings.isHomeSetupSuggestionsExpanded ? 8 : 0)
             .modifier(HomeGlassCardBackground(cornerRadius: HomeSuggestionLayout.sectionCornerRadius, tint: .accentColor))
             .clipShape(RoundedRectangle(cornerRadius: HomeSuggestionLayout.sectionCornerRadius, style: .continuous))
         }

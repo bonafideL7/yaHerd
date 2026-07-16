@@ -9,12 +9,9 @@ import SwiftUI
 struct SyncSettingsView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(\.recoveryModeController) private var recoveryModeController
+    @Environment(ApplicationSettings.self) private var applicationSettings
 
-    @AppStorage(AppPreferenceKey.syncMode) private var storedSyncMode = SyncMode.localOnly.rawValue
-
-    private var syncMode: SyncMode {
-        SyncMode(rawValue: storedSyncMode) ?? .localOnly
-    }
+    private var syncMode: SyncMode { applicationSettings.syncMode }
 
     var body: some View {
         List {

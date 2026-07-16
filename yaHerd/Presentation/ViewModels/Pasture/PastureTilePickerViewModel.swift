@@ -12,15 +12,15 @@ final class PastureTilePickerViewModel {
 
     func load(
         using repository: any PastureListReader,
-        recentPastureIDsRaw: String,
-        legacyRecentPastureNamesRaw: String
-    ) -> String? {
+        recentPastureIDs: [UUID],
+        legacyRecentPastureNames: [String]
+    ) -> [UUID]? {
         do {
             pastures = try repository.fetchPastures()
             errorMessage = nil
             return configureRecentPastures(
-                idsRawValue: recentPastureIDsRaw,
-                legacyNamesRawValue: legacyRecentPastureNamesRaw
+                recentPastureIDs: recentPastureIDs,
+                legacyRecentPastureNames: legacyRecentPastureNames
             )
         } catch {
             pastures = []
@@ -32,31 +32,29 @@ final class PastureTilePickerViewModel {
 
     @discardableResult
     func configureRecentPastures(
-        idsRawValue: String,
-        legacyNamesRawValue: String
-    ) -> String? {
-        let parsedIDs = RecentPasturesStore.decodeIDs(from: idsRawValue)
-
-        if parsedIDs.isEmpty, !legacyNamesRawValue.isEmpty {
-            recentPastureIDs = RecentPasturesStore.migrateNames(
-                legacyNamesRawValue,
+        recentPastureIDs: [UUID],
+        legacyRecentPastureNames: [String]
+    ) -> [UUID]? {
+        if recentPastureIDs.isEmpty, !legacyRecentPastureNames.isEmpty {
+            self.recentPastureIDs = RecentPasturesStore.migrateNames(
+                legacyRecentPastureNames,
                 using: pastures
             )
             refreshRecentPastures()
-            return RecentPasturesStore.encode(recentPastureIDs)
+            return self.recentPastureIDs
         }
 
-        recentPastureIDs = parsedIDs
+        self.recentPastureIDs = recentPastureIDs
         refreshRecentPastures()
         return nil
     }
 
-    func select(_ pasture: PastureSummary) -> String {
+    func select(_ pasture: PastureSummary) -> [UUID] {
         recentPastureIDs.removeAll { $0 == pasture.id }
         recentPastureIDs.insert(pasture.id, at: 0)
         recentPastureIDs = Array(recentPastureIDs.prefix(RecentPasturesStore.maximumRecentPastures))
         refreshRecentPastures()
-        return RecentPasturesStore.encode(recentPastureIDs)
+        return recentPastureIDs
     }
 
     private func refreshRecentPastures() {
@@ -67,23 +65,9 @@ final class PastureTilePickerViewModel {
 }
 
 private enum RecentPasturesStore {
-    static let maximumRecentPastures = 4
-    private static let separator: Character = "|"
+    static let maximumRecentPastures = ApplicationSettings.maximumRecentPastures
 
-    static func decodeIDs(from rawValue: String) -> [UUID] {
-        rawValue
-            .split(separator: separator)
-            .compactMap { UUID(uuidString: String($0)) }
-    }
-
-    static func encode(_ ids: [UUID]) -> String {
-        ids.prefix(maximumRecentPastures)
-            .map(\.uuidString)
-            .joined(separator: String(separator))
-    }
-
-    static func migrateNames(_ rawValue: String, using pastures: [PastureSummary]) -> [UUID] {
-        let names = rawValue.split(separator: separator).map(String.init)
+    static func migrateNames(_ names: [String], using pastures: [PastureSummary]) -> [UUID] {
         var ids: [UUID] = []
 
         for name in names {
