@@ -31,11 +31,11 @@ final class HerdCollaborationViewModel {
     storageMode: HerdStorageMode
   ) {
     do {
-      let loadedHerd = try LoadCurrentHerdUseCase(repository: herdRepository).execute()
+      let loadedHerd = try herdRepository.fetchCurrentHerd()
       herd = loadedHerd
       draftName = loadedHerd.name
-      readiness = LoadHerdSharingReadinessUseCase(repository: sharingRepository).execute(
-        herd: loadedHerd,
+      readiness = sharingRepository.fetchSharingReadiness(
+        for: loadedHerd,
         storageMode: storageMode
       )
       sharingAccess = nil
@@ -45,8 +45,8 @@ final class HerdCollaborationViewModel {
       herd = nil
       sharingAccess = nil
       sharingAccessMessage = nil
-      readiness = LoadHerdSharingReadinessUseCase(repository: sharingRepository).execute(
-        herd: nil,
+      readiness = sharingRepository.fetchSharingReadiness(
+        for: nil,
         storageMode: storageMode
       )
       errorMessage = UserVisibleErrorMessage.make(error)
@@ -63,8 +63,8 @@ final class HerdCollaborationViewModel {
     writePolicy: HerdCollaborationWritePolicy? = nil
   ) async {
     do {
-      let access = try await LoadHerdSharingAccessUseCase(repository: sharingRepository).execute(
-        herd: herd,
+      let access = try await sharingRepository.fetchSharingAccess(
+        for: herd,
         storageMode: storageMode
       )
       sharingAccess = access
@@ -91,12 +91,11 @@ final class HerdCollaborationViewModel {
     storageMode: HerdStorageMode
   ) {
     do {
-      let renamedHerd = try RenameCurrentHerdUseCase(repository: repository).execute(
-        name: draftName)
+      let renamedHerd = try repository.renameCurrentHerd(to: draftName)
       herd = renamedHerd
       draftName = renamedHerd.name
-      readiness = LoadHerdSharingReadinessUseCase(repository: sharingRepository).execute(
-        herd: renamedHerd,
+      readiness = sharingRepository.fetchSharingReadiness(
+        for: renamedHerd,
         storageMode: storageMode
       )
       sharingAccess = nil
@@ -174,7 +173,7 @@ final class HerdCollaborationViewModel {
     defer { isSharingActionInProgress = false }
 
     do {
-      let result = try await ImportSharedHerdDataUseCase(repository: sharingRepository).execute(
+      let result = try await sharingRepository.importSharedBridgeData(
         herd: herd,
         storageMode: storageMode
       )

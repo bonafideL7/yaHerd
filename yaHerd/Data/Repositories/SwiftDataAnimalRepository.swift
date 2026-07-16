@@ -420,23 +420,29 @@ private extension SwiftDataAnimalRepository {
     }
 
     func inferSingleSire(inPastureID pastureID: UUID, excludingAnimalID: UUID?) throws -> Animal? {
-        let oldestBullBirthDate = Calendar.current.date(
-            byAdding: .month,
-            value: -AnimalTypeClassifier.calfAgeThresholdInMonths,
-            to: .now
-        ) ?? .now
-
-        // Avoid enum-backed SwiftData predicates here. These fields are safer to filter in Swift.
+        // Avoid enum-backed SwiftData predicates here. These fields are safer to map in Swift.
         let descriptor = FetchDescriptor<Animal>()
-        let matches = try context.fetch(descriptor).filter { animal in
-            animal.pasture?.publicID == pastureID
-                && animal.isActiveInHerd
-                && animal.sex == .male
-                && animal.birthDate <= oldestBullBirthDate
-                && animal.publicID != excludingAnimalID
-                && animal.animalType == .bull
+        let animals = try context.fetch(descriptor)
+        let candidates = animals.map { animal in
+            AnimalSireCandidate(
+                id: animal.publicID,
+                pastureID: animal.pasture?.publicID,
+                sex: animal.sex ?? .unknown,
+                birthDate: animal.birthDate,
+                status: animal.status,
+                isArchived: animal.isArchived,
+                animalType: animal.animalType
+            )
         }
 
-        return matches.count == 1 ? matches[0] : nil
+        guard let inferredSireID = AnimalSireInferencePolicy().inferSireID(
+            from: candidates,
+            pastureID: pastureID,
+            excluding: excludingAnimalID
+        ) else {
+            return nil
+        }
+
+        return animals.first { $0.publicID == inferredSireID }
     }
 }

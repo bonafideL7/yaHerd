@@ -25,8 +25,8 @@ Features should generally follow this shape:
 
 - `Domain/Entities/<Feature>/*`
 - `Domain/Repositories/<Feature>Repository.swift`
-- `Domain/UseCases/<Feature>/*`
-- `Domain/Services/*` or `Domain/Policies/*` when business rules are reusable across use cases/view models
+- `Domain/UseCases/<Feature>/*` only when the operation enforces policy, coordinates repositories, shapes a workflow, or defines a transaction
+- `Domain/Services/*` or `Domain/Policies/*` when business rules are reusable across use cases, repositories, or view models
 - `Data/Models/<Feature>/*`
 - `Data/Mappers/<Feature>Mapper.swift`
 - `Data/Repositories/SwiftData<Feature>Repository.swift`
@@ -35,7 +35,19 @@ Features should generally follow this shape:
 
 Use cases should depend on the smallest domain-facing protocol they need. A concrete repository may still implement a larger composite protocol for app wiring, but individual use cases should not depend on a broad repository surface when a narrower capability protocol is available.
 
-Cross-feature orchestration belongs in use cases, not data repositories. Repositories should persist and fetch data; they should not hide business policy involving other features.
+Use cases are not mandatory wrappers around repository methods. Presentation may call a narrow Domain repository port directly for a single query or command when no application policy, validation, transaction, data shaping, or cross-repository orchestration is involved. Do not add `CreateXUseCase`, `UpdateXUseCase`, or `LoadXUseCase` types that only forward one call.
+
+Keep a use case when it does at least one of the following:
+
+- coordinates multiple repository capabilities or features
+- enforces a precondition or workflow transition
+- normalizes or validates input before persistence
+- derives a result through a Domain service or policy
+- defines a transaction boundary that must be tested as one operation
+
+Cross-feature orchestration belongs in use cases, not data repositories. Repositories fetch and persist data and implement storage transactions; reusable business decisions belong in Domain services or policies.
+
+The ceremonial-use-case cleanup reduced the application layer from 59 Swift use-case files to 25 focused files. Removed types were single-call CRUD/query wrappers; callers now use the same narrow Domain repository contracts directly. `Scripts/verify-architecture.sh` rejects new one-call forwarding use cases.
 
 ## Dashboard reference implementation
 
@@ -103,7 +115,7 @@ Pasture business rules belong in Domain services and policies:
 
 Reference data for pasture selection belongs to the Pasture boundary:
 
-- Use `PastureReferenceDataReader` and `LoadPastureOptionsUseCase`.
+- Use `PastureReferenceDataReader.fetchPastureOptions()` directly when the caller only needs the query.
 - Do not add pasture option loading back to `AnimalRepository`.
 
 Pasture delete behavior is intentionally coordinated by `DeletePasturesUseCase`:
@@ -121,8 +133,7 @@ Pasture Groups are part of the Pasture feature. Groups use stable public IDs and
 - `PastureGroupInput`
 - `PastureGroupSummary`
 - `PastureGroupDetailSnapshot`
-- `LoadPastureGroupsUseCase`
-- `LoadPastureGroupDetailUseCase`
+- `PastureGroupListReader` and `PastureGroupDetailReader` for direct queries
 - `CreatePastureGroupUseCase`
 - `UpdatePastureGroupUseCase`
 - `DeletePastureGroupsUseCase`
@@ -151,7 +162,9 @@ The animal list/add/detail flow follows the same layered pattern:
 
 Animal remains the owner of animal identity, tags, status transitions, archive/restore behavior, health records, pregnancy records, parent options, offspring draft preparation, and movement of animals between pastures.
 
-Pasture selection options should still come from the Pasture boundary. Animal flows may consume `PastureReferenceDataReader` or `LoadPastureOptionsUseCase`, but should not make `AnimalRepository` responsible for Pasture reference data.
+Pasture selection options should still come from the Pasture boundary. Animal flows may consume `PastureReferenceDataReader` directly, but should not make `AnimalRepository` responsible for Pasture reference data.
+
+`AnimalSireInferencePolicy` owns the neutral eligibility and single-candidate inference rule. `SwiftDataAnimalRepository` maps stored animals into `AnimalSireCandidate` values and applies the policy rather than embedding that decision in persistence code.
 
 ## Home reference implementation
 
@@ -171,7 +184,7 @@ The pasture check flow is separated as:
 
 - `Domain/Entities/Check/*`
 - `Domain/Repositories/FieldCheckRepository.swift`
-- `Domain/UseCases/Check/*`
+- direct `Domain/Repositories/FieldCheckRepository.swift` capability protocols for isolated queries and commands
 - `Data/Models/Check/*`
 - `Data/Mappers/FieldCheckMapper.swift`
 - `Data/Repositories/SwiftDataFieldCheckRepository.swift`
@@ -195,7 +208,7 @@ The working-session flow follows the same layered pattern:
 - `Presentation/ViewModels/Working/*`
 - `Presentation/Views/Working/*`
 
-Working-session screens should keep workflow orchestration in use cases and view models. Pasture choices used by working-session setup should come from the Pasture boundary, not from Animal persistence.
+Working-session screens call narrow repository ports directly for isolated reads and commands. `CompleteWorkingSessionUseCase` remains because it verifies the session state and complete destination assignment set, while `WorkingSessionCompleting` commits destination updates, animal movements, and the finished state atomically in one save. Pasture choices used by working-session setup come from the Pasture boundary, not from Animal persistence.
 
 ## Mapping rules
 
@@ -221,14 +234,16 @@ Pasture currently has focused coverage for validators, metrics/policies, use cas
 
 1. keep views declarative and state-light
 2. move screen logic into presentation view models
-3. put business rules, derivations, validation, and thresholds in domain services, policies, and use cases
+3. put business rules, derivations, validation, and thresholds in domain services, policies, and meaningful use cases
 4. keep SwiftData access inside data repositories and app persistence setup
 5. keep navigation types in `App` or `Presentation`, never in `Data` or `Domain`
-6. prefer narrow repository capability protocols for use cases over broad feature repositories
-7. keep cross-feature orchestration in use cases, not data repositories
-8. keep reference-data ownership with the feature that owns the data
-9. add focused tests when introducing or refactoring feature behavior
-10. avoid duplicate mappers for the same domain snapshot or summary
+6. call narrow repository capability protocols directly for simple one-port queries and commands
+7. keep use cases only for policy, validation, derivation, workflow orchestration, or transaction definition
+8. keep cross-feature orchestration in use cases, not data repositories
+9. keep reference-data ownership with the feature that owns the data
+10. add focused tests when introducing or refactoring feature behavior
+11. avoid duplicate mappers for the same domain snapshot or summary
+12. reject one-call pass-through use cases in `Scripts/verify-architecture.sh`
 
 ## SwiftData schema evolution
 

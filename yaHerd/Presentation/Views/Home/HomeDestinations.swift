@@ -213,8 +213,8 @@ struct WorkingSessionPastureStartListView: View {
         guard pastures.isEmpty else { return }
         isLoading = true
         do {
-            let useCase = LoadPastureOptionsUseCase(repository: pastureRepository)
-            pastures = try useCase.execute().sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            pastures = try pastureRepository.fetchPastureOptions()
+                .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -299,8 +299,8 @@ struct FieldCheckPastureStartListView: View {
         guard pastures.isEmpty else { return }
         isLoading = true
         do {
-            let useCase = LoadPastureOptionsUseCase(repository: pastureRepository)
-            pastures = try useCase.execute().sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            pastures = try pastureRepository.fetchPastureOptions()
+                .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

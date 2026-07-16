@@ -292,8 +292,7 @@ struct WorkingSessionAnimalEditView: View {
         )
 
         do {
-            let useCase = SaveWorkingQueueItemEditsUseCase(repository: repository)
-            try useCase.execute(queueItemID: snapshot.id, sessionID: snapshot.sessionID, input: input)
+            try repository.saveEdits(forQueueItemID: snapshot.id, inSessionID: snapshot.sessionID, input: input)
             dismiss()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -304,8 +303,7 @@ struct WorkingSessionAnimalEditView: View {
     private func deleteWorkDataForAnimal() {
         guard let snapshot else { return }
         do {
-            let useCase = DeleteWorkingQueueItemDataUseCase(repository: repository)
-            try useCase.execute(queueItemID: snapshot.id, sessionID: snapshot.sessionID)
+            try repository.deleteWorkData(forQueueItemID: snapshot.id, inSessionID: snapshot.sessionID)
             dismiss()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

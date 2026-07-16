@@ -195,9 +195,9 @@ final class HerdSharingSyncCoordinator {
     }
 
     do {
-      let herd = try LoadCurrentHerdUseCase(repository: herdRepository).execute()
-      let access = try await LoadHerdSharingAccessUseCase(repository: sharingRepository).execute(
-        herd: herd,
+      let herd = try herdRepository.fetchCurrentHerd()
+      let access = try await sharingRepository.fetchSharingAccess(
+        for: herd,
         storageMode: storageMode
       )
       writePolicy?.update(access: access)
@@ -293,11 +293,10 @@ final class HerdSharingSyncCoordinator {
     }
 
     do {
-      let result = try await AcceptPreventedSharedDeletesUseCase(repository: sharingRepository)
-        .execute(
-          review: review,
-          storageMode: storageMode
-        )
+      let result = try await sharingRepository.acceptPreventedSharedDeletes(
+        in: review,
+        storageMode: storageMode
+      )
       lastSuccessMessage = "\(result.title): \(result.message)"
       lastErrorMessage = nil
       lastSkippedReason = nil
@@ -328,12 +327,11 @@ final class HerdSharingSyncCoordinator {
     }
 
     do {
-      let result = try await RestoreLocalConflictFieldsUseCase(repository: sharingRepository)
-        .execute(
-          selections: selections,
-          review: review,
-          storageMode: storageMode
-        )
+      let result = try await sharingRepository.restoreLocalFields(
+        selections,
+        in: review,
+        storageMode: storageMode
+      )
       lastSuccessMessage = "\(result.title): \(result.message)"
       lastErrorMessage = nil
       lastSkippedReason = nil
@@ -403,9 +401,9 @@ final class HerdSharingSyncCoordinator {
     }
 
     do {
-      let herd = try LoadCurrentHerdUseCase(repository: herdRepository).execute()
-      let access = try await LoadHerdSharingAccessUseCase(repository: sharingRepository).execute(
-        herd: herd,
+      let herd = try herdRepository.fetchCurrentHerd()
+      let access = try await sharingRepository.fetchSharingAccess(
+        for: herd,
         storageMode: storageMode
       )
       writePolicy?.update(access: access)

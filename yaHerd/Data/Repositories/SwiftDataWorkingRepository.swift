@@ -185,24 +185,35 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         try PersistenceLog.save(context, operation: "SwiftDataWorkingRepository")
     }
 
-    func saveDestinations(sessionID: UUID, assignments: [WorkingQueueDestinationAssignment]) throws {
-        let session = try lookup.fetchSession(id: sessionID)
-        let destinationsByQueueItemID = Dictionary(uniqueKeysWithValues: assignments.map { ($0.queueItemID, $0.destinationPastureID) })
-        guard !destinationsByQueueItemID.isEmpty else { return }
-
-        for item in session.queueItems {
-            guard let destinationPastureID = destinationsByQueueItemID[item.publicID] else { continue }
-            item.destinationPasture = try lookup.fetchPasture(id: destinationPastureID)
+    func completeSession(
+        id: UUID,
+        assignments: [WorkingQueueDestinationAssignment]
+    ) throws {
+        let session = try lookup.fetchSession(id: id)
+        var destinationsByQueueItemID: [UUID: UUID?] = [:]
+        for assignment in assignments {
+            guard !destinationsByQueueItemID.keys.contains(assignment.queueItemID) else {
+                throw WorkingRepositoryError.duplicateQueueItemAssignments
+            }
+            destinationsByQueueItemID.updateValue(
+                assignment.destinationPastureID,
+                forKey: assignment.queueItemID
+            )
         }
 
-        try PersistenceLog.save(context, operation: "SwiftDataWorkingRepository")
-    }
+        let queueItemIDs = Set(session.queueItems.map(\.publicID))
+        guard Set(destinationsByQueueItemID.keys) == queueItemIDs else {
+            throw WorkingRepositoryError.assignmentSetDoesNotMatchSession
+        }
 
-    func finishSession(id: UUID) throws {
-        let session = try lookup.fetchSession(id: id)
         for item in session.queueItems.sorted(by: { $0.queueOrder < $1.queueOrder }) {
             guard let animal = item.animal else { continue }
-            let destination = item.destinationPasture ?? session.sourcePasture
+            guard let assignedPastureID = destinationsByQueueItemID[item.publicID] else {
+                throw WorkingRepositoryError.assignmentSetDoesNotMatchSession
+            }
+            let destination = try lookup.fetchPasture(id: assignedPastureID)
+                ?? session.sourcePasture
+            item.destinationPasture = destination
             _ = try AnimalMovementStore.move(
                 animal,
                 to: destination,
@@ -211,6 +222,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
                 save: false
             )
         }
+
         session.status = .finished
         try PersistenceLog.save(context, operation: "SwiftDataWorkingRepository")
     }

@@ -9,7 +9,7 @@ final class PastureChangeViewModel {
 
     func moveAnimal(animalID: UUID, using repository: any AnimalPastureMoving) -> Bool {
         do {
-            try MoveAnimalsUseCase(repository: repository).execute(ids: [animalID], toPastureID: selectedPastureID)
+            try repository.move(ids: [animalID], toPastureID: selectedPastureID)
             return true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

@@ -40,7 +40,7 @@ final class DashboardViewModel {
     ) {
         let date = Date.now
         do {
-            try MarkPastureGrazedTodayUseCase(repository: repository).execute(pastureID: pastureID, now: date)
+            try repository.markPastureGrazedToday(id: pastureID, on: date)
             applyPastureGrazedToday(pastureID: pastureID, date: date)
             errorMessage = nil
             hasLoaded = true

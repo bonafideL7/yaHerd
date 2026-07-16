@@ -239,10 +239,9 @@ struct WorkingChuteView: View {
         }
 
         do {
-            let useCase = CompleteWorkingQueueItemUseCase(repository: repository)
-            try useCase.execute(
+            try repository.complete(
                 queueItemID: snapshot.id,
-                sessionID: snapshot.sessionID,
+                inSessionID: snapshot.sessionID,
                 treatmentEntries: treatmentInputs,
                 pregnancyCheck: pregnancyInput,
                 markCastrated: markCastrated,

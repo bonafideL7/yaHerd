@@ -64,13 +64,11 @@ protocol WorkingSessionDeleting {
 }
 
 @MainActor
-protocol WorkingDestinationSaving {
-    func saveDestinations(sessionID: UUID, assignments: [WorkingQueueDestinationAssignment]) throws
-}
-
-@MainActor
-protocol WorkingSessionFinishing {
-    func finishSession(id: UUID) throws
+protocol WorkingSessionCompleting {
+    func completeSession(
+        id: UUID,
+        assignments: [WorkingQueueDestinationAssignment]
+    ) throws
 }
 
 @MainActor
@@ -128,8 +126,7 @@ protocol WorkingChuteRepository:
 @MainActor
 protocol WorkingFinishSessionRepository:
     WorkingSessionDetailReader,
-    WorkingDestinationSaving,
-    WorkingSessionFinishing
+    WorkingSessionCompleting
 {}
 
 @MainActor

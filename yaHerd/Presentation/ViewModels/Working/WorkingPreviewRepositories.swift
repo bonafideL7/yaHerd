@@ -23,8 +23,7 @@ struct EmptyWorkingRepository: WorkingRepository {
     func saveEdits(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID, input: WorkingSessionAnimalEditInput) throws {}
     func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) throws {}
     func deleteSession(id: UUID) throws {}
-    func saveDestinations(sessionID: UUID, assignments: [WorkingQueueDestinationAssignment]) throws {}
-    func finishSession(id: UUID) throws {}
+    func completeSession(id: UUID, assignments: [WorkingQueueDestinationAssignment]) throws {}
     func createTemplate(name: String, items: [WorkingProtocolItem]) throws -> UUID { UUID() }
     func updateTemplate(id: UUID, name: String, items: [WorkingProtocolItem]) throws {}
     func deleteTemplates(ids: [UUID]) throws {}

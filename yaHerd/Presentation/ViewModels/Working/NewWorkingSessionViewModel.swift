@@ -21,7 +21,7 @@ final class NewWorkingSessionViewModel: ObservableObject {
 
     func load() {
         do {
-            pastures = try LoadPastureOptionsUseCase(repository: pastureRepository).execute()
+            pastures = try pastureRepository.fetchPastureOptions()
             templates = try workingRepository.fetchTemplates()
             errorMessage = nil
         } catch {
