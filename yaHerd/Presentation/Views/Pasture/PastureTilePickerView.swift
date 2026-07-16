@@ -11,15 +11,10 @@ struct PastureTilePickerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.pastureFeatureDependencies) private var pastureDependencies
     private var pastureListRepository: any PastureListRepository { pastureDependencies.listRepository }
+    @Environment(ApplicationSettings.self) private var applicationSettings
 
     /// Called when user selects a pasture
     let onSelect: (PastureSummary) -> Void
-
-    /// Raw storage for recent pasture IDs (pipe-delimited UUID strings)
-    @AppStorage("recentPastureIDs") private var recentPastureIDsRaw = ""
-
-    /// Legacy name-based storage kept only to migrate existing installs to ID-based storage.
-    @AppStorage("recentPastureNames") private var legacyRecentPastureNamesRaw = ""
 
     @State private var model = PastureTilePickerViewModel()
 
@@ -98,18 +93,18 @@ struct PastureTilePickerView: View {
     }
 
     private func loadPastures() {
-        if let migratedRawValue = model.load(
+        if let migratedIDs = model.load(
             using: pastureListRepository,
-            recentPastureIDsRaw: recentPastureIDsRaw,
-            legacyRecentPastureNamesRaw: legacyRecentPastureNamesRaw
+            recentPastureIDs: applicationSettings.recentPastureIDs,
+            legacyRecentPastureNames: applicationSettings.legacyRecentPastureNames
         ) {
-            recentPastureIDsRaw = migratedRawValue
-            legacyRecentPastureNamesRaw = ""
+            applicationSettings.recentPastureIDs = migratedIDs
+            applicationSettings.clearLegacyRecentPastureNames()
         }
     }
 
     private func selectPasture(_ pasture: PastureSummary) {
-        recentPastureIDsRaw = model.select(pasture)
+        applicationSettings.recentPastureIDs = model.select(pasture)
         onSelect(pasture)
         dismiss()
     }

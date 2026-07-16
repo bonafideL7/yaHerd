@@ -13,6 +13,20 @@ root = Path("yaHerd/Domain")
 allowed_imports = {"Foundation"}
 failures: list[str] = []
 
+legacy_preferences_path = Path("yaHerd/App/Preferences/AppPreferences.swift")
+if legacy_preferences_path.exists():
+    legacy_preferences_source = legacy_preferences_path.read_text()
+    legacy_declarations = re.findall(
+        r"^\s*(?:protocol|class|final\s+class|struct|actor|enum|typealias)\s+"
+        r"(?:AppPreferences|AppSettingsSyncing|AppSettingsSynchronizer|AppPreferenceKey|SyncedAppSettingKey)\b",
+        legacy_preferences_source,
+        re.MULTILINE,
+    )
+    if legacy_declarations:
+        failures.append(
+            f"{legacy_preferences_path}: legacy application-settings declarations must not be restored"
+        )
+
 for path in root.rglob("*.swift"):
     source = path.read_text()
     for line_number, line in enumerate(source.splitlines(), start=1):
@@ -51,6 +65,11 @@ for environment_value in root_environment_values:
 if len(root_environment_values) > len(allowed_root_environment_values):
     failures.append(
         "yaHerd/App/yaHerdApp.swift: root dependency injection exceeds the approved feature-boundary values"
+    )
+
+if app_source.count(".environment(applicationSettings)") != 1:
+    failures.append(
+        "yaHerd/App/yaHerdApp.swift: inject exactly one observable ApplicationSettings service at the app root"
     )
 
 legacy_dependency_keys = {
@@ -104,6 +123,66 @@ if missing_feature_dependency_keys:
         "Missing feature dependency environment values: "
         + ", ".join(sorted(missing_feature_dependency_keys))
     )
+
+settings_catalog_path = Path("yaHerd/App/Preferences/ApplicationSettingCatalog.swift")
+known_setting_literals = {
+    "syncMode",
+    "allowHardDelete",
+    "isDashboardEnabled",
+    "targetAcresPerHeadDefault",
+    "usableAcreagePercentDefault",
+    "recentPastureIDs",
+    "recentPastureNames",
+    "homeDismissedSetupSuggestionIDs",
+    "homeSetupSuggestionsExpanded",
+    "settings.syncMode",
+    "settings.allowHardDelete",
+    "settings.dashboardEnabled",
+    "settings.targetAcresPerHeadDefault",
+    "settings.usableAcreagePercentDefault",
+    "settings.recentPastureIDs",
+    "settings.homeDismissedSetupSuggestionIDs",
+    "settings.homeSetupSuggestionsExpanded",
+    "settings.legacy.recentPastureNames",
+}
+for path in Path("yaHerd").rglob("*.swift"):
+    source = path.read_text()
+    if "@AppStorage" in source:
+        line_number = source.count("\n", 0, source.index("@AppStorage")) + 1
+        failures.append(
+            f"{path}:{line_number}: use the typed ApplicationSettings service instead of @AppStorage"
+        )
+
+    if path == settings_catalog_path:
+        continue
+
+    for literal in known_setting_literals:
+        match = re.search(rf'"{re.escape(literal)}"', source)
+        if match:
+            line_number = source.count("\n", 0, match.start()) + 1
+            failures.append(
+                f"{path}:{line_number}: application setting key {literal} must be defined only in ApplicationSettingCatalog"
+            )
+
+required_setting_cases = {
+    "syncMode",
+    "allowHardDelete",
+    "dashboardEnabled",
+    "targetAcresPerHeadDefault",
+    "usableAcreagePercentDefault",
+    "recentPastureIDs",
+    "homeDismissedSetupSuggestionIDs",
+    "homeSetupSuggestionsExpanded",
+    "legacyRecentPastureNames",
+}
+catalog_source = settings_catalog_path.read_text()
+catalog_cases = set(re.findall(r"^\s*case\s+(\w+)", catalog_source, re.MULTILINE))
+missing_setting_cases = required_setting_cases - catalog_cases
+if missing_setting_cases:
+    failures.append(
+        "ApplicationSettingCatalog is missing settings: " + ", ".join(sorted(missing_setting_cases))
+    )
+
 
 
 use_case_root = Path("yaHerd/Domain/UseCases")

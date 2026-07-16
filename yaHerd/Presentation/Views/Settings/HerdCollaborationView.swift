@@ -17,18 +17,9 @@ struct HerdCollaborationView: View {
   private var conflictReviewStore: HerdSharingConflictReviewStore? { collaborationDependencies.conflictReviewStore }
   @Environment(\.appDataAccessMode) private var dataAccessMode
   @Environment(\.recoveryModeController) private var recoveryModeController
+  @Environment(ApplicationSettings.self) private var applicationSettings
   @State private var viewModel = HerdCollaborationViewModel()
   @State private var pendingConflictConfirmation: HerdCollaborationConflictConfirmation?
-
-  private let preferences: AppPreferencesProviding
-
-  init() {
-    self.preferences = AppPreferences(userDefaults: .standard)
-  }
-
-  init(preferences: AppPreferencesProviding) {
-    self.preferences = preferences
-  }
 
   var body: some View {
     if dataAccessMode.isRecoveryMode {
@@ -81,12 +72,12 @@ struct HerdCollaborationView: View {
       viewModel.load(
         herdRepository: herdRepository,
         sharingRepository: herdSharingRepository,
-        storageMode: preferences.syncMode.herdStorageMode
+        storageMode: applicationSettings.syncMode.herdStorageMode
       )
       viewModel.loadLatestConflictReview(from: conflictReviewStore)
       await viewModel.refreshSharingAccess(
         using: herdSharingRepository,
-        storageMode: preferences.syncMode.herdStorageMode,
+        storageMode: applicationSettings.syncMode.herdStorageMode,
         writePolicy: writePolicy
       )
     }
@@ -194,7 +185,7 @@ struct HerdCollaborationView: View {
         viewModel.saveName(
           using: herdRepository,
           sharingRepository: sharingRepository,
-          storageMode: preferences.syncMode.herdStorageMode
+          storageMode: applicationSettings.syncMode.herdStorageMode
         )
       }
       .disabled(!canSaveName)
@@ -214,7 +205,7 @@ struct HerdCollaborationView: View {
 
   private var readinessSection: some View {
     Section("CloudKit Sharing Readiness") {
-      LabeledContent("Storage Mode", value: preferences.syncMode.displayName)
+      LabeledContent("Storage Mode", value: applicationSettings.syncMode.displayName)
       LabeledContent("Share Root", value: viewModel.herd == nil ? "Missing" : "Ready")
       LabeledContent(
         "Share UI", value: viewModel.readiness?.shareActionEnabled == true ? "Available" : "Blocked"
@@ -304,7 +295,7 @@ struct HerdCollaborationView: View {
           }
           await viewModel.refreshSharingAccess(
             using: sharingRepository,
-            storageMode: preferences.syncMode.herdStorageMode,
+            storageMode: applicationSettings.syncMode.herdStorageMode,
             writePolicy: writePolicy
           )
         }
@@ -312,7 +303,7 @@ struct HerdCollaborationView: View {
         Label("Refresh Access", systemImage: "person.crop.circle.badge.checkmark")
       }
       .disabled(
-        viewModel.herd == nil || preferences.syncMode.herdStorageMode != .iCloud
+        viewModel.herd == nil || applicationSettings.syncMode.herdStorageMode != .iCloud
           || sharingSyncCoordinator?.isRefreshingSharingAccess == true)
 
       Text(
@@ -669,7 +660,7 @@ struct HerdCollaborationView: View {
             let accepted = await viewModel.acceptPendingInvitation(
               invitation,
               using: sharingRepository,
-              storageMode: preferences.syncMode.herdStorageMode,
+              storageMode: applicationSettings.syncMode.herdStorageMode,
               conflictReviewStore: conflictReviewStore
             )
             if accepted {
@@ -677,7 +668,7 @@ struct HerdCollaborationView: View {
               viewModel.load(
                 herdRepository: herdRepository,
                 sharingRepository: sharingRepository,
-                storageMode: preferences.syncMode.herdStorageMode
+                storageMode: applicationSettings.syncMode.herdStorageMode
               )
               if let sharingSyncCoordinator {
                 await sharingSyncCoordinator.refreshSharingAccessNow(
@@ -687,7 +678,7 @@ struct HerdCollaborationView: View {
               }
               await viewModel.refreshSharingAccess(
                 using: sharingRepository,
-                storageMode: preferences.syncMode.herdStorageMode,
+                storageMode: applicationSettings.syncMode.herdStorageMode,
                 writePolicy: writePolicy
               )
             }
@@ -722,18 +713,18 @@ struct HerdCollaborationView: View {
         Task { @MainActor in
           let imported = await viewModel.importSharedBridgeData(
             using: sharingRepository,
-            storageMode: preferences.syncMode.herdStorageMode,
+            storageMode: applicationSettings.syncMode.herdStorageMode,
             conflictReviewStore: conflictReviewStore
           )
           if imported {
             viewModel.load(
               herdRepository: herdRepository,
               sharingRepository: sharingRepository,
-              storageMode: preferences.syncMode.herdStorageMode
+              storageMode: applicationSettings.syncMode.herdStorageMode
             )
             await viewModel.refreshSharingAccess(
               using: sharingRepository,
-              storageMode: preferences.syncMode.herdStorageMode,
+              storageMode: applicationSettings.syncMode.herdStorageMode,
               writePolicy: writePolicy
             )
           }
@@ -742,7 +733,7 @@ struct HerdCollaborationView: View {
         Label("Import Shared Data", systemImage: "arrow.triangle.2.circlepath")
       }
       .disabled(
-        viewModel.isSharingActionInProgress || preferences.syncMode.herdStorageMode != .iCloud)
+        viewModel.isSharingActionInProgress || applicationSettings.syncMode.herdStorageMode != .iCloud)
 
       Text(
         "Use this after accepting a share or after the Core Data bridge receives remote changes. yaHerd imports the current herd from the owner's private bridge store or an accepted shared store based on your access, then merges the bridge records into SwiftData."
@@ -765,7 +756,7 @@ struct HerdCollaborationView: View {
           } else {
             synced = await viewModel.syncSharedBridgeData(
               using: sharingRepository,
-              storageMode: preferences.syncMode.herdStorageMode,
+              storageMode: applicationSettings.syncMode.herdStorageMode,
               conflictReviewStore: conflictReviewStore
             )
           }
@@ -774,11 +765,11 @@ struct HerdCollaborationView: View {
             viewModel.load(
               herdRepository: herdRepository,
               sharingRepository: sharingRepository,
-              storageMode: preferences.syncMode.herdStorageMode
+              storageMode: applicationSettings.syncMode.herdStorageMode
             )
             await viewModel.refreshSharingAccess(
               using: sharingRepository,
-              storageMode: preferences.syncMode.herdStorageMode,
+              storageMode: applicationSettings.syncMode.herdStorageMode,
               writePolicy: writePolicy
             )
           }
@@ -788,7 +779,7 @@ struct HerdCollaborationView: View {
       }
       .disabled(
         viewModel.isSharingActionInProgress || sharingSyncCoordinator?.isSyncing == true
-          || viewModel.herd == nil || preferences.syncMode.herdStorageMode != .iCloud)
+          || viewModel.herd == nil || applicationSettings.syncMode.herdStorageMode != .iCloud)
 
       if let sharingSyncCoordinator {
         LabeledContent(
@@ -831,7 +822,7 @@ struct HerdCollaborationView: View {
         Task { @MainActor in
           await viewModel.startSharing(
             using: sharingRepository,
-            storageMode: preferences.syncMode.herdStorageMode,
+            storageMode: applicationSettings.syncMode.herdStorageMode,
             conflictReviewStore: conflictReviewStore
           )
         }
@@ -864,7 +855,7 @@ struct HerdCollaborationView: View {
   }
 
   private var readinessMessage: String {
-    switch preferences.syncMode {
+    switch applicationSettings.syncMode {
     case .localOnly:
       "Enable iCloud Sync before exposing a share action. Local-only stores cannot invite other iCloud users."
     case .iCloud:

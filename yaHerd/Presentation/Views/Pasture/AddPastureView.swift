@@ -5,8 +5,10 @@ struct AddPastureView: View {
     @Environment(\.pastureFeatureDependencies) private var pastureDependencies
     private var repository: any PastureCreateRepository { pastureDependencies.createRepository }
 
-    @AppStorage("targetAcresPerHeadDefault") private var targetAcresPerHeadDefault = 3.0
-    @AppStorage("usableAcreagePercentDefault") private var usableAcreagePercentDefault = 100
+    @Environment(ApplicationSettings.self) private var applicationSettings
+
+    private var targetAcresPerHeadDefault: Double { applicationSettings.targetAcresPerHeadDefault }
+    private var usableAcreagePercentDefault: Int { applicationSettings.usableAcreagePercentDefault }
 
     @State private var model = PastureFormViewModel()
 

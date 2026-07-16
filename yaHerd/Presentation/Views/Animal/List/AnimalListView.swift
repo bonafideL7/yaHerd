@@ -6,6 +6,7 @@ import SwiftUI
 
 #Preview {
     AnimalListView()
+        .environment(ApplicationSettings(store: InMemoryApplicationSettingsStore()))
         .preferredColorScheme(.dark)
 }
 
@@ -17,8 +18,9 @@ struct AnimalListView: View {
     private var sampleDataSeeder: any SampleDataSeeding { animalDependencies.sampleDataSeeder }
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(ApplicationSettings.self) private var applicationSettings
 
-    @AppStorage("allowHardDelete") private var hardDeleteOnSwipe = false
+    private var hardDeleteOnSwipe: Bool { applicationSettings.allowHardDelete }
 
     @State private var viewModel = AnimalListViewModel()
     @State private var internalSearchText = ""

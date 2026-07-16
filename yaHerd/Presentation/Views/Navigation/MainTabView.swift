@@ -15,7 +15,7 @@ struct MainTabView: View {
     @Environment(\.collaborationDependencies) private var collaborationDependencies
     private var herdSharingSyncCoordinator: HerdSharingSyncCoordinator? { collaborationDependencies.syncCoordinator }
     @Environment(\.appDataAccessMode) private var dataAccessMode
-    @AppStorage("isDashboardEnabled") private var isDashboardEnabled = false
+    @Environment(ApplicationSettings.self) private var applicationSettings
     
     @State private var selectedTab: MainTab = .home
     @State private var homePath = NavigationPath()
@@ -113,7 +113,7 @@ struct MainTabView: View {
                 }
             }
             
-            if isDashboardEnabled {
+            if applicationSettings.isDashboardEnabled {
                 Tab("Dashboard", systemImage: "rectangle.3.group", value: MainTab.dashboard) {
                     NavigationStack {
                         DashboardView()
@@ -167,7 +167,7 @@ struct MainTabView: View {
         .task {
             refreshSharingAccessForActiveSurface()
         }
-        .onChange(of: isDashboardEnabled) { _, isEnabled in
+        .onChange(of: applicationSettings.isDashboardEnabled) { _, isEnabled in
             if !isEnabled && selectedTab == .dashboard {
                 selectedTab = .home
             }

@@ -8,9 +8,10 @@ import SwiftUI
 @MainActor
 struct EnableICloudSyncView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.collaborationDependencies) private var collaborationDependencies
+    @Environment(ApplicationSettings.self) private var applicationSettings
 
     private let checker: ICloudAvailabilityChecking
-    private let preferences: AppPreferencesProviding
     private let settingsOpener: SystemSettingsOpening
 
     @State private var isChecking = false
@@ -21,17 +22,14 @@ struct EnableICloudSyncView: View {
 
     init() {
         self.checker = ICloudAvailabilityChecker()
-        self.preferences = AppPreferences(userDefaults: .standard)
         self.settingsOpener = SystemSettingsOpener()
     }
 
     init(
         checker: ICloudAvailabilityChecking,
-        preferences: AppPreferencesProviding,
         settingsOpener: SystemSettingsOpening
     ) {
         self.checker = checker
-        self.preferences = preferences
         self.settingsOpener = settingsOpener
     }
 
@@ -239,8 +237,8 @@ struct EnableICloudSyncView: View {
     }
 
     private func enableSync() {
-        preferences.syncMode = .iCloud
-        AppSettingsSynchronizer.shared.startIfNeeded(syncMode: .iCloud)
+        applicationSettings.syncMode = .iCloud
+        collaborationDependencies.settingsSynchronizer?.startIfNeeded(syncMode: .iCloud)
         didEnableSync = true
         statusMessage = "iCloud Sync preference saved. App settings are syncing now. Restart yaHerd to reopen the CloudKit-backed data store. If the CloudKit-backed store cannot open, yaHerd will return to Local Only mode and show a message."
     }

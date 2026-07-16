@@ -156,7 +156,7 @@ extension HomeView {
 
     var setupSuggestionContext: HomeSetupSuggestionContext {
         HomeSetupSuggestionContext(
-            isDashboardEnabled: isDashboardEnabled,
+            isDashboardEnabled: applicationSettings.isDashboardEnabled,
             syncMode: syncMode,
             customTagColorCount: customTagColorCount,
             dismissedIDs: dismissedSetupSuggestionIDs
@@ -164,11 +164,7 @@ extension HomeView {
     }
 
     var dismissedSetupSuggestionIDs: Set<String> {
-        Set(
-            dismissedSetupSuggestionIDsRaw
-                .split(separator: ",")
-                .map { String($0) }
-        )
+        applicationSettings.homeDismissedSetupSuggestionIDs
     }
 
     var customTagColorCount: Int {
@@ -176,6 +172,6 @@ extension HomeView {
     }
 
     var syncMode: SyncMode {
-        SyncMode(rawValue: syncModeRawValue) ?? .localOnly
+        applicationSettings.syncMode
     }
 }

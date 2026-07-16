@@ -19,28 +19,27 @@ protocol SyncDataResetting {
 
 @MainActor
 final class SyncDataResetService: SyncDataResetting {
-    private let preferences: AppPreferencesProviding
+    private let applicationSettings: ApplicationSettings
     private let settingsSynchronizer: AppSettingsSyncing
     private let cloudKitContainerIdentifier: String
 
-    convenience init() {
-        self.init(preferences: AppPreferences())
-    }
-
-    convenience init(preferences: AppPreferencesProviding) {
+    convenience init(
+        applicationSettings: ApplicationSettings,
+        settingsSynchronizer: AppSettingsSyncing
+    ) {
         self.init(
-            preferences: preferences,
-            settingsSynchronizer: AppSettingsSynchronizer.shared,
+            applicationSettings: applicationSettings,
+            settingsSynchronizer: settingsSynchronizer,
             cloudKitContainerIdentifier: ModelContainerFactory.cloudKitContainerIdentifier
         )
     }
 
     init(
-        preferences: AppPreferencesProviding,
+        applicationSettings: ApplicationSettings,
         settingsSynchronizer: AppSettingsSyncing,
         cloudKitContainerIdentifier: String
     ) {
-        self.preferences = preferences
+        self.applicationSettings = applicationSettings
         self.settingsSynchronizer = settingsSynchronizer
         self.cloudKitContainerIdentifier = cloudKitContainerIdentifier
     }
@@ -48,7 +47,7 @@ final class SyncDataResetService: SyncDataResetting {
     func deleteICloudSyncData() async throws -> SyncDataResetSummary {
         let cloudKitSummary = try await deletePrivateCloudKitData()
 
-        preferences.syncMode = .localOnly
+        applicationSettings.syncMode = .localOnly
         let deletedCloudSettingsCount = settingsSynchronizer.deleteCloudSettings()
 
         return SyncDataResetSummary(
