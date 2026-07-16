@@ -7,7 +7,7 @@ struct LoadAnimalEditorOptionsUseCase {
 
     func execute() throws -> (pastures: [PastureOption], statusReferences: [AnimalStatusReferenceOption]) {
         (
-            pastures: try LoadPastureOptionsUseCase(repository: pastureRepository).execute(),
+            pastures: try pastureRepository.fetchPastureOptions(),
             statusReferences: try animalRepository.fetchStatusReferenceOptions()
         )
     }

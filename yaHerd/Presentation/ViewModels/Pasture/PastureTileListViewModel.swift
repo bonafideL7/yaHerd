@@ -16,7 +16,7 @@ final class PastureTileListViewModel {
 
     func load(using repository: any PastureListReader) {
         do {
-            items = try LoadPasturesUseCase(repository: repository).execute()
+            items = try repository.fetchPastures()
             errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

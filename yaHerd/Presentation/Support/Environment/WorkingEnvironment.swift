@@ -73,11 +73,10 @@ private struct MissingWorkingRepository: WorkingRepository {
         throw missing("Working session delete repository")
     }
 
-    func saveDestinations(sessionID: UUID, assignments: [WorkingQueueDestinationAssignment]) throws {
-        throw missing("Working finish session repository")
-    }
-
-    func finishSession(id: UUID) throws {
+    func completeSession(
+        id: UUID,
+        assignments: [WorkingQueueDestinationAssignment]
+    ) throws {
         throw missing("Working finish session repository")
     }
 

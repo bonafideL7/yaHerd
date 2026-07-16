@@ -14,7 +14,7 @@ final class AnimalParentPickerViewModel {
         using repository: any AnimalParentOptionReading
     ) {
         do {
-            items = try LoadAnimalParentOptionsUseCase(repository: repository).execute(excluding: excludedAnimalID)
+            items = try repository.fetchParentOptions(excluding: excludedAnimalID)
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }

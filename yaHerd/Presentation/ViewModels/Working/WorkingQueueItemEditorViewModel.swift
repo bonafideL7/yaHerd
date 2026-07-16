@@ -26,7 +26,7 @@ final class WorkingQueueItemEditorViewModel: ObservableObject {
     func load() {
         do {
             snapshot = try workingRepository.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueItemID)
-            pastures = try LoadPastureOptionsUseCase(repository: pastureRepository).execute()
+            pastures = try pastureRepository.fetchPastureOptions()
             errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

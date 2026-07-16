@@ -59,7 +59,7 @@ struct PasturePickerView: View {
             .task {
                 model.selectedPastureID = currentPastureID
                 do {
-                    pastureOptions = try LoadPastureOptionsUseCase(repository: pastureReferenceReader).execute()
+                    pastureOptions = try pastureReferenceReader.fetchPastureOptions()
                 } catch {
                     model.errorMessage = UserVisibleErrorMessage.make(error)
                     showingError = true

@@ -22,7 +22,7 @@ struct UpdateInlineAnimalUseCase {
         let updatedTagNumber = tagNumber ?? detail.displayTagNumber
         let updatedTagColorID = tagNumber == nil ? detail.displayTagColorID : tagColorID
 
-        return try UpdateAnimalUseCase(repository: repository).execute(
+        return try repository.update(
             id: id,
             input: AnimalInput(
                 name: updatedName,

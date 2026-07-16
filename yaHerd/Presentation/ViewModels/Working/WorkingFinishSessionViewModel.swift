@@ -24,7 +24,7 @@ final class WorkingFinishSessionViewModel: ObservableObject {
     func load() {
         do {
             session = try workingRepository.fetchSessionDetail(id: sessionID)
-            pastures = try LoadPastureOptionsUseCase(repository: pastureRepository).execute()
+            pastures = try pastureRepository.fetchPastureOptions()
             errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

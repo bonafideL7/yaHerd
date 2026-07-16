@@ -41,7 +41,7 @@ final class FieldChecksViewModel {
         }
 
         do {
-            sessions = try LoadFieldChecksUseCase(repository: repository).execute()
+            sessions = try repository.fetchSessions()
             openFindings = try repository.fetchOpenFindings(limit: 0)
             errorMessage = nil
             hasLoaded = true

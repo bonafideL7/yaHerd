@@ -43,8 +43,8 @@ final class PastureGroupDetailViewModel {
 
     func load(groupID: UUID, using repository: any PastureGroupDetailReader & PastureListReader) {
         do {
-            detail = try LoadPastureGroupDetailUseCase(repository: repository).execute(id: groupID)
-            allPastures = try LoadPasturesUseCase(repository: repository).execute()
+            detail = try repository.fetchPastureGroupDetail(id: groupID)
+            allPastures = try repository.fetchPastures()
             hasLoaded = true
             errorMessage = nil
         } catch {

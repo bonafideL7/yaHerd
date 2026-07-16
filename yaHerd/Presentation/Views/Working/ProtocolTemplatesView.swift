@@ -75,8 +75,7 @@ struct ProtocolTemplatesView: View {
 
     private func delete(at offsets: IndexSet) {
         do {
-            let useCase = DeleteWorkingProtocolTemplatesUseCase(repository: repository)
-            try useCase.execute(offsets.map { viewModel.templates[$0].id })
+            try repository.deleteTemplates(ids: offsets.map { viewModel.templates[$0].id })
             viewModel.load()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -148,8 +147,7 @@ private struct ProtocolTemplateAddView: View {
         guard !cleaned.isEmpty else { return }
 
         do {
-            let useCase = CreateWorkingProtocolTemplateUseCase(repository: repository)
-            _ = try useCase.execute(name: trimmed, items: cleaned)
+            _ = try repository.createTemplate(name: trimmed, items: cleaned)
             dismiss()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -246,8 +244,7 @@ private struct ProtocolTemplateDetailView: View {
         guard !cleaned.isEmpty else { return }
 
         do {
-            let useCase = UpdateWorkingProtocolTemplateUseCase(repository: repository)
-            try useCase.execute(templateID: template.id, name: trimmedName, items: cleaned)
+            try repository.updateTemplate(id: template.id, name: trimmedName, items: cleaned)
             dismiss()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

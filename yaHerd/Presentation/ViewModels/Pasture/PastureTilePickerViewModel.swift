@@ -16,7 +16,7 @@ final class PastureTilePickerViewModel {
         legacyRecentPastureNamesRaw: String
     ) -> String? {
         do {
-            pastures = try LoadPasturesUseCase(repository: repository).execute()
+            pastures = try repository.fetchPastures()
             errorMessage = nil
             return configureRecentPastures(
                 idsRawValue: recentPastureIDsRaw,

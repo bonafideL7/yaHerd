@@ -123,10 +123,10 @@ struct WorkingFinishSessionView: View {
             WorkingQueueDestinationAssignment(queueItemID: $0.id, destinationPastureID: destinationPastureIDs[$0.id] ?? $0.destinationPastureID ?? session.sourcePastureID)
         }
         do {
-            let saveUseCase = SaveWorkingDestinationsUseCase(repository: repository)
-            try saveUseCase.execute(sessionID: session.id, assignments: assignments)
-            let finishUseCase = FinishWorkingSessionUseCase(repository: repository)
-            try finishUseCase.execute(sessionID: session.id)
+            try CompleteWorkingSessionUseCase(repository: repository).execute(
+                sessionID: session.id,
+                assignments: assignments
+            )
             dismiss()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

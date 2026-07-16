@@ -142,8 +142,7 @@ struct WorkingSessionDetailView: View {
 
     private func deleteSession(sessionID: UUID) {
         do {
-            let useCase = DeleteWorkingSessionUseCase(repository: repository)
-            try useCase.execute(sessionID: sessionID)
+            try repository.deleteSession(id: sessionID)
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true

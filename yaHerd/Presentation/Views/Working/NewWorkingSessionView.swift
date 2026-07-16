@@ -198,8 +198,7 @@ struct NewWorkingSessionView: View {
         }
 
         do {
-            let useCase = CreateWorkingSessionUseCase(repository: repository)
-            let sessionID = try useCase.execute(
+            let sessionID = try repository.createSession(
                 date: date,
                 sourcePastureID: sourcePasture?.id,
                 protocolName: trimmedName,

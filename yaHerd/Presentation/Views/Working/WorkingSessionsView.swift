@@ -162,8 +162,7 @@ struct WorkingSessionsView: View {
 
     private func deleteSession(_ session: WorkingSessionSummary) {
         do {
-            let useCase = DeleteWorkingSessionUseCase(repository: repository)
-            try useCase.execute(sessionID: session.id)
+            try repository.deleteSession(id: session.id)
             viewModel.load()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

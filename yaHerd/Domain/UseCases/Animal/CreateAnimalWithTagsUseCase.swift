@@ -10,10 +10,10 @@ struct CreateAnimalWithTagsUseCase {
         tags desiredTags: [AnimalTagSnapshot],
         defaultTagColorID: UUID?
     ) throws -> AnimalDetailSnapshot {
-        var created = try CreateAnimalUseCase(repository: repository).execute(input: input)
+        var created = try repository.create(input: input)
 
         for tag in desiredTags where tag.isActive && !tag.isPrimary && !tag.normalizedNumber.isEmpty {
-            created = try AddAnimalTagUseCase(repository: repository).execute(
+            created = try repository.addTag(
                 animalID: created.id,
                 input: AnimalTagInput(
                     number: tag.normalizedNumber,
@@ -32,7 +32,7 @@ struct CreateAnimalWithTagsUseCase {
             }
 
             if !represented {
-                created = try AddAnimalTagUseCase(repository: repository).execute(
+                created = try repository.addTag(
                     animalID: created.id,
                     input: AnimalTagInput(
                         number: tag.normalizedNumber,

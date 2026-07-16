@@ -11,7 +11,7 @@ final class PastureGroupListViewModel {
 
     func load(using repository: any PastureGroupListReader) {
         do {
-            groups = try LoadPastureGroupsUseCase(repository: repository).execute()
+            groups = try repository.fetchPastureGroups()
             errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

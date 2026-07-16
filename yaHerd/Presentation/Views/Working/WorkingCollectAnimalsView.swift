@@ -108,8 +108,7 @@ struct WorkingCollectAnimalsView: View {
     private func collectSelected() {
         guard session != nil else { return }
         do {
-            let useCase = CollectWorkingAnimalsUseCase(repository: repository)
-            try useCase.execute(sessionID: sessionID, animalIDs: Array(selectedAnimalIDs))
+            try repository.collectAnimals(sessionID: sessionID, animalIDs: Array(selectedAnimalIDs))
             dismiss()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

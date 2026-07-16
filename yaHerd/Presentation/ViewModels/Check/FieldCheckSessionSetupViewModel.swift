@@ -12,7 +12,7 @@ final class FieldCheckSessionSetupViewModel {
         defer { hasLoaded = true }
 
         do {
-            pastures = try LoadPastureOptionsUseCase(repository: repository).execute()
+            pastures = try repository.fetchPastureOptions()
                 .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             errorMessage = nil
         } catch {
@@ -35,6 +35,6 @@ final class FieldCheckSessionSetupViewModel {
             startedAt: startedAt,
             notes: notes
         )
-        return try CreateFieldCheckSessionUseCase(repository: repository).execute(input: input)
+        return try repository.createSession(input: input)
     }
 }

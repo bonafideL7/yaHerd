@@ -79,4 +79,54 @@ final class SwiftDataWorkingRepositoryTests: XCTestCase {
         XCTAssertEqual(healthRecords.count, 1)
         XCTAssertEqual(healthRecords.first?.notes, "Watch left eye")
     }
+
+    func testCompleteSessionAppliesDestinationsMovesAnimalsAndFinishesInOneOperation() throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = ModelContext(container)
+        let repository = SwiftDataWorkingRepository(context: context)
+
+        let sourcePasture = Pasture(name: "North")
+        let destinationPasture = Pasture(name: "South")
+        let animal = Animal(
+            name: "Cow 12",
+            tagNumber: "12",
+            birthDate: .distantPast,
+            status: .active,
+            sex: .female
+        )
+        animal.pasture = sourcePasture
+        context.insert(sourcePasture)
+        context.insert(destinationPasture)
+        context.insert(animal)
+        try context.save()
+
+        let sessionID = try repository.createSession(
+            date: .now,
+            sourcePastureID: sourcePasture.publicID,
+            protocolName: "Spring Work",
+            protocolItems: []
+        )
+        try repository.collectAnimals(sessionID: sessionID, animalIDs: [animal.publicID])
+
+        let queueItem = try XCTUnwrap(context.fetch(FetchDescriptor<WorkingQueueItem>()).first)
+        try repository.completeSession(
+            id: sessionID,
+            assignments: [
+                WorkingQueueDestinationAssignment(
+                    queueItemID: queueItem.publicID,
+                    destinationPastureID: destinationPasture.publicID
+                )
+            ]
+        )
+
+        let finishedSession = try XCTUnwrap(
+            context.fetch(FetchDescriptor<WorkingSession>()).first { $0.publicID == sessionID }
+        )
+        XCTAssertEqual(finishedSession.status, .finished)
+        XCTAssertEqual(animal.pasture?.publicID, destinationPasture.publicID)
+        XCTAssertEqual(animal.location, .pasture)
+        XCTAssertNil(animal.activeWorkingSession)
+        XCTAssertEqual(queueItem.destinationPasture?.publicID, destinationPasture.publicID)
+    }
+
 }

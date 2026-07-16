@@ -13,7 +13,7 @@ struct CreateInlineAnimalUseCase {
         birthDate: Date,
         pastureID: UUID?
     ) throws -> AnimalDetailSnapshot {
-        try CreateAnimalUseCase(repository: repository).execute(
+        try repository.create(
             input: AnimalInput(
                 name: name,
                 tagNumber: tagNumber,

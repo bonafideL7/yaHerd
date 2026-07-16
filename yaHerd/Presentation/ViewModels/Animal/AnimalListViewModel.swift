@@ -42,8 +42,8 @@ final class AnimalListViewModel {
         }
 
         do {
-            items = try LoadAnimalsUseCase(repository: repository).execute()
-            pastureOptions = try LoadPastureOptionsUseCase(repository: pastureRepository).execute()
+            items = try repository.fetchAnimals()
+            pastureOptions = try pastureRepository.fetchPastureOptions()
             errorMessage = nil
             hasLoaded = true
         } catch {
@@ -101,10 +101,10 @@ final class AnimalListViewModel {
     ) {
         do {
             if hardDelete {
-                try DeleteAnimalsUseCase(repository: repository).execute(ids: [animalID])
+                try repository.delete(ids: [animalID])
                 removeItems(ids: [animalID])
             } else {
-                try ArchiveAnimalsUseCase(repository: repository).execute(ids: [animalID])
+                try repository.archive(ids: [animalID])
                 updateArchiveState(ids: [animalID], isArchived: true)
             }
             errorMessage = nil
@@ -120,7 +120,7 @@ final class AnimalListViewModel {
         pastureRepository: any PastureReferenceDataReader
     ) {
         do {
-            try RestoreAnimalsUseCase(repository: repository).execute(ids: [animalID])
+            try repository.restore(ids: [animalID])
             updateArchiveState(ids: [animalID], isArchived: false)
             errorMessage = nil
             hasLoaded = true
@@ -136,7 +136,7 @@ final class AnimalListViewModel {
         pastureRepository: any PastureReferenceDataReader
     ) {
         do {
-            try MoveAnimalsUseCase(repository: repository).execute(ids: ids, toPastureID: pastureID)
+            try repository.move(ids: ids, toPastureID: pastureID)
             moveItems(ids: ids, toPastureID: pastureID)
             errorMessage = nil
             hasLoaded = true

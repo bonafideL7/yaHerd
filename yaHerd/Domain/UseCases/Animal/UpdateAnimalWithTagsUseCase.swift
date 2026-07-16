@@ -11,7 +11,7 @@ struct UpdateAnimalWithTagsUseCase {
         desiredTags: [AnimalTagSnapshot],
         defaultTagColorID: UUID?
     ) throws -> AnimalDetailSnapshot {
-        var updated = try UpdateAnimalUseCase(repository: repository).execute(id: animalID, input: input)
+        var updated = try repository.update(id: animalID, input: input)
         var currentTagsByID = Dictionary(uniqueKeysWithValues: (updated.activeTags + updated.inactiveTags).map { ($0.id, $0) })
 
         let existingDesiredTags = desiredTags.filter { currentTagsByID[$0.id] != nil }
@@ -33,14 +33,14 @@ struct UpdateAnimalWithTagsUseCase {
 
         currentTagsByID = Dictionary(uniqueKeysWithValues: (updated.activeTags + updated.inactiveTags).map { ($0.id, $0) })
         for tag in inactiveExistingTags where currentTagsByID[tag.id]?.isActive == true {
-            updated = try RetireAnimalTagUseCase(repository: repository).execute(animalID: animalID, tagID: tag.id)
+            updated = try repository.retireTag(animalID: animalID, tagID: tag.id)
         }
 
         currentTagsByID = Dictionary(uniqueKeysWithValues: (updated.activeTags + updated.inactiveTags).map { ($0.id, $0) })
         let newActiveTags = desiredTags.filter { currentTagsByID[$0.id] == nil && $0.isActive && !$0.normalizedNumber.isEmpty }
 
         for tag in newActiveTags where !tag.isPrimary {
-            updated = try AddAnimalTagUseCase(repository: repository).execute(
+            updated = try repository.addTag(
                 animalID: animalID,
                 input: makeTagInput(from: tag, isPrimary: false, defaultTagColorID: defaultTagColorID)
             )
@@ -55,7 +55,7 @@ struct UpdateAnimalWithTagsUseCase {
             }
 
             if !represented {
-                updated = try AddAnimalTagUseCase(repository: repository).execute(
+                updated = try repository.addTag(
                     animalID: animalID,
                     input: makeTagInput(from: tag, isPrimary: true, defaultTagColorID: defaultTagColorID)
                 )
@@ -66,7 +66,7 @@ struct UpdateAnimalWithTagsUseCase {
     }
 
     private func updateTag(animalID: UUID, tag: AnimalTagSnapshot, isPrimary: Bool, defaultTagColorID: UUID?) throws -> AnimalDetailSnapshot {
-        try UpdateAnimalTagUseCase(repository: repository).execute(
+        try repository.updateTag(
             animalID: animalID,
             tagID: tag.id,
             input: makeTagInput(from: tag, isPrimary: isPrimary, defaultTagColorID: defaultTagColorID)

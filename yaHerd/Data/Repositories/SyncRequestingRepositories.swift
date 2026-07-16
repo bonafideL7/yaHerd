@@ -466,15 +466,12 @@ struct SyncRequestingWorkingRepository: WorkingRepository {
     scheduler.requestSharedDataSyncAfterMutation(reason: .working)
   }
 
-  func saveDestinations(sessionID: UUID, assignments: [WorkingQueueDestinationAssignment]) throws {
+  func completeSession(
+    id: UUID,
+    assignments: [WorkingQueueDestinationAssignment]
+  ) throws {
     try writePolicy.validateCanWrite(reason: .working)
-    try base.saveDestinations(sessionID: sessionID, assignments: assignments)
-    scheduler.requestSharedDataSyncAfterMutation(reason: .working)
-  }
-
-  func finishSession(id: UUID) throws {
-    try writePolicy.validateCanWrite(reason: .working)
-    try base.finishSession(id: id)
+    try base.completeSession(id: id, assignments: assignments)
     scheduler.requestSharedDataSyncAfterMutation(reason: .working)
   }
 

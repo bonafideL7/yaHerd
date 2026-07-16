@@ -13,7 +13,7 @@ final class FieldCheckSessionDetailViewModel {
         defer { hasLoaded = true }
 
         do {
-            let loadedDetail = try LoadFieldCheckDetailUseCase(repository: repository).execute(id: sessionID)
+            let loadedDetail = try repository.fetchSessionDetail(id: sessionID)
             detail = loadedDetail
             notesDraft = loadedDetail?.notes ?? ""
             errorMessage = nil
@@ -24,7 +24,7 @@ final class FieldCheckSessionDetailViewModel {
 
     func refresh(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) {
         do {
-            let loadedDetail = try LoadFieldCheckDetailUseCase(repository: repository).execute(id: sessionID)
+            let loadedDetail = try repository.fetchSessionDetail(id: sessionID)
             detail = loadedDetail
             if let loadedDetail, notesDraft.trimmingCharacters(in: .whitespacesAndNewlines) == loadedDetail.notes.trimmingCharacters(in: .whitespacesAndNewlines) {
                 notesDraft = loadedDetail.notes
@@ -179,9 +179,9 @@ final class FieldCheckAnimalDetailViewModel {
         defer { hasLoaded = true }
 
         do {
-            animalDetail = try LoadAnimalDetailUseCase(repository: animalRepository).execute(id: animalID)
+            animalDetail = try animalRepository.fetchAnimalDetail(id: animalID)
             preparedOffspringEditor = try PrepareOffspringDraftUseCase(repository: animalRepository).execute(forDamID: animalID)
-            sessionDetail = try LoadFieldCheckDetailUseCase(repository: fieldCheckRepository).execute(id: sessionID)
+            sessionDetail = try fieldCheckRepository.fetchSessionDetail(id: sessionID)
             errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -195,9 +195,9 @@ final class FieldCheckAnimalDetailViewModel {
         fieldCheckRepository: any FieldCheckAnimalDetailRepository
     ) {
         do {
-            animalDetail = try LoadAnimalDetailUseCase(repository: animalRepository).execute(id: animalID)
+            animalDetail = try animalRepository.fetchAnimalDetail(id: animalID)
             preparedOffspringEditor = try PrepareOffspringDraftUseCase(repository: animalRepository).execute(forDamID: animalID)
-            sessionDetail = try LoadFieldCheckDetailUseCase(repository: fieldCheckRepository).execute(id: sessionID)
+            sessionDetail = try fieldCheckRepository.fetchSessionDetail(id: sessionID)
             errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -331,7 +331,7 @@ final class FieldCheckTrackedAnimalPickerViewModel {
         defer { hasLoaded = true }
 
         do {
-            animals = try LoadAnimalsUseCase(repository: repository).execute()
+            animals = try repository.fetchAnimals()
             errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

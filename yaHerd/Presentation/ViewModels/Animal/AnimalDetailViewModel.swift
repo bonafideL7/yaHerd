@@ -28,7 +28,7 @@ final class AnimalDetailViewModel {
         form.loadSupportData(using: repository, pastureRepository: pastureRepository)
 
         do {
-            let loadedDetail = try LoadAnimalDetailUseCase(repository: repository).execute(id: animalID)
+            let loadedDetail = try repository.fetchAnimalDetail(id: animalID)
             detail = loadedDetail
             preparedOffspringEditor = try PrepareOffspringDraftUseCase(repository: repository).execute(forDamID: animalID)
             if let loadedDetail, !isEditing {
@@ -85,7 +85,7 @@ final class AnimalDetailViewModel {
 
     func addTag(animalID: UUID, number: String, colorID: UUID?, isPrimary: Bool, using repository: any AnimalDetailRepository) {
         do {
-            let updated = try AddAnimalTagUseCase(repository: repository).execute(
+            let updated = try repository.addTag(
                 animalID: animalID,
                 input: AnimalTagInput(number: number, colorID: colorID, isPrimary: isPrimary)
             )
@@ -98,7 +98,7 @@ final class AnimalDetailViewModel {
 
     func updateTag(animalID: UUID, tagID: UUID, number: String, colorID: UUID?, isPrimary: Bool, using repository: any AnimalDetailRepository) {
         do {
-            let updated = try UpdateAnimalTagUseCase(repository: repository).execute(
+            let updated = try repository.updateTag(
                 animalID: animalID,
                 tagID: tagID,
                 input: AnimalTagInput(number: number, colorID: colorID, isPrimary: isPrimary)
@@ -112,7 +112,7 @@ final class AnimalDetailViewModel {
 
     func promoteTag(animalID: UUID, tagID: UUID, using repository: any AnimalDetailRepository) {
         do {
-            let updated = try PromoteAnimalTagUseCase(repository: repository).execute(animalID: animalID, tagID: tagID)
+            let updated = try repository.promoteTag(animalID: animalID, tagID: tagID)
             detail = updated
             form.syncPrimaryTag(from: updated)
         } catch {
@@ -122,7 +122,7 @@ final class AnimalDetailViewModel {
 
     func retireTag(animalID: UUID, tagID: UUID, using repository: any AnimalDetailRepository) {
         do {
-            let updated = try RetireAnimalTagUseCase(repository: repository).execute(animalID: animalID, tagID: tagID)
+            let updated = try repository.retireTag(animalID: animalID, tagID: tagID)
             detail = updated
             form.syncPrimaryTag(from: updated)
         } catch {
@@ -215,7 +215,7 @@ final class AnimalDetailViewModel {
         pastureRepository: any PastureReferenceDataReader
     ) {
         do {
-            try ArchiveAnimalsUseCase(repository: repository).execute(ids: [animalID])
+            try repository.archive(ids: [animalID])
             load(animalID: animalID, using: repository, pastureRepository: pastureRepository)
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -228,7 +228,7 @@ final class AnimalDetailViewModel {
         pastureRepository: any PastureReferenceDataReader
     ) {
         do {
-            try RestoreAnimalsUseCase(repository: repository).execute(ids: [animalID])
+            try repository.restore(ids: [animalID])
             load(animalID: animalID, using: repository, pastureRepository: pastureRepository)
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -237,7 +237,7 @@ final class AnimalDetailViewModel {
 
     func delete(animalID: UUID, using repository: any AnimalDetailRepository) {
         do {
-            try DeleteAnimalsUseCase(repository: repository).execute(ids: [animalID])
+            try repository.delete(ids: [animalID])
             didDelete = true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
