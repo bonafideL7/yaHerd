@@ -6,6 +6,7 @@ import SwiftUI
 
 #Preview {
     AnimalListView()
+        .environment(AppNavigationState())
         .environment(ApplicationSettings(store: InMemoryApplicationSettingsStore()))
         .preferredColorScheme(.dark)
 }
@@ -19,6 +20,7 @@ struct AnimalListView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(ApplicationSettings.self) private var applicationSettings
+    @Environment(AppNavigationState.self) private var navigation
 
     private var hardDeleteOnSwipe: Bool { applicationSettings.allowHardDelete }
 
@@ -294,7 +296,7 @@ struct AnimalListView: View {
             if dataAccessMode.allowsDataMutations && !batchMode && !inlineEntry.isActive {
                 AnimalListFloatingAddButton(
                     bottomPadding: floatingAddButtonBottomPadding,
-                    action: beginNewInlineEntry
+                    action: presentAddAnimal
                 )
             }
         }
@@ -362,6 +364,10 @@ struct AnimalListView: View {
         .onChange(of: showArchivedRecordsValue) { _, _ in
             refreshDerivedState()
         }
+        .onChange(of: navigation.presentedSheet) { oldValue, newValue in
+            guard oldValue == .addAnimal, newValue == nil else { return }
+            reload()
+        }
         .onReceive(tagColorLibrary.$colors) { _ in
             refreshDerivedState()
         }
@@ -415,7 +421,8 @@ struct AnimalListView: View {
             showRemovedStatuses: showRemovedStatusesValue,
             showArchivedRecords: showArchivedRecordsValue,
             colorScheme: colorScheme,
-            onAddAnimal: beginNewInlineEntry,
+            onStartInlineEntry: beginNewInlineEntry,
+            onAddAnimal: presentAddAnimal,
             onAddSampleData: seedSampleData,
             onAddLargeSampleData: seedLargeSampleData,
             onClearFilters: clearAllFilters,
@@ -607,6 +614,11 @@ struct AnimalListView: View {
         withAnimation(.snappy) {
             inlineEntry.beginNew()
         }
+    }
+
+    private func presentAddAnimal() {
+        guard dataAccessMode.allowsDataMutations, !batchMode else { return }
+        navigation.present(.addAnimal)
     }
 
     private func beginInlineEditing(_ animal: AnimalSummary) {
