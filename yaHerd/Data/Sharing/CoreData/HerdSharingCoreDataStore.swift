@@ -30,7 +30,7 @@ final class HerdSharingCoreDataStore {
     journalFileURL: URL? = nil,
     failureInjector: HerdSharingBridgeFailureInjector = .disabled
   ) {
-    let model = HerdSharingCoreDataModelFactory.makeModel()
+    let model = HerdSharingCoreDataModelFactory.makeCurrentModel()
     persistentContainer = NSPersistentCloudKitContainer(
       name: Self.containerName,
       managedObjectModel: model

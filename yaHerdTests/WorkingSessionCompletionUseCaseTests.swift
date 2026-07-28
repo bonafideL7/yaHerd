@@ -101,7 +101,6 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
             queueItems: queueItemIDs.enumerated().map { index, queueItemID in
                 WorkingQueueItemSnapshot(
                     id: queueItemID,
-                    queueOrder: index,
                     status: .done,
                     completedAt: .now,
                     animalID: UUID(),

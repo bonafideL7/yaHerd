@@ -120,7 +120,7 @@ final class AppDependencies {
         self.homeFeatureDependencies = HomeFeatureDependencies(
             dashboardReader: dashboardRepository,
             fieldCheckOverviewReader: fieldCheckRepository,
-            workingProtocolTemplateReader: workingRepository,
+            workingTreatmentTemplateReader: workingRepository,
             mutationStream: mutationCenter
         )
 

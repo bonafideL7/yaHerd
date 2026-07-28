@@ -20,7 +20,7 @@ struct HomeSnapshot: Equatable {
     let hasPastures: Bool
     let hasActiveAnimals: Bool
     let hasFieldCheckHistory: Bool
-    let hasWorkingProtocolTemplates: Bool
+    let hasWorkingTreatmentTemplates: Bool
 
     var flaggedCheckAnimalCount: Int {
         flaggedCheckSessions.reduce(0) { $0 + $1.flaggedAnimalCount }
@@ -69,6 +69,4 @@ struct HomeSnapshot: Equatable {
             || !unknownSexAnimals.isEmpty
             || !archivedActiveRecords.isEmpty
     }
-
 }
-

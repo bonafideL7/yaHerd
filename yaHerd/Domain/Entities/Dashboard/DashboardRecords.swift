@@ -69,7 +69,7 @@ struct DashboardWorkingSessionRecord: Identifiable, Hashable {
     let date: Date
     let isActive: Bool
     let sourcePastureName: String?
-    let protocolName: String
+    let treatmentTemplateName: String
     let totalQueueItems: Int
     let completedQueueItems: Int
 }

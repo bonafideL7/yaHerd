@@ -15,6 +15,7 @@ struct AnimalTagEditView: View {
     private let title: String
     private let saveButtonTitle: String
     private let showsPrimaryToggle: Bool
+    private let requiresNumber: Bool
     private let onSave: (String, UUID?, Bool) -> Void
     
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 5)
@@ -34,6 +35,7 @@ struct AnimalTagEditView: View {
         title: String = "Add Tag",
         saveButtonTitle: String = "Save",
         showsPrimaryToggle: Bool = false,
+        requiresNumber: Bool = false,
         onSave: @escaping (String, UUID?, Bool) -> Void
     ) {
         _number = State(initialValue: initialNumber)
@@ -42,6 +44,7 @@ struct AnimalTagEditView: View {
         self.title = title
         self.saveButtonTitle = saveButtonTitle
         self.showsPrimaryToggle = showsPrimaryToggle
+        self.requiresNumber = requiresNumber
         self.onSave = onSave
     }
     
@@ -118,6 +121,7 @@ struct AnimalTagEditView: View {
                         )
                         dismiss()
                     }
+                    .disabled(requiresNumber && previewTagNumber.isEmpty)
                 }
             }
         }

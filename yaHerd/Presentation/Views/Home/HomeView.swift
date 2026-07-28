@@ -4,7 +4,7 @@ struct HomeView: View {
     @Environment(\.homeFeatureDependencies) private var homeDependencies
     private var dashboardRecordReader: any DashboardRecordReading { homeDependencies.dashboardReader }
     private var fieldCheckOverviewReader: any FieldCheckOverviewReading { homeDependencies.fieldCheckOverviewReader }
-    private var workingProtocolTemplateReader: any WorkingProtocolTemplateListReader { homeDependencies.workingProtocolTemplateReader }
+    private var workingTreatmentTemplateReader: any WorkingTreatmentTemplateListReader { homeDependencies.workingTreatmentTemplateReader }
     @EnvironmentObject var tagColorLibrary: TagColorLibraryStore
     @Environment(ApplicationSettings.self) var applicationSettings
     @Environment(AppNavigationState.self) private var navigation
@@ -144,7 +144,7 @@ struct HomeView: View {
         LoadHomeUseCase(
             dashboardRepository: dashboardRecordReader,
             fieldCheckRepository: fieldCheckOverviewReader,
-            workingRepository: workingProtocolTemplateReader
+            workingRepository: workingTreatmentTemplateReader
         )
     }
 

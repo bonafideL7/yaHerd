@@ -1,15 +1,19 @@
 //
-//  ProtocolTemplatesView.swift
+//  TreatmentTemplatesView.swift
 //  yaHerd
 //
 
 import SwiftUI
 
-struct ProtocolTemplatesView: View {
+struct TreatmentTemplatesView: View {
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
-    private var repository: any WorkingProtocolTemplatesRepository { workingDependencies.protocolTemplatesRepository }
+    private var repository: any WorkingTreatmentTemplatesRepository {
+        workingDependencies.treatmentTemplatesRepository
+    }
     @Environment(\.appDataAccessMode) private var dataAccessMode
-    @StateObject private var viewModel = WorkingProtocolTemplatesViewModel(repository: EmptyWorkingRepository())
+    @StateObject private var viewModel = WorkingTreatmentTemplatesViewModel(
+        repository: EmptyWorkingRepository()
+    )
 
     @State private var showingAdd = false
     @State private var errorMessage: String?
@@ -19,19 +23,19 @@ struct ProtocolTemplatesView: View {
         List {
             if viewModel.templates.isEmpty {
                 ContentUnavailableView(
-                    "No protocols",
+                    "No Treatment Templates",
                     systemImage: "list.bullet",
-                    description: Text("Add a protocol template to reuse your predetermined shots.")
+                    description: Text("Add a treatment template to reuse planned treatments during working sessions.")
                 )
             } else {
                 ForEach(viewModel.templates) { template in
                     NavigationLink {
-                        ProtocolTemplateDetailView(templateID: template.id)
+                        TreatmentTemplateDetailView(templateID: template.id)
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(template.name)
                                 .font(.headline)
-                            Text("\(template.itemCount) items")
+                            Text(template.treatmentCount == 1 ? "1 treatment" : "\(template.treatmentCount) treatments")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -41,7 +45,7 @@ struct ProtocolTemplatesView: View {
                 .onDelete(perform: delete)
             }
         }
-        .navigationTitle("Protocols")
+        .navigationTitle("Treatment Templates")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -70,7 +74,7 @@ struct ProtocolTemplatesView: View {
             if newValue != nil { showingError = true }
         }
         .sheet(isPresented: $showingAdd) {
-            ProtocolTemplateAddView()
+            TreatmentTemplateAddView()
         }
     }
 
@@ -85,13 +89,17 @@ struct ProtocolTemplatesView: View {
     }
 }
 
-private struct ProtocolTemplateAddView: View {
+private struct TreatmentTemplateAddView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
-    private var repository: any WorkingProtocolTemplateCreating { workingDependencies.protocolTemplateCreator }
+    private var repository: any WorkingTreatmentTemplateCreating {
+        workingDependencies.treatmentTemplateCreator
+    }
 
-    @State private var name: String = ""
-    @State private var items: [WorkingProtocolItem] = [WorkingProtocolItem(name: "")]
+    @State private var name = ""
+    @State private var plannedTreatments: [WorkingTreatmentPlanItem] = [
+        WorkingTreatmentPlanItem(name: "")
+    ]
     @State private var errorMessage: String?
     @State private var showingError = false
 
@@ -99,30 +107,26 @@ private struct ProtocolTemplateAddView: View {
         NavigationStack {
             Form {
                 Section("Name") {
-                    TextField("Protocol name", text: $name)
+                    TextField("Template name", text: $name)
                 }
 
-                Section("Items") {
-                    ForEach($items) { $item in
-                        HStack {
-                            TextField("Item", text: $item.name)
-                            Spacer()
-                            TextField("Qty", value: $item.defaultQuantity, format: .number)
-                                .multilineTextAlignment(.trailing)
-                                .keyboardType(.decimalPad)
-                                .frame(width: 90)
+                Section("Planned Treatments") {
+                    ForEach($plannedTreatments) { $treatment in
+                        VStack(alignment: .leading, spacing: 8) {
+                            TextField("Treatment", text: $treatment.name)
+                            WorkingTreatmentDoseEditor(dose: $treatment.suggestedDose)
                         }
                     }
-                    .onDelete { idx in items.remove(atOffsets: idx) }
+                    .onDelete { plannedTreatments.remove(atOffsets: $0) }
 
                     Button {
-                        items.append(WorkingProtocolItem(name: ""))
+                        plannedTreatments.append(WorkingTreatmentPlanItem(name: ""))
                     } label: {
-                        Label("Add Item", systemImage: "plus")
+                        Label("Add Treatment", systemImage: "plus")
                     }
                 }
             }
-            .navigationTitle("New Protocol")
+            .navigationTitle("New Treatment Template")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -141,15 +145,21 @@ private struct ProtocolTemplateAddView: View {
     }
 
     private func save() {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        let cleaned = items
-            .map { WorkingProtocolItem(id: $0.id, name: $0.name.trimmingCharacters(in: .whitespacesAndNewlines), defaultQuantity: $0.defaultQuantity) }
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        let cleanedTreatments = plannedTreatments
+            .map {
+                WorkingTreatmentPlanItem(
+                    id: $0.id,
+                    name: $0.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                    suggestedDose: $0.suggestedDose
+                )
+            }
             .filter { !$0.name.isEmpty }
-        guard !cleaned.isEmpty else { return }
+        guard !cleanedTreatments.isEmpty else { return }
 
         do {
-            _ = try repository.createTemplate(name: trimmed, items: cleaned)
+            _ = try repository.createTemplate(name: trimmedName, items: cleanedTreatments)
             dismiss()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -158,55 +168,56 @@ private struct ProtocolTemplateAddView: View {
     }
 }
 
-private struct ProtocolTemplateDetailView: View {
+private struct TreatmentTemplateDetailView: View {
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
-    private var repository: any WorkingProtocolTemplateEditorRepository { workingDependencies.protocolTemplateEditorRepository }
+    private var repository: any WorkingTreatmentTemplateEditorRepository {
+        workingDependencies.treatmentTemplateEditorRepository
+    }
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var viewModel: WorkingProtocolTemplateDetailViewModel
+    @StateObject private var viewModel: WorkingTreatmentTemplateDetailViewModel
 
-    @State private var nameDraft: String = ""
-    @State private var items: [WorkingProtocolItem] = []
+    @State private var nameDraft = ""
+    @State private var plannedTreatments: [WorkingTreatmentPlanItem] = []
     @State private var errorMessage: String?
     @State private var showingError = false
 
     init(templateID: UUID) {
-        _viewModel = StateObject(wrappedValue: WorkingProtocolTemplateDetailViewModel(templateID: templateID, repository: EmptyWorkingRepository()))
+        _viewModel = StateObject(
+            wrappedValue: WorkingTreatmentTemplateDetailViewModel(
+                templateID: templateID,
+                repository: EmptyWorkingRepository()
+            )
+        )
     }
 
     var body: some View {
         Form {
             Section("Name") {
-                TextField("Protocol name", text: $nameDraft)
+                TextField("Template name", text: $nameDraft)
             }
 
-            Section("Items") {
-                if items.isEmpty {
-                    Text("No items")
+            Section("Planned Treatments") {
+                if plannedTreatments.isEmpty {
+                    Text("No planned treatments")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach($items) { $item in
-                        HStack {
-                            TextField("Item", text: $item.name)
-                            Spacer()
-                            TextField("Qty", value: $item.defaultQuantity, format: .number)
-                                .multilineTextAlignment(.trailing)
-                                .keyboardType(.decimalPad)
-                                .frame(width: 90)
+                    ForEach($plannedTreatments) { $treatment in
+                        VStack(alignment: .leading, spacing: 8) {
+                            TextField("Treatment", text: $treatment.name)
+                            WorkingTreatmentDoseEditor(dose: $treatment.suggestedDose)
                         }
                     }
-                    .onDelete { idx in
-                        items.remove(atOffsets: idx)
-                    }
+                    .onDelete { plannedTreatments.remove(atOffsets: $0) }
                 }
 
                 Button {
-                    items.append(WorkingProtocolItem(name: ""))
+                    plannedTreatments.append(WorkingTreatmentPlanItem(name: ""))
                 } label: {
-                    Label("Add Item", systemImage: "plus")
+                    Label("Add Treatment", systemImage: "plus")
                 }
             }
         }
-        .navigationTitle(nameDraft.isEmpty ? "Protocol" : nameDraft)
+        .navigationTitle(nameDraft.isEmpty ? "Treatment Template" : nameDraft)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -234,20 +245,30 @@ private struct ProtocolTemplateDetailView: View {
     private func seedFromSnapshot() {
         guard let template = viewModel.template else { return }
         nameDraft = template.name
-        items = template.items
+        plannedTreatments = template.plannedTreatments
     }
 
     private func save() {
         guard let template = viewModel.template else { return }
         let trimmedName = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
-        let cleaned = items
-            .map { WorkingProtocolItem(id: $0.id, name: $0.name.trimmingCharacters(in: .whitespacesAndNewlines), defaultQuantity: $0.defaultQuantity) }
+        let cleanedTreatments = plannedTreatments
+            .map {
+                WorkingTreatmentPlanItem(
+                    id: $0.id,
+                    name: $0.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                    suggestedDose: $0.suggestedDose
+                )
+            }
             .filter { !$0.name.isEmpty }
-        guard !cleaned.isEmpty else { return }
+        guard !cleanedTreatments.isEmpty else { return }
 
         do {
-            try repository.updateTemplate(id: template.id, name: trimmedName, items: cleaned)
+            try repository.updateTemplate(
+                id: template.id,
+                name: trimmedName,
+                items: cleanedTreatments
+            )
             dismiss()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

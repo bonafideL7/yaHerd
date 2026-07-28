@@ -3,30 +3,45 @@ import Foundation
 @MainActor
 final class WorkingQueueItemEditorViewModel: ObservableObject {
     @Published private(set) var snapshot: WorkingQueueItemEditorSnapshot?
-    @Published private(set) var pastures: [PastureOption] = []
     @Published var errorMessage: String?
 
     private let sessionID: UUID
     private let queueItemID: UUID
-    private var workingRepository: any WorkingQueueItemEditorReader
-    private var pastureRepository: any PastureReferenceDataReader
+    private var repository: any WorkingQueueItemEditingRepository
 
-    init(sessionID: UUID, queueItemID: UUID, workingRepository: any WorkingQueueItemEditorReader, pastureRepository: any PastureReferenceDataReader) {
+    init(
+        sessionID: UUID,
+        queueItemID: UUID,
+        repository: any WorkingQueueItemEditingRepository
+    ) {
         self.sessionID = sessionID
         self.queueItemID = queueItemID
-        self.workingRepository = workingRepository
-        self.pastureRepository = pastureRepository
+        self.repository = repository
     }
 
-    func configure(workingRepository: any WorkingQueueItemEditorReader, pastureRepository: any PastureReferenceDataReader) {
-        self.workingRepository = workingRepository
-        self.pastureRepository = pastureRepository
+    func configure(repository: any WorkingQueueItemEditingRepository) {
+        self.repository = repository
     }
 
     func load() {
         do {
-            snapshot = try workingRepository.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueItemID)
-            pastures = try pastureRepository.fetchPastureOptions()
+            snapshot = try repository.fetchQueueItemEditor(
+                sessionID: sessionID,
+                queueItemID: queueItemID
+            )
+            errorMessage = nil
+        } catch {
+            errorMessage = UserVisibleErrorMessage.make(error)
+        }
+    }
+
+    func replacePrimaryTag(number: String, colorID: UUID?) {
+        do {
+            snapshot = try repository.replacePrimaryTag(
+                forQueueItemID: queueItemID,
+                inSessionID: sessionID,
+                input: WorkingTagReplacementInput(number: number, colorID: colorID)
+            )
             errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

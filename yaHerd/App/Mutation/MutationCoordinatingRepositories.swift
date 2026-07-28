@@ -395,28 +395,14 @@ struct SyncRequestingWorkingRepository: WorkingRepository {
   func fetchSessionDetail(id: UUID) throws -> WorkingSessionDetailSnapshot? {
     try base.fetchSessionDetail(id: id)
   }
-  func fetchTemplates() throws -> [WorkingProtocolTemplateSummary] { try base.fetchTemplates() }
-  func fetchTemplateDetail(id: UUID) throws -> WorkingProtocolTemplateDetailSnapshot? {
+  func fetchTemplates() throws -> [WorkingTreatmentTemplateSummary] { try base.fetchTemplates() }
+  func fetchTemplateDetail(id: UUID) throws -> WorkingTreatmentTemplateDetailSnapshot? {
     try base.fetchTemplateDetail(id: id)
   }
   func fetchQueueItemEditor(sessionID: UUID, queueItemID: UUID) throws
     -> WorkingQueueItemEditorSnapshot?
   {
     try base.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueItemID)
-  }
-
-  func createSession(
-    date: Date, sourcePastureID: UUID?, protocolName: String, protocolItems: [WorkingProtocolItem]
-  ) throws -> UUID {
-    try writePolicy.validateCanWrite(reason: .working)
-    let result = try base.createSession(
-      date: date,
-      sourcePastureID: sourcePastureID,
-      protocolName: protocolName,
-      protocolItems: protocolItems
-    )
-    mutationRecorder.recordSuccessfulMutation(reason: .working)
-    return result
   }
 
   func collectAnimals(sessionID: UUID, animalIDs: [UUID]) throws {
@@ -475,14 +461,14 @@ struct SyncRequestingWorkingRepository: WorkingRepository {
     mutationRecorder.recordSuccessfulMutation(reason: .working)
   }
 
-  func createTemplate(name: String, items: [WorkingProtocolItem]) throws -> UUID {
+  func createTemplate(name: String, items: [WorkingTreatmentPlanItem]) throws -> UUID {
     try writePolicy.validateCanWrite(reason: .working)
     let result = try base.createTemplate(name: name, items: items)
     mutationRecorder.recordSuccessfulMutation(reason: .working)
     return result
   }
 
-  func updateTemplate(id: UUID, name: String, items: [WorkingProtocolItem]) throws {
+  func updateTemplate(id: UUID, name: String, items: [WorkingTreatmentPlanItem]) throws {
     try writePolicy.validateCanWrite(reason: .working)
     try base.updateTemplate(id: id, name: name, items: items)
     mutationRecorder.recordSuccessfulMutation(reason: .working)

@@ -118,16 +118,16 @@ extension HomeView {
                 onAction: { presentFieldCheckStart() },
                 onDismiss: { dismissSetupSuggestion(.startFirstPastureCheck) }
             )
-        case .createWorkingProtocol:
+        case .createWorkingTreatmentTemplate:
             HomeSuggestionNavigationRow(
-                title: "Create a working protocol",
+                title: "Create a treatment template",
                 subtitle: "Set up reusable treatment or processing steps before the first working session.",
                 systemImage: "list.clipboard.fill",
                 tint: .orange,
                 actionTitle: "Open",
                 cardWidth: cardWidth,
-                destination: { ProtocolTemplatesView() },
-                onDismiss: { dismissSetupSuggestion(.createWorkingProtocol) }
+                destination: { TreatmentTemplatesView() },
+                onDismiss: { dismissSetupSuggestion(.createWorkingTreatmentTemplate) }
             )
         case .enableDashboard:
             HomeSuggestionNavigationRow(

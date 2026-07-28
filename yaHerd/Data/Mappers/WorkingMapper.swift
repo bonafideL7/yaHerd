@@ -22,16 +22,13 @@ enum WorkingMapper {
             sourcePastureName: session.sourcePasture?.name,
             protocolName: session.protocolName,
             protocolItems: session.protocolItems,
-            queueItems: session.queueItems
-                .sorted(by: { $0.queueOrder < $1.queueOrder })
-                .map(makeQueueItemSnapshot)
+            queueItems: session.queueItems.map(makeQueueItemSnapshot)
         )
     }
 
     static func makeQueueItemSnapshot(from item: WorkingQueueItem) -> WorkingQueueItemSnapshot {
         WorkingQueueItemSnapshot(
             id: item.publicID,
-            queueOrder: item.queueOrder,
             status: item.status,
             completedAt: item.completedAt,
             animalID: item.animal?.publicID,
@@ -64,11 +61,12 @@ enum WorkingMapper {
 
     static func makeTreatmentRecordSnapshot(from record: WorkingTreatmentRecord) -> WorkingTreatmentRecordSnapshot {
         WorkingTreatmentRecordSnapshot(
-            id: UUID(),
+            id: record.publicID,
             date: record.date,
+            treatmentItemID: record.treatmentItemID,
             itemName: record.itemName,
             given: record.given,
-            quantity: record.quantity
+            dose: record.dose
         )
     }
 
@@ -91,11 +89,20 @@ enum WorkingMapper {
         )
     }
 
-    static func makeQueueItemEditorSnapshot(session: WorkingSession, queueItem: WorkingQueueItem, animal: Animal, treatmentRecords: [WorkingTreatmentRecordSnapshot], pregnancyCheck: WorkingPregnancyCheckSnapshot?, castrationPerformed: Bool, observationNotes: String) -> WorkingQueueItemEditorSnapshot {
+    static func makeQueueItemEditorSnapshot(
+        session: WorkingSession,
+        queueItem: WorkingQueueItem,
+        animal: Animal,
+        treatmentRecords: [WorkingTreatmentRecordSnapshot],
+        pregnancyCheck: WorkingPregnancyCheckSnapshot?,
+        castrationPerformed: Bool,
+        observationNotes: String
+    ) -> WorkingQueueItemEditorSnapshot {
         WorkingQueueItemEditorSnapshot(
             id: queueItem.publicID,
             sessionID: session.publicID,
             sessionDate: session.date,
+            sessionStatus: session.status,
             sessionSourcePastureName: session.sourcePasture?.name,
             protocolItems: session.protocolItems,
             status: queueItem.status,

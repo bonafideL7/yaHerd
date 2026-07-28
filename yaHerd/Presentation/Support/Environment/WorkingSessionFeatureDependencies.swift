@@ -10,9 +10,9 @@ nonisolated struct WorkingSessionFeatureDependencies {
     let queueItemEditingRepository: any WorkingQueueItemEditingRepository
     let chuteRepository: any WorkingChuteRepository
     let finishSessionRepository: any WorkingFinishSessionRepository
-    let protocolTemplatesRepository: any WorkingProtocolTemplatesRepository
-    let protocolTemplateCreator: any WorkingProtocolTemplateCreating
-    let protocolTemplateEditorRepository: any WorkingProtocolTemplateEditorRepository
+    let treatmentTemplatesRepository: any WorkingTreatmentTemplatesRepository
+    let treatmentTemplateCreator: any WorkingTreatmentTemplateCreating
+    let treatmentTemplateEditorRepository: any WorkingTreatmentTemplateEditorRepository
     let animalSummaryReader: any AnimalSummaryReading
     let pastureReferenceReader: any PastureReferenceDataReader
 
@@ -25,9 +25,9 @@ nonisolated struct WorkingSessionFeatureDependencies {
         queueItemEditingRepository: any WorkingQueueItemEditingRepository,
         chuteRepository: any WorkingChuteRepository,
         finishSessionRepository: any WorkingFinishSessionRepository,
-        protocolTemplatesRepository: any WorkingProtocolTemplatesRepository,
-        protocolTemplateCreator: any WorkingProtocolTemplateCreating,
-        protocolTemplateEditorRepository: any WorkingProtocolTemplateEditorRepository,
+        treatmentTemplatesRepository: any WorkingTreatmentTemplatesRepository,
+        treatmentTemplateCreator: any WorkingTreatmentTemplateCreating,
+        treatmentTemplateEditorRepository: any WorkingTreatmentTemplateEditorRepository,
         animalSummaryReader: any AnimalSummaryReading,
         pastureReferenceReader: any PastureReferenceDataReader
     ) {
@@ -39,9 +39,9 @@ nonisolated struct WorkingSessionFeatureDependencies {
         self.queueItemEditingRepository = queueItemEditingRepository
         self.chuteRepository = chuteRepository
         self.finishSessionRepository = finishSessionRepository
-        self.protocolTemplatesRepository = protocolTemplatesRepository
-        self.protocolTemplateCreator = protocolTemplateCreator
-        self.protocolTemplateEditorRepository = protocolTemplateEditorRepository
+        self.treatmentTemplatesRepository = treatmentTemplatesRepository
+        self.treatmentTemplateCreator = treatmentTemplateCreator
+        self.treatmentTemplateEditorRepository = treatmentTemplateEditorRepository
         self.animalSummaryReader = animalSummaryReader
         self.pastureReferenceReader = pastureReferenceReader
     }
@@ -61,9 +61,9 @@ nonisolated struct WorkingSessionFeatureDependencies {
             queueItemEditingRepository: repository,
             chuteRepository: repository,
             finishSessionRepository: repository,
-            protocolTemplatesRepository: repository,
-            protocolTemplateCreator: repository,
-            protocolTemplateEditorRepository: repository,
+            treatmentTemplatesRepository: repository,
+            treatmentTemplateCreator: repository,
+            treatmentTemplateEditorRepository: repository,
             animalSummaryReader: animalSummaryReader,
             pastureReferenceReader: pastureReferenceReader
         )
@@ -79,9 +79,9 @@ nonisolated struct WorkingSessionFeatureDependencies {
         queueItemEditingRepository: (any WorkingQueueItemEditingRepository)? = nil,
         chuteRepository: (any WorkingChuteRepository)? = nil,
         finishSessionRepository: (any WorkingFinishSessionRepository)? = nil,
-        protocolTemplatesRepository: (any WorkingProtocolTemplatesRepository)? = nil,
-        protocolTemplateCreator: (any WorkingProtocolTemplateCreating)? = nil,
-        protocolTemplateEditorRepository: (any WorkingProtocolTemplateEditorRepository)? = nil,
+        treatmentTemplatesRepository: (any WorkingTreatmentTemplatesRepository)? = nil,
+        treatmentTemplateCreator: (any WorkingTreatmentTemplateCreating)? = nil,
+        treatmentTemplateEditorRepository: (any WorkingTreatmentTemplateEditorRepository)? = nil,
         animalSummaryReader: (any AnimalSummaryReading)? = nil,
         pastureReferenceReader: (any PastureReferenceDataReader)? = nil
     ) -> Self {
@@ -95,9 +95,9 @@ nonisolated struct WorkingSessionFeatureDependencies {
             queueItemEditingRepository: queueItemEditingRepository ?? missingRepository,
             chuteRepository: chuteRepository ?? missingRepository,
             finishSessionRepository: finishSessionRepository ?? missingRepository,
-            protocolTemplatesRepository: protocolTemplatesRepository ?? missingRepository,
-            protocolTemplateCreator: protocolTemplateCreator ?? missingRepository,
-            protocolTemplateEditorRepository: protocolTemplateEditorRepository ?? missingRepository,
+            treatmentTemplatesRepository: treatmentTemplatesRepository ?? missingRepository,
+            treatmentTemplateCreator: treatmentTemplateCreator ?? missingRepository,
+            treatmentTemplateEditorRepository: treatmentTemplateEditorRepository ?? missingRepository,
             animalSummaryReader: animalSummaryReader ?? MissingWorkingAnimalSummaryReader(),
             pastureReferenceReader: pastureReferenceReader ?? MissingWorkingPastureReferenceReader()
         )
@@ -122,27 +122,33 @@ private struct MissingWorkingRepository: WorkingRepository {
         .dependency(name)
     }
 
-    func fetchSessions() throws -> [WorkingSessionSummary] { throw missing("Working sessions repository") }
-    func fetchSessionDetail(id: UUID) throws -> WorkingSessionDetailSnapshot? { throw missing("Working session detail repository") }
-    func fetchTemplates() throws -> [WorkingProtocolTemplateSummary] { throw missing("Working protocol template repository") }
-    func fetchTemplateDetail(id: UUID) throws -> WorkingProtocolTemplateDetailSnapshot? {
-        throw missing("Working protocol template detail repository")
+    func fetchSessions() throws -> [WorkingSessionSummary] {
+        throw missing("Working sessions repository")
     }
+
+    func fetchSessionDetail(id: UUID) throws -> WorkingSessionDetailSnapshot? {
+        throw missing("Working session detail repository")
+    }
+
+    func fetchTemplates() throws -> [WorkingTreatmentTemplateSummary] {
+        throw missing("Working treatment template repository")
+    }
+
+    func fetchTemplateDetail(id: UUID) throws -> WorkingTreatmentTemplateDetailSnapshot? {
+        throw missing("Working treatment template detail repository")
+    }
+
     func fetchQueueItemEditor(
         sessionID: UUID,
         queueItemID: UUID
     ) throws -> WorkingQueueItemEditorSnapshot? {
-        throw missing("Working queue item editor repository")
+        throw missing("Working session animal editor repository")
     }
-    func createSession(
-        date: Date,
-        sourcePastureID: UUID?,
-        protocolName: String,
-        protocolItems: [WorkingProtocolItem]
-    ) throws -> UUID {
-        throw missing("Working session creator")
+
+    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) throws {
+        throw missing("Working animal collector")
     }
-    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) throws { throw missing("Working animal collector") }
+
     func complete(
         queueItemID: UUID,
         inSessionID sessionID: UUID,
@@ -150,20 +156,44 @@ private struct MissingWorkingRepository: WorkingRepository {
         pregnancyCheck: WorkingPregnancyCheckInput?,
         markCastrated: Bool,
         observationNotes: String
-    ) throws { throw missing("Working chute repository") }
+    ) throws {
+        throw missing("Working animal repository")
+    }
+
     func saveEdits(
         forQueueItemID queueItemID: UUID,
         inSessionID sessionID: UUID,
         input: WorkingSessionAnimalEditInput
     ) throws {
-        throw missing("Working queue item editor")
+        throw missing("Working session animal editor")
     }
-    func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) throws { throw missing("Working queue item editor") }
-    func deleteSession(id: UUID) throws { throw missing("Working session deleter") }
-    func completeSession(id: UUID, assignments: [WorkingQueueDestinationAssignment]) throws { throw missing("Working session completion repository") }
-    func createTemplate(name: String, items: [WorkingProtocolItem]) throws -> UUID { throw missing("Working protocol template creator") }
-    func updateTemplate(id: UUID, name: String, items: [WorkingProtocolItem]) throws { throw missing("Working protocol template editor") }
-    func deleteTemplates(ids: [UUID]) throws { throw missing("Working protocol template deleter") }
+
+    func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) throws {
+        throw missing("Working session animal editor")
+    }
+
+    func deleteSession(id: UUID) throws {
+        throw missing("Working session deleter")
+    }
+
+    func completeSession(
+        id: UUID,
+        assignments: [WorkingQueueDestinationAssignment]
+    ) throws {
+        throw missing("Working session completion repository")
+    }
+
+    func createTemplate(name: String, items: [WorkingTreatmentPlanItem]) throws -> UUID {
+        throw missing("Working treatment template creator")
+    }
+
+    func updateTemplate(id: UUID, name: String, items: [WorkingTreatmentPlanItem]) throws {
+        throw missing("Working treatment template editor")
+    }
+
+    func deleteTemplates(ids: [UUID]) throws {
+        throw missing("Working treatment template deleter")
+    }
 }
 
 private struct MissingWorkingAnimalSummaryReader: AnimalSummaryReading {
@@ -193,9 +223,9 @@ private struct WorkingSessionFeatureDependenciesKey: EnvironmentKey {
             queueItemEditingRepository: MissingWorkingRepository(),
             chuteRepository: MissingWorkingRepository(),
             finishSessionRepository: MissingWorkingRepository(),
-            protocolTemplatesRepository: MissingWorkingRepository(),
-            protocolTemplateCreator: MissingWorkingRepository(),
-            protocolTemplateEditorRepository: MissingWorkingRepository(),
+            treatmentTemplatesRepository: MissingWorkingRepository(),
+            treatmentTemplateCreator: MissingWorkingRepository(),
+            treatmentTemplateEditorRepository: MissingWorkingRepository(),
             animalSummaryReader: MissingWorkingAnimalSummaryReader(),
             pastureReferenceReader: MissingWorkingPastureReferenceReader()
         )

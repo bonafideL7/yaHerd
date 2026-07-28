@@ -2,4 +2,4 @@
 // - WorkingSessionSummary.swift
 // - WorkingSessionDetailSnapshot.swift
 // - WorkingQueueItemEditorSnapshot.swift
-// - WorkingProtocolTemplateSnapshots.swift
+// - WorkingTreatmentTemplateSnapshots.swift

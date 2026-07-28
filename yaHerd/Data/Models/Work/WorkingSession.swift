@@ -21,12 +21,13 @@ extension YaHerdSchemaV1 {
         @Relationship(deleteRule: .nullify)
         var sourcePasture: Pasture?
 
-        /// Protocol name displayed in the UI.
+        /// Stored field name retained in V1; domain and presentation use treatment-template terminology.
         var protocolName: String = ""
-        /// Predetermined work items (shots) for this session.
+        /// Planned treatments captured as a session snapshot.
         var protocolItems: [WorkingProtocolItem] = []
 
-        /// Pointer into the queue for chute mode.
+        /// Deprecated V1 storage compatibility field. The current animal workflow
+        /// no longer has a queue pointer and must not depend on this value.
         var currentQueueIndex: Int = 0
         var notes: String?
 
@@ -75,17 +76,4 @@ enum WorkingSessionStatus: String, Codable, CaseIterable {
     case active
     case finished
     case cancelled
-}
-
-/// Codable protocol item stored inside a WorkingSession or template.
-struct WorkingProtocolItem: Codable, Hashable, Identifiable {
-    var id: UUID = UUID()
-    var name: String = ""
-    var defaultQuantity: Double?
-
-    init(id: UUID = UUID(), name: String, defaultQuantity: Double? = nil) {
-        self.id = id
-        self.name = name
-        self.defaultQuantity = defaultQuantity
-    }
 }

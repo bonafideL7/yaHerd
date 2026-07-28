@@ -5,33 +5,38 @@ import XCTest
 
 @MainActor
 final class SwiftDataSchemaMigrationTests: XCTestCase {
-    func testMigrationPlanHasAtLeastOneReleasedSchema() {
+    func testMigrationPlanContainsCurrentSchema() {
         XCTAssertFalse(YaHerdMigrationPlan.schemas.isEmpty)
+        XCTAssertEqual(
+            YaHerdMigrationPlan.currentSchema.versionIdentifier,
+            YaHerdSchemaV1.versionIdentifier
+        )
     }
 
-    func testEveryReleasedSchemaHasAFixtureStore() {
+    func testEveryRegisteredSchemaHasAFixtureStore() {
         XCTAssertEqual(
             YaHerdMigrationPlan.schemas.map { $0.versionIdentifier },
             YaHerdMigrationFixtureStores.versionIdentifiers
         )
     }
 
-    func testMigrationPlanHasAStageBetweenEveryReleasedSchema() {
+    func testMigrationPlanHasAStageBetweenEveryRegisteredSchema() {
         XCTAssertEqual(
             YaHerdMigrationPlan.stages.count,
             max(YaHerdMigrationPlan.schemas.count - 1, 0)
         )
+        XCTAssertTrue(YaHerdMigrationPlan.stages.isEmpty)
     }
 
-    func testEveryReleasedFixtureStoreUpgradesThroughProductionMigrationPlan() throws {
-        for releasedSchema in YaHerdMigrationPlan.schemas {
-            try assertFixtureUpgrades(
-                from: releasedSchema.versionIdentifier
+    func testEveryFixtureStoreOpensThroughProductionMigrationPlan() throws {
+        for schema in YaHerdMigrationPlan.schemas {
+            try assertFixtureOpensThroughProductionPlan(
+                from: schema.versionIdentifier
             )
         }
     }
 
-    private func assertFixtureUpgrades(
+    private func assertFixtureOpensThroughProductionPlan(
         from versionIdentifier: Schema.Version
     ) throws {
         let fixtureDirectory = FileManager.default.temporaryDirectory
@@ -52,14 +57,14 @@ final class SwiftDataSchemaMigrationTests: XCTestCase {
             at: storeURL
         )
 
-        let upgradedContainer = try ModelContainerFactory.makeContainer(
+        let container = try ModelContainerFactory.makeContainer(
             syncMode: .localOnly,
             storeURL: storeURL
         )
 
-        try YaHerdMigrationFixtureStores.validateUpgradedStore(
+        try YaHerdMigrationFixtureStores.validateStoreOpenedThroughCurrentPlan(
             from: versionIdentifier,
-            in: upgradedContainer.mainContext
+            in: container.mainContext
         )
     }
 }

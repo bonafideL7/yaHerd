@@ -330,7 +330,7 @@ struct HerdCollaborationView: View {
       )
 
       Text(
-        "Core Data is intentionally isolated behind the sharing repository. SwiftData remains the app data store. The bridge now mirrors tag colors, animal tags, custom status references, pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working protocol templates, working sessions, queue items, treatment records, and field checks into CloudKit sharing and can import those accepted shared records back into SwiftData."
+        "Core Data is intentionally isolated behind the sharing repository. SwiftData remains the app data store. The bridge now mirrors tag colors, animal tags, custom status references, pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working treatment templates, working sessions, queue items, treatment records, and field checks into CloudKit sharing and can import those accepted shared records back into SwiftData."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -832,7 +832,7 @@ struct HerdCollaborationView: View {
       .disabled(!viewModel.canStartSharing)
 
       Text(
-        "This mirrors the current SwiftData herd, support records, pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working protocol templates, working sessions, queue items, treatment records, and field checks into the isolated Core Data bridge, then opens Apple's CloudKit sharing sheet. It does not move yaHerd's normal app data out of SwiftData."
+        "This mirrors the current SwiftData herd, support records, pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working treatment templates, working sessions, queue items, treatment records, and field checks into the isolated Core Data bridge, then opens Apple's CloudKit sharing sheet. It does not move yaHerd's normal app data out of SwiftData."
       )
       .font(.caption)
       .foregroundStyle(.secondary)

@@ -12,7 +12,7 @@ struct DashboardActiveSessionCard: View {
             HStack {
                 Image(systemName: "wrench.and.screwdriver")
                     .foregroundStyle(.tint)
-                Text(session.protocolName)
+                Text(session.treatmentTemplateName)
                     .font(.headline)
                 Spacer()
                 Text("In progress")

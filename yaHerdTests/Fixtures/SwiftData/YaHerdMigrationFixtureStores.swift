@@ -20,7 +20,7 @@ enum YaHerdMigrationFixtureStores {
         throw FixtureRegistryError.missingFixture(versionIdentifier)
     }
 
-    static func validateUpgradedStore(
+    static func validateStoreOpenedThroughCurrentPlan(
         from versionIdentifier: Schema.Version,
         in context: ModelContext
     ) throws {

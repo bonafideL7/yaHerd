@@ -5,9 +5,22 @@ import SwiftData
 struct SwiftDataWorkingWorkDataWriter {
     let context: ModelContext
 
-    func replaceWorkData(session: WorkingSession, animal: Animal, input: WorkingQueueItemWorkDataInput, recordDate: Date) throws {
-        try replaceTreatmentRecords(session: session, animal: animal, entries: input.treatmentEntries)
-        try replacePregnancyCheck(session: session, animal: animal, input: input.pregnancyCheck)
+    func replaceWorkData(
+        session: WorkingSession,
+        animal: Animal,
+        input: WorkingQueueItemWorkDataInput,
+        recordDate: Date
+    ) throws {
+        try replaceTreatmentRecords(
+            session: session,
+            animal: animal,
+            entries: input.treatmentEntries
+        )
+        try replacePregnancyCheck(
+            session: session,
+            animal: animal,
+            input: input.pregnancyCheck
+        )
         try replaceGeneratedHealthRecord(
             session: session,
             animal: animal,
@@ -34,14 +47,20 @@ struct SwiftDataWorkingWorkDataWriter {
         try deleteHealthRecords(session: session, animal: animal)
     }
 
-    private func replaceTreatmentRecords(session: WorkingSession, animal: Animal, entries: [WorkingTreatmentEntryInput]) throws {
+    private func replaceTreatmentRecords(
+        session: WorkingSession,
+        animal: Animal,
+        entries: [WorkingTreatmentEntryInput]
+    ) throws {
+        try WorkingTreatmentPlanRules.validate(entries, against: session.protocolItems)
         try deleteTreatmentRecords(session: session, animal: animal)
         for entry in entries {
             let record = WorkingTreatmentRecord(
                 date: entry.date,
+                treatmentItemID: entry.treatmentItemID,
                 itemName: entry.itemName,
                 given: entry.given,
-                quantity: entry.quantity,
+                dose: entry.dose,
                 animal: animal,
                 session: session
             )
@@ -49,7 +68,11 @@ struct SwiftDataWorkingWorkDataWriter {
         }
     }
 
-    private func replacePregnancyCheck(session: WorkingSession, animal: Animal, input: WorkingPregnancyCheckInput?) throws {
+    private func replacePregnancyCheck(
+        session: WorkingSession,
+        animal: Animal,
+        input: WorkingPregnancyCheckInput?
+    ) throws {
         try deletePregnancyChecks(session: session, animal: animal)
         guard WorkingWorkDataRules.shouldRecordPregnancyCheck(input), let input else { return }
 
@@ -89,7 +112,9 @@ struct SwiftDataWorkingWorkDataWriter {
 
     private func fetchAnimal(id: UUID?) throws -> Animal? {
         guard let id else { return nil }
-        let descriptor = FetchDescriptor<Animal>(predicate: #Predicate<Animal> { animal in animal.publicID == id })
+        let descriptor = FetchDescriptor<Animal>(
+            predicate: #Predicate<Animal> { animal in animal.publicID == id }
+        )
         return try context.fetch(descriptor).first
     }
 
@@ -119,7 +144,11 @@ struct SwiftDataWorkingWorkDataWriter {
         }
     }
 
-    private func deleteHealthRecords(session: WorkingSession, animal: Animal, treatment: String? = nil) throws {
+    private func deleteHealthRecords(
+        session: WorkingSession,
+        animal: Animal,
+        treatment: String? = nil
+    ) throws {
         let sessionID = session.publicID
         let animalID = animal.publicID
         let descriptor: FetchDescriptor<HealthRecord>
@@ -134,7 +163,8 @@ struct SwiftDataWorkingWorkDataWriter {
         } else {
             descriptor = FetchDescriptor<HealthRecord>(
                 predicate: #Predicate<HealthRecord> { record in
-                    record.workingSession?.publicID == sessionID && record.animal?.publicID == animalID
+                    record.workingSession?.publicID == sessionID
+                        && record.animal?.publicID == animalID
                 }
             )
         }

@@ -2,7 +2,6 @@ import Foundation
 
 struct WorkingQueueItemSnapshot: Identifiable, Hashable {
     let id: UUID
-    let queueOrder: Int
     let status: WorkingQueueStatus
     let completedAt: Date?
     let animalID: UUID?
@@ -22,8 +21,8 @@ struct WorkingSessionDetailSnapshot: Identifiable, Hashable {
     let status: WorkingSessionStatus
     let sourcePastureID: UUID?
     let sourcePastureName: String?
-    let protocolName: String
-    let protocolItems: [WorkingProtocolItem]
+    let treatmentTemplateName: String
+    let plannedTreatments: [WorkingTreatmentPlanItem]
     let queueItems: [WorkingQueueItemSnapshot]
 
     var queuedCount: Int {

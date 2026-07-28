@@ -8,21 +8,28 @@ import SwiftUI
 struct NewWorkingSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
+    @Environment(\.appDataAccessMode) private var dataAccessMode
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+
     private var repository: any NewWorkingSessionRepository { workingDependencies.newSessionRepository }
     private var pastureRepository: any PastureReferenceDataReader { workingDependencies.pastureReferenceReader }
+    private var animalSummaryReader: any AnimalSummaryReading { workingDependencies.animalSummaryReader }
 
-    @StateObject private var viewModel = NewWorkingSessionViewModel(pastureRepository: EmptyPastureRepository(), workingRepository: EmptyWorkingRepository())
+    @StateObject private var viewModel = NewWorkingSessionViewModel(
+        pastureRepository: EmptyPastureRepository(),
+        animalSummaryReader: EmptyAnimalRepository(),
+        workingRepository: EmptyWorkingRepository()
+    )
 
     @State private var date: Date = .now
-    @State private var sourcePasture: PastureOption?
+    @State private var selectedPastureID: UUID?
     @State private var selectedTemplateID: UUID?
-
-    @State private var protocolName: String = ""
-    @State private var items: [WorkingProtocolItem] = []
-
-    @State private var showingPasturePicker = false
-    @State private var errorMessage: String?
-    @State private var showingError = false
+    @State private var selectedTemplateName: String?
+    @State private var plannedTreatments: [WorkingTreatmentPlanItem] = []
+    @State private var specifiesAnimals = false
+    @State private var selectedAnimalIDs: Set<UUID> = []
+    @State private var showingAnimalPicker = false
+    @State private var startedRoute: StartedWorkingSessionSetupRoute?
 
     private let suggestedPastureID: UUID?
     private let wrapsInNavigationStack: Bool
@@ -36,13 +43,53 @@ struct NewWorkingSessionView: View {
         self.suggestedPastureID = suggestedPastureID
         self.wrapsInNavigationStack = wrapsInNavigationStack
         self.onSessionCreated = onSessionCreated
+        _selectedPastureID = State(initialValue: suggestedPastureID)
+    }
+
+    private var selectedPasture: PastureOption? {
+        guard let selectedPastureID else { return nil }
+        return viewModel.pastures.first { $0.id == selectedPastureID }
+    }
+
+    private var eligibleAnimals: [AnimalSummary] {
+        viewModel.eligibleAnimals(pastureID: selectedPastureID)
+    }
+
+    private var includedAnimalCount: Int {
+        specifiesAnimals ? selectedAnimalIDs.count : eligibleAnimals.count
+    }
+
+    private var canStart: Bool {
+        dataAccessMode.allowsDataMutations
+            && selectedPasture != nil
+            && includedAnimalCount > 0
+    }
+
+    private var startStatusText: String? {
+        if !dataAccessMode.allowsDataMutations {
+            return "Recovery mode is read-only. New sessions cannot be saved."
+        }
+        if !viewModel.hasLoaded {
+            return "Loading pastures and animals…"
+        }
+        if viewModel.pastures.isEmpty {
+            return "Add a pasture before starting a working session."
+        }
+        if selectedPasture == nil {
+            return "Select a pasture to start."
+        }
+        if eligibleAnimals.isEmpty {
+            return "The selected pasture has no active animals available to work."
+        }
+        if specifiesAnimals && selectedAnimalIDs.isEmpty {
+            return "Select at least one animal."
+        }
+        return nil
     }
 
     var body: some View {
         if wrapsInNavigationStack {
-            NavigationStack {
-                content
-            }
+            NavigationStack { content }
         } else {
             content
         }
@@ -50,166 +97,202 @@ struct NewWorkingSessionView: View {
 
     private var content: some View {
         Form {
-                Section("Session") {
-                    DatePicker("Date", selection: $date)
-
-                    Button {
-                        showingPasturePicker = true
-                    } label: {
-                        HStack {
-                            Text("Source Pasture")
-                            Spacer()
-                            Text(sourcePasture?.name ?? "Choose")
-                                .foregroundStyle(sourcePasture == nil ? .secondary : .primary)
-                        }
-                    }
-                }
-
-                Section("Protocol") {
-                    Picker("Template", selection: $selectedTemplateID) {
-                        Text("Custom")
-                            .tag(Optional<UUID>(nil))
-                        ForEach(viewModel.templates) { template in
-                            Text(template.name)
-                                .tag(Optional(template.id))
-                        }
-                    }
-                    .onChange(of: selectedTemplateID) { _, newValue in
-                        guard let id = newValue,
-                              let template = viewModel.templateDetail(id: id) else { return }
-                        protocolName = template.name
-                        items = template.items
-                    }
-
-                    TextField("Protocol Name", text: $protocolName)
-
-                    if items.isEmpty {
-                        Text("No protocol items")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach($items) { $item in
-                            HStack {
-                                TextField("Item", text: $item.name)
-                                Spacer()
-                                TextField("Qty", value: $item.defaultQuantity, format: .number)
-                                    .multilineTextAlignment(.trailing)
-                                    .keyboardType(.decimalPad)
-                                    .frame(width: 90)
-                            }
-                        }
-                        .onDelete { idx in
-                            items.remove(atOffsets: idx)
-                        }
-                    }
-
-                    Button {
-                        items.append(WorkingProtocolItem(name: "", defaultQuantity: nil))
-                    } label: {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
+            sessionSection
+            animalsSection
+            treatmentsSection
         }
-        .navigationTitle("New Session")
+        .navigationTitle("Start Working Session")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            viewModel.configure(
+                pastureRepository: pastureRepository,
+                animalSummaryReader: animalSummaryReader,
+                workingRepository: repository
+            )
+            if !viewModel.hasLoaded { viewModel.load() }
+            seedSuggestedPastureIfNeeded()
+            resetAnimalSelection()
+        }
+        .onChange(of: selectedPastureID) { _, _ in resetAnimalSelection() }
+        .sheet(isPresented: $showingAnimalPicker) {
+            WorkingSessionAnimalSelectionView(animals: eligibleAnimals, selection: $selectedAnimalIDs)
+        }
+        .navigationDestination(item: $startedRoute) { route in
+            WorkingSessionDetailView(sessionID: route.id)
+        }
+        .safeAreaInset(edge: .bottom) {
+            WorkingSessionStartBar(
+                animalCount: includedAnimalCount,
+                isEnabled: canStart,
+                statusText: startStatusText,
+                onStart: startSession
+            )
+        }
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Create") {
-                    createSession()
-                }
-                .disabledWhenDataReadOnly()
-            }
             if wrapsInNavigationStack {
                 ToolbarItem(placement: .cancellationAction) {
                     ToolbarCancelButton { dismiss() }
                 }
             }
         }
-        .sheet(isPresented: $showingPasturePicker) {
-            NavigationStack {
-                List(viewModel.pastures) { pasture in
-                    Button {
-                        sourcePasture = pasture
-                        showingPasturePicker = false
-                    } label: {
-                        HStack {
-                            Text(pasture.name)
-                            Spacer()
-                            if sourcePasture?.id == pasture.id {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-                .navigationTitle("Choose Pasture")
-                .navigationBarTitleDisplayMode(.inline)
-            }
-        }
-        .task {
-            viewModel.configure(pastureRepository: pastureRepository, workingRepository: repository)
-            viewModel.load()
-            seedSuggestedPastureIfNeeded()
-            seedDefaultsIfNeeded()
-        }
-        .alert("Can’t Create", isPresented: $showingError) {
+        .alert("Can’t Start Session", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(errorMessage ?? viewModel.errorMessage ?? "")
+            Text(viewModel.errorMessage ?? "Unknown error")
         }
-        .onChange(of: viewModel.errorMessage) { _, newValue in
-            if newValue != nil { showingError = true }
+    }
+
+    private var sessionSection: some View {
+        Section("Session") {
+            if !viewModel.hasLoaded {
+                HStack {
+                    ProgressView()
+                    Text("Loading pastures…").foregroundStyle(.secondary)
+                }
+            } else if viewModel.pastures.isEmpty {
+                ContentUnavailableView(
+                    "No Pastures",
+                    systemImage: "map",
+                    description: Text("Add a pasture before starting a working session.")
+                )
+            } else {
+                LabeledContent("Pasture") {
+                    Picker("Pasture", selection: $selectedPastureID) {
+                        Text("Select").tag(Optional<UUID>.none)
+                        ForEach(viewModel.pastures) { pasture in
+                            Text(pasture.name).tag(Optional(pasture.id))
+                        }
+                    }
+                    .labelsHidden()
+                }
+            }
+
+            LabeledContent("Date") {
+                DatePicker("Date", selection: $date, displayedComponents: .date)
+                    .labelsHidden()
+            }
+        }
+    }
+
+    private var animalsSection: some View {
+        Section {
+            LabeledContent("Included") {
+                Text(specifiesAnimals ? "Selected animals" : "All animals")
+                    .foregroundStyle(.secondary)
+            }
+            LabeledContent("Available") {
+                Text("\(eligibleAnimals.count)").foregroundStyle(.secondary)
+            }
+            Toggle("Specify Animals", isOn: $specifiesAnimals)
+                .onChange(of: specifiesAnimals) { _, enabled in
+                    if enabled { selectedAnimalIDs = Set(eligibleAnimals.map(\.id)) }
+                }
+            if specifiesAnimals {
+                Button { showingAnimalPicker = true } label: {
+                    HStack {
+                        Label("Choose Animals", systemImage: "checklist")
+                        Spacer()
+                        Text("\(selectedAnimalIDs.count) selected").foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(eligibleAnimals.isEmpty)
+            }
+        } header: {
+            Text("Animals")
+        } footer: {
+            Text("All active animals in the selected pasture are included automatically unless you choose a specific group.")
+        }
+    }
+
+    private var treatmentsSection: some View {
+        Section {
+            Picker("Treatment Template", selection: $selectedTemplateID) {
+                Text("None").tag(Optional<UUID>.none)
+                ForEach(viewModel.templates) { template in
+                    Text(template.name).tag(Optional(template.id))
+                }
+            }
+            .onChange(of: selectedTemplateID) { _, id in applyTemplate(id: id) }
+
+            if plannedTreatments.isEmpty {
+                Text("No planned treatments").foregroundStyle(.secondary)
+            } else {
+                ForEach($plannedTreatments) { $treatment in
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Treatment", text: $treatment.name)
+                        WorkingTreatmentDoseEditor(dose: $treatment.suggestedDose)
+                    }
+                }
+                .onDelete { plannedTreatments.remove(atOffsets: $0) }
+            }
+
+            Button {
+                plannedTreatments.append(WorkingTreatmentPlanItem(name: ""))
+            } label: {
+                Label("Add Treatment", systemImage: "plus")
+            }
+        } header: {
+            Text("Treatments")
+        } footer: {
+            Text("Treatments are optional. Suggested dose amount, unit, and route can be adjusted for each animal during the session.")
         }
     }
 
     private func seedSuggestedPastureIfNeeded() {
-        guard sourcePasture == nil, let suggestedPastureID else { return }
-        sourcePasture = viewModel.pastures.first { $0.id == suggestedPastureID }
+        guard let suggestedPastureID else { return }
+        selectedPastureID = viewModel.pastures.contains(where: { $0.id == suggestedPastureID })
+            ? suggestedPastureID : nil
     }
 
-    private func seedDefaultsIfNeeded() {
-        guard protocolName.isEmpty else { return }
-        if let first = viewModel.templates.first,
-           let detail = viewModel.templateDetail(id: first.id) {
-            selectedTemplateID = first.id
-            protocolName = detail.name
-            items = detail.items
-        } else {
-            protocolName = "Working"
-            items = [WorkingProtocolItem(name: "7-way")]
-        }
+    private func resetAnimalSelection() {
+        selectedAnimalIDs = specifiesAnimals ? Set(eligibleAnimals.map(\.id)) : []
     }
 
-    private func createSession() {
-        let trimmedName = protocolName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty else {
-            errorMessage = "Protocol name can’t be empty."
-            showingError = true
+    private func applyTemplate(id: UUID?) {
+        guard let id, let template = viewModel.templateDetail(id: id) else {
+            selectedTemplateName = nil
+            plannedTreatments = []
             return
         }
+        selectedTemplateName = template.name
+        plannedTreatments = template.plannedTreatments
+    }
 
-        let cleanedItems = items
-            .map { WorkingProtocolItem(id: $0.id, name: $0.name.trimmingCharacters(in: .whitespacesAndNewlines), defaultQuantity: $0.defaultQuantity) }
+    private func startSession() {
+        guard dataAccessMode.allowsDataMutations, let pastureID = selectedPastureID else { return }
+        let cleanedTreatments = plannedTreatments
+            .map {
+                WorkingTreatmentPlanItem(
+                    id: $0.id,
+                    name: $0.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                    suggestedDose: $0.suggestedDose
+                )
+            }
             .filter { !$0.name.isEmpty }
 
-        guard !cleanedItems.isEmpty else {
-            errorMessage = "Add at least one protocol item."
-            showingError = true
-            return
-        }
-
         do {
-            let sessionID = try repository.createSession(
+            let sessionID = try viewModel.startSession(
                 date: date,
-                sourcePastureID: sourcePasture?.id,
-                protocolName: trimmedName,
-                protocolItems: cleanedItems
+                pastureID: pastureID,
+                treatmentTemplateName: selectedTemplateName,
+                plannedTreatments: cleanedTreatments,
+                animalIDs: specifiesAnimals ? Array(selectedAnimalIDs) : nil
             )
-            dismiss()
-            onSessionCreated?(sessionID)
+            if let onSessionCreated {
+                dismiss()
+                onSessionCreated(sessionID)
+            } else {
+                startedRoute = StartedWorkingSessionSetupRoute(id: sessionID)
+            }
         } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-            showingError = true
+            viewModel.errorMessage = UserVisibleErrorMessage.make(error)
         }
+    }
+
+    private var errorBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
+        )
     }
 }
