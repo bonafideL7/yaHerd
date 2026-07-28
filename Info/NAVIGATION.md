@@ -61,7 +61,7 @@ Invalid UUIDs and unknown destinations are rejected without mutating navigation 
 
 ## Search ownership
 
-Search is part of `HerdTabRootView` and uses the same `HerdRouter` and `NavigationStack` as the normal animal/pasture hierarchy. There is no separate Search tab and no duplicated `HerdView` tree.
+Search remains a permanent tab-bar destination. The Search and YaHerd tabs use the same `HerdRouter`, search text, sort order, filters, and typed herd routes so search state is not duplicated. Selecting Search always opens the animal hierarchy and presents the search field; opening a result stays in the Search tab.
 
 ## Notification routing
 

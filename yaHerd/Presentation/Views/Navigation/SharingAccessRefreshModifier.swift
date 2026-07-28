@@ -32,7 +32,7 @@ private struct SharingAccessRefreshModifier: ViewModifier {
             surfaceName = "Home"
         case .dashboard:
             surfaceName = "Dashboard"
-        case .herd:
+        case .herd, .search:
             surfaceName = activeMode == .animals ? "Animal records" : "Pasture records"
         }
 
