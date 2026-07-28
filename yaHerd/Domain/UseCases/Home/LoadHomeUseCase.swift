@@ -4,13 +4,13 @@ import Foundation
 struct LoadHomeUseCase {
     let dashboardRepository: any DashboardRecordReading
     let fieldCheckRepository: any FieldCheckOverviewReading
-    let workingRepository: any WorkingProtocolTemplateListReader
+    let workingRepository: any WorkingTreatmentTemplateListReader
     let service: HomeService
 
     init(
         dashboardRepository: any DashboardRecordReading,
         fieldCheckRepository: any FieldCheckOverviewReading,
-        workingRepository: any WorkingProtocolTemplateListReader,
+        workingRepository: any WorkingTreatmentTemplateListReader,
         service: HomeService = HomeService()
     ) {
         self.dashboardRepository = dashboardRepository
@@ -23,13 +23,13 @@ struct LoadHomeUseCase {
         let dashboardRecords = try dashboardRepository.fetchDashboardRecords()
         let fieldCheckSessions = try fieldCheckRepository.fetchSessions()
         let openFindings = try fieldCheckRepository.fetchOpenFindings(limit: 0)
-        let protocolTemplates = try workingRepository.fetchTemplates()
+        let treatmentTemplates = try workingRepository.fetchTemplates()
 
         return service.makeSnapshot(
             dashboardRecords: dashboardRecords,
             fieldCheckSessions: fieldCheckSessions,
             openFindings: openFindings,
-            protocolTemplates: protocolTemplates,
+            treatmentTemplates: treatmentTemplates,
             configuration: configuration,
             now: now
         )

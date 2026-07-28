@@ -5,7 +5,7 @@ struct WorkingSessionSummary: Identifiable, Hashable {
     let date: Date
     let status: WorkingSessionStatus
     let sourcePastureName: String?
-    let protocolName: String
+    let treatmentTemplateName: String
     let totalQueueItems: Int
     let completedQueueItems: Int
 }

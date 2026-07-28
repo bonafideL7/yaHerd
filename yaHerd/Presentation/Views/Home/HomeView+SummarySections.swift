@@ -32,9 +32,12 @@ extension HomeView {
     @ViewBuilder
     var startWorkingSessionActionCard: some View {
         NavigationLink {
-            WorkingSessionPastureStartListView { sessionID in
-                openWorkArea(.session(sessionID))
-            }
+            NewWorkingSessionView(
+                wrapsInNavigationStack: false,
+                onSessionCreated: { sessionID in
+                    openWorkArea(.session(sessionID))
+                }
+            )
         } label: {
             HomeActionCardView(
                 title: "Work animals",

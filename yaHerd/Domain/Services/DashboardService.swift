@@ -99,7 +99,7 @@ struct DashboardService {
                     id: session.id,
                     date: session.date,
                     sourcePastureName: session.sourcePastureName,
-                    protocolName: session.protocolName,
+                    treatmentTemplateName: session.treatmentTemplateName,
                     totalQueueItems: session.totalQueueItems,
                     completedQueueItems: session.completedQueueItems
                 )

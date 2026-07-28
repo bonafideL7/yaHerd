@@ -11,7 +11,11 @@ extension YaHerdSchemaV1 {
     final class WorkingQueueItem {
         var publicID: UUID = UUID()
         @Relationship(deleteRule: .nullify) var herd: Herd?
+
+        /// Deprecated V1 storage compatibility field. Queue items are displayed
+        /// using animal/tag sorting and new code must not depend on this value.
         var queueOrder: Int = 0
+
         var status: WorkingQueueStatus = WorkingQueueStatus.queued
         var completedAt: Date?
 
@@ -33,7 +37,7 @@ extension YaHerdSchemaV1 {
 
         init(
             publicID: UUID = UUID(),
-            queueOrder: Int,
+            queueOrder: Int = 0,
             status: WorkingQueueStatus = WorkingQueueStatus.queued,
             collectedFromPasture: Pasture? = nil,
             destinationPasture: Pasture? = nil,

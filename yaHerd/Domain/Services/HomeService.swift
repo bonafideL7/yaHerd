@@ -11,7 +11,7 @@ struct HomeService {
         dashboardRecords: DashboardRecords,
         fieldCheckSessions: [FieldCheckSessionSummary],
         openFindings: [FieldCheckFindingSnapshot],
-        protocolTemplates: [WorkingProtocolTemplateSummary],
+        treatmentTemplates: [WorkingTreatmentTemplateSummary],
         configuration: DashboardConfiguration,
         now: Date = .now
     ) -> HomeSnapshot {
@@ -45,7 +45,7 @@ struct HomeService {
             hasPastures: !dashboardRecords.pastures.isEmpty,
             hasActiveAnimals: dashboardRecords.animals.contains { $0.isActiveInHerd },
             hasFieldCheckHistory: !fieldCheckSessions.isEmpty,
-            hasWorkingProtocolTemplates: !protocolTemplates.isEmpty
+            hasWorkingTreatmentTemplates: !treatmentTemplates.isEmpty
         )
     }
 

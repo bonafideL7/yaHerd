@@ -87,7 +87,7 @@ struct DashboardWorkingSessionSummary: Identifiable, Equatable {
     let id: String
     let date: Date
     let sourcePastureName: String?
-    let protocolName: String
+    let treatmentTemplateName: String
     let totalQueueItems: Int
     let completedQueueItems: Int
 }

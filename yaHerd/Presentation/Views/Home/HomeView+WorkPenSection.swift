@@ -23,10 +23,10 @@ extension HomeView {
                 }
 
                 NavigationLink {
-                    ProtocolTemplatesView()
+                    TreatmentTemplatesView()
                 } label: {
                     HomeListRow(
-                        title: "Protocol templates",
+                        title: "Treatment templates",
                         subtitle: "Maintain reusable treatment and processing templates.",
                         systemImage: "list.bullet.rectangle.fill",
                         tint: .indigo,

@@ -11,13 +11,13 @@ protocol WorkingSessionDetailReader {
 }
 
 @MainActor
-protocol WorkingProtocolTemplateListReader {
-    func fetchTemplates() throws -> [WorkingProtocolTemplateSummary]
+protocol WorkingTreatmentTemplateListReader {
+    func fetchTemplates() throws -> [WorkingTreatmentTemplateSummary]
 }
 
 @MainActor
-protocol WorkingProtocolTemplateDetailReader {
-    func fetchTemplateDetail(id: UUID) throws -> WorkingProtocolTemplateDetailSnapshot?
+protocol WorkingTreatmentTemplateDetailReader {
+    func fetchTemplateDetail(id: UUID) throws -> WorkingTreatmentTemplateDetailSnapshot?
 }
 
 @MainActor
@@ -26,9 +26,17 @@ protocol WorkingQueueItemEditorReader {
 }
 
 @MainActor
-protocol WorkingSessionCreating {
+protocol WorkingSessionStarting {
     @discardableResult
-    func createSession(date: Date, sourcePastureID: UUID?, protocolName: String, protocolItems: [WorkingProtocolItem]) throws -> UUID
+    func startSession(input: WorkingSessionStartInput) throws -> UUID
+}
+
+@MainActor
+extension WorkingSessionStarting {
+    @discardableResult
+    func startSession(input: WorkingSessionStartInput) throws -> UUID {
+        throw WorkingRepositoryError.sessionStartUnavailable
+    }
 }
 
 @MainActor
@@ -50,7 +58,33 @@ protocol WorkingQueueItemCompleting {
 
 @MainActor
 protocol WorkingQueueItemEditSaving {
-    func saveEdits(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID, input: WorkingSessionAnimalEditInput) throws
+    func saveEdits(
+        forQueueItemID queueItemID: UUID,
+        inSessionID sessionID: UUID,
+        input: WorkingSessionAnimalEditInput
+    ) throws
+}
+
+@MainActor
+protocol WorkingPrimaryTagReplacing {
+    @discardableResult
+    func replacePrimaryTag(
+        forQueueItemID queueItemID: UUID,
+        inSessionID sessionID: UUID,
+        input: WorkingTagReplacementInput
+    ) throws -> WorkingQueueItemEditorSnapshot
+}
+
+@MainActor
+extension WorkingPrimaryTagReplacing {
+    @discardableResult
+    func replacePrimaryTag(
+        forQueueItemID queueItemID: UUID,
+        inSessionID sessionID: UUID,
+        input: WorkingTagReplacementInput
+    ) throws -> WorkingQueueItemEditorSnapshot {
+        throw WorkingRepositoryError.tagReplacementUnavailable
+    }
 }
 
 @MainActor
@@ -72,33 +106,48 @@ protocol WorkingSessionCompleting {
 }
 
 @MainActor
-protocol WorkingProtocolTemplateCreating {
+protocol WorkingSessionReopening {
+    func reopenSession(id: UUID) throws
+}
+
+@MainActor
+extension WorkingSessionReopening {
+    func reopenSession(id: UUID) throws {
+        throw WorkingRepositoryError.sessionReopenUnavailable
+    }
+}
+
+@MainActor
+protocol WorkingTreatmentTemplateCreating {
     @discardableResult
-    func createTemplate(name: String, items: [WorkingProtocolItem]) throws -> UUID
+    func createTemplate(name: String, items: [WorkingTreatmentPlanItem]) throws -> UUID
 }
 
 @MainActor
-protocol WorkingProtocolTemplateUpdating {
-    func updateTemplate(id: UUID, name: String, items: [WorkingProtocolItem]) throws
+protocol WorkingTreatmentTemplateUpdating {
+    func updateTemplate(id: UUID, name: String, items: [WorkingTreatmentPlanItem]) throws
 }
 
 @MainActor
-protocol WorkingProtocolTemplateDeleting {
+protocol WorkingTreatmentTemplateDeleting {
     func deleteTemplates(ids: [UUID]) throws
 }
-
 
 @MainActor
 protocol WorkingSessionsRepository: WorkingSessionListReader, WorkingSessionDeleting {}
 
 @MainActor
-protocol WorkingSessionDetailRepository: WorkingSessionDetailReader, WorkingSessionDeleting {}
+protocol WorkingSessionDetailRepository:
+    WorkingSessionDetailReader,
+    WorkingSessionDeleting,
+    WorkingSessionReopening
+{}
 
 @MainActor
 protocol NewWorkingSessionRepository:
-    WorkingProtocolTemplateListReader,
-    WorkingProtocolTemplateDetailReader,
-    WorkingSessionCreating
+    WorkingTreatmentTemplateListReader,
+    WorkingTreatmentTemplateDetailReader,
+    WorkingSessionStarting
 {}
 
 @MainActor
@@ -114,6 +163,7 @@ protocol WorkingQueueRepository: WorkingSessionDetailReader {}
 protocol WorkingQueueItemEditingRepository:
     WorkingQueueItemEditorReader,
     WorkingQueueItemEditSaving,
+    WorkingPrimaryTagReplacing,
     WorkingQueueItemDataDeleting
 {}
 
@@ -130,15 +180,15 @@ protocol WorkingFinishSessionRepository:
 {}
 
 @MainActor
-protocol WorkingProtocolTemplatesRepository:
-    WorkingProtocolTemplateListReader,
-    WorkingProtocolTemplateDeleting
+protocol WorkingTreatmentTemplatesRepository:
+    WorkingTreatmentTemplateListReader,
+    WorkingTreatmentTemplateDeleting
 {}
 
 @MainActor
-protocol WorkingProtocolTemplateEditorRepository:
-    WorkingProtocolTemplateDetailReader,
-    WorkingProtocolTemplateUpdating
+protocol WorkingTreatmentTemplateEditorRepository:
+    WorkingTreatmentTemplateDetailReader,
+    WorkingTreatmentTemplateUpdating
 {}
 
 @MainActor
@@ -151,7 +201,7 @@ protocol WorkingRepository:
     WorkingQueueItemEditingRepository,
     WorkingChuteRepository,
     WorkingFinishSessionRepository,
-    WorkingProtocolTemplatesRepository,
-    WorkingProtocolTemplateCreating,
-    WorkingProtocolTemplateEditorRepository
+    WorkingTreatmentTemplatesRepository,
+    WorkingTreatmentTemplateCreating,
+    WorkingTreatmentTemplateEditorRepository
 {}

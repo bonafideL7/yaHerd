@@ -14,18 +14,17 @@ private enum PreviewRepositoryError: LocalizedError {
 struct EmptyWorkingRepository: WorkingRepository {
     func fetchSessions() throws -> [WorkingSessionSummary] { [] }
     func fetchSessionDetail(id: UUID) throws -> WorkingSessionDetailSnapshot? { nil }
-    func fetchTemplates() throws -> [WorkingProtocolTemplateSummary] { [] }
-    func fetchTemplateDetail(id: UUID) throws -> WorkingProtocolTemplateDetailSnapshot? { nil }
+    func fetchTemplates() throws -> [WorkingTreatmentTemplateSummary] { [] }
+    func fetchTemplateDetail(id: UUID) throws -> WorkingTreatmentTemplateDetailSnapshot? { nil }
     func fetchQueueItemEditor(sessionID: UUID, queueItemID: UUID) throws -> WorkingQueueItemEditorSnapshot? { nil }
-    func createSession(date: Date, sourcePastureID: UUID?, protocolName: String, protocolItems: [WorkingProtocolItem]) throws -> UUID { UUID() }
     func collectAnimals(sessionID: UUID, animalIDs: [UUID]) throws {}
     func complete(queueItemID: UUID, inSessionID sessionID: UUID, treatmentEntries: [WorkingTreatmentEntryInput], pregnancyCheck: WorkingPregnancyCheckInput?, markCastrated: Bool, observationNotes: String) throws {}
     func saveEdits(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID, input: WorkingSessionAnimalEditInput) throws {}
     func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) throws {}
     func deleteSession(id: UUID) throws {}
     func completeSession(id: UUID, assignments: [WorkingQueueDestinationAssignment]) throws {}
-    func createTemplate(name: String, items: [WorkingProtocolItem]) throws -> UUID { UUID() }
-    func updateTemplate(id: UUID, name: String, items: [WorkingProtocolItem]) throws {}
+    func createTemplate(name: String, items: [WorkingTreatmentPlanItem]) throws -> UUID { UUID() }
+    func updateTemplate(id: UUID, name: String, items: [WorkingTreatmentPlanItem]) throws {}
     func deleteTemplates(ids: [UUID]) throws {}
 }
 

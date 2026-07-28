@@ -15,6 +15,7 @@ final class SharedWorkingSessionRecord: NSManagedObject {
     @NSManaged var sourcePasturePublicID: String?
     @NSManaged var protocolName: String?
     @NSManaged var protocolItemsJSON: Data?
+    /// Deprecated V1 bridge storage. New exports leave this field unset.
     @NSManaged var currentQueueIndex: NSNumber?
     @NSManaged var notes: String?
     @NSManaged var lastMirroredAt: Date?
@@ -42,9 +43,12 @@ extension SharedWorkingSessionRecord {
             protocolItemsJSON = try JSONEncoder().encode(session.protocolItems)
         } catch {
             protocolItemsJSON = nil
-            PersistenceLog.decodeFailure("SharedWorkingSessionRecord.protocolItemsJSON.encode", error: error)
+            PersistenceLog.decodeFailure(
+                "SharedWorkingSessionRecord.protocolItemsJSON.encode",
+                error: error
+            )
         }
-        currentQueueIndex = NSNumber(value: session.currentQueueIndex)
+        currentQueueIndex = nil
         notes = session.notes
         lastMirroredAt = mirroredAt
     }
@@ -71,7 +75,10 @@ extension SharedWorkingSessionRecord {
         do {
             return try JSONDecoder().decode([WorkingProtocolItem].self, from: protocolItemsJSON)
         } catch {
-            PersistenceLog.decodeFailure("SharedWorkingSessionRecord.parsedProtocolItems.decode", error: error)
+            PersistenceLog.decodeFailure(
+                "SharedWorkingSessionRecord.parsedProtocolItems.decode",
+                error: error
+            )
             return []
         }
     }

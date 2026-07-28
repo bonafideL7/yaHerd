@@ -1,17 +1,17 @@
 import Foundation
 
 @MainActor
-final class WorkingProtocolTemplatesViewModel: ObservableObject {
-    @Published private(set) var templates: [WorkingProtocolTemplateSummary] = []
+final class WorkingTreatmentTemplatesViewModel: ObservableObject {
+    @Published private(set) var templates: [WorkingTreatmentTemplateSummary] = []
     @Published var errorMessage: String?
 
-    private var repository: any WorkingProtocolTemplateListReader
+    private var repository: any WorkingTreatmentTemplateListReader
 
-    init(repository: any WorkingProtocolTemplateListReader) {
+    init(repository: any WorkingTreatmentTemplateListReader) {
         self.repository = repository
     }
 
-    func configure(repository: any WorkingProtocolTemplateListReader) {
+    func configure(repository: any WorkingTreatmentTemplateListReader) {
         self.repository = repository
     }
 
@@ -26,19 +26,19 @@ final class WorkingProtocolTemplatesViewModel: ObservableObject {
 }
 
 @MainActor
-final class WorkingProtocolTemplateDetailViewModel: ObservableObject {
-    @Published private(set) var template: WorkingProtocolTemplateDetailSnapshot?
+final class WorkingTreatmentTemplateDetailViewModel: ObservableObject {
+    @Published private(set) var template: WorkingTreatmentTemplateDetailSnapshot?
     @Published var errorMessage: String?
 
     private let templateID: UUID
-    private var repository: any WorkingProtocolTemplateDetailReader
+    private var repository: any WorkingTreatmentTemplateDetailReader
 
-    init(templateID: UUID, repository: any WorkingProtocolTemplateDetailReader) {
+    init(templateID: UUID, repository: any WorkingTreatmentTemplateDetailReader) {
         self.templateID = templateID
         self.repository = repository
     }
 
-    func configure(repository: any WorkingProtocolTemplateDetailReader) {
+    func configure(repository: any WorkingTreatmentTemplateDetailReader) {
         self.repository = repository
     }
 

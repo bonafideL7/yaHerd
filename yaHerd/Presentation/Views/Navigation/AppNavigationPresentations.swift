@@ -43,9 +43,12 @@ private struct AppNavigationPresentationModifier: ViewModifier {
             }
         case .startWorkingSession:
             NavigationStack {
-                WorkingSessionPastureStartListView { sessionID in
-                    navigation.openWorkArea(.session(sessionID))
-                }
+                NewWorkingSessionView(
+                    wrapsInNavigationStack: false,
+                    onSessionCreated: { sessionID in
+                        navigation.openWorkArea(.session(sessionID))
+                    }
+                )
                 .sheetCancelToolbar()
             }
         }

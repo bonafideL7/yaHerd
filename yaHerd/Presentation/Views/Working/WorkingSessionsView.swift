@@ -13,7 +13,7 @@ struct WorkingSessionsView: View {
 
     @State private var showingNewSession = false
     @State private var sessionPendingDeleteID: UUID?
-    @State private var showingDeleteAlert: Bool = false
+    @State private var showingDeleteAlert = false
     @State private var errorMessage: String?
     @State private var showingError = false
     @State private var startedRoute: StartedWorkingSessionRoute?
@@ -22,7 +22,9 @@ struct WorkingSessionsView: View {
 
     init(onSessionStarted: ((UUID) -> Void)? = nil) {
         self.onSessionStarted = onSessionStarted
-        _viewModel = StateObject(wrappedValue: WorkingSessionsViewModel(repository: EmptyWorkingRepository()))
+        _viewModel = StateObject(
+            wrappedValue: WorkingSessionsViewModel(repository: EmptyWorkingRepository())
+        )
     }
 
     private var activeSessions: [WorkingSessionSummary] {
@@ -80,11 +82,11 @@ struct WorkingSessionsView: View {
 
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {
-                    ProtocolTemplatesView()
+                    TreatmentTemplatesView()
                 } label: {
                     Image(systemName: "list.bullet")
                 }
-                .accessibilityLabel("Protocols")
+                .accessibilityLabel("Treatment Templates")
             }
         }
         .task {
@@ -97,12 +99,19 @@ struct WorkingSessionsView: View {
             }
         }
         .navigationDestination(isPresented: $showingNewSession) {
-            WorkingSessionPastureStartListView(onSessionCreated: handleSessionStarted)
+            NewWorkingSessionView(
+                wrapsInNavigationStack: false,
+                onSessionCreated: handleSessionStarted
+            )
         }
         .navigationDestination(item: $startedRoute) { route in
             WorkingSessionDetailView(sessionID: route.id)
         }
-        .alert("Delete working session?", isPresented: $showingDeleteAlert, presenting: pendingSession) { session in
+        .alert(
+            "Delete working session?",
+            isPresented: $showingDeleteAlert,
+            presenting: pendingSession
+        ) { session in
             Button("Delete", role: .destructive) { deleteSession(session) }
                 .disabledWhenDataReadOnly()
             Button("Cancel", role: .cancel) {}
@@ -122,7 +131,6 @@ struct WorkingSessionsView: View {
             if newValue != nil { showingError = true }
         }
     }
-
 
     @ViewBuilder
     private func workingSessionNavigationRow(_ session: WorkingSessionSummary) -> some View {
@@ -156,8 +164,8 @@ struct WorkingSessionsView: View {
     }
 
     private func requestDelete(from list: [WorkingSessionSummary], offsets: IndexSet) {
-        guard let idx = offsets.first, idx < list.count else { return }
-        sessionPendingDeleteID = list[idx].id
+        guard let index = offsets.first, index < list.count else { return }
+        sessionPendingDeleteID = list[index].id
         showingDeleteAlert = true
     }
 
@@ -178,7 +186,7 @@ private struct WorkingSessionRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(session.protocolName)
+                Text(session.sourcePastureName ?? "Working Session")
                     .font(.headline)
                 Spacer()
                 Text(session.status.rawValue.capitalized)
@@ -187,11 +195,11 @@ private struct WorkingSessionRow: View {
             }
 
             HStack {
-                Text(session.date.formatted(date: .abbreviated, time: .shortened))
+                Text(session.date.formatted(date: .abbreviated, time: .omitted))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if let source = session.sourcePastureName {
-                    Text("• \(source)")
+                if !session.treatmentTemplateName.isEmpty {
+                    Text("• \(session.treatmentTemplateName)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -205,7 +213,6 @@ private struct WorkingSessionRow: View {
         }
     }
 }
-
 
 private struct StartedWorkingSessionRoute: Identifiable, Hashable {
     let id: UUID

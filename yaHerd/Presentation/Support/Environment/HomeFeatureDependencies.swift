@@ -4,18 +4,18 @@ import SwiftUI
 nonisolated struct HomeFeatureDependencies {
     let dashboardReader: any DashboardRecordReading
     let fieldCheckOverviewReader: any FieldCheckOverviewReading
-    let workingProtocolTemplateReader: any WorkingProtocolTemplateListReader
+    let workingTreatmentTemplateReader: any WorkingTreatmentTemplateListReader
     let mutationStream: any ApplicationMutationStreaming
 
     nonisolated init(
         dashboardReader: any DashboardRecordReading,
         fieldCheckOverviewReader: any FieldCheckOverviewReading,
-        workingProtocolTemplateReader: any WorkingProtocolTemplateListReader,
+        workingTreatmentTemplateReader: any WorkingTreatmentTemplateListReader,
         mutationStream: any ApplicationMutationStreaming
     ) {
         self.dashboardReader = dashboardReader
         self.fieldCheckOverviewReader = fieldCheckOverviewReader
-        self.workingProtocolTemplateReader = workingProtocolTemplateReader
+        self.workingTreatmentTemplateReader = workingTreatmentTemplateReader
         self.mutationStream = mutationStream
     }
 
@@ -23,13 +23,13 @@ nonisolated struct HomeFeatureDependencies {
     static func preview(
         dashboardReader: (any DashboardRecordReading)? = nil,
         fieldCheckOverviewReader: (any FieldCheckOverviewReading)? = nil,
-        workingProtocolTemplateReader: (any WorkingProtocolTemplateListReader)? = nil,
+        workingTreatmentTemplateReader: (any WorkingTreatmentTemplateListReader)? = nil,
         mutationStream: (any ApplicationMutationStreaming)? = nil
     ) -> Self {
         Self(
             dashboardReader: dashboardReader ?? MissingHomeDashboardReader(),
             fieldCheckOverviewReader: fieldCheckOverviewReader ?? MissingHomeFieldCheckOverviewReader(),
-            workingProtocolTemplateReader: workingProtocolTemplateReader ?? MissingHomeWorkingProtocolTemplateReader(),
+            workingTreatmentTemplateReader: workingTreatmentTemplateReader ?? MissingHomeWorkingTreatmentTemplateReader(),
             mutationStream: mutationStream ?? MissingHomeMutationStream()
         )
     }
@@ -66,11 +66,11 @@ private struct MissingHomeFieldCheckOverviewReader: FieldCheckOverviewReading {
     }
 }
 
-private struct MissingHomeWorkingProtocolTemplateReader: WorkingProtocolTemplateListReader {
+private struct MissingHomeWorkingTreatmentTemplateReader: WorkingTreatmentTemplateListReader {
     nonisolated init(environmentFallback _: Void = ()) {}
 
-    func fetchTemplates() throws -> [WorkingProtocolTemplateSummary] {
-        throw MissingHomeFeatureDependencyError.dependency("Home working protocol template reader")
+    func fetchTemplates() throws -> [WorkingTreatmentTemplateSummary] {
+        throw MissingHomeFeatureDependencyError.dependency("Home working treatment template reader")
     }
 }
 
@@ -91,7 +91,7 @@ private struct HomeFeatureDependenciesKey: EnvironmentKey {
         HomeFeatureDependencies(
             dashboardReader: MissingHomeDashboardReader(),
             fieldCheckOverviewReader: MissingHomeFieldCheckOverviewReader(),
-            workingProtocolTemplateReader: MissingHomeWorkingProtocolTemplateReader(),
+            workingTreatmentTemplateReader: MissingHomeWorkingTreatmentTemplateReader(),
             mutationStream: MissingHomeMutationStream()
         )
     }

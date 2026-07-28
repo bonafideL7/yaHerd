@@ -12,6 +12,7 @@ final class SharedWorkingQueueItemRecord: NSManagedObject {
     @NSManaged var herdPublicID: String?
     @NSManaged var sessionPublicID: String?
     @NSManaged var animalPublicID: String?
+    /// Deprecated V1 bridge storage. New exports leave this field unset.
     @NSManaged var queueOrder: NSNumber?
     @NSManaged var statusRawValue: String?
     @NSManaged var completedAt: Date?
@@ -37,7 +38,7 @@ extension SharedWorkingQueueItemRecord {
         self.herdPublicID = herdPublicID.uuidString
         sessionPublicID = queueItem.session?.publicID.uuidString
         animalPublicID = queueItem.animal?.publicID.uuidString
-        queueOrder = NSNumber(value: queueItem.queueOrder)
+        queueOrder = nil
         statusRawValue = queueItem.status.rawValue
         completedAt = queueItem.completedAt
         collectedFromPasturePublicID = queueItem.collectedFromPasture?.publicID.uuidString

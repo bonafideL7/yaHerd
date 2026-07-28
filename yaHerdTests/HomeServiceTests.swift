@@ -30,7 +30,7 @@ final class HomeServiceTests: XCTestCase {
             dashboardRecords: records,
             fieldCheckSessions: sessions,
             openFindings: [],
-            protocolTemplates: [],
+            treatmentTemplates: [],
             configuration: configuration,
             now: now
         )
@@ -54,7 +54,7 @@ final class HomeServiceTests: XCTestCase {
             dashboardRecords: records,
             fieldCheckSessions: [],
             openFindings: [],
-            protocolTemplates: [],
+            treatmentTemplates: [],
             configuration: configuration,
             now: date(year: 2026, month: 1, day: 10)
         )
