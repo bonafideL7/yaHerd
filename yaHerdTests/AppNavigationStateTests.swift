@@ -5,6 +5,7 @@ import XCTest
 final class AppNavigationStateTests: XCTestCase {
     func testRestorationRoundTripPreservesTypedRoutesAndWorkflow() throws {
         let animalID = UUID()
+        let searchAnimalID = UUID()
         let sessionID = UUID()
         let findingID = UUID()
         let navigation = AppNavigationState()
@@ -20,6 +21,7 @@ final class AppNavigationStateTests: XCTestCase {
             )
         )
         navigation.herdRouter.path = [.animal(animalID)]
+        navigation.herdRouter.searchPath = [.animal(searchAnimalID)]
         navigation.handle(.openFinding(sessionID: sessionID, findingID: findingID))
 
         let payload = try XCTUnwrap(navigation.restorationPayload())
@@ -28,6 +30,7 @@ final class AppNavigationStateTests: XCTestCase {
 
         XCTAssertEqual(restored.snapshot, navigation.snapshot)
         XCTAssertEqual(restored.herdRouter.path, [.animal(animalID)])
+        XCTAssertEqual(restored.herdRouter.searchPath, [.animal(searchAnimalID)])
         XCTAssertEqual(restored.fullScreenWorkflow, .fieldCheck)
         guard case .fieldCheckSession(let restoredRoute) = restored.workflowRouter.route else {
             return XCTFail("Expected restored field-check session route")
@@ -68,9 +71,10 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertEqual(navigation.fullScreenWorkflow, .fieldCheck)
     }
 
-    func testSearchSelectsSearchTabAndUsesHerdHierarchy() {
+    func testSearchSelectsSearchTabWithoutChangingHerdNavigationStack() {
+        let pastureID = UUID()
         let navigation = AppNavigationState()
-        navigation.herdRouter.path = [.pasture(UUID())]
+        navigation.herdRouter.path = [.pasture(pastureID)]
 
         navigation.handle(.searchAnimals("blue 01"))
 
@@ -78,12 +82,47 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertEqual(navigation.herdRouter.mode, .animals)
         XCTAssertEqual(navigation.herdRouter.searchText, "blue 01")
         XCTAssertTrue(navigation.herdRouter.isSearchPresented)
-        XCTAssertTrue(navigation.herdRouter.path.isEmpty)
+        XCTAssertEqual(navigation.herdRouter.path, [.pasture(pastureID)])
+        XCTAssertTrue(navigation.herdRouter.searchPath.isEmpty)
     }
 
-    func testSearchTabRestorationPreservesSearchState() throws {
+    func testOpeningSearchResultStaysInSearchTabAndUsesSeparateStack() {
+        let herdAnimalID = UUID()
+        let searchAnimalID = UUID()
+        let navigation = AppNavigationState()
+        navigation.herdRouter.path = [.animal(herdAnimalID)]
+        navigation.selectSearchTab()
+
+        navigation.herdRouter.openAnimal(searchAnimalID, in: .search)
+
+        XCTAssertEqual(navigation.selectedTab, .search)
+        XCTAssertEqual(navigation.herdRouter.path, [.animal(herdAnimalID)])
+        XCTAssertEqual(navigation.herdRouter.searchPath, [.animal(searchAnimalID)])
+        XCTAssertTrue(navigation.herdRouter.isSearchPresented)
+    }
+
+    func testDismissingSearchClearsCriteriaAndReturnsToHerdTab() {
         let navigation = AppNavigationState()
         navigation.openSearch(query: "green 14")
+        navigation.herdRouter.filter = AnimalFilter(recordIssue: .missingTag)
+        navigation.herdRouter.showRemovedStatuses = true
+        navigation.herdRouter.showArchivedRecords = true
+
+        navigation.dismissSearch(clearCriteria: true)
+
+        XCTAssertEqual(navigation.selectedTab, .herd)
+        XCTAssertEqual(navigation.herdRouter.searchText, "")
+        XCTAssertEqual(navigation.herdRouter.filter, AnimalFilter())
+        XCTAssertFalse(navigation.herdRouter.showRemovedStatuses)
+        XCTAssertFalse(navigation.herdRouter.showArchivedRecords)
+        XCTAssertFalse(navigation.herdRouter.isSearchPresented)
+    }
+
+    func testSearchTabRestorationPreservesSearchStateAndPath() throws {
+        let animalID = UUID()
+        let navigation = AppNavigationState()
+        navigation.openSearch(query: "green 14")
+        navigation.herdRouter.searchPath = [.animal(animalID)]
 
         let payload = try XCTUnwrap(navigation.restorationPayload())
         let restored = AppNavigationState()
@@ -93,6 +132,7 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertEqual(restored.herdRouter.mode, .animals)
         XCTAssertEqual(restored.herdRouter.searchText, "green 14")
         XCTAssertTrue(restored.herdRouter.isSearchPresented)
+        XCTAssertEqual(restored.herdRouter.searchPath, [.animal(animalID)])
     }
 
     func testInvalidRestorationPayloadLeavesDefaultStateUnchanged() {
@@ -101,6 +141,7 @@ final class AppNavigationStateTests: XCTestCase {
 
         XCTAssertEqual(navigation.selectedTab, .home)
         XCTAssertTrue(navigation.herdRouter.path.isEmpty)
+        XCTAssertTrue(navigation.herdRouter.searchPath.isEmpty)
         XCTAssertNil(navigation.presentedSheet)
         XCTAssertNil(navigation.fullScreenWorkflow)
     }
