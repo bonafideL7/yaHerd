@@ -15,67 +15,105 @@ struct HerdTabRootView: View {
     var body: some View {
         @Bindable var router = router
 
-        NavigationStack(path: $router.path) {
-            HerdView(
-                searchText: $router.searchText,
-                isSearchPresented: searchPresentationBinding,
-                mode: $router.mode,
-                sortOrder: $router.sortOrder,
-                filter: $router.filter,
-                showRemovedStatuses: $router.showRemovedStatuses,
-                showArchivedRecords: $router.showArchivedRecords,
-                showingFilters: $router.showingFilters,
-                pastureFilter: $router.pastureFilter,
-                usesShellBottomAccessory: true,
-                onOpenAnimal: { router.openAnimal($0) },
-                onOpenPasture: { router.openPasture($0) },
-                onOpenFieldChecks: { router.openFieldChecks(.all) },
-                onOpenWorkSessions: { router.openWorkingSessions() },
-                onOpenSettings: { navigation.present(.settings) }
-            )
-            .navigationDestination(for: HerdRoute.self) { route in
-                destination(route)
-            }
+        if tab == .search {
+            herdNavigationStack
+                .searchable(
+                    text: $router.searchText,
+                    prompt: "Search tag, color, or name"
+                )
+                .searchFocused($searchFieldIsFocused)
+                .simultaneousGesture(searchFocusDismissGesture)
+                .task {
+                    prepareSearchTabIfSelected()
+                }
+                .onChange(of: navigation.selectedTab) { oldValue, newValue in
+                    handleTabSelectionChange(from: oldValue, to: newValue)
+                }
+        } else {
+            herdNavigationStack
         }
-        .searchable(
-            text: $router.searchText,
-            prompt: "Search tag, color, or name"
-        )
-        .searchFocused($searchFieldIsFocused)
-        .simultaneousGesture(searchFocusDismissGesture)
-        .task(id: navigation.selectedTab) {
-            guard navigation.selectedTab == tab else {
-                searchFieldIsFocused = false
-                return
-            }
+    }
 
-            if tab == .search {
-                router.presentSearch(query: router.searchText)
-                await Task.yield()
-                searchFieldIsFocused = true
-            } else {
-                searchFieldIsFocused = router.isSearchPresented
-            }
+    private var herdNavigationStack: some View {
+        NavigationStack(path: navigationPathBinding) {
+            herdContent
+                .navigationDestination(for: HerdRoute.self) { route in
+                    destination(route)
+                }
         }
-        .onChange(of: router.isSearchPresented) { _, isPresented in
-            guard navigation.selectedTab == tab else { return }
-            searchFieldIsFocused = isPresented
-        }
-        .onChange(of: searchFieldIsFocused) { _, isFocused in
-            guard navigation.selectedTab == tab else { return }
-            router.isSearchPresented = isFocused || !router.searchText.isEmpty
+    }
+
+    private var herdContent: some View {
+        @Bindable var router = router
+
+        return HerdView(
+            searchText: $router.searchText,
+            isSearchPresented: searchPresentationBinding,
+            mode: $router.mode,
+            sortOrder: $router.sortOrder,
+            filter: $router.filter,
+            showRemovedStatuses: $router.showRemovedStatuses,
+            showArchivedRecords: $router.showArchivedRecords,
+            showingFilters: $router.showingFilters,
+            pastureFilter: $router.pastureFilter,
+            usesShellBottomAccessory: true,
+            onOpenAnimal: { router.openAnimal($0, in: tab) },
+            onOpenPasture: { router.openPasture($0, in: tab) },
+            onOpenFieldChecks: { router.openFieldChecks(.all, in: tab) },
+            onOpenWorkSessions: { router.openWorkingSessions(in: tab) },
+            onOpenSettings: { navigation.present(.settings) }
+        )
+    }
+
+    private var navigationPathBinding: Binding<[HerdRoute]> {
+        Binding {
+            router.path(for: tab)
+        } set: { newPath in
+            router.setPath(newPath, for: tab)
         }
     }
 
     private var searchPresentationBinding: Binding<Bool> {
         Binding {
-            router.isSearchPresented || !router.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            navigation.selectedTab == .search || hasSearchText
         } set: { isPresented in
             if isPresented {
-                router.presentSearch(query: router.searchText)
+                navigation.selectSearchTab()
             } else {
-                router.dismissSearch(clearText: true)
+                navigation.dismissSearch(clearCriteria: true)
             }
+        }
+    }
+
+    private var hasSearchText: Bool {
+        !router.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func prepareSearchTabIfSelected() {
+        guard navigation.selectedTab == .search else { return }
+        router.mode = .animals
+        router.isSearchPresented = true
+
+        Task { @MainActor in
+            await Task.yield()
+            searchFieldIsFocused = false
+        }
+    }
+
+    private func handleTabSelectionChange(from oldValue: AppTab, to newValue: AppTab) {
+        if newValue == .search {
+            router.mode = .animals
+            router.isSearchPresented = true
+
+            Task { @MainActor in
+                await Task.yield()
+                searchFieldIsFocused = false
+            }
+        }
+
+        if oldValue == .search && newValue != .search {
+            searchFieldIsFocused = false
+            router.isSearchPresented = hasSearchText
         }
     }
 
@@ -100,7 +138,7 @@ struct HerdTabRootView: View {
     private var searchFocusDismissGesture: some Gesture {
         DragGesture(minimumDistance: 24, coordinateSpace: .local)
             .onEnded { value in
-                guard searchFieldIsFocused else { return }
+                guard navigation.selectedTab == .search, searchFieldIsFocused else { return }
 
                 let verticalDrag = value.translation.height
                 let horizontalDrag = abs(value.translation.width)

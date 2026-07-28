@@ -38,7 +38,7 @@ A new route must remain `Hashable` and `Codable`, and it must be represented in 
 The restored state includes:
 
 - selected tab
-- herd route path
+- YaHerd and Search navigation paths
 - herd mode, search, sort, and filters
 - active workflow route
 - app sheet
@@ -61,7 +61,7 @@ Invalid UUIDs and unknown destinations are rejected without mutating navigation 
 
 ## Search ownership
 
-Search remains a permanent tab-bar destination. The Search and YaHerd tabs use the same `HerdRouter`, search text, sort order, filters, and typed herd routes so search state is not duplicated. Selecting Search always opens the animal hierarchy and presents the search field; opening a result stays in the Search tab.
+Search remains a permanent tab-bar destination. Search and YaHerd share the same herd mode, search text, sort order, filters, and other list criteria, matching the original feature. Each tab keeps its own typed navigation stack, so opening a Search result stays in Search without replacing the YaHerd tab's navigation state. Only the Search tab owns the system `.searchable` field. Selecting Search switches the shared herd mode to animals without automatically opening the keyboard; leaving Search dismisses keyboard focus. Dismissing Search clears the search and filters and returns to YaHerd.
 
 ## Notification routing
 

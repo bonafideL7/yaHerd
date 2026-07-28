@@ -54,6 +54,7 @@ enum AppNavigationRequest: Codable, Hashable, Sendable {
 
 struct HerdRouterSnapshot: Codable, Equatable {
     var path: [HerdRoute]
+    var searchPath: [HerdRoute]?
     var mode: HerdViewMode
     var searchText: String
     var isSearchPresented: Bool
@@ -68,6 +69,7 @@ struct HerdRouterSnapshot: Codable, Equatable {
 @Observable
 final class HerdRouter {
     var path: [HerdRoute] = []
+    var searchPath: [HerdRoute] = []
     var mode: HerdViewMode = .animals
     var searchText = ""
     var isSearchPresented = false
@@ -81,6 +83,7 @@ final class HerdRouter {
     var snapshot: HerdRouterSnapshot {
         HerdRouterSnapshot(
             path: path,
+            searchPath: searchPath,
             mode: mode,
             searchText: searchText,
             isSearchPresented: isSearchPresented,
@@ -94,6 +97,7 @@ final class HerdRouter {
 
     func restore(_ snapshot: HerdRouterSnapshot) {
         path = snapshot.path
+        searchPath = snapshot.searchPath ?? []
         mode = snapshot.mode
         searchText = snapshot.searchText
         isSearchPresented = snapshot.isSearchPresented
@@ -121,31 +125,44 @@ final class HerdRouter {
         path.removeAll()
         mode = .pastures
         pastureFilter = configuration.filter
-        isSearchPresented = false
     }
 
-    func openAnimal(_ animalID: UUID) {
+    func path(for tab: AppTab) -> [HerdRoute] {
+        tab == .search ? searchPath : path
+    }
+
+    func setPath(_ newPath: [HerdRoute], for tab: AppTab) {
+        if tab == .search {
+            searchPath = newPath
+        } else {
+            path = newPath
+        }
+    }
+
+    func openAnimal(_ animalID: UUID, in tab: AppTab = .herd) {
         mode = .animals
-        isSearchPresented = false
-        path = [.animal(animalID)]
+        setPath([.animal(animalID)], for: tab)
     }
 
-    func openPasture(_ pastureID: UUID) {
+    func openPasture(_ pastureID: UUID, in tab: AppTab = .herd) {
         mode = .pastures
-        isSearchPresented = false
-        path = [.pasture(pastureID)]
+        setPath([.pasture(pastureID)], for: tab)
     }
 
-    func openFieldChecks(_ mode: FieldChecksViewMode = .all) {
-        path.append(.fieldChecks(mode))
+    func openFieldChecks(_ mode: FieldChecksViewMode = .all, in tab: AppTab = .herd) {
+        var activePath = path(for: tab)
+        activePath.append(.fieldChecks(mode))
+        setPath(activePath, for: tab)
     }
 
-    func openWorkingSessions() {
-        path.append(.workingSessions)
+    func openWorkingSessions(in tab: AppTab = .herd) {
+        var activePath = path(for: tab)
+        activePath.append(.workingSessions)
+        setPath(activePath, for: tab)
     }
 
-    func presentSearch(query: String = "") {
-        path.removeAll()
+    func showSearch(query: String = "") {
+        searchPath.removeAll()
         mode = .animals
         searchText = query
         isSearchPresented = true
@@ -265,9 +282,22 @@ final class AppNavigationState {
         herdRouter.openPasture(pastureID)
     }
 
+    func selectSearchTab() {
+        selectedTab = .search
+        herdRouter.mode = .animals
+        herdRouter.isSearchPresented = true
+    }
+
     func openSearch(query: String = "") {
         selectedTab = .search
-        herdRouter.presentSearch(query: query)
+        herdRouter.showSearch(query: query)
+    }
+
+    func dismissSearch(clearCriteria: Bool) {
+        herdRouter.dismissSearch(clearText: clearCriteria)
+        if selectedTab == .search {
+            selectedTab = .herd
+        }
     }
 
     func openFieldChecks(_ mode: FieldChecksViewMode = .all) {
