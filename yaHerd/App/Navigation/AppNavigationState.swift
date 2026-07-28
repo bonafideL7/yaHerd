@@ -6,6 +6,7 @@ enum AppTab: String, Codable, Hashable {
     case home
     case dashboard
     case herd
+    case search
 }
 
 /// Routes owned by the herd navigation stack.
@@ -264,6 +265,10 @@ final class AppNavigationState {
         herdRouter.openPasture(pastureID)
     }
 
+    func openSearch(query: String = "") {
+        selectedTab = .search
+        herdRouter.presentSearch(query: query)
+    }
 
     func openFieldChecks(_ mode: FieldChecksViewMode = .all) {
         selectedTab = .herd
@@ -315,8 +320,7 @@ final class AppNavigationState {
         case .continueWorkingSession(let sessionID):
             openWorkArea(.session(sessionID))
         case .searchAnimals(let query):
-            selectedTab = .herd
-            herdRouter.presentSearch(query: query)
+            openSearch(query: query)
         }
     }
 

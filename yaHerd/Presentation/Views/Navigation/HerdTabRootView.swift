@@ -1,8 +1,14 @@
 import SwiftUI
 
 struct HerdTabRootView: View {
+    let tab: AppTab
+
     @Environment(AppNavigationState.self) private var navigation
     @FocusState private var searchFieldIsFocused: Bool
+
+    init(tab: AppTab = .herd) {
+        self.tab = tab
+    }
 
     private var router: HerdRouter { navigation.herdRouter }
 
@@ -21,8 +27,8 @@ struct HerdTabRootView: View {
                 showingFilters: $router.showingFilters,
                 pastureFilter: $router.pastureFilter,
                 usesShellBottomAccessory: true,
-                onOpenAnimal: { navigation.openAnimal($0) },
-                onOpenPasture: { navigation.openPasture($0) },
+                onOpenAnimal: { router.openAnimal($0) },
+                onOpenPasture: { router.openPasture($0) },
                 onOpenFieldChecks: { router.openFieldChecks(.all) },
                 onOpenWorkSessions: { router.openWorkingSessions() },
                 onOpenSettings: { navigation.present(.settings) }
@@ -37,13 +43,26 @@ struct HerdTabRootView: View {
         )
         .searchFocused($searchFieldIsFocused)
         .simultaneousGesture(searchFocusDismissGesture)
-        .task {
-            searchFieldIsFocused = router.isSearchPresented
+        .task(id: navigation.selectedTab) {
+            guard navigation.selectedTab == tab else {
+                searchFieldIsFocused = false
+                return
+            }
+
+            if tab == .search {
+                router.presentSearch(query: router.searchText)
+                await Task.yield()
+                searchFieldIsFocused = true
+            } else {
+                searchFieldIsFocused = router.isSearchPresented
+            }
         }
         .onChange(of: router.isSearchPresented) { _, isPresented in
+            guard navigation.selectedTab == tab else { return }
             searchFieldIsFocused = isPresented
         }
         .onChange(of: searchFieldIsFocused) { _, isFocused in
+            guard navigation.selectedTab == tab else { return }
             router.isSearchPresented = isFocused || !router.searchText.isEmpty
         }
     }

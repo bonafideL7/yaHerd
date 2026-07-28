@@ -22,13 +22,17 @@ struct MainTabView: View {
             }
 
             Tab(value: AppTab.herd) {
-                HerdTabRootView()
+                HerdTabRootView(tab: .herd)
             } label: {
                 Label {
                     Text("YaHerd")
                 } icon: {
                     yaherdTabIcon
                 }
+            }
+
+            Tab("Search", systemImage: "magnifyingglass", value: AppTab.search, role: .search) {
+                HerdTabRootView(tab: .search)
             }
         }
         .yaherdTabBarMinimizeBehavior()
@@ -45,7 +49,8 @@ struct MainTabView: View {
     }
 
     private var showsHerdAccessory: Bool {
-        navigation.selectedTab == .herd && navigation.herdRouter.mode == .animals
+        (navigation.selectedTab == .herd || navigation.selectedTab == .search)
+            && navigation.herdRouter.mode == .animals
     }
 
     @ViewBuilder

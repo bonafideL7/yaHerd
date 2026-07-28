@@ -224,6 +224,9 @@ else:
         if declaration is None or "Codable" not in declaration.group(1):
             failures.append(f"{route_name} must remain a typed Codable route")
 
+    if not re.search(r"enum\s+AppTab\b[\s\S]*?\bcase\s+search\b", navigation_source):
+        failures.append("AppTab must retain the permanent Search tab")
+
 main_tab_source = main_tab_path.read_text()
 if len(main_tab_source.splitlines()) > 120:
     failures.append(
@@ -233,10 +236,16 @@ if "@State" in main_tab_source or "NavigationPath" in main_tab_source:
     failures.append(
         "MainTabView must not own navigation paths or modal/search workflow state"
     )
-if 'Tab("Search"' in main_tab_source or "role: .search" in main_tab_source:
-    failures.append(
-        "Search must remain inside the single herd navigation hierarchy, not a duplicate tab tree"
-    )
+required_search_tab_fragments = (
+    "value: AppTab.search",
+    "role: .search",
+    "HerdTabRootView(tab: .search)",
+)
+for required_fragment in required_search_tab_fragments:
+    if required_fragment not in main_tab_source:
+        failures.append(
+            f"Search must remain available in the tab menu and reuse the herd hierarchy: missing {required_fragment}"
+        )
 
 app_root_source = app_root_path.read_text()
 project_source = Path("yaHerd.xcodeproj/project.pbxproj").read_text()

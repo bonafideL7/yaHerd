@@ -68,17 +68,31 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertEqual(navigation.fullScreenWorkflow, .fieldCheck)
     }
 
-    func testSearchUsesSingleHerdHierarchy() {
+    func testSearchSelectsSearchTabAndUsesHerdHierarchy() {
         let navigation = AppNavigationState()
         navigation.herdRouter.path = [.pasture(UUID())]
 
         navigation.handle(.searchAnimals("blue 01"))
 
-        XCTAssertEqual(navigation.selectedTab, .herd)
+        XCTAssertEqual(navigation.selectedTab, .search)
         XCTAssertEqual(navigation.herdRouter.mode, .animals)
         XCTAssertEqual(navigation.herdRouter.searchText, "blue 01")
         XCTAssertTrue(navigation.herdRouter.isSearchPresented)
         XCTAssertTrue(navigation.herdRouter.path.isEmpty)
+    }
+
+    func testSearchTabRestorationPreservesSearchState() throws {
+        let navigation = AppNavigationState()
+        navigation.openSearch(query: "green 14")
+
+        let payload = try XCTUnwrap(navigation.restorationPayload())
+        let restored = AppNavigationState()
+        restored.restore(from: payload)
+
+        XCTAssertEqual(restored.selectedTab, .search)
+        XCTAssertEqual(restored.herdRouter.mode, .animals)
+        XCTAssertEqual(restored.herdRouter.searchText, "green 14")
+        XCTAssertTrue(restored.herdRouter.isSearchPresented)
     }
 
     func testInvalidRestorationPayloadLeavesDefaultStateUnchanged() {
@@ -90,5 +104,4 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertNil(navigation.presentedSheet)
         XCTAssertNil(navigation.fullScreenWorkflow)
     }
-
 }
