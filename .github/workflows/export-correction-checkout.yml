@@ -16,9 +16,9 @@ jobs:
         with:
           fetch-depth: 0
       - name: Archive checkout with Git metadata
-        run: tar -czf correction-checkout.tar.gz --exclude=correction-checkout.tar.gz .
+        run: tar -C .. -czf correction-checkout.tar.gz yaHerd
       - uses: actions/upload-artifact@v4
         with:
           name: correction-checkout
-          path: correction-checkout.tar.gz
+          path: ../correction-checkout.tar.gz
           include-hidden-files: true
