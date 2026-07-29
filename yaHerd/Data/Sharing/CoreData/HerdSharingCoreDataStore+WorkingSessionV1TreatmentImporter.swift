@@ -57,11 +57,6 @@ extension HerdSharingCoreDataStore {
                     "A shared treatment record is missing a stable treatment-item identifier."
                 )
             }
-            guard session.protocolItems.contains(where: { $0.id == treatmentItemID }) else {
-                throw HerdSharingActionError.bridgeImportFailed(
-                    "A shared treatment record references an item outside its Working Session treatment plan."
-                )
-            }
 
             let treatmentRecord: WorkingTreatmentRecord
             var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
