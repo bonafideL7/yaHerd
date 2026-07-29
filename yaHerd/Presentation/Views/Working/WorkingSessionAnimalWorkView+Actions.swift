@@ -224,12 +224,17 @@ extension WorkingSessionAnimalWorkView {
     func saveWork() {
         guard allowsEditing, let snapshot else { return }
 
+        let workDate = WorkingAnimalWorkTimestamp.resolve(
+            existingCompletedAt: snapshot.completedAt,
+            now: .now
+        )
+
         let pregnancyInput: WorkingPregnancyCheckInput?
         if showsPregnancySection,
            recordPregnancyCheck,
            pregnancyResult == .open || pregnancyResult == .pregnant {
             pregnancyInput = WorkingPregnancyCheckInput(
-                date: snapshot.sessionDate,
+                date: workDate,
                 result: pregnancyResult,
                 estimatedDaysPregnant: Int(
                     estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -246,7 +251,7 @@ extension WorkingSessionAnimalWorkView {
             guard !name.isEmpty else { return nil }
             guard entry.isPlanned || entry.given else { return nil }
             return WorkingTreatmentEntryInput(
-                date: snapshot.sessionDate,
+                date: workDate,
                 treatmentItemID: entry.id,
                 itemName: name,
                 given: entry.given,
@@ -256,7 +261,7 @@ extension WorkingSessionAnimalWorkView {
 
         let input = WorkingSessionAnimalEditInput(
             status: .done,
-            completedAt: snapshot.completedAt ?? snapshot.sessionDate,
+            completedAt: workDate,
             destinationPastureID: selectedDestinationPastureID,
             treatmentEntries: treatmentInputs,
             pregnancyCheck: pregnancyInput,
@@ -319,5 +324,11 @@ enum WorkingSessionTreatmentPlanBuilder {
                 suggestedDose: entry.dose
             )
         }
+    }
+}
+
+enum WorkingAnimalWorkTimestamp {
+    static func resolve(existingCompletedAt: Date?, now: Date) -> Date {
+        existingCompletedAt ?? now
     }
 }
