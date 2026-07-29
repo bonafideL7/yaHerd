@@ -1,0 +1,222 @@
+name: Validate reopened session ownership push
+
+on:
+  push:
+    branches:
+      - agent/review-reopened-session-ownership-push
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/review-reopened-session-ownership-push
+          fetch-depth: 0
+
+      - name: Skip completed validation
+        id: completed
+        shell: bash
+        run: |
+          if [[ -f validation-result-reopened-session-ownership.txt ]]; then
+            echo "done=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "done=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply focused ownership fix
+        if: steps.completed.outputs.done != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file_path = Path(path)
+              content = file_path.read_text()
+              count = content.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one match in {path}, found {count}")
+              file_path.write_text(content.replace(old, new, 1))
+
+          repository_path = "yaHerd/Data/Repositories/SwiftDataWorkingRepository.swift"
+          repository = Path(repository_path).read_text()
+          if "try validateCompletionOwnership(for: session)" not in repository:
+              replace_once(
+                  repository_path,
+                  '''            if animal.activeWorkingSession?.publicID == session.publicID
+                  || animal.location == .workingPen
+              {
+''',
+                  '''            let activeSessionID = animal.activeWorkingSession?.publicID
+              if activeSessionID == session.publicID
+                  || (activeSessionID == nil && animal.location == .workingPen)
+              {
+''',
+              )
+              replace_once(
+                  repository_path,
+                  '''        guard Set(destinationsByQueueItemID.keys) == queueItemIDs else {
+              throw WorkingRepositoryError.assignmentSetDoesNotMatchSession
+          }
+
+          for item in session.queueItems {
+''',
+                  '''        guard Set(destinationsByQueueItemID.keys) == queueItemIDs else {
+              throw WorkingRepositoryError.assignmentSetDoesNotMatchSession
+          }
+
+          try validateCompletionOwnership(for: session)
+
+          for item in session.queueItems {
+''',
+              )
+              replace_once(
+                  repository_path,
+                  '''    private func fetchActiveSession(id: UUID) throws -> WorkingSession {
+''',
+                  '''    private func validateCompletionOwnership(for session: WorkingSession) throws {
+          let hasConflictingOwnership = session.queueItems.contains { item in
+              guard let activeSessionID = item.animal?.activeWorkingSession?.publicID else {
+                  return false
+              }
+              return activeSessionID != session.publicID
+          }
+
+          guard !hasConflictingOwnership else {
+              throw WorkingRepositoryError.animalAlreadyInAnotherSession
+          }
+      }
+
+      private func fetchActiveSession(id: UUID) throws -> WorkingSession {
+''',
+              )
+
+          tests_path = "yaHerdTests/SwiftDataWorkingSessionLifecycleTests.swift"
+          tests = Path(tests_path).read_text()
+          if "testReopenedSessionCannotFinishAnimalOwnedByNewerActiveSession" not in tests:
+              replace_once(
+                  tests_path,
+                  '''    func testReopenRejectsAlreadyActiveSession() throws {
+''',
+                  '''    func testReopenedSessionCannotFinishAnimalOwnedByNewerActiveSession() throws {
+          let fixture = try makeFinishedSessionFixture()
+          try fixture.repository.reopenSession(id: fixture.session.publicID)
+
+          let alternatePasture = Pasture(name: "South")
+          fixture.repository.context.insert(alternatePasture)
+          try fixture.repository.context.save()
+
+          let newerSessionID = try fixture.repository.startSession(
+              input: WorkingSessionStartInput(
+                  date: .now,
+                  sourcePastureID: fixture.sourcePasture.publicID,
+                  treatmentTemplateName: nil,
+                  plannedTreatments: [],
+                  animalIDs: [fixture.animal.publicID]
+              )
+          )
+          let newerSession = try XCTUnwrap(
+              fixture.repository.context.fetch(FetchDescriptor<WorkingSession>())
+                  .first { $0.publicID == newerSessionID }
+          )
+          let movementCountBefore = try fixture.repository.context.fetch(
+              FetchDescriptor<MovementRecord>()
+          ).count
+
+          XCTAssertThrowsError(
+              try fixture.repository.completeSession(
+                  id: fixture.session.publicID,
+                  assignments: [
+                      WorkingQueueDestinationAssignment(
+                          queueItemID: fixture.queueItem.publicID,
+                          destinationPastureID: alternatePasture.publicID
+                      )
+                  ]
+              )
+          ) { error in
+              XCTAssertEqual(
+                  error as? WorkingRepositoryError,
+                  .animalAlreadyInAnotherSession
+              )
+          }
+
+          XCTAssertEqual(fixture.session.status, .active)
+          XCTAssertEqual(newerSession.status, .active)
+          XCTAssertEqual(fixture.animal.activeWorkingSession?.publicID, newerSessionID)
+          XCTAssertEqual(fixture.animal.location, .workingPen)
+          XCTAssertNil(fixture.animal.pasture)
+          XCTAssertEqual(
+              fixture.queueItem.destinationPasture?.publicID,
+              fixture.sourcePasture.publicID
+          )
+          XCTAssertEqual(
+              try fixture.repository.context.fetch(FetchDescriptor<MovementRecord>()).count,
+              movementCountBefore
+          )
+      }
+
+      func testDeletingReopenedSessionDoesNotReleaseAnimalOwnedByNewerActiveSession() throws {
+          let fixture = try makeFinishedSessionFixture()
+          try fixture.repository.reopenSession(id: fixture.session.publicID)
+
+          let newerSessionID = try fixture.repository.startSession(
+              input: WorkingSessionStartInput(
+                  date: .now,
+                  sourcePastureID: fixture.sourcePasture.publicID,
+                  treatmentTemplateName: nil,
+                  plannedTreatments: [],
+                  animalIDs: [fixture.animal.publicID]
+              )
+          )
+
+          try fixture.repository.deleteSession(id: fixture.session.publicID)
+
+          let remainingSessions = try fixture.repository.context.fetch(
+              FetchDescriptor<WorkingSession>()
+          )
+          XCTAssertFalse(remainingSessions.contains { $0.publicID == fixture.session.publicID })
+          XCTAssertTrue(remainingSessions.contains { $0.publicID == newerSessionID })
+          XCTAssertEqual(fixture.animal.activeWorkingSession?.publicID, newerSessionID)
+          XCTAssertEqual(fixture.animal.location, .workingPen)
+          XCTAssertNil(fixture.animal.pasture)
+      }
+
+      func testReopenRejectsAlreadyActiveSession() throws {
+''',
+              )
+          PY
+
+      - name: Validate architecture and Swift 6 build
+        if: steps.completed.outputs.done != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' -print | sort -V | tail -1)"
+          if [[ -z "$XCODE_PATH" ]]; then
+            echo "Xcode 26 is required for the iOS 26 target and Swift 6 concurrency gate." >&2
+            exit 1
+          fi
+          sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
+          bash Scripts/verify-architecture.sh
+          bash Scripts/verify-concurrency.sh
+
+      - name: Commit validated source changes
+        if: steps.completed.outputs.done != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'success\n' > validation-result-reopened-session-ownership.txt
+          git config user.name "chatgpt-codex-connector[bot]"
+          git config user.email "1144995+chatgpt-codex-connector[bot]@users.noreply.github.com"
+          git add \
+            yaHerd/Data/Repositories/SwiftDataWorkingRepository.swift \
+            yaHerdTests/SwiftDataWorkingSessionLifecycleTests.swift \
+            validation-result-reopened-session-ownership.txt
+          git commit -m "Validate reopened session ownership"
+          git push origin HEAD:agent/review-reopened-session-ownership-push
