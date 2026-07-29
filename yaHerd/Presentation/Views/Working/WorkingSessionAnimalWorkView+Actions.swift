@@ -131,9 +131,14 @@ extension WorkingSessionAnimalWorkView {
         selectedDestinationPastureID = snapshot.destinationPastureID
         recordPregnancyCheck = snapshot.pregnancyCheck != nil
         pregnancyResult = snapshot.pregnancyCheck?.result ?? .unknown
-        estimatedDaysText = snapshot.pregnancyCheck?.estimatedDaysPregnant.map { String($0) } ?? ""
-        dueDate = snapshot.pregnancyCheck?.dueDate ?? snapshot.sessionDate
-        automaticallyCalculatedDueDate = nil
+        let pregnancyDueDateState = WorkingPregnancyDueDateFormState.seeded(
+            estimatedDaysPregnant: snapshot.pregnancyCheck?.estimatedDaysPregnant,
+            savedDueDate: snapshot.pregnancyCheck?.dueDate,
+            fallbackDate: snapshot.sessionDate
+        )
+        estimatedDaysText = pregnancyDueDateState.estimatedDaysText
+        dueDate = pregnancyDueDateState.dueDate
+        automaticallyCalculatedDueDate = pregnancyDueDateState.automaticallyCalculatedDueDate
         selectedSire = snapshot.pregnancyCheck?.sire
         castrationPerformed = snapshot.castrationPerformedInSession
         observationNotes = snapshot.observationNotes
@@ -202,7 +207,17 @@ extension WorkingSessionAnimalWorkView {
         return "\(snapshot.sessionSourcePastureName ?? "Working Session") \(date)"
     }
 
-    func recalculateDueDate() {
+    var estimatedDaysBinding: Binding<String> {
+        Binding(
+            get: { estimatedDaysText },
+            set: { newValue in
+                estimatedDaysText = newValue
+                recalculateDueDate(estimatedDaysText: newValue)
+            }
+        )
+    }
+
+    func recalculateDueDate(estimatedDaysText: String) {
         guard allowsEditing,
               pregnancyResult == .pregnant,
               let snapshot,
@@ -341,6 +356,24 @@ enum WorkingSessionTreatmentPlanBuilder {
                 suggestedDose: entry.dose
             )
         }
+    }
+}
+
+struct WorkingPregnancyDueDateFormState: Equatable {
+    let estimatedDaysText: String
+    let dueDate: Date
+    let automaticallyCalculatedDueDate: Date?
+
+    static func seeded(
+        estimatedDaysPregnant: Int?,
+        savedDueDate: Date?,
+        fallbackDate: Date
+    ) -> Self {
+        Self(
+            estimatedDaysText: estimatedDaysPregnant.map(String.init) ?? "",
+            dueDate: savedDueDate ?? fallbackDate,
+            automaticallyCalculatedDueDate: nil
+        )
     }
 }
 

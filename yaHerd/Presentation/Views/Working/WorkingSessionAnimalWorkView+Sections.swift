@@ -210,7 +210,7 @@ extension WorkingSessionAnimalWorkView {
 
                 if pregnancyResult == .pregnant {
                     LabeledContent("Estimated Days") {
-                        TextField("Optional", text: $estimatedDaysText)
+                        TextField("Optional", text: estimatedDaysBinding)
                             .multilineTextAlignment(.trailing)
                             .keyboardType(.numberPad)
                             .frame(width: 120)

@@ -119,6 +119,21 @@ final class WorkingAnimalWorkTimestampTests: XCTestCase {
         XCTAssertEqual(savedDueDate, expected)
     }
 
+    func testSeedingSavedPregnancyCheckPreservesManualDueDate() {
+        let savedDueDate = Date(timeIntervalSince1970: 1_800_000_000)
+        let fallbackDate = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let state = WorkingPregnancyDueDateFormState.seeded(
+            estimatedDaysPregnant: 175,
+            savedDueDate: savedDueDate,
+            fallbackDate: fallbackDate
+        )
+
+        XCTAssertEqual(state.estimatedDaysText, "175")
+        XCTAssertEqual(state.dueDate, savedDueDate)
+        XCTAssertNil(state.automaticallyCalculatedDueDate)
+    }
+
     func testManuallyAdjustedDueDateIsPreservedAtSave() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
