@@ -203,29 +203,29 @@ extension WorkingSessionAnimalWorkView {
     }
 
     func recalculateDueDate() {
-    guard allowsEditing,
-          pregnancyResult == .pregnant,
-          let snapshot,
-          let estimatedDays = Int(
-            estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
-          ) else {
-        return
+        guard allowsEditing,
+              pregnancyResult == .pregnant,
+              let snapshot,
+              let estimatedDays = Int(
+                estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
+              ) else {
+            return
+        }
+
+        let workDate = WorkingAnimalWorkTimestamp.resolve(
+            existingCompletedAt: snapshot.completedAt,
+            now: .now
+        )
+        if let calculatedDate = WorkingPregnancyDueDateCalculator.calculate(
+            estimatedDaysPregnant: estimatedDays,
+            workDate: workDate
+        ) {
+            dueDate = calculatedDate
+            automaticallyCalculatedDueDate = calculatedDate
+        }
     }
 
-    let workDate = WorkingAnimalWorkTimestamp.resolve(
-        existingCompletedAt: snapshot.completedAt,
-        now: .now
-    )
-    if let calculatedDate = WorkingPregnancyDueDateCalculator.calculate(
-        estimatedDaysPregnant: estimatedDays,
-        workDate: workDate
-    ) {
-        dueDate = calculatedDate
-        automaticallyCalculatedDueDate = calculatedDate
-    }
-}
-
-func saveWork() {
+    func saveWork() {
         guard allowsEditing, let snapshot else { return }
 
         let workDate = WorkingAnimalWorkTimestamp.resolve(
@@ -234,36 +234,36 @@ func saveWork() {
         )
 
         let estimatedDaysPregnant = Int(
-    estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
-)
-let pregnancyInput: WorkingPregnancyCheckInput?
-if showsPregnancySection,
-   recordPregnancyCheck,
-   pregnancyResult == .open || pregnancyResult == .pregnant {
-    let savedDueDate: Date?
-    if pregnancyResult == .pregnant {
-        savedDueDate = WorkingPregnancyDueDateCalculator.resolveForSave(
-            displayedDueDate: dueDate,
-            automaticallyCalculatedDueDate: automaticallyCalculatedDueDate,
-            estimatedDaysPregnant: estimatedDaysPregnant,
-            workDate: workDate
+            estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
         )
-    } else {
-        savedDueDate = nil
-    }
+        let pregnancyInput: WorkingPregnancyCheckInput?
+        if showsPregnancySection,
+           recordPregnancyCheck,
+           pregnancyResult == .open || pregnancyResult == .pregnant {
+            let savedDueDate: Date?
+            if pregnancyResult == .pregnant {
+                savedDueDate = WorkingPregnancyDueDateCalculator.resolveForSave(
+                    displayedDueDate: dueDate,
+                    automaticallyCalculatedDueDate: automaticallyCalculatedDueDate,
+                    estimatedDaysPregnant: estimatedDaysPregnant,
+                    workDate: workDate
+                )
+            } else {
+                savedDueDate = nil
+            }
 
-    pregnancyInput = WorkingPregnancyCheckInput(
-        date: workDate,
-        result: pregnancyResult,
-        estimatedDaysPregnant: estimatedDaysPregnant,
-        dueDate: savedDueDate,
-        sireAnimalID: selectedSire?.id
-    )
-} else {
-    pregnancyInput = nil
-}
+            pregnancyInput = WorkingPregnancyCheckInput(
+                date: workDate,
+                result: pregnancyResult,
+                estimatedDaysPregnant: estimatedDaysPregnant,
+                dueDate: savedDueDate,
+                sireAnimalID: selectedSire?.id
+            )
+        } else {
+            pregnancyInput = nil
+        }
 
-let treatmentInputs = treatmentEntries.compactMap { entry -> WorkingTreatmentEntryInput? in
+        let treatmentInputs = treatmentEntries.compactMap { entry -> WorkingTreatmentEntryInput? in
             let name = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { return nil }
             guard entry.isPlanned || entry.given else { return nil }
