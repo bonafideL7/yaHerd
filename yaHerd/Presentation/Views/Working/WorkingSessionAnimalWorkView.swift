@@ -124,9 +124,6 @@ struct WorkingSessionAnimalWorkView: View {
         .onChange(of: viewModel.snapshot?.id) { _, _ in
             seedStateIfNeeded()
         }
-        .onChange(of: estimatedDaysText) { _, _ in
-            recalculateDueDate()
-        }
         .sheet(isPresented: $showingTagReplacement) {
             tagReplacementSheet
         }
