@@ -140,6 +140,10 @@ struct HomeView: View {
         navigation.present(.startFieldCheck)
     }
 
+    func presentWorkingSessionStart() {
+        navigation.present(.startWorkingSession)
+    }
+
     private func makeLoadHomeUseCase() -> LoadHomeUseCase {
         LoadHomeUseCase(
             dashboardRepository: dashboardRecordReader,
