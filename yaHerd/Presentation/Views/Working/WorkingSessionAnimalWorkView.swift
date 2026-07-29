@@ -10,8 +10,18 @@ struct WorkingSessionAnimalWorkView: View {
         workingDependencies.queueItemEditingRepository
     }
 
+    var pastureRepository: any PastureReferenceDataReader {
+        workingDependencies.pastureReferenceReader
+    }
+
+    var vaccinationRepository: any WorkingTreatmentTemplateCreating {
+        workingDependencies.treatmentTemplateCreator
+    }
+
     @StateObject var viewModel: WorkingQueueItemEditorViewModel
     @State var treatmentEntries: [WorkingAnimalTreatmentEntry] = []
+    @State var availablePastures: [PastureOption] = []
+    @State var selectedDestinationPastureID: UUID?
     @State var recordPregnancyCheck = false
     @State var pregnancyResult: PregnancyResult = .unknown
     @State var estimatedDaysText = ""
@@ -23,6 +33,9 @@ struct WorkingSessionAnimalWorkView: View {
     @State var showingSirePicker = false
     @State var showingTagReplacement = false
     @State var showingDeleteConfirmation = false
+    @State var showingSaveSessionVaccination = false
+    @State var sessionVaccinationName = ""
+    @State var savedVaccinationName: String?
     @State var errorMessage: String?
     @State var showingError = false
 
@@ -104,6 +117,7 @@ struct WorkingSessionAnimalWorkView: View {
         .task {
             viewModel.configure(repository: repository)
             viewModel.load()
+            loadPastures()
             seedStateIfNeeded()
         }
         .onChange(of: viewModel.snapshot?.id) { _, _ in
@@ -117,6 +131,21 @@ struct WorkingSessionAnimalWorkView: View {
         }
         .sheet(isPresented: $showingSirePicker) {
             sirePickerSheet
+        }
+        .alert("Save Session Vaccinations", isPresented: $showingSaveSessionVaccination) {
+            TextField("Vaccination name", text: $sessionVaccinationName)
+            Button("Save") {
+                saveSessionVaccinations()
+            }
+            .disabled(sessionVaccinationName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Save the vaccinations and treatments currently available in this session for reuse later.")
+        }
+        .alert("Saved to Vaccinations", isPresented: savedVaccinationBinding) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(savedVaccinationName.map { "\($0) is now available under Vaccinations." } ?? "Saved.")
         }
         .alert("Delete Work Data?", isPresented: $showingDeleteConfirmation) {
             Button("Delete", role: .destructive) {
@@ -144,5 +173,12 @@ struct WorkingSessionAnimalWorkView: View {
             return "Animal Work Review"
         }
         return isExistingWork ? "Edit Animal Work" : "Work Animal"
+    }
+
+    private var savedVaccinationBinding: Binding<Bool> {
+        Binding(
+            get: { savedVaccinationName != nil },
+            set: { if !$0 { savedVaccinationName = nil } }
+        )
     }
 }
