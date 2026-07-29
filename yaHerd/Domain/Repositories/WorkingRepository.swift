@@ -66,6 +66,24 @@ protocol WorkingQueueItemEditSaving {
 }
 
 @MainActor
+protocol WorkingSessionTreatmentUpdating {
+    func updateSessionTreatments(
+        id: UUID,
+        plannedTreatments: [WorkingTreatmentPlanItem]
+    ) throws
+}
+
+@MainActor
+extension WorkingSessionTreatmentUpdating {
+    func updateSessionTreatments(
+        id: UUID,
+        plannedTreatments: [WorkingTreatmentPlanItem]
+    ) throws {
+        throw WorkingRepositoryError.sessionTreatmentUpdateUnavailable
+    }
+}
+
+@MainActor
 protocol WorkingPrimaryTagReplacing {
     @discardableResult
     func replacePrimaryTag(
@@ -140,7 +158,8 @@ protocol WorkingSessionsRepository: WorkingSessionListReader, WorkingSessionDele
 protocol WorkingSessionDetailRepository:
     WorkingSessionDetailReader,
     WorkingSessionDeleting,
-    WorkingSessionReopening
+    WorkingSessionReopening,
+    WorkingSessionTreatmentUpdating
 {}
 
 @MainActor
@@ -163,6 +182,7 @@ protocol WorkingQueueRepository: WorkingSessionDetailReader {}
 protocol WorkingQueueItemEditingRepository:
     WorkingQueueItemEditorReader,
     WorkingQueueItemEditSaving,
+    WorkingSessionTreatmentUpdating,
     WorkingPrimaryTagReplacing,
     WorkingQueueItemDataDeleting
 {}
