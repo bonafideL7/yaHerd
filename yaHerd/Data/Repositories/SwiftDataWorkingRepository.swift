@@ -214,8 +214,9 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         let session = try lookup.fetchSession(id: id)
         for item in session.queueItems {
             guard let animal = item.animal else { continue }
-            if animal.activeWorkingSession?.publicID == session.publicID
-                || animal.location == .workingPen
+            let activeSessionID = animal.activeWorkingSession?.publicID
+            if activeSessionID == session.publicID
+                || (activeSessionID == nil && animal.location == .workingPen)
             {
                 let destination = item.collectedFromPasture ?? session.sourcePasture
                 animal.pasture = destination
@@ -249,6 +250,8 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         guard Set(destinationsByQueueItemID.keys) == queueItemIDs else {
             throw WorkingRepositoryError.assignmentSetDoesNotMatchSession
         }
+
+        try validateCompletionOwnership(for: session)
 
         for item in session.queueItems {
             guard let animal = item.animal else { continue }
@@ -345,6 +348,19 @@ struct SwiftDataWorkingRepository: WorkingRepository {
 
     private var sessionCleanupWriter: SwiftDataWorkingSessionCleanupWriter {
         SwiftDataWorkingSessionCleanupWriter(context: context)
+    }
+
+    private func validateCompletionOwnership(for session: WorkingSession) throws {
+        let hasConflictingOwnership = session.queueItems.contains { item in
+            guard let activeSessionID = item.animal?.activeWorkingSession?.publicID else {
+                return false
+            }
+            return activeSessionID != session.publicID
+        }
+
+        guard !hasConflictingOwnership else {
+            throw WorkingRepositoryError.animalAlreadyInAnotherSession
+        }
     }
 
     private func fetchActiveSession(id: UUID) throws -> WorkingSession {
