@@ -32,7 +32,7 @@ extension HomeView {
     @ViewBuilder
     var startWorkingSessionActionCard: some View {
         Button {
-            navigation.present(.startWorkingSession)
+            presentWorkingSessionStart()
         } label: {
             HomeActionCardView(
                 title: "Work animals",
