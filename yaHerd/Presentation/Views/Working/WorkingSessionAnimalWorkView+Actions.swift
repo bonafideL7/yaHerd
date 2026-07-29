@@ -133,6 +133,7 @@ extension WorkingSessionAnimalWorkView {
         pregnancyResult = snapshot.pregnancyCheck?.result ?? .unknown
         estimatedDaysText = snapshot.pregnancyCheck?.estimatedDaysPregnant.map { String($0) } ?? ""
         dueDate = snapshot.pregnancyCheck?.dueDate ?? snapshot.sessionDate
+        automaticallyCalculatedDueDate = nil
         selectedSire = snapshot.pregnancyCheck?.sire
         castrationPerformed = snapshot.castrationPerformedInSession
         observationNotes = snapshot.observationNotes
@@ -202,26 +203,29 @@ extension WorkingSessionAnimalWorkView {
     }
 
     func recalculateDueDate() {
-        guard allowsEditing,
-              pregnancyResult == .pregnant,
-              let snapshot,
-              let estimatedDays = Int(
-                estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
-              ) else {
-            return
-        }
-
-        let remainingDays = max(0, WorkingConstants.gestationDays - estimatedDays)
-        if let calculatedDate = Calendar.current.date(
-            byAdding: .day,
-            value: remainingDays,
-            to: snapshot.sessionDate
-        ) {
-            dueDate = calculatedDate
-        }
+    guard allowsEditing,
+          pregnancyResult == .pregnant,
+          let snapshot,
+          let estimatedDays = Int(
+            estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
+          ) else {
+        return
     }
 
-    func saveWork() {
+    let workDate = WorkingAnimalWorkTimestamp.resolve(
+        existingCompletedAt: snapshot.completedAt,
+        now: .now
+    )
+    if let calculatedDate = WorkingPregnancyDueDateCalculator.calculate(
+        estimatedDaysPregnant: estimatedDays,
+        workDate: workDate
+    ) {
+        dueDate = calculatedDate
+        automaticallyCalculatedDueDate = calculatedDate
+    }
+}
+
+func saveWork() {
         guard allowsEditing, let snapshot else { return }
 
         let workDate = WorkingAnimalWorkTimestamp.resolve(
@@ -229,24 +233,37 @@ extension WorkingSessionAnimalWorkView {
             now: .now
         )
 
-        let pregnancyInput: WorkingPregnancyCheckInput?
-        if showsPregnancySection,
-           recordPregnancyCheck,
-           pregnancyResult == .open || pregnancyResult == .pregnant {
-            pregnancyInput = WorkingPregnancyCheckInput(
-                date: workDate,
-                result: pregnancyResult,
-                estimatedDaysPregnant: Int(
-                    estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
-                ),
-                dueDate: pregnancyResult == .pregnant ? dueDate : nil,
-                sireAnimalID: selectedSire?.id
-            )
-        } else {
-            pregnancyInput = nil
-        }
+        let estimatedDaysPregnant = Int(
+    estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
+)
+let pregnancyInput: WorkingPregnancyCheckInput?
+if showsPregnancySection,
+   recordPregnancyCheck,
+   pregnancyResult == .open || pregnancyResult == .pregnant {
+    let savedDueDate: Date?
+    if pregnancyResult == .pregnant {
+        savedDueDate = WorkingPregnancyDueDateCalculator.resolveForSave(
+            displayedDueDate: dueDate,
+            automaticallyCalculatedDueDate: automaticallyCalculatedDueDate,
+            estimatedDaysPregnant: estimatedDaysPregnant,
+            workDate: workDate
+        )
+    } else {
+        savedDueDate = nil
+    }
 
-        let treatmentInputs = treatmentEntries.compactMap { entry -> WorkingTreatmentEntryInput? in
+    pregnancyInput = WorkingPregnancyCheckInput(
+        date: workDate,
+        result: pregnancyResult,
+        estimatedDaysPregnant: estimatedDaysPregnant,
+        dueDate: savedDueDate,
+        sireAnimalID: selectedSire?.id
+    )
+} else {
+    pregnancyInput = nil
+}
+
+let treatmentInputs = treatmentEntries.compactMap { entry -> WorkingTreatmentEntryInput? in
             let name = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { return nil }
             guard entry.isPlanned || entry.given else { return nil }
@@ -324,6 +341,47 @@ enum WorkingSessionTreatmentPlanBuilder {
                 suggestedDose: entry.dose
             )
         }
+    }
+}
+
+enum WorkingPregnancyDueDateCalculator {
+    static func calculate(
+        estimatedDaysPregnant: Int,
+        workDate: Date,
+        calendar: Calendar = .current
+    ) -> Date? {
+        let remainingDays = max(
+            0,
+            WorkingConstants.gestationDays - estimatedDaysPregnant
+        )
+        return calendar.date(
+            byAdding: .day,
+            value: remainingDays,
+            to: workDate
+        )
+    }
+
+    static func resolveForSave(
+        displayedDueDate: Date,
+        automaticallyCalculatedDueDate: Date?,
+        estimatedDaysPregnant: Int?,
+        workDate: Date,
+        calendar: Calendar = .current
+    ) -> Date {
+        guard
+            let automaticallyCalculatedDueDate,
+            displayedDueDate == automaticallyCalculatedDueDate,
+            let estimatedDaysPregnant,
+            let recalculatedDate = calculate(
+                estimatedDaysPregnant: estimatedDaysPregnant,
+                workDate: workDate,
+                calendar: calendar
+            )
+        else {
+            return displayedDueDate
+        }
+
+        return recalculatedDate
     }
 }
 
