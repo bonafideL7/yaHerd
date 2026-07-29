@@ -29,15 +29,13 @@ enum WorkingTreatmentPlanRules {
         }
     }
 
+    /// Session plans are defaults, not a closed list. An animal may receive a
+    /// one-off vaccination or treatment that was not known when the session began.
     static func validate(
         _ entries: [WorkingTreatmentEntryInput],
         against plannedTreatments: [WorkingTreatmentPlanItem]
     ) throws {
+        _ = plannedTreatments
         try validate(entries)
-
-        let plannedIDs = Set(plannedTreatments.map(\.id))
-        guard Set(entries.map(\.treatmentItemID)).isSubset(of: plannedIDs) else {
-            throw WorkingRepositoryError.treatmentItemNotInSession
-        }
     }
 }

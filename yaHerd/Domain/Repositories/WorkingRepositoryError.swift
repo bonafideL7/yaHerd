@@ -4,6 +4,7 @@ enum WorkingRepositoryError: LocalizedError, Equatable {
     case sessionNotFound
     case sessionStartUnavailable
     case sessionReopenUnavailable
+    case sessionTreatmentUpdateUnavailable
     case sessionAlreadyActive
     case sessionCannotBeReopened
     case queueItemNotFound
@@ -32,6 +33,8 @@ enum WorkingRepositoryError: LocalizedError, Equatable {
             return "Working sessions are unavailable in the current data mode."
         case .sessionReopenUnavailable:
             return "Reopening working sessions is unavailable in the current data mode."
+        case .sessionTreatmentUpdateUnavailable:
+            return "Updating vaccinations and treatments is unavailable in the current data mode."
         case .sessionAlreadyActive:
             return "This working session is already open."
         case .sessionCannotBeReopened:
@@ -39,11 +42,11 @@ enum WorkingRepositoryError: LocalizedError, Equatable {
         case .queueItemNotFound:
             return "Working session animal not found."
         case .templateNotFound:
-            return "Treatment template not found."
+            return "Vaccination not found."
         case .duplicateTemplateName(let name):
-            return "A treatment template named \(name) already exists. Names must be unique."
+            return "A vaccination named \(name) already exists. Names must be unique."
         case .duplicateTreatmentItemIdentifiers:
-            return "Each planned treatment must have a unique identifier."
+            return "Each vaccination or treatment must have a unique identifier."
         case .treatmentItemNotInSession:
             return "A treatment entry does not belong to this working session’s treatment plan."
         case .invalidTreatmentDose:

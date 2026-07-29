@@ -69,7 +69,7 @@ struct WorkingSessionsView: View {
                 }
             }
         }
-        .navigationTitle("Work")
+        .navigationTitle("Working Sessions")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -84,9 +84,9 @@ struct WorkingSessionsView: View {
                 NavigationLink {
                     TreatmentTemplatesView()
                 } label: {
-                    Image(systemName: "list.bullet")
+                    Image(systemName: "syringe")
                 }
-                .accessibilityLabel("Treatment Templates")
+                .accessibilityLabel("Vaccinations")
             }
         }
         .task {

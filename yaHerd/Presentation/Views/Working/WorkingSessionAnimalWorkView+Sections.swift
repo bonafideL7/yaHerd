@@ -8,6 +8,7 @@ extension WorkingSessionAnimalWorkView {
             }
 
             animalSection(snapshot)
+            destinationSection(snapshot)
             treatmentSection
 
             if showsPregnancySection {
@@ -92,37 +93,105 @@ extension WorkingSessionAnimalWorkView {
         }
     }
 
+    func destinationSection(_ snapshot: WorkingQueueItemEditorSnapshot) -> some View {
+        Section {
+            Picker("Destination After Session", selection: $selectedDestinationPastureID) {
+                Text("Return to \(snapshot.sessionSourcePastureName ?? "Source Pasture")")
+                    .tag(Optional<UUID>.none)
+                ForEach(availablePastures) { pasture in
+                    Text(pasture.name).tag(Optional(pasture.id))
+                }
+            }
+            .disabled(!allowsEditing)
+        } header: {
+            Text("Pasture")
+        } footer: {
+            Text("Choose a different pasture for this animal, or leave the source pasture selected. The move is applied when the session is finished.")
+        }
+    }
+
     var treatmentSection: some View {
         Section {
             if treatmentEntries.isEmpty {
-                Text("No planned treatments")
+                Text("No vaccinations or treatments yet")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(treatmentEntries.indices, id: \.self) { index in
-                    VStack(alignment: .leading, spacing: 8) {
-                        Toggle(
-                            treatmentEntries[index].name,
-                            isOn: $treatmentEntries[index].given
-                        )
-                        .disabled(!allowsEditing)
+                    VStack(alignment: .leading, spacing: 12) {
+                        if treatmentEntries[index].isPlanned {
+                            Toggle(
+                                treatmentEntries[index].name,
+                                isOn: $treatmentEntries[index].given
+                            )
+                            .disabled(!allowsEditing)
+                        } else {
+                            TextField(
+                                "Vaccination, medication, or treatment",
+                                text: $treatmentEntries[index].name
+                            )
+                            .textFieldStyle(.roundedBorder)
+                            .disabled(!allowsEditing)
 
-                        WorkingTreatmentDoseEditor(
-                            dose: $treatmentEntries[index].dose,
-                            isEnabled: allowsEditing && treatmentEntries[index].given
-                        )
+                            Toggle("Given", isOn: $treatmentEntries[index].given)
+                                .disabled(!allowsEditing)
+                        }
+
+                        if treatmentEntries[index].given || !treatmentEntries[index].dose.isEmpty {
+                            WorkingTreatmentDoseEditor(
+                                dose: $treatmentEntries[index].dose,
+                                isEnabled: allowsEditing && treatmentEntries[index].given
+                            )
+                        }
+
+                        if !treatmentEntries[index].isPlanned && allowsEditing {
+                            HStack {
+                                Button {
+                                    addTreatmentToSession(at: index)
+                                } label: {
+                                    Label("Use for Remaining Animals", systemImage: "person.3")
+                                }
+                                .disabled(
+                                    treatmentEntries[index].name
+                                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                                        .isEmpty
+                                )
+
+                                Spacer()
+
+                                Button("Remove", role: .destructive) {
+                                    treatmentEntries.remove(at: index)
+                                }
+                            }
+                            .font(.footnote)
+                        }
                     }
+                    .padding(.vertical, 6)
+                }
+            }
+
+            if allowsEditing {
+                Button {
+                    treatmentEntries.append(
+                        WorkingAnimalTreatmentEntry(
+                            id: UUID(),
+                            name: "",
+                            given: true,
+                            dose: WorkingTreatmentDose(),
+                            isPlanned: false
+                        )
+                    )
+                } label: {
+                    Label("Add One-Off Vaccination or Treatment", systemImage: "plus.circle")
                 }
             }
         } header: {
-            Text("Treatments")
+            Text("Vaccinations & Treatments")
         } footer: {
-            if !treatmentEntries.isEmpty {
-                Text(
-                    isSessionLocked
-                        ? "Recorded treatment doses for this completed session."
-                        : "Dose amount, unit, and administration route are recorded for this animal and can differ from the treatment template."
-                )
-            }
+            Text(
+                isSessionLocked
+                    ? "Recorded vaccinations and treatments for this completed session."
+                    : "One-off entries apply only to this animal. Use for Remaining Animals adds the item to the active session without requiring advance setup."
+            )
         }
     }
 

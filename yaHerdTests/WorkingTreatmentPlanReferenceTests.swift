@@ -2,23 +2,25 @@ import XCTest
 @testable import yaHerd
 
 final class WorkingTreatmentPlanReferenceTests: XCTestCase {
-    func testRejectsTreatmentEntryOutsideSessionPlan() {
+    func testAllowsOneOffTreatmentOutsideSessionPlan() throws {
         let plannedTreatment = WorkingTreatmentPlanItem(name: "Vaccine A")
-        let unrelatedEntry = WorkingTreatmentEntryInput(
+        let oneOffEntry = WorkingTreatmentEntryInput(
             date: .now,
             treatmentItemID: UUID(),
-            itemName: "Vaccine A",
+            itemName: "Antibiotic",
             given: true,
-            dose: WorkingTreatmentDose(amount: 2, unit: .milliliter, route: .subcutaneous)
+            dose: WorkingTreatmentDose(
+                amount: 8,
+                unit: .milliliter,
+                route: .intramuscular
+            )
         )
 
-        XCTAssertThrowsError(
+        XCTAssertNoThrow(
             try WorkingTreatmentPlanRules.validate(
-                [unrelatedEntry],
+                [oneOffEntry],
                 against: [plannedTreatment]
             )
-        ) { error in
-            XCTAssertEqual(error as? WorkingRepositoryError, .treatmentItemNotInSession)
-        }
+        )
     }
 }
