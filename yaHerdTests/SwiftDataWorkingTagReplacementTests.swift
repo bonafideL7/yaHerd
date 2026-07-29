@@ -20,6 +20,24 @@ final class SwiftDataWorkingTagReplacementTests: XCTestCase {
         XCTAssertNotNil(fixture.animal.inactiveTags.first?.removedAt)
     }
 
+    func testLegacyTagIsMaterializedBeforeSharedReplacementTime() throws {
+        let fixture = try makeFixture(tagNumber: "12")
+        XCTAssertTrue(fixture.animal.tags.isEmpty)
+
+        _ = try fixture.repository.replacePrimaryTag(
+            forQueueItemID: fixture.queueItem.publicID,
+            inSessionID: fixture.sessionID,
+            input: WorkingTagReplacementInput(number: "99", colorID: nil)
+        )
+
+        let retiredTag = try XCTUnwrap(fixture.animal.inactiveTags.first)
+        let replacementTag = try XCTUnwrap(fixture.animal.activeTags.first)
+        let retiredAt = try XCTUnwrap(retiredTag.removedAt)
+
+        XCTAssertLessThanOrEqual(retiredTag.assignedAt, retiredAt)
+        XCTAssertEqual(retiredAt, replacementTag.assignedAt)
+    }
+
     func testReplacePrimaryTagDoesNotCreateRetiredPlaceholderForUntaggedAnimal() throws {
         let fixture = try makeFixture(tagNumber: "")
 
