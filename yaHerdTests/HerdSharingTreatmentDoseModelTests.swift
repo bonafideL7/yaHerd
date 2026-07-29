@@ -210,6 +210,98 @@ final class HerdSharingTreatmentDoseModelTests: XCTestCase {
         XCTAssertEqual(importedTreatment.administrationRoute, .intramuscular)
     }
 
+    func testRestoreLocalFieldsRestoresStructuredTreatmentDose() throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = ModelContext(container)
+        let animal = Animal(
+            name: "Cow 12",
+            tagNumber: "12",
+            birthDate: .distantPast,
+            status: .active,
+            sex: .female
+        )
+        let session = WorkingSession(protocolName: "Working Session", protocolItems: [])
+        let treatmentRecordID = UUID()
+        let treatmentRecord = WorkingTreatmentRecord(
+            publicID: treatmentRecordID,
+            treatmentItemID: UUID(),
+            itemName: "Vaccine A",
+            given: true,
+            dose: WorkingTreatmentDose(
+                amount: 5,
+                unit: .milligram,
+                route: .intramuscular
+            ),
+            animal: animal,
+            session: session
+        )
+        context.insert(animal)
+        context.insert(session)
+        context.insert(treatmentRecord)
+        try context.save()
+
+        let fieldChanges = [
+            HerdSharingUpdatedRecordFieldChange(
+                fieldName: "doseAmount",
+                localValue: .double(2.5),
+                sharedValue: .double(5)
+            ),
+            HerdSharingUpdatedRecordFieldChange(
+                fieldName: "doseUnit",
+                localValue: .string(WorkingTreatmentDoseUnit.milliliter.rawValue),
+                sharedValue: .string(WorkingTreatmentDoseUnit.milligram.rawValue)
+            ),
+            HerdSharingUpdatedRecordFieldChange(
+                fieldName: "administrationRoute",
+                localValue: .string(WorkingTreatmentAdministrationRoute.subcutaneous.rawValue),
+                sharedValue: .string(WorkingTreatmentAdministrationRoute.intramuscular.rawValue)
+            ),
+        ]
+        let conflict = HerdSharingUpdatedRecordConflict(
+            sourceEntityName: SharedWorkingTreatmentRecord.entityName,
+            publicID: treatmentRecordID,
+            localModifiedAt: Date(timeIntervalSince1970: 10),
+            sharedModifiedAt: Date(timeIntervalSince1970: 20),
+            fieldChanges: fieldChanges
+        )
+        let review = HerdSharingConflictReview(
+            title: "Shared-data conflicts detected",
+            sourceDescription: "Test import",
+            detectedAt: Date(timeIntervalSince1970: 30),
+            existingLocalRecordUpdateCount: 1,
+            updatedRecordConflicts: [conflict],
+            preventedDeleteConflicts: []
+        )
+        let selections = fieldChanges.map {
+            HerdSharingLocalFieldRestoreSelection(
+                sourceEntityName: SharedWorkingTreatmentRecord.entityName,
+                publicID: treatmentRecordID,
+                fieldName: $0.fieldName
+            )
+        }
+        let storeDirectory = FileManager.default.temporaryDirectory
+            .appending(path: "HerdSharingTreatmentDoseRestoreTests")
+            .appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: storeDirectory) }
+        let store = HerdSharingCoreDataStore(
+            storeDirectoryURL: storeDirectory,
+            journalFileURL: storeDirectory.appending(path: "journal.json")
+        )
+
+        let result = try store.restoreLocalFields(
+            selections,
+            from: review,
+            context: context
+        )
+
+        XCTAssertEqual(result.requestedFieldCount, 3)
+        XCTAssertEqual(result.restoredFieldCount, 3)
+        XCTAssertEqual(result.skippedFieldCount, 0)
+        XCTAssertEqual(treatmentRecord.doseAmount, 2.5)
+        XCTAssertEqual(treatmentRecord.doseUnit, .milliliter)
+        XCTAssertEqual(treatmentRecord.administrationRoute, .subcutaneous)
+    }
+
     private func makeSharedContext() throws -> NSManagedObjectContext {
         let coordinator = NSPersistentStoreCoordinator(
             managedObjectModel: HerdSharingCoreDataModelFactory.makeCurrentModel()

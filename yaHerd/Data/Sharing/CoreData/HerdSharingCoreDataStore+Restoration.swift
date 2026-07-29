@@ -805,12 +805,32 @@ extension HerdSharingCoreDataStore {
     case "given":
       guard let boolValue = value.boolValue else { return false }
       treatmentRecord.given = boolValue
-    case "quantity":
+    case "quantity", "doseAmount":
       if value.isNull {
-        treatmentRecord.quantity = nil
+        treatmentRecord.doseAmount = nil
       } else {
         guard let doubleValue = value.doubleValue else { return false }
-        treatmentRecord.quantity = doubleValue
+        treatmentRecord.doseAmount = doubleValue
+      }
+    case "doseUnit":
+      if value.isNull {
+        treatmentRecord.doseUnit = nil
+      } else {
+        guard
+          let rawValue = value.stringValue,
+          let doseUnit = WorkingTreatmentDoseUnit(rawValue: rawValue)
+        else { return false }
+        treatmentRecord.doseUnit = doseUnit
+      }
+    case "administrationRoute":
+      if value.isNull {
+        treatmentRecord.administrationRoute = nil
+      } else {
+        guard
+          let rawValue = value.stringValue,
+          let route = WorkingTreatmentAdministrationRoute(rawValue: rawValue)
+        else { return false }
+        treatmentRecord.administrationRoute = route
       }
     default:
       return false
