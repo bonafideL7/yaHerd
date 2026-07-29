@@ -134,6 +134,89 @@ final class SwiftDataWorkingSessionLifecycleTests: XCTestCase {
         XCTAssertNil(fixture.animal.activeWorkingSession)
     }
 
+    func testReopenedSessionCannotFinishAnimalOwnedByNewerActiveSession() throws {
+        let fixture = try makeFinishedSessionFixture()
+        try fixture.repository.reopenSession(id: fixture.session.publicID)
+
+        let alternatePasture = Pasture(name: "South")
+        fixture.repository.context.insert(alternatePasture)
+        try fixture.repository.context.save()
+
+        let newerSessionID = try fixture.repository.startSession(
+            input: WorkingSessionStartInput(
+                date: .now,
+                sourcePastureID: fixture.sourcePasture.publicID,
+                treatmentTemplateName: nil,
+                plannedTreatments: [],
+                animalIDs: [fixture.animal.publicID]
+            )
+        )
+        let newerSession = try XCTUnwrap(
+            fixture.repository.context.fetch(FetchDescriptor<WorkingSession>())
+                .first { $0.publicID == newerSessionID }
+        )
+        let movementCountBefore = try fixture.repository.context.fetch(
+            FetchDescriptor<MovementRecord>()
+        ).count
+
+        XCTAssertThrowsError(
+            try fixture.repository.completeSession(
+                id: fixture.session.publicID,
+                assignments: [
+                    WorkingQueueDestinationAssignment(
+                        queueItemID: fixture.queueItem.publicID,
+                        destinationPastureID: alternatePasture.publicID
+                    )
+                ]
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? WorkingRepositoryError,
+                .animalAlreadyInAnotherSession
+            )
+        }
+
+        XCTAssertEqual(fixture.session.status, .active)
+        XCTAssertEqual(newerSession.status, .active)
+        XCTAssertEqual(fixture.animal.activeWorkingSession?.publicID, newerSessionID)
+        XCTAssertEqual(fixture.animal.location, .workingPen)
+        XCTAssertNil(fixture.animal.pasture)
+        XCTAssertEqual(
+            fixture.queueItem.destinationPasture?.publicID,
+            fixture.sourcePasture.publicID
+        )
+        XCTAssertEqual(
+            try fixture.repository.context.fetch(FetchDescriptor<MovementRecord>()).count,
+            movementCountBefore
+        )
+    }
+
+    func testDeletingReopenedSessionDoesNotReleaseAnimalOwnedByNewerActiveSession() throws {
+        let fixture = try makeFinishedSessionFixture()
+        try fixture.repository.reopenSession(id: fixture.session.publicID)
+
+        let newerSessionID = try fixture.repository.startSession(
+            input: WorkingSessionStartInput(
+                date: .now,
+                sourcePastureID: fixture.sourcePasture.publicID,
+                treatmentTemplateName: nil,
+                plannedTreatments: [],
+                animalIDs: [fixture.animal.publicID]
+            )
+        )
+
+        try fixture.repository.deleteSession(id: fixture.session.publicID)
+
+        let remainingSessions = try fixture.repository.context.fetch(
+            FetchDescriptor<WorkingSession>()
+        )
+        XCTAssertFalse(remainingSessions.contains { $0.publicID == fixture.session.publicID })
+        XCTAssertTrue(remainingSessions.contains { $0.publicID == newerSessionID })
+        XCTAssertEqual(fixture.animal.activeWorkingSession?.publicID, newerSessionID)
+        XCTAssertEqual(fixture.animal.location, .workingPen)
+        XCTAssertNil(fixture.animal.pasture)
+    }
+
     func testReopenRejectsAlreadyActiveSession() throws {
         let container = try TestSupport.makeModelContainer()
         let context = ModelContext(container)
