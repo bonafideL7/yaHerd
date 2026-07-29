@@ -5,28 +5,32 @@ struct WorkingTreatmentDoseEditor: View {
     var isEnabled = true
 
     var body: some View {
-        LabeledContent("Dose") {
-            TextField("Amount", value: $dose.amount, format: .number)
-                .multilineTextAlignment(.trailing)
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Dose")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            TextField("Enter dose amount", value: $dose.amount, format: .number)
                 .keyboardType(.decimalPad)
-                .frame(width: 110)
+                .textFieldStyle(.roundedBorder)
                 .disabled(!isEnabled)
-        }
 
-        Picker("Unit", selection: $dose.unit) {
-            Text("None").tag(Optional<WorkingTreatmentDoseUnit>.none)
-            ForEach(WorkingTreatmentDoseUnit.allCases) { unit in
-                Text(unit.label).tag(Optional(unit))
+            Picker("Unit", selection: $dose.unit) {
+                Text("Select unit").tag(Optional<WorkingTreatmentDoseUnit>.none)
+                ForEach(WorkingTreatmentDoseUnit.allCases) { unit in
+                    Text(unit.label).tag(Optional(unit))
+                }
             }
-        }
-        .disabled(!isEnabled)
+            .disabled(!isEnabled)
 
-        Picker("Route", selection: $dose.route) {
-            Text("None").tag(Optional<WorkingTreatmentAdministrationRoute>.none)
-            ForEach(WorkingTreatmentAdministrationRoute.allCases) { route in
-                Text(route.label).tag(Optional(route))
+            Picker("Route", selection: $dose.route) {
+                Text("Select route").tag(Optional<WorkingTreatmentAdministrationRoute>.none)
+                ForEach(WorkingTreatmentAdministrationRoute.allCases) { route in
+                    Text(route.label).tag(Optional(route))
+                }
             }
+            .disabled(!isEnabled)
         }
-        .disabled(!isEnabled)
+        .padding(.vertical, 2)
     }
 }

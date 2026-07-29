@@ -206,7 +206,7 @@ struct NewWorkingSessionView: View {
 
     private var treatmentsSection: some View {
         Section {
-            Picker("Treatment Template", selection: $selectedTemplateID) {
+            Picker("Saved Vaccinations", selection: $selectedTemplateID) {
                 Text("None").tag(Optional<UUID>.none)
                 ForEach(viewModel.templates) { template in
                     Text(template.name).tag(Optional(template.id))
@@ -215,11 +215,12 @@ struct NewWorkingSessionView: View {
             .onChange(of: selectedTemplateID) { _, id in applyTemplate(id: id) }
 
             if plannedTreatments.isEmpty {
-                Text("No planned treatments").foregroundStyle(.secondary)
+                Text("No vaccinations or treatments selected")
+                    .foregroundStyle(.secondary)
             } else {
                 ForEach($plannedTreatments) { $treatment in
-                    VStack(alignment: .leading, spacing: 8) {
-                        TextField("Treatment", text: $treatment.name)
+                    VStack(alignment: .leading, spacing: 10) {
+                        TextField("Vaccination, medication, or treatment", text: $treatment.name)
                         WorkingTreatmentDoseEditor(dose: $treatment.suggestedDose)
                     }
                 }
@@ -229,12 +230,12 @@ struct NewWorkingSessionView: View {
             Button {
                 plannedTreatments.append(WorkingTreatmentPlanItem(name: ""))
             } label: {
-                Label("Add Treatment", systemImage: "plus")
+                Label("Add Vaccination or Treatment", systemImage: "plus")
             }
         } header: {
-            Text("Treatments")
+            Text("Vaccinations & Treatments")
         } footer: {
-            Text("Treatments are optional. Suggested dose amount, unit, and route can be adjusted for each animal during the session.")
+            Text("This setup is optional. You can add more vaccinations or treatments after the session starts, including one-off medications for a single animal.")
         }
     }
 
@@ -279,7 +280,6 @@ struct NewWorkingSessionView: View {
                 animalIDs: specifiesAnimals ? Array(selectedAnimalIDs) : nil
             )
             if let onSessionCreated {
-                dismiss()
                 onSessionCreated(sessionID)
             } else {
                 startedRoute = StartedWorkingSessionSetupRoute(id: sessionID)
