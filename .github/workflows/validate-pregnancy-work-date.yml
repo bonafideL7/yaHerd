@@ -1,0 +1,368 @@
+name: Validate pregnancy work-date anchor
+
+on:
+  pull_request:
+    branches:
+      - agent/rework-working-session-setup
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Apply focused fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file_path = Path(path)
+              content = file_path.read_text()
+              if content.count(old) != 1:
+                  raise SystemExit(f"Expected exactly one match in {path}, found {content.count(old)}")
+              file_path.write_text(content.replace(old, new, 1))
+
+          replace_once(
+              "yaHerd/Presentation/Views/Working/WorkingSessionAnimalWorkView.swift",
+              """    @State var dueDate: Date = .now
+    @State var selectedSire: AnimalParentOption?
+""",
+              """    @State var dueDate: Date = .now
+    @State var automaticallyCalculatedDueDate: Date?
+    @State var selectedSire: AnimalParentOption?
+""",
+          )
+
+          replace_once(
+              "yaHerd/Presentation/Views/Working/WorkingSessionAnimalWorkView+Actions.swift",
+              """        dueDate = snapshot.pregnancyCheck?.dueDate ?? snapshot.sessionDate
+        selectedSire = snapshot.pregnancyCheck?.sire
+""",
+              """        dueDate = snapshot.pregnancyCheck?.dueDate ?? snapshot.sessionDate
+        automaticallyCalculatedDueDate = nil
+        selectedSire = snapshot.pregnancyCheck?.sire
+""",
+          )
+
+          replace_once(
+              "yaHerd/Presentation/Views/Working/WorkingSessionAnimalWorkView+Actions.swift",
+              """    func recalculateDueDate() {
+        guard allowsEditing,
+              pregnancyResult == .pregnant,
+              let snapshot,
+              let estimatedDays = Int(
+                estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
+              ) else {
+            return
+        }
+
+        let remainingDays = max(0, WorkingConstants.gestationDays - estimatedDays)
+        if let calculatedDate = Calendar.current.date(
+            byAdding: .day,
+            value: remainingDays,
+            to: snapshot.sessionDate
+        ) {
+            dueDate = calculatedDate
+        }
+    }
+""",
+              """    func recalculateDueDate() {
+        guard allowsEditing,
+              pregnancyResult == .pregnant,
+              let snapshot,
+              let estimatedDays = Int(
+                estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
+              ) else {
+            return
+        }
+
+        let workDate = WorkingAnimalWorkTimestamp.resolve(
+            existingCompletedAt: snapshot.completedAt,
+            now: .now
+        )
+        if let calculatedDate = WorkingPregnancyDueDateCalculator.calculate(
+            estimatedDaysPregnant: estimatedDays,
+            workDate: workDate
+        ) {
+            dueDate = calculatedDate
+            automaticallyCalculatedDueDate = calculatedDate
+        }
+    }
+""",
+          )
+
+          replace_once(
+              "yaHerd/Presentation/Views/Working/WorkingSessionAnimalWorkView+Actions.swift",
+              """        let pregnancyInput: WorkingPregnancyCheckInput?
+        if showsPregnancySection,
+           recordPregnancyCheck,
+           pregnancyResult == .open || pregnancyResult == .pregnant {
+            pregnancyInput = WorkingPregnancyCheckInput(
+                date: workDate,
+                result: pregnancyResult,
+                estimatedDaysPregnant: Int(
+                    estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
+                ),
+                dueDate: pregnancyResult == .pregnant ? dueDate : nil,
+                sireAnimalID: selectedSire?.id
+            )
+        } else {
+            pregnancyInput = nil
+        }
+""",
+              """        let estimatedDaysPregnant = Int(
+            estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        let pregnancyInput: WorkingPregnancyCheckInput?
+        if showsPregnancySection,
+           recordPregnancyCheck,
+           pregnancyResult == .open || pregnancyResult == .pregnant {
+            let savedDueDate: Date?
+            if pregnancyResult == .pregnant {
+                savedDueDate = WorkingPregnancyDueDateCalculator.resolveForSave(
+                    displayedDueDate: dueDate,
+                    automaticallyCalculatedDueDate: automaticallyCalculatedDueDate,
+                    estimatedDaysPregnant: estimatedDaysPregnant,
+                    workDate: workDate
+                )
+            } else {
+                savedDueDate = nil
+            }
+
+            pregnancyInput = WorkingPregnancyCheckInput(
+                date: workDate,
+                result: pregnancyResult,
+                estimatedDaysPregnant: estimatedDaysPregnant,
+                dueDate: savedDueDate,
+                sireAnimalID: selectedSire?.id
+            )
+        } else {
+            pregnancyInput = nil
+        }
+""",
+          )
+
+          replace_once(
+              "yaHerd/Presentation/Views/Working/WorkingSessionAnimalWorkView+Actions.swift",
+              """enum WorkingAnimalWorkTimestamp {
+    static func resolve(existingCompletedAt: Date?, now: Date) -> Date {
+        existingCompletedAt ?? now
+    }
+}
+""",
+              """enum WorkingPregnancyDueDateCalculator {
+    static func calculate(
+        estimatedDaysPregnant: Int,
+        workDate: Date,
+        calendar: Calendar = .current
+    ) -> Date? {
+        let remainingDays = max(0, WorkingConstants.gestationDays - estimatedDaysPregnant)
+        return calendar.date(
+            byAdding: .day,
+            value: remainingDays,
+            to: workDate
+        )
+    }
+
+    static func resolveForSave(
+        displayedDueDate: Date,
+        automaticallyCalculatedDueDate: Date?,
+        estimatedDaysPregnant: Int?,
+        workDate: Date,
+        calendar: Calendar = .current
+    ) -> Date {
+        guard
+            let automaticallyCalculatedDueDate,
+            displayedDueDate == automaticallyCalculatedDueDate,
+            let estimatedDaysPregnant,
+            let recalculatedDate = calculate(
+                estimatedDaysPregnant: estimatedDaysPregnant,
+                workDate: workDate,
+                calendar: calendar
+            )
+        else {
+            return displayedDueDate
+        }
+
+        return recalculatedDate
+    }
+}
+
+enum WorkingAnimalWorkTimestamp {
+    static func resolve(existingCompletedAt: Date?, now: Date) -> Date {
+        existingCompletedAt ?? now
+    }
+}
+""",
+          )
+
+          tests = Path("yaHerdTests/WorkingAnimalWorkTimestampTests.swift")
+          content = tests.read_text()
+          marker = "\n}\n"
+          if not content.endswith(marker):
+              raise SystemExit("Unexpected test file ending")
+          additions = r'''
+
+    func testPregnancyDueDateUsesCurrentWorkDateForBackdatedSession() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let sessionDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let saveTime = Date(timeIntervalSince1970: 1_800_000_000)
+        let estimatedDaysPregnant = 200
+        let workDate = WorkingAnimalWorkTimestamp.resolve(
+            existingCompletedAt: nil,
+            now: saveTime
+        )
+
+        let dueDate = try XCTUnwrap(
+            WorkingPregnancyDueDateCalculator.calculate(
+                estimatedDaysPregnant: estimatedDaysPregnant,
+                workDate: workDate,
+                calendar: calendar
+            )
+        )
+        let expected = try XCTUnwrap(
+            calendar.date(
+                byAdding: .day,
+                value: WorkingConstants.gestationDays - estimatedDaysPregnant,
+                to: saveTime
+            )
+        )
+        let sessionAnchoredDate = try XCTUnwrap(
+            calendar.date(
+                byAdding: .day,
+                value: WorkingConstants.gestationDays - estimatedDaysPregnant,
+                to: sessionDate
+            )
+        )
+
+        XCTAssertEqual(dueDate, expected)
+        XCTAssertNotEqual(dueDate, sessionAnchoredDate)
+    }
+
+    func testPregnancyDueDatePreservesHistoricalCompletionAnchor() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let existingCompletion = Date(timeIntervalSince1970: 1_700_000_000)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let estimatedDaysPregnant = 150
+        let workDate = WorkingAnimalWorkTimestamp.resolve(
+            existingCompletedAt: existingCompletion,
+            now: now
+        )
+
+        let dueDate = try XCTUnwrap(
+            WorkingPregnancyDueDateCalculator.calculate(
+                estimatedDaysPregnant: estimatedDaysPregnant,
+                workDate: workDate,
+                calendar: calendar
+            )
+        )
+        let expected = try XCTUnwrap(
+            calendar.date(
+                byAdding: .day,
+                value: WorkingConstants.gestationDays - estimatedDaysPregnant,
+                to: existingCompletion
+            )
+        )
+
+        XCTAssertEqual(dueDate, expected)
+    }
+
+    func testAutomaticallyCalculatedDueDateReanchorsToFinalSaveTime() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let previewTime = Date(timeIntervalSince1970: 1_800_000_000)
+        let saveTime = Date(timeIntervalSince1970: 1_800_086_400)
+        let estimatedDaysPregnant = 200
+        let previewDueDate = try XCTUnwrap(
+            WorkingPregnancyDueDateCalculator.calculate(
+                estimatedDaysPregnant: estimatedDaysPregnant,
+                workDate: previewTime,
+                calendar: calendar
+            )
+        )
+
+        let savedDueDate = WorkingPregnancyDueDateCalculator.resolveForSave(
+            displayedDueDate: previewDueDate,
+            automaticallyCalculatedDueDate: previewDueDate,
+            estimatedDaysPregnant: estimatedDaysPregnant,
+            workDate: saveTime,
+            calendar: calendar
+        )
+        let expected = try XCTUnwrap(
+            calendar.date(
+                byAdding: .day,
+                value: WorkingConstants.gestationDays - estimatedDaysPregnant,
+                to: saveTime
+            )
+        )
+
+        XCTAssertEqual(savedDueDate, expected)
+    }
+
+    func testManuallyAdjustedDueDateIsPreservedAtSave() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let previewTime = Date(timeIntervalSince1970: 1_800_000_000)
+        let saveTime = Date(timeIntervalSince1970: 1_800_086_400)
+        let previewDueDate = try XCTUnwrap(
+            WorkingPregnancyDueDateCalculator.calculate(
+                estimatedDaysPregnant: 200,
+                workDate: previewTime,
+                calendar: calendar
+            )
+        )
+        let manuallyAdjustedDueDate = try XCTUnwrap(
+            calendar.date(byAdding: .day, value: 3, to: previewDueDate)
+        )
+
+        let savedDueDate = WorkingPregnancyDueDateCalculator.resolveForSave(
+            displayedDueDate: manuallyAdjustedDueDate,
+            automaticallyCalculatedDueDate: previewDueDate,
+            estimatedDaysPregnant: 200,
+            workDate: saveTime,
+            calendar: calendar
+        )
+
+        XCTAssertEqual(savedDueDate, manuallyAdjustedDueDate)
+    }
+'''
+          tests.write_text(content[:-len(marker)] + additions + marker)
+          PY
+
+      - name: Validate architecture and Swift 6 build
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' -print | sort -V | tail -1)"
+          if [[ -z "$XCODE_PATH" ]]; then
+            echo "Xcode 26 is required for the iOS 26 target and Swift 6 concurrency gate." >&2
+            exit 1
+          fi
+          sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
+          bash Scripts/verify-architecture.sh
+          bash Scripts/verify-concurrency.sh
+
+      - name: Commit validated source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "chatgpt-codex-connector[bot]"
+          git config user.email "1144995+chatgpt-codex-connector[bot]@users.noreply.github.com"
+          git add \
+            yaHerd/Presentation/Views/Working/WorkingSessionAnimalWorkView.swift \
+            yaHerd/Presentation/Views/Working/WorkingSessionAnimalWorkView+Actions.swift \
+            yaHerdTests/WorkingAnimalWorkTimestampTests.swift
+          git commit -m "Anchor pregnancy due dates to work time"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
