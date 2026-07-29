@@ -131,8 +131,14 @@ extension WorkingSessionAnimalWorkView {
         selectedDestinationPastureID = snapshot.destinationPastureID
         recordPregnancyCheck = snapshot.pregnancyCheck != nil
         pregnancyResult = snapshot.pregnancyCheck?.result ?? .unknown
-        estimatedDaysText = snapshot.pregnancyCheck?.estimatedDaysPregnant.map { String($0) } ?? ""
-        dueDate = snapshot.pregnancyCheck?.dueDate ?? snapshot.sessionDate
+        let pregnancyDueDateState = WorkingPregnancyDueDateFormState.seeded(
+            estimatedDaysPregnant: snapshot.pregnancyCheck?.estimatedDaysPregnant,
+            savedDueDate: snapshot.pregnancyCheck?.dueDate,
+            fallbackDate: snapshot.sessionDate
+        )
+        estimatedDaysText = pregnancyDueDateState.estimatedDaysText
+        dueDate = pregnancyDueDateState.dueDate
+        automaticallyCalculatedDueDate = pregnancyDueDateState.automaticallyCalculatedDueDate
         selectedSire = snapshot.pregnancyCheck?.sire
         castrationPerformed = snapshot.castrationPerformedInSession
         observationNotes = snapshot.observationNotes
@@ -149,15 +155,11 @@ extension WorkingSessionAnimalWorkView {
         let trimmedName = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
 
-        let item = WorkingTreatmentPlanItem(
-            id: entry.id,
-            name: trimmedName,
-            suggestedDose: entry.dose
+        let updatedItems = WorkingSessionTreatmentPlanBuilder.items(
+            preserving: snapshot.plannedTreatments,
+            from: treatmentEntries,
+            including: entry.id
         )
-        let currentItems = snapshot.plannedTreatments
-        let updatedItems = currentItems.contains(where: { $0.id == item.id })
-            ? currentItems
-            : currentItems + [item]
 
         do {
             try repository.updateSessionTreatments(
@@ -166,6 +168,7 @@ extension WorkingSessionAnimalWorkView {
             )
             treatmentEntries[index].name = trimmedName
             treatmentEntries[index].isPlanned = true
+            viewModel.load()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
@@ -173,18 +176,9 @@ extension WorkingSessionAnimalWorkView {
     }
 
     func saveSessionVaccinations() {
-        guard snapshot != nil else { return }
+        guard let snapshot else { return }
         let name = sessionVaccinationName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let items = treatmentEntries.compactMap { entry -> WorkingTreatmentPlanItem? in
-            guard entry.isPlanned else { return nil }
-            let itemName = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !itemName.isEmpty else { return nil }
-            return WorkingTreatmentPlanItem(
-                id: entry.id,
-                name: itemName,
-                suggestedDose: entry.dose
-            )
-        }
+        let items = snapshot.plannedTreatments
         guard !name.isEmpty, !items.isEmpty else { return }
 
         do {
@@ -206,7 +200,17 @@ extension WorkingSessionAnimalWorkView {
         return "\(snapshot.sessionSourcePastureName ?? "Working Session") \(date)"
     }
 
-    func recalculateDueDate() {
+    var estimatedDaysBinding: Binding<String> {
+        Binding(
+            get: { estimatedDaysText },
+            set: { newValue in
+                estimatedDaysText = newValue
+                recalculateDueDate(estimatedDaysText: newValue)
+            }
+        )
+    }
+
+    func recalculateDueDate(estimatedDaysText: String) {
         guard allowsEditing,
               pregnancyResult == .pregnant,
               let snapshot,
@@ -216,30 +220,51 @@ extension WorkingSessionAnimalWorkView {
             return
         }
 
-        let remainingDays = max(0, WorkingConstants.gestationDays - estimatedDays)
-        if let calculatedDate = Calendar.current.date(
-            byAdding: .day,
-            value: remainingDays,
-            to: snapshot.sessionDate
+        let workDate = WorkingAnimalWorkTimestamp.resolve(
+            existingCompletedAt: snapshot.completedAt,
+            now: .now
+        )
+        if let calculatedDate = WorkingPregnancyDueDateCalculator.calculate(
+            estimatedDaysPregnant: estimatedDays,
+            workDate: workDate
         ) {
             dueDate = calculatedDate
+            automaticallyCalculatedDueDate = calculatedDate
         }
     }
 
     func saveWork() {
         guard allowsEditing, let snapshot else { return }
 
+        let workDate = WorkingAnimalWorkTimestamp.resolve(
+            existingCompletedAt: snapshot.completedAt,
+            now: .now
+        )
+
+        let estimatedDaysPregnant = Int(
+            estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
         let pregnancyInput: WorkingPregnancyCheckInput?
         if showsPregnancySection,
            recordPregnancyCheck,
            pregnancyResult == .open || pregnancyResult == .pregnant {
+            let savedDueDate: Date?
+            if pregnancyResult == .pregnant {
+                savedDueDate = WorkingPregnancyDueDateCalculator.resolveForSave(
+                    displayedDueDate: dueDate,
+                    automaticallyCalculatedDueDate: automaticallyCalculatedDueDate,
+                    estimatedDaysPregnant: estimatedDaysPregnant,
+                    workDate: workDate
+                )
+            } else {
+                savedDueDate = nil
+            }
+
             pregnancyInput = WorkingPregnancyCheckInput(
-                date: snapshot.sessionDate,
+                date: workDate,
                 result: pregnancyResult,
-                estimatedDaysPregnant: Int(
-                    estimatedDaysText.trimmingCharacters(in: .whitespacesAndNewlines)
-                ),
-                dueDate: pregnancyResult == .pregnant ? dueDate : nil,
+                estimatedDaysPregnant: estimatedDaysPregnant,
+                dueDate: savedDueDate,
                 sireAnimalID: selectedSire?.id
             )
         } else {
@@ -251,7 +276,7 @@ extension WorkingSessionAnimalWorkView {
             guard !name.isEmpty else { return nil }
             guard entry.isPlanned || entry.given else { return nil }
             return WorkingTreatmentEntryInput(
-                date: snapshot.sessionDate,
+                date: workDate,
                 treatmentItemID: entry.id,
                 itemName: name,
                 given: entry.given,
@@ -261,7 +286,7 @@ extension WorkingSessionAnimalWorkView {
 
         let input = WorkingSessionAnimalEditInput(
             status: .done,
-            completedAt: snapshot.completedAt ?? snapshot.sessionDate,
+            completedAt: workDate,
             destinationPastureID: selectedDestinationPastureID,
             treatmentEntries: treatmentInputs,
             pregnancyCheck: pregnancyInput,
@@ -305,4 +330,94 @@ struct WorkingAnimalTreatmentEntry: Identifiable {
     var given: Bool
     var dose: WorkingTreatmentDose
     var isPlanned: Bool
+}
+
+enum WorkingSessionTreatmentPlanBuilder {
+    static func items(
+        preserving existingItems: [WorkingTreatmentPlanItem],
+        from entries: [WorkingAnimalTreatmentEntry],
+        including entryID: UUID
+    ) -> [WorkingTreatmentPlanItem] {
+        let existingIDs = Set(existingItems.map(\.id))
+        let locallyPromotedItems = entries.compactMap { entry -> WorkingTreatmentPlanItem? in
+            guard entry.isPlanned || entry.id == entryID else { return nil }
+            guard !existingIDs.contains(entry.id) else { return nil }
+
+            let name = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return nil }
+
+            return WorkingTreatmentPlanItem(
+                id: entry.id,
+                name: name,
+                suggestedDose: entry.dose
+            )
+        }
+
+        return existingItems + locallyPromotedItems
+    }
+}
+
+struct WorkingPregnancyDueDateFormState: Equatable {
+    let estimatedDaysText: String
+    let dueDate: Date
+    let automaticallyCalculatedDueDate: Date?
+
+    static func seeded(
+        estimatedDaysPregnant: Int?,
+        savedDueDate: Date?,
+        fallbackDate: Date
+    ) -> Self {
+        Self(
+            estimatedDaysText: estimatedDaysPregnant.map(String.init) ?? "",
+            dueDate: savedDueDate ?? fallbackDate,
+            automaticallyCalculatedDueDate: nil
+        )
+    }
+}
+
+enum WorkingPregnancyDueDateCalculator {
+    static func calculate(
+        estimatedDaysPregnant: Int,
+        workDate: Date,
+        calendar: Calendar = .current
+    ) -> Date? {
+        let remainingDays = max(
+            0,
+            WorkingConstants.gestationDays - estimatedDaysPregnant
+        )
+        return calendar.date(
+            byAdding: .day,
+            value: remainingDays,
+            to: workDate
+        )
+    }
+
+    static func resolveForSave(
+        displayedDueDate: Date,
+        automaticallyCalculatedDueDate: Date?,
+        estimatedDaysPregnant: Int?,
+        workDate: Date,
+        calendar: Calendar = .current
+    ) -> Date {
+        guard
+            let automaticallyCalculatedDueDate,
+            displayedDueDate == automaticallyCalculatedDueDate,
+            let estimatedDaysPregnant,
+            let recalculatedDate = calculate(
+                estimatedDaysPregnant: estimatedDaysPregnant,
+                workDate: workDate,
+                calendar: calendar
+            )
+        else {
+            return displayedDueDate
+        }
+
+        return recalculatedDate
+    }
+}
+
+enum WorkingAnimalWorkTimestamp {
+    static func resolve(existingCompletedAt: Date?, now: Date) -> Date {
+        existingCompletedAt ?? now
+    }
 }

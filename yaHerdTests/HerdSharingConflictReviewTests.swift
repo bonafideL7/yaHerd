@@ -460,9 +460,19 @@ final class HerdSharingConflictReviewTests: XCTestCase {
       sharedModifiedAt: Date(timeIntervalSince1970: 20),
       fieldChanges: [
         HerdSharingUpdatedRecordFieldChange(
-          fieldName: "quantity",
+          fieldName: "doseAmount",
           localValue: .double(2.0),
           sharedValue: .double(3.0)
+        ),
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "doseUnit",
+          localValue: .string(WorkingTreatmentDoseUnit.milliliter.rawValue),
+          sharedValue: .string(WorkingTreatmentDoseUnit.milligram.rawValue)
+        ),
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: "administrationRoute",
+          localValue: .string(WorkingTreatmentAdministrationRoute.subcutaneous.rawValue),
+          sharedValue: .string(WorkingTreatmentAdministrationRoute.intramuscular.rawValue)
         ),
         HerdSharingUpdatedRecordFieldChange(
           fieldName: "animalPublicID",
@@ -472,7 +482,10 @@ final class HerdSharingConflictReviewTests: XCTestCase {
       ]
     )
 
-    XCTAssertEqual(treatmentConflict.supportedLocalRestoreFieldChanges.map(\.fieldName), ["quantity"])
+    XCTAssertEqual(
+      treatmentConflict.supportedLocalRestoreFieldChanges.map(\.fieldName),
+      ["doseAmount", "doseUnit", "administrationRoute"]
+    )
     XCTAssertEqual(treatmentConflict.reviewOnlyFieldChanges.map(\.fieldName), ["animalPublicID"])
     XCTAssertEqual(treatmentConflict.relationshipFieldChanges.map(\.fieldName), ["animalPublicID"])
 

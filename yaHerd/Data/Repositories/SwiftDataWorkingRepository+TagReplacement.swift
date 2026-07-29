@@ -24,13 +24,20 @@ extension SwiftDataWorkingRepository {
             throw WorkingRepositoryError.animalNotFound
         }
 
-        let replacementDate = Date.now
+        let primaryTagToRetire: AnimalTag?
         if let primaryTag = animal.primaryTag {
-            animal.retireTag(primaryTag, on: replacementDate)
+            primaryTagToRetire = primaryTag
         } else if !animal.tagNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             let legacyTag = animal.ensurePrimaryTagRecord()
             try ensureUniqueAnimalTagPublicID(legacyTag)
-            animal.retireTag(legacyTag, on: replacementDate)
+            primaryTagToRetire = legacyTag
+        } else {
+            primaryTagToRetire = nil
+        }
+
+        let replacementDate = Date.now
+        if let primaryTagToRetire {
+            animal.retireTag(primaryTagToRetire, on: replacementDate)
         }
 
         let replacementTag = animal.addTag(

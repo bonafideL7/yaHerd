@@ -26,6 +26,7 @@ struct WorkingSessionAnimalWorkView: View {
     @State var pregnancyResult: PregnancyResult = .unknown
     @State var estimatedDaysText = ""
     @State var dueDate: Date = .now
+    @State var automaticallyCalculatedDueDate: Date?
     @State var selectedSire: AnimalParentOption?
     @State var castrationPerformed = false
     @State var observationNotes = ""
@@ -122,9 +123,6 @@ struct WorkingSessionAnimalWorkView: View {
         }
         .onChange(of: viewModel.snapshot?.id) { _, _ in
             seedStateIfNeeded()
-        }
-        .onChange(of: estimatedDaysText) { _, _ in
-            recalculateDueDate()
         }
         .sheet(isPresented: $showingTagReplacement) {
             tagReplacementSheet

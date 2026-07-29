@@ -24,10 +24,12 @@ struct WorkingCollectAnimalsView: View {
     private var eligibleAnimals: [AnimalSummary] {
         guard let session else { return [] }
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return availableAnimals
-            .filter { $0.status == .active && !$0.isArchived }
-            .filter { $0.pastureID == session.sourcePastureID }
-            .filter { $0.location == .pasture }
+        let existingAnimalIDs = Set(session.queueItems.compactMap(\.animalID))
+        return WorkingCollectAnimalsEligibility.candidates(
+            from: availableAnimals,
+            sourcePastureID: session.sourcePastureID,
+            existingAnimalIDs: existingAnimalIDs
+        )
             .filter { animal in
                 guard !query.isEmpty else { return true }
                 return animal.displayTagNumber.localizedCaseInsensitiveContains(query)
@@ -114,6 +116,24 @@ struct WorkingCollectAnimalsView: View {
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
+        }
+    }
+}
+
+enum WorkingCollectAnimalsEligibility {
+    static func candidates(
+        from animals: [AnimalSummary],
+        sourcePastureID: UUID?,
+        existingAnimalIDs: Set<UUID>
+    ) -> [AnimalSummary] {
+        guard let sourcePastureID else { return [] }
+
+        return animals.filter { animal in
+            animal.status == .active
+                && !animal.isArchived
+                && animal.pastureID == sourcePastureID
+                && animal.location == .pasture
+                && !existingAnimalIDs.contains(animal.id)
         }
     }
 }
