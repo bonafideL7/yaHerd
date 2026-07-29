@@ -1,0 +1,24 @@
+name: Export correction checkout
+
+on:
+  pull_request:
+    branches:
+      - agent/rework-working-session-setup
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Archive checkout with Git metadata
+        run: tar -czf correction-checkout.tar.gz --exclude=correction-checkout.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: correction-checkout
+          path: correction-checkout.tar.gz
+          include-hidden-files: true
