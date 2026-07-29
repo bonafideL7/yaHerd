@@ -1,0 +1,48 @@
+name: Validate review 5 ownership
+
+on:
+  pull_request:
+    branches:
+      - agent/rework-working-session-setup
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Apply focused fix
+        shell: bash
+        run: python3 Scripts/review5_patch.py
+
+      - name: Validate architecture and Swift 6 build
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' -print | sort -V | tail -1)"
+          if [[ -z "$XCODE_PATH" ]]; then
+            echo "Xcode 26 is required for the iOS 26 target and Swift 6 concurrency gate." >&2
+            exit 1
+          fi
+          sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
+          bash Scripts/verify-architecture.sh
+          bash Scripts/verify-concurrency.sh
+
+      - name: Commit validated source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "chatgpt-codex-connector[bot]"
+          git config user.email "1144995+chatgpt-codex-connector[bot]@users.noreply.github.com"
+          git add \
+            yaHerd/Data/Repositories/SwiftDataWorkingRepository.swift \
+            yaHerdTests/SwiftDataWorkingSessionLifecycleTests.swift
+          git commit -m "Protect reopened sessions from newer ownership"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
