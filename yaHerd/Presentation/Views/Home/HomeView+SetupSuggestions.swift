@@ -120,9 +120,9 @@ extension HomeView {
             )
         case .createWorkingTreatmentTemplate:
             HomeSuggestionNavigationRow(
-                title: "Create a treatment template",
-                subtitle: "Set up reusable treatment or processing steps before the first working session.",
-                systemImage: "list.clipboard.fill",
+                title: "Save common vaccinations",
+                subtitle: "Optional shortcuts for vaccinations and treatments you use often. You can also add them during a session.",
+                systemImage: "syringe.fill",
                 tint: .orange,
                 actionTitle: "Open",
                 cardWidth: cardWidth,
