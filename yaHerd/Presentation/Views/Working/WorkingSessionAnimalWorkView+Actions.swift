@@ -149,15 +149,10 @@ extension WorkingSessionAnimalWorkView {
         let trimmedName = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
 
-        let item = WorkingTreatmentPlanItem(
-            id: entry.id,
-            name: trimmedName,
-            suggestedDose: entry.dose
+        let updatedItems = WorkingSessionTreatmentPlanBuilder.items(
+            from: treatmentEntries,
+            including: entry.id
         )
-        let currentItems = snapshot.plannedTreatments
-        let updatedItems = currentItems.contains(where: { $0.id == item.id })
-            ? currentItems
-            : currentItems + [item]
 
         do {
             try repository.updateSessionTreatments(
@@ -305,4 +300,24 @@ struct WorkingAnimalTreatmentEntry: Identifiable {
     var given: Bool
     var dose: WorkingTreatmentDose
     var isPlanned: Bool
+}
+
+enum WorkingSessionTreatmentPlanBuilder {
+    static func items(
+        from entries: [WorkingAnimalTreatmentEntry],
+        including entryID: UUID
+    ) -> [WorkingTreatmentPlanItem] {
+        entries.compactMap { entry in
+            guard entry.isPlanned || entry.id == entryID else { return nil }
+
+            let name = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return nil }
+
+            return WorkingTreatmentPlanItem(
+                id: entry.id,
+                name: name,
+                suggestedDose: entry.dose
+            )
+        }
+    }
 }
