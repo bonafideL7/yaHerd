@@ -519,7 +519,10 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
         "queueOrder", "status", "completedAt", "workNotes",
       ]
     case "SharedWorkingTreatmentRecord":
-      return ["date", "itemName", "given", "quantity"]
+      return [
+        "date", "itemName", "given", "quantity", "doseAmount", "doseUnit",
+        "administrationRoute",
+      ]
     case "SharedFieldCheckSessionRecord":
       return [
         "startedAt", "completedAt", "notes", "expectedHeadCountSnapshot",
