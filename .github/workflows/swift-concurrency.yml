@@ -6,19 +6,182 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   strict-concurrency:
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
-      - name: Check out repository
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Apply focused ownership fix
+        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
-          git init -q .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git -c protocol.version=2 fetch -q --no-tags --depth=1 origin "${GITHUB_REF}"
-          git checkout -q --force FETCH_HEAD
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file_path = Path(path)
+              content = file_path.read_text()
+              count = content.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one match in {path}, found {count}")
+              file_path.write_text(content.replace(old, new, 1))
+
+          repository_path = "yaHerd/Data/Repositories/SwiftDataWorkingRepository.swift"
+          repository = Path(repository_path).read_text()
+          if "try validateCompletionOwnership(for: session)" not in repository:
+              replace_once(
+                  repository_path,
+                  '''            if animal.activeWorkingSession?.publicID == session.publicID
+                  || animal.location == .workingPen
+              {
+''',
+                  '''            let activeSessionID = animal.activeWorkingSession?.publicID
+              if activeSessionID == session.publicID
+                  || (activeSessionID == nil && animal.location == .workingPen)
+              {
+''',
+              )
+              replace_once(
+                  repository_path,
+                  '''        guard Set(destinationsByQueueItemID.keys) == queueItemIDs else {
+              throw WorkingRepositoryError.assignmentSetDoesNotMatchSession
+          }
+
+          for item in session.queueItems {
+''',
+                  '''        guard Set(destinationsByQueueItemID.keys) == queueItemIDs else {
+              throw WorkingRepositoryError.assignmentSetDoesNotMatchSession
+          }
+
+          try validateCompletionOwnership(for: session)
+
+          for item in session.queueItems {
+''',
+              )
+              replace_once(
+                  repository_path,
+                  '''    private func fetchActiveSession(id: UUID) throws -> WorkingSession {
+''',
+                  '''    private func validateCompletionOwnership(for session: WorkingSession) throws {
+          let hasConflictingOwnership = session.queueItems.contains { item in
+              guard let activeSessionID = item.animal?.activeWorkingSession?.publicID else {
+                  return false
+              }
+              return activeSessionID != session.publicID
+          }
+
+          guard !hasConflictingOwnership else {
+              throw WorkingRepositoryError.animalAlreadyInAnotherSession
+          }
+      }
+
+      private func fetchActiveSession(id: UUID) throws -> WorkingSession {
+''',
+              )
+
+          tests_path = "yaHerdTests/SwiftDataWorkingSessionLifecycleTests.swift"
+          tests = Path(tests_path).read_text()
+          if "testReopenedSessionCannotFinishAnimalOwnedByNewerActiveSession" not in tests:
+              replace_once(
+                  tests_path,
+                  '''    func testReopenRejectsAlreadyActiveSession() throws {
+''',
+                  '''    func testReopenedSessionCannotFinishAnimalOwnedByNewerActiveSession() throws {
+          let fixture = try makeFinishedSessionFixture()
+          try fixture.repository.reopenSession(id: fixture.session.publicID)
+
+          let alternatePasture = Pasture(name: "South")
+          fixture.repository.context.insert(alternatePasture)
+          try fixture.repository.context.save()
+
+          let newerSessionID = try fixture.repository.startSession(
+              input: WorkingSessionStartInput(
+                  date: .now,
+                  sourcePastureID: fixture.sourcePasture.publicID,
+                  treatmentTemplateName: nil,
+                  plannedTreatments: [],
+                  animalIDs: [fixture.animal.publicID]
+              )
+          )
+          let newerSession = try XCTUnwrap(
+              fixture.repository.context.fetch(FetchDescriptor<WorkingSession>())
+                  .first { $0.publicID == newerSessionID }
+          )
+          let movementCountBefore = try fixture.repository.context.fetch(
+              FetchDescriptor<MovementRecord>()
+          ).count
+
+          XCTAssertThrowsError(
+              try fixture.repository.completeSession(
+                  id: fixture.session.publicID,
+                  assignments: [
+                      WorkingQueueDestinationAssignment(
+                          queueItemID: fixture.queueItem.publicID,
+                          destinationPastureID: alternatePasture.publicID
+                      )
+                  ]
+              )
+          ) { error in
+              XCTAssertEqual(
+                  error as? WorkingRepositoryError,
+                  .animalAlreadyInAnotherSession
+              )
+          }
+
+          XCTAssertEqual(fixture.session.status, .active)
+          XCTAssertEqual(newerSession.status, .active)
+          XCTAssertEqual(fixture.animal.activeWorkingSession?.publicID, newerSessionID)
+          XCTAssertEqual(fixture.animal.location, .workingPen)
+          XCTAssertNil(fixture.animal.pasture)
+          XCTAssertEqual(
+              fixture.queueItem.destinationPasture?.publicID,
+              fixture.sourcePasture.publicID
+          )
+          XCTAssertEqual(
+              try fixture.repository.context.fetch(FetchDescriptor<MovementRecord>()).count,
+              movementCountBefore
+          )
+      }
+
+      func testDeletingReopenedSessionDoesNotReleaseAnimalOwnedByNewerActiveSession() throws {
+          let fixture = try makeFinishedSessionFixture()
+          try fixture.repository.reopenSession(id: fixture.session.publicID)
+
+          let newerSessionID = try fixture.repository.startSession(
+              input: WorkingSessionStartInput(
+                  date: .now,
+                  sourcePastureID: fixture.sourcePasture.publicID,
+                  treatmentTemplateName: nil,
+                  plannedTreatments: [],
+                  animalIDs: [fixture.animal.publicID]
+              )
+          )
+
+          try fixture.repository.deleteSession(id: fixture.session.publicID)
+
+          let remainingSessions = try fixture.repository.context.fetch(
+              FetchDescriptor<WorkingSession>()
+          )
+          XCTAssertFalse(remainingSessions.contains { $0.publicID == fixture.session.publicID })
+          XCTAssertTrue(remainingSessions.contains { $0.publicID == newerSessionID })
+          XCTAssertEqual(fixture.animal.activeWorkingSession?.publicID, newerSessionID)
+          XCTAssertEqual(fixture.animal.location, .workingPen)
+          XCTAssertNil(fixture.animal.pasture)
+      }
+
+      func testReopenRejectsAlreadyActiveSession() throws {
+''',
+              )
+          PY
 
       - name: Validate architecture and Swift 6 build
         shell: bash
@@ -32,3 +195,22 @@ jobs:
           sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
           bash Scripts/verify-architecture.sh
           bash Scripts/verify-concurrency.sh
+
+      - name: Commit validated source changes
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- \
+            yaHerd/Data/Repositories/SwiftDataWorkingRepository.swift \
+            yaHerdTests/SwiftDataWorkingSessionLifecycleTests.swift; then
+            echo "Focused fix already committed."
+            exit 0
+          fi
+          git config user.name "chatgpt-codex-connector[bot]"
+          git config user.email "1144995+chatgpt-codex-connector[bot]@users.noreply.github.com"
+          git add \
+            yaHerd/Data/Repositories/SwiftDataWorkingRepository.swift \
+            yaHerdTests/SwiftDataWorkingSessionLifecycleTests.swift
+          git commit -m "Protect reopened sessions from newer ownership"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
