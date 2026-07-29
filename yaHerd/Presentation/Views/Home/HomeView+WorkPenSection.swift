@@ -26,9 +26,9 @@ extension HomeView {
                     TreatmentTemplatesView()
                 } label: {
                     HomeListRow(
-                        title: "Treatment templates",
-                        subtitle: "Maintain reusable treatment and processing templates.",
-                        systemImage: "list.bullet.rectangle.fill",
+                        title: "Vaccinations",
+                        subtitle: "Maintain reusable vaccination and treatment sets.",
+                        systemImage: "syringe.fill",
                         tint: .indigo,
                         count: nil,
                         showsChevron: true
@@ -36,12 +36,12 @@ extension HomeView {
                 }
                 .buttonStyle(.plain)
 
-                Button {
-                    openWorkingSessionHistory()
+                NavigationLink {
+                    WorkingSessionsView()
                 } label: {
                     HomeListRow(
-                        title: "Working session history",
-                        subtitle: "Review active and completed work sessions.",
+                        title: "Working sessions",
+                        subtitle: "Open active sessions or review completed work.",
                         systemImage: "clock.arrow.circlepath",
                         tint: .gray,
                         count: nil,
@@ -52,5 +52,4 @@ extension HomeView {
             }
         }
     }
-
 }
