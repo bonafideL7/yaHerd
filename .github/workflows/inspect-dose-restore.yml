@@ -1,0 +1,18 @@
+name: Inspect dose restore path
+
+on:
+  pull_request:
+    branches:
+      - agent/rework-working-session-setup
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate restore code and tests
+        run: |
+          echo '=== restore function ==='
+          grep -R -n -A80 -B20 "restoreWorkingTreatmentRecordLocalField" yaHerd yaHerdTests || true
+          echo '=== restore tests ==='
+          grep -R -n -A40 -B10 "restoreLocalFields\|LocalFieldRestore" yaHerdTests || true
