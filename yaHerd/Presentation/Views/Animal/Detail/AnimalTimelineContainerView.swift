@@ -6,7 +6,9 @@ import SwiftUI
 
 struct AnimalTimelineContainerView: View {
     @Environment(\.animalFeatureDependencies) private var animalDependencies
-    private var timelineReader: any AnimalTimelineReading { animalDependencies.timelineReader }
+    private var timelineReadModel: any AnimalTimelineReadModel {
+        animalDependencies.timelineReadModel
+    }
 
     let animalID: UUID
 
@@ -35,9 +37,7 @@ struct AnimalTimelineContainerView: View {
         .task {
             guard !hasLoaded else { return }
             do {
-                events = try PerformanceLog.measure("AnimalTimelineContainerView.load") {
-                    try timelineReader.fetchTimeline(id: animalID)
-                }
+                events = try await timelineReadModel.fetchTimeline(id: animalID)
                 errorMessage = nil
             } catch {
                 events = []
