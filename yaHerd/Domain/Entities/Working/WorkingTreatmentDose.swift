@@ -1,6 +1,6 @@
 import Foundation
 
-struct WorkingTreatmentDose: Codable, Hashable {
+struct WorkingTreatmentDose: Codable, Hashable, Sendable {
     var amount: Double?
     var unit: WorkingTreatmentDoseUnit?
     var route: WorkingTreatmentAdministrationRoute?
@@ -34,7 +34,7 @@ struct WorkingTreatmentDose: Codable, Hashable {
     }
 }
 
-enum WorkingTreatmentDoseUnit: String, Codable, CaseIterable, Identifiable {
+enum WorkingTreatmentDoseUnit: String, Codable, CaseIterable, Identifiable, Sendable {
     case milliliter
     case cubicCentimeter
     case milligram
@@ -79,7 +79,7 @@ enum WorkingTreatmentDoseUnit: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-enum WorkingTreatmentAdministrationRoute: String, Codable, CaseIterable, Identifiable {
+enum WorkingTreatmentAdministrationRoute: String, Codable, CaseIterable, Identifiable, Sendable {
     case subcutaneous
     case intramuscular
     case intravenous
