@@ -5,40 +5,20 @@ import SwiftData
 actor SwiftDataReadModelActor: DashboardReadModel, HomeFieldCheckReadModel, HomeWorkingReadModel, AnimalListReadModel {
     func fetchDashboardRecords(pageSize: Int) async throws -> DashboardRecords {
         try PerformanceLog.measure("SwiftDataReadModelActor.fetchDashboardRecords") {
-            let animals = try fetchAll(
-                FetchDescriptor<Animal>(
-                    sortBy: [SortDescriptor(\.tagNumber), SortDescriptor(\.birthDate, order: .reverse)]
-                ),
-                pageSize: pageSize
-            )
-            let pastures = try modelContext.fetch(
-                FetchDescriptor<Pasture>(
-                    sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.name)]
-                )
-            )
-            let activeStatus = WorkingSessionStatus.active.rawValue
-            let activeSessions = try modelContext.fetch(
-                FetchDescriptor<WorkingSession>(
-                    predicate: #Predicate<WorkingSession> { session in
-                        session.statusRawValue == activeStatus
-                    },
-                    sortBy: [SortDescriptor(\.date, order: .reverse)]
-                )
-            )
+            try makeDashboardRecords(pageSize: pageSize)
+        }
+    }
 
-            let activeAnimalCounts = Dictionary(grouping: animals.filter(\.isActiveInHerd)) {
-                $0.pasture?.publicID
-            }
-
-            return DashboardRecords(
-                animals: animals.map(DashboardMapper.makeAnimalRecord),
-                pastures: pastures.map { pasture in
-                    DashboardMapper.makePastureRecord(
-                        from: pasture,
-                        activeAnimalCount: activeAnimalCounts[pasture.publicID]?.count ?? 0
-                    )
-                },
-                workingSessions: activeSessions.map(DashboardMapper.makeWorkingSessionRecord)
+    func fetchDashboardSnapshot(
+        configuration: DashboardConfiguration,
+        now: Date,
+        pageSize: Int
+    ) async throws -> DashboardSnapshot {
+        try PerformanceLog.measure("SwiftDataReadModelActor.fetchDashboardSnapshot") {
+            DashboardService().makeSnapshot(
+                records: try makeDashboardRecords(pageSize: pageSize),
+                configuration: configuration,
+                now: now
             )
         }
     }
@@ -96,6 +76,44 @@ actor SwiftDataReadModelActor: DashboardReadModel, HomeFieldCheckReadModel, Home
                 pastureOptions: pastures.map { PastureOption(id: $0.publicID, name: $0.name) }
             )
         }
+    }
+
+    private func makeDashboardRecords(pageSize: Int) throws -> DashboardRecords {
+        let animals = try fetchAll(
+            FetchDescriptor<Animal>(
+                sortBy: [SortDescriptor(\.tagNumber), SortDescriptor(\.birthDate, order: .reverse)]
+            ),
+            pageSize: pageSize
+        )
+        let pastures = try modelContext.fetch(
+            FetchDescriptor<Pasture>(
+                sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.name)]
+            )
+        )
+        let activeStatus = WorkingSessionStatus.active.rawValue
+        var activeSessionDescriptor = FetchDescriptor<WorkingSession>(
+            predicate: #Predicate<WorkingSession> { session in
+                session.statusRawValue == activeStatus
+            },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        activeSessionDescriptor.fetchLimit = 10
+        let activeSessions = try modelContext.fetch(activeSessionDescriptor)
+
+        let activeAnimalCounts = Dictionary(grouping: animals.filter(\.isActiveInHerd)) {
+            $0.pasture?.publicID
+        }
+
+        return DashboardRecords(
+            animals: animals.map(DashboardMapper.makeAnimalRecord),
+            pastures: pastures.map { pasture in
+                DashboardMapper.makePastureRecord(
+                    from: pasture,
+                    activeAnimalCount: activeAnimalCounts[pasture.publicID]?.count ?? 0
+                )
+            },
+            workingSessions: activeSessions.map(DashboardMapper.makeWorkingSessionRecord)
+        )
     }
 
     private func fetchAll<Model: PersistentModel>(
