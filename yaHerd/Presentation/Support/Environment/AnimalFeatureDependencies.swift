@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 
 nonisolated struct AnimalFeatureDependencies {
+    let listReadModel: any AnimalListReadModel
     let listRepository: any AnimalListRepository
     let editorRepository: any AnimalEditorRepository
     let detailRepository: any AnimalDetailRepository
@@ -13,6 +14,7 @@ nonisolated struct AnimalFeatureDependencies {
     let sampleDataSeeder: any SampleDataSeeding
 
     nonisolated init(
+        listReadModel: any AnimalListReadModel,
         listRepository: any AnimalListRepository,
         editorRepository: any AnimalEditorRepository,
         detailRepository: any AnimalDetailRepository,
@@ -23,6 +25,7 @@ nonisolated struct AnimalFeatureDependencies {
         pastureReferenceReader: any PastureReferenceDataReader,
         sampleDataSeeder: any SampleDataSeeding
     ) {
+        self.listReadModel = listReadModel
         self.listRepository = listRepository
         self.editorRepository = editorRepository
         self.detailRepository = detailRepository
@@ -37,10 +40,12 @@ nonisolated struct AnimalFeatureDependencies {
     @MainActor
     init(
         repository: any AnimalRepository,
+        listReadModel: any AnimalListReadModel,
         pastureReferenceReader: any PastureReferenceDataReader,
         sampleDataSeeder: any SampleDataSeeding
     ) {
         self.init(
+            listReadModel: listReadModel,
             listRepository: repository,
             editorRepository: repository,
             detailRepository: repository,
@@ -55,6 +60,7 @@ nonisolated struct AnimalFeatureDependencies {
 
     @MainActor
     static func preview(
+        listReadModel: (any AnimalListReadModel)? = nil,
         listRepository: (any AnimalListRepository)? = nil,
         editorRepository: (any AnimalEditorRepository)? = nil,
         detailRepository: (any AnimalDetailRepository)? = nil,
@@ -67,6 +73,7 @@ nonisolated struct AnimalFeatureDependencies {
     ) -> Self {
         let missingRepository = MissingAnimalRepository()
         return Self(
+            listReadModel: listReadModel ?? MissingAnimalListReadModel(),
             listRepository: listRepository ?? missingRepository,
             editorRepository: editorRepository ?? missingRepository,
             detailRepository: detailRepository ?? missingRepository,
@@ -88,6 +95,14 @@ private enum MissingAnimalFeatureDependencyError: LocalizedError {
         case .dependency(let name):
             return "\(name) has not been configured."
         }
+    }
+}
+
+private struct MissingAnimalListReadModel: AnimalListReadModel {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
+    func fetchAnimalListSnapshot(pageSize: Int) async throws -> AnimalListSnapshot {
+        throw MissingAnimalFeatureDependencyError.dependency("Animal list read model")
     }
 }
 
@@ -146,6 +161,7 @@ private struct MissingAnimalSampleDataSeeder: SampleDataSeeding {
 private struct AnimalFeatureDependenciesKey: EnvironmentKey {
     static var defaultValue: AnimalFeatureDependencies {
         AnimalFeatureDependencies(
+            listReadModel: MissingAnimalListReadModel(),
             listRepository: MissingAnimalRepository(),
             editorRepository: MissingAnimalRepository(),
             detailRepository: MissingAnimalRepository(),
