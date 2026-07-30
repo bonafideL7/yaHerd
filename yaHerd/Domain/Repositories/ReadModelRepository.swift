@@ -62,3 +62,8 @@ protocol WorkingSessionDetailReadModel: Sendable {
 protocol AnimalListReadModelProviding {
     var animalListReadModel: any AnimalListReadModel { get }
 }
+
+@MainActor
+protocol WorkingSessionDetailReadModelProviding {
+    var workingSessionDetailReadModel: any WorkingSessionDetailReadModel { get }
+}
