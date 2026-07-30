@@ -52,6 +52,14 @@ private struct MissingHomeDashboardReadModel: DashboardReadModel {
     func fetchDashboardRecords(pageSize: Int) async throws -> DashboardRecords {
         throw MissingHomeFeatureDependencyError.dependency("Home dashboard read model")
     }
+
+    func fetchDashboardSnapshot(
+        configuration: DashboardConfiguration,
+        now: Date,
+        pageSize: Int
+    ) async throws -> DashboardSnapshot {
+        throw MissingHomeFeatureDependencyError.dependency("Home dashboard read model")
+    }
 }
 
 private struct MissingHomeFieldCheckReadModel: HomeFieldCheckReadModel {
