@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 
 nonisolated struct WorkingSessionFeatureDependencies {
+    let sessionDetailReadModel: any WorkingSessionDetailReadModel
     let sessionsRepository: any WorkingSessionsRepository
     let sessionDetailRepository: any WorkingSessionDetailRepository
     let newSessionRepository: any NewWorkingSessionRepository
@@ -17,6 +18,7 @@ nonisolated struct WorkingSessionFeatureDependencies {
     let pastureReferenceReader: any PastureReferenceDataReader
 
     nonisolated init(
+        sessionDetailReadModel: any WorkingSessionDetailReadModel,
         sessionsRepository: any WorkingSessionsRepository,
         sessionDetailRepository: any WorkingSessionDetailRepository,
         newSessionRepository: any NewWorkingSessionRepository,
@@ -31,6 +33,7 @@ nonisolated struct WorkingSessionFeatureDependencies {
         animalSummaryReader: any AnimalSummaryReading,
         pastureReferenceReader: any PastureReferenceDataReader
     ) {
+        self.sessionDetailReadModel = sessionDetailReadModel
         self.sessionsRepository = sessionsRepository
         self.sessionDetailRepository = sessionDetailRepository
         self.newSessionRepository = newSessionRepository
@@ -49,10 +52,12 @@ nonisolated struct WorkingSessionFeatureDependencies {
     @MainActor
     init(
         repository: any WorkingRepository,
+        sessionDetailReadModel: any WorkingSessionDetailReadModel,
         animalSummaryReader: any AnimalSummaryReading,
         pastureReferenceReader: any PastureReferenceDataReader
     ) {
         self.init(
+            sessionDetailReadModel: sessionDetailReadModel,
             sessionsRepository: repository,
             sessionDetailRepository: repository,
             newSessionRepository: repository,
@@ -71,6 +76,7 @@ nonisolated struct WorkingSessionFeatureDependencies {
 
     @MainActor
     static func preview(
+        sessionDetailReadModel: (any WorkingSessionDetailReadModel)? = nil,
         sessionsRepository: (any WorkingSessionsRepository)? = nil,
         sessionDetailRepository: (any WorkingSessionDetailRepository)? = nil,
         newSessionRepository: (any NewWorkingSessionRepository)? = nil,
@@ -87,6 +93,7 @@ nonisolated struct WorkingSessionFeatureDependencies {
     ) -> Self {
         let missingRepository = MissingWorkingRepository()
         return Self(
+            sessionDetailReadModel: sessionDetailReadModel ?? MissingWorkingSessionDetailReadModel(),
             sessionsRepository: sessionsRepository ?? missingRepository,
             sessionDetailRepository: sessionDetailRepository ?? missingRepository,
             newSessionRepository: newSessionRepository ?? missingRepository,
@@ -112,6 +119,14 @@ private enum MissingWorkingSessionFeatureDependencyError: LocalizedError {
         case .dependency(let name):
             return "\(name) has not been configured."
         }
+    }
+}
+
+private struct MissingWorkingSessionDetailReadModel: WorkingSessionDetailReadModel {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
+    func fetchSessionDetail(id: UUID) async throws -> WorkingSessionDetailSnapshot? {
+        throw MissingWorkingSessionFeatureDependencyError.dependency("Working session detail read model")
     }
 }
 
@@ -215,6 +230,7 @@ private struct MissingWorkingPastureReferenceReader: PastureReferenceDataReader 
 private struct WorkingSessionFeatureDependenciesKey: EnvironmentKey {
     static var defaultValue: WorkingSessionFeatureDependencies {
         WorkingSessionFeatureDependencies(
+            sessionDetailReadModel: MissingWorkingSessionDetailReadModel(),
             sessionsRepository: MissingWorkingRepository(),
             sessionDetailRepository: MissingWorkingRepository(),
             newSessionRepository: MissingWorkingRepository(),
