@@ -1,6 +1,6 @@
 import Foundation
 
-struct WorkingSessionSummary: Identifiable, Hashable {
+struct WorkingSessionSummary: Identifiable, Hashable, Sendable {
     let id: UUID
     let date: Date
     let status: WorkingSessionStatus
