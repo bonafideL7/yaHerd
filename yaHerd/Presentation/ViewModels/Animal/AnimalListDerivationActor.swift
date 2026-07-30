@@ -1,5 +1,10 @@
 import Foundation
 
+struct AnimalListTagKey: Hashable, Sendable {
+    let tagNumber: String
+    let colorID: UUID?
+}
+
 struct AnimalListDerivationRequest: Sendable {
     let items: [AnimalSummary]
     let searchText: String
@@ -7,7 +12,7 @@ struct AnimalListDerivationRequest: Sendable {
     let filter: AnimalFilter
     let showRemovedStatuses: Bool
     let showArchivedRecords: Bool
-    let formattedTagsByAnimalID: [UUID: String]
+    let formattedTagsByKey: [AnimalListTagKey: String]
 }
 
 struct AnimalListDerivedStateSnapshot: Sendable {
@@ -30,21 +35,20 @@ actor AnimalListDerivationActor {
                 filter: request.filter,
                 showRemovedStatuses: request.showRemovedStatuses,
                 showArchivedRecords: request.showArchivedRecords
-            ) { _, _ in
-                ""
+            ) { tagNumber, colorID in
+                request.formattedTagsByKey[
+                    AnimalListTagKey(tagNumber: tagNumber, colorID: colorID),
+                    default: ""
+                ]
             }
-            let searched = applyFormattedTagSearch(
-                to: filtered,
-                request: request
-            )
             let sections = AnimalListDerivations.groupedAnimals(
-                searched,
+                filtered,
                 sortOrder: request.sortOrder
             )
             let usesSections = AnimalListDerivations.shouldUseSections(for: request.sortOrder)
 
             return AnimalListDerivedStateSnapshot(
-                filteredAndSortedAnimals: searched,
+                filteredAndSortedAnimals: filtered,
                 groupedAnimals: sections,
                 shouldUseSections: usesSections,
                 currentSectionIDs: usesSections ? Set(sections.map(\.id)) : [],
@@ -62,21 +66,6 @@ actor AnimalListDerivationActor {
                     items: request.items
                 )
             )
-        }
-    }
-
-    private func applyFormattedTagSearch(
-        to items: [AnimalSummary],
-        request: AnimalListDerivationRequest
-    ) -> [AnimalSummary] {
-        let query = request.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return items }
-
-        return items.filter { animal in
-            animal.displayTagNumber.localizedCaseInsensitiveContains(query)
-                || animal.name.localizedCaseInsensitiveContains(query)
-                || request.formattedTagsByAnimalID[animal.id, default: ""]
-                    .localizedCaseInsensitiveContains(query)
         }
     }
 }
