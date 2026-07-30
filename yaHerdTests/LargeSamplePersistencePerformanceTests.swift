@@ -13,7 +13,7 @@ final class LargeSamplePersistencePerformanceTests: XCTestCase {
         let dashboardReadModel = SwiftDataReadModelActor(modelContainer: container)
         let fieldCheckReadModel = SwiftDataReadModelActor(modelContainer: container)
         let workingReadModel = SwiftDataReadModelActor(modelContainer: container)
-        let animalListReadModel = SwiftDataReadModelActor(modelContainer: container)
+        let animalReadModel = SwiftDataReadModelActor(modelContainer: container)
 
         let homeSnapshot = try await PerformanceLog.measureAsync("LargeSampleProbe.homeLoading") {
             try await LoadHomeUseCase(
@@ -25,7 +25,7 @@ final class LargeSamplePersistencePerformanceTests: XCTestCase {
         XCTAssertTrue(homeSnapshot.hasPastures)
         XCTAssertTrue(homeSnapshot.hasActiveAnimals)
 
-        let animalListSnapshot = try await animalListReadModel.fetchAnimalListSnapshot(pageSize: 50)
+        let animalListSnapshot = try await animalReadModel.fetchAnimalListSnapshot(pageSize: 50)
         let formattedTags = Dictionary(
             uniqueKeysWithValues: animalListSnapshot.animals.map { animal in
                 (
@@ -59,20 +59,19 @@ final class LargeSamplePersistencePerformanceTests: XCTestCase {
         )
         context.insertIntoDefaultHerdIfAvailable(workingSession)
         try PersistenceLog.save(context, operation: "LargeSamplePersistencePerformanceTests")
+        let workingSessionID = workingSession.publicID
 
-        let workingRepository = SwiftDataWorkingRepository(context: context)
-        let sessionDetail = try PerformanceLog.measure("LargeSampleProbe.sessionOpening") {
-            try workingRepository.fetchSessionDetail(id: workingSession.publicID)
+        let sessionDetail = try await PerformanceLog.measureAsync("LargeSampleProbe.sessionOpening") {
+            try await workingReadModel.fetchSessionDetail(id: workingSessionID)
         }
         XCTAssertNotNil(sessionDetail)
 
         let animalDescriptor = FetchDescriptor<Animal>(
             sortBy: [SortDescriptor(\.tagNumber)]
         )
-        let firstAnimal = try XCTUnwrap(context.fetch(animalDescriptor).first)
-        let animalRepository = SwiftDataAnimalRepository(context: context)
-        let timeline = try PerformanceLog.measure("LargeSampleProbe.timelineRendering") {
-            try animalRepository.fetchTimeline(id: firstAnimal.publicID)
+        let firstAnimalID = try XCTUnwrap(context.fetch(animalDescriptor).first).publicID
+        let timeline = try await PerformanceLog.measureAsync("LargeSampleProbe.timelineRendering") {
+            try await animalReadModel.fetchTimeline(id: firstAnimalID)
         }
         XCTAssertFalse(timeline.isEmpty)
     }
