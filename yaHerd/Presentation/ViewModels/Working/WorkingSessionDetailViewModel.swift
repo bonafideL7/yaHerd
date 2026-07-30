@@ -14,10 +14,20 @@ final class WorkingSessionDetailViewModel: ObservableObject {
     init(sessionID: UUID, repository: any WorkingSessionDetailRepository) {
         self.sessionID = sessionID
         self.repository = repository
+        if let provider = repository as? any WorkingSessionDetailReadModelProviding {
+            self.readModel = provider.workingSessionDetailReadModel
+        }
     }
 
     deinit {
         loadTask?.cancel()
+    }
+
+    func configure(repository: any WorkingSessionDetailRepository) {
+        self.repository = repository
+        if let provider = repository as? any WorkingSessionDetailReadModelProviding {
+            readModel = provider.workingSessionDetailReadModel
+        }
     }
 
     func configure(
