@@ -50,6 +50,14 @@ extension AnimalListReadModel {
     }
 }
 
+protocol AnimalTimelineReadModel: Sendable {
+    func fetchTimeline(id: UUID) async throws -> [AnimalTimelineEvent]
+}
+
+protocol WorkingSessionDetailReadModel: Sendable {
+    func fetchSessionDetail(id: UUID) async throws -> WorkingSessionDetailSnapshot?
+}
+
 @MainActor
 protocol AnimalListReadModelProviding {
     var animalListReadModel: any AnimalListReadModel { get }
