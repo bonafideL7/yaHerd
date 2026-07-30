@@ -39,10 +39,19 @@ final class AppDependencies {
         let conflictReviewStore = HerdSharingConflictReviewStore()
         let cloudKitShareAdapter = CloudKitShareAdapter()
 
-        let animalRepository = SyncRequestingAnimalRepository(
+        let dashboardReadModel = SwiftDataReadModelActor(modelContainer: context.container)
+        let fieldCheckReadModel = SwiftDataReadModelActor(modelContainer: context.container)
+        let workingReadModel = SwiftDataReadModelActor(modelContainer: context.container)
+        let animalListReadModel = SwiftDataReadModelActor(modelContainer: context.container)
+
+        let synchronizedAnimalRepository = SyncRequestingAnimalRepository(
             base: SwiftDataAnimalRepository(context: context),
             mutationRecorder: mutationPipeline,
             writePolicy: writePolicy
+        )
+        let animalRepository = ReadModelBackedAnimalRepository(
+            base: synchronizedAnimalRepository,
+            animalListReadModel: animalListReadModel
         )
         let pastureRepository = SyncRequestingPastureRepository(
             base: SwiftDataPastureRepository(context: context),
@@ -78,11 +87,6 @@ final class AppDependencies {
             writePolicy: writePolicy
         )
         let syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(context: context)
-
-        let dashboardReadModel = SwiftDataReadModelActor(modelContainer: context.container)
-        let fieldCheckReadModel = SwiftDataReadModelActor(modelContainer: context.container)
-        let workingReadModel = SwiftDataReadModelActor(modelContainer: context.container)
-        let animalListReadModel = SwiftDataReadModelActor(modelContainer: context.container)
 
         let baseHerdSharingRepository: any HerdSharingRepository
         if dataAccessMode.isRecoveryMode {
