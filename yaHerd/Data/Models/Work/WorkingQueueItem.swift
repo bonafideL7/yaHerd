@@ -58,7 +58,7 @@ extension YaHerdSchemaV1 {
     }
 }
 
-enum WorkingQueueStatus: String, Codable, CaseIterable {
+enum WorkingQueueStatus: String, Codable, CaseIterable, Sendable {
     case queued
     case inProgress
     case done
