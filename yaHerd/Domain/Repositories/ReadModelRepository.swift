@@ -33,3 +33,8 @@ extension AnimalListReadModel {
         try await fetchAnimalListSnapshot(pageSize: 250)
     }
 }
+
+@MainActor
+protocol AnimalListReadModelProviding {
+    var animalListReadModel: any AnimalListReadModel { get }
+}
