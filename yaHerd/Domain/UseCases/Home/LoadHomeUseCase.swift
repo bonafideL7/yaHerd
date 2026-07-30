@@ -2,36 +2,41 @@ import Foundation
 
 @MainActor
 struct LoadHomeUseCase {
-    let dashboardRepository: any DashboardRecordReading
-    let fieldCheckRepository: any FieldCheckOverviewReading
-    let workingRepository: any WorkingTreatmentTemplateListReader
+    let dashboardReadModel: any DashboardReadModel
+    let fieldCheckReadModel: any HomeFieldCheckReadModel
+    let workingReadModel: any HomeWorkingReadModel
     let service: HomeService
 
     init(
-        dashboardRepository: any DashboardRecordReading,
-        fieldCheckRepository: any FieldCheckOverviewReading,
-        workingRepository: any WorkingTreatmentTemplateListReader,
+        dashboardReadModel: any DashboardReadModel,
+        fieldCheckReadModel: any HomeFieldCheckReadModel,
+        workingReadModel: any HomeWorkingReadModel,
         service: HomeService = HomeService()
     ) {
-        self.dashboardRepository = dashboardRepository
-        self.fieldCheckRepository = fieldCheckRepository
-        self.workingRepository = workingRepository
+        self.dashboardReadModel = dashboardReadModel
+        self.fieldCheckReadModel = fieldCheckReadModel
+        self.workingReadModel = workingReadModel
         self.service = service
     }
 
-    func execute(configuration: DashboardConfiguration, now: Date = .now) throws -> HomeSnapshot {
-        let dashboardRecords = try dashboardRepository.fetchDashboardRecords()
-        let fieldCheckSessions = try fieldCheckRepository.fetchSessions()
-        let openFindings = try fieldCheckRepository.fetchOpenFindings(limit: 0)
-        let treatmentTemplates = try workingRepository.fetchTemplates()
+    func execute(
+        configuration: DashboardConfiguration,
+        now: Date = .now
+    ) async throws -> HomeSnapshot {
+        try await PerformanceLog.measureAsync("LoadHomeUseCase.execute") {
+            async let dashboardRecords = dashboardReadModel.fetchDashboardRecords(pageSize: 250)
+            async let fieldCheckSessions = fieldCheckReadModel.fetchRecentSessions(limit: 250)
+            async let openFindings = fieldCheckReadModel.fetchOpenFindings(limit: 100)
+            async let treatmentTemplates = workingReadModel.fetchTreatmentTemplates(limit: 100)
 
-        return service.makeSnapshot(
-            dashboardRecords: dashboardRecords,
-            fieldCheckSessions: fieldCheckSessions,
-            openFindings: openFindings,
-            treatmentTemplates: treatmentTemplates,
-            configuration: configuration,
-            now: now
-        )
+            return try await service.makeSnapshot(
+                dashboardRecords: dashboardRecords,
+                fieldCheckSessions: fieldCheckSessions,
+                openFindings: openFindings,
+                treatmentTemplates: treatmentTemplates,
+                configuration: configuration,
+                now: now
+            )
+        }
     }
 }
