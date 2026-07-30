@@ -56,10 +56,14 @@ nonisolated struct WorkingSessionFeatureDependencies {
         animalSummaryReader: any AnimalSummaryReading,
         pastureReferenceReader: any PastureReferenceDataReader
     ) {
+        let detailRepository = ReadModelBackedWorkingSessionDetailRepository(
+            base: repository,
+            workingSessionDetailReadModel: sessionDetailReadModel
+        )
         self.init(
             sessionDetailReadModel: sessionDetailReadModel,
             sessionsRepository: repository,
-            sessionDetailRepository: repository,
+            sessionDetailRepository: detailRepository,
             newSessionRepository: repository,
             collectAnimalsRepository: repository,
             queueRepository: repository,
