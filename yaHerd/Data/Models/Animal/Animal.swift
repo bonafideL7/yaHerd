@@ -15,9 +15,9 @@ extension YaHerdSchemaV1 {
         var name: String = ""
         var tagNumber: String = ""
         var tagColorID: UUID?
-        var sex: Sex?
+        var sexRawValue: String? = Sex.unknown.rawValue
         var birthDate: Date = Date.now
-        var status: AnimalStatus = AnimalStatus.active
+        var statusRawValue: String = AnimalStatus.active.rawValue
         var saleDate: Date?
         var salePrice: Double?
         var reasonSold: String?
@@ -27,7 +27,7 @@ extension YaHerdSchemaV1 {
         var isSoftDeleted: Bool = false
         var softDeletedAt: Date?
         var softDeleteReason: String?
-        var locationRaw: AnimalLocation? = AnimalLocation.pasture
+        var locationRawValue: String? = AnimalLocation.pasture.rawValue
         var distinguishingFeatures: [DistinguishingFeature] = []
 
         @Relationship(deleteRule: .cascade, inverse: \HealthRecord.animal) var healthRecordStorage: [HealthRecord]?
@@ -46,6 +46,16 @@ extension YaHerdSchemaV1 {
         @Relationship(deleteRule: .nullify, inverse: \FieldCheckAnimalCheck.animal) var fieldCheckAnimalCheckStorage: [FieldCheckAnimalCheck]?
         @Relationship(deleteRule: .nullify, inverse: \FieldCheckFinding.animal) var fieldCheckFindingStorage: [FieldCheckFinding]?
         @Relationship(deleteRule: .nullify, inverse: \PregnancyCheck.sireAnimal) var siredPregnancyCheckStorage: [PregnancyCheck]?
+
+        var sex: Sex? {
+            get { sexRawValue.flatMap(Sex.init(rawValue:)) ?? .unknown }
+            set { sexRawValue = (newValue ?? .unknown).rawValue }
+        }
+
+        var status: AnimalStatus {
+            get { AnimalStatus(rawValue: statusRawValue) ?? .active }
+            set { statusRawValue = newValue.rawValue }
+        }
 
         var healthRecords: [HealthRecord] {
             get { healthRecordStorage ?? [] }
@@ -78,8 +88,8 @@ extension YaHerdSchemaV1 {
         }
 
         var location: AnimalLocation {
-            get { locationRaw ?? .pasture }
-            set { locationRaw = newValue }
+            get { locationRawValue.flatMap(AnimalLocation.init(rawValue:)) ?? .pasture }
+            set { locationRawValue = newValue.rawValue }
         }
 
         var isActiveInHerd: Bool {
@@ -129,7 +139,7 @@ extension YaHerdSchemaV1 {
             self.tagNumber = tagNumber
             self.tagColorID = tagColorID
             self.birthDate = birthDate
-            self.status = status
+            self.statusRawValue = status.rawValue
             self.saleDate = saleDate
             self.salePrice = salePrice
             self.reasonSold = reasonSold
@@ -142,9 +152,9 @@ extension YaHerdSchemaV1 {
             self.sireAnimal = sireAnimal
             self.damAnimal = damAnimal
             self.pasture = pasture
-            self.location = AnimalLocation.pasture
+            self.locationRawValue = AnimalLocation.pasture.rawValue
             self.activeWorkingSession = nil
-            self.sex = sex ?? .unknown
+            self.sexRawValue = (sex ?? .unknown).rawValue
             self.distinguishingFeatures = distinguishingFeatures
         }
     }
