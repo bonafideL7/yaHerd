@@ -4,6 +4,15 @@ import Observation
 @MainActor
 @Observable
 final class AnimalListViewModel {
+    private struct DerivationConfiguration {
+        let searchText: String
+        let sortOrder: AnimalSortOrder
+        let filter: AnimalFilter
+        let showRemovedStatuses: Bool
+        let showArchivedRecords: Bool
+        let formatTag: (String, UUID?) -> String
+    }
+
     private(set) var items: [AnimalSummary] = []
     private(set) var pastureOptions: [PastureOption] = []
     private(set) var hasLoaded = false
@@ -22,7 +31,9 @@ final class AnimalListViewModel {
 
     private let derivationActor = AnimalListDerivationActor()
     private var isLoading = false
+    private var loadTask: Task<Void, Never>?
     private var derivedStateTask: Task<Void, Never>?
+    private var latestDerivationConfiguration: DerivationConfiguration?
 
     func loadIfNeeded(using readModel: any AnimalListReadModel) async {
         guard !hasLoaded else { return }
@@ -42,6 +53,45 @@ final class AnimalListViewModel {
             pastureOptions = snapshot.pastureOptions
             errorMessage = nil
             hasLoaded = true
+            refreshLatestDerivedState()
+        } catch {
+            errorMessage = UserVisibleErrorMessage.make(error)
+        }
+    }
+
+    func loadIfNeeded(
+        using repository: any AnimalListRepository,
+        pastureRepository: any PastureReferenceDataReader
+    ) {
+        guard !hasLoaded else { return }
+        load(using: repository, pastureRepository: pastureRepository)
+    }
+
+    func load(
+        using repository: any AnimalListRepository,
+        pastureRepository: any PastureReferenceDataReader
+    ) {
+        if let provider = repository as? any AnimalListReadModelProviding {
+            loadTask?.cancel()
+            let readModel = provider.animalListReadModel
+            loadTask = Task { @MainActor [weak self] in
+                await self?.load(using: readModel)
+            }
+            return
+        }
+
+        guard !isLoading else { return }
+        isLoading = true
+        defer {
+            isLoading = false
+        }
+
+        do {
+            items = try repository.fetchAnimals()
+            pastureOptions = try pastureRepository.fetchPastureOptions()
+            errorMessage = nil
+            hasLoaded = true
+            refreshLatestDerivedState()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
@@ -54,47 +104,18 @@ final class AnimalListViewModel {
         showRemovedStatuses: Bool,
         showArchivedRecords: Bool,
         debounced: Bool = false,
-        formatTag: (String, UUID?) -> String
+        formatTag: @escaping (String, UUID?) -> String
     ) {
-        derivedStateTask?.cancel()
-
-        let formattedTagsByKey = Dictionary(
-            uniqueKeysWithValues: items.map { animal in
-                let key = AnimalListTagKey(
-                    tagNumber: animal.displayTagNumber,
-                    colorID: animal.displayTagColorID
-                )
-                return (
-                    key,
-                    formatTag(animal.displayTagNumber, animal.displayTagColorID)
-                )
-            }
-        )
-        let request = AnimalListDerivationRequest(
-            items: items,
+        let configuration = DerivationConfiguration(
             searchText: searchText,
             sortOrder: sortOrder,
             filter: filter,
             showRemovedStatuses: showRemovedStatuses,
             showArchivedRecords: showArchivedRecords,
-            formattedTagsByKey: formattedTagsByKey
+            formatTag: formatTag
         )
-        let derivationActor = self.derivationActor
-
-        derivedStateTask = Task { @MainActor [weak self] in
-            if debounced {
-                do {
-                    try await Task.sleep(for: .milliseconds(250))
-                } catch {
-                    return
-                }
-            }
-
-            guard !Task.isCancelled else { return }
-            let derivedState = await derivationActor.derive(request)
-            guard !Task.isCancelled else { return }
-            self?.apply(derivedState)
-        }
+        latestDerivationConfiguration = configuration
+        scheduleDerivedState(configuration, debounced: debounced)
     }
 
     func performPrimarySwipeAction(
@@ -152,6 +173,56 @@ final class AnimalListViewModel {
     func pastureName(for id: UUID?) -> String? {
         guard let id else { return nil }
         return pastureOptions.first(where: { $0.id == id })?.name
+    }
+
+    private func refreshLatestDerivedState() {
+        guard let latestDerivationConfiguration else { return }
+        scheduleDerivedState(latestDerivationConfiguration, debounced: false)
+    }
+
+    private func scheduleDerivedState(
+        _ configuration: DerivationConfiguration,
+        debounced: Bool
+    ) {
+        derivedStateTask?.cancel()
+
+        var formattedTagsByKey: [AnimalListTagKey: String] = [:]
+        for animal in items {
+            let key = AnimalListTagKey(
+                tagNumber: animal.displayTagNumber,
+                colorID: animal.displayTagColorID
+            )
+            formattedTagsByKey[key] = configuration.formatTag(
+                animal.displayTagNumber,
+                animal.displayTagColorID
+            )
+        }
+
+        let request = AnimalListDerivationRequest(
+            items: items,
+            searchText: configuration.searchText,
+            sortOrder: configuration.sortOrder,
+            filter: configuration.filter,
+            showRemovedStatuses: configuration.showRemovedStatuses,
+            showArchivedRecords: configuration.showArchivedRecords,
+            formattedTagsByKey: formattedTagsByKey
+        )
+        let derivationActor = self.derivationActor
+
+        derivedStateTask = Task { @MainActor [weak self] in
+            if debounced {
+                do {
+                    try await Task.sleep(for: .milliseconds(250))
+                } catch {
+                    return
+                }
+            }
+
+            guard !Task.isCancelled else { return }
+            let derivedState = await derivationActor.derive(request)
+            guard !Task.isCancelled else { return }
+            self?.apply(derivedState)
+        }
     }
 
     private func removeItems(ids: [UUID]) {
