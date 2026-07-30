@@ -116,6 +116,7 @@ final class AppDependencies {
         )
         self.fieldCheckFeatureDependencies = FieldCheckFeatureDependencies(
             repository: fieldCheckRepository,
+            overviewReadModel: fieldCheckReadModel,
             animalRepository: animalRepository,
             pastureReferenceReader: pastureRepository
         )
