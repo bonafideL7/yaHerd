@@ -252,10 +252,16 @@ final class AnimalListViewModel {
 
     private func apply(_ state: AnimalListDerivedStateSnapshot) {
         filteredAndSortedAnimals = state.filteredAndSortedAnimals
-        groupedAnimals = state.groupedAnimals
+        groupedAnimals = state.groupedAnimals.map {
+            AnimalSection(id: $0.id, title: $0.title, animals: $0.animals)
+        }
         shouldUseSections = state.shouldUseSections
         currentSectionIDs = state.currentSectionIDs
-        emptyStateConfiguration = state.emptyStateConfiguration
+        emptyStateConfiguration = AnimalListEmptyStateConfiguration(
+            title: state.emptyStateConfiguration.title,
+            description: state.emptyStateConfiguration.description,
+            systemImage: state.emptyStateConfiguration.systemImage
+        )
         hasHiddenOffHerdAnimals = state.hasHiddenOffHerdAnimals
         hasHiddenArchivedRecords = state.hasHiddenArchivedRecords
     }
