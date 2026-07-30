@@ -1,6 +1,5 @@
 import Foundation
 import OSLog
-import os
 
 enum PerformanceLog {
     private static let subsystem = Bundle.main.bundleIdentifier ?? "yaHerd"
@@ -8,7 +7,7 @@ enum PerformanceLog {
         subsystem: subsystem,
         category: "Performance"
     )
-    private static let signpostLog = OSLog(
+    private static let signposter = OSSignposter(
         subsystem: subsystem,
         category: "PointsOfInterest"
     )
@@ -16,29 +15,38 @@ enum PerformanceLog {
     @discardableResult
     static func measure<T>(_ operation: String, _ work: () throws -> T) rethrows -> T {
         let startedAt = Date()
-        let signpostID = OSSignpostID(log: signpostLog)
-        os_signpost(.begin, log: signpostLog, name: "yaHerd Operation", signpostID: signpostID, "%{public}@", operation as NSString)
-        defer {
-            os_signpost(.end, log: signpostLog, name: "yaHerd Operation", signpostID: signpostID, "%{public}@", operation as NSString)
-        }
+        let signpostID = signposter.makeSignpostID()
 
-        do {
-            let result = try work()
-            logDuration(operation, startedAt: startedAt, failed: false)
-            return result
-        } catch {
-            logDuration(operation, startedAt: startedAt, failed: true, error: error)
-            throw error
+        return try signposter.withIntervalSignpost(
+            "yaHerd Operation",
+            id: signpostID,
+            "Operation: \(operation, privacy: .public)"
+        ) {
+            do {
+                let result = try work()
+                logDuration(operation, startedAt: startedAt, failed: false)
+                return result
+            } catch {
+                logDuration(operation, startedAt: startedAt, failed: true, error: error)
+                throw error
+            }
         }
     }
 
     @discardableResult
-    static func measureAsync<T>(_ operation: String, _ work: () async throws -> T) async rethrows -> T {
+    static func measureAsync<T>(
+        _ operation: String,
+        _ work: () async throws -> T
+    ) async rethrows -> T {
         let startedAt = Date()
-        let signpostID = OSSignpostID(log: signpostLog)
-        os_signpost(.begin, log: signpostLog, name: "yaHerd Async Operation", signpostID: signpostID, "%{public}@", operation as NSString)
+        let signpostID = signposter.makeSignpostID()
+        let intervalState = signposter.beginInterval(
+            "yaHerd Async Operation",
+            id: signpostID,
+            "Operation: \(operation, privacy: .public)"
+        )
         defer {
-            os_signpost(.end, log: signpostLog, name: "yaHerd Async Operation", signpostID: signpostID, "%{public}@", operation as NSString)
+            signposter.endInterval("yaHerd Async Operation", intervalState)
         }
 
         do {
