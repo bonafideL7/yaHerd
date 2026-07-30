@@ -8,7 +8,9 @@ final class FieldChecksViewModel {
     private(set) var openFindings: [FieldCheckFindingSnapshot] = []
     var errorMessage: String?
     var hasLoaded = false
+
     private var isLoading = false
+    private var loadTask: Task<Void, Never>?
 
     var activeSessions: [FieldCheckSessionSummary] {
         sessions.filter { !$0.isCompleted }
@@ -34,6 +36,39 @@ final class FieldChecksViewModel {
     }
 
     func load(using repository: any FieldCheckOverviewReading) {
+        loadTask?.cancel()
+
+        if let provider = repository as? any FieldCheckOverviewReadModelProviding {
+            let readModel = provider.fieldCheckOverviewReadModel
+            loadTask = Task { @MainActor [weak self] in
+                await self?.load(using: readModel)
+            }
+            return
+        }
+
+        loadSynchronously(using: repository)
+    }
+
+    private func load(using readModel: any HomeFieldCheckReadModel) async {
+        guard !isLoading else { return }
+        isLoading = true
+        defer {
+            isLoading = false
+        }
+
+        do {
+            async let loadedSessions = readModel.fetchRecentSessions(limit: 250)
+            async let loadedFindings = readModel.fetchOpenFindings(limit: 100)
+            sessions = try await loadedSessions
+            openFindings = try await loadedFindings
+            errorMessage = nil
+            hasLoaded = true
+        } catch {
+            errorMessage = UserVisibleErrorMessage.make(error)
+        }
+    }
+
+    private func loadSynchronously(using repository: any FieldCheckOverviewReading) {
         guard !isLoading else { return }
         isLoading = true
         defer {
@@ -42,7 +77,7 @@ final class FieldChecksViewModel {
 
         do {
             sessions = try repository.fetchSessions()
-            openFindings = try repository.fetchOpenFindings(limit: 0)
+            openFindings = try repository.fetchOpenFindings(limit: 100)
             errorMessage = nil
             hasLoaded = true
         } catch {
