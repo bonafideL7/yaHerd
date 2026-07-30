@@ -15,12 +15,24 @@ struct AnimalListDerivationRequest: Sendable {
     let formattedTagsByKey: [AnimalListTagKey: String]
 }
 
+struct AnimalListSectionSnapshot: Sendable {
+    let id: String
+    let title: String
+    let animals: [AnimalSummary]
+}
+
+struct AnimalListEmptyStateSnapshot: Sendable {
+    let title: String
+    let description: String
+    let systemImage: String
+}
+
 struct AnimalListDerivedStateSnapshot: Sendable {
     let filteredAndSortedAnimals: [AnimalSummary]
-    let groupedAnimals: [AnimalSection]
+    let groupedAnimals: [AnimalListSectionSnapshot]
     let shouldUseSections: Bool
     let currentSectionIDs: Set<String>
-    let emptyStateConfiguration: AnimalListEmptyStateConfiguration
+    let emptyStateConfiguration: AnimalListEmptyStateSnapshot
     let hasHiddenOffHerdAnimals: Bool
     let hasHiddenArchivedRecords: Bool
 }
@@ -45,19 +57,30 @@ actor AnimalListDerivationActor {
                 filtered,
                 sortOrder: request.sortOrder
             )
+            let emptyState = AnimalListDerivations.emptyStateConfiguration(
+                items: request.items,
+                searchText: request.searchText,
+                filter: request.filter,
+                showRemovedStatuses: request.showRemovedStatuses,
+                showArchivedRecords: request.showArchivedRecords
+            )
             let usesSections = AnimalListDerivations.shouldUseSections(for: request.sortOrder)
 
             return AnimalListDerivedStateSnapshot(
                 filteredAndSortedAnimals: filtered,
-                groupedAnimals: sections,
+                groupedAnimals: sections.map {
+                    AnimalListSectionSnapshot(
+                        id: $0.id,
+                        title: $0.title,
+                        animals: $0.animals
+                    )
+                },
                 shouldUseSections: usesSections,
                 currentSectionIDs: usesSections ? Set(sections.map(\.id)) : [],
-                emptyStateConfiguration: AnimalListDerivations.emptyStateConfiguration(
-                    items: request.items,
-                    searchText: request.searchText,
-                    filter: request.filter,
-                    showRemovedStatuses: request.showRemovedStatuses,
-                    showArchivedRecords: request.showArchivedRecords
+                emptyStateConfiguration: AnimalListEmptyStateSnapshot(
+                    title: emptyState.title,
+                    description: emptyState.description,
+                    systemImage: emptyState.systemImage
                 ),
                 hasHiddenOffHerdAnimals: AnimalListDerivations.hasHiddenOffHerdAnimals(
                     items: request.items
