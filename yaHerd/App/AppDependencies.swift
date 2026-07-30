@@ -42,7 +42,7 @@ final class AppDependencies {
         let dashboardReadModel = SwiftDataReadModelActor(modelContainer: context.container)
         let fieldCheckReadModel = SwiftDataReadModelActor(modelContainer: context.container)
         let workingReadModel = SwiftDataReadModelActor(modelContainer: context.container)
-        let animalListReadModel = SwiftDataReadModelActor(modelContainer: context.container)
+        let animalReadModel = SwiftDataReadModelActor(modelContainer: context.container)
 
         let synchronizedAnimalRepository = SyncRequestingAnimalRepository(
             base: SwiftDataAnimalRepository(context: context),
@@ -51,7 +51,7 @@ final class AppDependencies {
         )
         let animalRepository = ReadModelBackedAnimalRepository(
             base: synchronizedAnimalRepository,
-            animalListReadModel: animalListReadModel
+            animalListReadModel: animalReadModel
         )
         let pastureRepository = SyncRequestingPastureRepository(
             base: SwiftDataPastureRepository(context: context),
@@ -104,7 +104,8 @@ final class AppDependencies {
 
         self.animalFeatureDependencies = AnimalFeatureDependencies(
             repository: animalRepository,
-            listReadModel: animalListReadModel,
+            listReadModel: animalReadModel,
+            timelineReadModel: animalReadModel,
             pastureReferenceReader: pastureRepository,
             sampleDataSeeder: sampleDataSeeder
         )
@@ -120,6 +121,7 @@ final class AppDependencies {
         )
         self.workingSessionFeatureDependencies = WorkingSessionFeatureDependencies(
             repository: workingRepository,
+            sessionDetailReadModel: workingReadModel,
             animalSummaryReader: animalRepository,
             pastureReferenceReader: pastureRepository
         )
