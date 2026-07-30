@@ -7,11 +7,27 @@ struct AnimalListSnapshot: Sendable {
 
 protocol DashboardReadModel: Sendable {
     func fetchDashboardRecords(pageSize: Int) async throws -> DashboardRecords
+    func fetchDashboardSnapshot(
+        configuration: DashboardConfiguration,
+        now: Date,
+        pageSize: Int
+    ) async throws -> DashboardSnapshot
 }
 
 extension DashboardReadModel {
     func fetchDashboardRecords() async throws -> DashboardRecords {
         try await fetchDashboardRecords(pageSize: 250)
+    }
+
+    func fetchDashboardSnapshot(
+        configuration: DashboardConfiguration,
+        now: Date = .now
+    ) async throws -> DashboardSnapshot {
+        try await fetchDashboardSnapshot(
+            configuration: configuration,
+            now: now,
+            pageSize: 250
+        )
     }
 }
 
