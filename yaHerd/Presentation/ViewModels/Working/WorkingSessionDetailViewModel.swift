@@ -7,27 +7,32 @@ final class WorkingSessionDetailViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let sessionID: UUID
+    private var readModel: (any WorkingSessionDetailReadModel)?
     private var repository: any WorkingSessionDetailRepository
+    private var loadTask: Task<Void, Never>?
 
     init(sessionID: UUID, repository: any WorkingSessionDetailRepository) {
         self.sessionID = sessionID
         self.repository = repository
     }
 
-    func configure(repository: any WorkingSessionDetailRepository) {
+    deinit {
+        loadTask?.cancel()
+    }
+
+    func configure(
+        readModel: any WorkingSessionDetailReadModel,
+        repository: any WorkingSessionDetailRepository
+    ) {
+        self.readModel = readModel
         self.repository = repository
     }
 
     func load() {
-        do {
-            session = try PerformanceLog.measure("WorkingSessionDetailViewModel.load") {
-                try repository.fetchSessionDetail(id: sessionID)
-            }
-            errorMessage = nil
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+        loadTask?.cancel()
+        loadTask = Task { @MainActor [weak self] in
+            await self?.performLoad()
         }
-        hasLoaded = true
     }
 
     func reopenSession() {
@@ -37,5 +42,21 @@ final class WorkingSessionDetailViewModel: ObservableObject {
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
+    }
+
+    private func performLoad() async {
+        guard let readModel else {
+            errorMessage = "Working session detail read model has not been configured."
+            hasLoaded = true
+            return
+        }
+
+        do {
+            session = try await readModel.fetchSessionDetail(id: sessionID)
+            errorMessage = nil
+        } catch {
+            errorMessage = UserVisibleErrorMessage.make(error)
+        }
+        hasLoaded = true
     }
 }
