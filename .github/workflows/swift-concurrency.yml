@@ -32,3 +32,18 @@ jobs:
           sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
           bash Scripts/verify-architecture.sh
           bash Scripts/verify-concurrency.sh
+
+      - name: Package source snapshot
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf /tmp/yaherd-source.tar.gz --exclude=.git .
+
+      - name: Upload source snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yaherd-source-${{ github.run_id }}
+          path: /tmp/yaherd-source.tar.gz
+          retention-days: 1
