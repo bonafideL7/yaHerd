@@ -8,6 +8,7 @@ actor SwiftDataReadModelActor:
     HomeWorkingReadModel,
     AnimalListReadModel,
     AnimalTimelineReadModel,
+    WorkingSessionListReadModel,
     WorkingSessionDetailReadModel
 {
     func fetchDashboardRecords(pageSize: Int) async throws -> DashboardRecords {
@@ -96,6 +97,16 @@ actor SwiftDataReadModelActor:
             descriptor.fetchLimit = 1
             guard let animal = try modelContext.fetch(descriptor).first else { return [] }
             return AnimalMapper.makeTimeline(from: animal)
+        }
+    }
+
+    func fetchWorkingSessions(limit: Int) async throws -> [WorkingSessionSummary] {
+        try PerformanceLog.measure("SwiftDataReadModelActor.fetchWorkingSessions") {
+            var descriptor = FetchDescriptor<WorkingSession>(
+                sortBy: [SortDescriptor(\.date, order: .reverse)]
+            )
+            descriptor.fetchLimit = max(limit, 1)
+            return try modelContext.fetch(descriptor).map(WorkingMapper.makeSessionSummary)
         }
     }
 
