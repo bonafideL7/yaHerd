@@ -1,6 +1,6 @@
 import Foundation
 
-struct DashboardSnapshot: Equatable {
+struct DashboardSnapshot: Equatable, Sendable {
     let activeSession: DashboardWorkingSessionSummary?
     let alerts: [DashboardAlert]
     let overview: DashboardOverview
@@ -9,7 +9,7 @@ struct DashboardSnapshot: Equatable {
     let pastures: [DashboardPastureItem]
 }
 
-struct DashboardAnalytics: Equatable {
+struct DashboardAnalytics: Equatable, Sendable {
     let lifecycleMetrics: [DashboardLifecycleMetric]
     let seasonalCalvingCounts: [DashboardSeasonalCalvingCount]
     let offspringByDam: [DashboardOffspringDamMetric]
@@ -18,7 +18,7 @@ struct DashboardAnalytics: Equatable {
     let statusOutcomesByYear: [DashboardStatusOutcomeYearCount]
 }
 
-struct DashboardLifecycleMetric: Identifiable, Hashable {
+struct DashboardLifecycleMetric: Identifiable, Hashable, Sendable {
     let label: String
     let value: Int
     let systemImage: String
@@ -26,7 +26,7 @@ struct DashboardLifecycleMetric: Identifiable, Hashable {
     var id: String { label }
 }
 
-struct DashboardSeasonalCalvingCount: Identifiable, Hashable {
+struct DashboardSeasonalCalvingCount: Identifiable, Hashable, Sendable {
     let seasonID: String
     let seasonLabel: String
     let year: Int
@@ -36,7 +36,7 @@ struct DashboardSeasonalCalvingCount: Identifiable, Hashable {
     var id: String { seasonID }
 }
 
-enum DashboardCalvingSeason: String, CaseIterable, Hashable {
+enum DashboardCalvingSeason: String, CaseIterable, Hashable, Sendable {
     case spring
     case fall
 
@@ -48,7 +48,7 @@ enum DashboardCalvingSeason: String, CaseIterable, Hashable {
     }
 }
 
-struct DashboardOffspringDamMetric: Identifiable, Hashable {
+struct DashboardOffspringDamMetric: Identifiable, Hashable, Sendable {
     let damID: String
     let damDisplayTagNumber: String
     let offspringCount: Int
@@ -56,7 +56,7 @@ struct DashboardOffspringDamMetric: Identifiable, Hashable {
     var id: String { damID }
 }
 
-struct DashboardMonthlyMedicalRecordCount: Identifiable, Hashable {
+struct DashboardMonthlyMedicalRecordCount: Identifiable, Hashable, Sendable {
     let monthStart: Date
     let treatmentCategory: String
     let count: Int
@@ -66,14 +66,14 @@ struct DashboardMonthlyMedicalRecordCount: Identifiable, Hashable {
     }
 }
 
-struct DashboardYearCount: Identifiable, Hashable {
+struct DashboardYearCount: Identifiable, Hashable, Sendable {
     let year: Int
     let count: Int
 
     var id: Int { year }
 }
 
-struct DashboardStatusOutcomeYearCount: Identifiable, Hashable {
+struct DashboardStatusOutcomeYearCount: Identifiable, Hashable, Sendable {
     let year: Int
     let outcome: AnimalStatus
     let count: Int
@@ -83,7 +83,7 @@ struct DashboardStatusOutcomeYearCount: Identifiable, Hashable {
     }
 }
 
-struct DashboardWorkingSessionSummary: Identifiable, Equatable {
+struct DashboardWorkingSessionSummary: Identifiable, Equatable, Sendable {
     let id: String
     let date: Date
     let sourcePastureName: String?
@@ -92,7 +92,7 @@ struct DashboardWorkingSessionSummary: Identifiable, Equatable {
     let completedQueueItems: Int
 }
 
-struct DashboardOverview: Equatable {
+struct DashboardOverview: Equatable, Sendable {
     let activeAnimalCount: Int
     let workingPenCount: Int
     let unassignedAnimalCount: Int
@@ -101,7 +101,7 @@ struct DashboardOverview: Equatable {
     let rotationReadyPastureCount: Int
 }
 
-struct DashboardAnimalItem: Identifiable, Hashable {
+struct DashboardAnimalItem: Identifiable, Hashable, Sendable {
     let id: UUID
     let displayTagNumber: String
     let displayTagColorID: UUID?
@@ -114,7 +114,7 @@ struct DashboardAnimalItem: Identifiable, Hashable {
     let location: AnimalLocation
 }
 
-struct DashboardPastureItem: Identifiable, Hashable {
+struct DashboardPastureItem: Identifiable, Hashable, Sendable {
     let id: UUID
     let name: String
     let activeAnimalCount: Int
