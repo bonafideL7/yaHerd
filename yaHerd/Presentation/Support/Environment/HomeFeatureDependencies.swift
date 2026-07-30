@@ -2,34 +2,34 @@ import Foundation
 import SwiftUI
 
 nonisolated struct HomeFeatureDependencies {
-    let dashboardReader: any DashboardRecordReading
-    let fieldCheckOverviewReader: any FieldCheckOverviewReading
-    let workingTreatmentTemplateReader: any WorkingTreatmentTemplateListReader
+    let dashboardReadModel: any DashboardReadModel
+    let fieldCheckReadModel: any HomeFieldCheckReadModel
+    let workingReadModel: any HomeWorkingReadModel
     let mutationStream: any ApplicationMutationStreaming
 
     nonisolated init(
-        dashboardReader: any DashboardRecordReading,
-        fieldCheckOverviewReader: any FieldCheckOverviewReading,
-        workingTreatmentTemplateReader: any WorkingTreatmentTemplateListReader,
+        dashboardReadModel: any DashboardReadModel,
+        fieldCheckReadModel: any HomeFieldCheckReadModel,
+        workingReadModel: any HomeWorkingReadModel,
         mutationStream: any ApplicationMutationStreaming
     ) {
-        self.dashboardReader = dashboardReader
-        self.fieldCheckOverviewReader = fieldCheckOverviewReader
-        self.workingTreatmentTemplateReader = workingTreatmentTemplateReader
+        self.dashboardReadModel = dashboardReadModel
+        self.fieldCheckReadModel = fieldCheckReadModel
+        self.workingReadModel = workingReadModel
         self.mutationStream = mutationStream
     }
 
     @MainActor
     static func preview(
-        dashboardReader: (any DashboardRecordReading)? = nil,
-        fieldCheckOverviewReader: (any FieldCheckOverviewReading)? = nil,
-        workingTreatmentTemplateReader: (any WorkingTreatmentTemplateListReader)? = nil,
+        dashboardReadModel: (any DashboardReadModel)? = nil,
+        fieldCheckReadModel: (any HomeFieldCheckReadModel)? = nil,
+        workingReadModel: (any HomeWorkingReadModel)? = nil,
         mutationStream: (any ApplicationMutationStreaming)? = nil
     ) -> Self {
         Self(
-            dashboardReader: dashboardReader ?? MissingHomeDashboardReader(),
-            fieldCheckOverviewReader: fieldCheckOverviewReader ?? MissingHomeFieldCheckOverviewReader(),
-            workingTreatmentTemplateReader: workingTreatmentTemplateReader ?? MissingHomeWorkingTreatmentTemplateReader(),
+            dashboardReadModel: dashboardReadModel ?? MissingHomeDashboardReadModel(),
+            fieldCheckReadModel: fieldCheckReadModel ?? MissingHomeFieldCheckReadModel(),
+            workingReadModel: workingReadModel ?? MissingHomeWorkingReadModel(),
             mutationStream: mutationStream ?? MissingHomeMutationStream()
         )
     }
@@ -46,31 +46,31 @@ private enum MissingHomeFeatureDependencyError: LocalizedError {
     }
 }
 
-private struct MissingHomeDashboardReader: DashboardRecordReading {
+private struct MissingHomeDashboardReadModel: DashboardReadModel {
     nonisolated init(environmentFallback _: Void = ()) {}
 
-    func fetchDashboardRecords() throws -> DashboardRecords {
-        throw MissingHomeFeatureDependencyError.dependency("Home dashboard reader")
+    func fetchDashboardRecords(pageSize: Int) async throws -> DashboardRecords {
+        throw MissingHomeFeatureDependencyError.dependency("Home dashboard read model")
     }
 }
 
-private struct MissingHomeFieldCheckOverviewReader: FieldCheckOverviewReading {
+private struct MissingHomeFieldCheckReadModel: HomeFieldCheckReadModel {
     nonisolated init(environmentFallback _: Void = ()) {}
 
-    func fetchSessions() throws -> [FieldCheckSessionSummary] {
-        throw MissingHomeFeatureDependencyError.dependency("Home field-check overview reader")
+    func fetchRecentSessions(limit: Int) async throws -> [FieldCheckSessionSummary] {
+        throw MissingHomeFeatureDependencyError.dependency("Home field-check read model")
     }
 
-    func fetchOpenFindings(limit: Int) throws -> [FieldCheckFindingSnapshot] {
-        throw MissingHomeFeatureDependencyError.dependency("Home field-check overview reader")
+    func fetchOpenFindings(limit: Int) async throws -> [FieldCheckFindingSnapshot] {
+        throw MissingHomeFeatureDependencyError.dependency("Home field-check read model")
     }
 }
 
-private struct MissingHomeWorkingTreatmentTemplateReader: WorkingTreatmentTemplateListReader {
+private struct MissingHomeWorkingReadModel: HomeWorkingReadModel {
     nonisolated init(environmentFallback _: Void = ()) {}
 
-    func fetchTemplates() throws -> [WorkingTreatmentTemplateSummary] {
-        throw MissingHomeFeatureDependencyError.dependency("Home working treatment template reader")
+    func fetchTreatmentTemplates(limit: Int) async throws -> [WorkingTreatmentTemplateSummary] {
+        throw MissingHomeFeatureDependencyError.dependency("Home working read model")
     }
 }
 
@@ -89,9 +89,9 @@ private struct MissingHomeMutationStream: ApplicationMutationStreaming {
 private struct HomeFeatureDependenciesKey: EnvironmentKey {
     static var defaultValue: HomeFeatureDependencies {
         HomeFeatureDependencies(
-            dashboardReader: MissingHomeDashboardReader(),
-            fieldCheckOverviewReader: MissingHomeFieldCheckOverviewReader(),
-            workingTreatmentTemplateReader: MissingHomeWorkingTreatmentTemplateReader(),
+            dashboardReadModel: MissingHomeDashboardReadModel(),
+            fieldCheckReadModel: MissingHomeFieldCheckReadModel(),
+            workingReadModel: MissingHomeWorkingReadModel(),
             mutationStream: MissingHomeMutationStream()
         )
     }
