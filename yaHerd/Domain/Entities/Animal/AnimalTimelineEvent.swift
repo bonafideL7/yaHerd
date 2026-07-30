@@ -1,6 +1,6 @@
 import Foundation
 
-enum AnimalTimelineEventType {
+enum AnimalTimelineEventType: Sendable {
     case birth
     case health
     case pregnancy
@@ -9,7 +9,7 @@ enum AnimalTimelineEventType {
     case tag
 }
 
-struct AnimalTimelineEvent: Identifiable, Hashable {
+struct AnimalTimelineEvent: Identifiable, Hashable, Sendable {
     let id: UUID
     let date: Date
     let type: AnimalTimelineEventType
