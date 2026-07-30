@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum AnimalPastureFilter: Hashable, Codable {
+enum AnimalPastureFilter: Hashable, Codable, Sendable {
     case any
     case noPasture
     case pasture(UUID)
@@ -22,7 +22,7 @@ enum AnimalPastureFilter: Hashable, Codable {
     }
 }
 
-enum AnimalLocationFilter: String, CaseIterable, Hashable, Codable {
+enum AnimalLocationFilter: String, CaseIterable, Hashable, Codable, Sendable {
     case any
     case pasture
     case workingPen
@@ -43,7 +43,7 @@ enum AnimalLocationFilter: String, CaseIterable, Hashable, Codable {
     }
 }
 
-enum AnimalRecordIssueFilter: String, CaseIterable, Hashable, Codable {
+enum AnimalRecordIssueFilter: String, CaseIterable, Hashable, Codable, Sendable {
     case any
     case missingPasture
     case missingTag
@@ -70,7 +70,7 @@ enum AnimalRecordIssueFilter: String, CaseIterable, Hashable, Codable {
     }
 }
 
-struct AnimalFilter: Hashable, Codable {
+struct AnimalFilter: Hashable, Codable, Sendable {
     var sex: Sex? = nil
     var animalType: AnimalType? = nil
     var status: AnimalStatus? = nil
