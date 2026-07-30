@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 
 nonisolated struct WorkingSessionFeatureDependencies {
+    let sessionListReadModel: any WorkingSessionListReadModel
     let sessionDetailReadModel: any WorkingSessionDetailReadModel
     let sessionsRepository: any WorkingSessionsRepository
     let sessionDetailRepository: any WorkingSessionDetailRepository
@@ -18,6 +19,7 @@ nonisolated struct WorkingSessionFeatureDependencies {
     let pastureReferenceReader: any PastureReferenceDataReader
 
     nonisolated init(
+        sessionListReadModel: any WorkingSessionListReadModel,
         sessionDetailReadModel: any WorkingSessionDetailReadModel,
         sessionsRepository: any WorkingSessionsRepository,
         sessionDetailRepository: any WorkingSessionDetailRepository,
@@ -33,6 +35,7 @@ nonisolated struct WorkingSessionFeatureDependencies {
         animalSummaryReader: any AnimalSummaryReading,
         pastureReferenceReader: any PastureReferenceDataReader
     ) {
+        self.sessionListReadModel = sessionListReadModel
         self.sessionDetailReadModel = sessionDetailReadModel
         self.sessionsRepository = sessionsRepository
         self.sessionDetailRepository = sessionDetailRepository
@@ -52,17 +55,23 @@ nonisolated struct WorkingSessionFeatureDependencies {
     @MainActor
     init(
         repository: any WorkingRepository,
+        sessionListReadModel: any WorkingSessionListReadModel,
         sessionDetailReadModel: any WorkingSessionDetailReadModel,
         animalSummaryReader: any AnimalSummaryReading,
         pastureReferenceReader: any PastureReferenceDataReader
     ) {
+        let sessionsRepository = ReadModelBackedWorkingSessionsRepository(
+            base: repository,
+            workingSessionListReadModel: sessionListReadModel
+        )
         let detailRepository = ReadModelBackedWorkingSessionDetailRepository(
             base: repository,
             workingSessionDetailReadModel: sessionDetailReadModel
         )
         self.init(
+            sessionListReadModel: sessionListReadModel,
             sessionDetailReadModel: sessionDetailReadModel,
-            sessionsRepository: repository,
+            sessionsRepository: sessionsRepository,
             sessionDetailRepository: detailRepository,
             newSessionRepository: repository,
             collectAnimalsRepository: repository,
@@ -80,6 +89,7 @@ nonisolated struct WorkingSessionFeatureDependencies {
 
     @MainActor
     static func preview(
+        sessionListReadModel: (any WorkingSessionListReadModel)? = nil,
         sessionDetailReadModel: (any WorkingSessionDetailReadModel)? = nil,
         sessionsRepository: (any WorkingSessionsRepository)? = nil,
         sessionDetailRepository: (any WorkingSessionDetailRepository)? = nil,
@@ -97,6 +107,7 @@ nonisolated struct WorkingSessionFeatureDependencies {
     ) -> Self {
         let missingRepository = MissingWorkingRepository()
         return Self(
+            sessionListReadModel: sessionListReadModel ?? MissingWorkingSessionListReadModel(),
             sessionDetailReadModel: sessionDetailReadModel ?? MissingWorkingSessionDetailReadModel(),
             sessionsRepository: sessionsRepository ?? missingRepository,
             sessionDetailRepository: sessionDetailRepository ?? missingRepository,
@@ -123,6 +134,14 @@ private enum MissingWorkingSessionFeatureDependencyError: LocalizedError {
         case .dependency(let name):
             return "\(name) has not been configured."
         }
+    }
+}
+
+private struct MissingWorkingSessionListReadModel: WorkingSessionListReadModel {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
+    func fetchWorkingSessions(limit: Int) async throws -> [WorkingSessionSummary] {
+        throw MissingWorkingSessionFeatureDependencyError.dependency("Working session history read model")
     }
 }
 
@@ -234,6 +253,7 @@ private struct MissingWorkingPastureReferenceReader: PastureReferenceDataReader 
 private struct WorkingSessionFeatureDependenciesKey: EnvironmentKey {
     static var defaultValue: WorkingSessionFeatureDependencies {
         WorkingSessionFeatureDependencies(
+            sessionListReadModel: MissingWorkingSessionListReadModel(),
             sessionDetailReadModel: MissingWorkingSessionDetailReadModel(),
             sessionsRepository: MissingWorkingRepository(),
             sessionDetailRepository: MissingWorkingRepository(),
