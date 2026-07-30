@@ -31,11 +31,16 @@ nonisolated struct FieldCheckFeatureDependencies {
     @MainActor
     init(
         repository: any FieldCheckRepository,
+        overviewReadModel: any HomeFieldCheckReadModel,
         animalRepository: any AnimalRepository,
         pastureReferenceReader: any PastureReferenceDataReader
     ) {
+        let overviewReader = ReadModelBackedFieldCheckOverviewRepository(
+            base: repository,
+            fieldCheckOverviewReadModel: overviewReadModel
+        )
         self.init(
-            overviewReader: repository,
+            overviewReader: overviewReader,
             sessionSetupRepository: repository,
             sessionDetailRepository: repository,
             animalDetailRepository: repository,
