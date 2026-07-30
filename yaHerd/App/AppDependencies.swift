@@ -121,6 +121,7 @@ final class AppDependencies {
         )
         self.workingSessionFeatureDependencies = WorkingSessionFeatureDependencies(
             repository: workingRepository,
+            sessionListReadModel: workingReadModel,
             sessionDetailReadModel: workingReadModel,
             animalSummaryReader: animalRepository,
             pastureReferenceReader: pastureRepository
