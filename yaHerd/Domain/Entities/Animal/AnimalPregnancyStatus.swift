@@ -1,6 +1,6 @@
 import Foundation
 
-enum AnimalPregnancyStatus: Hashable {
+enum AnimalPregnancyStatus: Hashable, Sendable {
     case open
     case pregnant
     case unknown
