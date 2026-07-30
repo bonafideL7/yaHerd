@@ -20,21 +20,16 @@ final class AnimalListViewModel {
     private(set) var hasHiddenArchivedRecords = false
     var errorMessage: String?
 
+    private let derivationActor = AnimalListDerivationActor()
     private var isLoading = false
     private var derivedStateTask: Task<Void, Never>?
 
-    func loadIfNeeded(
-        using repository: any AnimalListRepository,
-        pastureRepository: any PastureReferenceDataReader
-    ) {
+    func loadIfNeeded(using readModel: any AnimalListReadModel) async {
         guard !hasLoaded else { return }
-        load(using: repository, pastureRepository: pastureRepository)
+        await load(using: readModel)
     }
 
-    func load(
-        using repository: any AnimalListRepository,
-        pastureRepository: any PastureReferenceDataReader
-    ) {
+    func load(using readModel: any AnimalListReadModel) async {
         guard !isLoading else { return }
         isLoading = true
         defer {
@@ -42,8 +37,9 @@ final class AnimalListViewModel {
         }
 
         do {
-            items = try repository.fetchAnimals()
-            pastureOptions = try pastureRepository.fetchPastureOptions()
+            let snapshot = try await readModel.fetchAnimalListSnapshot(pageSize: 250)
+            items = snapshot.animals
+            pastureOptions = snapshot.pastureOptions
             errorMessage = nil
             hasLoaded = true
         } catch {
@@ -58,38 +54,46 @@ final class AnimalListViewModel {
         showRemovedStatuses: Bool,
         showArchivedRecords: Bool,
         debounced: Bool = false,
-        formatTag: @escaping (String, UUID?) -> String
+        formatTag: (String, UUID?) -> String
     ) {
         derivedStateTask?.cancel()
 
-        guard debounced else {
-            applyDerivedState(
-                searchText: searchText,
-                sortOrder: sortOrder,
-                filter: filter,
-                showRemovedStatuses: showRemovedStatuses,
-                showArchivedRecords: showArchivedRecords,
-                formatTag: formatTag
-            )
-            return
-        }
+        let formattedTagsByKey = Dictionary(
+            uniqueKeysWithValues: items.map { animal in
+                let key = AnimalListTagKey(
+                    tagNumber: animal.displayTagNumber,
+                    colorID: animal.displayTagColorID
+                )
+                return (
+                    key,
+                    formatTag(animal.displayTagNumber, animal.displayTagColorID)
+                )
+            }
+        )
+        let request = AnimalListDerivationRequest(
+            items: items,
+            searchText: searchText,
+            sortOrder: sortOrder,
+            filter: filter,
+            showRemovedStatuses: showRemovedStatuses,
+            showArchivedRecords: showArchivedRecords,
+            formattedTagsByKey: formattedTagsByKey
+        )
+        let derivationActor = self.derivationActor
 
         derivedStateTask = Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(for: .milliseconds(250))
-            } catch {
-                return
+            if debounced {
+                do {
+                    try await Task.sleep(for: .milliseconds(250))
+                } catch {
+                    return
+                }
             }
 
             guard !Task.isCancelled else { return }
-            self?.applyDerivedState(
-                searchText: searchText,
-                sortOrder: sortOrder,
-                filter: filter,
-                showRemovedStatuses: showRemovedStatuses,
-                showArchivedRecords: showArchivedRecords,
-                formatTag: formatTag
-            )
+            let derivedState = await derivationActor.derive(request)
+            guard !Task.isCancelled else { return }
+            self?.apply(derivedState)
         }
     }
 
@@ -175,42 +179,16 @@ final class AnimalListViewModel {
         }
     }
 
-    private func applyDerivedState(
-        searchText: String,
-        sortOrder: AnimalSortOrder,
-        filter: AnimalFilter,
-        showRemovedStatuses: Bool,
-        showArchivedRecords: Bool,
-        formatTag: (String, UUID?) -> String
-    ) {
-        let filtered = AnimalListDerivations.filteredAndSortedAnimals(
-            items: items,
-            searchText: searchText,
-            sortOrder: sortOrder,
-            filter: filter,
-            showRemovedStatuses: showRemovedStatuses,
-            showArchivedRecords: showArchivedRecords,
-            formatTag: formatTag
-        )
-        let sections = AnimalListDerivations.groupedAnimals(filtered, sortOrder: sortOrder)
-        let usesSections = AnimalListDerivations.shouldUseSections(for: sortOrder)
-
-        filteredAndSortedAnimals = filtered
-        groupedAnimals = sections
-        shouldUseSections = usesSections
-        currentSectionIDs = usesSections ? Set(sections.map(\.id)) : []
-        emptyStateConfiguration = AnimalListDerivations.emptyStateConfiguration(
-            items: items,
-            searchText: searchText,
-            filter: filter,
-            showRemovedStatuses: showRemovedStatuses,
-            showArchivedRecords: showArchivedRecords
-        )
-        hasHiddenOffHerdAnimals = AnimalListDerivations.hasHiddenOffHerdAnimals(items: items)
-        hasHiddenArchivedRecords = AnimalListDerivations.hasHiddenArchivedRecords(items: items)
+    private func apply(_ state: AnimalListDerivedStateSnapshot) {
+        filteredAndSortedAnimals = state.filteredAndSortedAnimals
+        groupedAnimals = state.groupedAnimals
+        shouldUseSections = state.shouldUseSections
+        currentSectionIDs = state.currentSectionIDs
+        emptyStateConfiguration = state.emptyStateConfiguration
+        hasHiddenOffHerdAnimals = state.hasHiddenOffHerdAnimals
+        hasHiddenArchivedRecords = state.hasHiddenArchivedRecords
     }
 }
-
 
 private extension AnimalSummary {
     func replacingArchiveState(_ isArchived: Bool) -> AnimalSummary {
