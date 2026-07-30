@@ -7,6 +7,13 @@ extension AnimalType: Sendable {}
 extension DistinguishingFeature: Sendable {}
 extension AnimalSummary: Sendable {}
 extension AnimalPregnancyStatus: Sendable {}
+extension AnimalPastureFilter: Sendable {}
+extension AnimalLocationFilter: Sendable {}
+extension AnimalRecordIssueFilter: Sendable {}
+extension AnimalFilter: Sendable {}
+extension AnimalSortOrder: Sendable {}
+extension AnimalSection: Sendable {}
+extension AnimalListEmptyStateConfiguration: Sendable {}
 extension PastureOption: Sendable {}
 extension PastureMetrics: Sendable {}
 
