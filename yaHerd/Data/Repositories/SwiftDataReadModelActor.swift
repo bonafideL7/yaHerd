@@ -2,7 +2,14 @@ import Foundation
 import SwiftData
 
 @ModelActor
-actor SwiftDataReadModelActor: DashboardReadModel, HomeFieldCheckReadModel, HomeWorkingReadModel, AnimalListReadModel {
+actor SwiftDataReadModelActor:
+    DashboardReadModel,
+    HomeFieldCheckReadModel,
+    HomeWorkingReadModel,
+    AnimalListReadModel,
+    AnimalTimelineReadModel,
+    WorkingSessionDetailReadModel
+{
     func fetchDashboardRecords(pageSize: Int) async throws -> DashboardRecords {
         try PerformanceLog.measure("SwiftDataReadModelActor.fetchDashboardRecords") {
             try makeDashboardRecords(pageSize: pageSize)
@@ -75,6 +82,33 @@ actor SwiftDataReadModelActor: DashboardReadModel, HomeFieldCheckReadModel, Home
                 animals: animals.map(AnimalMapper.makeSummary),
                 pastureOptions: pastures.map { PastureOption(id: $0.publicID, name: $0.name) }
             )
+        }
+    }
+
+    func fetchTimeline(id: UUID) async throws -> [AnimalTimelineEvent] {
+        try PerformanceLog.measure("SwiftDataReadModelActor.fetchTimeline") {
+            let animalID = id
+            var descriptor = FetchDescriptor<Animal>(
+                predicate: #Predicate<Animal> { animal in
+                    animal.publicID == animalID
+                }
+            )
+            descriptor.fetchLimit = 1
+            guard let animal = try modelContext.fetch(descriptor).first else { return [] }
+            return AnimalMapper.makeTimeline(from: animal)
+        }
+    }
+
+    func fetchSessionDetail(id: UUID) async throws -> WorkingSessionDetailSnapshot? {
+        try PerformanceLog.measure("SwiftDataReadModelActor.fetchSessionDetail") {
+            let sessionID = id
+            var descriptor = FetchDescriptor<WorkingSession>(
+                predicate: #Predicate<WorkingSession> { session in
+                    session.publicID == sessionID
+                }
+            )
+            descriptor.fetchLimit = 1
+            return try modelContext.fetch(descriptor).first.map(WorkingMapper.makeSessionDetail)
         }
     }
 
