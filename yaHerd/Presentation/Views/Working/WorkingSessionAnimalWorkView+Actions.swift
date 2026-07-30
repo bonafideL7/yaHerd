@@ -168,6 +168,7 @@ extension WorkingSessionAnimalWorkView {
             )
             treatmentEntries[index].name = trimmedName
             treatmentEntries[index].isPlanned = true
+            viewModel.load()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
@@ -175,18 +176,9 @@ extension WorkingSessionAnimalWorkView {
     }
 
     func saveSessionVaccinations() {
-        guard snapshot != nil else { return }
+        guard let snapshot else { return }
         let name = sessionVaccinationName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let items = treatmentEntries.compactMap { entry -> WorkingTreatmentPlanItem? in
-            guard entry.isPlanned else { return nil }
-            let itemName = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !itemName.isEmpty else { return nil }
-            return WorkingTreatmentPlanItem(
-                id: entry.id,
-                name: itemName,
-                suggestedDose: entry.dose
-            )
-        }
+        let items = snapshot.plannedTreatments
         guard !name.isEmpty, !items.isEmpty else { return }
 
         do {
