@@ -1,6 +1,6 @@
 import Foundation
 
-struct WorkingQueueItemSnapshot: Identifiable, Hashable {
+struct WorkingQueueItemSnapshot: Identifiable, Hashable, Sendable {
     let id: UUID
     let status: WorkingQueueStatus
     let completedAt: Date?
@@ -15,7 +15,7 @@ struct WorkingQueueItemSnapshot: Identifiable, Hashable {
     let destinationPastureName: String?
 }
 
-struct WorkingSessionDetailSnapshot: Identifiable, Hashable {
+struct WorkingSessionDetailSnapshot: Identifiable, Hashable, Sendable {
     let id: UUID
     let date: Date
     let status: WorkingSessionStatus
