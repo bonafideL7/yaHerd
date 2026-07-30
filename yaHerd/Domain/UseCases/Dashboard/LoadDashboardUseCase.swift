@@ -2,16 +2,19 @@ import Foundation
 
 @MainActor
 struct LoadDashboardUseCase {
-    let repository: any DashboardRecordReading
-    let service: DashboardService
+    let readModel: any DashboardReadModel
 
-    init(repository: any DashboardRecordReading, service: DashboardService = DashboardService()) {
-        self.repository = repository
-        self.service = service
+    init(readModel: any DashboardReadModel) {
+        self.readModel = readModel
     }
 
-    func execute(configuration: DashboardConfiguration) throws -> DashboardSnapshot {
-        let records = try repository.fetchDashboardRecords()
-        return service.makeSnapshot(records: records, configuration: configuration)
+    func execute(
+        configuration: DashboardConfiguration,
+        now: Date = .now
+    ) async throws -> DashboardSnapshot {
+        try await readModel.fetchDashboardSnapshot(
+            configuration: configuration,
+            now: now
+        )
     }
 }
