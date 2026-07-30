@@ -33,12 +33,12 @@ final class ApplicationMutationCenterTests: XCTestCase {
 
     func testHomeModelReloadsAfterAnimalFieldCheckAndWorkingMutations() async throws {
         let center = ApplicationMutationCenter()
-        let repository = RecordingHomeRepository()
+        let repository = RecordingHomeReadModel()
         let viewModel = HomeViewModel()
         let useCase = LoadHomeUseCase(
-            dashboardRepository: repository,
-            fieldCheckRepository: repository,
-            workingRepository: repository
+            dashboardReadModel: repository,
+            fieldCheckReadModel: repository,
+            workingReadModel: repository
         )
 
         let observationTask = Task { @MainActor in
@@ -67,37 +67,51 @@ final class ApplicationMutationCenterTests: XCTestCase {
 
     private func waitForFetchCount(
         _ expectedCount: Int,
-        repository: RecordingHomeRepository
+        repository: RecordingHomeReadModel
     ) async throws {
-        for _ in 0..<100 where repository.dashboardFetchCount < expectedCount {
+        for _ in 0..<100 {
+            if await repository.dashboardFetchCount >= expectedCount {
+                break
+            }
             try await Task.sleep(for: .milliseconds(5))
         }
-        XCTAssertEqual(repository.dashboardFetchCount, expectedCount)
+        XCTAssertEqual(await repository.dashboardFetchCount, expectedCount)
     }
 }
 
-@MainActor
-private final class RecordingHomeRepository:
-    DashboardRecordReading,
-    FieldCheckOverviewReading,
-    WorkingProtocolTemplateListReader
+private actor RecordingHomeReadModel:
+    DashboardReadModel,
+    HomeFieldCheckReadModel,
+    HomeWorkingReadModel
 {
     private(set) var dashboardFetchCount = 0
 
-    func fetchDashboardRecords() throws -> DashboardRecords {
+    func fetchDashboardRecords(pageSize: Int) async throws -> DashboardRecords {
         dashboardFetchCount += 1
         return DashboardRecords(animals: [], pastures: [], workingSessions: [])
     }
 
-    func fetchSessions() throws -> [FieldCheckSessionSummary] {
+    func fetchDashboardSnapshot(
+        configuration: DashboardConfiguration,
+        now: Date,
+        pageSize: Int
+    ) async throws -> DashboardSnapshot {
+        DashboardService().makeSnapshot(
+            records: DashboardRecords(animals: [], pastures: [], workingSessions: []),
+            configuration: configuration,
+            now: now
+        )
+    }
+
+    func fetchRecentSessions(limit: Int) async throws -> [FieldCheckSessionSummary] {
         []
     }
 
-    func fetchOpenFindings(limit: Int) throws -> [FieldCheckFindingSnapshot] {
+    func fetchOpenFindings(limit: Int) async throws -> [FieldCheckFindingSnapshot] {
         []
     }
 
-    func fetchTemplates() throws -> [WorkingProtocolTemplateSummary] {
+    func fetchTreatmentTemplates(limit: Int) async throws -> [WorkingTreatmentTemplateSummary] {
         []
     }
 }
