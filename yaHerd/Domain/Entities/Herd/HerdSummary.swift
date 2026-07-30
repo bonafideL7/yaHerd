@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct HerdSummary: Identifiable, Equatable {
+struct HerdSummary: Identifiable, Equatable, Hashable, Sendable {
     let publicID: UUID
     let name: String
     let createdAt: Date
