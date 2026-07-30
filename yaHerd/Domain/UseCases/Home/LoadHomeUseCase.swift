@@ -5,18 +5,18 @@ struct LoadHomeUseCase {
     let dashboardReadModel: any DashboardReadModel
     let fieldCheckReadModel: any HomeFieldCheckReadModel
     let workingReadModel: any HomeWorkingReadModel
-    let service: HomeService
+    let snapshotBuilder: HomeSnapshotBuilderActor
 
     init(
         dashboardReadModel: any DashboardReadModel,
         fieldCheckReadModel: any HomeFieldCheckReadModel,
         workingReadModel: any HomeWorkingReadModel,
-        service: HomeService = HomeService()
+        snapshotBuilder: HomeSnapshotBuilderActor = HomeSnapshotBuilderActor()
     ) {
         self.dashboardReadModel = dashboardReadModel
         self.fieldCheckReadModel = fieldCheckReadModel
         self.workingReadModel = workingReadModel
-        self.service = service
+        self.snapshotBuilder = snapshotBuilder
     }
 
     func execute(
@@ -29,11 +29,18 @@ struct LoadHomeUseCase {
             async let openFindings = fieldCheckReadModel.fetchOpenFindings(limit: 100)
             async let treatmentTemplates = workingReadModel.fetchTreatmentTemplates(limit: 100)
 
-            return try await service.makeSnapshot(
-                dashboardRecords: dashboardRecords,
-                fieldCheckSessions: fieldCheckSessions,
-                openFindings: openFindings,
-                treatmentTemplates: treatmentTemplates,
+            let records = try await (
+                dashboardRecords,
+                fieldCheckSessions,
+                openFindings,
+                treatmentTemplates
+            )
+
+            return await snapshotBuilder.makeSnapshot(
+                dashboardRecords: records.0,
+                fieldCheckSessions: records.1,
+                openFindings: records.2,
+                treatmentTemplates: records.3,
                 configuration: configuration,
                 now: now
             )
