@@ -54,6 +54,10 @@ protocol AnimalTimelineReadModel: Sendable {
     func fetchTimeline(id: UUID) async throws -> [AnimalTimelineEvent]
 }
 
+protocol WorkingSessionListReadModel: Sendable {
+    func fetchWorkingSessions(limit: Int) async throws -> [WorkingSessionSummary]
+}
+
 protocol WorkingSessionDetailReadModel: Sendable {
     func fetchSessionDetail(id: UUID) async throws -> WorkingSessionDetailSnapshot?
 }
@@ -61,6 +65,11 @@ protocol WorkingSessionDetailReadModel: Sendable {
 @MainActor
 protocol AnimalListReadModelProviding {
     var animalListReadModel: any AnimalListReadModel { get }
+}
+
+@MainActor
+protocol WorkingSessionListReadModelProviding {
+    var workingSessionListReadModel: any WorkingSessionListReadModel { get }
 }
 
 @MainActor
