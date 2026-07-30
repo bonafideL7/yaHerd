@@ -1,6 +1,6 @@
 import Foundation
 
-enum Sex: String, Codable, CaseIterable {
+enum Sex: String, Codable, CaseIterable, Sendable {
     case female
     case male
     case unknown
@@ -14,7 +14,7 @@ enum Sex: String, Codable, CaseIterable {
     }
 }
 
-enum AnimalStatus: String, Codable, CaseIterable {
+enum AnimalStatus: String, Codable, CaseIterable, Sendable {
     case active
     case sold
     case dead
@@ -52,12 +52,12 @@ enum AnimalStatus: String, Codable, CaseIterable {
     }
 }
 
-enum AnimalLocation: String, Codable, CaseIterable {
+enum AnimalLocation: String, Codable, CaseIterable, Sendable {
     case pasture
     case workingPen
 }
 
-struct DistinguishingFeature: Codable, Hashable, Identifiable {
+struct DistinguishingFeature: Codable, Hashable, Identifiable, Sendable {
     var id: UUID
     var description: String
     var order: Int
@@ -102,7 +102,7 @@ extension Collection where Element == DistinguishingFeature {
 }
 
 
-enum AnimalType: String, Codable, CaseIterable {
+enum AnimalType: String, Codable, CaseIterable, Sendable {
     case calf
     case heifer
     case steer
