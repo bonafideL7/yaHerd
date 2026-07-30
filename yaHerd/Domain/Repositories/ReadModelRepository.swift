@@ -68,6 +68,11 @@ protocol AnimalListReadModelProviding {
 }
 
 @MainActor
+protocol FieldCheckOverviewReadModelProviding {
+    var fieldCheckOverviewReadModel: any HomeFieldCheckReadModel { get }
+}
+
+@MainActor
 protocol WorkingSessionListReadModelProviding {
     var workingSessionListReadModel: any WorkingSessionListReadModel { get }
 }
