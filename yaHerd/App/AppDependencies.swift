@@ -49,11 +49,6 @@ final class AppDependencies {
             mutationRecorder: mutationPipeline,
             writePolicy: writePolicy
         )
-        let dashboardRepository = SyncRequestingDashboardRepository(
-            base: SwiftDataDashboardRepository(context: context),
-            mutationRecorder: mutationPipeline,
-            writePolicy: writePolicy
-        )
         let workingRepository = SyncRequestingWorkingRepository(
             base: SwiftDataWorkingRepository(context: context),
             mutationRecorder: mutationPipeline,
@@ -83,6 +78,12 @@ final class AppDependencies {
             writePolicy: writePolicy
         )
         let syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(context: context)
+
+        let dashboardReadModel = SwiftDataReadModelActor(modelContainer: context.container)
+        let fieldCheckReadModel = SwiftDataReadModelActor(modelContainer: context.container)
+        let workingReadModel = SwiftDataReadModelActor(modelContainer: context.container)
+        let animalListReadModel = SwiftDataReadModelActor(modelContainer: context.container)
+
         let baseHerdSharingRepository: any HerdSharingRepository
         if dataAccessMode.isRecoveryMode {
             baseHerdSharingRepository = RecoveryModeHerdSharingRepository()
@@ -99,6 +100,7 @@ final class AppDependencies {
 
         self.animalFeatureDependencies = AnimalFeatureDependencies(
             repository: animalRepository,
+            listReadModel: animalListReadModel,
             pastureReferenceReader: pastureRepository,
             sampleDataSeeder: sampleDataSeeder
         )
@@ -118,9 +120,9 @@ final class AppDependencies {
             pastureReferenceReader: pastureRepository
         )
         self.homeFeatureDependencies = HomeFeatureDependencies(
-            dashboardReader: dashboardRepository,
-            fieldCheckOverviewReader: fieldCheckRepository,
-            workingTreatmentTemplateReader: workingRepository,
+            dashboardReadModel: dashboardReadModel,
+            fieldCheckReadModel: fieldCheckReadModel,
+            workingReadModel: workingReadModel,
             mutationStream: mutationCenter
         )
 
