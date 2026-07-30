@@ -75,7 +75,8 @@ final class ApplicationMutationCenterTests: XCTestCase {
             }
             try await Task.sleep(for: .milliseconds(5))
         }
-        XCTAssertEqual(await repository.dashboardFetchCount, expectedCount)
+        let actualCount = await repository.dashboardFetchCount
+        XCTAssertEqual(actualCount, expectedCount)
     }
 }
 
