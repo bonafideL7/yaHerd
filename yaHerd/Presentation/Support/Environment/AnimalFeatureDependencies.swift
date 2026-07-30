@@ -3,6 +3,7 @@ import SwiftUI
 
 nonisolated struct AnimalFeatureDependencies {
     let listReadModel: any AnimalListReadModel
+    let timelineReadModel: any AnimalTimelineReadModel
     let listRepository: any AnimalListRepository
     let editorRepository: any AnimalEditorRepository
     let detailRepository: any AnimalDetailRepository
@@ -15,6 +16,7 @@ nonisolated struct AnimalFeatureDependencies {
 
     nonisolated init(
         listReadModel: any AnimalListReadModel,
+        timelineReadModel: any AnimalTimelineReadModel,
         listRepository: any AnimalListRepository,
         editorRepository: any AnimalEditorRepository,
         detailRepository: any AnimalDetailRepository,
@@ -26,6 +28,7 @@ nonisolated struct AnimalFeatureDependencies {
         sampleDataSeeder: any SampleDataSeeding
     ) {
         self.listReadModel = listReadModel
+        self.timelineReadModel = timelineReadModel
         self.listRepository = listRepository
         self.editorRepository = editorRepository
         self.detailRepository = detailRepository
@@ -41,11 +44,13 @@ nonisolated struct AnimalFeatureDependencies {
     init(
         repository: any AnimalRepository,
         listReadModel: any AnimalListReadModel,
+        timelineReadModel: any AnimalTimelineReadModel,
         pastureReferenceReader: any PastureReferenceDataReader,
         sampleDataSeeder: any SampleDataSeeding
     ) {
         self.init(
             listReadModel: listReadModel,
+            timelineReadModel: timelineReadModel,
             listRepository: repository,
             editorRepository: repository,
             detailRepository: repository,
@@ -61,6 +66,7 @@ nonisolated struct AnimalFeatureDependencies {
     @MainActor
     static func preview(
         listReadModel: (any AnimalListReadModel)? = nil,
+        timelineReadModel: (any AnimalTimelineReadModel)? = nil,
         listRepository: (any AnimalListRepository)? = nil,
         editorRepository: (any AnimalEditorRepository)? = nil,
         detailRepository: (any AnimalDetailRepository)? = nil,
@@ -74,6 +80,7 @@ nonisolated struct AnimalFeatureDependencies {
         let missingRepository = MissingAnimalRepository()
         return Self(
             listReadModel: listReadModel ?? MissingAnimalListReadModel(),
+            timelineReadModel: timelineReadModel ?? MissingAnimalTimelineReadModel(),
             listRepository: listRepository ?? missingRepository,
             editorRepository: editorRepository ?? missingRepository,
             detailRepository: detailRepository ?? missingRepository,
@@ -103,6 +110,14 @@ private struct MissingAnimalListReadModel: AnimalListReadModel {
 
     func fetchAnimalListSnapshot(pageSize: Int) async throws -> AnimalListSnapshot {
         throw MissingAnimalFeatureDependencyError.dependency("Animal list read model")
+    }
+}
+
+private struct MissingAnimalTimelineReadModel: AnimalTimelineReadModel {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
+    func fetchTimeline(id: UUID) async throws -> [AnimalTimelineEvent] {
+        throw MissingAnimalFeatureDependencyError.dependency("Animal timeline read model")
     }
 }
 
@@ -162,6 +177,7 @@ private struct AnimalFeatureDependenciesKey: EnvironmentKey {
     static var defaultValue: AnimalFeatureDependencies {
         AnimalFeatureDependencies(
             listReadModel: MissingAnimalListReadModel(),
+            timelineReadModel: MissingAnimalTimelineReadModel(),
             listRepository: MissingAnimalRepository(),
             editorRepository: MissingAnimalRepository(),
             detailRepository: MissingAnimalRepository(),
