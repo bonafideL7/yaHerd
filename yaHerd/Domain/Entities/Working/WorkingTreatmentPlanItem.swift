@@ -3,7 +3,7 @@ import Foundation
 /// A treatment planned for a working session or reusable treatment template.
 /// `id` is persisted with the session/template and is the stable identity used by
 /// per-animal treatment records, even when the treatment name changes.
-struct WorkingTreatmentPlanItem: Codable, Hashable, Identifiable {
+struct WorkingTreatmentPlanItem: Codable, Hashable, Identifiable, Sendable {
     var id: UUID = UUID()
     var name: String = ""
     var suggestedDose: WorkingTreatmentDose = WorkingTreatmentDose()
