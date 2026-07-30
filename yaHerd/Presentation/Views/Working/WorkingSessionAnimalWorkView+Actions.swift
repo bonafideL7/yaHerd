@@ -156,6 +156,7 @@ extension WorkingSessionAnimalWorkView {
         guard !trimmedName.isEmpty else { return }
 
         let updatedItems = WorkingSessionTreatmentPlanBuilder.items(
+            preserving: snapshot.plannedTreatments,
             from: treatmentEntries,
             including: entry.id
         )
@@ -341,11 +342,14 @@ struct WorkingAnimalTreatmentEntry: Identifiable {
 
 enum WorkingSessionTreatmentPlanBuilder {
     static func items(
+        preserving existingItems: [WorkingTreatmentPlanItem],
         from entries: [WorkingAnimalTreatmentEntry],
         including entryID: UUID
     ) -> [WorkingTreatmentPlanItem] {
-        entries.compactMap { entry in
+        let existingIDs = Set(existingItems.map(\.id))
+        let locallyPromotedItems = entries.compactMap { entry -> WorkingTreatmentPlanItem? in
             guard entry.isPlanned || entry.id == entryID else { return nil }
+            guard !existingIDs.contains(entry.id) else { return nil }
 
             let name = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { return nil }
@@ -356,6 +360,8 @@ enum WorkingSessionTreatmentPlanBuilder {
                 suggestedDose: entry.dose
             )
         }
+
+        return existingItems + locallyPromotedItems
     }
 }
 
