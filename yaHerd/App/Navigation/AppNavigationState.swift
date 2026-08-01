@@ -68,17 +68,47 @@ struct HerdRouterSnapshot: Codable, Equatable {
 @MainActor
 @Observable
 final class HerdRouter {
+    private let animalQuery: AnimalQueryState
+
     var path: [HerdRoute] = []
     var searchPath: [HerdRoute] = []
     var mode: HerdViewMode = .animals
-    var searchText = ""
     var isSearchPresented = false
-    var sortOrder: AnimalSortOrder = .tagAscending
-    var filter = AnimalFilter()
     var pastureFilter: PastureListFilter = .all
-    var showRemovedStatuses = false
-    var showArchivedRecords = false
-    var showingFilters = false
+
+    init(animalQuery: AnimalQueryState = AnimalQueryState()) {
+        self.animalQuery = animalQuery
+    }
+
+    var searchText: String {
+        get { animalQuery.searchText }
+        set { animalQuery.searchText = newValue }
+    }
+
+    var sortOrder: AnimalSortOrder {
+        get { animalQuery.sortOrder }
+        set { animalQuery.sortOrder = newValue }
+    }
+
+    var filter: AnimalFilter {
+        get { animalQuery.filter }
+        set { animalQuery.filter = newValue }
+    }
+
+    var showRemovedStatuses: Bool {
+        get { animalQuery.showRemovedStatuses }
+        set { animalQuery.showRemovedStatuses = newValue }
+    }
+
+    var showArchivedRecords: Bool {
+        get { animalQuery.showArchivedRecords }
+        set { animalQuery.showArchivedRecords = newValue }
+    }
+
+    var showingFilters: Bool {
+        get { animalQuery.showingFilters }
+        set { animalQuery.showingFilters = newValue }
+    }
 
     var snapshot: HerdRouterSnapshot {
         HerdRouterSnapshot(
@@ -99,26 +129,22 @@ final class HerdRouter {
         path = snapshot.path
         searchPath = snapshot.searchPath ?? []
         mode = snapshot.mode
-        searchText = snapshot.searchText
+        animalQuery.restore(
+            searchText: snapshot.searchText,
+            sortOrder: snapshot.sortOrder,
+            filter: snapshot.filter,
+            showRemovedStatuses: snapshot.showRemovedStatuses,
+            showArchivedRecords: snapshot.showArchivedRecords
+        )
         isSearchPresented = snapshot.isSearchPresented
-        sortOrder = snapshot.sortOrder
-        filter = snapshot.filter
         pastureFilter = snapshot.pastureFilter
-        showRemovedStatuses = snapshot.showRemovedStatuses
-        showArchivedRecords = snapshot.showArchivedRecords
-        showingFilters = false
     }
 
     func showAnimals(_ configuration: AnimalListLaunchConfiguration = .active) {
         path.removeAll()
         mode = .animals
-        searchText = configuration.searchText
-        sortOrder = configuration.sortOrder
-        filter = configuration.filter
-        showRemovedStatuses = configuration.showRemovedStatuses
-        showArchivedRecords = configuration.showArchivedRecords
+        animalQuery.apply(configuration)
         isSearchPresented = !configuration.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        showingFilters = false
     }
 
     func showPastures(_ configuration: PastureListLaunchConfiguration = .all) {
@@ -176,10 +202,7 @@ final class HerdRouter {
     }
 
     func clearAnimalCriteria() {
-        searchText = ""
-        filter = AnimalFilter()
-        showRemovedStatuses = false
-        showArchivedRecords = false
+        animalQuery.clearCriteria()
     }
 }
 
@@ -220,10 +243,17 @@ struct AppNavigationSnapshot: Codable, Equatable {
 @Observable
 final class AppNavigationState {
     var selectedTab: AppTab = .home
-    let herdRouter = HerdRouter()
+    let animalQuery: AnimalQueryState
+    let herdRouter: HerdRouter
     let workflowRouter = WorkflowRouter()
     var presentedSheet: AppPresentedSheet?
     var fullScreenWorkflow: AppFullScreenWorkflow?
+
+    init() {
+        let animalQuery = AnimalQueryState()
+        self.animalQuery = animalQuery
+        self.herdRouter = HerdRouter(animalQuery: animalQuery)
+    }
 
     var snapshot: AppNavigationSnapshot {
         AppNavigationSnapshot(
@@ -284,7 +314,6 @@ final class AppNavigationState {
 
     func selectSearchTab() {
         selectedTab = .search
-        herdRouter.mode = .animals
         herdRouter.isSearchPresented = true
     }
 
