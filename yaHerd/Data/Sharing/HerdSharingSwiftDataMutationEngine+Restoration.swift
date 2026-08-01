@@ -6,8 +6,8 @@
 import Foundation
 import SwiftData
 
-extension HerdSharingCoreDataStore {
-  func restoreLocalFields(
+extension HerdSharingSwiftDataMutationEngine {
+  static func restoreLocalFields(
     _ selections: [HerdSharingLocalFieldRestoreSelection],
     from review: HerdSharingConflictReview,
     context: ModelContext
@@ -51,7 +51,12 @@ extension HerdSharingCoreDataStore {
       }
     }
 
-    try saveBridgeContextIfNeeded()
+    if context.hasChanges {
+      try PersistenceLog.save(
+        context,
+        operation: "HerdSharingSwiftDataMutationEngine"
+      )
+    }
 
     return HerdSharingLocalFieldRestoreResult(
       requestedFieldCount: selections.count,
@@ -60,7 +65,7 @@ extension HerdSharingCoreDataStore {
     )
   }
 
-  private func restoreSelectionKey(
+  private static func restoreSelectionKey(
     sourceEntityName: String,
     publicID: UUID,
     fieldName: String
@@ -68,7 +73,7 @@ extension HerdSharingCoreDataStore {
     "\(sourceEntityName)-\(publicID.uuidString)-\(fieldName)"
   }
 
-  private func restoreLocalField(
+  private static func restoreLocalField(
     sourceEntityName: String,
     publicID: UUID,
     fieldName: String,
@@ -282,7 +287,7 @@ extension HerdSharingCoreDataStore {
     }
   }
 
-  private func restoreTagColorDefinitionLocalField(
+  private static func restoreTagColorDefinitionLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     definition: TagColorDefinition
@@ -328,7 +333,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restoreAnimalStatusReferenceLocalField(
+  private static func restoreAnimalStatusReferenceLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     reference: AnimalStatusReference
@@ -352,7 +357,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restorePastureGroupLocalField(
+  private static func restorePastureGroupLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     group: PastureGroup
@@ -374,7 +379,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restoreWorkingProtocolTemplateLocalField(
+  private static func restoreWorkingProtocolTemplateLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     template: WorkingProtocolTemplate
@@ -390,7 +395,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restoreAnimalLocalField(
+  private static func restoreAnimalLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     animal: Animal
@@ -494,7 +499,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restorePastureLocalField(
+  private static func restorePastureLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     pasture: Pasture
@@ -541,7 +546,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restoreHealthRecordLocalField(
+  private static func restoreHealthRecordLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     healthRecord: HealthRecord
@@ -567,7 +572,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restoreMovementRecordLocalField(
+  private static func restoreMovementRecordLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     movement: MovementRecord
@@ -597,7 +602,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restorePregnancyCheckLocalField(
+  private static func restorePregnancyCheckLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     check: PregnancyCheck
@@ -640,7 +645,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restoreStatusRecordLocalField(
+  private static func restoreStatusRecordLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     statusRecord: StatusRecord
@@ -680,7 +685,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restoreAnimalTagLocalField(
+  private static func restoreAnimalTagLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     tag: AnimalTag
@@ -719,7 +724,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restoreWorkingSessionLocalField(
+  private static func restoreWorkingSessionLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     session: WorkingSession
@@ -754,7 +759,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restoreWorkingQueueItemLocalField(
+  private static func restoreWorkingQueueItemLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     queueItem: WorkingQueueItem
@@ -790,7 +795,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restoreWorkingTreatmentRecordLocalField(
+  private static func restoreWorkingTreatmentRecordLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     treatmentRecord: WorkingTreatmentRecord
@@ -839,7 +844,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restoreFieldCheckSessionLocalField(
+  private static func restoreFieldCheckSessionLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     session: FieldCheckSession
@@ -900,7 +905,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restoreFieldCheckAnimalCheckLocalField(
+  private static func restoreFieldCheckAnimalCheckLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     check: FieldCheckAnimalCheck
@@ -973,7 +978,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  private func restoreFieldCheckFindingLocalField(
+  private static func restoreFieldCheckFindingLocalField(
     fieldName: String,
     value: HerdSharingConflictStoredValue,
     finding: FieldCheckFinding

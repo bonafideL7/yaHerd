@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct HerdSharingBridgeEntityReconciliation: Codable, Equatable {
+struct HerdSharingBridgeEntityReconciliation: Codable, Equatable, Sendable {
   let step: HerdSharingBridgeStep
   let localRecordCount: Int
   let bridgeRecordCount: Int
@@ -22,7 +22,7 @@ struct HerdSharingBridgeEntityReconciliation: Codable, Equatable {
   }
 }
 
-struct HerdSharingBridgeReconciliationReport: Codable, Equatable {
+struct HerdSharingBridgeReconciliationReport: Codable, Equatable, Sendable {
   static let empty = HerdSharingBridgeReconciliationReport(
     entities: [],
     deletionTombstoneCount: 0

@@ -1,9 +1,9 @@
 import Foundation
 
-struct DashboardConfiguration: Equatable, Hashable {}
+struct DashboardConfiguration: Equatable, Hashable, Sendable {}
 
 
-enum DashboardAnimalListKind: String, Hashable, Codable {
+enum DashboardAnimalListKind: String, Hashable, Codable, Sendable {
     case active
     case workingPen
     case unassigned
@@ -20,7 +20,7 @@ enum DashboardAnimalListKind: String, Hashable, Codable {
     }
 }
 
-enum DashboardPastureFilter: CaseIterable, Hashable {
+enum DashboardPastureFilter: CaseIterable, Hashable, Sendable {
     case all
     case underutilized
     case rotationReady
@@ -37,7 +37,7 @@ enum DashboardPastureFilter: CaseIterable, Hashable {
     }
 }
 
-enum DashboardAlertSeverity: Hashable {
+enum DashboardAlertSeverity: Hashable, Sendable {
     case info
     case warning
     case critical
@@ -54,14 +54,14 @@ enum DashboardAlertSeverity: Hashable {
     }
 }
 
-enum DashboardNavigationTarget: Hashable {
+enum DashboardNavigationTarget: Hashable, Sendable {
     case animal(UUID)
     case pasture(UUID)
     case animalList(DashboardAnimalListKind)
     case pastureList
 }
 
-enum DashboardPregnancyStatus: Hashable {
+enum DashboardPregnancyStatus: Hashable, Sendable {
     case open
     case pregnant
     case unknown

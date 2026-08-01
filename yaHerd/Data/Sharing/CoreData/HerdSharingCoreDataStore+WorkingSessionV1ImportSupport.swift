@@ -66,7 +66,7 @@ extension HerdSharingCoreDataStore {
 
     func workingV1ConflictSnapshot(
         for session: WorkingSession
-    ) -> HerdSharingConflictFieldSnapshot {
+    ) -> [String: HerdSharingBridgeConflictValue] {
         workingV1ConflictSnapshot([
             "date": session.date,
             "status": session.status.rawValue,
@@ -79,7 +79,7 @@ extension HerdSharingCoreDataStore {
 
     func workingV1ConflictSnapshot(
         for queueItem: WorkingQueueItem
-    ) -> HerdSharingConflictFieldSnapshot {
+    ) -> [String: HerdSharingBridgeConflictValue] {
         workingV1ConflictSnapshot([
             "status": queueItem.status.rawValue,
             "completedAt": queueItem.completedAt,
@@ -93,7 +93,7 @@ extension HerdSharingCoreDataStore {
 
     func workingV1ConflictSnapshot(
         for treatmentRecord: WorkingTreatmentRecord
-    ) -> HerdSharingConflictFieldSnapshot {
+    ) -> [String: HerdSharingBridgeConflictValue] {
         workingV1ConflictSnapshot([
             "date": treatmentRecord.date,
             "treatmentItemID": treatmentRecord.treatmentItemID,
@@ -109,8 +109,8 @@ extension HerdSharingCoreDataStore {
 
     private func workingV1ConflictSnapshot(
         _ values: [String: Any?]
-    ) -> HerdSharingConflictFieldSnapshot {
-        values.reduce(into: HerdSharingConflictFieldSnapshot()) { result, entry in
+    ) -> [String: HerdSharingBridgeConflictValue] {
+        values.reduce(into: [String: HerdSharingBridgeConflictValue]()) { result, entry in
             result[entry.key] = workingV1ConflictValue(entry.value)
         }
     }

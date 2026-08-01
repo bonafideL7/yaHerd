@@ -69,35 +69,51 @@ final class ApplicationMutationCenterTests: XCTestCase {
         _ expectedCount: Int,
         repository: RecordingHomeRepository
     ) async throws {
-        for _ in 0..<100 where repository.dashboardFetchCount < expectedCount {
+        for _ in 0..<100 {
+            if await repository.dashboardFetchCount >= expectedCount {
+                break
+            }
             try await Task.sleep(for: .milliseconds(5))
         }
-        XCTAssertEqual(repository.dashboardFetchCount, expectedCount)
+        let actualCount = await repository.dashboardFetchCount
+        XCTAssertEqual(actualCount, expectedCount)
     }
 }
 
-@MainActor
-private final class RecordingHomeRepository:
-    DashboardRecordReading,
-    FieldCheckOverviewReading,
-    WorkingProtocolTemplateListReader
+private actor RecordingHomeRepository:
+    DashboardQueryReading,
+    HomeFieldCheckQueryReading,
+    HomeWorkingQueryReading
 {
     private(set) var dashboardFetchCount = 0
 
-    func fetchDashboardRecords() throws -> DashboardRecords {
+    func fetchDashboardRecords() -> DashboardRecords {
         dashboardFetchCount += 1
         return DashboardRecords(animals: [], pastures: [], workingSessions: [])
     }
 
-    func fetchSessions() throws -> [FieldCheckSessionSummary] {
+    func fetchDashboardAnimalRecords(
+        kind: DashboardAnimalListKind
+    ) -> [DashboardAnimalRecord] {
         []
     }
 
-    func fetchOpenFindings(limit: Int) throws -> [FieldCheckFindingSnapshot] {
+    func fetchDashboardPastureRecords() -> [DashboardPastureRecord] {
         []
     }
 
-    func fetchTemplates() throws -> [WorkingProtocolTemplateSummary] {
+    func fetchHomeFieldCheckRecords() -> HomeFieldCheckRecords {
+        HomeFieldCheckRecords(
+            sessions: [],
+            openFindings: [],
+            openFindingCount: 0,
+            hasHistory: false
+        )
+    }
+
+    func fetchHomeTreatmentTemplates(
+        limit: Int
+    ) -> [WorkingTreatmentTemplateSummary] {
         []
     }
 }

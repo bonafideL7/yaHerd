@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct HerdSharingBridgeConflictReport: Codable, Equatable {
+struct HerdSharingBridgeConflictReport: Codable, Equatable, Sendable {
   static let empty = HerdSharingBridgeConflictReport(
     existingLocalRecordUpdateCount: 0,
     updatedRecordConflicts: [],
@@ -66,8 +66,8 @@ struct HerdSharingBridgeConflictReport: Codable, Equatable {
   }
 }
 
-struct HerdSharingBridgeConflictValue: Codable, Equatable {
-  enum ValueType: String, Codable, Equatable {
+struct HerdSharingBridgeConflictValue: Codable, Equatable, Sendable {
+  enum ValueType: String, Codable, Equatable, Sendable {
     case null
     case string
     case bool
@@ -88,7 +88,7 @@ struct HerdSharingBridgeConflictValue: Codable, Equatable {
   }
 }
 
-struct HerdSharingBridgeFieldChange: Codable, Equatable, Identifiable {
+struct HerdSharingBridgeFieldChange: Codable, Equatable, Identifiable, Sendable {
   var id: String { fieldName }
 
   let fieldName: String
@@ -123,8 +123,8 @@ struct HerdSharingBridgeFieldChange: Codable, Equatable, Identifiable {
   var sharedValueDescription: String { sharedValue.displayDescription }
 }
 
-struct HerdSharingBridgeConflictDetail: Codable, Equatable, Identifiable {
-  enum Kind: String, Codable, Equatable {
+struct HerdSharingBridgeConflictDetail: Codable, Equatable, Identifiable, Sendable {
+  enum Kind: String, Codable, Equatable, Sendable {
     case existingLocalRecordUpdate
     case preventedSharedDelete
   }

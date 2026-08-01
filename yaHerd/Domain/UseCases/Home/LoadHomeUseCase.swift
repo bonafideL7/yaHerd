@@ -2,15 +2,15 @@ import Foundation
 
 @MainActor
 struct LoadHomeUseCase {
-    let dashboardRepository: any DashboardRecordReading
-    let fieldCheckRepository: any FieldCheckOverviewReading
-    let workingRepository: any WorkingTreatmentTemplateListReader
+    let dashboardRepository: any DashboardQueryReading
+    let fieldCheckRepository: any HomeFieldCheckQueryReading
+    let workingRepository: any HomeWorkingQueryReading
     let service: HomeService
 
     init(
-        dashboardRepository: any DashboardRecordReading,
-        fieldCheckRepository: any FieldCheckOverviewReading,
-        workingRepository: any WorkingTreatmentTemplateListReader,
+        dashboardRepository: any DashboardQueryReading,
+        fieldCheckRepository: any HomeFieldCheckQueryReading,
+        workingRepository: any HomeWorkingQueryReading,
         service: HomeService = HomeService()
     ) {
         self.dashboardRepository = dashboardRepository
@@ -19,19 +19,29 @@ struct LoadHomeUseCase {
         self.service = service
     }
 
-    func execute(configuration: DashboardConfiguration, now: Date = .now) throws -> HomeSnapshot {
-        let dashboardRecords = try dashboardRepository.fetchDashboardRecords()
-        let fieldCheckSessions = try fieldCheckRepository.fetchSessions()
-        let openFindings = try fieldCheckRepository.fetchOpenFindings(limit: 0)
-        let treatmentTemplates = try workingRepository.fetchTemplates()
+    func execute(
+        configuration: DashboardConfiguration,
+        now: Date = .now
+    ) async throws -> HomeSnapshot {
+        try await PerformanceLog.measureAsync("Home.load") {
+            async let dashboardRecords = dashboardRepository.fetchDashboardRecords()
+            async let fieldCheckRecords = fieldCheckRepository.fetchHomeFieldCheckRecords()
+            async let treatmentTemplates = workingRepository.fetchHomeTreatmentTemplates(limit: 250)
 
-        return service.makeSnapshot(
-            dashboardRecords: dashboardRecords,
-            fieldCheckSessions: fieldCheckSessions,
-            openFindings: openFindings,
-            treatmentTemplates: treatmentTemplates,
-            configuration: configuration,
-            now: now
-        )
+            let dashboard = try await dashboardRecords
+            let fieldChecks = try await fieldCheckRecords
+            let templates = try await treatmentTemplates
+
+            return service.makeSnapshot(
+                dashboardRecords: dashboard,
+                fieldCheckSessions: fieldChecks.sessions,
+                openFindings: fieldChecks.openFindings,
+                treatmentTemplates: templates,
+                openFindingCount: fieldChecks.openFindingCount,
+                hasFieldCheckHistory: fieldChecks.hasHistory,
+                configuration: configuration,
+                now: now
+            )
+        }
     }
 }

@@ -6,8 +6,8 @@
 import Foundation
 import SwiftData
 
-extension HerdSharingCoreDataStore {
-  func acceptPreventedSharedDeletes(
+enum HerdSharingSwiftDataMutationEngine {
+  static func acceptPreventedSharedDeletes(
     _ conflicts: [HerdSharingPreventedDeleteConflict],
     context: ModelContext
   ) throws -> Int {
@@ -26,12 +26,17 @@ extension HerdSharingCoreDataStore {
       }
     }
 
-    try saveBridgeContextIfNeeded()
+    if context.hasChanges {
+      try PersistenceLog.save(
+        context,
+        operation: "HerdSharingSwiftDataMutationEngine"
+      )
+    }
 
     return deletedCount
   }
 
-  func deleteSwiftDataRecords(
+  static func deleteSwiftDataRecords(
     from tombstones: [SharedDeletedRecord],
     herd: Herd,
     in context: ModelContext
@@ -70,7 +75,7 @@ extension HerdSharingCoreDataStore {
     return (deletedCount, preventedDeleteConflicts)
   }
 
-  private func preventedDeleteConflict(
+  private static func preventedDeleteConflict(
     sourceEntityName: String,
     publicID: UUID,
     tombstoneDeletedAt: Date?,
@@ -94,7 +99,7 @@ extension HerdSharingCoreDataStore {
     )
   }
 
-  private func localModificationDate(
+  private static func localModificationDate(
     sourceEntityName: String,
     publicID: UUID,
     in context: ModelContext
@@ -209,11 +214,11 @@ extension HerdSharingCoreDataStore {
     }
   }
 
-  private func latestDate(_ dates: Date?...) -> Date? {
+  private static func latestDate(_ dates: Date?...) -> Date? {
     dates.compactMap { $0 }.max()
   }
 
-  private func deleteSwiftDataRecord(
+  private static func deleteSwiftDataRecord(
     sourceEntityName: String,
     publicID: UUID,
     herd: Herd,
@@ -226,7 +231,7 @@ extension HerdSharingCoreDataStore {
     )
   }
 
-  private func deleteSwiftDataRecord(
+  private static func deleteSwiftDataRecord(
     sourceEntityName: String,
     publicID: UUID,
     in context: ModelContext
@@ -288,7 +293,7 @@ extension HerdSharingCoreDataStore {
     }
   }
 
-  private func deleteSwiftDataRecord<T: PersistentModel>(
+  private static func deleteSwiftDataRecord<T: PersistentModel>(
     _ modelType: T.Type,
     publicID: UUID,
     keyPath: KeyPath<T, UUID>,
@@ -307,7 +312,7 @@ extension HerdSharingCoreDataStore {
     return true
   }
 
-  func fetchSwiftDataRecord<T: PersistentModel>(
+  static func fetchSwiftDataRecord<T: PersistentModel>(
     _ modelType: T.Type,
     publicID: UUID,
     keyPath: KeyPath<T, UUID>,
@@ -318,7 +323,7 @@ extension HerdSharingCoreDataStore {
     }
   }
 
-  private func deletionPriority(for sourceEntityName: String?) -> Int {
+  private static func deletionPriority(for sourceEntityName: String?) -> Int {
     switch sourceEntityName {
     case SharedAnimalTagRecord.entityName,
       SharedMovementRecord.entityName,
@@ -348,7 +353,7 @@ extension HerdSharingCoreDataStore {
     }
   }
 
-  func fetchSwiftDataHerd(
+  static func fetchSwiftDataHerd(
     publicID: UUID,
     in context: ModelContext
   ) throws -> Herd? {

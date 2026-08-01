@@ -6,6 +6,7 @@ struct HomeSnapshot: Equatable {
     let activeAnimalRecords: [DashboardAnimalRecord]
     let activeCheckSessions: [FieldCheckSessionSummary]
     let openFindings: [FieldCheckFindingSnapshot]
+    let openFindingCount: Int
     let flaggedCheckSessions: [FieldCheckSessionSummary]
     let missingCheckSessions: [FieldCheckSessionSummary]
     let pastureCheckStartPastures: [DashboardPastureItem]
@@ -47,7 +48,7 @@ struct HomeSnapshot: Equatable {
     }
 
     var shouldShowOpenFindingsRow: Bool {
-        !openFindings.isEmpty
+        openFindingCount > 0
     }
 
     var hasFieldWorkRows: Bool {

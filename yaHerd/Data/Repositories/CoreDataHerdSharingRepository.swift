@@ -13,29 +13,13 @@ protocol HerdSharingBridgeSyncStore: AnyObject {
   func importBridgeRecordsIntoSwiftData(
     for herd: HerdSummary,
     access: HerdSharingAccess,
-    context: ModelContext
+    importer: any HerdSharingImportApplying
   ) async throws -> HerdSharingBridgeImportResult
 
-  func syncBridgeRecordsFromSwiftData(
-    herd: HerdSummary,
-    tagColorDefinitions: [TagColorDefinition],
-    statusReferences: [AnimalStatusReference],
-    animalTags: [AnimalTag],
-    pastureGroups: [PastureGroup],
-    pastures: [Pasture],
-    animals: [Animal],
-    movements: [MovementRecord],
-    statusRecords: [StatusRecord],
-    healthRecords: [HealthRecord],
-    pregnancyChecks: [PregnancyCheck],
-    workingProtocolTemplates: [WorkingProtocolTemplate],
-    workingSessions: [WorkingSession],
-    workingQueueItems: [WorkingQueueItem],
-    workingTreatmentRecords: [WorkingTreatmentRecord],
-    fieldCheckSessions: [FieldCheckSession],
-    fieldCheckAnimalChecks: [FieldCheckAnimalCheck],
-    fieldCheckFindings: [FieldCheckFinding]
+  func syncBridgeRecordsFromSnapshot(
+    _ export: HerdSharingSwiftDataExport
   ) async throws -> HerdSharingBridgeExportResult
+
 }
 
 extension HerdSharingCoreDataStore: HerdSharingBridgeSyncStore {}
@@ -45,6 +29,9 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
   private let context: ModelContext
   private let store: HerdSharingCoreDataStore
   private let syncStore: any HerdSharingBridgeSyncStore
+  private let exportReader: any HerdSharingExportSnapshotReading
+  private let swiftDataMutator: any HerdSharingSwiftDataMutating
+  private let swiftDataImporter: any HerdSharingImportApplying
   private let shareAdapter: CloudKitShareAdapter
   private let operationGate = HerdSharingBridgeOperationGate()
 
@@ -52,6 +39,9 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     context: ModelContext,
     store: HerdSharingCoreDataStore? = nil,
     syncStore: (any HerdSharingBridgeSyncStore)? = nil,
+    exportReader: (any HerdSharingExportSnapshotReading)? = nil,
+    swiftDataMutator: (any HerdSharingSwiftDataMutating)? = nil,
+    swiftDataImporter: (any HerdSharingImportApplying)? = nil,
     shareAdapter: CloudKitShareAdapter? = nil
   ) {
     self.context = context
@@ -62,6 +52,10 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     } else {
       self.syncStore = resolvedStore
     }
+    let resolvedSwiftDataActor = SwiftDataHerdSharingActor(modelContainer: context.container)
+    self.exportReader = exportReader ?? resolvedSwiftDataActor
+    self.swiftDataMutator = swiftDataMutator ?? resolvedSwiftDataActor
+    self.swiftDataImporter = swiftDataImporter ?? resolvedSwiftDataActor
     self.shareAdapter = shareAdapter ?? CloudKitShareAdapter()
   }
 
@@ -116,49 +110,17 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     await operationGate.acquire()
     defer { operationGate.release() }
 
-    let mergedHerd = try fetchMergedSwiftDataHerd(matching: herd)
-    let tagColorDefinitions = try fetchSwiftDataTagColorDefinitions(for: mergedHerd)
-    let statusReferences = try fetchSwiftDataStatusReferences(for: mergedHerd)
-    let pastureGroups = try fetchSwiftDataPastureGroups(for: mergedHerd)
-    let pastures = try fetchSwiftDataPastures(for: mergedHerd)
-    let animals = try fetchSwiftDataAnimals(for: mergedHerd)
-    let animalTags = try fetchSwiftDataAnimalTags(for: mergedHerd)
-    let movements = try fetchSwiftDataMovements(for: mergedHerd)
-    let statusRecords = try fetchSwiftDataStatusRecords(for: mergedHerd)
-    let healthRecords = try fetchSwiftDataHealthRecords(for: mergedHerd)
-    let pregnancyChecks = try fetchSwiftDataPregnancyChecks(for: mergedHerd)
-    let workingProtocolTemplates = try fetchSwiftDataWorkingProtocolTemplates(for: mergedHerd)
-    let workingSessions = try fetchSwiftDataWorkingSessions(for: mergedHerd)
-    let workingQueueItems = try fetchSwiftDataWorkingQueueItems(for: mergedHerd)
-    let workingTreatmentRecords = try fetchSwiftDataWorkingTreatmentRecords(for: mergedHerd)
-    let fieldCheckSessions = try fetchSwiftDataFieldCheckSessions(for: mergedHerd)
-    let fieldCheckAnimalChecks = try fetchSwiftDataFieldCheckAnimalChecks(for: mergedHerd)
-    let fieldCheckFindings = try fetchSwiftDataFieldCheckFindings(for: mergedHerd)
-    let systemShare = try await store.makeSystemShare(
-      for: mergedHerd,
-      tagColorDefinitions: tagColorDefinitions,
-      statusReferences: statusReferences,
-      animalTags: animalTags,
-      pastureGroups: pastureGroups,
-      pastures: pastures,
-      animals: animals,
-      movements: movements,
-      statusRecords: statusRecords,
-      healthRecords: healthRecords,
-      pregnancyChecks: pregnancyChecks,
-      workingProtocolTemplates: workingProtocolTemplates,
-      workingSessions: workingSessions,
-      workingQueueItems: workingQueueItems,
-      workingTreatmentRecords: workingTreatmentRecords,
-      fieldCheckSessions: fieldCheckSessions,
-      fieldCheckAnimalChecks: fieldCheckAnimalChecks,
-      fieldCheckFindings: fieldCheckFindings
+    let export = try await exportReader.makeExport(
+      for: herd,
+      storeDescription: "owner private store"
     )
+    let systemShare = try await store.makeSystemShare(from: export)
     let sharePresentation = shareAdapter.registerSystemShare(systemShare)
+    let snapshot = export.snapshot
     return HerdSharingActionResult(
       title: "Share sheet ready",
       message:
-        "Invite people through the system CloudKit sharing sheet. SwiftData remains the app data store; Core Data now mirrors the herd root, \(tagColorDefinitions.count) tag color definitions, \(statusReferences.count) custom status references, \(pastureGroups.count) pasture groups, \(pastures.count) pastures, \(animals.count) animal records, \(animalTags.count) animal tags, \(movements.count) movement records, \(statusRecords.count) status history records, \(healthRecords.count) health records, \(pregnancyChecks.count) pregnancy checks, \(workingProtocolTemplates.count) working protocol templates, \(workingSessions.count) working sessions, \(workingQueueItems.count) working queue items, \(workingTreatmentRecords.count) working treatment records, \(fieldCheckSessions.count) field check sessions, \(fieldCheckAnimalChecks.count) field check animal checks, and \(fieldCheckFindings.count) field check findings for CloudKit sharing.",
+        "Invite people through the system CloudKit sharing sheet. SwiftData remains the app data store; Core Data now mirrors the herd root, \(snapshot.records(for: .tagColorDefinitions).count) tag color definitions, \(snapshot.records(for: .statusReferences).count) custom status references, \(snapshot.records(for: .pastureGroups).count) pasture groups, \(snapshot.records(for: .pastures).count) pastures, \(snapshot.records(for: .animals).count) animal records, \(snapshot.records(for: .animalTags).count) animal tags, \(snapshot.records(for: .movements).count) movement records, \(snapshot.records(for: .statusRecords).count) status history records, \(snapshot.records(for: .healthRecords).count) health records, \(snapshot.records(for: .pregnancyChecks).count) pregnancy checks, \(snapshot.records(for: .workingProtocolTemplates).count) working protocol templates, \(snapshot.records(for: .workingSessions).count) working sessions, \(snapshot.records(for: .workingQueueItems).count) working queue items, \(snapshot.records(for: .workingTreatmentRecords).count) working treatment records, \(snapshot.records(for: .fieldCheckSessions).count) field check sessions, \(snapshot.records(for: .fieldCheckAnimalChecks).count) field check animal checks, and \(snapshot.records(for: .fieldCheckFindings).count) field check findings for CloudKit sharing.",
       sharePresentation: sharePresentation
     )
   }
@@ -189,7 +151,7 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     shareAdapter.discardInvitation(invitation)
 
     do {
-      let importResult = try await store.importSharedRecordsIntoSwiftData(context: context)
+      let importResult = try await store.importSharedRecordsIntoSwiftData(importer: swiftDataImporter)
       return HerdSharingActionResult(
         title: "Invitation accepted",
         message:
@@ -238,10 +200,10 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       importResult = try await syncStore.importBridgeRecordsIntoSwiftData(
         for: herd,
         access: access,
-        context: context
+        importer: swiftDataImporter
       )
     } else {
-      importResult = try await store.importSharedRecordsIntoSwiftData(context: context)
+      importResult = try await store.importSharedRecordsIntoSwiftData(importer: swiftDataImporter)
     }
     return HerdSharingActionResult(
       title: "Shared data imported",
@@ -275,9 +237,8 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     await operationGate.acquire()
     defer { operationGate.release() }
 
-    let deletedCount = try store.acceptPreventedSharedDeletes(
-      review.preventedDeleteConflicts,
-      context: context
+    let deletedCount = try await swiftDataMutator.acceptPreventedSharedDeletes(
+      review.preventedDeleteConflicts
     )
 
     return HerdSharingActionResult(
@@ -306,10 +267,9 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     await operationGate.acquire()
     defer { operationGate.release() }
 
-    let result = try store.restoreLocalFields(
+    let result = try await swiftDataMutator.restoreLocalFields(
       selections,
-      from: review,
-      context: context
+      from: review
     )
 
     return HerdSharingActionResult(
@@ -358,49 +318,15 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       importResult = try await syncStore.importBridgeRecordsIntoSwiftData(
         for: herd,
         access: access,
-        context: context
+        importer: swiftDataImporter
       )
     }
 
-    let mergedHerd = try fetchMergedSwiftDataHerd(matching: herd)
-    let tagColorDefinitions = try fetchSwiftDataTagColorDefinitions(for: mergedHerd)
-    let statusReferences = try fetchSwiftDataStatusReferences(for: mergedHerd)
-    let pastureGroups = try fetchSwiftDataPastureGroups(for: mergedHerd)
-    let pastures = try fetchSwiftDataPastures(for: mergedHerd)
-    let animals = try fetchSwiftDataAnimals(for: mergedHerd)
-    let animalTags = try fetchSwiftDataAnimalTags(for: mergedHerd)
-    let movements = try fetchSwiftDataMovements(for: mergedHerd)
-    let statusRecords = try fetchSwiftDataStatusRecords(for: mergedHerd)
-    let healthRecords = try fetchSwiftDataHealthRecords(for: mergedHerd)
-    let pregnancyChecks = try fetchSwiftDataPregnancyChecks(for: mergedHerd)
-    let workingProtocolTemplates = try fetchSwiftDataWorkingProtocolTemplates(for: mergedHerd)
-    let workingSessions = try fetchSwiftDataWorkingSessions(for: mergedHerd)
-    let workingQueueItems = try fetchSwiftDataWorkingQueueItems(for: mergedHerd)
-    let workingTreatmentRecords = try fetchSwiftDataWorkingTreatmentRecords(for: mergedHerd)
-    let fieldCheckSessions = try fetchSwiftDataFieldCheckSessions(for: mergedHerd)
-    let fieldCheckAnimalChecks = try fetchSwiftDataFieldCheckAnimalChecks(for: mergedHerd)
-    let fieldCheckFindings = try fetchSwiftDataFieldCheckFindings(for: mergedHerd)
-
-    let exportResult = try await syncStore.syncBridgeRecordsFromSwiftData(
-      herd: mergedHerd,
-      tagColorDefinitions: tagColorDefinitions,
-      statusReferences: statusReferences,
-      animalTags: animalTags,
-      pastureGroups: pastureGroups,
-      pastures: pastures,
-      animals: animals,
-      movements: movements,
-      statusRecords: statusRecords,
-      healthRecords: healthRecords,
-      pregnancyChecks: pregnancyChecks,
-      workingProtocolTemplates: workingProtocolTemplates,
-      workingSessions: workingSessions,
-      workingQueueItems: workingQueueItems,
-      workingTreatmentRecords: workingTreatmentRecords,
-      fieldCheckSessions: fieldCheckSessions,
-      fieldCheckAnimalChecks: fieldCheckAnimalChecks,
-      fieldCheckFindings: fieldCheckFindings
+    let export = try await exportReader.makeExport(
+      for: herd,
+      storeDescription: access.locationDescription
     )
+    let exportResult = try await syncStore.syncBridgeRecordsFromSnapshot(export)
 
     let importMessage: String
     let conflictReview: HerdSharingConflictReview?
@@ -441,7 +367,7 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       let importResult = try await syncStore.importBridgeRecordsIntoSwiftData(
         for: herd,
         access: access,
-        context: context
+        importer: swiftDataImporter
       )
       return HerdSharingActionResult(
         title: "Shared data imported",
@@ -531,175 +457,5 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     )
   }
 
-  private func fetchSwiftDataTagColorDefinitions(for herd: HerdSummary) throws
-    -> [TagColorDefinition]
-  {
-    let herdID = herd.publicID
-    return try PerformanceLog.measure("CoreDataHerdSharingRepository.fetchTagColorDefinitions") {
-      try context.fetch(FetchDescriptor<TagColorDefinition>()).filter { definition in
-        definition.herd?.publicID == herdID
-      }
-    }
-  }
-
-  private func fetchMergedSwiftDataHerd(matching herd: HerdSummary) throws -> HerdSummary {
-    let herdID = herd.publicID
-    let matchingHerds = try context.fetch(FetchDescriptor<Herd>()).filter { candidate in
-      candidate.publicID == herdID
-    }
-    guard matchingHerds.count <= 1 else {
-      throw HerdSharingActionError.bridgeConsistencyFailed(
-        "Multiple SwiftData herd roots use public ID \(herdID.uuidString). Repair the duplicate before sharing or synchronization."
-      )
-    }
-    return matchingHerds.first?.toSummary() ?? herd
-  }
-
-  private func fetchSwiftDataStatusReferences(for herd: HerdSummary) throws
-    -> [AnimalStatusReference]
-  {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<AnimalStatusReference>()).filter { statusReference in
-      statusReference.herd?.publicID == herdID
-    }
-  }
-
-  private func fetchSwiftDataPastureGroups(for herd: HerdSummary) throws -> [PastureGroup] {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<PastureGroup>()).filter { pastureGroup in
-      pastureGroup.herd?.publicID == herdID
-    }
-  }
-
-  private func fetchSwiftDataPastures(for herd: HerdSummary) throws -> [Pasture] {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<Pasture>()).filter { pasture in
-      pasture.herd?.publicID == herdID
-    }
-  }
-
-  private func fetchSwiftDataAnimals(for herd: HerdSummary) throws -> [Animal] {
-    let herdID = herd.publicID
-    return try PerformanceLog.measure("CoreDataHerdSharingRepository.fetchAnimals") {
-      try context.fetch(FetchDescriptor<Animal>()).filter { animal in
-        animal.herd?.publicID == herdID
-      }
-    }
-  }
-
-  private func fetchSwiftDataAnimalTags(for herd: HerdSummary) throws -> [AnimalTag] {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<AnimalTag>()).filter { tag in
-      tag.herd?.publicID == herdID || tag.animal?.herd?.publicID == herdID
-    }
-  }
-
-  private func fetchSwiftDataMovements(for herd: HerdSummary) throws -> [MovementRecord] {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<MovementRecord>()).filter { movement in
-      movement.herd?.publicID == herdID || movement.animal?.herd?.publicID == herdID
-    }
-  }
-
-  private func fetchSwiftDataStatusRecords(for herd: HerdSummary) throws -> [StatusRecord] {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<StatusRecord>()).filter { statusRecord in
-      statusRecord.herd?.publicID == herdID || statusRecord.animal?.herd?.publicID == herdID
-    }
-  }
-
-  private func fetchSwiftDataHealthRecords(for herd: HerdSummary) throws -> [HealthRecord] {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<HealthRecord>()).filter { healthRecord in
-      healthRecord.herd?.publicID == herdID || healthRecord.animal?.herd?.publicID == herdID
-    }
-  }
-
-  private func fetchSwiftDataPregnancyChecks(for herd: HerdSummary) throws -> [PregnancyCheck] {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<PregnancyCheck>()).filter { pregnancyCheck in
-      pregnancyCheck.herd?.publicID == herdID || pregnancyCheck.animal?.herd?.publicID == herdID
-    }
-  }
-
-  private func fetchSwiftDataWorkingProtocolTemplates(for herd: HerdSummary) throws
-    -> [WorkingProtocolTemplate]
-  {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<WorkingProtocolTemplate>()).filter { template in
-      template.herd?.publicID == herdID
-    }
-  }
-
-  private func fetchSwiftDataWorkingSessions(for herd: HerdSummary) throws -> [WorkingSession] {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<WorkingSession>()).filter { session in
-      session.herd?.publicID == herdID
-    }
-  }
-
-  private func fetchSwiftDataWorkingQueueItems(for herd: HerdSummary) throws -> [WorkingQueueItem] {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<WorkingQueueItem>()).filter { queueItem in
-      queueItem.herd?.publicID == herdID
-        || queueItem.session?.herd?.publicID == herdID
-        || queueItem.animal?.herd?.publicID == herdID
-    }
-  }
-
-  private func fetchSwiftDataWorkingTreatmentRecords(for herd: HerdSummary) throws
-    -> [WorkingTreatmentRecord]
-  {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<WorkingTreatmentRecord>()).filter { treatmentRecord in
-      treatmentRecord.herd?.publicID == herdID
-        || treatmentRecord.session?.herd?.publicID == herdID
-        || treatmentRecord.animal?.herd?.publicID == herdID
-    }
-  }
-
-  private func fetchSwiftDataFieldCheckSessions(for herd: HerdSummary) throws -> [FieldCheckSession]
-  {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<FieldCheckSession>()).filter { session in
-      session.herd?.publicID == herdID || session.pasture?.herd?.publicID == herdID
-    }
-  }
-
-  private func fetchSwiftDataFieldCheckAnimalChecks(for herd: HerdSummary) throws
-    -> [FieldCheckAnimalCheck]
-  {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<FieldCheckAnimalCheck>()).filter { check in
-      check.herd?.publicID == herdID
-        || check.session?.herd?.publicID == herdID
-        || check.animal?.herd?.publicID == herdID
-    }
-  }
-
-  private func fetchSwiftDataFieldCheckFindings(for herd: HerdSummary) throws -> [FieldCheckFinding]
-  {
-    let herdID = herd.publicID
-    return try context.fetch(FetchDescriptor<FieldCheckFinding>()).filter { finding in
-      finding.herd?.publicID == herdID
-        || finding.session?.herd?.publicID == herdID
-        || finding.animal?.herd?.publicID == herdID
-    }
-  }
-
-  private func uniqueModels<T>(_ items: [T], by id: (T) -> UUID) -> [T] {
-    var seen = Set<UUID>()
-    var result: [T] = []
-    result.reserveCapacity(items.count)
-
-    for item in items {
-      let itemID = id(item)
-      if seen.insert(itemID).inserted {
-        result.append(item)
-      }
-    }
-
-    return result
-  }
 
 }

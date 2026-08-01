@@ -6,7 +6,7 @@ struct FieldCheckSessionStartInput: Hashable {
     let notes: String
 }
 
-struct FieldCheckAnimalCheckSnapshot: Identifiable, Hashable {
+struct FieldCheckAnimalCheckSnapshot: Sendable, Identifiable, Hashable {
     let id: UUID
     let animalID: UUID?
     let displayTagNumber: String
@@ -22,7 +22,7 @@ struct FieldCheckAnimalCheckSnapshot: Identifiable, Hashable {
     let isMissing: Bool
 }
 
-struct FieldCheckFindingSnapshot: Identifiable, Hashable {
+struct FieldCheckFindingSnapshot: Sendable, Identifiable, Hashable {
     let id: UUID
     let recordedAt: Date
     let type: FieldCheckFindingType
@@ -36,7 +36,7 @@ struct FieldCheckFindingSnapshot: Identifiable, Hashable {
     let sessionID: UUID
 }
 
-struct FieldCheckSessionSummary: Identifiable, Hashable {
+struct FieldCheckSessionSummary: Sendable, Identifiable, Hashable {
     let id: UUID
     let startedAt: Date
     let completedAt: Date?

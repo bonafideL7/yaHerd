@@ -5,10 +5,10 @@
 
 import Foundation
 
-extension HerdSharingCoreDataStore {
+enum HerdSharingSwiftDataImportEngine {
   typealias HerdSharingConflictFieldSnapshot = [String: HerdSharingBridgeConflictValue]
 
-  func updatedRecordConflict(
+  static func updatedRecordConflict(
     sourceEntityName: String,
     publicID: UUID,
     localModifiedAt: Date?,
@@ -25,7 +25,7 @@ extension HerdSharingCoreDataStore {
     )
   }
 
-  func updatedRecordConflict(
+  static func updatedRecordConflict(
     sourceEntityName: String,
     publicID: UUID,
     localModifiedAt: Date?,
@@ -42,7 +42,7 @@ extension HerdSharingCoreDataStore {
     )
   }
 
-  private func conflictFieldChanges(
+  private static func conflictFieldChanges(
     before: HerdSharingConflictFieldSnapshot,
     after: HerdSharingConflictFieldSnapshot
   ) -> [HerdSharingBridgeFieldChange] {
@@ -59,7 +59,7 @@ extension HerdSharingCoreDataStore {
     }
   }
 
-  private func conflictValue(_ value: Any?) -> HerdSharingBridgeConflictValue {
+  private static func conflictValue(_ value: Any?) -> HerdSharingBridgeConflictValue {
     guard let value else { return .null }
     if let date = value as? Date {
       return HerdSharingBridgeConflictValue(
@@ -91,13 +91,13 @@ extension HerdSharingCoreDataStore {
     return HerdSharingBridgeConflictValue(type: .string, encodedValue: String(describing: value))
   }
 
-  private func conflictFieldSnapshot(_ values: [String: Any?]) -> HerdSharingConflictFieldSnapshot {
+  private static func conflictFieldSnapshot(_ values: [String: Any?]) -> HerdSharingConflictFieldSnapshot {
     values.reduce(into: HerdSharingConflictFieldSnapshot()) { result, item in
       result[item.key] = conflictValue(item.value)
     }
   }
 
-  func conflictFieldSnapshot(for definition: TagColorDefinition) -> HerdSharingConflictFieldSnapshot
+  static func conflictFieldSnapshot(for definition: TagColorDefinition) -> HerdSharingConflictFieldSnapshot
   {
     conflictFieldSnapshot([
       "name": definition.name,
@@ -114,7 +114,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for reference: AnimalStatusReference)
+  static func conflictFieldSnapshot(for reference: AnimalStatusReference)
     -> HerdSharingConflictFieldSnapshot
   {
     conflictFieldSnapshot([
@@ -124,7 +124,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for group: PastureGroup) -> HerdSharingConflictFieldSnapshot {
+  static func conflictFieldSnapshot(for group: PastureGroup) -> HerdSharingConflictFieldSnapshot {
     conflictFieldSnapshot([
       "name": group.name,
       "grazeDays": group.grazeDays,
@@ -132,7 +132,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for pasture: Pasture) -> HerdSharingConflictFieldSnapshot {
+  static func conflictFieldSnapshot(for pasture: Pasture) -> HerdSharingConflictFieldSnapshot {
     conflictFieldSnapshot([
       "name": pasture.name,
       "sortOrder": pasture.sortOrder,
@@ -144,7 +144,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for animal: Animal) -> HerdSharingConflictFieldSnapshot {
+  static func conflictFieldSnapshot(for animal: Animal) -> HerdSharingConflictFieldSnapshot {
     conflictFieldSnapshot([
       "name": animal.name,
       "tagNumber": animal.tagNumber,
@@ -167,7 +167,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for tag: AnimalTag) -> HerdSharingConflictFieldSnapshot {
+  static func conflictFieldSnapshot(for tag: AnimalTag) -> HerdSharingConflictFieldSnapshot {
     conflictFieldSnapshot([
       "number": tag.number,
       "colorID": tag.colorID,
@@ -179,7 +179,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for movement: MovementRecord) -> HerdSharingConflictFieldSnapshot {
+  static func conflictFieldSnapshot(for movement: MovementRecord) -> HerdSharingConflictFieldSnapshot {
     conflictFieldSnapshot([
       "date": movement.date,
       "fromPasture": movement.fromPasture,
@@ -188,7 +188,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for statusRecord: StatusRecord) -> HerdSharingConflictFieldSnapshot {
+  static func conflictFieldSnapshot(for statusRecord: StatusRecord) -> HerdSharingConflictFieldSnapshot {
     conflictFieldSnapshot([
       "date": statusRecord.date,
       "oldStatus": statusRecord.oldStatus,
@@ -199,7 +199,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for template: WorkingProtocolTemplate)
+  static func conflictFieldSnapshot(for template: WorkingProtocolTemplate)
     -> HerdSharingConflictFieldSnapshot
   {
     conflictFieldSnapshot([
@@ -208,7 +208,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for session: WorkingSession) -> HerdSharingConflictFieldSnapshot {
+  static func conflictFieldSnapshot(for session: WorkingSession) -> HerdSharingConflictFieldSnapshot {
     conflictFieldSnapshot([
       "date": session.date,
       "status": session.status,
@@ -220,7 +220,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for queueItem: WorkingQueueItem) -> HerdSharingConflictFieldSnapshot {
+  static func conflictFieldSnapshot(for queueItem: WorkingQueueItem) -> HerdSharingConflictFieldSnapshot {
     conflictFieldSnapshot([
       "queueOrder": queueItem.queueOrder,
       "status": queueItem.status,
@@ -233,7 +233,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for treatmentRecord: WorkingTreatmentRecord)
+  static func conflictFieldSnapshot(for treatmentRecord: WorkingTreatmentRecord)
     -> HerdSharingConflictFieldSnapshot
   {
     conflictFieldSnapshot([
@@ -246,7 +246,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for healthRecord: HealthRecord) -> HerdSharingConflictFieldSnapshot {
+  static func conflictFieldSnapshot(for healthRecord: HealthRecord) -> HerdSharingConflictFieldSnapshot {
     conflictFieldSnapshot([
       "date": healthRecord.date,
       "treatment": healthRecord.treatment,
@@ -256,7 +256,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for check: PregnancyCheck) -> HerdSharingConflictFieldSnapshot {
+  static func conflictFieldSnapshot(for check: PregnancyCheck) -> HerdSharingConflictFieldSnapshot {
     conflictFieldSnapshot([
       "date": check.date,
       "result": check.result,
@@ -269,7 +269,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for session: FieldCheckSession) -> HerdSharingConflictFieldSnapshot {
+  static func conflictFieldSnapshot(for session: FieldCheckSession) -> HerdSharingConflictFieldSnapshot {
     conflictFieldSnapshot([
       "startedAt": session.startedAt,
       "completedAt": session.completedAt,
@@ -287,7 +287,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for check: FieldCheckAnimalCheck) -> HerdSharingConflictFieldSnapshot {
+  static func conflictFieldSnapshot(for check: FieldCheckAnimalCheck) -> HerdSharingConflictFieldSnapshot {
     conflictFieldSnapshot([
       "animalIDSnapshot": check.animalIDSnapshot,
       "rosterTagNumber": check.rosterTagNumber,
@@ -306,7 +306,7 @@ extension HerdSharingCoreDataStore {
     ])
   }
 
-  func conflictFieldSnapshot(for finding: FieldCheckFinding) -> HerdSharingConflictFieldSnapshot {
+  static func conflictFieldSnapshot(for finding: FieldCheckFinding) -> HerdSharingConflictFieldSnapshot {
     conflictFieldSnapshot([
       "recordedAt": finding.recordedAt,
       "type": finding.type,

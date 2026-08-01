@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct HerdSharingConflictReview: Codable, Equatable, Identifiable {
+struct HerdSharingConflictReview: Codable, Equatable, Identifiable, Sendable {
   var id: String { "\(detectedAt.timeIntervalSince1970)-\(sourceDescription)-\(title)" }
 
   let title: String
@@ -138,7 +138,7 @@ struct HerdSharingConflictReview: Codable, Equatable, Identifiable {
   }
 }
 
-struct HerdSharingConflictStoredValue: Codable, Equatable {
+struct HerdSharingConflictStoredValue: Codable, Equatable, Sendable {
   enum ValueType: String, Codable {
     case null
     case string
@@ -233,7 +233,7 @@ struct HerdSharingConflictStoredValue: Codable, Equatable {
   var displayType: String { type.rawValue }
 }
 
-struct HerdSharingLocalFieldRestoreSelection: Codable, Equatable, Hashable, Identifiable {
+struct HerdSharingLocalFieldRestoreSelection: Codable, Equatable, Hashable, Identifiable, Sendable {
   var id: String { "\(sourceEntityName)-\(publicID.uuidString)-\(fieldName)" }
 
   let sourceEntityName: String
@@ -247,7 +247,7 @@ struct HerdSharingLocalFieldRestoreSelection: Codable, Equatable, Hashable, Iden
   }
 }
 
-struct HerdSharingLocalFieldRestoreResult: Codable, Equatable {
+struct HerdSharingLocalFieldRestoreResult: Codable, Equatable, Sendable {
   let requestedFieldCount: Int
   let restoredFieldCount: Int
   let skippedFieldCount: Int
@@ -255,7 +255,7 @@ struct HerdSharingLocalFieldRestoreResult: Codable, Equatable {
   var restoredAnyFields: Bool { restoredFieldCount > 0 }
 }
 
-struct HerdSharingUpdatedRecordFieldChange: Codable, Equatable, Identifiable {
+struct HerdSharingUpdatedRecordFieldChange: Codable, Equatable, Identifiable, Sendable {
   var id: String { fieldName }
 
   let fieldName: String
@@ -332,7 +332,7 @@ struct HerdSharingUpdatedRecordFieldChange: Codable, Equatable, Identifiable {
 }
 
 
-enum HerdSharingLocalFieldRestoreSupportCategory: String, Codable, Equatable {
+enum HerdSharingLocalFieldRestoreSupportCategory: String, Codable, Equatable, Sendable {
   case restorable
   case relationship
   case complex
@@ -365,7 +365,7 @@ enum HerdSharingLocalFieldRestoreSupportCategory: String, Codable, Equatable {
   }
 }
 
-struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
+struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable, Sendable {
   var id: String { "\(sourceEntityName)-\(publicID.uuidString)" }
 
   let sourceEntityName: String
@@ -575,14 +575,14 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable {
   }
 }
 
-struct HerdSharingUpdatedRecordEntitySummary: Equatable, Identifiable {
+struct HerdSharingUpdatedRecordEntitySummary: Equatable, Identifiable, Sendable {
   var id: String { displayEntityName }
 
   let displayEntityName: String
   let count: Int
 }
 
-struct HerdSharingPreventedDeleteConflict: Codable, Equatable, Identifiable {
+struct HerdSharingPreventedDeleteConflict: Codable, Equatable, Identifiable, Sendable {
   var id: String { "\(sourceEntityName)-\(publicID.uuidString)" }
 
   let sourceEntityName: String
@@ -597,7 +597,7 @@ struct HerdSharingPreventedDeleteConflict: Codable, Equatable, Identifiable {
   }
 }
 
-struct HerdSharingPreventedDeleteEntitySummary: Equatable, Identifiable {
+struct HerdSharingPreventedDeleteEntitySummary: Equatable, Identifiable, Sendable {
   var id: String { displayEntityName }
 
   let displayEntityName: String

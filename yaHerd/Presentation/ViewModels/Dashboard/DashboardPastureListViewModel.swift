@@ -9,23 +9,29 @@ final class DashboardPastureListViewModel {
     private var isLoading = false
     var errorMessage: String?
 
-    func loadIfNeeded(configuration: DashboardConfiguration, using repository: any DashboardRecordReading) {
+    func loadIfNeeded(
+        configuration: DashboardConfiguration,
+        using repository: any DashboardQueryReading
+    ) async {
         guard !hasLoaded else { return }
-        load(configuration: configuration, using: repository)
+        await load(configuration: configuration, using: repository)
     }
 
-    func load(configuration: DashboardConfiguration, using repository: any DashboardRecordReading) {
+    func load(
+        configuration: DashboardConfiguration,
+        using repository: any DashboardQueryReading
+    ) async {
         guard !isLoading else { return }
         isLoading = true
-        defer {
-            isLoading = false
-        }
+        defer { isLoading = false }
 
         do {
-            items = try LoadDashboardPastureListUseCase(repository: repository)
+            items = try await LoadDashboardPastureListUseCase(repository: repository)
                 .execute(configuration: configuration)
             errorMessage = nil
             hasLoaded = true
+        } catch is CancellationError {
+            return
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
@@ -33,7 +39,7 @@ final class DashboardPastureListViewModel {
 
     func markPastureGrazedToday(
         pastureID: UUID,
-        configuration: DashboardConfiguration,
+        configuration _: DashboardConfiguration,
         using repository: any DashboardReadWriting
     ) {
         let date = Date.now
