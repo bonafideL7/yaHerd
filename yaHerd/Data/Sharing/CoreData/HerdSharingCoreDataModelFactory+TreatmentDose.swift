@@ -1,15 +1,22 @@
 import CoreData
+import Synchronization
 
 extension HerdSharingCoreDataModelFactory {
     /// Current unreleased V1 bridge model. The bridge is updated in lockstep with
     /// `YaHerdSchemaV1`; this is not a second application schema version.
     static func makeCurrentModel() -> NSManagedObjectModel {
-        currentModelCache.model
+        currentModelCache.withLock { cachedModel in
+            if let cachedModel {
+                return cachedModel
+            }
+
+            let model = buildCurrentModel()
+            cachedModel = model
+            return model
+        }
     }
 
-    private static let currentModelCache = CurrentBridgeModelCache(
-        model: buildCurrentModel()
-    )
+    private static let currentModelCache = Mutex<NSManagedObjectModel?>(nil)
 
     private static func buildCurrentModel() -> NSManagedObjectModel {
         let model = makeModel()
@@ -53,16 +60,5 @@ extension HerdSharingCoreDataModelFactory {
         attribute.attributeType = type
         attribute.isOptional = true
         entity.properties.append(attribute)
-    }
-}
-
-/// `NSManagedObjectModel` is safe to share after construction as long as it is
-/// treated as immutable. The wrapper makes that invariant explicit to Swift's
-/// strict concurrency checking while static initialization provides synchronization.
-private final class CurrentBridgeModelCache: @unchecked Sendable {
-    let model: NSManagedObjectModel
-
-    init(model: NSManagedObjectModel) {
-        self.model = model
     }
 }
