@@ -103,4 +103,95 @@ extension SwiftDataHerdSharingActorTests {
       }
     )
   }
+
+  func testExportKeepsDeletionTombstonesDistinctByEntity() async throws {
+    let storeDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("HerdSharingDeletionTombstoneIdentityTests", isDirectory: true)
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: storeDirectory) }
+
+    let store = HerdSharingCoreDataStore(
+      storeDirectoryURL: storeDirectory,
+      journalFileURL: storeDirectory.appendingPathComponent("journal.json")
+    )
+    try await store.loadIfNeeded()
+    let privateStore = try XCTUnwrap(store.privateStore)
+
+    let now = Date(timeIntervalSince1970: 1_700_000_000)
+    let herdID = UUID()
+    let sharedRecordID = UUID()
+    let herd = HerdSummary(
+      publicID: herdID,
+      name: "Composite export tombstone herd",
+      createdAt: now,
+      updatedAt: now,
+      schemaVersion: 1
+    )
+    let pasture = Pasture(
+      publicID: sharedRecordID,
+      name: "Shared-ID pasture"
+    )
+    let animal = Animal(
+      publicID: sharedRecordID,
+      name: "",
+      tagNumber: "101",
+      birthDate: now,
+      status: .active,
+      pasture: pasture,
+      sex: .female
+    )
+
+    let bridgeModel = HerdSharingCoreDataModelFactory.makeCurrentModel()
+    let herdEntity = try XCTUnwrap(
+      bridgeModel.entitiesByName[SharedHerdRecord.entityName]
+    )
+    let pastureEntity = try XCTUnwrap(
+      bridgeModel.entitiesByName[SharedPastureRecord.entityName]
+    )
+    let animalEntity = try XCTUnwrap(
+      bridgeModel.entitiesByName[SharedAnimalRecord.entityName]
+    )
+
+    let sharedHerd = SharedHerdRecord(entity: herdEntity, insertInto: nil)
+    sharedHerd.mirror(herd, mirroredAt: now)
+    let sharedPasture = SharedPastureRecord(entity: pastureEntity, insertInto: nil)
+    sharedPasture.mirror(pasture, herdPublicID: herdID, mirroredAt: now)
+    let sharedAnimal = SharedAnimalRecord(entity: animalEntity, insertInto: nil)
+    sharedAnimal.mirror(animal, herdPublicID: herdID, mirroredAt: now)
+
+    let herdSnapshot = try HerdSharingBridgeRecordSnapshot(record: sharedHerd)
+    let initialSnapshot = HerdSharingBridgeStoreSnapshot(
+      herdPublicID: herdID,
+      storeDescription: "composite export tombstone test",
+      recordsByStep: [
+        .herd: [herdSnapshot],
+        .pastures: [try HerdSharingBridgeRecordSnapshot(record: sharedPasture)],
+        .animals: [try HerdSharingBridgeRecordSnapshot(record: sharedAnimal)],
+      ]
+    )
+    _ = try await store.writeBridgeSnapshot(initialSnapshot, to: privateStore)
+
+    let removalSnapshot = HerdSharingBridgeStoreSnapshot(
+      herdPublicID: herdID,
+      storeDescription: "composite export tombstone test",
+      recordsByStep: [.herd: [herdSnapshot]]
+    )
+    let result = try await store.writeBridgeSnapshot(removalSnapshot, to: privateStore)
+    let tombstones = result.snapshot.records(for: .deletions)
+
+    XCTAssertEqual(tombstones.count, 2)
+    let identities = Set(tombstones.compactMap { snapshot -> String? in
+      guard case .string(let sourceEntityName) = snapshot.attributes["sourceEntityName"] else {
+        return nil
+      }
+      return "\(sourceEntityName)|\(snapshot.publicID)"
+    })
+    XCTAssertEqual(
+      identities,
+      Set([
+        "\(SharedAnimalRecord.entityName)|\(sharedRecordID.uuidString)",
+        "\(SharedPastureRecord.entityName)|\(sharedRecordID.uuidString)",
+      ])
+    )
+  }
 }
