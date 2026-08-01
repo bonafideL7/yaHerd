@@ -227,7 +227,8 @@ actor SwiftDataReadModelActor:
                 var descriptor = FetchDescriptor<Pasture>(
                     sortBy: [
                         SortDescriptor(\Pasture.name),
-                        SortDescriptor(\Pasture.sortOrder)
+                        SortDescriptor(\Pasture.sortOrder),
+                        SortDescriptor(\Pasture.publicID)
                     ]
                 )
                 descriptor.fetchOffset = offset
