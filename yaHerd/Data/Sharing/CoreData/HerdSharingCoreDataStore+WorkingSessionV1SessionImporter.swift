@@ -36,7 +36,7 @@ extension HerdSharingCoreDataStore {
 
         for (record, publicID) in validSharedRecords {
             let session: WorkingSession
-            var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
+            var beforeFieldSnapshot: HerdSharingSwiftDataImportEngine.HerdSharingConflictFieldSnapshot?
             if let existingSession = sessionsByPublicID[publicID] {
                 session = existingSession
                 updated += 1
@@ -66,7 +66,7 @@ extension HerdSharingCoreDataStore {
             )
             if let beforeFieldSnapshot {
                 updatedRecordConflicts.append(
-                    updatedRecordConflict(
+                    HerdSharingSwiftDataImportEngine.updatedRecordConflict(
                         sourceEntityName: SharedWorkingSessionRecord.entityName,
                         publicID: publicID,
                         localModifiedAt: nil,

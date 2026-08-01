@@ -5,12 +5,12 @@
 
 import Foundation
 
-enum HerdSharingBridgeDirection: String, Codable, Equatable {
+enum HerdSharingBridgeDirection: String, Codable, Equatable, Sendable {
   case exportToBridge
   case importFromBridge
 }
 
-enum HerdSharingBridgeStep: String, CaseIterable, Codable, Equatable, Hashable {
+enum HerdSharingBridgeStep: String, CaseIterable, Codable, Equatable, Hashable, Sendable {
   case herd
   case tagColorDefinitions
   case statusReferences

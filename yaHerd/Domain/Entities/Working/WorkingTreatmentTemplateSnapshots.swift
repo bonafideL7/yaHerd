@@ -1,6 +1,6 @@
 import Foundation
 
-struct WorkingTreatmentTemplateSummary: Identifiable, Hashable {
+struct WorkingTreatmentTemplateSummary: Identifiable, Hashable, Sendable {
     let id: UUID
     let name: String
     let treatmentCount: Int

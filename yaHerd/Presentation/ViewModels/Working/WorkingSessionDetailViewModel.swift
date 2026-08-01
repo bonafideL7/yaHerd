@@ -20,7 +20,9 @@ final class WorkingSessionDetailViewModel: ObservableObject {
 
     func load() {
         do {
-            session = try repository.fetchSessionDetail(id: sessionID)
+            session = try PerformanceLog.measure("WorkingSession.open") {
+                try repository.fetchSessionDetail(id: sessionID)
+            }
             errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)

@@ -12,12 +12,18 @@ final class DashboardViewModel {
     var isPresentingAddPasture = false
     var isPresentingNewWorkingSession = false
 
-    func loadIfNeeded(configuration: DashboardConfiguration, using repository: any DashboardRecordReading) {
+    func loadIfNeeded(
+        configuration: DashboardConfiguration,
+        using repository: any DashboardQueryReading
+    ) async {
         guard !hasLoaded else { return }
-        load(configuration: configuration, using: repository)
+        await load(configuration: configuration, using: repository)
     }
 
-    func load(configuration: DashboardConfiguration, using repository: any DashboardRecordReading) {
+    func load(
+        configuration: DashboardConfiguration,
+        using repository: any DashboardQueryReading
+    ) async {
         guard !isLoading else { return }
         isLoading = true
         defer {
@@ -25,7 +31,8 @@ final class DashboardViewModel {
         }
 
         do {
-            snapshot = try LoadDashboardUseCase(repository: repository).execute(configuration: configuration)
+            snapshot = try await LoadDashboardUseCase(repository: repository)
+                .execute(configuration: configuration)
             errorMessage = nil
             hasLoaded = true
         } catch {

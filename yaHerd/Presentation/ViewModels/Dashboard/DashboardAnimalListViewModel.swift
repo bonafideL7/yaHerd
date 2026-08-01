@@ -12,28 +12,28 @@ final class DashboardAnimalListViewModel {
     func loadIfNeeded(
         kind: DashboardAnimalListKind,
         configuration: DashboardConfiguration,
-        using repository: any DashboardRecordReading
-    ) {
+        using repository: any DashboardQueryReading
+    ) async {
         guard !hasLoaded else { return }
-        load(kind: kind, configuration: configuration, using: repository)
+        await load(kind: kind, configuration: configuration, using: repository)
     }
 
     func load(
         kind: DashboardAnimalListKind,
         configuration: DashboardConfiguration,
-        using repository: any DashboardRecordReading
-    ) {
+        using repository: any DashboardQueryReading
+    ) async {
         guard !isLoading else { return }
         isLoading = true
-        defer {
-            isLoading = false
-        }
+        defer { isLoading = false }
 
         do {
-            items = try LoadDashboardAnimalListUseCase(repository: repository)
+            items = try await LoadDashboardAnimalListUseCase(repository: repository)
                 .execute(kind: kind, configuration: configuration)
             errorMessage = nil
             hasLoaded = true
+        } catch is CancellationError {
+            return
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }

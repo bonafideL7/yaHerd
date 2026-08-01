@@ -2,15 +2,18 @@ import SwiftUI
 
 struct DashboardAnimalListView: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+    @Environment(\.homeFeatureDependencies) private var homeDependencies
 
     @State private var viewModel = DashboardAnimalListViewModel()
 
     let kind: DashboardAnimalListKind
-    private let repository: any DashboardRecordReading
 
-    init(kind: DashboardAnimalListKind, repository: any DashboardRecordReading) {
+    init(kind: DashboardAnimalListKind) {
         self.kind = kind
-        self.repository = repository
+    }
+
+    init(kind: DashboardAnimalListKind, repository _: any DashboardRecordReading) {
+        self.kind = kind
     }
 
     private let configuration = DashboardConfiguration()
@@ -30,7 +33,11 @@ struct DashboardAnimalListView: View {
         }
         .navigationTitle(kind.title)
         .task {
-            viewModel.loadIfNeeded(kind: kind, configuration: configuration, using: repository)
+            await viewModel.loadIfNeeded(
+                kind: kind,
+                configuration: configuration,
+                using: homeDependencies.dashboardQueryReader
+            )
         }
         .alert("Dashboard Error", isPresented: errorBinding) {
             Button("OK", role: .cancel) {
@@ -45,9 +52,7 @@ struct DashboardAnimalListView: View {
         Binding(
             get: { viewModel.errorMessage != nil },
             set: { newValue in
-                if !newValue {
-                    viewModel.errorMessage = nil
-                }
+                if !newValue { viewModel.errorMessage = nil }
             }
         )
     }

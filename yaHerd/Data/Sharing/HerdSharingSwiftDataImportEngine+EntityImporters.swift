@@ -7,8 +7,8 @@ import CoreData
 import Foundation
 import SwiftData
 
-extension HerdSharingCoreDataStore {
-  func upsertSwiftDataHerd(
+extension HerdSharingSwiftDataImportEngine {
+  static func upsertSwiftDataHerd(
     from sharedRecord: SharedHerdRecord,
     in context: ModelContext
   ) throws -> Herd {
@@ -17,7 +17,7 @@ extension HerdSharingCoreDataStore {
         "The shared herd record is missing a valid public ID.")
     }
 
-    if let existingHerd = try fetchSwiftDataHerd(publicID: sharedPublicID, in: context) {
+    if let existingHerd = try HerdSharingSwiftDataMutationEngine.fetchSwiftDataHerd(publicID: sharedPublicID, in: context) {
       apply(sharedRecord, to: existingHerd)
       return existingHerd
     }
@@ -28,7 +28,7 @@ extension HerdSharingCoreDataStore {
     return herd
   }
 
-  private func apply(_ sharedRecord: SharedHerdRecord, to herd: Herd) {
+  private static func apply(_ sharedRecord: SharedHerdRecord, to herd: Herd) {
     herd.name =
       sharedRecord.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
       ?? DefaultHerdBootstrapper.defaultHerdName
@@ -37,7 +37,7 @@ extension HerdSharingCoreDataStore {
     herd.schemaVersion = sharedRecord.schemaVersion?.intValue ?? herd.schemaVersion
   }
 
-  func upsertSwiftDataTagColorDefinitions(
+  static func upsertSwiftDataTagColorDefinitions(
     from sharedRecords: [SharedTagColorDefinitionRecord],
     herd: Herd,
     in context: ModelContext
@@ -103,7 +103,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedTagColorDefinitionRecord,
     to definition: TagColorDefinition,
     herd: Herd
@@ -122,7 +122,7 @@ extension HerdSharingCoreDataStore {
     definition.updatedAt = sharedRecord.updatedAt ?? definition.updatedAt
   }
 
-  func upsertSwiftDataStatusReferences(
+  static func upsertSwiftDataStatusReferences(
     from sharedRecords: [SharedAnimalStatusReferenceRecord],
     herd: Herd,
     in context: ModelContext
@@ -183,7 +183,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedAnimalStatusReferenceRecord,
     to reference: AnimalStatusReference,
     herd: Herd
@@ -194,7 +194,7 @@ extension HerdSharingCoreDataStore {
     reference.createdAt = sharedRecord.createdAt ?? reference.createdAt
   }
 
-  func upsertSwiftDataPastureGroups(
+  static func upsertSwiftDataPastureGroups(
     from sharedRecords: [SharedPastureGroupRecord],
     herd: Herd,
     in context: ModelContext
@@ -255,7 +255,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedPastureGroupRecord,
     to group: PastureGroup,
     herd: Herd
@@ -266,7 +266,7 @@ extension HerdSharingCoreDataStore {
     group.restDays = sharedRecord.restDays?.intValue ?? group.restDays
   }
 
-  func upsertSwiftDataPastures(
+  static func upsertSwiftDataPastures(
     from sharedRecords: [SharedPastureRecord],
     herd: Herd,
     in context: ModelContext
@@ -334,7 +334,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedPastureRecord,
     to pasture: Pasture,
     herd: Herd,
@@ -350,7 +350,7 @@ extension HerdSharingCoreDataStore {
     pasture.group = sharedRecord.parsedGroupPublicID.flatMap { groupsByPublicID[$0] }
   }
 
-  func upsertSwiftDataAnimals(
+  static func upsertSwiftDataAnimals(
     from sharedRecords: [SharedAnimalRecord],
     herd: Herd,
     in context: ModelContext
@@ -435,7 +435,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedAnimalRecord,
     to animal: Animal,
     herd: Herd,
@@ -462,7 +462,7 @@ extension HerdSharingCoreDataStore {
     animal.distinguishingFeatures = sharedRecord.parsedDistinguishingFeatures
   }
 
-  func upsertSwiftDataAnimalTags(
+  static func upsertSwiftDataAnimalTags(
     from sharedRecords: [SharedAnimalTagRecord],
     herd: Herd,
     in context: ModelContext
@@ -537,7 +537,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedAnimalTagRecord,
     to tag: AnimalTag,
     herd: Herd,
@@ -553,7 +553,7 @@ extension HerdSharingCoreDataStore {
     tag.removedAt = sharedRecord.removedAt
   }
 
-  func upsertSwiftDataMovements(
+  static func upsertSwiftDataMovements(
     from sharedRecords: [SharedMovementRecord],
     herd: Herd,
     in context: ModelContext
@@ -625,7 +625,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedMovementRecord,
     to movement: MovementRecord,
     herd: Herd,
@@ -638,7 +638,7 @@ extension HerdSharingCoreDataStore {
     movement.toPasture = sharedRecord.toPasture
   }
 
-  func upsertSwiftDataStatusRecords(
+  static func upsertSwiftDataStatusRecords(
     from sharedRecords: [SharedStatusRecord],
     herd: Herd,
     in context: ModelContext
@@ -712,7 +712,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedStatusRecord,
     to statusRecord: StatusRecord,
     herd: Herd,
@@ -727,7 +727,7 @@ extension HerdSharingCoreDataStore {
     statusRecord.newStatusReferenceID = sharedRecord.parsedNewStatusReferenceID
   }
 
-  func upsertSwiftDataWorkingProtocolTemplates(
+  static func upsertSwiftDataWorkingProtocolTemplates(
     from sharedRecords: [SharedWorkingProtocolTemplateRecord],
     herd: Herd,
     in context: ModelContext
@@ -787,7 +787,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedWorkingProtocolTemplateRecord,
     to template: WorkingProtocolTemplate,
     herd: Herd
@@ -797,7 +797,7 @@ extension HerdSharingCoreDataStore {
     template.items = sharedRecord.parsedItems
   }
 
-  func upsertSwiftDataWorkingSessions(
+  static func upsertSwiftDataWorkingSessions(
     from sharedRecords: [SharedWorkingSessionRecord],
     herd: Herd,
     in context: ModelContext
@@ -867,7 +867,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedWorkingSessionRecord,
     to session: WorkingSession,
     herd: Herd,
@@ -886,7 +886,7 @@ extension HerdSharingCoreDataStore {
     session.notes = sharedRecord.notes
   }
 
-  func upsertSwiftDataWorkingQueueItems(
+  static func upsertSwiftDataWorkingQueueItems(
     from sharedRecords: [SharedWorkingQueueItemRecord],
     herd: Herd,
     in context: ModelContext
@@ -987,7 +987,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedWorkingQueueItemRecord,
     to queueItem: WorkingQueueItem,
     herd: Herd,
@@ -1016,7 +1016,7 @@ extension HerdSharingCoreDataStore {
     }
   }
 
-  func upsertSwiftDataWorkingTreatmentRecords(
+  static func upsertSwiftDataWorkingTreatmentRecords(
     from sharedRecords: [SharedWorkingTreatmentRecord],
     herd: Herd,
     in context: ModelContext
@@ -1099,7 +1099,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedWorkingTreatmentRecord,
     to treatmentRecord: WorkingTreatmentRecord,
     herd: Herd,
@@ -1115,7 +1115,7 @@ extension HerdSharingCoreDataStore {
     treatmentRecord.quantity = sharedRecord.quantity?.doubleValue
   }
 
-  func upsertSwiftDataHealthRecords(
+  static func upsertSwiftDataHealthRecords(
     from sharedRecords: [SharedHealthRecord],
     herd: Herd,
     in context: ModelContext
@@ -1196,7 +1196,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedHealthRecord,
     to healthRecord: HealthRecord,
     herd: Herd,
@@ -1213,7 +1213,7 @@ extension HerdSharingCoreDataStore {
     }
   }
 
-  func upsertSwiftDataPregnancyChecks(
+  static func upsertSwiftDataPregnancyChecks(
     from sharedRecords: [SharedPregnancyCheckRecord],
     herd: Herd,
     in context: ModelContext
@@ -1297,7 +1297,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedPregnancyCheckRecord,
     to check: PregnancyCheck,
     herd: Herd,
@@ -1318,7 +1318,7 @@ extension HerdSharingCoreDataStore {
     }
   }
 
-  func upsertSwiftDataFieldCheckSessions(
+  static func upsertSwiftDataFieldCheckSessions(
     from sharedRecords: [SharedFieldCheckSessionRecord],
     herd: Herd,
     in context: ModelContext
@@ -1395,7 +1395,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedFieldCheckSessionRecord,
     to session: FieldCheckSession,
     herd: Herd,
@@ -1417,7 +1417,7 @@ extension HerdSharingCoreDataStore {
     session.pasture = sharedRecord.parsedPasturePublicID.flatMap { pasturesByPublicID[$0] }
   }
 
-  func upsertSwiftDataFieldCheckAnimalChecks(
+  static func upsertSwiftDataFieldCheckAnimalChecks(
     from sharedRecords: [SharedFieldCheckAnimalCheckRecord],
     herd: Herd,
     in context: ModelContext
@@ -1506,7 +1506,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedFieldCheckAnimalCheckRecord,
     to check: FieldCheckAnimalCheck,
     herd: Herd,
@@ -1532,7 +1532,7 @@ extension HerdSharingCoreDataStore {
     check.note = sharedRecord.note ?? ""
   }
 
-  func upsertSwiftDataFieldCheckFindings(
+  static func upsertSwiftDataFieldCheckFindings(
     from sharedRecords: [SharedFieldCheckFindingRecord],
     herd: Herd,
     in context: ModelContext
@@ -1620,7 +1620,7 @@ extension HerdSharingCoreDataStore {
     return (inserted, updated, updatedRecordConflicts)
   }
 
-  private func apply(
+  private static func apply(
     _ sharedRecord: SharedFieldCheckFindingRecord,
     to finding: FieldCheckFinding,
     herd: Herd,

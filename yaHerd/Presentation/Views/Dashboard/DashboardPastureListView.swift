@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct DashboardPastureListView: View {
-
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(\.homeFeatureDependencies) private var homeDependencies
     @State private var viewModel = DashboardPastureListViewModel()
     @State private var filter: DashboardPastureFilter = .all
 
@@ -63,7 +63,10 @@ struct DashboardPastureListView: View {
         }
         .navigationTitle("Pastures")
         .task {
-            viewModel.loadIfNeeded(configuration: configuration, using: repository)
+            await viewModel.loadIfNeeded(
+                configuration: configuration,
+                using: homeDependencies.dashboardQueryReader
+            )
         }
         .alert("Dashboard Error", isPresented: errorBinding) {
             Button("OK", role: .cancel) {
@@ -78,9 +81,7 @@ struct DashboardPastureListView: View {
         Binding(
             get: { viewModel.errorMessage != nil },
             set: { newValue in
-                if !newValue {
-                    viewModel.errorMessage = nil
-                }
+                if !newValue { viewModel.errorMessage = nil }
             }
         )
     }

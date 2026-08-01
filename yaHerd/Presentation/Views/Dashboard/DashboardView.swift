@@ -2,7 +2,7 @@ import SwiftUI
 
 struct DashboardView: View {
     @Environment(\.homeFeatureDependencies) private var homeDependencies
-    private var dashboardRecordReader: any DashboardRecordReading { homeDependencies.dashboardReader }
+    private var dashboardQueryReader: any DashboardQueryReading { homeDependencies.dashboardQueryReader }
     private var fieldCheckOverviewReader: any FieldCheckOverviewReading { homeDependencies.fieldCheckOverviewReader }
 
     @State private var viewModel = DashboardViewModel()
@@ -31,10 +31,10 @@ struct DashboardView: View {
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .refreshable {
-            loadDashboardData()
+            await loadDashboardData()
         }
         .task {
-            loadDashboardDataIfNeeded()
+            await loadDashboardDataIfNeeded()
         }
         .alert("Dashboard Error", isPresented: errorBinding) {
             Button("OK", role: .cancel) {
@@ -63,13 +63,21 @@ struct DashboardView: View {
         )
     }
 
-    private func loadDashboardDataIfNeeded() {
-        viewModel.loadIfNeeded(configuration: configuration, using: dashboardRecordReader)
+    private func loadDashboardDataIfNeeded() async {
+        async let dashboardLoad: Void = viewModel.loadIfNeeded(
+            configuration: configuration,
+            using: dashboardQueryReader
+        )
         fieldChecksModel.loadIfNeeded(using: fieldCheckOverviewReader)
+        await dashboardLoad
     }
 
-    private func loadDashboardData() {
-        viewModel.load(configuration: configuration, using: dashboardRecordReader)
+    private func loadDashboardData() async {
+        async let dashboardLoad: Void = viewModel.load(
+            configuration: configuration,
+            using: dashboardQueryReader
+        )
         fieldChecksModel.load(using: fieldCheckOverviewReader)
+        await dashboardLoad
     }
 }

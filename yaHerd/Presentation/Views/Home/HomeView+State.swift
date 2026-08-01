@@ -17,6 +17,10 @@ extension HomeView {
         snapshot?.openFindings ?? []
     }
 
+    var openFindingCount: Int {
+        snapshot?.openFindingCount ?? 0
+    }
+
     var flaggedCheckSessions: [FieldCheckSessionSummary] {
         snapshot?.flaggedCheckSessions ?? []
     }

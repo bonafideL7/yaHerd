@@ -2,9 +2,9 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(\.homeFeatureDependencies) private var homeDependencies
-    private var dashboardRecordReader: any DashboardRecordReading { homeDependencies.dashboardReader }
-    private var fieldCheckOverviewReader: any FieldCheckOverviewReading { homeDependencies.fieldCheckOverviewReader }
-    private var workingTreatmentTemplateReader: any WorkingTreatmentTemplateListReader { homeDependencies.workingTreatmentTemplateReader }
+    private var dashboardQueryReader: any DashboardQueryReading { homeDependencies.dashboardQueryReader }
+    private var homeFieldCheckQueryReader: any HomeFieldCheckQueryReading { homeDependencies.homeFieldCheckQueryReader }
+    private var homeWorkingQueryReader: any HomeWorkingQueryReading { homeDependencies.homeWorkingQueryReader }
     @EnvironmentObject var tagColorLibrary: TagColorLibraryStore
     @Environment(ApplicationSettings.self) var applicationSettings
     @Environment(AppNavigationState.self) private var navigation
@@ -146,9 +146,9 @@ struct HomeView: View {
 
     private func makeLoadHomeUseCase() -> LoadHomeUseCase {
         LoadHomeUseCase(
-            dashboardRepository: dashboardRecordReader,
-            fieldCheckRepository: fieldCheckOverviewReader,
-            workingRepository: workingTreatmentTemplateReader
+            dashboardRepository: dashboardQueryReader,
+            fieldCheckRepository: homeFieldCheckQueryReader,
+            workingRepository: homeWorkingQueryReader
         )
     }
 

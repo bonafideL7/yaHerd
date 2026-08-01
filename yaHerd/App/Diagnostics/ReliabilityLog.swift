@@ -5,13 +5,13 @@ import SwiftData
 
 /// Centralized reliability logging for persistence, sharing sync, and user-visible failures.
 enum ReliabilityLog {
-    private static let subsystem = Bundle.main.bundleIdentifier ?? "yaHerd"
+    nonisolated private static let subsystem = Bundle.main.bundleIdentifier ?? "yaHerd"
 
-    static let persistence = Logger(subsystem: subsystem, category: "Persistence")
-    static let sync = Logger(subsystem: subsystem, category: "Sync")
-    static let userVisibleError = Logger(subsystem: subsystem, category: "UserVisibleError")
+    nonisolated static let persistence = Logger(subsystem: subsystem, category: "Persistence")
+    nonisolated static let sync = Logger(subsystem: subsystem, category: "Sync")
+    nonisolated static let userVisibleError = Logger(subsystem: subsystem, category: "UserVisibleError")
 
-    static func persistenceEvent(_ operation: String, detail: String? = nil) {
+    nonisolated static func persistenceEvent(_ operation: String, detail: String? = nil) {
         if let detail {
             persistence.notice("operation=\(operation, privacy: .public) detail=\(detail, privacy: .public)")
         } else {
@@ -19,25 +19,25 @@ enum ReliabilityLog {
         }
     }
 
-    static func persistenceFailure(_ operation: String, error: Error) {
+    nonisolated static func persistenceFailure(_ operation: String, error: Error) {
         persistence.error(
             "operation=\(operation, privacy: .public) failed error=\(String(describing: error), privacy: .public)"
         )
     }
 
-    static func syncEvent(_ operation: String, trigger: String? = nil, detail: String? = nil) {
+    nonisolated static func syncEvent(_ operation: String, trigger: String? = nil, detail: String? = nil) {
         sync.notice(
             "operation=\(operation, privacy: .public) trigger=\(trigger ?? "n/a", privacy: .public) detail=\(detail ?? "", privacy: .public)"
         )
     }
 
-    static func syncFailure(_ operation: String, trigger: String? = nil, error: Error) {
+    nonisolated static func syncFailure(_ operation: String, trigger: String? = nil, error: Error) {
         sync.error(
             "operation=\(operation, privacy: .public) trigger=\(trigger ?? "n/a", privacy: .public) failed error=\(String(describing: error), privacy: .public)"
         )
     }
 
-    static func userVisibleFailure(_ message: String, error: Error) {
+    nonisolated static func userVisibleFailure(_ message: String, error: Error) {
         userVisibleError.error(
             "message=\(message, privacy: .public) error=\(String(describing: error), privacy: .public)"
         )
@@ -46,12 +46,11 @@ enum ReliabilityLog {
 
 enum PersistenceLog {
     @discardableResult
-    static func fetch<T>(_ operation: String, _ work: () throws -> T) rethrows -> T {
+    nonisolated static func fetch<T>(_ operation: String, _ work: () throws -> T) rethrows -> T {
         try PerformanceLog.measure("SwiftData.fetch.\(operation)", work)
     }
 
-    @MainActor
-    static func save(_ context: ModelContext, operation: String) throws {
+    nonisolated static func save(_ context: ModelContext, operation: String) throws {
         do {
             try PerformanceLog.measure("SwiftData.save.\(operation)") {
                 try context.save()
@@ -63,8 +62,7 @@ enum PersistenceLog {
         }
     }
 
-    @MainActor
-    static func save(_ context: NSManagedObjectContext, operation: String) throws {
+    nonisolated static func save(_ context: NSManagedObjectContext, operation: String) throws {
         do {
             try PerformanceLog.measure("CoreData.save.\(operation)") {
                 try context.save()
@@ -76,7 +74,7 @@ enum PersistenceLog {
         }
     }
 
-    static func decodeFailure(_ operation: String, error: Error) {
+    nonisolated static func decodeFailure(_ operation: String, error: Error) {
         ReliabilityLog.persistenceFailure(operation, error: error)
     }
 }

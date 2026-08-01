@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct HerdSharingBridgeImportResult: Equatable {
+struct HerdSharingBridgeImportResult: Equatable, Sendable {
   let herdName: String
   let insertedTagColorDefinitionCount: Int
   let updatedTagColorDefinitionCount: Int

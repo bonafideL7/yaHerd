@@ -35,7 +35,9 @@ struct AnimalTimelineContainerView: View {
         .task {
             guard !hasLoaded else { return }
             do {
-                events = try timelineReader.fetchTimeline(id: animalID)
+                events = try PerformanceLog.measure("AnimalTimeline.load") {
+                    try timelineReader.fetchTimeline(id: animalID)
+                }
                 errorMessage = nil
             } catch {
                 events = []
@@ -43,5 +45,6 @@ struct AnimalTimelineContainerView: View {
             }
             hasLoaded = true
         }
+        .profileBodyRecomputation("AnimalTimelineContainerView")
     }
 }

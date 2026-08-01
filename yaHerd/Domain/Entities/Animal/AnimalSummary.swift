@@ -1,6 +1,6 @@
 import Foundation
 
-struct AnimalSummary: Identifiable, Hashable {
+struct AnimalSummary: Identifiable, Hashable, Sendable {
     let id: UUID
     let name: String
     let displayTagNumber: String
