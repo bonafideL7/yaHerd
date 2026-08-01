@@ -7,15 +7,28 @@ struct PastureDetailView: View {
     @Environment(AppNavigationState.self) private var navigation
     @State private var isStockingExpanded = false
     @State private var model = PastureDetailViewModel()
+    @State private var filterPastureOptions: [PastureOption] = []
 
     private let pastureID: UUID
+
+    private var query: AnimalQueryState { navigation.animalQuery }
+
+    private var filteredResidentAnimals: [AnimalSummary] {
+        AnimalQueryEngine.apply(
+            to: model.residentAnimals,
+            query: query.query,
+            mandatoryConstraint: { $0.pastureID == pastureID },
+            formatTag: tagColorLibrary.formattedTag(tagNumber:colorID:)
+        )
+    }
 
     init(pastureID: UUID) {
         self.pastureID = pastureID
     }
 
-
     var body: some View {
+        @Bindable var query = query
+
         Group {
             if let detail = model.detail {
                 Form {
@@ -62,6 +75,15 @@ struct PastureDetailView: View {
         }
         .task(id: pastureID) {
             model.load(pastureID: pastureID, using: repository)
+            filterPastureOptions = (try? pastureDependencies.referenceReader.fetchPastureOptions()) ?? []
+        }
+        .sheet(isPresented: $query.showingFilters) {
+            AnimalFilterView(
+                filter: $query.filter,
+                showRemovedStatuses: $query.showRemovedStatuses,
+                showArchivedRecords: $query.showArchivedRecords,
+                pastureOptions: filterPastureOptions
+            )
         }
         .onChange(of: navigation.fullScreenWorkflow) { oldValue, newValue in
             if oldValue == .fieldCheck && newValue == nil {
@@ -94,9 +116,9 @@ struct PastureDetailView: View {
                 if let acreage = detail.acreage, model.shouldShowAcreageSummary {
                     HStack {
                         Text("Acreage: \(acreage, format: .number)")
-                        
+
                         Spacer()
-                        
+
                         if let usableAcreage = detail.usableAcreage,
                            model.shouldShowUsableAcreageSummary {
                             Text("Usable Acres: \(usableAcreage, format: .number)")
@@ -107,7 +129,6 @@ struct PastureDetailView: View {
             }
         }
     }
-
 
     @ViewBuilder
     private func checkSection(_ detail: PastureDetailSnapshot) -> some View {
@@ -138,7 +159,7 @@ struct PastureDetailView: View {
                         .multilineTextAlignment(.trailing)
                         .keyboardType(.decimalPad)
                 }
-                
+
                 HStack {
                     Text("Target Acres/Head")
                     Spacer()
@@ -159,17 +180,17 @@ struct PastureDetailView: View {
             if let capacityHead = metrics.capacityHead {
                 Text("Capacity: \(capacityHead, format: .number.precision(.fractionLength(2)))")
             }
-            
+
             Text(
                 "Stocking Rate: \(metrics.acresPerHead, format: .number.precision(.fractionLength(2))) acres/head"
             )
-            
+
             if let targetAcresPerHead = metrics.targetAcresPerHead {
                 Text(
                     "Target Rate: \(targetAcresPerHead, format: .number.precision(.fractionLength(2))) acres/head"
                 )
             }
-            
+
             HStack {
                 if let utilizationPercent = metrics.utilizationPercent {
                     Text(
@@ -177,9 +198,9 @@ struct PastureDetailView: View {
                     )
                     .foregroundStyle(utilizationColor(for: display.utilizationStatus))
                 }
-                
+
                 Spacer()
-                
+
                 if let badge = display.badge {
                     Label(badge.title, systemImage: badge.systemImage)
                         .foregroundStyle(utilizationColor(for: display.utilizationStatus))
@@ -190,29 +211,42 @@ struct PastureDetailView: View {
 
     @ViewBuilder
     private var animalsSection: some View {
+        let animals = filteredResidentAnimals
         let sections = AnimalListDerivations.groupedAnimals(
-            model.residentAnimals,
-            sortOrder: .animalType
+            animals,
+            sortOrder: query.sortOrder
         )
 
-        ForEach(sections) { section in
-            Section(section.title) {
-                ForEach(section.animals) { animal in
-                    NavigationLink {
-                        AnimalDetailView(animalID: animal.id)
-                    } label: {
-                        let definition = tagColorLibrary.resolvedDefinition(for: animal)
-                        let damDefinition = tagColorLibrary.resolvedDefinition(tagColorID: animal.damDisplayTagColorID)
+        if animals.isEmpty {
+            Section("Animals") {
+                if model.residentAnimals.isEmpty {
+                    Text("No animals are currently assigned to this pasture.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("No animals match the current search and filters.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } else {
+            ForEach(sections) { section in
+                Section(section.title) {
+                    ForEach(section.animals) { animal in
+                        NavigationLink {
+                            AnimalDetailView(animalID: animal.id)
+                        } label: {
+                            let definition = tagColorLibrary.resolvedDefinition(for: animal)
+                            let damDefinition = tagColorLibrary.resolvedDefinition(tagColorID: animal.damDisplayTagColorID)
 
-                        AnimalTagView(
-                            tagNumber: animal.displayTagNumber,
-                            color: definition.color,
-                            colorName: definition.name,
-                            damTagNumber: animal.damDisplayTagNumber,
-                            damTagColor: damDefinition.color,
-                            damTagColorName: damDefinition.name,
-                            damTagVisibility: animal.animalType == .calf ? .always : .whenUntagged
-                        )
+                            AnimalTagView(
+                                tagNumber: animal.displayTagNumber,
+                                color: definition.color,
+                                colorName: definition.name,
+                                damTagNumber: animal.damDisplayTagNumber,
+                                damTagColor: damDefinition.color,
+                                damTagColorName: damDefinition.name,
+                                damTagVisibility: animal.animalType == .calf ? .always : .whenUntagged
+                            )
+                        }
                     }
                 }
             }
