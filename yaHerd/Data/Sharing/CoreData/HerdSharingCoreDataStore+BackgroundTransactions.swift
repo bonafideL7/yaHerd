@@ -320,29 +320,44 @@ extension HerdSharingCoreDataStore {
     _ records: [NSManagedObject],
     in context: NSManagedObjectContext
   ) -> [String: NSManagedObject] {
-    var recordsByPublicID: [String: NSManagedObject] = [:]
+    var recordsByIdentity: [String: NSManagedObject] = [:]
     for record in records {
       guard let publicID = record.value(forKey: "publicID") as? String, !publicID.isEmpty else {
         context.delete(record)
         continue
       }
-      guard let existing = recordsByPublicID[publicID] else {
-        recordsByPublicID[publicID] = record
+
+      let identityKey: String
+      if record.entity.name == SharedDeletedRecord.entityName {
+        guard
+          let sourceEntityName = record.value(forKey: "sourceEntityName") as? String,
+          !sourceEntityName.isEmpty
+        else {
+          context.delete(record)
+          continue
+        }
+        identityKey = "\(sourceEntityName)\u{1F}\(publicID)"
+      } else {
+        identityKey = publicID
+      }
+
+      guard let existing = recordsByIdentity[identityKey] else {
+        recordsByIdentity[identityKey] = record
         continue
       }
 
       if bridgeRecordSort(record, existing) {
         context.delete(existing)
-        recordsByPublicID[publicID] = record
+        recordsByIdentity[identityKey] = record
       } else {
         context.delete(record)
       }
       ReliabilityLog.syncEvent(
         "HerdSharingCoreDataStore.duplicateBridgeRecordRepaired",
-        detail: "\(record.entity.name ?? "Unknown"):\(publicID)"
+        detail: "\(record.entity.name ?? "Unknown"):\(identityKey)"
       )
     }
-    return recordsByPublicID
+    return recordsByIdentity
   }
 
   nonisolated private static func upsertDeletionTombstone(
