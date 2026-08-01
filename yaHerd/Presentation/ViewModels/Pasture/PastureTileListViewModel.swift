@@ -4,7 +4,10 @@ import Observation
 @MainActor
 @Observable
 final class PastureTileListViewModel {
+    private static let animalPageSize = ReadPageRequest.defaultLimit
+
     private(set) var items: [PastureSummary] = []
+    private(set) var residentAnimalsByPastureID: [UUID: [AnimalSummary]] = [:]
     var selectedPasture: PastureSummary?
     var isPresentingAddPasture = false
     var internalFilter: PastureListFilter = .all
@@ -23,6 +26,26 @@ final class PastureTileListViewModel {
         }
     }
 
+    func load(
+        using repository: any PastureListReader,
+        animalQueryReader: any AnimalListQueryReading
+    ) async {
+        do {
+            let loadedPastures = try repository.fetchPastures()
+            let animals = try await fetchAllAnimals(using: animalQueryReader)
+            items = loadedPastures
+            residentAnimalsByPastureID = animals.reduce(into: [:]) { grouped, animal in
+                guard let pastureID = animal.pastureID else { return }
+                grouped[pastureID, default: []].append(animal)
+            }
+            errorMessage = nil
+        } catch is CancellationError {
+            return
+        } catch {
+            errorMessage = UserVisibleErrorMessage.make(error)
+        }
+    }
+
     func filteredItems(for filter: PastureListFilter) -> [PastureSummary] {
         switch filter {
         case .all:
@@ -35,6 +58,41 @@ final class PastureTileListViewModel {
             return items.filter(\.isRotationReady)
         case .missingStockingData:
             return items.filter(\.isMissingStockingData)
+        }
+    }
+
+    func filteredItems(
+        for filter: PastureListFilter,
+        query: AnimalQuery,
+        formatTag: (String, UUID?) -> String
+    ) -> [PastureSummary] {
+        let pastureMatches = filteredItems(for: filter)
+        guard query.hasFilteringCriteria else { return pastureMatches }
+
+        let searchText = query.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return pastureMatches.filter { pasture in
+            let pastureNameMatches = !searchText.isEmpty
+                && pasture.name.localizedCaseInsensitiveContains(searchText)
+            let residentAnimals = residentAnimalsByPastureID[pasture.id] ?? []
+
+            var animalQuery = query
+            if pastureNameMatches {
+                animalQuery.searchText = ""
+            }
+
+            let matchingAnimals = AnimalQueryEngine.apply(
+                to: residentAnimals,
+                query: animalQuery,
+                mandatoryConstraint: { $0.pastureID == pasture.id },
+                formatTag: formatTag
+            )
+
+            if pastureNameMatches && !query.filtersAreActive {
+                return true
+            }
+
+            return !matchingAnimals.isEmpty
         }
     }
 
@@ -140,6 +198,24 @@ final class PastureTileListViewModel {
             animalRepository: animalRepository,
             fieldCheckRepository: fieldCheckRepository
         )
+    }
+
+    private func fetchAllAnimals(
+        using reader: any AnimalListQueryReading
+    ) async throws -> [AnimalSummary] {
+        var offset = 0
+        var animals: [AnimalSummary] = []
+
+        while true {
+            try Task.checkCancellation()
+            let page = try await reader.fetchAnimalSummaryPage(
+                ReadPageRequest(offset: offset, limit: Self.animalPageSize)
+            )
+            animals.append(contentsOf: page.animals)
+
+            guard page.hasMore, !page.animals.isEmpty else { return animals }
+            offset += page.animals.count
+        }
     }
 
     private func movedItems(from source: IndexSet, to destination: Int) -> [PastureSummary] {
