@@ -362,20 +362,61 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
     _ descriptor: FetchDescriptor<Model>,
     pageSize: Int = 500
   ) throws -> [Model] {
+    let expectedCount = try modelContext.fetchCount(descriptor)
     var records: [Model] = []
+    records.reserveCapacity(expectedCount)
+    var seenModelIDs = Set<PersistentIdentifier>()
+    seenModelIDs.reserveCapacity(expectedCount)
     var offset = 0
 
-    while true {
+    while records.count < expectedCount {
       var page = descriptor
       page.fetchOffset = offset
       page.fetchLimit = pageSize
       let fetched = try modelContext.fetch(page)
-      records.append(contentsOf: fetched)
-      guard fetched.count == pageSize else { break }
+
+      guard !fetched.isEmpty else {
+        throw unstablePagedExportError(
+          modelType: Model.self,
+          expectedCount: expectedCount,
+          fetchedCount: records.count
+        )
+      }
+
+      for record in fetched {
+        guard seenModelIDs.insert(record.persistentModelID).inserted else {
+          throw unstablePagedExportError(
+            modelType: Model.self,
+            expectedCount: expectedCount,
+            fetchedCount: records.count
+          )
+        }
+        records.append(record)
+      }
+
       offset += fetched.count
+      if fetched.count < pageSize { break }
+    }
+
+    guard records.count == expectedCount else {
+      throw unstablePagedExportError(
+        modelType: Model.self,
+        expectedCount: expectedCount,
+        fetchedCount: records.count
+      )
     }
 
     return records
+  }
+
+  private func unstablePagedExportError<Model: PersistentModel>(
+    modelType: Model.Type,
+    expectedCount: Int,
+    fetchedCount: Int
+  ) -> HerdSharingActionError {
+    .bridgeConsistencyFailed(
+      "SwiftData export could not produce a complete stable page sequence for \(String(describing: modelType)); expected \(expectedCount) records and read \(fetchedCount). Repair duplicate application-managed public IDs before sharing or synchronization."
+    )
   }
 
   private func mergeRelatedModels<Model: AnyObject>(
