@@ -316,7 +316,7 @@ extension HerdSharingCoreDataStore {
     )
   }
 
-  nonisolated private static func canonicalRecordsByPublicID(
+  nonisolated static func canonicalRecordsByPublicID(
     _ records: [NSManagedObject],
     in context: NSManagedObjectContext
   ) -> [String: NSManagedObject] {
