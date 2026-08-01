@@ -144,7 +144,7 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
           sortBy: [SortDescriptor(\Animal.publicID)]
         )
       )
-      let animalTags = try fetchAll(
+      let directAnimalTags = try fetchAll(
         FetchDescriptor<AnimalTag>(
           predicate: #Predicate<AnimalTag> { tag in
             tag.herd?.publicID == herdID
@@ -152,7 +152,12 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
           sortBy: [SortDescriptor(\AnimalTag.publicID)]
         )
       )
-      let movements = try fetchAll(
+      let animalTags = mergeRelatedModels(
+        directAnimalTags,
+        with: animals.flatMap { $0.tags },
+        publicID: { $0.publicID }
+      )
+      let directMovements = try fetchAll(
         FetchDescriptor<MovementRecord>(
           predicate: #Predicate<MovementRecord> { movement in
             movement.herd?.publicID == herdID
@@ -160,7 +165,12 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
           sortBy: [SortDescriptor(\MovementRecord.publicID)]
         )
       )
-      let statusRecords = try fetchAll(
+      let movements = mergeRelatedModels(
+        directMovements,
+        with: animals.flatMap { $0.movementRecords },
+        publicID: { $0.publicID }
+      )
+      let directStatusRecords = try fetchAll(
         FetchDescriptor<StatusRecord>(
           predicate: #Predicate<StatusRecord> { record in
             record.herd?.publicID == herdID
@@ -168,7 +178,12 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
           sortBy: [SortDescriptor(\StatusRecord.publicID)]
         )
       )
-      let healthRecords = try fetchAll(
+      let statusRecords = mergeRelatedModels(
+        directStatusRecords,
+        with: animals.flatMap { $0.statusRecords },
+        publicID: { $0.publicID }
+      )
+      let directHealthRecords = try fetchAll(
         FetchDescriptor<HealthRecord>(
           predicate: #Predicate<HealthRecord> { record in
             record.herd?.publicID == herdID
@@ -176,13 +191,23 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
           sortBy: [SortDescriptor(\HealthRecord.publicID)]
         )
       )
-      let pregnancyChecks = try fetchAll(
+      let healthRecords = mergeRelatedModels(
+        directHealthRecords,
+        with: animals.flatMap { $0.healthRecords },
+        publicID: { $0.publicID }
+      )
+      let directPregnancyChecks = try fetchAll(
         FetchDescriptor<PregnancyCheck>(
           predicate: #Predicate<PregnancyCheck> { check in
             check.herd?.publicID == herdID
           },
           sortBy: [SortDescriptor(\PregnancyCheck.publicID)]
         )
+      )
+      let pregnancyChecks = mergeRelatedModels(
+        directPregnancyChecks,
+        with: animals.flatMap { $0.pregnancyChecks },
+        publicID: { $0.publicID }
       )
       let workingProtocolTemplates = try fetchAll(
         FetchDescriptor<WorkingProtocolTemplate>(
@@ -200,7 +225,7 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
           sortBy: [SortDescriptor(\WorkingSession.publicID)]
         )
       )
-      let workingQueueItems = try fetchAll(
+      let directWorkingQueueItems = try fetchAll(
         FetchDescriptor<WorkingQueueItem>(
           predicate: #Predicate<WorkingQueueItem> { item in
             item.herd?.publicID == herdID
@@ -208,7 +233,13 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
           sortBy: [SortDescriptor(\WorkingQueueItem.publicID)]
         )
       )
-      let workingTreatmentRecords = try fetchAll(
+      let workingQueueItems = mergeRelatedModels(
+        directWorkingQueueItems,
+        with: workingSessions.flatMap { $0.queueItems }
+          + animals.flatMap { $0.workingQueueItemStorage ?? [] },
+        publicID: { $0.publicID }
+      )
+      let directWorkingTreatmentRecords = try fetchAll(
         FetchDescriptor<WorkingTreatmentRecord>(
           predicate: #Predicate<WorkingTreatmentRecord> { record in
             record.herd?.publicID == herdID
@@ -216,7 +247,13 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
           sortBy: [SortDescriptor(\WorkingTreatmentRecord.publicID)]
         )
       )
-      let fieldCheckSessions = try fetchAll(
+      let workingTreatmentRecords = mergeRelatedModels(
+        directWorkingTreatmentRecords,
+        with: workingSessions.flatMap { $0.treatmentRecordStorage ?? [] }
+          + animals.flatMap { $0.workingTreatmentRecordStorage ?? [] },
+        publicID: { $0.publicID }
+      )
+      let directFieldCheckSessions = try fetchAll(
         FetchDescriptor<FieldCheckSession>(
           predicate: #Predicate<FieldCheckSession> { session in
             session.herd?.publicID == herdID
@@ -224,7 +261,12 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
           sortBy: [SortDescriptor(\FieldCheckSession.publicID)]
         )
       )
-      let fieldCheckAnimalChecks = try fetchAll(
+      let fieldCheckSessions = mergeRelatedModels(
+        directFieldCheckSessions,
+        with: pastures.flatMap { $0.fieldCheckSessionStorage ?? [] },
+        publicID: { $0.publicID }
+      )
+      let directFieldCheckAnimalChecks = try fetchAll(
         FetchDescriptor<FieldCheckAnimalCheck>(
           predicate: #Predicate<FieldCheckAnimalCheck> { check in
             check.herd?.publicID == herdID
@@ -232,13 +274,25 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
           sortBy: [SortDescriptor(\FieldCheckAnimalCheck.publicID)]
         )
       )
-      let fieldCheckFindings = try fetchAll(
+      let fieldCheckAnimalChecks = mergeRelatedModels(
+        directFieldCheckAnimalChecks,
+        with: fieldCheckSessions.flatMap { $0.animalChecks }
+          + animals.flatMap { $0.fieldCheckAnimalCheckStorage ?? [] },
+        publicID: { $0.publicID }
+      )
+      let directFieldCheckFindings = try fetchAll(
         FetchDescriptor<FieldCheckFinding>(
           predicate: #Predicate<FieldCheckFinding> { finding in
             finding.herd?.publicID == herdID
           },
           sortBy: [SortDescriptor(\FieldCheckFinding.publicID)]
         )
+      )
+      let fieldCheckFindings = mergeRelatedModels(
+        directFieldCheckFindings,
+        with: fieldCheckSessions.flatMap { $0.findings }
+          + animals.flatMap { $0.fieldCheckFindingStorage ?? [] },
+        publicID: { $0.publicID }
       )
 
       let localPublicIDs: [HerdSharingBridgeStep: [UUID]] = [
@@ -322,5 +376,28 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
     }
 
     return records
+  }
+
+  private func mergeRelatedModels<Model: AnyObject>(
+    _ directModels: [Model],
+    with relatedModels: [Model],
+    publicID: (Model) -> UUID
+  ) -> [Model] {
+    var seenModels = Set<ObjectIdentifier>()
+    var mergedModels: [Model] = []
+    mergedModels.reserveCapacity(directModels.count + relatedModels.count)
+
+    for model in directModels {
+      guard seenModels.insert(ObjectIdentifier(model)).inserted else { continue }
+      mergedModels.append(model)
+    }
+    for model in relatedModels {
+      guard seenModels.insert(ObjectIdentifier(model)).inserted else { continue }
+      mergedModels.append(model)
+    }
+
+    return mergedModels.sorted {
+      publicID($0).uuidString < publicID($1).uuidString
+    }
   }
 }
