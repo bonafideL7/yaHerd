@@ -59,7 +59,7 @@ extension HerdSharingCoreDataStore {
             }
 
             let treatmentRecord: WorkingTreatmentRecord
-            var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
+            var beforeFieldSnapshot: HerdSharingSwiftDataImportEngine.HerdSharingConflictFieldSnapshot?
             if let existingTreatmentRecord = treatmentRecordsByPublicID[publicID] {
                 treatmentRecord = existingTreatmentRecord
                 updated += 1
@@ -90,7 +90,7 @@ extension HerdSharingCoreDataStore {
             )
             if let beforeFieldSnapshot {
                 updatedRecordConflicts.append(
-                    updatedRecordConflict(
+                    HerdSharingSwiftDataImportEngine.updatedRecordConflict(
                         sourceEntityName: SharedWorkingTreatmentRecord.entityName,
                         publicID: publicID,
                         localModifiedAt: nil,

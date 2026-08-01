@@ -11,7 +11,7 @@ import SwiftData
 /// sharing a herd as one CloudKit collaboration unit.
 @MainActor
 enum DefaultHerdBootstrapper {
-    static let defaultHerdName = "My Herd"
+    nonisolated static let defaultHerdName = "My Herd"
     private static let currentMigrationVersion = 1
     private static let migrationVersionKeyPrefix = "DefaultHerdBootstrapper.completedMigrationVersion"
 
@@ -42,7 +42,7 @@ enum DefaultHerdBootstrapper {
         }
     }
 
-    static func defaultHerd(in context: ModelContext) throws -> Herd {
+    nonisolated static func defaultHerd(in context: ModelContext) throws -> Herd {
         var descriptor = FetchDescriptor<Herd>(
             sortBy: [SortDescriptor(\Herd.createdAt)]
         )

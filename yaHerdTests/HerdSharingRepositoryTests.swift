@@ -302,7 +302,7 @@ private final class RecordingHerdSharingBridgeSyncStore: HerdSharingBridgeSyncSt
   func importBridgeRecordsIntoSwiftData(
     for herd: HerdSummary,
     access: HerdSharingAccess,
-    context: ModelContext
+    importer: any HerdSharingImportApplying
   ) async throws -> HerdSharingBridgeImportResult {
     operationOrder.append("import")
     importedHerd = herd
@@ -311,81 +311,49 @@ private final class RecordingHerdSharingBridgeSyncStore: HerdSharingBridgeSyncSt
       throw importError
     }
 
-    let herd = try XCTUnwrap(
-      context.fetch(FetchDescriptor<Herd>()).first { candidate in
-        candidate.publicID == herdID
-      }
+    let importedHerd = HerdSummary(
+      publicID: herdID,
+      name: "Downloaded collaborator herd",
+      createdAt: Date(timeIntervalSince1970: 1),
+      updatedAt: Date(timeIntervalSince1970: 10),
+      schemaVersion: herd.schemaVersion
     )
-    herd.name = "Downloaded collaborator herd"
-    herd.updatedAt = Date(timeIntervalSince1970: 10)
-    try context.save()
-
-    return HerdSharingBridgeImportResult(
-      herdName: herd.name,
-      insertedTagColorDefinitionCount: 0,
-      updatedTagColorDefinitionCount: 0,
-      insertedStatusReferenceCount: 0,
-      updatedStatusReferenceCount: 0,
-      insertedAnimalTagCount: 0,
-      updatedAnimalTagCount: 0,
-      insertedPastureGroupCount: 0,
-      updatedPastureGroupCount: 0,
-      insertedPastureCount: 0,
-      updatedPastureCount: 0,
-      insertedAnimalCount: 0,
-      updatedAnimalCount: 0,
-      insertedMovementCount: 0,
-      updatedMovementCount: 0,
-      insertedStatusRecordCount: 0,
-      updatedStatusRecordCount: 0,
-      insertedHealthRecordCount: 0,
-      updatedHealthRecordCount: 0,
-      insertedPregnancyCheckCount: 0,
-      updatedPregnancyCheckCount: 0,
-      insertedWorkingProtocolTemplateCount: 0,
-      updatedWorkingProtocolTemplateCount: 0,
-      insertedWorkingSessionCount: 0,
-      updatedWorkingSessionCount: 0,
-      insertedWorkingQueueItemCount: 0,
-      updatedWorkingQueueItemCount: 0,
-      insertedWorkingTreatmentRecordCount: 0,
-      updatedWorkingTreatmentRecordCount: 0,
-      insertedFieldCheckSessionCount: 0,
-      updatedFieldCheckSessionCount: 0,
-      insertedFieldCheckAnimalCheckCount: 0,
-      updatedFieldCheckAnimalCheckCount: 0,
-      insertedFieldCheckFindingCount: 0,
-      updatedFieldCheckFindingCount: 0,
-      deletedRecordCount: 0,
-      conflictReport: .empty,
-      reconciliationReport: .empty
+    let snapshot = try HerdSharingBridgeExportSnapshotBuilder.makeExportStoreSnapshot(
+      herd: importedHerd,
+      tagColorDefinitions: [],
+      statusReferences: [],
+      animalTags: [],
+      pastureGroups: [],
+      pastures: [],
+      animals: [],
+      movements: [],
+      statusRecords: [],
+      healthRecords: [],
+      pregnancyChecks: [],
+      workingProtocolTemplates: [],
+      workingSessions: [],
+      workingQueueItems: [],
+      workingTreatmentRecords: [],
+      fieldCheckSessions: [],
+      fieldCheckAnimalChecks: [],
+      fieldCheckFindings: [],
+      storeDescription: access.locationDescription
     )
+    let application = try await importer.applyImport(
+      snapshot,
+      pendingConflictReport: nil,
+      failureInjector: .disabled
+    )
+    return application.result
   }
 
-  func syncBridgeRecordsFromSwiftData(
-    herd: HerdSummary,
-    tagColorDefinitions _: [TagColorDefinition],
-    statusReferences _: [AnimalStatusReference],
-    animalTags _: [AnimalTag],
-    pastureGroups _: [PastureGroup],
-    pastures _: [Pasture],
-    animals _: [Animal],
-    movements _: [MovementRecord],
-    statusRecords _: [StatusRecord],
-    healthRecords _: [HealthRecord],
-    pregnancyChecks _: [PregnancyCheck],
-    workingProtocolTemplates _: [WorkingProtocolTemplate],
-    workingSessions _: [WorkingSession],
-    workingQueueItems _: [WorkingQueueItem],
-    workingTreatmentRecords _: [WorkingTreatmentRecord],
-    fieldCheckSessions _: [FieldCheckSession],
-    fieldCheckAnimalChecks _: [FieldCheckAnimalCheck],
-    fieldCheckFindings _: [FieldCheckFinding]
+  func syncBridgeRecordsFromSnapshot(
+    _ export: HerdSharingSwiftDataExport
   ) async throws -> HerdSharingBridgeExportResult {
     operationOrder.append("export")
-    exportedHerd = herd
+    exportedHerd = export.herd
     return HerdSharingBridgeExportResult(
-      herdName: herd.name,
+      herdName: export.herd.name,
       writeTargetDescription: "accepted shared store",
       didUpdateExistingCloudKitShare: false,
       exportedTagColorDefinitionCount: 0,

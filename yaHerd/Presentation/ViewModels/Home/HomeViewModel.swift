@@ -17,7 +17,7 @@ final class HomeViewModel {
     ) async {
         let startingSequence = mutationStream.currentSequence
         if !hasLoaded || lastAppliedMutationSequence < startingSequence {
-            if load(configuration: configuration, useCase: useCase) {
+            if await load(configuration: configuration, useCase: useCase) {
                 lastAppliedMutationSequence = startingSequence
             }
         }
@@ -26,14 +26,17 @@ final class HomeViewModel {
             guard !Task.isCancelled else { return }
             guard event.affectedAreas.contains(.home) else { continue }
 
-            if load(configuration: configuration, useCase: useCase) {
+            if await load(configuration: configuration, useCase: useCase) {
                 lastAppliedMutationSequence = event.sequence
             }
         }
     }
 
     @discardableResult
-    func load(configuration: DashboardConfiguration, useCase: LoadHomeUseCase) -> Bool {
+    func load(
+        configuration: DashboardConfiguration,
+        useCase: LoadHomeUseCase
+    ) async -> Bool {
         guard !isLoading else { return false }
         isLoading = true
         defer {
@@ -41,7 +44,7 @@ final class HomeViewModel {
         }
 
         do {
-            snapshot = try useCase.execute(configuration: configuration)
+            snapshot = try await useCase.execute(configuration: configuration)
             errorMessage = nil
             hasLoaded = true
             return true

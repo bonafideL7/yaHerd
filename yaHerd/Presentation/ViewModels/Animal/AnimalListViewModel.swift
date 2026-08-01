@@ -20,14 +20,21 @@ final class AnimalListViewModel {
     private(set) var hasHiddenArchivedRecords = false
     var errorMessage: String?
 
+    private static let pageSize = ReadPageRequest.defaultLimit
+
     private var isLoading = false
+    private var loadTask: Task<Void, Never>?
+    private var loadGeneration = 0
     private var derivedStateTask: Task<Void, Never>?
+    private var derivedStateGeneration = 0
+    private var lastDerivedStateRequest: DerivedStateRequest?
+    private let derivationActor = AnimalListDerivationActor()
 
     func loadIfNeeded(
         using repository: any AnimalListRepository,
         pastureRepository: any PastureReferenceDataReader
     ) {
-        guard !hasLoaded else { return }
+        guard !hasLoaded, !isLoading else { return }
         load(using: repository, pastureRepository: pastureRepository)
     }
 
@@ -35,19 +42,24 @@ final class AnimalListViewModel {
         using repository: any AnimalListRepository,
         pastureRepository: any PastureReferenceDataReader
     ) {
-        guard !isLoading else { return }
-        isLoading = true
-        defer {
-            isLoading = false
+        loadGeneration += 1
+        let generation = loadGeneration
+        loadTask?.cancel()
+        loadTask = nil
+
+        guard let queryReader = repository as? any AnimalListQueryReading else {
+            loadSynchronously(
+                using: repository,
+                pastureRepository: pastureRepository,
+                generation: generation
+            )
+            return
         }
 
-        do {
-            items = try repository.fetchAnimals()
-            pastureOptions = try pastureRepository.fetchPastureOptions()
-            errorMessage = nil
-            hasLoaded = true
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+        isLoading = true
+        loadTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.loadUsingReadModel(queryReader, generation: generation)
         }
     }
 
@@ -60,51 +72,32 @@ final class AnimalListViewModel {
         debounced: Bool = false,
         formatTag: @escaping (String, UUID?) -> String
     ) {
-        derivedStateTask?.cancel()
-
-        guard debounced else {
-            applyDerivedState(
-                searchText: searchText,
-                sortOrder: sortOrder,
-                filter: filter,
-                showRemovedStatuses: showRemovedStatuses,
-                showArchivedRecords: showArchivedRecords,
-                formatTag: formatTag
-            )
-            return
-        }
-
-        derivedStateTask = Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(for: .milliseconds(250))
-            } catch {
-                return
-            }
-
-            guard !Task.isCancelled else { return }
-            self?.applyDerivedState(
-                searchText: searchText,
-                sortOrder: sortOrder,
-                filter: filter,
-                showRemovedStatuses: showRemovedStatuses,
-                showArchivedRecords: showArchivedRecords,
-                formatTag: formatTag
-            )
-        }
+        let request = DerivedStateRequest(
+            searchText: searchText,
+            sortOrder: sortOrder,
+            filter: filter,
+            showRemovedStatuses: showRemovedStatuses,
+            showArchivedRecords: showArchivedRecords,
+            formatTag: formatTag
+        )
+        lastDerivedStateRequest = request
+        scheduleDerivedState(request, debounced: debounced)
     }
 
     func performPrimarySwipeAction(
         animalID: UUID,
         hardDelete: Bool,
         using repository: any AnimalListRepository,
-        pastureRepository: any PastureReferenceDataReader
+        pastureRepository _: any PastureReferenceDataReader
     ) {
         do {
             if hardDelete {
                 try repository.delete(ids: [animalID])
+                invalidateCurrentLoad()
                 removeItems(ids: [animalID])
             } else {
                 try repository.archive(ids: [animalID])
+                invalidateCurrentLoad()
                 updateArchiveState(ids: [animalID], isArchived: true)
             }
             errorMessage = nil
@@ -117,10 +110,11 @@ final class AnimalListViewModel {
     func restore(
         animalID: UUID,
         using repository: any AnimalListRepository,
-        pastureRepository: any PastureReferenceDataReader
+        pastureRepository _: any PastureReferenceDataReader
     ) {
         do {
             try repository.restore(ids: [animalID])
+            invalidateCurrentLoad()
             updateArchiveState(ids: [animalID], isArchived: false)
             errorMessage = nil
             hasLoaded = true
@@ -133,10 +127,11 @@ final class AnimalListViewModel {
         ids: [UUID],
         toPastureID pastureID: UUID?,
         using repository: any AnimalListRepository,
-        pastureRepository: any PastureReferenceDataReader
+        pastureRepository _: any PastureReferenceDataReader
     ) {
         do {
             try repository.move(ids: ids, toPastureID: pastureID)
+            invalidateCurrentLoad()
             moveItems(ids: ids, toPastureID: pastureID)
             errorMessage = nil
             hasLoaded = true
@@ -150,9 +145,154 @@ final class AnimalListViewModel {
         return pastureOptions.first(where: { $0.id == id })?.name
     }
 
+    private func loadUsingReadModel(
+        _ reader: any AnimalListQueryReading,
+        generation: Int
+    ) async {
+        defer {
+            if generation == loadGeneration {
+                isLoading = false
+                loadTask = nil
+            }
+        }
+
+        do {
+            let loaded = try await PerformanceLog.measureAsync("AnimalList.load") {
+                async let pastureOptions = reader.fetchAnimalPastureOptions(limit: 500)
+                let animals = try await fetchAllAnimalPages(using: reader)
+                return (animals, try await pastureOptions)
+            }
+
+            guard !Task.isCancelled, generation == loadGeneration else { return }
+            items = loaded.0
+            pastureOptions = loaded.1
+            errorMessage = nil
+            hasLoaded = true
+            refreshLastDerivedState()
+        } catch is CancellationError {
+            return
+        } catch {
+            guard generation == loadGeneration else { return }
+            errorMessage = UserVisibleErrorMessage.make(error)
+        }
+    }
+
+    private func loadSynchronously(
+        using repository: any AnimalListRepository,
+        pastureRepository: any PastureReferenceDataReader,
+        generation: Int
+    ) {
+        isLoading = true
+        defer {
+            if generation == loadGeneration {
+                isLoading = false
+            }
+        }
+
+        do {
+            let loadedItems = try repository.fetchAnimals()
+            let loadedPastures = try pastureRepository.fetchPastureOptions()
+            guard generation == loadGeneration else { return }
+            items = loadedItems
+            pastureOptions = loadedPastures
+            errorMessage = nil
+            hasLoaded = true
+            refreshLastDerivedState()
+        } catch {
+            guard generation == loadGeneration else { return }
+            errorMessage = UserVisibleErrorMessage.make(error)
+        }
+    }
+
+    private func fetchAllAnimalPages(
+        using reader: any AnimalListQueryReading
+    ) async throws -> [AnimalSummary] {
+        var offset = 0
+        var animals: [AnimalSummary] = []
+
+        while true {
+            try Task.checkCancellation()
+            let page = try await reader.fetchAnimalSummaryPage(
+                ReadPageRequest(offset: offset, limit: Self.pageSize)
+            )
+            animals.append(contentsOf: page.animals)
+
+            guard page.hasMore else { return animals }
+            guard !page.animals.isEmpty else { return animals }
+            offset += page.animals.count
+        }
+    }
+
+    private func invalidateCurrentLoad() {
+        loadGeneration += 1
+        loadTask?.cancel()
+        loadTask = nil
+        isLoading = false
+    }
+
+    private func refreshLastDerivedState() {
+        guard let lastDerivedStateRequest else { return }
+        scheduleDerivedState(lastDerivedStateRequest, debounced: false)
+    }
+
+    private func scheduleDerivedState(
+        _ request: DerivedStateRequest,
+        debounced: Bool
+    ) {
+        derivedStateTask?.cancel()
+        derivedStateGeneration += 1
+        let generation = derivedStateGeneration
+        let itemsSnapshot = items
+        var formattedTags: [AnimalFormattedTagKey: String] = [:]
+        formattedTags.reserveCapacity(itemsSnapshot.count)
+        for animal in itemsSnapshot {
+            let key = AnimalFormattedTagKey(
+                number: animal.displayTagNumber,
+                colorID: animal.displayTagColorID
+            )
+            formattedTags[key] = request.formatTag(key.number, key.colorID)
+        }
+        let derivationActor = derivationActor
+
+        derivedStateTask = Task { @MainActor [weak self] in
+            if debounced {
+                do {
+                    try await Task.sleep(for: .milliseconds(250))
+                } catch {
+                    return
+                }
+            }
+
+            guard !Task.isCancelled else { return }
+            let snapshot = await derivationActor.makeSnapshot(
+                items: itemsSnapshot,
+                searchText: request.searchText,
+                sortOrder: request.sortOrder,
+                filter: request.filter,
+                showRemovedStatuses: request.showRemovedStatuses,
+                showArchivedRecords: request.showArchivedRecords,
+                formattedTags: formattedTags
+            )
+            guard !Task.isCancelled else { return }
+            guard let self, generation == self.derivedStateGeneration else { return }
+            self.applyDerivedState(snapshot)
+        }
+    }
+
+    private func applyDerivedState(_ snapshot: AnimalListDerivedStateSnapshot) {
+        filteredAndSortedAnimals = snapshot.filteredAndSortedAnimals
+        groupedAnimals = snapshot.groupedAnimals
+        shouldUseSections = snapshot.shouldUseSections
+        currentSectionIDs = snapshot.currentSectionIDs
+        emptyStateConfiguration = snapshot.emptyStateConfiguration
+        hasHiddenOffHerdAnimals = snapshot.hasHiddenOffHerdAnimals
+        hasHiddenArchivedRecords = snapshot.hasHiddenArchivedRecords
+    }
+
     private func removeItems(ids: [UUID]) {
         let idsToRemove = Set(ids)
         items.removeAll { idsToRemove.contains($0.id) }
+        refreshLastDerivedState()
     }
 
     private func updateArchiveState(ids: [UUID], isArchived: Bool) {
@@ -161,6 +301,7 @@ final class AnimalListViewModel {
             guard idsToUpdate.contains(animal.id) else { return animal }
             return animal.replacingArchiveState(isArchived)
         }
+        refreshLastDerivedState()
     }
 
     private func moveItems(ids: [UUID], toPastureID pastureID: UUID?) {
@@ -173,44 +314,18 @@ final class AnimalListViewModel {
                 pastureName: destinationName
             )
         }
-    }
-
-    private func applyDerivedState(
-        searchText: String,
-        sortOrder: AnimalSortOrder,
-        filter: AnimalFilter,
-        showRemovedStatuses: Bool,
-        showArchivedRecords: Bool,
-        formatTag: (String, UUID?) -> String
-    ) {
-        let filtered = AnimalListDerivations.filteredAndSortedAnimals(
-            items: items,
-            searchText: searchText,
-            sortOrder: sortOrder,
-            filter: filter,
-            showRemovedStatuses: showRemovedStatuses,
-            showArchivedRecords: showArchivedRecords,
-            formatTag: formatTag
-        )
-        let sections = AnimalListDerivations.groupedAnimals(filtered, sortOrder: sortOrder)
-        let usesSections = AnimalListDerivations.shouldUseSections(for: sortOrder)
-
-        filteredAndSortedAnimals = filtered
-        groupedAnimals = sections
-        shouldUseSections = usesSections
-        currentSectionIDs = usesSections ? Set(sections.map(\.id)) : []
-        emptyStateConfiguration = AnimalListDerivations.emptyStateConfiguration(
-            items: items,
-            searchText: searchText,
-            filter: filter,
-            showRemovedStatuses: showRemovedStatuses,
-            showArchivedRecords: showArchivedRecords
-        )
-        hasHiddenOffHerdAnimals = AnimalListDerivations.hasHiddenOffHerdAnimals(items: items)
-        hasHiddenArchivedRecords = AnimalListDerivations.hasHiddenArchivedRecords(items: items)
+        refreshLastDerivedState()
     }
 }
 
+private struct DerivedStateRequest {
+    let searchText: String
+    let sortOrder: AnimalSortOrder
+    let filter: AnimalFilter
+    let showRemovedStatuses: Bool
+    let showArchivedRecords: Bool
+    let formatTag: (String, UUID?) -> String
+}
 
 private extension AnimalSummary {
     func replacingArchiveState(_ isArchived: Bool) -> AnimalSummary {

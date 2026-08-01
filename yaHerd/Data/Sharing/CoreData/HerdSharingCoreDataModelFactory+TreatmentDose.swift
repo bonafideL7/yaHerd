@@ -1,9 +1,24 @@
 import CoreData
+import Synchronization
 
 extension HerdSharingCoreDataModelFactory {
     /// Current unreleased V1 bridge model. The bridge is updated in lockstep with
     /// `YaHerdSchemaV1`; this is not a second application schema version.
     static func makeCurrentModel() -> NSManagedObjectModel {
+        currentModelCache.withLock { cachedModel in
+            if let cachedModel {
+                return cachedModel
+            }
+
+            let model = buildCurrentModel()
+            cachedModel = model
+            return model
+        }
+    }
+
+    private static let currentModelCache = Mutex<NSManagedObjectModel?>(nil)
+
+    private static func buildCurrentModel() -> NSManagedObjectModel {
         let model = makeModel()
         guard let entity = model.entitiesByName[SharedWorkingTreatmentRecord.entityName] else {
             return model

@@ -130,7 +130,10 @@ if ! command -v xcodebuild >/dev/null 2>&1; then
 fi
 
 BUILD_LOG="$(mktemp)"
-trap 'rm -f "$BUILD_LOG"' EXIT
+TEST_LOG="$(mktemp)"
+RESULT_BUNDLE="$ROOT_DIR/.build/PersistenceTests.xcresult"
+rm -rf "$RESULT_BUNDLE"
+trap 'rm -f "$BUILD_LOG" "$TEST_LOG"' EXIT
 
 set +e
 xcodebuild \
@@ -157,3 +160,88 @@ if [[ "$build_status" -ne 0 ]]; then
 fi
 
 cat "$BUILD_LOG"
+
+SIMULATOR_ID="$(xcrun simctl list devices available -j | python3 -c '
+import json
+import sys
+
+devices = json.load(sys.stdin).get("devices", {})
+for runtime_devices in devices.values():
+    for device in runtime_devices:
+        if device.get("isAvailable") and device.get("name", "").startswith("iPhone"):
+            print(device["udid"])
+            raise SystemExit(0)
+raise SystemExit(1)
+')"
+
+if [[ -z "$SIMULATOR_ID" ]]; then
+  echo 'No available iPhone simulator was found for persistence tests.' >&2
+  exit 1
+fi
+
+xcrun simctl boot "$SIMULATOR_ID" >/dev/null 2>&1 || true
+xcrun simctl bootstatus "$SIMULATOR_ID" -b
+
+PERSISTENCE_TEST_SUITES=(
+  AnimalListViewModelReloadTests
+  ApplicationMutationCenterTests
+  HerdSharingBridgeImportBoundaryTests
+  HerdSharingBridgeReliabilityTests
+  HerdSharingCoreDataModelCachingTests
+  HerdSharingDeletionTombstoneIdentityTests
+  HerdSharingImportCommitBoundaryTests
+  HerdSharingRepositoryTests
+  SwiftDataHerdSharingActorDuplicateIDPagingTests
+  SwiftDataHerdSharingActorRelationshipScopeTests
+  SwiftDataHerdSharingActorTests
+  SwiftDataReadModelActorPaginationTests
+  SwiftDataReadModelActorPasturePaginationTests
+  SwiftDataReadModelActorTests
+)
+TEST_SELECTION_ARGS=()
+for suite in "${PERSISTENCE_TEST_SUITES[@]}"; do
+  if [[ ! -f "yaHerdTests/$suite.swift" ]]; then
+    echo "Configured persistence test suite source is missing: yaHerdTests/$suite.swift" >&2
+    exit 1
+  fi
+  TEST_SELECTION_ARGS+=("-only-testing:yaHerdTests/$suite")
+done
+
+set +e
+xcodebuild \
+  -quiet \
+  -project yaHerd.xcodeproj \
+  -scheme yaHerd \
+  -configuration Debug \
+  -sdk iphonesimulator \
+  -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+  -derivedDataPath .build/DerivedData \
+  CODE_SIGNING_ALLOWED=NO \
+  -parallel-testing-enabled NO \
+  -resultBundlePath "$RESULT_BUNDLE" \
+  test-without-building \
+  "${TEST_SELECTION_ARGS[@]}" >"$TEST_LOG" 2>&1
+test_status=$?
+set -e
+
+if [[ "$test_status" -ne 0 ]]; then
+  echo 'Persistence-focused tests failed:' >&2
+  grep -E -i 'error:|failed|failure|fatal|signal|killed|uncaught|assert' "$TEST_LOG" | tail -n 160 >&2 || true
+  echo 'Result bundle summary:' >&2
+  xcrun xcresulttool get test-results summary --path "$RESULT_BUNDLE" >&2 || true
+  echo 'Recent yaHerd simulator logs:' >&2
+  xcrun simctl spawn "$SIMULATOR_ID" log show \
+    --last 10m \
+    --style compact \
+    --predicate 'process == "yaHerd" OR process == "xctest"' 2>&1 \
+    | tail -n 300 >&2 || true
+  echo 'Recent crash reports:' >&2
+  find "$HOME/Library/Logs/DiagnosticReports" -type f \
+    \( -name 'yaHerd*.ips' -o -name 'yaHerd*.crash' -o -name 'xctest*.ips' -o -name 'xctest*.crash' \) \
+    -mmin -15 -print -exec tail -n 240 {} \; >&2 || true
+  echo 'Final test log:' >&2
+  tail -n 100 "$TEST_LOG" >&2
+  exit "$test_status"
+fi
+
+cat "$TEST_LOG"

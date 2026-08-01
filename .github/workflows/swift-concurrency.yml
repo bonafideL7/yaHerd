@@ -32,3 +32,24 @@ jobs:
           sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
           bash Scripts/verify-architecture.sh
           bash Scripts/verify-concurrency.sh
+
+      - name: Collect persistence test diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p .build/PersistenceDiagnostics
+          if [[ -d .build/PersistenceTests.xcresult ]]; then
+            cp -R .build/PersistenceTests.xcresult .build/PersistenceDiagnostics/
+          fi
+          find "$HOME/Library/Logs/DiagnosticReports" -type f \
+            \( -name 'yaHerd*.ips' -o -name 'yaHerd*.crash' -o -name 'xctest*.ips' -o -name 'xctest*.crash' \) \
+            -mmin -30 -exec cp {} .build/PersistenceDiagnostics/ \; || true
+
+      - name: Upload persistence test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: persistence-test-diagnostics
+          path: .build/PersistenceDiagnostics
+          retention-days: 3
+          if-no-files-found: warn

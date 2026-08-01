@@ -21,11 +21,24 @@ final class AppDependencies {
     private let context: ModelContext
     private let dataAccessMode: AppDataAccessMode
 
-    init(
+    convenience init(
         context: ModelContext,
         tagColorDuplicateResolutionPolicy: TagColorDuplicateResolutionPolicy = .stableSortOrderWins,
         dataAccessMode: AppDataAccessMode = .readWrite
     ) {
+        self.init(
+            modelContainer: context.container,
+            tagColorDuplicateResolutionPolicy: tagColorDuplicateResolutionPolicy,
+            dataAccessMode: dataAccessMode
+        )
+    }
+
+    init(
+        modelContainer: ModelContainer,
+        tagColorDuplicateResolutionPolicy: TagColorDuplicateResolutionPolicy = .stableSortOrderWins,
+        dataAccessMode: AppDataAccessMode = .readWrite
+    ) {
+        let context = modelContainer.mainContext
         self.context = context
         self.dataAccessMode = dataAccessMode
 
@@ -39,10 +52,22 @@ final class AppDependencies {
         let conflictReviewStore = HerdSharingConflictReviewStore()
         let cloudKitShareAdapter = CloudKitShareAdapter()
 
+        // Each read model actor owns its own ModelContext. Separate actors allow
+        // independent home queries to run concurrently instead of serializing on
+        // the main context or on one shared actor executor.
+        let dashboardQueryReader = SwiftDataReadModelActor(modelContainer: modelContainer)
+        let homeFieldCheckQueryReader = SwiftDataReadModelActor(modelContainer: modelContainer)
+        let homeWorkingQueryReader = SwiftDataReadModelActor(modelContainer: modelContainer)
+        let animalListQueryReader = SwiftDataReadModelActor(modelContainer: modelContainer)
+
         let animalRepository = SyncRequestingAnimalRepository(
             base: SwiftDataAnimalRepository(context: context),
             mutationRecorder: mutationPipeline,
             writePolicy: writePolicy
+        )
+        let animalListRepository = BackgroundQueryingAnimalListRepository(
+            base: animalRepository,
+            queryReader: animalListQueryReader
         )
         let pastureRepository = SyncRequestingPastureRepository(
             base: SwiftDataPastureRepository(context: context),
@@ -87,7 +112,7 @@ final class AppDependencies {
         if dataAccessMode.isRecoveryMode {
             baseHerdSharingRepository = RecoveryModeHerdSharingRepository()
         } else {
-            baseHerdSharingRepository = CoreDataHerdSharingRepository(
+            baseHerdSharingRepository = DeferredCoreDataHerdSharingRepository(
                 context: context,
                 shareAdapter: cloudKitShareAdapter
             )
@@ -98,7 +123,14 @@ final class AppDependencies {
         )
 
         self.animalFeatureDependencies = AnimalFeatureDependencies(
-            repository: animalRepository,
+            listRepository: animalListRepository,
+            listQueryReader: animalListQueryReader,
+            editorRepository: animalRepository,
+            detailRepository: animalRepository,
+            timelineReader: animalRepository,
+            parentOptionReader: animalRepository,
+            healthRecordAdder: animalRepository,
+            pregnancyCheckAdder: animalRepository,
             pastureReferenceReader: pastureRepository,
             sampleDataSeeder: sampleDataSeeder
         )
@@ -120,7 +152,9 @@ final class AppDependencies {
         self.homeFeatureDependencies = HomeFeatureDependencies(
             dashboardReader: dashboardRepository,
             fieldCheckOverviewReader: fieldCheckRepository,
-            workingTreatmentTemplateReader: workingRepository,
+            dashboardQueryReader: dashboardQueryReader,
+            homeFieldCheckQueryReader: homeFieldCheckQueryReader,
+            homeWorkingQueryReader: homeWorkingQueryReader,
             mutationStream: mutationCenter
         )
 

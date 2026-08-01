@@ -11,10 +11,16 @@ import Foundation
 extension YaHerdSchemaV1 {
     @Model
     final class WorkingSession {
+        #Index<WorkingSession>(
+            [\.statusRawValue],
+            [\.date],
+            [\.statusRawValue, \.date]
+        )
+
         var publicID: UUID = UUID()
         @Relationship(deleteRule: .nullify) var herd: Herd?
         var date: Date = Date.now
-        var status: WorkingSessionStatus = WorkingSessionStatus.active
+        var statusRawValue: String = WorkingSessionStatus.active.rawValue
 
         /// Convenience reference for the common case where the lot is collected from one pasture.
         /// (Working pen is not a pasture.)
@@ -46,6 +52,11 @@ extension YaHerdSchemaV1 {
         @Relationship(deleteRule: .nullify, inverse: \WorkingTreatmentRecord.session)
         var treatmentRecordStorage: [WorkingTreatmentRecord]?
 
+        var status: WorkingSessionStatus {
+            get { WorkingSessionStatus(rawValue: statusRawValue) ?? .active }
+            set { statusRawValue = newValue.rawValue }
+        }
+
         var queueItems: [WorkingQueueItem] {
             get { queueItemStorage ?? [] }
             set { queueItemStorage = newValue }
@@ -62,7 +73,7 @@ extension YaHerdSchemaV1 {
         ) {
             self.publicID = publicID
             self.date = date
-            self.status = status
+            self.statusRawValue = status.rawValue
             self.sourcePasture = sourcePasture
             self.protocolName = protocolName
             self.protocolItems = protocolItems
@@ -72,7 +83,7 @@ extension YaHerdSchemaV1 {
     }
 }
 
-enum WorkingSessionStatus: String, Codable, CaseIterable {
+enum WorkingSessionStatus: String, Codable, CaseIterable, Sendable {
     case active
     case finished
     case cancelled

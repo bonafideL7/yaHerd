@@ -1,6 +1,6 @@
 import Foundation
 
-enum FieldCheckFindingType: String, Codable, CaseIterable, Identifiable, Hashable {
+enum FieldCheckFindingType: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
     case generalObservation
     case pinkEye
     case limping
@@ -34,7 +34,7 @@ enum FieldCheckFindingType: String, Codable, CaseIterable, Identifiable, Hashabl
     }
 }
 
-enum FieldCheckFindingSeverity: String, Codable, CaseIterable, Identifiable, Hashable {
+enum FieldCheckFindingSeverity: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
     case info
     case warning
     case critical
@@ -50,7 +50,7 @@ enum FieldCheckFindingSeverity: String, Codable, CaseIterable, Identifiable, Has
     }
 }
 
-enum FieldCheckFindingStatus: String, Codable, CaseIterable, Identifiable, Hashable {
+enum FieldCheckFindingStatus: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
     case open
     case monitoring
     case resolved

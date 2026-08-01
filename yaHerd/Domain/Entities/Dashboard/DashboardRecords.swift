@@ -1,12 +1,12 @@
 import Foundation
 
-struct DashboardRecords {
+struct DashboardRecords: Sendable {
     let animals: [DashboardAnimalRecord]
     let pastures: [DashboardPastureRecord]
     let workingSessions: [DashboardWorkingSessionRecord]
 }
 
-struct DashboardAnimalRecord: Identifiable, Hashable {
+struct DashboardAnimalRecord: Identifiable, Hashable, Sendable {
     let id: UUID
     let displayTagNumber: String
     let displayTagColorID: UUID?
@@ -38,13 +38,13 @@ struct DashboardAnimalRecord: Identifiable, Hashable {
     }
 }
 
-struct DashboardHealthRecord: Hashable {
+struct DashboardHealthRecord: Hashable, Sendable {
     let date: Date
     let treatment: String
     let notes: String?
 }
 
-struct DashboardPastureRecord: Identifiable, Hashable {
+struct DashboardPastureRecord: Identifiable, Hashable, Sendable {
     let id: UUID
     let name: String
     let acreage: Double?
@@ -64,7 +64,7 @@ struct DashboardPastureRecord: Identifiable, Hashable {
     }
 }
 
-struct DashboardWorkingSessionRecord: Identifiable, Hashable {
+struct DashboardWorkingSessionRecord: Identifiable, Hashable, Sendable {
     let id: String
     let date: Date
     let isActive: Bool

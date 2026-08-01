@@ -49,7 +49,7 @@ extension HomeView {
         }
 
         if shouldShowOpenFindingsRow {
-            if openFindings.count == 1, let finding = openFindings.first {
+            if openFindingCount == 1, let finding = openFindings.first {
                 Button {
                     openFieldCheckArea(
                         .session(
@@ -80,7 +80,7 @@ extension HomeView {
                         subtitle: "Fence, water, health, and missing-animal notes from checks.",
                         systemImage: "exclamationmark.bubble.fill",
                         tint: .red,
-                        count: openFindings.count,
+                        count: openFindingCount,
                         showsChevron: true
                     )
                 }

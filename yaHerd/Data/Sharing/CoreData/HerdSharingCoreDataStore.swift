@@ -16,7 +16,8 @@ final class HerdSharingCoreDataStore {
   static let sharedStoreFileName = "HerdSharingShared.sqlite"
 
   let persistentContainer: NSPersistentCloudKitContainer
-  let cloudKitContainer: CKContainer
+  private let cloudKitContainerIdentifier: String
+  lazy var cloudKitContainer = CKContainer(identifier: cloudKitContainerIdentifier)
 
   var privateStore: NSPersistentStore?
   var sharedStore: NSPersistentStore?
@@ -30,12 +31,12 @@ final class HerdSharingCoreDataStore {
     journalFileURL: URL? = nil,
     failureInjector: HerdSharingBridgeFailureInjector = .disabled
   ) {
+    cloudKitContainerIdentifier = containerIdentifier
     let model = HerdSharingCoreDataModelFactory.makeCurrentModel()
     persistentContainer = NSPersistentCloudKitContainer(
       name: Self.containerName,
       managedObjectModel: model
     )
-    cloudKitContainer = CKContainer(identifier: containerIdentifier)
 
     let directoryURL = storeDirectoryURL ?? Self.defaultStoreDirectoryURL()
     let journal = HerdSharingBridgeJournal(

@@ -5,8 +5,8 @@
 
 import Foundation
 
-struct HerdSharingBridgeOperationRecord: Codable, Equatable, Identifiable {
-  enum State: String, Codable, Equatable {
+struct HerdSharingBridgeOperationRecord: Codable, Equatable, Identifiable, Sendable {
+  enum State: String, Codable, Equatable, Sendable {
     case running
     case failed
     case completed
@@ -26,7 +26,7 @@ struct HerdSharingBridgeOperationRecord: Codable, Equatable, Identifiable {
   var lastErrorDescription: String?
 }
 
-struct HerdSharingBridgeSyncCheckpoint: Codable, Equatable {
+struct HerdSharingBridgeSyncCheckpoint: Codable, Equatable, Sendable {
   let herdPublicID: UUID
   let direction: HerdSharingBridgeDirection
   let bridgeLocation: String
@@ -36,21 +36,19 @@ struct HerdSharingBridgeSyncCheckpoint: Codable, Equatable {
   let reconciliationSummary: String
 }
 
-@MainActor
-final class HerdSharingBridgeJournal {
-  private struct Document: Codable {
+actor HerdSharingBridgeJournal {
+  private struct Document: Codable, Sendable {
     var operations: [HerdSharingBridgeOperationRecord] = []
     var checkpoints: [String: HerdSharingBridgeSyncCheckpoint] = [:]
   }
 
   private let fileURL: URL
   private let maximumOperationCount: Int
-  private var document: Document
+  private var document: Document?
 
   init(fileURL: URL, maximumOperationCount: Int = 100) {
     self.fileURL = fileURL
     self.maximumOperationCount = maximumOperationCount
-    document = Self.loadDocument(from: fileURL)
   }
 
   func begin(
@@ -59,6 +57,7 @@ final class HerdSharingBridgeJournal {
     bridgeLocation: String,
     now: Date = .now
   ) throws -> HerdSharingBridgeOperationRecord {
+    var document = loadDocumentIfNeeded()
     let operationKey = key(
       herdPublicID: herdPublicID,
       direction: direction,
@@ -99,30 +98,55 @@ final class HerdSharingBridgeJournal {
       document.operations.append(operation)
     }
 
-    trimOperationHistory()
-    try persist()
+    trimOperationHistory(in: &document)
+    try persist(document)
+    self.document = document
     return operation
   }
 
   func markCompleted(_ step: HerdSharingBridgeStep, operationID: UUID) throws {
+    var document = loadDocumentIfNeeded()
     guard let index = document.operations.firstIndex(where: { $0.id == operationID }) else {
       return
     }
     if !document.operations[index].completedSteps.contains(step) {
       document.operations[index].completedSteps.append(step)
     }
-    try persist()
+    try persist(document)
+    self.document = document
   }
 
   func recordConflictReport(
     _ report: HerdSharingBridgeConflictReport,
     operationID: UUID
   ) throws {
+    var document = loadDocumentIfNeeded()
     guard let index = document.operations.firstIndex(where: { $0.id == operationID }) else {
       return
     }
     document.operations[index].pendingConflictReport = report
-    try persist()
+    try persist(document)
+    self.document = document
+  }
+
+  func recordCommittedImportFailure(
+    _ failure: HerdSharingSwiftDataCommittedImportFailure,
+    operationID: UUID
+  ) throws {
+    var document = loadDocumentIfNeeded()
+    guard let index = document.operations.firstIndex(where: { $0.id == operationID }) else {
+      return
+    }
+
+    document.operations[index].pendingConflictReport = failure.conflictReport
+    for step in failure.completedSteps
+    where !document.operations[index].completedSteps.contains(step) {
+      document.operations[index].completedSteps.append(step)
+    }
+    document.operations[index].state = .failed
+    document.operations[index].lastErrorDescription = String(describing: failure.underlyingError)
+    try persist(document)
+    self.document = document
   }
 
   func complete(
@@ -131,6 +155,7 @@ final class HerdSharingBridgeJournal {
     reconciliationSummary: String,
     now: Date = .now
   ) throws {
+    var document = loadDocumentIfNeeded()
     guard let index = document.operations.firstIndex(where: { $0.id == operationID }) else {
       return
     }
@@ -155,16 +180,19 @@ final class HerdSharingBridgeJournal {
         bridgeLocation: operation.bridgeLocation
       )
     ] = checkpoint
-    try persist()
+    try persist(document)
+    self.document = document
   }
 
-  func fail(operationID: UUID, error: Error) throws {
+  func fail(operationID: UUID, errorDescription: String) throws {
+    var document = loadDocumentIfNeeded()
     guard let index = document.operations.firstIndex(where: { $0.id == operationID }) else {
       return
     }
     document.operations[index].state = .failed
-    document.operations[index].lastErrorDescription = String(describing: error)
-    try persist()
+    document.operations[index].lastErrorDescription = errorDescription
+    try persist(document)
+    self.document = document
   }
 
   func checkpoint(
@@ -172,7 +200,7 @@ final class HerdSharingBridgeJournal {
     direction: HerdSharingBridgeDirection,
     bridgeLocation: String
   ) -> HerdSharingBridgeSyncCheckpoint? {
-    document.checkpoints[
+    loadDocumentIfNeeded().checkpoints[
       key(
         herdPublicID: herdPublicID,
         direction: direction,
@@ -182,7 +210,7 @@ final class HerdSharingBridgeJournal {
   }
 
   func unfinishedOperations() -> [HerdSharingBridgeOperationRecord] {
-    document.operations.filter { $0.state != .completed }
+    loadDocumentIfNeeded().operations.filter { $0.state != .completed }
   }
 
   private func key(
@@ -193,12 +221,12 @@ final class HerdSharingBridgeJournal {
     "\(herdPublicID.uuidString)|\(direction.rawValue)|\(bridgeLocation)"
   }
 
-  private func trimOperationHistory() {
+  private func trimOperationHistory(in document: inout Document) {
     guard document.operations.count > maximumOperationCount else { return }
     document.operations.removeFirst(document.operations.count - maximumOperationCount)
   }
 
-  private func persist() throws {
+  private func persist(_ document: Document) throws {
     let directoryURL = fileURL.deletingLastPathComponent()
     try FileManager.default.createDirectory(
       at: directoryURL,
@@ -211,7 +239,14 @@ final class HerdSharingBridgeJournal {
     try encoder.encode(document).write(to: fileURL, options: .atomic)
   }
 
-  private static func loadDocument(from fileURL: URL) -> Document {
+  private func loadDocumentIfNeeded() -> Document {
+    if let document { return document }
+    let loaded = Self.loadDocument(from: fileURL)
+    document = loaded
+    return loaded
+  }
+
+  nonisolated private static func loadDocument(from fileURL: URL) -> Document {
     guard let data = try? Data(contentsOf: fileURL) else { return Document() }
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601

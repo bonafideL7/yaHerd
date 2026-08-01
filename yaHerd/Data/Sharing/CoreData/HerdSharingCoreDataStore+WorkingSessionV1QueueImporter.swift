@@ -57,7 +57,7 @@ extension HerdSharingCoreDataStore {
             }
 
             let queueItem: WorkingQueueItem
-            var beforeFieldSnapshot: HerdSharingConflictFieldSnapshot?
+            var beforeFieldSnapshot: HerdSharingSwiftDataImportEngine.HerdSharingConflictFieldSnapshot?
             if let existingQueueItem = queueItemsByPublicID[publicID] {
                 queueItem = existingQueueItem
                 updated += 1
@@ -91,7 +91,7 @@ extension HerdSharingCoreDataStore {
             )
             if let beforeFieldSnapshot {
                 updatedRecordConflicts.append(
-                    updatedRecordConflict(
+                    HerdSharingSwiftDataImportEngine.updatedRecordConflict(
                         sourceEntityName: SharedWorkingQueueItemRecord.entityName,
                         publicID: publicID,
                         localModifiedAt: nil,

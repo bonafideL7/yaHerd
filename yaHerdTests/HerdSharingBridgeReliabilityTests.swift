@@ -14,7 +14,7 @@ final class HerdSharingBridgeReliabilityTests: XCTestCase {
     case afterStep(HerdSharingBridgeStep)
   }
 
-  func testFailureInjectionRunsAfterEveryBridgeStep() throws {
+  func testFailureInjectionRunsAfterEveryBridgeStep() async throws {
     for step in HerdSharingBridgeStep.allCases {
       let journalURL = temporaryJournalURL(testName: #function, suffix: step.rawValue)
       defer { try? FileManager.default.removeItem(at: journalURL.deletingLastPathComponent()) }
@@ -26,44 +26,46 @@ final class HerdSharingBridgeReliabilityTests: XCTestCase {
           candidate == step ? InjectedFailure.afterStep(candidate) : nil
         }
       )
-      let operation = try coordinator.begin(
+      let operation = try await coordinator.begin(
         herdPublicID: UUID(),
         direction: .exportToBridge,
         bridgeLocation: "test bridge"
       )
 
-      XCTAssertThrowsError(
-        try coordinator.execute(step, operationID: operation.id) { () }
-      ) { error in
+      do {
+        _ = try await coordinator.execute(step, operationID: operation.id) { () }
+        XCTFail("Expected failure injection after \(step.rawValue)")
+      } catch {
         XCTAssertEqual(error as? InjectedFailure, .afterStep(step))
       }
-      coordinator.fail(operationID: operation.id, error: InjectedFailure.afterStep(step))
+      await coordinator.fail(operationID: operation.id, error: InjectedFailure.afterStep(step))
 
-      let persistedOperation = try XCTUnwrap(journal.unfinishedOperations().first)
+      let unfinishedOperations = await journal.unfinishedOperations()
+      let persistedOperation = try XCTUnwrap(unfinishedOperations.first)
       XCTAssertEqual(persistedOperation.completedSteps, [step])
       XCTAssertEqual(persistedOperation.state, .failed)
     }
   }
 
-  func testRetryReusesIncompleteOperationAndWritesCheckpointOnlyAfterCompletion() throws {
+  func testRetryReusesIncompleteOperationAndWritesCheckpointOnlyAfterCompletion() async throws {
     let journalURL = temporaryJournalURL(testName: #function)
     defer { try? FileManager.default.removeItem(at: journalURL.deletingLastPathComponent()) }
 
     let herdID = UUID()
     let journal = HerdSharingBridgeJournal(fileURL: journalURL)
     let coordinator = HerdSharingBridgeOperationCoordinator(journal: journal)
-    let firstAttempt = try coordinator.begin(
+    let firstAttempt = try await coordinator.begin(
       herdPublicID: herdID,
       direction: .importFromBridge,
       bridgeLocation: "owner private store"
     )
-    _ = try coordinator.execute(.herd, operationID: firstAttempt.id) { "herd" }
-    coordinator.fail(
+    _ = try await coordinator.execute(.herd, operationID: firstAttempt.id) { "herd" }
+    await coordinator.fail(
       operationID: firstAttempt.id,
       error: InjectedFailure.afterStep(.herd)
     )
 
-    let retry = try coordinator.begin(
+    let retry = try await coordinator.begin(
       herdPublicID: herdID,
       direction: .importFromBridge,
       bridgeLocation: "owner private store"
@@ -72,16 +74,17 @@ final class HerdSharingBridgeReliabilityTests: XCTestCase {
     XCTAssertEqual(retry.attemptCount, 2)
     XCTAssertTrue(retry.completedSteps.isEmpty)
 
-    _ = try coordinator.execute(.herd, operationID: retry.id) { "herd" }
-    try coordinator.complete(
+    _ = try await coordinator.execute(.herd, operationID: retry.id) { "herd" }
+    try await coordinator.complete(
       operationID: retry.id,
       recordCounts: ["updatedRecords": 1],
       reconciliationSummary: "clean"
     )
 
     let reloadedJournal = HerdSharingBridgeJournal(fileURL: journalURL)
-    XCTAssertTrue(reloadedJournal.unfinishedOperations().isEmpty)
-    let checkpoint = reloadedJournal.checkpoint(
+    let reloadedUnfinishedOperations = await reloadedJournal.unfinishedOperations()
+    XCTAssertTrue(reloadedUnfinishedOperations.isEmpty)
+    let checkpoint = await reloadedJournal.checkpoint(
       herdPublicID: herdID,
       direction: .importFromBridge,
       bridgeLocation: "owner private store"
@@ -118,7 +121,7 @@ final class HerdSharingBridgeReliabilityTests: XCTestCase {
     XCTAssertTrue(report.hasUnresolvedDifferences)
   }
 
-  func testInterruptedImportRetainsConflictSnapshotForRetry() throws {
+  func testInterruptedImportRetainsConflictSnapshotForRetry() async throws {
     let journalURL = temporaryJournalURL(testName: #function)
     defer { try? FileManager.default.removeItem(at: journalURL.deletingLastPathComponent()) }
 
@@ -144,19 +147,19 @@ final class HerdSharingBridgeReliabilityTests: XCTestCase {
     )
     let journal = HerdSharingBridgeJournal(fileURL: journalURL)
     let coordinator = HerdSharingBridgeOperationCoordinator(journal: journal)
-    let firstAttempt = try coordinator.begin(
+    let firstAttempt = try await coordinator.begin(
       herdPublicID: UUID(),
       direction: .importFromBridge,
       bridgeLocation: "owner private store"
     )
-    try coordinator.recordConflictReport(report, operationID: firstAttempt.id)
-    coordinator.fail(
+    try await coordinator.recordConflictReport(report, operationID: firstAttempt.id)
+    await coordinator.fail(
       operationID: firstAttempt.id, error: InjectedFailure.afterStep(.persistentStoreCommit))
 
     let reloadedCoordinator = HerdSharingBridgeOperationCoordinator(
       journal: HerdSharingBridgeJournal(fileURL: journalURL)
     )
-    let retry = try reloadedCoordinator.begin(
+    let retry = try await reloadedCoordinator.begin(
       herdPublicID: firstAttempt.herdPublicID,
       direction: .importFromBridge,
       bridgeLocation: firstAttempt.bridgeLocation

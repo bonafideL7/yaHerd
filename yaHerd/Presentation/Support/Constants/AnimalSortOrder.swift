@@ -5,10 +5,9 @@
 //  Created by mm on 11/30/25.
 //
 
-
 import Foundation
 
-enum AnimalSortOrder: String, CaseIterable, Codable, Hashable {
+enum AnimalSortOrder: String, CaseIterable, Codable, Hashable, Sendable {
     case tagAscending
     case tagDescending
     case birthDateNewest

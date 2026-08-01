@@ -12,6 +12,8 @@ struct HomeService {
         fieldCheckSessions: [FieldCheckSessionSummary],
         openFindings: [FieldCheckFindingSnapshot],
         treatmentTemplates: [WorkingTreatmentTemplateSummary],
+        openFindingCount: Int? = nil,
+        hasFieldCheckHistory: Bool? = nil,
         configuration: DashboardConfiguration,
         now: Date = .now
     ) -> HomeSnapshot {
@@ -31,6 +33,7 @@ struct HomeService {
             activeAnimalRecords: activeAnimalRecords,
             activeCheckSessions: activeCheckSessions,
             openFindings: openFindings,
+            openFindingCount: openFindingCount ?? openFindings.count,
             flaggedCheckSessions: flaggedCheckSessions(from: fieldCheckSessions),
             missingCheckSessions: missingCheckSessions(from: fieldCheckSessions),
             pastureCheckStartPastures: dashboardSnapshot.pastures,
@@ -44,7 +47,7 @@ struct HomeService {
             archivedActiveRecords: archivedActiveRecords(from: dashboardRecords.animals),
             hasPastures: !dashboardRecords.pastures.isEmpty,
             hasActiveAnimals: dashboardRecords.animals.contains { $0.isActiveInHerd },
-            hasFieldCheckHistory: !fieldCheckSessions.isEmpty,
+            hasFieldCheckHistory: hasFieldCheckHistory ?? !fieldCheckSessions.isEmpty,
             hasWorkingTreatmentTemplates: !treatmentTemplates.isEmpty
         )
     }
