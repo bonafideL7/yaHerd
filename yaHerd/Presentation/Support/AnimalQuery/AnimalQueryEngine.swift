@@ -178,6 +178,92 @@ enum AnimalQueryEngine {
     }
 }
 
+enum WorkingQueueAnimalQueryEngine {
+    static func apply(
+        to items: [WorkingQueueItemSnapshot],
+        summariesByID: [UUID: AnimalSummary],
+        query: AnimalQuery,
+        formatTag: (String, UUID?) -> String
+    ) -> [WorkingQueueItemSnapshot] {
+        let candidateIDs = Set(items.compactMap(\.animalID))
+        let candidates = candidateIDs.compactMap { summariesByID[$0] }
+
+        let sortQuery = AnimalQuery(
+            sortOrder: query.sortOrder,
+            showRemovedStatuses: true,
+            showArchivedRecords: true
+        )
+        let sortedCandidateIDs = AnimalQueryEngine.apply(
+            to: candidates,
+            query: sortQuery,
+            formatTag: formatTag
+        )
+        .map(\.id)
+        let rankByAnimalID = Dictionary(
+            uniqueKeysWithValues: sortedCandidateIDs.enumerated().map { ($0.element, $0.offset) }
+        )
+
+        let orderedItems = items.sorted { left, right in
+            let leftRank = left.animalID.flatMap { rankByAnimalID[$0] }
+            let rightRank = right.animalID.flatMap { rankByAnimalID[$0] }
+
+            switch (leftRank, rightRank) {
+            case let (.some(leftRank), .some(rightRank)):
+                if leftRank != rightRank {
+                    return leftRank < rightRank
+                }
+            case (.some, .none):
+                return true
+            case (.none, .some):
+                return false
+            case (.none, .none):
+                break
+            }
+
+            return fallbackSort(left, right)
+        }
+
+        guard query.hasFilteringCriteria else {
+            return orderedItems
+        }
+
+        let matchingAnimalIDs = Set(
+            AnimalQueryEngine.apply(
+                to: candidates,
+                query: query,
+                formatTag: formatTag
+            )
+            .map(\.id)
+        )
+
+        return orderedItems.filter { item in
+            guard let animalID = item.animalID else { return false }
+            return matchingAnimalIDs.contains(animalID)
+        }
+    }
+
+    private static func fallbackSort(
+        _ left: WorkingQueueItemSnapshot,
+        _ right: WorkingQueueItemSnapshot
+    ) -> Bool {
+        let leftTag = left.animalDisplayTagNumber?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let rightTag = right.animalDisplayTagNumber?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if leftTag.isEmpty != rightTag.isEmpty {
+            return !leftTag.isEmpty
+        }
+
+        let comparison = leftTag.localizedStandardCompare(rightTag)
+        if comparison != .orderedSame {
+            return comparison == .orderedAscending
+        }
+
+        return left.id.uuidString < right.id.uuidString
+    }
+}
+
 private extension AnimalSummary {
     var isActiveInVisibleHerd: Bool {
         status == .active && !isArchived
