@@ -182,6 +182,31 @@ fi
 xcrun simctl boot "$SIMULATOR_ID" >/dev/null 2>&1 || true
 xcrun simctl bootstatus "$SIMULATOR_ID" -b
 
+PERSISTENCE_TEST_SUITES=(
+  AnimalListViewModelReloadTests
+  ApplicationMutationCenterTests
+  HerdSharingBridgeImportBoundaryTests
+  HerdSharingBridgeReliabilityTests
+  HerdSharingCoreDataModelCachingTests
+  HerdSharingDeletionTombstoneIdentityTests
+  HerdSharingImportCommitBoundaryTests
+  HerdSharingRepositoryTests
+  SwiftDataHerdSharingActorDuplicateIDPagingTests
+  SwiftDataHerdSharingActorRelationshipScopeTests
+  SwiftDataHerdSharingActorTests
+  SwiftDataReadModelActorPaginationTests
+  SwiftDataReadModelActorPasturePaginationTests
+  SwiftDataReadModelActorTests
+)
+TEST_SELECTION_ARGS=()
+for suite in "${PERSISTENCE_TEST_SUITES[@]}"; do
+  if [[ ! -f "yaHerdTests/$suite.swift" ]]; then
+    echo "Configured persistence test suite source is missing: yaHerdTests/$suite.swift" >&2
+    exit 1
+  fi
+  TEST_SELECTION_ARGS+=("-only-testing:yaHerdTests/$suite")
+done
+
 set +e
 xcodebuild \
   -quiet \
@@ -195,9 +220,7 @@ xcodebuild \
   -parallel-testing-enabled NO \
   -resultBundlePath "$RESULT_BUNDLE" \
   test-without-building \
-  -only-testing:yaHerdTests/HerdSharingBridgeReliabilityTests \
-  -only-testing:yaHerdTests/SwiftDataHerdSharingActorTests \
-  -only-testing:yaHerdTests/SwiftDataReadModelActorTests >"$TEST_LOG" 2>&1
+  "${TEST_SELECTION_ARGS[@]}" >"$TEST_LOG" 2>&1
 test_status=$?
 set -e
 
@@ -207,9 +230,15 @@ if [[ "$test_status" -ne 0 ]]; then
   echo 'Result bundle summary:' >&2
   xcrun xcresulttool get test-results summary --path "$RESULT_BUNDLE" >&2 || true
   echo 'Recent yaHerd simulator logs:' >&2
-  xcrun simctl spawn "$SIMULATOR_ID" log show     --last 10m     --style compact     --predicate 'process == "yaHerd" OR process == "xctest"' 2>&1     | tail -n 300 >&2 || true
+  xcrun simctl spawn "$SIMULATOR_ID" log show \
+    --last 10m \
+    --style compact \
+    --predicate 'process == "yaHerd" OR process == "xctest"' 2>&1 \
+    | tail -n 300 >&2 || true
   echo 'Recent crash reports:' >&2
-  find "$HOME/Library/Logs/DiagnosticReports" -type f     \( -name 'yaHerd*.ips' -o -name 'yaHerd*.crash' -o -name 'xctest*.ips' -o -name 'xctest*.crash' \)     -mmin -15 -print -exec tail -n 240 {} \; >&2 || true
+  find "$HOME/Library/Logs/DiagnosticReports" -type f \
+    \( -name 'yaHerd*.ips' -o -name 'yaHerd*.crash' -o -name 'xctest*.ips' -o -name 'xctest*.crash' \) \
+    -mmin -15 -print -exec tail -n 240 {} \; >&2 || true
   echo 'Final test log:' >&2
   tail -n 100 "$TEST_LOG" >&2
   exit "$test_status"
