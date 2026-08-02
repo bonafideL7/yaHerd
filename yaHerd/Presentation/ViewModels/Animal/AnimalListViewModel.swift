@@ -24,6 +24,7 @@ final class AnimalListViewModel {
 
     private var isLoading = false
     private var loadTask: Task<Void, Never>?
+    private var loadGeneration = 0
     private var derivedStateTask: Task<Void, Never>?
     private var derivedStateGeneration = 0
     private var lastDerivedStateRequest: DerivedStateRequest?
@@ -33,7 +34,7 @@ final class AnimalListViewModel {
         using repository: any AnimalListRepository,
         pastureRepository: any PastureReferenceDataReader
     ) {
-        guard !hasLoaded else { return }
+        guard !hasLoaded, !isLoading else { return }
         load(using: repository, pastureRepository: pastureRepository)
     }
 
@@ -41,18 +42,24 @@ final class AnimalListViewModel {
         using repository: any AnimalListRepository,
         pastureRepository: any PastureReferenceDataReader
     ) {
-        guard !isLoading else { return }
+        loadGeneration += 1
+        let generation = loadGeneration
+        loadTask?.cancel()
+        loadTask = nil
 
         guard let queryReader = repository as? any AnimalListQueryReading else {
-            loadSynchronously(using: repository, pastureRepository: pastureRepository)
+            loadSynchronously(
+                using: repository,
+                pastureRepository: pastureRepository,
+                generation: generation
+            )
             return
         }
 
         isLoading = true
-        loadTask?.cancel()
         loadTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.loadUsingReadModel(queryReader)
+            await self.loadUsingReadModel(queryReader, generation: generation)
         }
     }
 
@@ -134,9 +141,15 @@ final class AnimalListViewModel {
         return pastureOptions.first(where: { $0.id == id })?.name
     }
 
-    private func loadUsingReadModel(_ reader: any AnimalListQueryReading) async {
+    private func loadUsingReadModel(
+        _ reader: any AnimalListQueryReading,
+        generation: Int
+    ) async {
         defer {
-            isLoading = false
+            if generation == loadGeneration {
+                isLoading = false
+                loadTask = nil
+            }
         }
 
         do {
@@ -146,6 +159,7 @@ final class AnimalListViewModel {
                 return (animals, try await pastureOptions)
             }
 
+            guard !Task.isCancelled, generation == loadGeneration else { return }
             items = loaded.0
             pastureOptions = loaded.1
             errorMessage = nil
@@ -154,26 +168,34 @@ final class AnimalListViewModel {
         } catch is CancellationError {
             return
         } catch {
+            guard generation == loadGeneration else { return }
             errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
     private func loadSynchronously(
         using repository: any AnimalListRepository,
-        pastureRepository: any PastureReferenceDataReader
+        pastureRepository: any PastureReferenceDataReader,
+        generation: Int
     ) {
         isLoading = true
         defer {
-            isLoading = false
+            if generation == loadGeneration {
+                isLoading = false
+            }
         }
 
         do {
-            items = try repository.fetchAnimals()
-            pastureOptions = try pastureRepository.fetchPastureOptions()
+            let loadedItems = try repository.fetchAnimals()
+            let loadedPastures = try pastureRepository.fetchPastureOptions()
+            guard generation == loadGeneration else { return }
+            items = loadedItems
+            pastureOptions = loadedPastures
             errorMessage = nil
             hasLoaded = true
             refreshLastDerivedState()
         } catch {
+            guard generation == loadGeneration else { return }
             errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
