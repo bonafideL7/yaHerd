@@ -65,19 +65,34 @@ extension HerdSharingCoreDataStore {
       direction: .importFromBridge,
       bridgeLocation: source.description
     )
+    guard let transactionalImporter = importer as? any HerdSharingTransactionalImportApplying else {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The configured SwiftData importer does not support journaled import transactions."
+      )
+    }
 
     do {
-      let application = try await importer.applyImport(
+      let preparation = try await transactionalImporter.prepareImport(
         snapshot,
         pendingConflictReport: operation.pendingConflictReport,
         failureInjector: operationCoordinator.backgroundFailureInjector
       )
       try await operationCoordinator.recordCompletedSteps(
-        application.completedSteps,
+        preparation.completedSteps,
         operationID: operation.id
       )
       try await operationCoordinator.recordConflictReport(
-        application.result.conflictReport,
+        preparation.result.conflictReport,
+        operationID: operation.id
+      )
+
+      let application = try await transactionalImporter.commitImport(
+        preparation,
+        snapshot: snapshot,
+        failureInjector: operationCoordinator.backgroundFailureInjector
+      )
+      try await operationCoordinator.recordCompletedSteps(
+        application.completedSteps,
         operationID: operation.id
       )
       try await operationCoordinator.complete(
@@ -91,6 +106,7 @@ extension HerdSharingCoreDataStore {
       )
       return application.result
     } catch {
+      await transactionalImporter.rollbackPreparedImport()
       await operationCoordinator.fail(operationID: operation.id, error: error)
       throw error
     }
