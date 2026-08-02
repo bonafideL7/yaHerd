@@ -41,9 +41,53 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         XCTAssertEqual(viewModel.items, [freshAnimal])
     }
 
+    func testArchiveSupersedesCancellationInsensitiveInFlightReload() async {
+        let animal = makeAnimal(name: "Animal", tagNumber: "102")
+        let queryReader = MutationRaceAnimalListQueryReader(animal: animal)
+        let repository = BackgroundQueryingAnimalListRepository(
+            base: StubAnimalListRepository(),
+            queryReader: queryReader
+        )
+        let pastureRepository = EmptyPastureReferenceDataReader()
+        let viewModel = AnimalListViewModel()
+
+        viewModel.load(using: repository, pastureRepository: pastureRepository)
+        XCTAssertTrue(await waitForAnimal(animal.id, in: viewModel))
+
+        viewModel.load(using: repository, pastureRepository: pastureRepository)
+        XCTAssertTrue(await waitForRequestCount(2, reader: queryReader))
+
+        viewModel.performPrimarySwipeAction(
+            animalID: animal.id,
+            hardDelete: false,
+            using: repository,
+            pastureRepository: pastureRepository
+        )
+        XCTAssertEqual(viewModel.items.first?.isArchived, true)
+
+        await queryReader.releaseReload()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(viewModel.items.map(\.id), [animal.id])
+        XCTAssertEqual(viewModel.items.first?.isArchived, true)
+    }
+
     private func waitForRequestCount(
         _ expectedCount: Int,
         reader: ControlledAnimalListQueryReader
+    ) async -> Bool {
+        for _ in 0..<100 {
+            if await reader.currentRequestCount() >= expectedCount {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return false
+    }
+
+    private func waitForRequestCount(
+        _ expectedCount: Int,
+        reader: MutationRaceAnimalListQueryReader
     ) async -> Bool {
         for _ in 0..<100 {
             if await reader.currentRequestCount() >= expectedCount {
@@ -128,6 +172,45 @@ private actor ControlledAnimalListQueryReader: AnimalListQueryReading {
     func releaseFirstRequest() {
         firstRequestContinuation?.resume()
         firstRequestContinuation = nil
+    }
+}
+
+private actor MutationRaceAnimalListQueryReader: AnimalListQueryReading {
+    private let animal: AnimalSummary
+    private var requestCount = 0
+    private var reloadContinuation: CheckedContinuation<Void, Never>?
+
+    init(animal: AnimalSummary) {
+        self.animal = animal
+    }
+
+    func fetchAnimalSummaryPage(
+        _ request: ReadPageRequest
+    ) async throws -> AnimalSummaryPage {
+        guard request.offset == 0 else {
+            return AnimalSummaryPage(animals: [], hasMore: false)
+        }
+
+        requestCount += 1
+        if requestCount == 2 {
+            await withCheckedContinuation { continuation in
+                reloadContinuation = continuation
+            }
+        }
+        return AnimalSummaryPage(animals: [animal], hasMore: false)
+    }
+
+    func fetchAnimalPastureOptions(limit _: Int) async throws -> [PastureOption] {
+        []
+    }
+
+    func currentRequestCount() -> Int {
+        requestCount
+    }
+
+    func releaseReload() {
+        reloadContinuation?.resume()
+        reloadContinuation = nil
     }
 }
 
