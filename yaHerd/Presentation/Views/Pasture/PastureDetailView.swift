@@ -231,9 +231,7 @@ struct PastureDetailView: View {
             ForEach(sections) { section in
                 Section(section.title) {
                     ForEach(section.animals) { animal in
-                        NavigationLink {
-                            AnimalDetailView(animalID: animal.id)
-                        } label: {
+                        NavigationLink(value: HerdRoute.animal(animal.id)) {
                             let definition = tagColorLibrary.resolvedDefinition(for: animal)
                             let damDefinition = tagColorLibrary.resolvedDefinition(tagColorID: animal.damDisplayTagColorID)
 
