@@ -119,7 +119,8 @@ final class HerdSharingImportCommitBoundaryTests: XCTestCase {
       operationID: operation.id
     )
 
-    let failedOperation = try XCTUnwrap(await journal.unfinishedOperations().first)
+    let unfinishedOperations = await journal.unfinishedOperations()
+    let failedOperation = try XCTUnwrap(unfinishedOperations.first)
     XCTAssertEqual(failedOperation.state, .failed)
     XCTAssertEqual(failedOperation.pendingConflictReport, committedFailure.conflictReport)
     XCTAssertTrue(failedOperation.completedSteps.contains(.persistentStoreCommit))
