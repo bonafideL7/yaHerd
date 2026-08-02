@@ -49,13 +49,51 @@ final class FieldCheckAnimalQueryEngineTests: XCTestCase {
         XCTAssertEqual(result.map(\.displayTagNumber), ["3", "12"])
     }
 
+    func testRosterFilterCombinesWithGlobalAnimalFilter() {
+        let remainingFemale = makeCheck(tag: "12", sex: .female)
+        let seenFemale = makeCheck(tag: "3", sex: .female, wasCounted: true)
+        let remainingMale = makeCheck(tag: "2", sex: .male, animalType: .bull)
+
+        let result = FieldCheckRosterQueryEngine.apply(
+            to: [seenFemale, remainingMale, remainingFemale],
+            rosterFilter: .remaining,
+            effectivelySeenCheckIDs: [],
+            query: AnimalQuery(
+                filter: AnimalFilter(sex: .female),
+                sortOrder: .tagAscending
+            ),
+            formatTag: { number, _ in number }
+        )
+
+        XCTAssertEqual(result.map(\.id), [remainingFemale.id])
+    }
+
+    func testQuickCountedAnimalIsExcludedFromRemainingRoster() {
+        let quickCounted = makeCheck(tag: "3")
+        let remaining = makeCheck(tag: "12")
+
+        let result = FieldCheckRosterQueryEngine.apply(
+            to: [remaining, quickCounted],
+            rosterFilter: .remaining,
+            effectivelySeenCheckIDs: [quickCounted.id],
+            query: AnimalQuery(),
+            formatTag: { number, _ in number }
+        )
+
+        XCTAssertEqual(result.map(\.id), [remaining.id])
+    }
+
     private func makeCheck(
         tag: String,
         colorID: UUID? = nil,
         damTag: String? = nil,
         damColorID: UUID? = nil,
         sex: Sex = .female,
-        animalType: AnimalType = .cow
+        animalType: AnimalType = .cow,
+        wasExpectedAtStart: Bool = true,
+        wasCounted: Bool = false,
+        needsAttention: Bool = false,
+        isMissing: Bool = false
     ) -> FieldCheckAnimalCheckSnapshot {
         FieldCheckAnimalCheckSnapshot(
             id: UUID(),
@@ -67,10 +105,10 @@ final class FieldCheckAnimalQueryEngineTests: XCTestCase {
             animalName: "",
             animalSex: sex,
             animalType: animalType,
-            wasExpectedAtStart: true,
-            wasCounted: false,
-            needsAttention: false,
-            isMissing: false
+            wasExpectedAtStart: wasExpectedAtStart,
+            wasCounted: wasCounted,
+            needsAttention: needsAttention,
+            isMissing: isMissing
         )
     }
 }
