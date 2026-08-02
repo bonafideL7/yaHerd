@@ -21,11 +21,13 @@ extension HerdSharingSwiftDataImportEngine {
     }
 
     return try withExtendedLifetime(model) {
-      try snapshot.records(for: step).map { recordSnapshot in
-        let record = Record(entity: entity, insertInto: nil)
-        try recordSnapshot.apply(to: record)
-        return record
-      }
+      try snapshot.records(for: step)
+        .sorted(by: bridgeRecordSnapshotSort)
+        .map { recordSnapshot in
+          let record = Record(entity: entity, insertInto: nil)
+          try recordSnapshot.apply(to: record)
+          return record
+        }
     }
   }
 
@@ -179,5 +181,15 @@ extension HerdSharingSwiftDataImportEngine {
     as type: SharedDeletedRecord.Type
   ) throws -> [SharedDeletedRecord] {
     try retainedDetachedRecords(from: snapshot, step: step, as: type)
+  }
+
+  private static func bridgeRecordSnapshotSort(
+    _ lhs: HerdSharingBridgeRecordSnapshot,
+    _ rhs: HerdSharingBridgeRecordSnapshot
+  ) -> Bool {
+    if lhs.lastMirroredAt != rhs.lastMirroredAt {
+      return lhs.lastMirroredAt > rhs.lastMirroredAt
+    }
+    return lhs.sourceObjectURI < rhs.sourceObjectURI
   }
 }
