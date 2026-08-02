@@ -93,9 +93,11 @@ final class AnimalListViewModel {
         do {
             if hardDelete {
                 try repository.delete(ids: [animalID])
+                invalidateCurrentLoad()
                 removeItems(ids: [animalID])
             } else {
                 try repository.archive(ids: [animalID])
+                invalidateCurrentLoad()
                 updateArchiveState(ids: [animalID], isArchived: true)
             }
             errorMessage = nil
@@ -112,6 +114,7 @@ final class AnimalListViewModel {
     ) {
         do {
             try repository.restore(ids: [animalID])
+            invalidateCurrentLoad()
             updateArchiveState(ids: [animalID], isArchived: false)
             errorMessage = nil
             hasLoaded = true
@@ -128,6 +131,7 @@ final class AnimalListViewModel {
     ) {
         do {
             try repository.move(ids: ids, toPastureID: pastureID)
+            invalidateCurrentLoad()
             moveItems(ids: ids, toPastureID: pastureID)
             errorMessage = nil
             hasLoaded = true
@@ -219,6 +223,13 @@ final class AnimalListViewModel {
         }
     }
 
+    private func invalidateCurrentLoad() {
+        loadGeneration += 1
+        loadTask?.cancel()
+        loadTask = nil
+        isLoading = false
+    }
+
     private func refreshLastDerivedState() {
         guard let lastDerivedStateRequest else { return }
         scheduleDerivedState(lastDerivedStateRequest, debounced: false)
@@ -281,6 +292,7 @@ final class AnimalListViewModel {
     private func removeItems(ids: [UUID]) {
         let idsToRemove = Set(ids)
         items.removeAll { idsToRemove.contains($0.id) }
+        refreshLastDerivedState()
     }
 
     private func updateArchiveState(ids: [UUID], isArchived: Bool) {
@@ -289,6 +301,7 @@ final class AnimalListViewModel {
             guard idsToUpdate.contains(animal.id) else { return animal }
             return animal.replacingArchiveState(isArchived)
         }
+        refreshLastDerivedState()
     }
 
     private func moveItems(ids: [UUID], toPastureID pastureID: UUID?) {
@@ -301,6 +314,7 @@ final class AnimalListViewModel {
                 pastureName: destinationName
             )
         }
+        refreshLastDerivedState()
     }
 }
 
