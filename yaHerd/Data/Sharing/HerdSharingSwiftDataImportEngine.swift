@@ -12,6 +12,12 @@ struct HerdSharingSwiftDataImportApplication: Sendable {
   let completedSteps: [HerdSharingBridgeStep]
 }
 
+struct HerdSharingSwiftDataCommittedImportFailure: Error {
+  let underlyingError: any Error
+  let conflictReport: HerdSharingBridgeConflictReport
+  let completedSteps: [HerdSharingBridgeStep]
+}
+
 extension HerdSharingSwiftDataImportEngine {
   static func apply(
     _ snapshot: HerdSharingBridgeStoreSnapshot,
@@ -21,7 +27,7 @@ extension HerdSharingSwiftDataImportEngine {
   ) throws -> HerdSharingSwiftDataImportApplication {
     let herdRecords: [SharedHerdRecord] = try detachedRecords(
       from: snapshot, step: .herd, as: SharedHerdRecord.self)
-    guard let herdRecord = herdRecords.sorted(by: sharedRecordSort).first else {
+    guard let herdRecord = herdRecords.first else {
       throw HerdSharingActionError.bridgeImportFailed(
         "No bridge herd record was found in the \(snapshot.storeDescription)."
       )
@@ -78,6 +84,9 @@ extension HerdSharingSwiftDataImportEngine {
     }
 
     var completedSteps: [HerdSharingBridgeStep] = []
+    var committedConflictReport: HerdSharingBridgeConflictReport?
+    var didCommit = false
+
     func complete(_ step: HerdSharingBridgeStep) throws {
       try failureInjector.check(after: step)
       completedSteps.append(step)
@@ -166,10 +175,12 @@ extension HerdSharingSwiftDataImportEngine {
         updatedRecordConflicts: updatedConflicts,
         preventedDeleteConflicts: deletionResult.preventedDeleteConflicts
       ).recoveringMissingConflicts(from: pendingConflictReport)
+      committedConflictReport = conflictReport
 
       if context.hasChanges {
         try PersistenceLog.save(context, operation: "SwiftDataHerdSharingActor.atomicImport")
       }
+      didCommit = true
       try complete(.persistentStoreCommit)
 
       let reconciliation = HerdSharingBridgeReconciler.makeReport(
@@ -226,6 +237,16 @@ extension HerdSharingSwiftDataImportEngine {
         completedSteps: completedSteps
       )
     } catch {
+      if didCommit, let committedConflictReport {
+        let committedSteps = completedSteps.contains(.persistentStoreCommit)
+          ? completedSteps
+          : completedSteps + [.persistentStoreCommit]
+        throw HerdSharingSwiftDataCommittedImportFailure(
+          underlyingError: error,
+          conflictReport: committedConflictReport,
+          completedSteps: committedSteps
+        )
+      }
       context.rollback()
       throw error
     }
@@ -241,11 +262,13 @@ extension HerdSharingSwiftDataImportEngine {
     else {
       throw HerdSharingBridgeSnapshotError.missingEntityDescription(entityName)
     }
-    return try snapshot.records(for: step).map { recordSnapshot in
-      let record = Record(entity: entity, insertInto: nil)
-      try recordSnapshot.apply(to: record)
-      return record
-    }
+    return try snapshot.records(for: step)
+      .sorted(by: bridgeRecordSnapshotSort)
+      .map { recordSnapshot in
+        let record = Record(entity: entity, insertInto: nil)
+        try recordSnapshot.apply(to: record)
+        return record
+      }
   }
 
   private static func canonicalImportRecords<Record: NSManagedObject>(
@@ -260,24 +283,20 @@ extension HerdSharingSwiftDataImportEngine {
         recordsWithoutPublicID.append(record)
         continue
       }
-      guard let existing = canonicalByPublicID[publicID] else {
-        canonicalByPublicID[publicID] = record
-        continue
-      }
-      if sharedRecordSort(record, existing) {
-        canonicalByPublicID[publicID] = record
-      }
+      guard canonicalByPublicID[publicID] == nil else { continue }
+      canonicalByPublicID[publicID] = record
     }
     return recordsWithoutPublicID + canonicalByPublicID.values
   }
 
-  private static func sharedRecordSort(_ lhs: NSManagedObject, _ rhs: NSManagedObject) -> Bool {
-    let lhsDate = lhs.value(forKey: "lastMirroredAt") as? Date ?? .distantPast
-    let rhsDate = rhs.value(forKey: "lastMirroredAt") as? Date ?? .distantPast
-    if lhsDate != rhsDate { return lhsDate > rhsDate }
-    let lhsID = lhs.value(forKey: "publicID") as? String ?? ""
-    let rhsID = rhs.value(forKey: "publicID") as? String ?? ""
-    return lhsID < rhsID
+  private static func bridgeRecordSnapshotSort(
+    _ lhs: HerdSharingBridgeRecordSnapshot,
+    _ rhs: HerdSharingBridgeRecordSnapshot
+  ) -> Bool {
+    if lhs.lastMirroredAt != rhs.lastMirroredAt {
+      return lhs.lastMirroredAt > rhs.lastMirroredAt
+    }
+    return lhs.sourceObjectURI < rhs.sourceObjectURI
   }
 
   private static func swiftDataPublicIDs(
