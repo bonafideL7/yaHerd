@@ -9,6 +9,8 @@ struct WorkingSessionAnimalSelectionView: View {
     @Binding var selection: Set<UUID>
     @State private var pastureOptions: [PastureOption] = []
     @State private var showingQueryFilters = false
+    @State private var errorMessage: String?
+    @State private var showingError = false
 
     private var query: AnimalQueryState { navigation.animalQuery }
 
@@ -51,7 +53,7 @@ struct WorkingSessionAnimalSelectionView: View {
                     .background(.bar)
             }
             .task {
-                pastureOptions = (try? workingDependencies.pastureReferenceReader.fetchPastureOptions()) ?? []
+                loadPastureOptions()
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -69,6 +71,11 @@ struct WorkingSessionAnimalSelectionView: View {
                     pastureOptions: pastureOptions
                 )
             }
+            .alert("Can’t Load Filters", isPresented: $showingError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "Unknown error")
+            }
         }
     }
 
@@ -83,6 +90,16 @@ struct WorkingSessionAnimalSelectionView: View {
             onShowFilters: { showingQueryFilters = true },
             onClearAllCriteria: { query.clearCriteria() }
         )
+    }
+
+    private func loadPastureOptions() {
+        do {
+            pastureOptions = try workingDependencies.pastureReferenceReader.fetchPastureOptions()
+            errorMessage = nil
+        } catch {
+            errorMessage = UserVisibleErrorMessage.make(error)
+            showingError = true
+        }
     }
 }
 
