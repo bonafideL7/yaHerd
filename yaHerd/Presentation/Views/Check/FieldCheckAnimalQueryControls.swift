@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 enum FieldCheckAnimalQuerySupport {
     static let sortOrders: [AnimalSortOrder] = [
         .tagAscending,
