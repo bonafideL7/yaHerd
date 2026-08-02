@@ -129,6 +129,26 @@ actor HerdSharingBridgeJournal {
     self.document = document
   }
 
+  func recordCommittedImportFailure(
+    _ failure: HerdSharingSwiftDataCommittedImportFailure,
+    operationID: UUID
+  ) throws {
+    var document = loadDocumentIfNeeded()
+    guard let index = document.operations.firstIndex(where: { $0.id == operationID }) else {
+      return
+    }
+
+    document.operations[index].pendingConflictReport = failure.conflictReport
+    for step in failure.completedSteps
+    where !document.operations[index].completedSteps.contains(step) {
+      document.operations[index].completedSteps.append(step)
+    }
+    document.operations[index].state = .failed
+    document.operations[index].lastErrorDescription = String(describing: failure.underlyingError)
+    try persist(document)
+    self.document = document
+  }
+
   func complete(
     operationID: UUID,
     recordCounts: [String: Int],
