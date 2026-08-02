@@ -72,6 +72,23 @@ final class HerdSharingBridgeOperationCoordinator {
     try await journal.recordConflictReport(report, operationID: operationID)
   }
 
+  func recordCommittedImportFailure(
+    _ failure: HerdSharingSwiftDataCommittedImportFailure,
+    operationID: UUID
+  ) async {
+    do {
+      try await journal.recordCommittedImportFailure(
+        failure,
+        operationID: operationID
+      )
+    } catch {
+      ReliabilityLog.syncEvent(
+        "HerdSharingBridgeOperationCoordinator.committedImportJournalFailure",
+        detail: String(describing: error)
+      )
+    }
+  }
+
   func complete(
     operationID: UUID,
     recordCounts: [String: Int],
