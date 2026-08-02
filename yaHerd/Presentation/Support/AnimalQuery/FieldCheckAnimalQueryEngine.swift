@@ -64,3 +64,36 @@ enum FieldCheckAnimalQueryEngine {
         left.displayTagNumber.localizedStandardCompare(right.displayTagNumber) == .orderedAscending
     }
 }
+
+enum FieldCheckRosterQueryEngine {
+    static func apply(
+        to checks: [FieldCheckAnimalCheckSnapshot],
+        rosterFilter: FieldCheckRosterFilter,
+        effectivelySeenCheckIDs: Set<UUID>,
+        query: AnimalQuery,
+        formatTag: (String, UUID?) -> String
+    ) -> [FieldCheckAnimalCheckSnapshot] {
+        let rosterFilteredChecks = checks.filter { check in
+            let isEffectivelySeen = check.wasCounted || effectivelySeenCheckIDs.contains(check.id)
+
+            switch rosterFilter {
+            case .all:
+                return true
+            case .remaining:
+                return !isEffectivelySeen && !check.isMissing
+            case .seen:
+                return isEffectivelySeen
+            case .missing:
+                return check.isMissing
+            case .flagged:
+                return check.needsAttention
+            }
+        }
+
+        return FieldCheckAnimalQueryEngine.apply(
+            to: rosterFilteredChecks,
+            query: query,
+            formatTag: formatTag
+        )
+    }
+}
