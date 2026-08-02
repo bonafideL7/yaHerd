@@ -90,6 +90,12 @@ extension HerdSharingCoreDataStore {
         reconciliationSummary: application.result.reconciliationSummary
       )
       return application.result
+    } catch let committedFailure as HerdSharingSwiftDataCommittedImportFailure {
+      await operationCoordinator.recordCommittedImportFailure(
+        committedFailure,
+        operationID: operation.id
+      )
+      throw committedFailure.underlyingError
     } catch {
       await operationCoordinator.fail(operationID: operation.id, error: error)
       throw error
