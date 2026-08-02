@@ -13,7 +13,7 @@ struct HerdSharingSwiftDataImportApplication: Sendable {
 }
 
 extension HerdSharingSwiftDataImportEngine {
-  static func apply(
+  static func prepare(
     _ snapshot: HerdSharingBridgeStoreSnapshot,
     pendingConflictReport: HerdSharingBridgeConflictReport?,
     failureInjector: HerdSharingBridgeFailureInjector,
@@ -167,21 +167,6 @@ extension HerdSharingSwiftDataImportEngine {
         preventedDeleteConflicts: deletionResult.preventedDeleteConflicts
       ).recoveringMissingConflicts(from: pendingConflictReport)
 
-      if context.hasChanges {
-        try PersistenceLog.save(context, operation: "SwiftDataHerdSharingActor.atomicImport")
-      }
-      try complete(.persistentStoreCommit)
-
-      let reconciliation = HerdSharingBridgeReconciler.makeReport(
-        localPublicIDs: try swiftDataPublicIDs(
-          herdPublicID: snapshot.herdPublicID,
-          in: context
-        ),
-        bridgePublicIDs: snapshot.publicIDsByStep,
-        deletionTombstoneCount: snapshot.deletionTombstoneCount
-      )
-      try complete(.reconciliation)
-
       return HerdSharingSwiftDataImportApplication(
         result: HerdSharingBridgeImportResult(
           herdName: herd.name,
@@ -221,8 +206,48 @@ extension HerdSharingSwiftDataImportEngine {
           updatedFieldCheckFindingCount: fieldCheckFindingResult.updated,
           deletedRecordCount: deletionResult.deletedCount,
           conflictReport: conflictReport,
-          reconciliationReport: reconciliation
+          reconciliationReport: .empty
         ),
+        completedSteps: completedSteps
+      )
+    } catch {
+      context.rollback()
+      throw error
+    }
+  }
+
+  static func commit(
+    _ preparation: HerdSharingSwiftDataImportApplication,
+    snapshot: HerdSharingBridgeStoreSnapshot,
+    failureInjector: HerdSharingBridgeFailureInjector,
+    in context: ModelContext
+  ) throws -> HerdSharingSwiftDataImportApplication {
+    var completedSteps = preparation.completedSteps
+    func complete(_ step: HerdSharingBridgeStep) throws {
+      try failureInjector.check(after: step)
+      completedSteps.append(step)
+    }
+
+    do {
+      if context.hasChanges {
+        try PersistenceLog.save(context, operation: "SwiftDataHerdSharingActor.atomicImport")
+      }
+      try complete(.persistentStoreCommit)
+
+      let reconciliation = HerdSharingBridgeReconciler.makeReport(
+        localPublicIDs: try swiftDataPublicIDs(
+          herdPublicID: snapshot.herdPublicID,
+          in: context
+        ),
+        bridgePublicIDs: snapshot.publicIDsByStep,
+        deletionTombstoneCount: snapshot.deletionTombstoneCount
+      )
+      try complete(.reconciliation)
+
+      var result = preparation.result
+      result.reconciliationReport = reconciliation
+      return HerdSharingSwiftDataImportApplication(
+        result: result,
         completedSteps: completedSteps
       )
     } catch {
