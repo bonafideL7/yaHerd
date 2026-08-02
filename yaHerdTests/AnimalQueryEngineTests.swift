@@ -54,6 +54,40 @@ final class AnimalQueryEngineTests: XCTestCase {
         XCTAssertEqual(result.map(\.displayTagNumber), ["12", "3"])
     }
 
+    func testWorkingQueueQueryPreservesMissingAnimalsWithoutCriteria() {
+        let animal = makeAnimal(tagNumber: "12", pastureID: UUID())
+        let animalItem = makeQueueItem(animal: animal)
+        let missingItem = makeQueueItem(animal: nil)
+
+        let result = WorkingQueueAnimalQueryEngine.apply(
+            to: [missingItem, animalItem],
+            summariesByID: [animal.id: animal],
+            query: AnimalQuery(),
+            formatTag: { number, _ in number }
+        )
+
+        XCTAssertEqual(result.map(\.id), [animalItem.id, missingItem.id])
+    }
+
+    func testWorkingQueueQueryAppliesGlobalFilterWithinSessionMembership() {
+        let female = makeAnimal(tagNumber: "12", sex: .female, pastureID: UUID())
+        let male = makeAnimal(tagNumber: "3", sex: .male, pastureID: UUID())
+        let femaleItem = makeQueueItem(animal: female)
+        let maleItem = makeQueueItem(animal: male)
+
+        let result = WorkingQueueAnimalQueryEngine.apply(
+            to: [femaleItem, maleItem],
+            summariesByID: [
+                female.id: female,
+                male.id: male
+            ],
+            query: AnimalQuery(filter: AnimalFilter(sex: .male)),
+            formatTag: { number, _ in number }
+        )
+
+        XCTAssertEqual(result.map(\.id), [maleItem.id])
+    }
+
     private func makeAnimal(
         tagNumber: String,
         colorID: UUID? = nil,
@@ -76,6 +110,23 @@ final class AnimalQueryEngineTests: XCTestCase {
             pastureID: pastureID,
             pastureName: nil,
             location: .pasture
+        )
+    }
+
+    private func makeQueueItem(animal: AnimalSummary?) -> WorkingQueueItemSnapshot {
+        WorkingQueueItemSnapshot(
+            id: UUID(),
+            status: .queued,
+            completedAt: nil,
+            animalID: animal?.id,
+            animalDisplayTagNumber: animal?.displayTagNumber,
+            animalDisplayTagColorID: animal?.displayTagColorID,
+            animalDamDisplayTagNumber: animal?.damDisplayTagNumber,
+            animalDamDisplayTagColorID: animal?.damDisplayTagColorID,
+            animalSex: animal?.sex ?? .unknown,
+            collectedFromPastureName: animal?.pastureName,
+            destinationPastureID: nil,
+            destinationPastureName: nil
         )
     }
 }
