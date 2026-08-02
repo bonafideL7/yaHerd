@@ -52,10 +52,12 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         let viewModel = AnimalListViewModel()
 
         viewModel.load(using: repository, pastureRepository: pastureRepository)
-        XCTAssertTrue(await waitForAnimal(animal.id, in: viewModel))
+        let initialResultApplied = await waitForAnimal(animal.id, in: viewModel)
+        XCTAssertTrue(initialResultApplied)
 
         viewModel.load(using: repository, pastureRepository: pastureRepository)
-        XCTAssertTrue(await waitForRequestCount(2, reader: queryReader))
+        let reloadStarted = await waitForRequestCount(2, reader: queryReader)
+        XCTAssertTrue(reloadStarted)
 
         viewModel.performPrimarySwipeAction(
             animalID: animal.id,
