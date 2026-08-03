@@ -393,11 +393,62 @@ extension HerdSharingCoreDataStore {
     }
 
     let now = Date.now
+    let metadata = deletionMetadata(
+      publicID: publicID,
+      sourceEntityName: sourceEntityName,
+      mirroredAt: now
+    )
     tombstone.setValue(publicID, forKey: "publicID")
     tombstone.setValue(herdPublicID.uuidString, forKey: "herdPublicID")
     tombstone.setValue(sourceEntityName, forKey: "sourceEntityName")
-    tombstone.setValue(now, forKey: "deletedAt")
+    tombstone.setValue(metadata.modifiedAt, forKey: "deletedAt")
     tombstone.setValue(now, forKey: "lastMirroredAt")
+    tombstone.setValue(metadata.modifiedAt, forKey: "modifiedAt")
+    tombstone.setValue(Int64(metadata.revision), forKey: "revision")
+    tombstone.setValue(metadata.modifiedByParticipantID, forKey: "modifiedByParticipantID")
+    tombstone.setValue(metadata.modifiedByDeviceID, forKey: "modifiedByDeviceID")
+    tombstone.setValue(Int64(metadata.baseRevision), forKey: "baseRevision")
+    tombstone.setValue(
+      CollaborationRevisionMetadata.encodeFieldSnapshot(metadata.baseFieldValues),
+      forKey: "baseFieldValuesJSON"
+    )
+    tombstone.setValue(
+      CollaborationRevisionMetadata.encodeFieldSnapshot(metadata.currentFieldValues),
+      forKey: "currentFieldValuesJSON"
+    )
+  }
+
+  nonisolated private static func deletionMetadata(
+    publicID: String,
+    sourceEntityName: String,
+    mirroredAt: Date
+  ) -> CollaborationRevisionMetadata {
+    guard let aggregatePublicID = UUID(uuidString: publicID),
+      CollaborationAggregateType(rawValue: sourceEntityName) != nil
+    else {
+      return CollaborationRevisionMetadata.localBootstrap(
+        fieldValues: [:],
+        isDeleted: true,
+        modifiedAt: mirroredAt
+      )
+    }
+
+    let key = CollaborationAggregateKey(
+      sourceEntityName: sourceEntityName,
+      publicID: aggregatePublicID
+    )
+    if var metadata = CollaborationRevisionRegistry.localMetadata(for: key) {
+      metadata.isDeleted = true
+      return metadata
+    }
+
+    let metadata = CollaborationRevisionMetadata.localBootstrap(
+      fieldValues: [:],
+      isDeleted: true,
+      modifiedAt: mirroredAt
+    )
+    CollaborationRevisionRegistry.registerLocal(metadata, for: key)
+    return metadata
   }
 
   nonisolated private static func linkBridgeRelationships(
