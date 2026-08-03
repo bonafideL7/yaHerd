@@ -53,7 +53,6 @@ struct FieldCheckAnimalPickerView: View {
     private var filteredAnimals: [FieldCheckAnimalCheckSnapshot] {
         FieldCheckLinkedAnimalPickerRules.filteredAnimals(
             from: globallyFilteredAnimals,
-            searchText: "",
             filter: selectedFilter
         )
     }
