@@ -25,3 +25,4 @@ typealias WorkingProtocolTemplate = YaHerdSchemaV1.WorkingProtocolTemplate
 typealias FieldCheckSession = YaHerdSchemaV1.FieldCheckSession
 typealias FieldCheckAnimalCheck = YaHerdSchemaV1.FieldCheckAnimalCheck
 typealias FieldCheckFinding = YaHerdSchemaV1.FieldCheckFinding
+typealias CollaborationRevisionRecord = YaHerdSchemaV1.CollaborationRevisionRecord
