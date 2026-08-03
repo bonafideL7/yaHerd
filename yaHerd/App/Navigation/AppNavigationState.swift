@@ -13,6 +13,7 @@ enum AppTab: String, Codable, Hashable {
 enum HerdRoute: Codable, Hashable {
     case animal(UUID)
     case pasture(UUID)
+    case fieldCheckSetup(UUID)
     case fieldChecks(FieldChecksViewMode)
     case workingSessions
 }
