@@ -143,6 +143,13 @@ extension YaHerdSchemaV1 {
             apply(metadata)
         }
 
+        var key: CollaborationAggregateKey {
+            CollaborationAggregateKey(
+                sourceEntityName: sourceEntityName,
+                publicID: aggregatePublicID
+            )
+        }
+
         var metadata: CollaborationRevisionMetadata {
             CollaborationRevisionMetadata(
                 modifiedAt: modifiedAt,
@@ -409,11 +416,23 @@ enum CollaborationRevisionRegistry {
     }
 
     static func registerLocal(_ metadata: CollaborationRevisionMetadata, for key: CollaborationAggregateKey) {
-        let snapshot = localCache.withLock { cache -> [String: CollaborationRevisionMetadata] in
+        localCache.withLock { cache in
             cache[key.storageKey] = preferred(existing: cache[key.storageKey], incoming: metadata)
-            return cache
+            persist(cache, key: localDefaultsKey)
         }
-        persist(snapshot, key: localDefaultsKey)
+    }
+
+    /// Rehydrates the bridge handoff cache from the durable SwiftData sidecar.
+    /// This intentionally replaces the cached value even when its revision is
+    /// lower because the persisted record is authoritative for the active store.
+    static func registerAuthoritativeLocal(
+        _ metadata: CollaborationRevisionMetadata,
+        for key: CollaborationAggregateKey
+    ) {
+        localCache.withLock { cache in
+            cache[key.storageKey] = metadata
+            persist(cache, key: localDefaultsKey)
+        }
     }
 
     /// Incoming metadata represents the exact bridge snapshot currently being
@@ -431,11 +450,10 @@ enum CollaborationRevisionRegistry {
         for key: CollaborationAggregateKey
     ) {
         registerIncoming(metadata, for: key)
-        let snapshot = observedSharedCache.withLock { cache -> [String: CollaborationRevisionMetadata] in
+        observedSharedCache.withLock { cache in
             cache[key.storageKey] = preferred(existing: cache[key.storageKey], incoming: metadata)
-            return cache
+            persist(cache, key: observedSharedDefaultsKey)
         }
-        persist(snapshot, key: observedSharedDefaultsKey)
     }
 
     static func resetForTesting() {
