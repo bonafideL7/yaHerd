@@ -72,6 +72,28 @@ final class HerdSharingBridgeOperationCoordinator {
     try await journal.recordConflictReport(report, operationID: operationID)
   }
 
+  func recordCommittedImportSuccess(
+    completedSteps: [HerdSharingBridgeStep],
+    conflictReport: HerdSharingBridgeConflictReport,
+    operationID: UUID,
+    recordCounts: [String: Int],
+    reconciliationSummary: String
+  ) async {
+    await bestEffortJournalWrite("completedSteps") {
+      try await recordCompletedSteps(completedSteps, operationID: operationID)
+    }
+    await bestEffortJournalWrite("conflictReport") {
+      try await recordConflictReport(conflictReport, operationID: operationID)
+    }
+    await bestEffortJournalWrite("completion") {
+      try await complete(
+        operationID: operationID,
+        recordCounts: recordCounts,
+        reconciliationSummary: reconciliationSummary
+      )
+    }
+  }
+
   func recordCommittedImportFailure(
     _ failure: HerdSharingSwiftDataCommittedImportFailure,
     operationID: UUID
@@ -111,6 +133,20 @@ final class HerdSharingBridgeOperationCoordinator {
       ReliabilityLog.syncEvent(
         "HerdSharingBridgeOperationCoordinator.journalFailure",
         detail: String(describing: error)
+      )
+    }
+  }
+
+  private func bestEffortJournalWrite(
+    _ operation: String,
+    write: () async throws -> Void
+  ) async {
+    do {
+      try await write()
+    } catch {
+      ReliabilityLog.syncEvent(
+        "HerdSharingBridgeOperationCoordinator.committedImportJournalFailure",
+        detail: "\(operation): \(String(describing: error))"
       )
     }
   }
