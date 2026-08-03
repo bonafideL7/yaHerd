@@ -1,2 +1,2 @@
 Temporary trigger for resolving PR #30 merge conflicts.
-Resolution test 1.
+Resolution test 2.
