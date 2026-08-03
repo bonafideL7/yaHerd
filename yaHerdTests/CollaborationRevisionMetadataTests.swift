@@ -86,6 +86,36 @@ final class CollaborationRevisionMetadataTests: XCTestCase {
         XCTAssertEqual(accepted.metadata.currentFieldValues, currentFields)
     }
 
+    func testIncomingSnapshotReplacesEarlierHigherRevision() throws {
+        let key = CollaborationAggregateKey(type: .animal, publicID: UUID())
+        let olderExportValue = CollaborationRevisionMetadata(
+            modifiedAt: Date(timeIntervalSince1970: 200),
+            revision: 9,
+            modifiedByParticipantID: "participant-local",
+            modifiedByDeviceID: "device-local",
+            baseRevision: 8,
+            baseFieldValues: [:],
+            currentFieldValues: [:],
+            isDeleted: false
+        )
+        let currentSharedValue = CollaborationRevisionMetadata(
+            modifiedAt: Date(timeIntervalSince1970: 100),
+            revision: 3,
+            modifiedByParticipantID: "participant-shared",
+            modifiedByDeviceID: "device-shared",
+            baseRevision: 2,
+            baseFieldValues: [:],
+            currentFieldValues: [:],
+            isDeleted: false
+        )
+
+        CollaborationRevisionRegistry.registerIncoming(olderExportValue, for: key)
+        CollaborationRevisionRegistry.registerIncoming(currentSharedValue, for: key)
+
+        let registered = try XCTUnwrap(CollaborationRevisionRegistry.incomingMetadata(for: key))
+        XCTAssertEqual(registered, currentSharedValue)
+    }
+
     func testRevisionAnalysisRecognizesDisjointDivergentEdits() {
         let publicID = UUID()
         let key = CollaborationAggregateKey(type: .animal, publicID: publicID)
