@@ -3,17 +3,19 @@ name: Merge Main Diagnostic
 on:
   pull_request:
     types:
+      - opened
       - reopened
+      - synchronize
 
 permissions:
   contents: write
 
 jobs:
   diagnose-merge:
-    if: github.event.pull_request.head.ref == 'agent/global-animal-query'
+    if: github.event.pull_request.base.ref == 'agent/global-animal-query'
     runs-on: macos-latest
     steps:
-      - name: Check out branch
+      - name: Check out feature branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
