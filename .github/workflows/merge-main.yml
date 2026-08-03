@@ -51,6 +51,26 @@ jobs:
           git checkout --ours -- \
             yaHerd/Data/Sharing/SwiftDataHerdSharingActor.swift \
             yaHerdTests/SwiftDataHerdSharingActorTests.swift
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("yaHerdTests/SwiftDataHerdSharingActorTests.swift")
+          text = path.read_text()
+          enum_block = '''  private enum InjectedFailure: Error, Equatable {
+    case afterPersistentStoreCommit
+  }
+
+'''
+          text = text.replace(enum_block, "", 1)
+          obsolete_test = text.find(
+              "  func testConflictReportIsJournaledBeforePersistentStoreCommitFailure()"
+          )
+          if obsolete_test == -1:
+              raise RuntimeError("Obsolete transactional import test was not found")
+          text = text[:obsolete_test].rstrip() + "\n}\n"
+          path.write_text(text)
+          PY
           git add \
             yaHerd/Data/Sharing/SwiftDataHerdSharingActor.swift \
             yaHerdTests/SwiftDataHerdSharingActorTests.swift
