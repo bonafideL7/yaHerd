@@ -27,6 +27,8 @@ struct CollaborationPreparedSave {
 /// Repositories and use cases continue to save normally; revision stamping is
 /// derived from ModelContext changes immediately before the transaction commits.
 enum CollaborationMutationPipeline {
+    private static let directLookupThreshold = 20
+
     static func prepareForSave(
         in context: ModelContext,
         operation: String
@@ -37,7 +39,10 @@ enum CollaborationMutationPipeline {
             return CollaborationPreparedSave(localMetadataUpdates: [:])
         }
 
-        let records = try context.fetch(FetchDescriptor<CollaborationRevisionRecord>())
+        let records = try existingRevisionRecords(
+            for: pendingAggregates,
+            in: context
+        )
         var recordsByKey: [CollaborationAggregateKey: CollaborationRevisionRecord] = [:]
         canonicalize(records, into: &recordsByKey, in: context)
 
@@ -119,6 +124,56 @@ enum CollaborationMutationPipeline {
         collect(context.changedModelsArray, isDeleted: false)
         collect(context.deletedModelsArray, isDeleted: true)
         return pending
+    }
+
+    private static func existingRevisionRecords(
+        for pending: [CollaborationAggregateKey: PendingAggregate],
+        in context: ModelContext
+    ) throws -> [CollaborationRevisionRecord] {
+        if pending.count <= directLookupThreshold {
+            return try pending.keys.flatMap { key in
+                try fetchRevisionRecords(for: key, in: context)
+            }
+        }
+
+        let herdPublicIDs = Set(
+            pending.values.compactMap { $0.aggregate.collaborationHerdPublicID }
+        )
+        var records: [CollaborationRevisionRecord] = []
+        records.reserveCapacity(pending.count)
+
+        for herdPublicID in herdPublicIDs {
+            let descriptor = FetchDescriptor<CollaborationRevisionRecord>(
+                predicate: #Predicate<CollaborationRevisionRecord> { record in
+                    record.herdPublicID == herdPublicID
+                },
+                sortBy: [SortDescriptor(\CollaborationRevisionRecord.aggregateKey)]
+            )
+            records.append(contentsOf: try context.fetch(descriptor))
+        }
+
+        let foundKeys = Set(records.map(\.key))
+        for key in pending.keys where !foundKeys.contains(key) {
+            records.append(contentsOf: try fetchRevisionRecords(for: key, in: context))
+        }
+        return records
+    }
+
+    private static func fetchRevisionRecords(
+        for key: CollaborationAggregateKey,
+        in context: ModelContext
+    ) throws -> [CollaborationRevisionRecord] {
+        let aggregateKey = key.storageKey
+        let descriptor = FetchDescriptor<CollaborationRevisionRecord>(
+            predicate: #Predicate<CollaborationRevisionRecord> { record in
+                record.aggregateKey == aggregateKey
+            },
+            sortBy: [
+                SortDescriptor(\CollaborationRevisionRecord.revision, order: .reverse),
+                SortDescriptor(\CollaborationRevisionRecord.modifiedAt, order: .reverse),
+            ]
+        )
+        return try context.fetch(descriptor)
     }
 
     private static func canonicalize(
