@@ -416,9 +416,13 @@ enum CollaborationRevisionRegistry {
         persist(snapshot, key: localDefaultsKey)
     }
 
+    /// Incoming metadata represents the exact bridge snapshot currently being
+    /// compared or imported. It must replace an earlier export/read value even
+    /// when the incoming revision is lower, otherwise stale local metadata can
+    /// be misidentified as the shared side of a conflict.
     static func registerIncoming(_ metadata: CollaborationRevisionMetadata, for key: CollaborationAggregateKey) {
         incomingCache.withLock { cache in
-            cache[key.storageKey] = preferred(existing: cache[key.storageKey], incoming: metadata)
+            cache[key.storageKey] = metadata
         }
     }
 
