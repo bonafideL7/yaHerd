@@ -1,17 +1,16 @@
 name: Merge Main Diagnostic
 
 on:
-  push:
-    branches:
-      - agent/global-animal-query
-    paths:
-      - .github/workflows/merge-main.yml
+  pull_request:
+    types:
+      - reopened
 
 permissions:
   contents: write
 
 jobs:
   diagnose-merge:
+    if: github.event.pull_request.head.ref == 'agent/global-animal-query'
     runs-on: macos-latest
     steps:
       - name: Check out branch
