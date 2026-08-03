@@ -67,7 +67,8 @@ final class PastureTileListViewModel {
         formatTag: (String, UUID?) -> String
     ) -> [PastureSummary] {
         let pastureMatches = filteredItems(for: filter)
-        guard query.hasFilteringCriteria else { return pastureMatches }
+        let hasPastureMatchingCriteria = query.hasSearchText || query.filter.isActive
+        guard hasPastureMatchingCriteria else { return pastureMatches }
 
         let searchText = query.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -88,7 +89,7 @@ final class PastureTileListViewModel {
                 formatTag: formatTag
             )
 
-            if pastureNameMatches && !query.filtersAreActive {
+            if pastureNameMatches && !query.filter.isActive {
                 return true
             }
 
