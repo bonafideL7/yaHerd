@@ -120,6 +120,12 @@ struct HerdTabRootView: View {
             AnimalDetailView(animalID: animalID)
         case .pasture(let pastureID):
             PastureDetailView(pastureID: pastureID)
+        case .fieldCheckSetup(let pastureID):
+            FieldCheckSessionSetupView(suggestedPastureID: pastureID) { sessionID in
+                navigation.openFieldCheckArea(
+                    .session(FieldCheckSessionLaunchConfiguration(sessionID: sessionID))
+                )
+            }
         case .fieldChecks(let mode):
             FieldChecksView(mode: mode, onSessionLaunch: { configuration in
                 navigation.openFieldCheckArea(.session(configuration))
