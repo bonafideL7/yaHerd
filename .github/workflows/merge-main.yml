@@ -1,0 +1,41 @@
+name: Merge Main Diagnostic
+
+on:
+  push:
+    branches:
+      - agent/global-animal-query
+    paths:
+      - .github/workflows/merge-main.yml
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose-merge:
+    runs-on: macos-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/global-animal-query
+
+      - name: Attempt merge and report conflicts
+        shell: bash
+        run: |
+          set -uo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          if git merge --no-commit --no-ff origin/main; then
+            echo "MERGE_HAS_NO_CONFLICTS"
+            git merge --abort
+            exit 0
+          fi
+          echo "UNRESOLVED_PATHS_BEGIN"
+          git diff --name-only --diff-filter=U
+          echo "UNRESOLVED_PATHS_END"
+          echo "CONFLICT_MARKERS_BEGIN"
+          git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- . ':!*.pbxproj' || true
+          echo "CONFLICT_MARKERS_END"
+          exit 1
