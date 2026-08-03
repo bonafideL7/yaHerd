@@ -52,9 +52,14 @@ enum PersistenceLog {
 
     nonisolated static func save(_ context: ModelContext, operation: String) throws {
         do {
+            let preparedSave = try CollaborationMutationPipeline.prepareForSave(
+                in: context,
+                operation: operation
+            )
             try PerformanceLog.measure("SwiftData.save.\(operation)") {
                 try context.save()
             }
+            preparedSave.commitRegistryUpdates()
             ReliabilityLog.persistenceEvent(operation, detail: "SwiftData save completed")
         } catch {
             ReliabilityLog.persistenceFailure(operation, error: error)
