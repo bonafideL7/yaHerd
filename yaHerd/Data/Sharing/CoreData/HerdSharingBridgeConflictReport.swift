@@ -129,6 +129,14 @@ struct HerdSharingBridgeConflictDetail: Codable, Equatable, Identifiable, Sendab
     case preventedSharedDelete
   }
 
+  enum RevisionComparison: String, Codable, Equatable, Sendable {
+    case metadataUnavailable
+    case sameRevisionMismatch
+    case localOnly
+    case sharedOnly
+    case divergent
+  }
+
   let id: UUID
   let kind: Kind
   let sourceEntityName: String
@@ -136,6 +144,22 @@ struct HerdSharingBridgeConflictDetail: Codable, Equatable, Identifiable, Sendab
   let localModifiedAt: Date
   let sharedModifiedAt: Date
   var fieldChanges: [HerdSharingBridgeFieldChange]
+
+  /// Optional for backward-compatible decoding of conflict reports written
+  /// before revision metadata was introduced.
+  let lastCommonRevision: Int?
+  let localRevision: Int?
+  let sharedRevision: Int?
+  let localBaseRevision: Int?
+  let sharedBaseRevision: Int?
+  let localModifiedByParticipantID: String?
+  let localModifiedByDeviceID: String?
+  let sharedModifiedByParticipantID: String?
+  let sharedModifiedByDeviceID: String?
+  let revisionComparison: RevisionComparison?
+  let localChangedFields: [String]?
+  let sharedChangedFields: [String]?
+  let canMergeAutomatically: Bool?
 
   fileprivate var recordKey: String {
     "\(kind.rawValue)|\(sourceEntityName)|\(publicID.uuidString)"
@@ -153,8 +177,138 @@ struct HerdSharingBridgeConflictDetail: Codable, Equatable, Identifiable, Sendab
     self.kind = kind
     self.sourceEntityName = sourceEntityName
     self.publicID = publicID
-    self.localModifiedAt = localModifiedAt
-    self.sharedModifiedAt = sharedModifiedAt
     self.fieldChanges = fieldChanges
+
+    let key = CollaborationAggregateKey(
+      sourceEntityName: sourceEntityName,
+      publicID: publicID
+    )
+    let localMetadata = CollaborationRevisionRegistry.localMetadata(for: key)
+    let sharedMetadata = CollaborationRevisionRegistry.incomingMetadata(for: key)
+    self.localModifiedAt = localMetadata?.modifiedAt ?? localModifiedAt
+    self.sharedModifiedAt = sharedMetadata?.modifiedAt ?? sharedModifiedAt
+    localRevision = localMetadata?.revision
+    sharedRevision = sharedMetadata?.revision
+    localBaseRevision = localMetadata?.baseRevision
+    sharedBaseRevision = sharedMetadata?.baseRevision
+    localModifiedByParticipantID = localMetadata?.modifiedByParticipantID
+    localModifiedByDeviceID = localMetadata?.modifiedByDeviceID
+    sharedModifiedByParticipantID = sharedMetadata?.modifiedByParticipantID
+    sharedModifiedByDeviceID = sharedMetadata?.modifiedByDeviceID
+
+    let analysis = Self.analyzeRevisions(
+      local: localMetadata,
+      shared: sharedMetadata,
+      fieldChanges: fieldChanges
+    )
+    lastCommonRevision = analysis.lastCommonRevision
+    revisionComparison = analysis.comparison
+    localChangedFields = analysis.localChangedFields
+    sharedChangedFields = analysis.sharedChangedFields
+    canMergeAutomatically = analysis.canMergeAutomatically
+  }
+
+  private struct RevisionAnalysis {
+    let lastCommonRevision: Int?
+    let comparison: RevisionComparison
+    let localChangedFields: [String]
+    let sharedChangedFields: [String]
+    let canMergeAutomatically: Bool
+  }
+
+  private static func analyzeRevisions(
+    local: CollaborationRevisionMetadata?,
+    shared: CollaborationRevisionMetadata?,
+    fieldChanges: [HerdSharingBridgeFieldChange]
+  ) -> RevisionAnalysis {
+    guard let local, let shared else {
+      return RevisionAnalysis(
+        lastCommonRevision: nil,
+        comparison: .metadataUnavailable,
+        localChangedFields: fieldChanges.map(\.fieldName).sorted(),
+        sharedChangedFields: fieldChanges.map(\.fieldName).sorted(),
+        canMergeAutomatically: false
+      )
+    }
+
+    let comparison: RevisionComparison
+    let lastCommonRevision: Int?
+    let baseFields: CollaborationFieldSnapshot?
+
+    if local.revision == shared.revision {
+      comparison = .sameRevisionMismatch
+      lastCommonRevision = local.revision
+      baseFields = nil
+    } else if local.revision == shared.baseRevision {
+      comparison = .sharedOnly
+      lastCommonRevision = local.revision
+      baseFields = local.currentFieldValues
+    } else if shared.revision == local.baseRevision {
+      comparison = .localOnly
+      lastCommonRevision = shared.revision
+      baseFields = shared.currentFieldValues
+    } else if local.baseRevision == shared.baseRevision {
+      comparison = .divergent
+      lastCommonRevision = local.baseRevision
+      if !local.baseFieldValues.isEmpty,
+         local.baseFieldValues == shared.baseFieldValues || shared.baseFieldValues.isEmpty {
+        baseFields = local.baseFieldValues
+      } else if !shared.baseFieldValues.isEmpty {
+        baseFields = shared.baseFieldValues
+      } else {
+        baseFields = nil
+      }
+    } else {
+      comparison = .divergent
+      let candidates = [local.baseRevision, shared.baseRevision].filter { $0 > 0 }
+      lastCommonRevision = candidates.min()
+      baseFields = nil
+    }
+
+    let localChangedFields: [String]
+    let sharedChangedFields: [String]
+    if let baseFields {
+      localChangedFields = changedFieldNames(
+        from: baseFields,
+        to: local.currentFieldValues
+      )
+      sharedChangedFields = changedFieldNames(
+        from: baseFields,
+        to: shared.currentFieldValues
+      )
+    } else {
+      let differingFields = fieldChanges.map(\.fieldName).sorted()
+      localChangedFields = differingFields
+      sharedChangedFields = differingFields
+    }
+
+    let localSet = Set(localChangedFields)
+    let sharedSet = Set(sharedChangedFields)
+    let canMergeAutomatically: Bool
+    switch comparison {
+    case .localOnly, .sharedOnly:
+      canMergeAutomatically = true
+    case .divergent:
+      canMergeAutomatically = baseFields != nil && localSet.isDisjoint(with: sharedSet)
+    case .metadataUnavailable, .sameRevisionMismatch:
+      canMergeAutomatically = false
+    }
+
+    return RevisionAnalysis(
+      lastCommonRevision: lastCommonRevision,
+      comparison: comparison,
+      localChangedFields: localChangedFields,
+      sharedChangedFields: sharedChangedFields,
+      canMergeAutomatically: canMergeAutomatically
+    )
+  }
+
+  private static func changedFieldNames(
+    from base: CollaborationFieldSnapshot,
+    to current: CollaborationFieldSnapshot
+  ) -> [String] {
+    Set(base.keys).union(current.keys).filter { fieldName in
+      (base[fieldName] ?? .null) != (current[fieldName] ?? .null)
+    }.sorted()
   }
 }
