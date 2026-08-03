@@ -447,13 +447,10 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
       )
     }
 
-    for record in recordsByKey.values {
-      let key = record.key
-      let metadata = record.metadata
-      if CollaborationRevisionRegistry.localMetadata(for: key) != metadata {
-        CollaborationRevisionRegistry.registerAuthoritativeLocal(metadata, for: key)
-      }
-    }
+    let entries = recordsByKey.values
+      .map { CollaborationRevisionRegistry.Entry(key: $0.key, metadata: $0.metadata) }
+      .sorted { $0.key.storageKey < $1.key.storageKey }
+    CollaborationRevisionRegistry.registerAuthoritativeLocals(entries)
   }
 
   private func appendCollaborativeAggregates<Model: CollaborativelyMutableAggregate>(
