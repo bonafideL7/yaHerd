@@ -236,9 +236,21 @@ struct HerdSharingBridgeConflictDetail: Codable, Equatable, Identifiable, Sendab
     let baseFields: CollaborationFieldSnapshot?
 
     if local.revision == shared.revision {
-      comparison = .sameRevisionMismatch
-      lastCommonRevision = local.revision
-      baseFields = nil
+      if local.currentFieldValues != shared.currentFieldValues,
+        local.baseRevision == shared.baseRevision,
+        local.baseRevision > 0,
+        local.baseRevision < local.revision
+      {
+        comparison = .divergent
+        lastCommonRevision = local.baseRevision
+        baseFields = commonBaseFields(local: local, shared: shared)
+      } else {
+        comparison = .sameRevisionMismatch
+        lastCommonRevision = local.baseRevision == shared.baseRevision && local.baseRevision > 0
+          ? local.baseRevision
+          : nil
+        baseFields = nil
+      }
     } else if local.revision == shared.baseRevision {
       comparison = .sharedOnly
       lastCommonRevision = local.revision
@@ -247,21 +259,13 @@ struct HerdSharingBridgeConflictDetail: Codable, Equatable, Identifiable, Sendab
       comparison = .localOnly
       lastCommonRevision = shared.revision
       baseFields = shared.currentFieldValues
-    } else if local.baseRevision == shared.baseRevision {
+    } else if local.baseRevision == shared.baseRevision, local.baseRevision > 0 {
       comparison = .divergent
       lastCommonRevision = local.baseRevision
-      if !local.baseFieldValues.isEmpty,
-         local.baseFieldValues == shared.baseFieldValues || shared.baseFieldValues.isEmpty {
-        baseFields = local.baseFieldValues
-      } else if !shared.baseFieldValues.isEmpty {
-        baseFields = shared.baseFieldValues
-      } else {
-        baseFields = nil
-      }
+      baseFields = commonBaseFields(local: local, shared: shared)
     } else {
       comparison = .divergent
-      let candidates = [local.baseRevision, shared.baseRevision].filter { $0 > 0 }
-      lastCommonRevision = candidates.min()
+      lastCommonRevision = nil
       baseFields = nil
     }
 
@@ -301,6 +305,20 @@ struct HerdSharingBridgeConflictDetail: Codable, Equatable, Identifiable, Sendab
       sharedChangedFields: sharedChangedFields,
       canMergeAutomatically: canMergeAutomatically
     )
+  }
+
+  private static func commonBaseFields(
+    local: CollaborationRevisionMetadata,
+    shared: CollaborationRevisionMetadata
+  ) -> CollaborationFieldSnapshot? {
+    let localBase = local.baseFieldValues
+    let sharedBase = shared.baseFieldValues
+    if !localBase.isEmpty, !sharedBase.isEmpty {
+      return localBase == sharedBase ? localBase : nil
+    }
+    if !localBase.isEmpty { return localBase }
+    if !sharedBase.isEmpty { return sharedBase }
+    return nil
   }
 
   private static func changedFieldNames(
