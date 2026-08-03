@@ -66,15 +66,11 @@ jobs:
           set -e
 
           echo "ANIMAL_PATCH_STATUS=$apply_status"
+          echo "ANIMAL_CONFLICT_BLOCKS_BEGIN"
+          nl -ba yaHerd/Presentation/ViewModels/Animal/AnimalListViewModel.swift \
+            | sed -n '35,65p;160,230p'
+          echo "ANIMAL_CONFLICT_BLOCKS_END"
           echo "UNRESOLVED_PATHS_BEGIN"
           git diff --name-only --diff-filter=U
           echo "UNRESOLVED_PATHS_END"
-          echo "CONFLICT_MARKERS_BEGIN"
-          git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- \
-            yaHerd/Presentation/ViewModels/Animal/AnimalListViewModel.swift || true
-          echo "CONFLICT_MARKERS_END"
-          echo "ANIMAL_DIFF_BEGIN"
-          git diff --cached -- \
-            yaHerd/Presentation/ViewModels/Animal/AnimalListViewModel.swift || true
-          echo "ANIMAL_DIFF_END"
           exit 1
