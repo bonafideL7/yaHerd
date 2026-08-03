@@ -51,6 +51,51 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.filteredItems(for: .rotationReady), [underutilized, missingStockingData, restedEmpty])
     }
 
+    func testInclusionTogglesDoNotHideEmptyPastures() {
+        let north = PastureTestSupport.makeSummary(name: "North", activeAnimalCount: 0)
+        let south = PastureTestSupport.makeSummary(name: "South", activeAnimalCount: 0)
+        let repository = PastureListReaderStub(result: .success([north, south]))
+        let viewModel = PastureTileListViewModel()
+        viewModel.load(using: repository)
+        let formatTag: (String, UUID?) -> String = { number, _ in number }
+
+        XCTAssertEqual(
+            viewModel.filteredItems(
+                for: .all,
+                query: AnimalQuery(showRemovedStatuses: true),
+                formatTag: formatTag
+            ),
+            [north, south]
+        )
+        XCTAssertEqual(
+            viewModel.filteredItems(
+                for: .all,
+                query: AnimalQuery(showArchivedRecords: true),
+                formatTag: formatTag
+            ),
+            [north, south]
+        )
+    }
+
+    func testPastureNameSearchMatchesEmptyPastureWithInclusionToggle() {
+        let north = PastureTestSupport.makeSummary(name: "North Meadow", activeAnimalCount: 0)
+        let south = PastureTestSupport.makeSummary(name: "South Meadow", activeAnimalCount: 0)
+        let repository = PastureListReaderStub(result: .success([north, south]))
+        let viewModel = PastureTileListViewModel()
+        viewModel.load(using: repository)
+
+        let matches = viewModel.filteredItems(
+            for: .all,
+            query: AnimalQuery(
+                searchText: "north",
+                showArchivedRecords: true
+            ),
+            formatTag: { number, _ in number }
+        )
+
+        XCTAssertEqual(matches, [north])
+    }
+
     func testMovePasturesInMemoryReordersItems() {
         let first = PastureTestSupport.makeSummary(name: "First")
         let second = PastureTestSupport.makeSummary(name: "Second")
