@@ -20,33 +20,71 @@ extension HerdSharingCoreDataModelFactory {
 
     private static func buildCurrentModel() -> NSManagedObjectModel {
         let model = makeModel()
-        guard let entity = model.entitiesByName[SharedWorkingTreatmentRecord.entityName] else {
-            return model
+        if let entity = model.entitiesByName[SharedWorkingTreatmentRecord.entityName] {
+            // `quantity` was the pre-release placeholder. V1 stores a structured dose.
+            entity.properties.removeAll { $0.name == "quantity" }
+            appendAttributeIfMissing(
+                name: "treatmentItemID",
+                type: .stringAttributeType,
+                to: entity
+            )
+            appendAttributeIfMissing(
+                name: "doseAmount",
+                type: .doubleAttributeType,
+                to: entity
+            )
+            appendAttributeIfMissing(
+                name: "doseUnitRawValue",
+                type: .stringAttributeType,
+                to: entity
+            )
+            appendAttributeIfMissing(
+                name: "administrationRouteRawValue",
+                type: .stringAttributeType,
+                to: entity
+            )
         }
 
-        // `quantity` was the pre-release placeholder. V1 stores a structured dose.
-        entity.properties.removeAll { $0.name == "quantity" }
-        appendAttributeIfMissing(
-            name: "treatmentItemID",
-            type: .stringAttributeType,
-            to: entity
+        let revisionedEntityNames = Set(
+            CollaborationAggregateType.allCases.map(\.rawValue)
+                + [SharedDeletedRecord.entityName]
         )
-        appendAttributeIfMissing(
-            name: "doseAmount",
-            type: .doubleAttributeType,
-            to: entity
-        )
-        appendAttributeIfMissing(
-            name: "doseUnitRawValue",
-            type: .stringAttributeType,
-            to: entity
-        )
-        appendAttributeIfMissing(
-            name: "administrationRouteRawValue",
-            type: .stringAttributeType,
-            to: entity
-        )
+        for entity in model.entities {
+            guard let entityName = entity.name,
+                  revisionedEntityNames.contains(entityName) else {
+                continue
+            }
+            appendCollaborationMetadataAttributes(to: entity)
+        }
         return model
+    }
+
+    private static func appendCollaborationMetadataAttributes(
+        to entity: NSEntityDescription
+    ) {
+        appendAttributeIfMissing(name: "modifiedAt", type: .dateAttributeType, to: entity)
+        appendAttributeIfMissing(name: "revision", type: .integer64AttributeType, to: entity)
+        appendAttributeIfMissing(
+            name: "modifiedByParticipantID",
+            type: .stringAttributeType,
+            to: entity
+        )
+        appendAttributeIfMissing(
+            name: "modifiedByDeviceID",
+            type: .stringAttributeType,
+            to: entity
+        )
+        appendAttributeIfMissing(name: "baseRevision", type: .integer64AttributeType, to: entity)
+        appendAttributeIfMissing(
+            name: "baseFieldValuesJSON",
+            type: .binaryDataAttributeType,
+            to: entity
+        )
+        appendAttributeIfMissing(
+            name: "currentFieldValuesJSON",
+            type: .binaryDataAttributeType,
+            to: entity
+        )
     }
 
     private static func appendAttributeIfMissing(
