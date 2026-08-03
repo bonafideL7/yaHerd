@@ -1,24 +1,17 @@
-import Foundation
 import Synchronization
 
-/// Thread-safe metadata cache used at the boundary between SwiftData snapshots
-/// and the isolated Core Data bridge. SwiftData remains the durable source; the
-/// cache avoids passing persistence contexts into background bridge transactions.
+/// Thread-safe handoff cache between SwiftData and the isolated Core Data bridge.
+/// SwiftData revision sidecars and Core Data metadata are the durable sources;
+/// this registry only carries values across actor and persistence boundaries for
+/// the active operation.
 enum CollaborationRevisionRegistry {
     struct Entry: Sendable {
         let key: CollaborationAggregateKey
         let metadata: CollaborationRevisionMetadata
     }
 
-    private static let localDefaultsKey = "CollaborationRevisionRegistry.local.v1"
-    private static let observedSharedDefaultsKey = "CollaborationRevisionRegistry.shared.v1"
-
-    private static let localCache = Mutex<[String: CollaborationRevisionMetadata]>(
-        loadPersistedCache(key: localDefaultsKey)
-    )
-    private static let observedSharedCache = Mutex<[String: CollaborationRevisionMetadata]>(
-        loadPersistedCache(key: observedSharedDefaultsKey)
-    )
+    private static let localCache = Mutex<[String: CollaborationRevisionMetadata]>([:])
+    private static let observedSharedCache = Mutex<[String: CollaborationRevisionMetadata]>([:])
     private static let incomingCache = Mutex<[String: CollaborationRevisionMetadata]>([:])
 
     static func localMetadata(for key: CollaborationAggregateKey) -> CollaborationRevisionMetadata? {
@@ -36,20 +29,18 @@ enum CollaborationRevisionRegistry {
     static func registerLocal(_ metadata: CollaborationRevisionMetadata, for key: CollaborationAggregateKey) {
         localCache.withLock { cache in
             cache[key.storageKey] = preferred(existing: cache[key.storageKey], incoming: metadata)
-            persist(cache, key: localDefaultsKey)
         }
     }
 
-    /// Rehydrates the bridge handoff cache from durable SwiftData sidecars in a
-    /// single write. Persisted records intentionally replace cached values even
-    /// when their revisions are lower because the active store is authoritative.
+    /// Rehydrates the handoff cache from durable SwiftData sidecars. Persisted
+    /// records intentionally replace cached values even when their revisions are
+    /// lower because the active SwiftData store is authoritative.
     static func registerAuthoritativeLocals(_ entries: [Entry]) {
         guard !entries.isEmpty else { return }
         localCache.withLock { cache in
             for entry in entries {
                 cache[entry.key.storageKey] = entry.metadata
             }
-            persist(cache, key: localDefaultsKey)
         }
     }
 
@@ -77,7 +68,6 @@ enum CollaborationRevisionRegistry {
         registerIncoming(metadata, for: key)
         observedSharedCache.withLock { cache in
             cache[key.storageKey] = preferred(existing: cache[key.storageKey], incoming: metadata)
-            persist(cache, key: observedSharedDefaultsKey)
         }
     }
 
@@ -85,8 +75,6 @@ enum CollaborationRevisionRegistry {
         localCache.withLock { $0.removeAll() }
         observedSharedCache.withLock { $0.removeAll() }
         incomingCache.withLock { $0.removeAll() }
-        UserDefaults.standard.removeObject(forKey: localDefaultsKey)
-        UserDefaults.standard.removeObject(forKey: observedSharedDefaultsKey)
     }
 
     private static func preferred(
@@ -98,23 +86,5 @@ enum CollaborationRevisionRegistry {
             return incoming.revision > existing.revision ? incoming : existing
         }
         return incoming.modifiedAt >= existing.modifiedAt ? incoming : existing
-    }
-
-    private static func loadPersistedCache(
-        key: String
-    ) -> [String: CollaborationRevisionMetadata] {
-        guard let data = UserDefaults.standard.data(forKey: key) else { return [:] }
-        return (try? JSONDecoder().decode(
-            [String: CollaborationRevisionMetadata].self,
-            from: data
-        )) ?? [:]
-    }
-
-    private static func persist(
-        _ cache: [String: CollaborationRevisionMetadata],
-        key: String
-    ) {
-        guard let data = try? JSONEncoder().encode(cache) else { return }
-        UserDefaults.standard.set(data, forKey: key)
     }
 }
