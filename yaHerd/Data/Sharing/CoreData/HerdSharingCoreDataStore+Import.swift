@@ -72,15 +72,9 @@ extension HerdSharingCoreDataStore {
         pendingConflictReport: operation.pendingConflictReport,
         failureInjector: operationCoordinator.backgroundFailureInjector
       )
-      try await operationCoordinator.recordCompletedSteps(
-        application.completedSteps,
-        operationID: operation.id
-      )
-      try await operationCoordinator.recordConflictReport(
-        application.result.conflictReport,
-        operationID: operation.id
-      )
-      try await operationCoordinator.complete(
+      await operationCoordinator.recordCommittedImportSuccess(
+        completedSteps: application.completedSteps,
+        conflictReport: application.result.conflictReport,
         operationID: operation.id,
         recordCounts: [
           "insertedRecords": totalInsertedRecordCount(in: application.result),
