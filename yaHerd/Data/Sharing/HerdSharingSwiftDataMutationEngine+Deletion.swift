@@ -82,7 +82,7 @@ enum HerdSharingSwiftDataMutationEngine {
     in context: ModelContext
   ) throws -> HerdSharingBridgeConflictDetail? {
     guard let tombstoneDeletedAt,
-      let localModifiedAt = try localModificationDate(
+      let localModifiedAt = try collaborationLocalModificationDate(
         sourceEntityName: sourceEntityName,
         publicID: publicID,
         in: context
@@ -96,6 +96,25 @@ enum HerdSharingSwiftDataMutationEngine {
       publicID: publicID,
       localModifiedAt: localModifiedAt,
       sharedModifiedAt: tombstoneDeletedAt
+    )
+  }
+
+  private static func collaborationLocalModificationDate(
+    sourceEntityName: String,
+    publicID: UUID,
+    in context: ModelContext
+  ) throws -> Date? {
+    let key = CollaborationAggregateKey(
+      sourceEntityName: sourceEntityName,
+      publicID: publicID
+    )
+    if let metadata = CollaborationRevisionRegistry.localMetadata(for: key) {
+      return metadata.modifiedAt
+    }
+    return try localModificationDate(
+      sourceEntityName: sourceEntityName,
+      publicID: publicID,
+      in: context
     )
   }
 

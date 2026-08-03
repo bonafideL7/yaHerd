@@ -18,7 +18,7 @@ extension HerdSharingCoreDataStore {
       }
       .first
 
-    return try await withCheckedThrowingContinuation {
+    let share = try await withCheckedThrowingContinuation {
       (continuation: CheckedContinuation<CKShare, Error>) in
       persistentContainer.share(records, to: existingCKShare) { _, share, _, error in
         if let error {
@@ -38,6 +38,8 @@ extension HerdSharingCoreDataStore {
         continuation.resume(returning: share)
       }
     }
+    registerCurrentParticipant(from: share)
+    return share
   }
 
   func existingShare(for record: NSManagedObject) throws -> CKShare? {
@@ -49,6 +51,7 @@ extension HerdSharingCoreDataStore {
     guard let currentUserParticipant = share.currentUserParticipant else {
       return .unknown
     }
+    registerCurrentParticipant(from: currentUserParticipant)
 
     switch currentUserParticipant.permission {
     case .readOnly:
@@ -86,5 +89,15 @@ extension HerdSharingCoreDataStore {
         continuation.resume()
       }
     }
+  }
+
+  private func registerCurrentParticipant(from share: CKShare) {
+    guard let participant = share.currentUserParticipant else { return }
+    registerCurrentParticipant(from: participant)
+  }
+
+  private func registerCurrentParticipant(from participant: CKShare.Participant) {
+    guard let participantID = participant.userIdentity.userRecordID?.recordName else { return }
+    CollaborationIdentityProvider.registerParticipantID(participantID)
   }
 }

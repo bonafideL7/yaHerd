@@ -393,11 +393,78 @@ extension HerdSharingCoreDataStore {
     }
 
     let now = Date.now
+    let metadata = deletionMetadata(
+      publicID: publicID,
+      sourceEntityName: sourceEntityName,
+      mirroredAt: now
+    )
     tombstone.setValue(publicID, forKey: "publicID")
     tombstone.setValue(herdPublicID.uuidString, forKey: "herdPublicID")
     tombstone.setValue(sourceEntityName, forKey: "sourceEntityName")
-    tombstone.setValue(now, forKey: "deletedAt")
+    tombstone.setValue(metadata.modifiedAt, forKey: "deletedAt")
     tombstone.setValue(now, forKey: "lastMirroredAt")
+    tombstone.setValue(metadata.modifiedAt, forKey: "modifiedAt")
+    tombstone.setValue(Int64(metadata.revision), forKey: "revision")
+    tombstone.setValue(metadata.modifiedByParticipantID, forKey: "modifiedByParticipantID")
+    tombstone.setValue(metadata.modifiedByDeviceID, forKey: "modifiedByDeviceID")
+    tombstone.setValue(Int64(metadata.baseRevision), forKey: "baseRevision")
+    tombstone.setValue(
+      CollaborationRevisionMetadata.encodeFieldSnapshot(metadata.baseFieldValues),
+      forKey: "baseFieldValuesJSON"
+    )
+    tombstone.setValue(
+      CollaborationRevisionMetadata.encodeFieldSnapshot(metadata.currentFieldValues),
+      forKey: "currentFieldValuesJSON"
+    )
+  }
+
+  nonisolated static func deletionMetadata(
+    publicID: String,
+    sourceEntityName: String,
+    mirroredAt: Date
+  ) -> CollaborationRevisionMetadata {
+    guard let aggregatePublicID = UUID(uuidString: publicID),
+      CollaborationAggregateType(rawValue: sourceEntityName) != nil
+    else {
+      return CollaborationRevisionMetadata.localBootstrap(
+        fieldValues: [:],
+        isDeleted: true,
+        modifiedAt: mirroredAt
+      )
+    }
+
+    let key = CollaborationAggregateKey(
+      sourceEntityName: sourceEntityName,
+      publicID: aggregatePublicID
+    )
+    if let existing = CollaborationRevisionRegistry.localMetadata(for: key) {
+      guard !existing.isDeleted else { return existing }
+
+      let identity = CollaborationIdentityProvider.current()
+      let modifiedAt = mirroredAt > existing.modifiedAt
+        ? mirroredAt
+        : existing.modifiedAt.addingTimeInterval(0.001)
+      let metadata = CollaborationRevisionMetadata(
+        modifiedAt: modifiedAt,
+        revision: existing.revision + 1,
+        modifiedByParticipantID: identity.participantID,
+        modifiedByDeviceID: identity.deviceID,
+        baseRevision: existing.revision,
+        baseFieldValues: existing.currentFieldValues,
+        currentFieldValues: existing.currentFieldValues,
+        isDeleted: true
+      )
+      CollaborationRevisionRegistry.registerAuthoritativeLocal(metadata, for: key)
+      return metadata
+    }
+
+    let metadata = CollaborationRevisionMetadata.localBootstrap(
+      fieldValues: [:],
+      isDeleted: true,
+      modifiedAt: mirroredAt
+    )
+    CollaborationRevisionRegistry.registerAuthoritativeLocal(metadata, for: key)
+    return metadata
   }
 
   nonisolated private static func linkBridgeRelationships(

@@ -60,6 +60,13 @@ extension HerdSharingCoreDataStore {
         sourceDescription: source.description
       )
     }
+
+    if let revisionHydrator = importer as? any CollaborationRevisionHydrating {
+      try await revisionHydrator.hydrateCollaborationRevisions(
+        for: snapshot.herdPublicID
+      )
+    }
+
     let operation = try await operationCoordinator.begin(
       herdPublicID: snapshot.herdPublicID,
       direction: .importFromBridge,

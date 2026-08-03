@@ -295,6 +295,32 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
         publicID: { $0.publicID }
       )
 
+      var collaborativeAggregates: [any CollaborativelyMutableAggregate] = []
+      if let herdModel = matchingHerds.first {
+        collaborativeAggregates.append(herdModel)
+      }
+      appendCollaborativeAggregates(tagColorDefinitions, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(statusReferences, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(pastureGroups, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(pastures, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(animals, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(animalTags, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(movements, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(statusRecords, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(workingProtocolTemplates, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(workingSessions, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(workingQueueItems, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(workingTreatmentRecords, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(healthRecords, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(pregnancyChecks, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(fieldCheckSessions, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(fieldCheckAnimalChecks, to: &collaborativeAggregates)
+      appendCollaborativeAggregates(fieldCheckFindings, to: &collaborativeAggregates)
+      try prepareCollaborationRevisionMetadata(
+        for: collaborativeAggregates,
+        herdPublicID: herdID
+      )
+
       let localPublicIDs: [HerdSharingBridgeStep: [UUID]] = [
         .herd: [herd.publicID],
         .tagColorDefinitions: tagColorDefinitions.map(\.id),
@@ -355,6 +381,84 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
         ),
         localPublicIDs: localPublicIDs
       )
+    }
+  }
+
+  private func prepareCollaborationRevisionMetadata(
+    for aggregates: [any CollaborativelyMutableAggregate],
+    herdPublicID: UUID
+  ) throws {
+    let revisionRecords = try fetchAll(
+      FetchDescriptor<CollaborationRevisionRecord>(
+        predicate: #Predicate<CollaborationRevisionRecord> { record in
+          record.herdPublicID == herdPublicID
+        },
+        sortBy: [SortDescriptor(\CollaborationRevisionRecord.aggregateKey)]
+      )
+    )
+    var recordsByKey: [CollaborationAggregateKey: CollaborationRevisionRecord] = [:]
+    var requiresSave = false
+
+    for record in revisionRecords {
+      let key = record.key
+      guard CollaborationAggregateType(rawValue: key.sourceEntityName) != nil else {
+        continue
+      }
+      guard let existing = recordsByKey[key] else {
+        recordsByKey[key] = record
+        continue
+      }
+
+      let keepIncoming = record.revision > existing.revision
+        || (record.revision == existing.revision && record.modifiedAt > existing.modifiedAt)
+      if keepIncoming {
+        modelContext.delete(existing)
+        recordsByKey[key] = record
+      } else {
+        modelContext.delete(record)
+      }
+      requiresSave = true
+      ReliabilityLog.persistenceEvent(
+        "SwiftDataHerdSharingActor.duplicateRevisionMetadataRepaired",
+        detail: key.storageKey
+      )
+    }
+
+    for aggregate in aggregates {
+      let key = aggregate.collaborationKey
+      guard recordsByKey[key] == nil else { continue }
+      let metadata = CollaborationRevisionMetadata.localBootstrap(
+        fieldValues: CollaborationFieldSnapshotProvider.snapshot(for: aggregate)
+      )
+      let record = CollaborationRevisionRecord(
+        key: key,
+        herdPublicID: aggregate.collaborationHerdPublicID ?? herdPublicID,
+        metadata: metadata
+      )
+      modelContext.insert(record)
+      recordsByKey[key] = record
+      requiresSave = true
+    }
+
+    if requiresSave {
+      try PersistenceLog.save(
+        modelContext,
+        operation: "SwiftDataHerdSharingActor.prepareCollaborationRevisionMetadata"
+      )
+    }
+
+    let entries = recordsByKey.values
+      .map { CollaborationRevisionRegistry.Entry(key: $0.key, metadata: $0.metadata) }
+      .sorted { $0.key.storageKey < $1.key.storageKey }
+    CollaborationRevisionRegistry.registerAuthoritativeLocals(entries)
+  }
+
+  private func appendCollaborativeAggregates<Model: CollaborativelyMutableAggregate>(
+    _ models: [Model],
+    to aggregates: inout [any CollaborativelyMutableAggregate]
+  ) {
+    for model in models {
+      aggregates.append(model)
     }
   }
 
