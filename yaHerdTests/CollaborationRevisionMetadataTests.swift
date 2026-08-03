@@ -152,24 +152,12 @@ final class CollaborationRevisionMetadataTests: XCTestCase {
             for: key
         )
 
-        let conflict = HerdSharingBridgeConflictDetail(
-            kind: .existingLocalRecordUpdate,
-            sourceEntityName: CollaborationAggregateType.animal.rawValue,
+        let conflict = makeAnimalConflict(
             publicID: publicID,
-            localModifiedAt: .distantPast,
-            sharedModifiedAt: .distantPast,
-            fieldChanges: [
-                HerdSharingBridgeFieldChange(
-                    fieldName: "name",
-                    localValue: localName,
-                    sharedValue: oldName
-                ),
-                HerdSharingBridgeFieldChange(
-                    fieldName: "tagNumber",
-                    localValue: oldTag,
-                    sharedValue: sharedTag
-                ),
-            ]
+            localName: localName,
+            sharedName: oldName,
+            localTag: oldTag,
+            sharedTag: sharedTag
         )
 
         XCTAssertEqual(conflict.lastCommonRevision, 3)
@@ -181,6 +169,59 @@ final class CollaborationRevisionMetadataTests: XCTestCase {
         XCTAssertEqual(conflict.canMergeAutomatically, true)
         XCTAssertEqual(conflict.localModifiedByParticipantID, "participant-local")
         XCTAssertEqual(conflict.sharedModifiedByDeviceID, "device-shared")
+    }
+
+    func testEqualNextRevisionRecognizesConcurrentDisjointEdits() {
+        let publicID = UUID()
+        let key = CollaborationAggregateKey(type: .animal, publicID: publicID)
+        let oldName = HerdSharingBridgeConflictValue(type: .string, encodedValue: "Original")
+        let localName = HerdSharingBridgeConflictValue(type: .string, encodedValue: "Local")
+        let oldTag = HerdSharingBridgeConflictValue(type: .string, encodedValue: "100")
+        let sharedTag = HerdSharingBridgeConflictValue(type: .string, encodedValue: "200")
+        let base: CollaborationFieldSnapshot = ["name": oldName, "tagNumber": oldTag]
+
+        CollaborationRevisionRegistry.registerLocal(
+            CollaborationRevisionMetadata(
+                modifiedAt: Date(timeIntervalSince1970: 100),
+                revision: 6,
+                modifiedByParticipantID: "participant-local",
+                modifiedByDeviceID: "device-local",
+                baseRevision: 5,
+                baseFieldValues: base,
+                currentFieldValues: ["name": localName, "tagNumber": oldTag],
+                isDeleted: false
+            ),
+            for: key
+        )
+        CollaborationRevisionRegistry.registerIncoming(
+            CollaborationRevisionMetadata(
+                modifiedAt: Date(timeIntervalSince1970: 200),
+                revision: 6,
+                modifiedByParticipantID: "participant-shared",
+                modifiedByDeviceID: "device-shared",
+                baseRevision: 5,
+                baseFieldValues: base,
+                currentFieldValues: ["name": oldName, "tagNumber": sharedTag],
+                isDeleted: false
+            ),
+            for: key
+        )
+
+        let conflict = makeAnimalConflict(
+            publicID: publicID,
+            localName: localName,
+            sharedName: oldName,
+            localTag: oldTag,
+            sharedTag: sharedTag
+        )
+
+        XCTAssertEqual(conflict.lastCommonRevision, 5)
+        XCTAssertEqual(conflict.localRevision, 6)
+        XCTAssertEqual(conflict.sharedRevision, 6)
+        XCTAssertEqual(conflict.revisionComparison, .divergent)
+        XCTAssertEqual(conflict.localChangedFields, ["name"])
+        XCTAssertEqual(conflict.sharedChangedFields, ["tagNumber"])
+        XCTAssertEqual(conflict.canMergeAutomatically, true)
     }
 
     func testCurrentBridgeModelAddsMetadataToEveryCollaborativeEntity() {
@@ -207,5 +248,33 @@ final class CollaborationRevisionMetadataTests: XCTestCase {
                 )
             }
         }
+    }
+
+    private func makeAnimalConflict(
+        publicID: UUID,
+        localName: HerdSharingBridgeConflictValue,
+        sharedName: HerdSharingBridgeConflictValue,
+        localTag: HerdSharingBridgeConflictValue,
+        sharedTag: HerdSharingBridgeConflictValue
+    ) -> HerdSharingBridgeConflictDetail {
+        HerdSharingBridgeConflictDetail(
+            kind: .existingLocalRecordUpdate,
+            sourceEntityName: CollaborationAggregateType.animal.rawValue,
+            publicID: publicID,
+            localModifiedAt: .distantPast,
+            sharedModifiedAt: .distantPast,
+            fieldChanges: [
+                HerdSharingBridgeFieldChange(
+                    fieldName: "name",
+                    localValue: localName,
+                    sharedValue: sharedName
+                ),
+                HerdSharingBridgeFieldChange(
+                    fieldName: "tagNumber",
+                    localValue: localTag,
+                    sharedValue: sharedTag
+                ),
+            ]
+        )
     }
 }
