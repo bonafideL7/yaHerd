@@ -245,6 +245,11 @@ enum CollaborationMutationPipeline {
             )
         }
 
+        if existing.currentFieldValues == currentFields,
+           existing.isDeleted == isDeleted {
+            return existing
+        }
+
         var baseRevision = existing.baseRevision
         var baseFields = existing.baseFieldValues
         if let observedShared,
