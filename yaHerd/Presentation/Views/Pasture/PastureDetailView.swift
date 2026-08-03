@@ -134,13 +134,7 @@ struct PastureDetailView: View {
     private func checkSection(_ detail: PastureDetailSnapshot) -> some View {
         if !model.isEditing {
             Section("Checks") {
-                NavigationLink {
-                    FieldCheckSessionSetupView(suggestedPastureID: detail.id) { sessionID in
-                        navigation.openFieldCheckArea(
-                            .session(FieldCheckSessionLaunchConfiguration(sessionID: sessionID))
-                        )
-                    }
-                } label: {
+                NavigationLink(value: HerdRoute.fieldCheckSetup(detail.id)) {
                     Label("Start Pasture Check", systemImage: "checklist")
                 }
                 .disabledWhenDataReadOnly()
