@@ -53,3 +53,20 @@ jobs:
           path: .build/PersistenceDiagnostics
           retention-days: 3
           if-no-files-found: warn
+
+  merge-main:
+    if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'agent/global-animal-query'
+    permissions:
+      contents: write
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/global-animal-query
+
+      - name: Resolve, validate, and push main merge
+        shell: bash
+        run: bash .github/scripts/merge-main-global-query.sh
