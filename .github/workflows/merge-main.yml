@@ -21,22 +21,60 @@ jobs:
           fetch-depth: 0
           ref: agent/global-animal-query
 
-      - name: Attempt merge and report conflicts
+      - name: Test conflict resolutions
         shell: bash
         run: |
           set -uo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          FEATURE_HEAD="$(git rev-parse HEAD)"
+          SPLIT_BASE="68eade6e3e53b04dd329057ad5308a5dac5d06c6"
           git fetch origin main
-          if git merge --no-commit --no-ff origin/main; then
-            echo "MERGE_HAS_NO_CONFLICTS"
-            git merge --abort
-            exit 0
-          fi
+          git merge --no-commit --no-ff origin/main || true
+
+          git checkout --theirs -- \
+            Scripts/verify-concurrency.sh \
+            yaHerd/Data/Sharing/CoreData/HerdSharingBridgeJournal.swift \
+            yaHerd/Data/Sharing/CoreData/HerdSharingBridgeOperationCoordinator.swift \
+            yaHerd/Data/Sharing/CoreData/HerdSharingCoreDataStore+Import.swift \
+            yaHerd/Data/Sharing/HerdSharingSwiftDataImportEngine+DetachedRecords.swift \
+            yaHerd/Data/Sharing/HerdSharingSwiftDataImportEngine.swift
+          git add \
+            Scripts/verify-concurrency.sh \
+            yaHerd/Data/Sharing/CoreData/HerdSharingBridgeJournal.swift \
+            yaHerd/Data/Sharing/CoreData/HerdSharingBridgeOperationCoordinator.swift \
+            yaHerd/Data/Sharing/CoreData/HerdSharingCoreDataStore+Import.swift \
+            yaHerd/Data/Sharing/HerdSharingSwiftDataImportEngine+DetachedRecords.swift \
+            yaHerd/Data/Sharing/HerdSharingSwiftDataImportEngine.swift
+
+          git checkout --ours -- \
+            yaHerd/Data/Sharing/SwiftDataHerdSharingActor.swift \
+            yaHerdTests/SwiftDataHerdSharingActorTests.swift
+          git add \
+            yaHerd/Data/Sharing/SwiftDataHerdSharingActor.swift \
+            yaHerdTests/SwiftDataHerdSharingActorTests.swift
+
+          git checkout --theirs -- yaHerd/Presentation/ViewModels/Animal/AnimalListViewModel.swift
+          git add yaHerd/Presentation/ViewModels/Animal/AnimalListViewModel.swift
+          git diff "$SPLIT_BASE" "$FEATURE_HEAD" -- \
+            yaHerd/Presentation/ViewModels/Animal/AnimalListViewModel.swift \
+            > /tmp/animal-list-query.patch
+
+          set +e
+          git apply --3way --index /tmp/animal-list-query.patch
+          apply_status=$?
+          set -e
+
+          echo "ANIMAL_PATCH_STATUS=$apply_status"
           echo "UNRESOLVED_PATHS_BEGIN"
           git diff --name-only --diff-filter=U
           echo "UNRESOLVED_PATHS_END"
           echo "CONFLICT_MARKERS_BEGIN"
-          git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- . ':!*.pbxproj' || true
+          git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- \
+            yaHerd/Presentation/ViewModels/Animal/AnimalListViewModel.swift || true
           echo "CONFLICT_MARKERS_END"
+          echo "ANIMAL_DIFF_BEGIN"
+          git diff --cached -- \
+            yaHerd/Presentation/ViewModels/Animal/AnimalListViewModel.swift || true
+          echo "ANIMAL_DIFF_END"
           exit 1
