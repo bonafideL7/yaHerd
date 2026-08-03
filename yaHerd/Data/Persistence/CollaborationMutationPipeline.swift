@@ -64,6 +64,7 @@ enum CollaborationMutationPipeline {
                 )
             case .acceptIncomingSharedRevision:
                 metadata = makeAcceptedSharedMetadata(
+                    existing: existingMetadata,
                     incoming: CollaborationRevisionRegistry.incomingMetadata(for: key),
                     currentFields: currentFields,
                     isDeleted: pending.isDeleted
@@ -216,11 +217,16 @@ enum CollaborationMutationPipeline {
     }
 
     private static func makeAcceptedSharedMetadata(
+        existing: CollaborationRevisionMetadata?,
         incoming: CollaborationRevisionMetadata?,
         currentFields: CollaborationFieldSnapshot,
         isDeleted: Bool
     ) -> CollaborationRevisionMetadata {
         guard var incoming else {
+            if let existing, existing.currentFieldValues == currentFields,
+               existing.isDeleted == isDeleted {
+                return existing
+            }
             return CollaborationRevisionMetadata.legacySharedBootstrap(
                 fieldValues: currentFields,
                 isDeleted: isDeleted,
@@ -230,6 +236,29 @@ enum CollaborationMutationPipeline {
 
         incoming.currentFieldValues = currentFields
         incoming.isDeleted = isDeleted
-        return incoming.acceptingAsCommonRevision()
+        guard let existing, incoming.revision < existing.revision else {
+            return incoming.acceptingAsCommonRevision()
+        }
+
+        if existing.currentFieldValues == currentFields,
+           existing.isDeleted == isDeleted {
+            return existing
+        }
+
+        let identity = CollaborationIdentityProvider.current()
+        let now = Date.now
+        let monotonicModifiedAt = now > existing.modifiedAt
+            ? now
+            : existing.modifiedAt.addingTimeInterval(0.001)
+        return CollaborationRevisionMetadata(
+            modifiedAt: monotonicModifiedAt,
+            revision: existing.revision + 1,
+            modifiedByParticipantID: identity.participantID,
+            modifiedByDeviceID: identity.deviceID,
+            baseRevision: incoming.revision,
+            baseFieldValues: currentFields,
+            currentFieldValues: currentFields,
+            isDeleted: isDeleted
+        )
     }
 }
