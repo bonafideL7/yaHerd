@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+git config user.name "github-actions[bot]"
+git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+FEATURE_HEAD="$(git rev-parse HEAD)"
+SPLIT_BASE="68eade6e3e53b04dd329057ad5308a5dac5d06c6"
+
+git fetch origin main
+git merge --no-commit --no-ff origin/main || true
+
+git checkout --theirs -- \
+  Scripts/verify-concurrency.sh \
+  yaHerd/Data/Sharing/CoreData/HerdSharingBridgeJournal.swift \
+  yaHerd/Data/Sharing/CoreData/HerdSharingBridgeOperationCoordinator.swift \
+  yaHerd/Data/Sharing/CoreData/HerdSharingCoreDataStore+Import.swift \
+  yaHerd/Data/Sharing/HerdSharingSwiftDataImportEngine+DetachedRecords.swift \
+  yaHerd/Data/Sharing/HerdSharingSwiftDataImportEngine.swift
+git add \
+  Scripts/verify-concurrency.sh \
+  yaHerd/Data/Sharing/CoreData/HerdSharingBridgeJournal.swift \
+  yaHerd/Data/Sharing/CoreData/HerdSharingBridgeOperationCoordinator.swift \
+  yaHerd/Data/Sharing/CoreData/HerdSharingCoreDataStore+Import.swift \
+  yaHerd/Data/Sharing/HerdSharingSwiftDataImportEngine+DetachedRecords.swift \
+  yaHerd/Data/Sharing/HerdSharingSwiftDataImportEngine.swift
+
+git checkout --ours -- \
+  yaHerd/Data/Sharing/SwiftDataHerdSharingActor.swift \
+  yaHerdTests/SwiftDataHerdSharingActorTests.swift
+
+python3 - <<'PY'
+from pathlib import Path
+
+path = Path("yaHerdTests/SwiftDataHerdSharingActorTests.swift")
+text = path.read_text()
+enum_block = '''  private enum InjectedFailure: Error, Equatable {
+    case afterPersistentStoreCommit
+  }
+
+'''
+text = text.replace(enum_block, "", 1)
+obsolete_test = text.find(
+    "  func testConflictReportIsJournaledBeforePersistentStoreCommitFailure()"
+)
+if obsolete_test == -1:
+    raise RuntimeError("Obsolete transactional import test was not found")
+text = text[:obsolete_test].rstrip() + "\n}\n"
+path.write_text(text)
+PY
+git add \
+  yaHerd/Data/Sharing/SwiftDataHerdSharingActor.swift \
+  yaHerdTests/SwiftDataHerdSharingActorTests.swift
+
+git checkout --theirs -- yaHerd/Presentation/ViewModels/Animal/AnimalListViewModel.swift
+git add yaHerd/Presentation/ViewModels/Animal/AnimalListViewModel.swift
+git diff "$SPLIT_BASE" "$FEATURE_HEAD" -- \
+  yaHerd/Presentation/ViewModels/Animal/AnimalListViewModel.swift \
+  > /tmp/animal-list-query.patch
+git apply --3way --index /tmp/animal-list-query.patch || true
+
+python3 - <<'PY'
+from pathlib import Path
+
+path = Path("yaHerd/Presentation/ViewModels/Animal/AnimalListViewModel.swift")
+lines = path.read_text().splitlines(keepends=True)
+resolved = []
+index = 0
+while index < len(lines):
+    if not lines[index].startswith("<<<<<<< ours"):
+        resolved.append(lines[index])
+        index += 1
+        continue
+
+    index += 1
+    ours = []
+    while index < len(lines) and not lines[index].startswith("======="):
+        ours.append(lines[index])
+        index += 1
+    if index >= len(lines):
+        raise RuntimeError("Unterminated conflict before separator")
+
+    index += 1
+    while index < len(lines) and not lines[index].startswith(">>>>>>> theirs"):
+        index += 1
+    if index >= len(lines):
+        raise RuntimeError("Unterminated conflict after separator")
+
+    resolved.extend(ours)
+    index += 1
+
+deduplicated = []
+saw_load_generation = False
+for line in resolved:
+    if line.strip() == "private var loadGeneration = 0":
+        if saw_load_generation:
+            continue
+        saw_load_generation = True
+    deduplicated.append(line)
+
+path.write_text("".join(deduplicated))
+PY
+git add yaHerd/Presentation/ViewModels/Animal/AnimalListViewModel.swift
+
+rm yaHerd/Data/Sharing/HerdSharingTransactionalImport.swift
+git add yaHerd/Data/Sharing/HerdSharingTransactionalImport.swift
+
+unresolved="$(git diff --name-only --diff-filter=U)"
+if [[ -n "$unresolved" ]]; then
+  echo "Unresolved merge paths:" >&2
+  echo "$unresolved" >&2
+  exit 1
+fi
+
+if git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- . ':!*.pbxproj'; then
+  echo "Conflict markers remain after resolution." >&2
+  exit 1
+fi
+
+# Restore normal CI and remove temporary merge tooling from the merge result.
+git checkout origin/main -- .github/workflows/swift-concurrency.yml
+rm -f .github/workflows/merge-main.yml
+rm -f .github/scripts/merge-main-global-query.sh
+git add -A
+
+XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' -print | sort -V | tail -1)"
+if [[ -z "$XCODE_PATH" ]]; then
+  echo "Xcode 26 is required for the iOS 26 target and Swift 6 concurrency gate." >&2
+  exit 1
+fi
+sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
+bash Scripts/verify-architecture.sh
+bash Scripts/verify-concurrency.sh
+
+git commit -m "Merge main into global animal query"
+git push origin HEAD:agent/global-animal-query
