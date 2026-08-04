@@ -55,12 +55,14 @@ enum CollaborationFieldSnapshotProvider {
         case let session as WorkingSession:
             return snapshot(
                 HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: session),
-                preciseDates: ["date": session.date]
+                preciseDates: ["date": session.date],
+                excluding: ["currentQueueIndex"]
             )
         case let queueItem as WorkingQueueItem:
             return snapshot(
                 HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: queueItem),
-                preciseDates: ["completedAt": queueItem.completedAt]
+                preciseDates: ["completedAt": queueItem.completedAt],
+                excluding: ["queueOrder"]
             )
         case let treatment as WorkingTreatmentRecord:
             return treatmentSnapshot(treatment)
@@ -148,14 +150,19 @@ enum CollaborationFieldSnapshotProvider {
 
     /// Conflict review predates revision lineage and formats dates to whole seconds.
     /// Override date fields at this boundary so every revision snapshot preserves
-    /// changes that occur within the same second.
+    /// changes that occur within the same second. Device-local fields are removed
+    /// because they are intentionally absent from the shared bridge payload.
     private static func snapshot(
         _ fields: CollaborationFieldSnapshot,
-        preciseDates: [String: Date?]
+        preciseDates: [String: Date?],
+        excluding excludedFields: Set<String> = []
     ) -> CollaborationFieldSnapshot {
         var fields = fields
         for (fieldName, date) in preciseDates {
             fields[fieldName] = value(date)
+        }
+        for fieldName in excludedFields {
+            fields.removeValue(forKey: fieldName)
         }
         return fields
     }
