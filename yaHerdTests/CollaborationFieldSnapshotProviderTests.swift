@@ -49,6 +49,56 @@ final class CollaborationFieldSnapshotProviderTests: XCTestCase {
         XCTAssertNil(snapshot["administrationRoute"])
     }
 
+    func testWorkingPositionFieldsAreExcludedFromRevisionSnapshots() {
+        let animal = Animal(
+            name: "Cow 12",
+            tagNumber: "12",
+            birthDate: .distantPast,
+            status: .active,
+            sex: .female
+        )
+        let session = WorkingSession(
+            protocolName: "Local Queue Position",
+            protocolItems: []
+        )
+        session.currentQueueIndex = 2
+        let queueItem = WorkingQueueItem(
+            queueOrder: 4,
+            animal: animal,
+            session: session
+        )
+
+        let originalSessionSnapshot = CollaborationFieldSnapshotProvider.snapshot(for: session)
+        let originalQueueItemSnapshot = CollaborationFieldSnapshotProvider.snapshot(for: queueItem)
+
+        XCTAssertNil(originalSessionSnapshot["currentQueueIndex"])
+        XCTAssertNil(originalQueueItemSnapshot["queueOrder"])
+
+        session.currentQueueIndex = 8
+        queueItem.queueOrder = 11
+
+        XCTAssertEqual(
+            CollaborationFieldSnapshotProvider.snapshot(for: session),
+            originalSessionSnapshot
+        )
+        XCTAssertEqual(
+            CollaborationFieldSnapshotProvider.snapshot(for: queueItem),
+            originalQueueItemSnapshot
+        )
+
+        session.notes = "Shared session note"
+        queueItem.workNotes = "Shared queue item note"
+
+        XCTAssertNotEqual(
+            CollaborationFieldSnapshotProvider.snapshot(for: session),
+            originalSessionSnapshot
+        )
+        XCTAssertNotEqual(
+            CollaborationFieldSnapshotProvider.snapshot(for: queueItem),
+            originalQueueItemSnapshot
+        )
+    }
+
     func testSnapshotDatesPreserveFractionalSeconds() {
         let herd = Herd(name: "Fractional Date Herd")
         herd.updatedAt = Date(timeIntervalSince1970: 1_800_000_000.125)
