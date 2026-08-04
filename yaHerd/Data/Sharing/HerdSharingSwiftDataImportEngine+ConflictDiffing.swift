@@ -238,9 +238,12 @@ enum HerdSharingSwiftDataImportEngine {
   {
     conflictFieldSnapshot([
       "date": treatmentRecord.date,
+      "treatmentItemID": treatmentRecord.treatmentItemID,
       "itemName": treatmentRecord.itemName,
       "given": treatmentRecord.given,
-      "quantity": treatmentRecord.quantity,
+      "doseAmount": treatmentRecord.doseAmount,
+      "doseUnit": treatmentRecord.doseUnit?.rawValue,
+      "administrationRoute": treatmentRecord.administrationRoute?.rawValue,
       "sessionPublicID": treatmentRecord.session?.publicID,
       "animalPublicID": treatmentRecord.animal?.publicID,
     ])
