@@ -104,14 +104,14 @@ final class CollaborationRevisionReviewCommentTests: XCTestCase {
             HerdSharingBridgeConflictValue(type: .double, encodedValue: "2.5")
         )
         XCTAssertEqual(
-            snapshot["doseUnit"],
+            snapshot["doseUnitRawValue"],
             HerdSharingBridgeConflictValue(
                 type: .string,
                 encodedValue: WorkingTreatmentDoseUnit.milliliter.rawValue
             )
         )
         XCTAssertEqual(
-            snapshot["administrationRoute"],
+            snapshot["administrationRouteRawValue"],
             HerdSharingBridgeConflictValue(
                 type: .string,
                 encodedValue: WorkingTreatmentAdministrationRoute.intramuscular.rawValue
