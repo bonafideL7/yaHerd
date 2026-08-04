@@ -19,7 +19,7 @@ enum CollaborationFieldSnapshotProvider {
         case let pasture as Pasture:
             return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: pasture)
         case let animal as Animal:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: animal)
+            return animalSnapshot(animal)
         case let tag as AnimalTag:
             return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: tag)
         case let movement as MovementRecord:
@@ -58,6 +58,13 @@ enum CollaborationFieldSnapshotProvider {
         ]
     }
 
+    private static func animalSnapshot(_ animal: Animal) -> CollaborationFieldSnapshot {
+        var snapshot = HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: animal)
+        snapshot["sireAnimalPublicID"] = value(animal.sireAnimal?.publicID)
+        snapshot["damAnimalPublicID"] = value(animal.damAnimal?.publicID)
+        return snapshot
+    }
+
     private static func value(_ value: String) -> HerdSharingBridgeConflictValue {
         HerdSharingBridgeConflictValue(type: .string, encodedValue: value)
     }
@@ -71,5 +78,10 @@ enum CollaborationFieldSnapshotProvider {
             type: .date,
             encodedValue: ISO8601DateFormatter().string(from: value)
         )
+    }
+
+    private static func value(_ value: UUID?) -> HerdSharingBridgeConflictValue {
+        guard let value else { return .null }
+        return HerdSharingBridgeConflictValue(type: .uuid, encodedValue: value.uuidString)
     }
 }
