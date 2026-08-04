@@ -418,7 +418,7 @@ extension HerdSharingCoreDataStore {
     )
   }
 
-  nonisolated private static func deletionMetadata(
+  nonisolated static func deletionMetadata(
     publicID: String,
     sourceEntityName: String,
     mirroredAt: Date
@@ -437,8 +437,24 @@ extension HerdSharingCoreDataStore {
       sourceEntityName: sourceEntityName,
       publicID: aggregatePublicID
     )
-    if var metadata = CollaborationRevisionRegistry.localMetadata(for: key) {
-      metadata.isDeleted = true
+    if let existing = CollaborationRevisionRegistry.localMetadata(for: key) {
+      guard !existing.isDeleted else { return existing }
+
+      let identity = CollaborationIdentityProvider.current()
+      let modifiedAt = mirroredAt > existing.modifiedAt
+        ? mirroredAt
+        : existing.modifiedAt.addingTimeInterval(0.001)
+      let metadata = CollaborationRevisionMetadata(
+        modifiedAt: modifiedAt,
+        revision: existing.revision + 1,
+        modifiedByParticipantID: identity.participantID,
+        modifiedByDeviceID: identity.deviceID,
+        baseRevision: existing.revision,
+        baseFieldValues: existing.currentFieldValues,
+        currentFieldValues: existing.currentFieldValues,
+        isDeleted: true
+      )
+      CollaborationRevisionRegistry.registerAuthoritativeLocal(metadata, for: key)
       return metadata
     }
 
@@ -447,7 +463,7 @@ extension HerdSharingCoreDataStore {
       isDeleted: true,
       modifiedAt: mirroredAt
     )
-    CollaborationRevisionRegistry.registerLocal(metadata, for: key)
+    CollaborationRevisionRegistry.registerAuthoritativeLocal(metadata, for: key)
     return metadata
   }
 
