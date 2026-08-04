@@ -266,11 +266,56 @@ enum WorkingQueueAnimalQueryEngine {
             )
             .map(\.id)
         )
+        let searchText = query.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filterMatchingAnimalIDs: Set<UUID>
+
+        if searchText.isEmpty {
+            filterMatchingAnimalIDs = matchingAnimalIDs
+        } else {
+            let filterQuery = AnimalQuery(
+                filter: query.filter,
+                sortOrder: query.sortOrder,
+                showRemovedStatuses: query.showRemovedStatuses,
+                showArchivedRecords: query.showArchivedRecords
+            )
+            filterMatchingAnimalIDs = Set(
+                AnimalQueryEngine.apply(
+                    to: candidates,
+                    query: filterQuery,
+                    formatTag: formatTag
+                )
+                .map(\.id)
+            )
+        }
 
         return orderedItems.filter { item in
-            guard let animalID = item.animalID else { return false }
+            guard let animalID = item.animalID,
+                  filterMatchingAnimalIDs.contains(animalID) else {
+                return false
+            }
+
             return matchingAnimalIDs.contains(animalID)
+                || itemMatchesSearch(item, searchText: searchText, formatTag: formatTag)
         }
+    }
+
+    private static func itemMatchesSearch(
+        _ item: WorkingQueueItemSnapshot,
+        searchText: String,
+        formatTag: (String, UUID?) -> String
+    ) -> Bool {
+        guard !searchText.isEmpty else { return false }
+
+        let tagMatches = item.animalDisplayTagNumber.map { tagNumber in
+            tagNumber.localizedCaseInsensitiveContains(searchText)
+                || formatTag(tagNumber, item.animalDisplayTagColorID)
+                    .localizedCaseInsensitiveContains(searchText)
+        } ?? false
+
+        return tagMatches
+            || item.animalSex.label.localizedCaseInsensitiveContains(searchText)
+            || (item.destinationPastureName?
+                .localizedCaseInsensitiveContains(searchText) ?? false)
     }
 
     private static func fallbackSort(
