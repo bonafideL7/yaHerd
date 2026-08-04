@@ -11,39 +11,94 @@ enum CollaborationFieldSnapshotProvider {
         case let herd as Herd:
             return herdSnapshot(herd)
         case let definition as TagColorDefinition:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: definition)
+            return snapshot(
+                HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: definition),
+                preciseDates: [
+                    "createdAt": definition.createdAt,
+                    "updatedAt": definition.updatedAt,
+                ]
+            )
         case let reference as AnimalStatusReference:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: reference)
+            return snapshot(
+                HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: reference),
+                preciseDates: ["createdAt": reference.createdAt]
+            )
         case let group as PastureGroup:
             return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: group)
         case let pasture as Pasture:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: pasture)
+            return snapshot(
+                HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: pasture),
+                preciseDates: ["lastGrazedDate": pasture.lastGrazedDate]
+            )
         case let animal as Animal:
             return animalSnapshot(animal)
         case let tag as AnimalTag:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: tag)
+            return snapshot(
+                HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: tag),
+                preciseDates: [
+                    "assignedAt": tag.assignedAt,
+                    "removedAt": tag.removedAt,
+                ]
+            )
         case let movement as MovementRecord:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: movement)
+            return snapshot(
+                HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: movement),
+                preciseDates: ["date": movement.date]
+            )
         case let record as StatusRecord:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: record)
+            return snapshot(
+                HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: record),
+                preciseDates: ["date": record.date]
+            )
         case let template as WorkingProtocolTemplate:
             return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: template)
         case let session as WorkingSession:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: session)
+            return snapshot(
+                HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: session),
+                preciseDates: ["date": session.date]
+            )
         case let queueItem as WorkingQueueItem:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: queueItem)
+            return snapshot(
+                HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: queueItem),
+                preciseDates: ["completedAt": queueItem.completedAt]
+            )
         case let treatment as WorkingTreatmentRecord:
             return treatmentSnapshot(treatment)
         case let record as HealthRecord:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: record)
+            return snapshot(
+                HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: record),
+                preciseDates: ["date": record.date]
+            )
         case let check as PregnancyCheck:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: check)
+            return snapshot(
+                HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: check),
+                preciseDates: [
+                    "date": check.date,
+                    "dueDate": check.dueDate,
+                ]
+            )
         case let session as FieldCheckSession:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: session)
+            return snapshot(
+                HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: session),
+                preciseDates: [
+                    "startedAt": session.startedAt,
+                    "completedAt": session.completedAt,
+                    "pastureArchivedAt": session.pastureArchivedAt,
+                ]
+            )
         case let check as FieldCheckAnimalCheck:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: check)
+            return snapshot(
+                HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: check),
+                preciseDates: [
+                    "countedAt": check.countedAt,
+                    "missingConfirmedAt": check.missingConfirmedAt,
+                ]
+            )
         case let finding as FieldCheckFinding:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: finding)
+            return snapshot(
+                HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: finding),
+                preciseDates: ["recordedAt": finding.recordedAt]
+            )
         default:
             return [:]
         }
@@ -59,10 +114,18 @@ enum CollaborationFieldSnapshotProvider {
     }
 
     private static func animalSnapshot(_ animal: Animal) -> CollaborationFieldSnapshot {
-        var snapshot = HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: animal)
-        snapshot["sireAnimalPublicID"] = value(animal.sireAnimal?.publicID)
-        snapshot["damAnimalPublicID"] = value(animal.damAnimal?.publicID)
-        return snapshot
+        var fields = snapshot(
+            HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: animal),
+            preciseDates: [
+                "birthDate": animal.birthDate,
+                "saleDate": animal.saleDate,
+                "deathDate": animal.deathDate,
+                "softDeletedAt": animal.softDeletedAt,
+            ]
+        )
+        fields["sireAnimalPublicID"] = value(animal.sireAnimal?.publicID)
+        fields["damAnimalPublicID"] = value(animal.damAnimal?.publicID)
+        return fields
     }
 
     /// Keep these names aligned with the bridge export schema. Treatment identity,
@@ -81,6 +144,20 @@ enum CollaborationFieldSnapshotProvider {
             "sessionPublicID": value(treatment.session?.publicID),
             "animalPublicID": value(treatment.animal?.publicID),
         ]
+    }
+
+    /// Conflict review predates revision lineage and formats dates to whole seconds.
+    /// Override date fields at this boundary so every revision snapshot preserves
+    /// changes that occur within the same second.
+    private static func snapshot(
+        _ fields: CollaborationFieldSnapshot,
+        preciseDates: [String: Date?]
+    ) -> CollaborationFieldSnapshot {
+        var fields = fields
+        for (fieldName, date) in preciseDates {
+            fields[fieldName] = value(date)
+        }
+        return fields
     }
 
     private static func value(_ value: String) -> HerdSharingBridgeConflictValue {
@@ -115,6 +192,11 @@ enum CollaborationFieldSnapshotProvider {
             type: .date,
             encodedValue: formatter.string(from: value)
         )
+    }
+
+    private static func value(_ value: Date?) -> HerdSharingBridgeConflictValue {
+        guard let value else { return .null }
+        return self.value(value)
     }
 
     private static func value(_ value: UUID) -> HerdSharingBridgeConflictValue {
