@@ -16,6 +16,54 @@ final class CollaborationRevisionReviewCommentTests: XCTestCase {
         super.tearDown()
     }
 
+    func testAnimalSnapshotIncludesParentLinks() {
+        let sire = Animal(
+            name: "Bull 7",
+            tagNumber: "7",
+            birthDate: .distantPast,
+            status: .active,
+            sex: .male
+        )
+        let dam = Animal(
+            name: "Cow 12",
+            tagNumber: "12",
+            birthDate: .distantPast,
+            status: .active,
+            sex: .female
+        )
+        let calf = Animal(
+            name: "Calf 21",
+            tagNumber: "21",
+            birthDate: .now,
+            status: .active,
+            sireAnimal: sire,
+            damAnimal: dam,
+            sex: .female
+        )
+
+        let snapshot = CollaborationFieldSnapshotProvider.snapshot(for: calf)
+
+        XCTAssertEqual(
+            snapshot["sireAnimalPublicID"],
+            HerdSharingBridgeConflictValue(
+                type: .uuid,
+                encodedValue: sire.publicID.uuidString
+            )
+        )
+        XCTAssertEqual(
+            snapshot["damAnimalPublicID"],
+            HerdSharingBridgeConflictValue(
+                type: .uuid,
+                encodedValue: dam.publicID.uuidString
+            )
+        )
+
+        calf.sireAnimal = nil
+        let updatedSnapshot = CollaborationFieldSnapshotProvider.snapshot(for: calf)
+        XCTAssertEqual(updatedSnapshot["sireAnimalPublicID"], .null)
+        XCTAssertNotEqual(snapshot, updatedSnapshot)
+    }
+
     func testTreatmentSnapshotIncludesStableIdentityAndStructuredDoseFields() {
         let animal = Animal(
             name: "Cow 12",
