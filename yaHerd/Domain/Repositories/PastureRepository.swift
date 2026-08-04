@@ -38,6 +38,17 @@ protocol PastureResidentAnimalReader {
 }
 
 @MainActor
+protocol PastureAssignedAnimalReader {
+    func fetchAssignedAnimals(pastureID: UUID) throws -> [AnimalSummary]
+}
+
+extension PastureAssignedAnimalReader where Self: PastureResidentAnimalReader {
+    func fetchAssignedAnimals(pastureID: UUID) throws -> [AnimalSummary] {
+        try fetchResidentAnimals(pastureID: pastureID)
+    }
+}
+
+@MainActor
 protocol PastureExistenceChecking {
     func validatePastureIDsExist(_ ids: [UUID]) throws
 }
@@ -129,7 +140,7 @@ protocol PastureGroupDeleteRepository: PastureGroupDeleting, PastureGroupExisten
 @MainActor
 protocol PastureGroupAssignRepository: PastureGroupAssignmentWriting, PastureExistenceChecking, PastureGroupExistenceChecking {}
 @MainActor
-protocol PastureDetailRepository: PastureDetailReader, PastureResidentAnimalReader {}
+protocol PastureDetailRepository: PastureDetailReader, PastureResidentAnimalReader, PastureAssignedAnimalReader {}
 @MainActor
 protocol PastureDeleteRepository: PastureDeleting, PastureExistenceChecking, PastureResidentAnimalReader {}
 

@@ -4,9 +4,11 @@ struct FieldCheckSessionDetailView: View {
     @Environment(\.fieldCheckFeatureDependencies) private var fieldCheckDependencies
     private var repository: any FieldCheckSessionDetailRepository { fieldCheckDependencies.sessionDetailRepository }
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppNavigationState.self) private var navigation
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @State private var model = FieldCheckSessionDetailViewModel()
     @State private var rosterFilter: FieldCheckRosterFilter = .remaining
-    @State private var rosterSearchText = ""
+    @State private var showingAnimalQueryFilters = false
     @State private var showingAddFinding = false
     @State private var showingAddTrackedAnimal = false
     @State private var showingCompletedRoster = false
@@ -67,42 +69,39 @@ struct FieldCheckSessionDetailView: View {
         return detail.startedAt.formatted(date: .abbreviated, time: .shortened)
     }
 
+    private var query: AnimalQueryState {
+        navigation.animalQuery
+    }
+
     private var filteredAnimalChecks: [FieldCheckAnimalCheckSnapshot] {
         guard let detail = model.detail else { return [] }
-        let quickCountedIDs = quickCountedAnimalCheckIDs(for: detail)
-        let checks = sortedAnimalChecks(detail.animalChecks)
-            .filter { check in
-                let isEffectivelySeen = check.wasCounted || quickCountedIDs.contains(check.id)
 
-                switch rosterFilter {
-                case .all:
-                    return true
-                case .remaining:
-                    return !isEffectivelySeen && !check.isMissing
-                case .seen:
-                    return isEffectivelySeen
-                case .missing:
-                    return check.isMissing
-                case .flagged:
-                    return check.needsAttention
-                }
-            }
-
-        let query = rosterSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return checks }
-
-        return checks.filter { check in
-            check.displayTagNumber.localizedCaseInsensitiveContains(query)
-            || check.animalName.localizedCaseInsensitiveContains(query)
-        }
+        return FieldCheckRosterQueryEngine.apply(
+            to: detail.animalChecks,
+            rosterFilter: rosterFilter,
+            effectivelySeenCheckIDs: quickCountedAnimalCheckIDs(for: detail),
+            query: query.query,
+            formatTag: tagColorLibrary.formattedTag(tagNumber:colorID:)
+        )
     }
 
     private var trimmedRosterSearchText: String {
-        rosterSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        query.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var hasActiveRosterQueryCriteria: Bool {
+        FieldCheckAnimalQuerySupport.hasActiveCriteria(in: query)
+    }
+
+    private var rosterSearchBinding: Binding<String> {
+        Binding(
+            get: { query.searchText },
+            set: { query.searchText = $0 }
+        )
     }
 
     private var rosterEmptyTitle: String {
-        if !trimmedRosterSearchText.isEmpty { return "No Matching Animals" }
+        if hasActiveRosterQueryCriteria { return "No Matching Animals" }
 
         switch rosterFilter {
         case .all:
@@ -119,13 +118,13 @@ struct FieldCheckSessionDetailView: View {
     }
 
     private var rosterEmptySystemImage: String {
-        if !trimmedRosterSearchText.isEmpty { return "magnifyingglass" }
+        if hasActiveRosterQueryCriteria { return "magnifyingglass" }
         return rosterFilter.systemImage
     }
 
     private var rosterEmptyDescription: String {
-        if !trimmedRosterSearchText.isEmpty {
-            return "No roster entries match the current search and filter."
+        if hasActiveRosterQueryCriteria {
+            return "No roster entries match the current global search and supported filters."
         }
 
         switch rosterFilter {
@@ -280,6 +279,9 @@ struct FieldCheckSessionDetailView: View {
                 model.persistNotes(sessionID: sessionID, using: repository)
             }
         }
+        .sheet(isPresented: $showingAnimalQueryFilters) {
+            FieldCheckAnimalFilterView(query: query)
+        }
         .sheet(isPresented: $showingAddFinding, onDismiss: { pendingFindingAnimalID = nil }) {
             NavigationStack {
                 FieldCheckFindingEditorView(
@@ -402,7 +404,7 @@ struct FieldCheckSessionDetailView: View {
         .refreshable {
             model.refresh(sessionID: sessionID, using: repository)
         }
-        .modifier(FieldCheckRosterSearchModifier(isActive: selectedPane == .roster, text: $rosterSearchText))
+        .modifier(FieldCheckRosterSearchModifier(isActive: selectedPane == .roster, text: rosterSearchBinding))
     }
 
     private func completedReviewContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
@@ -417,6 +419,7 @@ struct FieldCheckSessionDetailView: View {
         .refreshable {
             model.refresh(sessionID: sessionID, using: repository)
         }
+        .modifier(FieldCheckRosterSearchModifier(isActive: true, text: rosterSearchBinding))
     }
 
     @ViewBuilder
@@ -473,11 +476,16 @@ struct FieldCheckSessionDetailView: View {
         let quickCountedIDs = quickCountedAnimalCheckIDs(for: detail)
 
         Section {
+            FieldCheckAnimalQueryControls(
+                query: query,
+                onShowFilters: { showingAnimalQueryFilters = true }
+            )
+
             FieldCheckRosterFilterRow(
                 selectedFilter: $rosterFilter,
                 visibleCount: visibleAnimalChecks.count,
                 totalCount: detail.animalChecks.count,
-                hasSearchText: !trimmedRosterSearchText.isEmpty,
+                hasQueryCriteria: hasActiveRosterQueryCriteria,
                 onReset: resetRosterFilters
             )
 
@@ -488,7 +496,7 @@ struct FieldCheckSessionDetailView: View {
                     description: Text(rosterEmptyDescription)
                 )
 
-                if rosterFilter != .all || !trimmedRosterSearchText.isEmpty {
+                if rosterFilter != .all || hasActiveRosterQueryCriteria {
                     Button {
                         resetRosterFilters()
                     } label: {
@@ -531,10 +539,10 @@ struct FieldCheckSessionDetailView: View {
                 }
             }
         } header: {
-            Text(trimmedRosterSearchText.isEmpty ? "Animal Checklist" : "Search Results")
+            Text(hasActiveRosterQueryCriteria ? "Filtered Animals" : "Animal Checklist")
         } footer: {
-            if trimmedRosterSearchText.isEmpty {
-                Text("Default view shows animals not yet seen by tag. Use search to jump directly to a tag number.")
+            if !hasActiveRosterQueryCriteria {
+                Text("Default view shows animals not yet seen by tag. Search, filter, and sort use the shared animal query.")
             }
         }
     }
@@ -819,32 +827,53 @@ struct FieldCheckSessionDetailView: View {
 
     @ViewBuilder
     private func completedRosterSnapshotSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
-        let issueChecks = completedIssueAnimalChecks(for: detail)
-        let allChecks = sortedAnimalChecks(detail.animalChecks)
+        let allChecks = queriedAnimalChecks(detail.animalChecks)
+        let issueChecks = allChecks.filter { check in
+            check.isMissing || check.needsAttention || !check.wasExpectedAtStart
+        }
 
         Section {
-            if issueChecks.isEmpty {
+            FieldCheckAnimalQueryControls(
+                query: query,
+                onShowFilters: { showingAnimalQueryFilters = true }
+            )
+
+            if allChecks.isEmpty {
                 ContentUnavailableView(
-                    "No Roster Issues",
-                    systemImage: "checkmark.circle",
-                    description: Text("No missing, flagged, or added animals were recorded.")
+                    hasActiveRosterQueryCriteria ? "No Matching Animals" : "No Roster Entries",
+                    systemImage: hasActiveRosterQueryCriteria ? "magnifyingglass" : "tag",
+                    description: Text(
+                        hasActiveRosterQueryCriteria
+                            ? "No saved roster entries match the current global search and supported filters."
+                            : "No roster entries were saved with this completed check."
+                    )
                 )
             } else {
-                ForEach(issueChecks) { check in
-                    FieldCheckAnimalCheckRow(
-                        sessionID: detail.id,
-                        check: check,
-                        isEditable: false,
-                        onToggleCounted: {},
-                        onToggleMissing: {},
-                        onOpenAnimal: { animalID in
-                            selectedAnimalID = animalID
-                        }
+                if issueChecks.isEmpty {
+                    ContentUnavailableView(
+                        "No Matching Roster Issues",
+                        systemImage: "checkmark.circle",
+                        description: Text(
+                            hasActiveRosterQueryCriteria
+                                ? "The matching roster entries do not include missing, flagged, or added animals."
+                                : "No missing, flagged, or added animals were recorded."
+                        )
                     )
+                } else {
+                    ForEach(issueChecks) { check in
+                        FieldCheckAnimalCheckRow(
+                            sessionID: detail.id,
+                            check: check,
+                            isEditable: false,
+                            onToggleCounted: {},
+                            onToggleMissing: {},
+                            onOpenAnimal: { animalID in
+                                selectedAnimalID = animalID
+                            }
+                        )
+                    }
                 }
-            }
 
-            if !allChecks.isEmpty {
                 DisclosureGroup(isExpanded: $showingCompletedRoster) {
                     ForEach(allChecks) { check in
                         FieldCheckAnimalCheckRow(
@@ -859,14 +888,30 @@ struct FieldCheckSessionDetailView: View {
                         )
                     }
                 } label: {
-                    Label("All Roster Entries", systemImage: "tag")
+                    HStack {
+                        Label(
+                            hasActiveRosterQueryCriteria ? "Matching Roster Entries" : "All Roster Entries",
+                            systemImage: "tag"
+                        )
                         .font(.subheadline.weight(.semibold))
+
+                        Spacer()
+
+                        Text("\(allChecks.count)")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
                 }
             }
         } header: {
-            Text("Roster Snapshot")
+            Text(hasActiveRosterQueryCriteria ? "Roster Results" : "Roster Snapshot")
         } footer: {
-            Text("This is the roster state saved with the completed check.")
+            Text(
+                hasActiveRosterQueryCriteria
+                    ? "The query changes only the saved roster entries shown here. Completed-check counts and findings still use the full snapshot."
+                    : "This is the roster state saved with the completed check."
+            )
         }
     }
 
@@ -946,10 +991,6 @@ struct FieldCheckSessionDetailView: View {
             model.persistNotes(sessionID: sessionID, using: repository)
         }
 
-        if pane != .roster {
-            rosterSearchText = ""
-        }
-
         selectedPane = pane
     }
 
@@ -970,7 +1011,7 @@ struct FieldCheckSessionDetailView: View {
     }
 
     private func resetRosterFilters() {
-        rosterSearchText = ""
+        FieldCheckAnimalQuerySupport.clearCriteria(in: query)
         rosterFilter = .all
     }
 
@@ -1026,10 +1067,14 @@ struct FieldCheckSessionDetailView: View {
         }
     }
 
-    private func completedIssueAnimalChecks(for detail: FieldCheckSessionDetailSnapshot) -> [FieldCheckAnimalCheckSnapshot] {
-        sortedAnimalChecks(detail.animalChecks).filter { check in
-            check.isMissing || check.needsAttention || !check.wasExpectedAtStart
-        }
+    private func queriedAnimalChecks(
+        _ checks: [FieldCheckAnimalCheckSnapshot]
+    ) -> [FieldCheckAnimalCheckSnapshot] {
+        FieldCheckAnimalQueryEngine.apply(
+            to: checks,
+            query: query.query,
+            formatTag: tagColorLibrary.formattedTag(tagNumber:colorID:)
+        )
     }
 
     private func shouldConfirmFinish(_ detail: FieldCheckSessionDetailSnapshot) -> Bool {
@@ -1148,7 +1193,7 @@ private struct FieldCheckRosterFilterRow: View {
     @Binding var selectedFilter: FieldCheckRosterFilter
     let visibleCount: Int
     let totalCount: Int
-    let hasSearchText: Bool
+    let hasQueryCriteria: Bool
     let onReset: () -> Void
 
     private var countText: String {
@@ -1166,7 +1211,7 @@ private struct FieldCheckRosterFilterRow: View {
                     }
                 }
 
-                if selectedFilter != .all || hasSearchText {
+                if selectedFilter != .all || hasQueryCriteria {
                     Section {
                         Button {
                             onReset()

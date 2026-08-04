@@ -9,15 +9,26 @@ struct WorkingSessionDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppNavigationState.self) private var navigation
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     private var repository: any WorkingSessionDetailRepository {
         workingDependencies.sessionDetailRepository
     }
 
+    private var animalSummaryReader: any AnimalSummaryReading {
+        workingDependencies.animalSummaryReader
+    }
+
+    private var pastureReferenceReader: any PastureReferenceDataReader {
+        workingDependencies.pastureReferenceReader
+    }
+
     @StateObject private var viewModel: WorkingSessionDetailViewModel
     @State private var animalFilter: WorkingSessionAnimalFilter = .remaining
-    @State private var searchText = ""
+    @State private var animalSummariesByID: [UUID: AnimalSummary] = [:]
+    @State private var pastureOptions: [PastureOption] = []
+    @State private var showingQueryFilters = false
     @State private var showingAddAnimals = false
     @State private var showingFinish = false
     @State private var showingDeleteAlert = false
@@ -34,8 +45,10 @@ struct WorkingSessionDetailView: View {
         )
     }
 
+    private var query: AnimalQueryState { navigation.animalQuery }
+
     private var trimmedSearchText: String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        query.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var filteredItems: [WorkingQueueItemSnapshot] {
@@ -44,15 +57,17 @@ struct WorkingSessionDetailView: View {
         let statusFiltered = session.queueItems.filter { item in
             animalFilter.includes(item.status)
         }
-        return searchItems(statusFiltered.sorted(by: animalSortOrder))
+        return queryItems(statusFiltered)
     }
 
     private var completedReviewItems: [WorkingQueueItemSnapshot] {
         guard let session = viewModel.session else { return [] }
-        return searchItems(session.queueItems.sorted(by: animalSortOrder))
+        return queryItems(session.queueItems)
     }
 
     var body: some View {
+        @Bindable var query = query
+
         Group {
             if let session = viewModel.session {
                 sessionContent(session)
@@ -70,6 +85,15 @@ struct WorkingSessionDetailView: View {
         .navigationTitle(viewModel.session?.sourcePastureName ?? "Working Session")
         .navigationBarTitleDisplayMode(.inline)
         .navigationSubtitle(navigationSubtitle)
+        .searchable(
+            text: $query.searchText,
+            placement: .navigationBarDrawer(displayMode: .automatic),
+            prompt: "Search session animals"
+        )
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            queryControls
+                .background(.bar)
+        }
         .toolbar {
             if let session = viewModel.session {
                 sessionToolbar(session)
@@ -78,6 +102,14 @@ struct WorkingSessionDetailView: View {
         .task {
             viewModel.configure(repository: repository)
             reload()
+        }
+        .sheet(isPresented: $showingQueryFilters) {
+            AnimalFilterView(
+                filter: $query.filter,
+                showRemovedStatuses: $query.showRemovedStatuses,
+                showArchivedRecords: $query.showArchivedRecords,
+                pastureOptions: pastureOptions
+            )
         }
         .sheet(isPresented: $showingAddAnimals, onDismiss: reload) {
             if let session = viewModel.session {
@@ -121,6 +153,19 @@ struct WorkingSessionDetailView: View {
                 showingError = true
             }
         }
+    }
+
+    private var queryControls: some View {
+        @Bindable var query = query
+
+        return AnimalListAdaptiveTabAccessoryControls(
+            sortOrder: $query.sortOrder,
+            filtersAreActive: query.filtersAreActive,
+            activeFilterCount: query.activeFilterCount,
+            hasAnyActiveCriteria: query.hasAnyActiveCriteria,
+            onShowFilters: { showingQueryFilters = true },
+            onClearAllCriteria: { query.clearCriteria() }
+        )
     }
 
     private var navigationSubtitle: String {
@@ -194,11 +239,6 @@ struct WorkingSessionDetailView: View {
         .refreshable {
             reload()
         }
-        .searchable(
-            text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: "Search session animals"
-        )
     }
 
     private func completedReviewContent(_ session: WorkingSessionDetailSnapshot) -> some View {
@@ -218,7 +258,7 @@ struct WorkingSessionDetailView: View {
                         description: Text(
                             trimmedSearchText.isEmpty
                                 ? "This session does not contain any animals."
-                                : "No completed-session animals match the current search."
+                                : "No completed-session animals match the current search and filters."
                         )
                     )
                 } else {
@@ -246,11 +286,6 @@ struct WorkingSessionDetailView: View {
         .refreshable {
             reload()
         }
-        .searchable(
-            text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: "Search completed session"
-        )
     }
 
     @ViewBuilder
@@ -332,7 +367,7 @@ struct WorkingSessionDetailView: View {
     }
 
     private var emptyFilterTitle: String {
-        if !trimmedSearchText.isEmpty { return "No Matching Animals" }
+        if query.hasAnyActiveCriteria { return "No Matching Animals" }
         switch animalFilter {
         case .remaining:
             return "No Remaining Animals"
@@ -344,8 +379,8 @@ struct WorkingSessionDetailView: View {
     }
 
     private var emptyFilterDescription: String {
-        if !trimmedSearchText.isEmpty {
-            return "No session animals match the current search and filter."
+        if query.hasAnyActiveCriteria {
+            return "No session animals match the current search and filters."
         }
         switch animalFilter {
         case .remaining:
@@ -403,48 +438,20 @@ struct WorkingSessionDetailView: View {
         }
     }
 
-    private func searchItems(
+    private func queryItems(
         _ items: [WorkingQueueItemSnapshot]
     ) -> [WorkingQueueItemSnapshot] {
-        guard !trimmedSearchText.isEmpty else { return items }
-
-        return items.filter { item in
-            guard let tagNumber = item.animalDisplayTagNumber else { return false }
-            let formattedTag = tagColorLibrary.formattedTag(
-                tagNumber: tagNumber,
-                colorID: item.animalDisplayTagColorID
-            )
-            return tagNumber.localizedCaseInsensitiveContains(trimmedSearchText)
-                || formattedTag.localizedCaseInsensitiveContains(trimmedSearchText)
-                || item.animalSex.label.localizedCaseInsensitiveContains(trimmedSearchText)
-                || (item.destinationPastureName?.localizedCaseInsensitiveContains(trimmedSearchText) ?? false)
-        }
-    }
-
-    private func animalSortOrder(
-        _ left: WorkingQueueItemSnapshot,
-        _ right: WorkingQueueItemSnapshot
-    ) -> Bool {
-        let leftTag = left.animalDisplayTagNumber?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let rightTag = right.animalDisplayTagNumber?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        if leftTag.isEmpty != rightTag.isEmpty {
-            return !leftTag.isEmpty
-        }
-
-        let comparison = leftTag.localizedStandardCompare(rightTag)
-        if comparison != .orderedSame {
-            return comparison == .orderedAscending
-        }
-
-        return left.id.uuidString < right.id.uuidString
+        WorkingQueueAnimalQueryEngine.apply(
+            to: items,
+            summariesByID: animalSummariesByID,
+            query: query.query,
+            formatTag: tagColorLibrary.formattedTag(tagNumber:colorID:)
+        )
     }
 
     private func resetAnimalFilters() {
         animalFilter = .all
-        searchText = ""
+        query.clearCriteria()
     }
 
     private func remainingItemCount(in session: WorkingSessionDetailSnapshot) -> Int {
@@ -454,13 +461,26 @@ struct WorkingSessionDetailView: View {
     private func reopenSession() {
         viewModel.reopenSession()
         animalFilter = .all
-        searchText = ""
+        loadAnimalQueryData()
     }
 
     private func reload() {
         viewModel.load()
+        loadAnimalQueryData()
         if viewModel.session?.status != .active {
             animalFilter = .all
+        }
+    }
+
+    private func loadAnimalQueryData() {
+        do {
+            let animals = try animalSummaryReader.fetchAnimals()
+            animalSummariesByID = Dictionary(uniqueKeysWithValues: animals.map { ($0.id, $0) })
+            pastureOptions = try pastureReferenceReader.fetchPastureOptions()
+            errorMessage = nil
+        } catch {
+            errorMessage = UserVisibleErrorMessage.make(error)
+            showingError = true
         }
     }
 

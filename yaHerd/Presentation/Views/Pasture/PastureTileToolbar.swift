@@ -43,9 +43,7 @@ struct PastureTileToolbar: View {
 
                 Divider()
 
-                NavigationLink {
-                    PastureGroupListView()
-                } label: {
+                NavigationLink(value: HerdRoute.pastureGroups) {
                     Label("Pasture Groups", systemImage: "rectangle.3.group")
                 }
 
