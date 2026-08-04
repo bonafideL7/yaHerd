@@ -99,18 +99,103 @@ final class CollaborationFieldSnapshotProviderTests: XCTestCase {
         )
     }
 
-    func testSnapshotDatesPreserveFractionalSeconds() {
-        let herd = Herd(name: "Fractional Date Herd")
-        herd.updatedAt = Date(timeIntervalSince1970: 1_800_000_000.125)
+    func testAnimalSnapshotNormalizesDistinguishingFeatureOrder() {
+        let firstFeatureID = UUID()
+        let secondFeatureID = UUID()
+        let animal = Animal(
+            name: "Cow 12",
+            tagNumber: "12",
+            birthDate: .distantPast,
+            status: .active,
+            sex: .female
+        )
+        animal.distinguishingFeatures = [
+            DistinguishingFeature(
+                id: firstFeatureID,
+                description: "White face",
+                order: 10
+            ),
+            DistinguishingFeature(
+                id: secondFeatureID,
+                description: "Notched left ear",
+                order: 40
+            ),
+        ]
+
+        let originalSnapshot = CollaborationFieldSnapshotProvider.snapshot(for: animal)
+
+        XCTAssertNil(originalSnapshot["distinguishingFeatures"])
+        XCTAssertNotNil(originalSnapshot["distinguishingFeaturesJSON"])
+
+        animal.distinguishingFeatures = [
+            DistinguishingFeature(
+                id: firstFeatureID,
+                description: "White face",
+                order: 0
+            ),
+            DistinguishingFeature(
+                id: secondFeatureID,
+                description: "Notched left ear",
+                order: 1
+            ),
+        ]
+
+        XCTAssertEqual(
+            CollaborationFieldSnapshotProvider.snapshot(for: animal),
+            originalSnapshot
+        )
+
+        animal.distinguishingFeatures = [
+            DistinguishingFeature(
+                id: firstFeatureID,
+                description: "White face",
+                order: 1
+            ),
+            DistinguishingFeature(
+                id: secondFeatureID,
+                description: "Notched left ear",
+                order: 0
+            ),
+        ]
+
+        XCTAssertNotEqual(
+            CollaborationFieldSnapshotProvider.snapshot(for: animal),
+            originalSnapshot
+        )
+    }
+
+    func testSnapshotDatesPreserveSubMillisecondPrecisionLosslessly() {
+        let firstInterval = 800_000_000.123_456
+        let secondInterval = firstInterval.nextUp
+        XCTAssertLessThan(secondInterval - firstInterval, 0.001)
+
+        let firstDate = Date(timeIntervalSinceReferenceDate: firstInterval)
+        let secondDate = Date(timeIntervalSinceReferenceDate: secondInterval)
+        let herd = Herd(name: "Precise Date Herd")
+
+        herd.updatedAt = firstDate
         let firstSnapshot = CollaborationFieldSnapshotProvider.snapshot(for: herd)
 
-        herd.updatedAt = Date(timeIntervalSince1970: 1_800_000_000.875)
+        herd.updatedAt = secondDate
         let secondSnapshot = CollaborationFieldSnapshotProvider.snapshot(for: herd)
 
-        let firstValue = firstSnapshot["updatedAt"]?.encodedValue
-        let secondValue = secondSnapshot["updatedAt"]?.encodedValue
+        guard
+            let firstValue = firstSnapshot["updatedAt"]?.encodedValue,
+            let secondValue = secondSnapshot["updatedAt"]?.encodedValue,
+            let decodedFirstInterval = Double(firstValue),
+            let decodedSecondInterval = Double(secondValue)
+        else {
+            return XCTFail("Expected lossless numeric date snapshots")
+        }
+
         XCTAssertNotEqual(firstValue, secondValue)
-        XCTAssertTrue(firstValue?.contains(".125") == true)
-        XCTAssertTrue(secondValue?.contains(".875") == true)
+        XCTAssertEqual(
+            decodedFirstInterval.bitPattern,
+            firstDate.timeIntervalSinceReferenceDate.bitPattern
+        )
+        XCTAssertEqual(
+            decodedSecondInterval.bitPattern,
+            secondDate.timeIntervalSinceReferenceDate.bitPattern
+        )
     }
 }
