@@ -44,6 +44,59 @@ final class WorkingQueueAnimalQueryVisibilityTests: XCTestCase {
         XCTAssertEqual(result.map(\.id), [matchingItem.id])
     }
 
+    func testSearchMatchesDestinationPastureName() {
+        let matchingAnimal = makeAnimal(tagNumber: "12")
+        let excludedAnimal = makeAnimal(tagNumber: "34")
+        let matchingItem = makeQueueItem(
+            animal: matchingAnimal,
+            destinationPastureName: "North Holding"
+        )
+        let excludedItem = makeQueueItem(
+            animal: excludedAnimal,
+            destinationPastureName: "South Pasture"
+        )
+
+        let result = WorkingQueueAnimalQueryEngine.apply(
+            to: [excludedItem, matchingItem],
+            summariesByID: [
+                matchingAnimal.id: matchingAnimal,
+                excludedAnimal.id: excludedAnimal
+            ],
+            query: AnimalQuery(searchText: "holding"),
+            formatTag: { number, _ in number }
+        )
+
+        XCTAssertEqual(result.map(\.id), [matchingItem.id])
+    }
+
+    func testDestinationSearchStillHonorsGlobalAnimalFilter() {
+        let femaleAnimal = makeAnimal(tagNumber: "12", sex: .female)
+        let maleAnimal = makeAnimal(tagNumber: "34", sex: .male)
+        let femaleItem = makeQueueItem(
+            animal: femaleAnimal,
+            destinationPastureName: "North Holding"
+        )
+        let maleItem = makeQueueItem(
+            animal: maleAnimal,
+            destinationPastureName: "North Holding"
+        )
+
+        let result = WorkingQueueAnimalQueryEngine.apply(
+            to: [maleItem, femaleItem],
+            summariesByID: [
+                femaleAnimal.id: femaleAnimal,
+                maleAnimal.id: maleAnimal
+            ],
+            query: AnimalQuery(
+                searchText: "North",
+                filter: AnimalFilter(sex: .female)
+            ),
+            formatTag: { number, _ in number }
+        )
+
+        XCTAssertEqual(result.map(\.id), [femaleItem.id])
+    }
+
     func testEqualSortKeysPreserveSessionSourceOrder() {
         let animals = (0..<6).map { _ in makeAnimal(tagNumber: "12") }
         let items = animals.map(makeQueueItem)
@@ -64,7 +117,10 @@ final class WorkingQueueAnimalQueryVisibilityTests: XCTestCase {
         }
     }
 
-    private func makeAnimal(tagNumber: String) -> AnimalSummary {
+    private func makeAnimal(
+        tagNumber: String,
+        sex: Sex = .female
+    ) -> AnimalSummary {
         AnimalSummary(
             id: UUID(),
             name: "",
@@ -72,8 +128,8 @@ final class WorkingQueueAnimalQueryVisibilityTests: XCTestCase {
             displayTagColorID: nil,
             damDisplayTagNumber: nil,
             damDisplayTagColorID: nil,
-            sex: .female,
-            animalType: .cow,
+            sex: sex,
+            animalType: sex == .male ? .bull : .cow,
             firstDistinguishingFeature: nil,
             birthDate: Date(timeIntervalSince1970: 0),
             status: .active,
@@ -84,7 +140,10 @@ final class WorkingQueueAnimalQueryVisibilityTests: XCTestCase {
         )
     }
 
-    private func makeQueueItem(animal: AnimalSummary?) -> WorkingQueueItemSnapshot {
+    private func makeQueueItem(
+        animal: AnimalSummary?,
+        destinationPastureName: String? = nil
+    ) -> WorkingQueueItemSnapshot {
         WorkingQueueItemSnapshot(
             id: UUID(),
             status: .queued,
@@ -97,7 +156,7 @@ final class WorkingQueueAnimalQueryVisibilityTests: XCTestCase {
             animalSex: animal?.sex ?? .unknown,
             collectedFromPastureName: animal?.pastureName,
             destinationPastureID: nil,
-            destinationPastureName: nil
+            destinationPastureName: destinationPastureName
         )
     }
 }
