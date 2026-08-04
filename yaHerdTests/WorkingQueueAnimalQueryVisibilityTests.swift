@@ -99,7 +99,7 @@ final class WorkingQueueAnimalQueryVisibilityTests: XCTestCase {
 
     func testEqualSortKeysPreserveSessionSourceOrder() {
         let animals = (0..<6).map { _ in makeAnimal(tagNumber: "12") }
-        let items = animals.map(makeQueueItem)
+        let items = animals.map { makeQueueItem(animal: $0) }
         let summariesByID = Dictionary(
             uniqueKeysWithValues: animals.map { ($0.id, $0) }
         )
