@@ -33,7 +33,7 @@ enum CollaborationFieldSnapshotProvider {
         case let queueItem as WorkingQueueItem:
             return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: queueItem)
         case let treatment as WorkingTreatmentRecord:
-            return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: treatment)
+            return treatmentSnapshot(treatment)
         case let record as HealthRecord:
             return HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: record)
         case let check as PregnancyCheck:
@@ -65,19 +65,60 @@ enum CollaborationFieldSnapshotProvider {
         return snapshot
     }
 
+    /// Keep these names aligned with the bridge export schema. Treatment identity,
+    /// dose unit, and route are semantic fields and must advance revision lineage.
+    private static func treatmentSnapshot(
+        _ treatment: WorkingTreatmentRecord
+    ) -> CollaborationFieldSnapshot {
+        [
+            "date": value(treatment.date),
+            "treatmentItemID": value(treatment.treatmentItemID),
+            "itemName": value(treatment.itemName),
+            "given": value(treatment.given),
+            "doseAmount": value(treatment.doseAmount),
+            "doseUnitRawValue": value(treatment.doseUnit?.rawValue),
+            "administrationRouteRawValue": value(treatment.administrationRoute?.rawValue),
+            "sessionPublicID": value(treatment.session?.publicID),
+            "animalPublicID": value(treatment.animal?.publicID),
+        ]
+    }
+
     private static func value(_ value: String) -> HerdSharingBridgeConflictValue {
         HerdSharingBridgeConflictValue(type: .string, encodedValue: value)
+    }
+
+    private static func value(_ value: String?) -> HerdSharingBridgeConflictValue {
+        guard let value else { return .null }
+        return HerdSharingBridgeConflictValue(type: .string, encodedValue: value)
+    }
+
+    private static func value(_ value: Bool) -> HerdSharingBridgeConflictValue {
+        HerdSharingBridgeConflictValue(
+            type: .bool,
+            encodedValue: value ? "true" : "false"
+        )
     }
 
     private static func value(_ value: Int) -> HerdSharingBridgeConflictValue {
         HerdSharingBridgeConflictValue(type: .int, encodedValue: String(value))
     }
 
+    private static func value(_ value: Double?) -> HerdSharingBridgeConflictValue {
+        guard let value else { return .null }
+        return HerdSharingBridgeConflictValue(type: .double, encodedValue: String(value))
+    }
+
     private static func value(_ value: Date) -> HerdSharingBridgeConflictValue {
-        HerdSharingBridgeConflictValue(
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return HerdSharingBridgeConflictValue(
             type: .date,
-            encodedValue: ISO8601DateFormatter().string(from: value)
+            encodedValue: formatter.string(from: value)
         )
+    }
+
+    private static func value(_ value: UUID) -> HerdSharingBridgeConflictValue {
+        HerdSharingBridgeConflictValue(type: .uuid, encodedValue: value.uuidString)
     }
 
     private static func value(_ value: UUID?) -> HerdSharingBridgeConflictValue {
