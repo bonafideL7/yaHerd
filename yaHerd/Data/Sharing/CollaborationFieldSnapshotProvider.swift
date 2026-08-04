@@ -123,10 +123,14 @@ enum CollaborationFieldSnapshotProvider {
                 "saleDate": animal.saleDate,
                 "deathDate": animal.deathDate,
                 "softDeletedAt": animal.softDeletedAt,
-            ]
+            ],
+            excluding: ["distinguishingFeatures"]
         )
         fields["sireAnimalPublicID"] = value(animal.sireAnimal?.publicID)
         fields["damAnimalPublicID"] = value(animal.damAnimal?.publicID)
+        fields["distinguishingFeaturesJSON"] = jsonValue(
+            animal.distinguishingFeatures.normalizedDistinguishingFeatureOrder
+        )
         return fields
     }
 
@@ -149,8 +153,8 @@ enum CollaborationFieldSnapshotProvider {
     }
 
     /// Conflict review predates revision lineage and formats dates to whole seconds.
-    /// Override date fields at this boundary so every revision snapshot preserves
-    /// changes that occur within the same second. Device-local fields are removed
+    /// Override date fields at this boundary with lossless raw intervals so every
+    /// distinct `Date` advances revision lineage. Device-local fields are removed
     /// because they are intentionally absent from the shared bridge payload.
     private static func snapshot(
         _ fields: CollaborationFieldSnapshot,
@@ -193,11 +197,9 @@ enum CollaborationFieldSnapshotProvider {
     }
 
     private static func value(_ value: Date) -> HerdSharingBridgeConflictValue {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return HerdSharingBridgeConflictValue(
+        HerdSharingBridgeConflictValue(
             type: .date,
-            encodedValue: formatter.string(from: value)
+            encodedValue: String(value.timeIntervalSinceReferenceDate)
         )
     }
 
@@ -213,5 +215,22 @@ enum CollaborationFieldSnapshotProvider {
     private static func value(_ value: UUID?) -> HerdSharingBridgeConflictValue {
         guard let value else { return .null }
         return HerdSharingBridgeConflictValue(type: .uuid, encodedValue: value.uuidString)
+    }
+
+    private static func jsonValue<Value: Encodable>(
+        _ value: Value
+    ) -> HerdSharingBridgeConflictValue {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard
+            let data = try? encoder.encode(value),
+            let encodedValue = String(data: data, encoding: .utf8)
+        else {
+            return HerdSharingBridgeConflictValue(
+                type: .string,
+                encodedValue: String(describing: value)
+            )
+        }
+        return HerdSharingBridgeConflictValue(type: .string, encodedValue: encodedValue)
     }
 }
