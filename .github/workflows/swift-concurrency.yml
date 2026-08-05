@@ -31,6 +31,7 @@ jobs:
           fi
           sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
           bash Scripts/verify-architecture.sh
+          bash Scripts/verify-recovery-presentation.sh
           bash Scripts/verify-concurrency.sh
 
       - name: Collect persistence test diagnostics
