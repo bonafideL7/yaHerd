@@ -298,7 +298,7 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
                 publicID: { $0.publicID },
                 assignPublicID: { $0.publicID = $1 },
                 canonicalTimestamp: { $0.softDeletedAt ?? $0.deathDate ?? $0.saleDate ?? .distantPast },
-                recordDescription: { animalDescription($0) },
+                recordDescription: { self.animalDescription($0) },
                 revisionMetadata: revisionMetadata
             ),
             makeEntityPlan(
@@ -358,7 +358,7 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
                 publicID: { $0.publicID },
                 assignPublicID: { $0.publicID = $1 },
                 canonicalTimestamp: { $0.completedAt ?? .distantPast },
-                recordDescription: { "Working item for \(animalDescription($0.animal))" },
+                recordDescription: { "Working item for \(self.animalDescription($0.animal))" },
                 revisionMetadata: revisionMetadata
             ),
             makeEntityPlan(
