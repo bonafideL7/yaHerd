@@ -132,22 +132,26 @@ final class AppDependencies {
             healthRecordAdder: animalRepository,
             pregnancyCheckAdder: animalRepository,
             pastureReferenceReader: pastureRepository,
-            sampleDataSeeder: sampleDataSeeder
+            sampleDataSeeder: sampleDataSeeder,
+            mutationStream: mutationCenter
         )
         self.pastureFeatureDependencies = PastureFeatureDependencies(
             pastureRepository: pastureRepository,
             animalMover: animalRepository,
-            fieldCheckArchiveWriter: fieldCheckRepository
+            fieldCheckArchiveWriter: fieldCheckRepository,
+            mutationStream: mutationCenter
         )
         self.fieldCheckFeatureDependencies = FieldCheckFeatureDependencies(
             repository: fieldCheckRepository,
             animalRepository: animalRepository,
-            pastureReferenceReader: pastureRepository
+            pastureReferenceReader: pastureRepository,
+            mutationStream: mutationCenter
         )
         self.workingSessionFeatureDependencies = WorkingSessionFeatureDependencies(
             repository: workingRepository,
             animalSummaryReader: animalRepository,
-            pastureReferenceReader: pastureRepository
+            pastureReferenceReader: pastureRepository,
+            mutationStream: mutationCenter
         )
         self.homeFeatureDependencies = HomeFeatureDependencies(
             dashboardReader: dashboardRepository,
