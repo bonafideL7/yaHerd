@@ -130,7 +130,6 @@ final class AnimalDetailViewModel {
         }
     }
 
-
     func addDraftTag(number: String, colorID: UUID?, isPrimary: Bool) {
         draftTags = AnimalTagDraftEditor.addTag(
             to: draftTags,
@@ -236,6 +235,13 @@ final class AnimalDetailViewModel {
     }
 
     func delete(animalID: UUID, using repository: any AnimalDetailRepository) {
+        guard detail?.id == animalID, detail?.isArchived == true else {
+            errorMessage = UserVisibleErrorMessage.make(
+                AnimalValidationError.permanentDeleteRequiresArchive
+            )
+            return
+        }
+
         do {
             try repository.delete(ids: [animalID])
             didDelete = true
@@ -243,5 +249,4 @@ final class AnimalDetailViewModel {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
-
 }
