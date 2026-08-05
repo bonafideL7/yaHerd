@@ -555,16 +555,24 @@ final class AppNavigationState {
         _ path: [HerdRoute],
         using validator: any AppNavigationRestorationValidating
     ) -> [HerdRoute] {
-        path.filter { route in
+        var validatedRoutes: [HerdRoute] = []
+
+        for route in path {
+            let isValid: Bool
             switch route {
             case .animal(let animalID):
-                return (try? validator.animalExists(id: animalID)) == true
+                isValid = (try? validator.animalExists(id: animalID)) == true
             case .pasture(let pastureID):
-                return (try? validator.pastureExists(id: pastureID)) == true
+                isValid = (try? validator.pastureExists(id: pastureID)) == true
             case .fieldChecks, .workingSessions:
-                return true
+                isValid = true
             }
+
+            guard isValid else { break }
+            validatedRoutes.append(route)
         }
+
+        return validatedRoutes
     }
 
     private func restoreActiveWorkflow(
