@@ -16,7 +16,7 @@ final class ApplicationMutationCenterTests: XCTestCase {
         XCTAssertEqual(center.collaborationRevision, 0)
         XCTAssertEqual(
             center.latestEvent?.affectedAreas,
-            [.home, .animals, .pastures, .fieldChecks, .workingSessions]
+            Set([.home, .animals, .pastures, .fieldChecks, .workingSessions])
         )
     }
 
@@ -52,8 +52,9 @@ final class ApplicationMutationCenterTests: XCTestCase {
         center.recordSuccessfulMutation(reason: .animal)
 
         var iterator = center.revisions(for: .animals, after: 0).makeAsyncIterator()
+        let revision = await iterator.next()
 
-        XCTAssertEqual(await iterator.next(), 1)
+        XCTAssertEqual(revision, 1)
     }
 
     func testRevisionStreamBuffersOnlyNewestValue() async {
@@ -64,7 +65,8 @@ final class ApplicationMutationCenterTests: XCTestCase {
         center.recordSuccessfulMutation(reason: .animal)
         center.recordSuccessfulMutation(reason: .animal)
 
-        XCTAssertEqual(await iterator.next(), 3)
+        let revision = await iterator.next()
+        XCTAssertEqual(revision, 3)
     }
 
     func testEventStreamCarriesMutationMetadata() async {
@@ -78,7 +80,7 @@ final class ApplicationMutationCenterTests: XCTestCase {
         XCTAssertEqual(event?.sequence, 1)
         XCTAssertEqual(
             event?.affectedAreas,
-            [.home, .animals, .pastures, .fieldChecks, .workingSessions]
+            Set([.home, .animals, .pastures, .fieldChecks, .workingSessions])
         )
     }
 
