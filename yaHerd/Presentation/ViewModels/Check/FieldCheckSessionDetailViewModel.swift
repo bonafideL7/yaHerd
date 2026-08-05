@@ -8,6 +8,8 @@ final class FieldCheckSessionDetailViewModel {
     var notesDraft = ""
     var errorMessage: String?
     var hasLoaded = false
+
+    @ObservationIgnored private var mutationObservationTask: Task<Void, Never>?
     private var lastLoadedRevision: UInt64 = 0
 
     func observe(
@@ -16,28 +18,19 @@ final class FieldCheckSessionDetailViewModel {
         mutationStream: any ApplicationMutationStreaming,
         didLoad: @MainActor () -> Void = {}
     ) async {
-        let startingRevision = mutationStream.fieldCheckRevision
-        if !hasLoaded || lastLoadedRevision < startingRevision {
-            if load(sessionID: sessionID, using: repository) {
-                lastLoadedRevision = startingRevision
-                didLoad()
-            }
-        }
-
-        for await revision in mutationStream.revisions(
-            for: .fieldChecks,
-            after: lastLoadedRevision
-        ) {
-            guard !Task.isCancelled else { return }
-            if refresh(sessionID: sessionID, using: repository) {
-                lastLoadedRevision = revision
-                didLoad()
-            }
-        }
+        startObservingIfNeeded(
+            sessionID: sessionID,
+            using: repository,
+            mutationStream: mutationStream,
+            didLoad: didLoad
+        )
+        _ = load(sessionID: sessionID, using: repository)
+        await mutationObservationTask?.value
     }
 
     @discardableResult
     func load(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) -> Bool {
+        startObservingIfNeeded(sessionID: sessionID, using: repository)
         defer { hasLoaded = true }
 
         do {
@@ -45,6 +38,7 @@ final class FieldCheckSessionDetailViewModel {
             detail = loadedDetail
             notesDraft = loadedDetail?.notes ?? ""
             errorMessage = nil
+            markCurrentRevision(using: repository)
             return true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -54,10 +48,15 @@ final class FieldCheckSessionDetailViewModel {
 
     @discardableResult
     func refresh(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) -> Bool {
+        startObservingIfNeeded(sessionID: sessionID, using: repository)
+
         do {
             let loadedDetail = try repository.fetchSessionDetail(id: sessionID)
             detail = loadedDetail
-            if let loadedDetail, notesDraft.trimmingCharacters(in: .whitespacesAndNewlines) == loadedDetail.notes.trimmingCharacters(in: .whitespacesAndNewlines) {
+            if let loadedDetail,
+               notesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                == loadedDetail.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            {
                 notesDraft = loadedDetail.notes
             }
             errorMessage = nil
@@ -173,6 +172,43 @@ final class FieldCheckSessionDetailViewModel {
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
+    }
+
+    private func startObservingIfNeeded(
+        sessionID: UUID,
+        using repository: any FieldCheckSessionDetailRepository,
+        mutationStream explicitMutationStream: (any ApplicationMutationStreaming)? = nil,
+        didLoad: @escaping @MainActor () -> Void = {}
+    ) {
+        guard mutationObservationTask == nil else { return }
+
+        let mutationStream: any ApplicationMutationStreaming
+        if let explicitMutationStream {
+            mutationStream = explicitMutationStream
+        } else if let provider = repository as? any ApplicationMutationStreamProviding {
+            mutationStream = provider.applicationMutationStream
+        } else {
+            return
+        }
+
+        mutationObservationTask = Task { @MainActor [weak self] in
+            let startingRevision = self?.lastLoadedRevision ?? 0
+            for await revision in mutationStream.revisions(
+                for: .fieldChecks,
+                after: startingRevision
+            ) {
+                guard !Task.isCancelled, let self else { return }
+                if self.refresh(sessionID: sessionID, using: repository) {
+                    self.lastLoadedRevision = revision
+                    didLoad()
+                }
+            }
+        }
+    }
+
+    private func markCurrentRevision(using repository: any FieldCheckSessionDetailRepository) {
+        guard let provider = repository as? any ApplicationMutationStreamProviding else { return }
+        lastLoadedRevision = provider.applicationMutationStream.fieldCheckRevision
     }
 }
 
