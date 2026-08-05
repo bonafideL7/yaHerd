@@ -7,7 +7,6 @@ import SwiftUI
 #Preview {
     AnimalListView()
         .environment(AppNavigationState())
-        .environment(ApplicationSettings(store: InMemoryApplicationSettingsStore()))
         .preferredColorScheme(.dark)
 }
 
@@ -19,10 +18,7 @@ struct AnimalListView: View {
     private var sampleDataSeeder: any SampleDataSeeding { animalDependencies.sampleDataSeeder }
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appDataAccessMode) private var dataAccessMode
-    @Environment(ApplicationSettings.self) private var applicationSettings
     @Environment(AppNavigationState.self) private var navigation
-
-    private var hardDeleteOnSwipe: Bool { applicationSettings.allowHardDelete }
 
     @State private var viewModel = AnimalListViewModel()
     @State private var internalSearchText = ""
@@ -44,7 +40,6 @@ struct AnimalListView: View {
     @State private var isShowingInlineBirthDatePicker = false
     @State private var detailAnimalID: UUID?
     @State private var isShowingInlineDetail = false
-    @State private var pendingHardDeleteAnimal: AnimalSummary?
     private let externalSearchText: Binding<String>?
     private let externalIsSearching: Binding<Bool>?
     private let externalSortOrder: Binding<AnimalSortOrder>?
@@ -255,16 +250,6 @@ struct AnimalListView: View {
         }
     }
 
-    private var hardDeleteConfirmationIsPresented: Binding<Bool> {
-        Binding {
-            pendingHardDeleteAnimal != nil
-        } set: { isPresented in
-            if !isPresented {
-                pendingHardDeleteAnimal = nil
-            }
-        }
-    }
-
     var body: some View {
         Group {
             if filteredAndSortedAnimals.isEmpty && !inlineEntry.isActive {
@@ -332,20 +317,6 @@ struct AnimalListView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
-        .alert(
-            "Permanently Delete Animal?",
-            isPresented: hardDeleteConfirmationIsPresented,
-            presenting: pendingHardDeleteAnimal
-        ) { animal in
-            Button("Delete Permanently", role: .destructive) {
-                confirmHardDelete(animal)
-            }
-            Button("Cancel", role: .cancel) {
-                pendingHardDeleteAnimal = nil
-            }
-        } message: { animal in
-            Text("This permanently deletes \(deleteConfirmationLabel(for: animal)) and cannot be undone.")
-        }
         .task {
             reloadIfNeeded()
         }
@@ -384,7 +355,6 @@ struct AnimalListView: View {
             shouldUseSections: shouldUseSections,
             batchMode: batchMode,
             selectedAnimalIDs: $selectedAnimalIDs,
-            hardDeleteOnSwipe: hardDeleteOnSwipe,
             collapsedSectionIDs: $collapsedSectionIDs,
             inlineEntryIsActive: inlineEntry.isActive,
             inlineEntryIdentity: inlineEntry.identity,
@@ -634,11 +604,11 @@ struct AnimalListView: View {
 
     private func submitInlineEntry() {
         let trimmedText = inlineEntry.trimmedText
-        
+
         if !trimmedText.isEmpty {
             inlineEntry.ignoresNextFocusLoss = true
         }
-        
+
         commitInlineEntry(startNewEntryAfterCreate: !inlineEntry.isEditing)
     }
 
@@ -680,40 +650,12 @@ struct AnimalListView: View {
     }
 
     private func performPrimarySwipeAction(for animal: AnimalSummary) {
-        let shouldHardDelete = animal.isArchived || hardDeleteOnSwipe
-
-        guard shouldHardDelete else {
-            executePrimarySwipeAction(for: animal, hardDelete: false)
-            return
-        }
-
-        pendingHardDeleteAnimal = animal
-    }
-
-    private func confirmHardDelete(_ animal: AnimalSummary) {
-        pendingHardDeleteAnimal = nil
-        executePrimarySwipeAction(for: animal, hardDelete: true)
-    }
-
-    private func executePrimarySwipeAction(for animal: AnimalSummary, hardDelete: Bool) {
         viewModel.performPrimarySwipeAction(
             animalID: animal.id,
-            hardDelete: hardDelete,
             using: repository,
             pastureRepository: pastureReferenceDataReader
         )
         refreshDerivedState()
-    }
-
-    private func deleteConfirmationLabel(for animal: AnimalSummary) -> String {
-        let tag = tagColorLibrary.formattedTag(for: animal)
-        let name = animal.name.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !name.isEmpty, name != tag else {
-            return tag
-        }
-
-        return "\(tag) / \(name)"
     }
 
     private func restoreArchivedRecord(_ animal: AnimalSummary) {
