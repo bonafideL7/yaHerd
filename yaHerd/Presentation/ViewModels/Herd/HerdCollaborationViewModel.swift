@@ -22,7 +22,37 @@ final class HerdCollaborationViewModel {
   var sharePresentation: HerdSharePresentationRequest?
 
   var canStartSharing: Bool {
-    readiness?.shareActionEnabled == true && herd != nil && !isSharingActionInProgress
+    readiness?.shareActionEnabled == true
+      && herd != nil
+      && sharingAccess?.creationState.allowsNewShare == true
+      && !isSharingActionInProgress
+  }
+
+  var canPerformPrimarySharingAction: Bool {
+    guard readiness?.shareActionEnabled == true, herd != nil, !isSharingActionInProgress else {
+      return false
+    }
+
+    switch sharingAccess?.creationState {
+    case .ready, .existingOwnerShare, .acceptedParticipantShare, .unresolvedBridgeRecord,
+      .pendingBridgeOperation:
+      return true
+    case .unknown, .notOwnedByCurrentDevice, nil:
+      return false
+    }
+  }
+
+  var primarySharingActionTitle: String {
+    sharingAccess?.creationState.primaryActionTitle ?? "Checking Sharing State"
+  }
+
+  var primarySharingActionSystemImage: String {
+    sharingAccess?.creationState.primaryActionSystemImage ?? "hourglass"
+  }
+
+  var primarySharingActionMessage: String {
+    sharingAccess?.creationState.message
+      ?? "Refresh sharing access before creating or managing a CloudKit share."
   }
 
   func load(
@@ -108,6 +138,39 @@ final class HerdCollaborationViewModel {
     }
   }
 
+  func performPrimarySharingAction(
+    using sharingRepository: any HerdSharingRepository,
+    storageMode: HerdStorageMode,
+    conflictReviewStore: HerdSharingConflictReviewStore? = nil
+  ) async {
+    switch sharingAccess?.creationState {
+    case .ready:
+      await startSharing(
+        using: sharingRepository,
+        storageMode: storageMode,
+        conflictReviewStore: conflictReviewStore
+      )
+    case .existingOwnerShare:
+      await manageExistingShare(
+        using: sharingRepository,
+        storageMode: storageMode,
+        conflictReviewStore: conflictReviewStore
+      )
+    case .acceptedParticipantShare, .unresolvedBridgeRecord, .pendingBridgeOperation:
+      _ = await syncSharedBridgeData(
+        using: sharingRepository,
+        storageMode: storageMode,
+        conflictReviewStore: conflictReviewStore
+      )
+    case .notOwnedByCurrentDevice:
+      errorMessage = HerdSharingActionError.herdOwnershipRequired.errorDescription
+      successMessage = nil
+    case .unknown, nil:
+      errorMessage = HerdSharingActionError.sharingStateUnavailable.errorDescription
+      successMessage = nil
+    }
+  }
+
   func startSharing(
     using sharingRepository: any HerdSharingRepository,
     storageMode: HerdStorageMode,
@@ -118,6 +181,34 @@ final class HerdCollaborationViewModel {
 
     do {
       let result = try await StartHerdSharingUseCase(repository: sharingRepository).execute(
+        herd: herd,
+        storageMode: storageMode
+      )
+      sharePresentation = result.sharePresentation
+      successMessage = result.sharePresentation == nil ? "\(result.title): \(result.message)" : nil
+      recordConflictReview(result.conflictReview, in: conflictReviewStore)
+      recordReconciliationReview(result.reconciliationReview)
+      errorMessage = nil
+    } catch {
+      errorMessage = UserVisibleErrorMessage.make(error)
+      successMessage = nil
+      sharePresentation = nil
+    }
+  }
+
+  func manageExistingShare(
+    using sharingRepository: any HerdSharingRepository,
+    storageMode: HerdStorageMode,
+    conflictReviewStore: HerdSharingConflictReviewStore? = nil
+  ) async {
+    isSharingActionInProgress = true
+    defer { isSharingActionInProgress = false }
+
+    do {
+      guard let herd else {
+        throw HerdSharingActionError.shareRootMissing
+      }
+      let result = try await sharingRepository.manageExistingShare(
         herd: herd,
         storageMode: storageMode
       )
