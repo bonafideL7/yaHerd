@@ -150,6 +150,10 @@ struct HerdCollaborationWritePolicySnapshot: Equatable {
       return "No shared-herd write restriction is active."
     }
 
+    if access.bridgeLocation == .conflictingStores {
+      return "Local edits are blocked because the Herd root exists in both owner and accepted shared bridge stores. Resolve the bridge conflict first."
+    }
+
     if access.allowsLocalMutations {
       return "Local edits are allowed for this \(access.locationDescription) access."
     }
@@ -166,6 +170,8 @@ extension HerdSharingAccess {
       true
     case .acceptedSharedStore:
       canExportLocalChangesToBridge
+    case .conflictingStores:
+      false
     }
   }
 }
