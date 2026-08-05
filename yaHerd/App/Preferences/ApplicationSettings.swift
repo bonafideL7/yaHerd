@@ -14,7 +14,6 @@ final class ApplicationSettings {
     @ObservationIgnored private var persistedChangeHandler: (@MainActor (ApplicationSettingKey) -> Void)?
 
     private var syncModeValue: SyncMode
-    private var allowHardDeleteValue: Bool
     private var dashboardEnabledValue: Bool
     private var targetAcresPerHeadDefaultValue: Double
     private var usableAcreagePercentDefaultValue: Int
@@ -30,12 +29,9 @@ final class ApplicationSettings {
     init(store: any ApplicationSettingsStore) {
         self.store = store
         ApplicationSettingsKeyMigrator.migrate(store: store)
+        store.removeObject(forKey: ApplicationSettingKey.allowHardDelete.rawValue)
 
         self.syncModeValue = Self.decodeSyncMode(store.object(forKey: ApplicationSettingKey.syncMode.rawValue))
-        self.allowHardDeleteValue = Self.decodeBool(
-            store.object(forKey: ApplicationSettingKey.allowHardDelete.rawValue),
-            defaultValue: false
-        )
         self.dashboardEnabledValue = Self.decodeBool(
             store.object(forKey: ApplicationSettingKey.dashboardEnabled.rawValue),
             defaultValue: false
@@ -79,8 +75,7 @@ final class ApplicationSettings {
     }
 
     var allowHardDelete: Bool {
-        get { allowHardDeleteValue }
-        set { update(&allowHardDeleteValue, to: newValue, key: .allowHardDelete, encodedValue: newValue) }
+        false
     }
 
     var isDashboardEnabled: Bool {
@@ -173,7 +168,7 @@ final class ApplicationSettings {
         case .syncMode:
             syncMode.rawValue
         case .allowHardDelete:
-            allowHardDelete
+            nil
         case .dashboardEnabled:
             isDashboardEnabled
         case .targetAcresPerHeadDefault:
@@ -196,7 +191,7 @@ final class ApplicationSettings {
         case .syncMode:
             syncMode = Self.decodeSyncMode(value)
         case .allowHardDelete:
-            allowHardDelete = Self.decodeBool(value, defaultValue: false)
+            store.removeObject(forKey: key.rawValue)
         case .dashboardEnabled:
             isDashboardEnabled = Self.decodeBool(value, defaultValue: false)
         case .targetAcresPerHeadDefault:
@@ -224,7 +219,6 @@ final class ApplicationSettings {
 
     func resetToDefaults() {
         syncMode = .localOnly
-        allowHardDelete = false
         isDashboardEnabled = false
         targetAcresPerHeadDefault = Self.defaultTargetAcresPerHead
         usableAcreagePercentDefault = Self.defaultUsableAcreagePercent
@@ -232,11 +226,15 @@ final class ApplicationSettings {
         homeDismissedSetupSuggestionIDs = []
         isHomeSetupSuggestionsExpanded = true
         clearLegacyRecentPastureNames()
+        store.removeObject(forKey: ApplicationSettingKey.allowHardDelete.rawValue)
     }
 
     private func persistNormalizedValues() {
         for key in ApplicationSettingKey.allCases {
-            guard let value = encodedValue(for: key) else { continue }
+            guard let value = encodedValue(for: key) else {
+                store.removeObject(forKey: key.rawValue)
+                continue
+            }
             if key == .legacyRecentPastureNames, legacyRecentPastureNamesValue.isEmpty {
                 store.removeObject(forKey: key.rawValue)
             } else {
