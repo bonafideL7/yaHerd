@@ -7,14 +7,18 @@ import SwiftData
 final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
     private let context: ModelContext
     private let shareAdapter: CloudKitShareAdapter
+    private let creationGuard: any HerdSharingCreationStateGuarding
+    private let creationOperationGate = HerdSharingBridgeOperationGate()
     private var resolvedRepository: CoreDataHerdSharingRepository?
 
     init(
         context: ModelContext,
-        shareAdapter: CloudKitShareAdapter
+        shareAdapter: CloudKitShareAdapter,
+        creationGuard: (any HerdSharingCreationStateGuarding)? = nil
     ) {
         self.context = context
         self.shareAdapter = shareAdapter
+        self.creationGuard = creationGuard ?? HerdSharingCreationStateGuard(context: context)
     }
 
     func fetchSharingReadiness(
@@ -31,7 +35,11 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingAccess {
         try requireICloud(storageMode)
-        return try await repository.fetchSharingAccess(for: herd, storageMode: storageMode)
+        guard let herd else {
+            throw HerdSharingActionError.shareRootMissing
+        }
+        let access = try await repository.fetchSharingAccess(for: herd, storageMode: storageMode)
+        return try await creationGuard.evaluate(herd: herd, access: access)
     }
 
     func startSharing(
@@ -39,6 +47,32 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingActionResult {
         try requireICloud(storageMode)
+
+        await creationOperationGate.acquire()
+        defer { creationOperationGate.release() }
+
+        let access = try await repository.fetchSharingAccess(for: herd, storageMode: storageMode)
+        _ = try await creationGuard.validateNewShare(herd: herd, access: access)
+        return try await repository.startSharing(herd: herd, storageMode: storageMode)
+    }
+
+    func manageExistingShare(
+        herd: HerdSummary,
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult {
+        try requireICloud(storageMode)
+
+        await creationOperationGate.acquire()
+        defer { creationOperationGate.release() }
+
+        let rawAccess = try await repository.fetchSharingAccess(for: herd, storageMode: storageMode)
+        let access = try await creationGuard.evaluate(herd: herd, access: rawAccess)
+        guard access.creationState == .existingOwnerShare else {
+            throw HerdSharingActionError.shareManagementUnavailable
+        }
+
+        // Core Data reuses the existing CKShare when the root is already shared,
+        // so this opens Apple's management UI rather than creating a second share.
         return try await repository.startSharing(herd: herd, storageMode: storageMode)
     }
 
