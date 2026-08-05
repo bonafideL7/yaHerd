@@ -120,6 +120,54 @@ final class CollaborationRevisionReviewCommentTests: XCTestCase {
         XCTAssertNil(snapshot["quantity"])
     }
 
+    func testFieldCheckPastureRelationshipHydrationDoesNotChangeSnapshot() {
+        let pastureID = UUID()
+        let session = FieldCheckSession(
+            notes: "North pasture check",
+            pastureID: pastureID
+        )
+
+        let detachedSnapshot = CollaborationFieldSnapshotProvider.snapshot(
+            for: session
+        )
+
+        XCTAssertNil(detachedSnapshot["pastureID"])
+        XCTAssertEqual(
+            detachedSnapshot["pasturePublicID"],
+            HerdSharingBridgeConflictValue(
+                type: .uuid,
+                encodedValue: pastureID.uuidString
+            )
+        )
+
+        session.pasture = Pasture(publicID: pastureID, name: "North")
+        let hydratedSnapshot = CollaborationFieldSnapshotProvider.snapshot(
+            for: session
+        )
+
+        XCTAssertEqual(hydratedSnapshot, detachedSnapshot)
+    }
+
+    func testFieldCheckPastureRelationshipTakesPrecedenceOverFallbackID() {
+        let fallbackID = UUID()
+        let linkedPasture = Pasture(publicID: UUID(), name: "South")
+        let session = FieldCheckSession(
+            pastureID: fallbackID,
+            pasture: linkedPasture
+        )
+
+        let snapshot = CollaborationFieldSnapshotProvider.snapshot(for: session)
+
+        XCTAssertNil(snapshot["pastureID"])
+        XCTAssertEqual(
+            snapshot["pasturePublicID"],
+            HerdSharingBridgeConflictValue(
+                type: .uuid,
+                encodedValue: linkedPasture.publicID.uuidString
+            )
+        )
+    }
+
     func testSynthesizedDeletionAdvancesLiveRevisionOnce() {
         let publicID = UUID()
         let key = CollaborationAggregateKey(
