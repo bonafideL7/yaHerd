@@ -114,9 +114,8 @@ final class HerdSharingCreationStateGuard: HerdSharingCreationStateGuarding {
       return access.applyingCreationState(.pendingBridgeOperation)
     }
 
-    if access.bridgeLocation == .ownerPrivateStore {
-      return access.applyingCreationState(.unresolvedBridgeRecord)
-    }
+    let ownedCreationState: HerdSharingAccess.CreationState =
+      access.bridgeLocation == .ownerPrivateStore ? .unresolvedBridgeRecord : .ready
 
     if let ownership = ownershipRegistry.ownership(for: herd.publicID) {
       switch ownership {
@@ -126,7 +125,7 @@ final class HerdSharingCreationStateGuard: HerdSharingCreationStateGuarding {
         guard deviceID == identity.deviceID else {
           return access.applyingCreationState(.notOwnedByCurrentDevice)
         }
-        return access.applyingCreationState(.ready)
+        return access.applyingCreationState(ownedCreationState)
       }
     }
 
@@ -144,7 +143,7 @@ final class HerdSharingCreationStateGuard: HerdSharingCreationStateGuarding {
       herdPublicID: herd.publicID,
       deviceID: identity.deviceID
     )
-    return access.applyingCreationState(.ready)
+    return access.applyingCreationState(ownedCreationState)
   }
 
   func validateNewShare(
