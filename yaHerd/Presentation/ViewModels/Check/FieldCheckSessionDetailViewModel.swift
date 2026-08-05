@@ -8,8 +8,36 @@ final class FieldCheckSessionDetailViewModel {
     var notesDraft = ""
     var errorMessage: String?
     var hasLoaded = false
+    private var lastLoadedRevision: UInt64 = 0
 
-    func load(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) {
+    func observe(
+        sessionID: UUID,
+        using repository: any FieldCheckSessionDetailRepository,
+        mutationStream: any ApplicationMutationStreaming,
+        didLoad: @MainActor () -> Void = {}
+    ) async {
+        let startingRevision = mutationStream.fieldCheckRevision
+        if !hasLoaded || lastLoadedRevision < startingRevision {
+            if load(sessionID: sessionID, using: repository) {
+                lastLoadedRevision = startingRevision
+                didLoad()
+            }
+        }
+
+        for await revision in mutationStream.revisions(
+            for: .fieldChecks,
+            after: lastLoadedRevision
+        ) {
+            guard !Task.isCancelled else { return }
+            if refresh(sessionID: sessionID, using: repository) {
+                lastLoadedRevision = revision
+                didLoad()
+            }
+        }
+    }
+
+    @discardableResult
+    func load(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) -> Bool {
         defer { hasLoaded = true }
 
         do {
@@ -17,12 +45,15 @@ final class FieldCheckSessionDetailViewModel {
             detail = loadedDetail
             notesDraft = loadedDetail?.notes ?? ""
             errorMessage = nil
+            return true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
+            return false
         }
     }
 
-    func refresh(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) {
+    @discardableResult
+    func refresh(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) -> Bool {
         do {
             let loadedDetail = try repository.fetchSessionDetail(id: sessionID)
             detail = loadedDetail
@@ -30,8 +61,10 @@ final class FieldCheckSessionDetailViewModel {
                 notesDraft = loadedDetail.notes
             }
             errorMessage = nil
+            return true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
+            return false
         }
     }
 
