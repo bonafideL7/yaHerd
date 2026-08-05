@@ -91,6 +91,9 @@ final class HerdSharingCreationStateGuard: HerdSharingCreationStateGuarding {
     let identity = CollaborationIdentityProvider.current()
 
     switch access.bridgeLocation {
+    case .conflictingStores:
+      return access.applyingCreationState(.conflictingBridgeRecords)
+
     case .acceptedSharedStore:
       ownershipRegistry.recordParticipant(herdPublicID: herd.publicID)
       return access.applyingCreationState(.acceptedParticipantShare)
@@ -156,7 +159,7 @@ final class HerdSharingCreationStateGuard: HerdSharingCreationStateGuarding {
       throw HerdSharingActionError.shareAlreadyExists
     case .acceptedParticipantShare:
       throw HerdSharingActionError.acceptedParticipantShareCannotReshare
-    case .unresolvedBridgeRecord:
+    case .unresolvedBridgeRecord, .conflictingBridgeRecords:
       throw HerdSharingActionError.unresolvedSharingBridge
     case .pendingBridgeOperation:
       throw HerdSharingActionError.sharingOperationPending
