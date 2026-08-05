@@ -16,7 +16,7 @@ final class ApplicationSettingsTests: XCTestCase {
         XCTAssertTrue(settings.isHomeSetupSuggestionsExpanded)
     }
 
-    func testLegacyKeysMigrateToCanonicalKeys() {
+    func testLegacyKeysMigrateToCanonicalKeysAndRetiredHardDeleteIsRemoved() {
         let pastureID = UUID()
         let store = InMemoryApplicationSettingsStore(values: [
             "syncMode": SyncMode.iCloud.rawValue,
@@ -34,7 +34,7 @@ final class ApplicationSettingsTests: XCTestCase {
         let storedValues = store.snapshot()
 
         XCTAssertEqual(settings.syncMode, .iCloud)
-        XCTAssertTrue(settings.allowHardDelete)
+        XCTAssertFalse(settings.allowHardDelete)
         XCTAssertTrue(settings.isDashboardEnabled)
         XCTAssertEqual(settings.targetAcresPerHeadDefault, 4.5)
         XCTAssertEqual(settings.usableAcreagePercentDefault, 85)
@@ -52,6 +52,7 @@ final class ApplicationSettingsTests: XCTestCase {
         )
         XCTAssertNil(storedValues["syncMode"])
         XCTAssertNil(storedValues["allowHardDelete"])
+        XCTAssertNil(storedValues[ApplicationSettingKey.allowHardDelete.rawValue])
         XCTAssertNil(storedValues["recentPastureNames"])
         XCTAssertEqual(
             storedValues[ApplicationSettingsCatalog.schemaVersionKey] as? Int,
@@ -100,7 +101,6 @@ final class ApplicationSettingsTests: XCTestCase {
         XCTAssertEqual(
             Set(ApplicationSettingsCatalog.synchronizedKeys),
             [
-                .allowHardDelete,
                 .dashboardEnabled,
                 .targetAcresPerHeadDefault,
                 .usableAcreagePercentDefault,
@@ -111,6 +111,7 @@ final class ApplicationSettingsTests: XCTestCase {
             Set(ApplicationSettingsCatalog.localKeys),
             [
                 .syncMode,
+                .allowHardDelete,
                 .recentPastureIDs,
                 .homeSetupSuggestionsExpanded,
                 .legacyRecentPastureNames,
@@ -134,22 +135,23 @@ final class ApplicationSettingsTests: XCTestCase {
         let firstSettings = ApplicationSettings(store: InMemoryApplicationSettingsStore())
         let secondSettings = ApplicationSettings(store: InMemoryApplicationSettingsStore())
 
-        firstSettings.allowHardDelete = true
         firstSettings.targetAcresPerHeadDefault = 7.5
 
-        XCTAssertTrue(firstSettings.allowHardDelete)
+        XCTAssertFalse(firstSettings.allowHardDelete)
         XCTAssertEqual(firstSettings.targetAcresPerHeadDefault, 7.5)
         XCTAssertFalse(secondSettings.allowHardDelete)
         XCTAssertEqual(secondSettings.targetAcresPerHeadDefault, 3.0)
     }
-    func testSynchronizerUsesOnlySynchronizedCatalogKeys() {
+
+    func testSynchronizerRemovesRetiredHardDeleteKeysAndUsesOnlySynchronizedCatalogKeys() {
         let recentPastureID = UUID()
         let settings = ApplicationSettings(store: InMemoryApplicationSettingsStore())
         settings.syncMode = .iCloud
-        settings.allowHardDelete = true
         settings.recentPastureIDs = [recentPastureID]
 
         let cloudStore = InMemoryApplicationSettingsCloudStore(values: [
+            ApplicationSettingKey.allowHardDelete.rawValue: true,
+            "allowHardDelete": true,
             "isDashboardEnabled": true,
             "recentPastureNames": "North",
         ])
@@ -162,19 +164,18 @@ final class ApplicationSettingsTests: XCTestCase {
         synchronizer.startIfNeeded(syncMode: .iCloud)
 
         XCTAssertTrue(settings.isDashboardEnabled)
-        XCTAssertEqual(
-            cloudStore.snapshot()[ApplicationSettingKey.allowHardDelete.rawValue] as? Bool,
-            true
-        )
+        XCTAssertFalse(settings.allowHardDelete)
+        XCTAssertNil(cloudStore.snapshot()[ApplicationSettingKey.allowHardDelete.rawValue])
+        XCTAssertNil(cloudStore.snapshot()["allowHardDelete"])
         XCTAssertNil(cloudStore.snapshot()[ApplicationSettingKey.syncMode.rawValue])
         XCTAssertNil(cloudStore.snapshot()[ApplicationSettingKey.recentPastureIDs.rawValue])
         XCTAssertNil(cloudStore.snapshot()["recentPastureNames"])
 
-        settings.allowHardDelete = false
+        settings.isDashboardEnabled = false
         settings.recentPastureIDs = [UUID()]
 
         XCTAssertEqual(
-            cloudStore.snapshot()[ApplicationSettingKey.allowHardDelete.rawValue] as? Bool,
+            cloudStore.snapshot()[ApplicationSettingKey.dashboardEnabled.rawValue] as? Bool,
             false
         )
         XCTAssertNil(cloudStore.snapshot()[ApplicationSettingKey.recentPastureIDs.rawValue])
@@ -185,6 +186,7 @@ final class ApplicationSettingsTests: XCTestCase {
         let settings = ApplicationSettings(store: InMemoryApplicationSettingsStore())
         let cloudStore = InMemoryApplicationSettingsCloudStore(values: [
             ApplicationSettingKey.allowHardDelete.rawValue: true,
+            "allowHardDelete": true,
             "isDashboardEnabled": true,
             "recentPastureNames": "North",
             ApplicationSettingsCatalog.schemaVersionKey: 1,
@@ -197,8 +199,7 @@ final class ApplicationSettingsTests: XCTestCase {
 
         let deletedCount = synchronizer.deleteCloudSettings()
 
-        XCTAssertEqual(deletedCount, 4)
+        XCTAssertEqual(deletedCount, 5)
         XCTAssertTrue(cloudStore.snapshot().isEmpty)
     }
-
 }
