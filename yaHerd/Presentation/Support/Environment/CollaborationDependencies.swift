@@ -35,7 +35,6 @@ nonisolated struct CollaborationDependencies {
         writePolicy: HerdCollaborationWritePolicy,
         conflictReviewStore: HerdSharingConflictReviewStore,
         diagnosticsRepository: any SyncDiagnosticsRepository,
-        publicIDRepairService: any PublicIDRepairService,
         settingsSynchronizer: any AppSettingsSyncing
     ) {
         self.herdRepository = herdRepository
@@ -46,7 +45,7 @@ nonisolated struct CollaborationDependencies {
         self.writePolicy = writePolicy
         self.conflictReviewStore = conflictReviewStore
         self.diagnosticsRepository = diagnosticsRepository
-        self.publicIDRepairService = publicIDRepairService
+        self.publicIDRepairService = diagnosticsRepository.publicIDRepairService
         self.settingsSynchronizer = settingsSynchronizer
     }
 }
