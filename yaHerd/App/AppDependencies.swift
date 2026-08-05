@@ -10,6 +10,7 @@ final class AppDependencies {
 
     let tagColorRepository: any TagColorRepository
     let syncDiagnosticsRepository: any SyncDiagnosticsRepository
+    let publicIDRepairService: any PublicIDRepairService
     let herdRepository: any HerdRepository
     let herdSharingRepository: any HerdSharingRepository
     let applicationMutationCenter: ApplicationMutationCenter
@@ -108,6 +109,7 @@ final class AppDependencies {
             writePolicy: writePolicy
         )
         let syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(context: context)
+        let publicIDRepairService = SwiftDataPublicIDRepairService(modelContainer: modelContainer)
         let baseHerdSharingRepository: any HerdSharingRepository
         if dataAccessMode.isRecoveryMode {
             baseHerdSharingRepository = RecoveryModeHerdSharingRepository()
@@ -160,6 +162,7 @@ final class AppDependencies {
 
         self.tagColorRepository = tagColorRepository
         self.syncDiagnosticsRepository = syncDiagnosticsRepository
+        self.publicIDRepairService = publicIDRepairService
         self.herdRepository = herdRepository
         self.herdSharingRepository = herdSharingRepository
         self.applicationMutationCenter = mutationCenter
