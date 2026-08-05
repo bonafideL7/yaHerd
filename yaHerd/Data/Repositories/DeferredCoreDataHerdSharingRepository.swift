@@ -78,9 +78,19 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
 
         let rawAccess = try await repository.fetchSharingAccess(for: herd, storageMode: storageMode)
         let access = try await creationGuard.evaluate(herd: herd, access: rawAccess)
-        guard access.creationState == .existingOwnerShare
-          || access.creationState == .unresolvedBridgeRecord
-        else {
+
+        switch access.creationState {
+        case .existingOwnerShare, .unresolvedBridgeRecord:
+            break
+        case .pendingBridgeOperation:
+            throw HerdSharingActionError.sharingOperationPending
+        case .notOwnedByCurrentDevice:
+            throw HerdSharingActionError.herdOwnershipRequired
+        case .conflictingBridgeRecords:
+            throw HerdSharingActionError.unresolvedSharingBridge
+        case .unknown:
+            throw HerdSharingActionError.sharingStateUnavailable
+        case .ready, .acceptedParticipantShare:
             throw HerdSharingActionError.shareManagementUnavailable
         }
 
