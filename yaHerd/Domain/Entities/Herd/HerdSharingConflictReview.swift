@@ -365,6 +365,15 @@ enum HerdSharingLocalFieldRestoreSupportCategory: String, Codable, Equatable, Se
   }
 }
 
+/// Revision relationship captured when comparing local and shared aggregate lineage.
+enum HerdSharingRevisionComparison: String, Codable, Equatable, Sendable {
+  case metadataUnavailable
+  case sameRevisionMismatch
+  case localOnly
+  case sharedOnly
+  case divergent
+}
+
 struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable, Sendable {
   var id: String { "\(sourceEntityName)-\(publicID.uuidString)" }
 
@@ -374,12 +383,41 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable, Senda
   let sharedModifiedAt: Date
   var fieldChanges: [HerdSharingUpdatedRecordFieldChange]
 
+  /// Optional so conflict reviews created before revision metadata was introduced
+  /// continue to decode from persisted storage.
+  let lastCommonRevision: Int?
+  let localRevision: Int?
+  let sharedRevision: Int?
+  let localBaseRevision: Int?
+  let sharedBaseRevision: Int?
+  let localModifiedByParticipantID: String?
+  let localModifiedByDeviceID: String?
+  let sharedModifiedByParticipantID: String?
+  let sharedModifiedByDeviceID: String?
+  let revisionComparison: HerdSharingRevisionComparison?
+  let localChangedFields: [String]?
+  let sharedChangedFields: [String]?
+  let canMergeAutomatically: Bool?
+
   enum CodingKeys: String, CodingKey {
     case sourceEntityName
     case publicID
     case localModifiedAt
     case sharedModifiedAt
     case fieldChanges
+    case lastCommonRevision
+    case localRevision
+    case sharedRevision
+    case localBaseRevision
+    case sharedBaseRevision
+    case localModifiedByParticipantID
+    case localModifiedByDeviceID
+    case sharedModifiedByParticipantID
+    case sharedModifiedByDeviceID
+    case revisionComparison
+    case localChangedFields
+    case sharedChangedFields
+    case canMergeAutomatically
   }
 
   init(
@@ -387,13 +425,39 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable, Senda
     publicID: UUID,
     localModifiedAt: Date,
     sharedModifiedAt: Date,
-    fieldChanges: [HerdSharingUpdatedRecordFieldChange] = []
+    fieldChanges: [HerdSharingUpdatedRecordFieldChange] = [],
+    lastCommonRevision: Int? = nil,
+    localRevision: Int? = nil,
+    sharedRevision: Int? = nil,
+    localBaseRevision: Int? = nil,
+    sharedBaseRevision: Int? = nil,
+    localModifiedByParticipantID: String? = nil,
+    localModifiedByDeviceID: String? = nil,
+    sharedModifiedByParticipantID: String? = nil,
+    sharedModifiedByDeviceID: String? = nil,
+    revisionComparison: HerdSharingRevisionComparison? = nil,
+    localChangedFields: [String]? = nil,
+    sharedChangedFields: [String]? = nil,
+    canMergeAutomatically: Bool? = nil
   ) {
     self.sourceEntityName = sourceEntityName
     self.publicID = publicID
     self.localModifiedAt = localModifiedAt
     self.sharedModifiedAt = sharedModifiedAt
     self.fieldChanges = fieldChanges
+    self.lastCommonRevision = lastCommonRevision
+    self.localRevision = localRevision
+    self.sharedRevision = sharedRevision
+    self.localBaseRevision = localBaseRevision
+    self.sharedBaseRevision = sharedBaseRevision
+    self.localModifiedByParticipantID = localModifiedByParticipantID
+    self.localModifiedByDeviceID = localModifiedByDeviceID
+    self.sharedModifiedByParticipantID = sharedModifiedByParticipantID
+    self.sharedModifiedByDeviceID = sharedModifiedByDeviceID
+    self.revisionComparison = revisionComparison
+    self.localChangedFields = localChangedFields
+    self.sharedChangedFields = sharedChangedFields
+    self.canMergeAutomatically = canMergeAutomatically
   }
 
   init(from decoder: Decoder) throws {
@@ -407,6 +471,43 @@ struct HerdSharingUpdatedRecordConflict: Codable, Equatable, Identifiable, Senda
         [HerdSharingUpdatedRecordFieldChange].self,
         forKey: .fieldChanges
       ) ?? []
+    lastCommonRevision = try container.decodeIfPresent(Int.self, forKey: .lastCommonRevision)
+    localRevision = try container.decodeIfPresent(Int.self, forKey: .localRevision)
+    sharedRevision = try container.decodeIfPresent(Int.self, forKey: .sharedRevision)
+    localBaseRevision = try container.decodeIfPresent(Int.self, forKey: .localBaseRevision)
+    sharedBaseRevision = try container.decodeIfPresent(Int.self, forKey: .sharedBaseRevision)
+    localModifiedByParticipantID = try container.decodeIfPresent(
+      String.self,
+      forKey: .localModifiedByParticipantID
+    )
+    localModifiedByDeviceID = try container.decodeIfPresent(
+      String.self,
+      forKey: .localModifiedByDeviceID
+    )
+    sharedModifiedByParticipantID = try container.decodeIfPresent(
+      String.self,
+      forKey: .sharedModifiedByParticipantID
+    )
+    sharedModifiedByDeviceID = try container.decodeIfPresent(
+      String.self,
+      forKey: .sharedModifiedByDeviceID
+    )
+    revisionComparison = try container.decodeIfPresent(
+      HerdSharingRevisionComparison.self,
+      forKey: .revisionComparison
+    )
+    localChangedFields = try container.decodeIfPresent(
+      [String].self,
+      forKey: .localChangedFields
+    )
+    sharedChangedFields = try container.decodeIfPresent(
+      [String].self,
+      forKey: .sharedChangedFields
+    )
+    canMergeAutomatically = try container.decodeIfPresent(
+      Bool.self,
+      forKey: .canMergeAutomatically
+    )
   }
 
   var changedFieldCount: Int { fieldChanges.count }
