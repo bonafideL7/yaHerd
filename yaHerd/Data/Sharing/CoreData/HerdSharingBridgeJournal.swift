@@ -213,6 +213,10 @@ actor HerdSharingBridgeJournal {
     loadDocumentIfNeeded().operations.filter { $0.state != .completed }
   }
 
+  func unfinishedOperations(for herdPublicID: UUID) -> [HerdSharingBridgeOperationRecord] {
+    unfinishedOperations().filter { $0.herdPublicID == herdPublicID }
+  }
+
   private func key(
     herdPublicID: UUID,
     direction: HerdSharingBridgeDirection,
