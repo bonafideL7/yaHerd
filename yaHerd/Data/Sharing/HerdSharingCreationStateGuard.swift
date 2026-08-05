@@ -126,13 +126,16 @@ final class HerdSharingCreationStateGuard: HerdSharingCreationStateGuarding {
       }
     }
 
-    guard try bootstrapOrVerifyLocalOwnership(
+    guard try verifyLocalOwnership(
       herd: herd,
       currentDeviceID: identity.deviceID
     ) else {
       return access.applyingCreationState(.notOwnedByCurrentDevice)
     }
 
+    // Legacy local herds may predate collaboration revision metadata. Once a
+    // unique local root is verified, persist a device ownership marker without
+    // inventing incomplete revision field snapshots.
     ownershipRegistry.recordOwner(
       herdPublicID: herd.publicID,
       deviceID: identity.deviceID
@@ -164,7 +167,7 @@ final class HerdSharingCreationStateGuard: HerdSharingCreationStateGuarding {
     }
   }
 
-  private func bootstrapOrVerifyLocalOwnership(
+  private func verifyLocalOwnership(
     herd: HerdSummary,
     currentDeviceID: String
   ) throws -> Bool {
@@ -196,26 +199,11 @@ final class HerdSharingCreationStateGuard: HerdSharingCreationStateGuarding {
     )
     herdDescriptor.fetchLimit = 2
     let herdModels = try context.fetch(herdDescriptor)
-    guard herdModels.count == 1, let herdModel = herdModels.first else {
+    guard herdModels.count == 1 else {
       throw HerdSharingActionError.bridgeConsistencyFailed(
         "The local Herd root could not be uniquely identified before sharing."
       )
     }
-
-    context.insert(
-      CollaborationRevisionRecord(
-        key: herdModel.collaborationKey,
-        herdPublicID: herdID,
-        metadata: .localBootstrap(
-          fieldValues: [:],
-          modifiedAt: herdModel.updatedAt
-        )
-      )
-    )
-    try PersistenceLog.save(
-      context,
-      operation: "HerdSharingCreationStateGuard.bootstrapOwnership"
-    )
     return true
   }
 }
