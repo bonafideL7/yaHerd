@@ -36,7 +36,7 @@ nonisolated struct CollaborationDependencies {
         conflictReviewStore: HerdSharingConflictReviewStore,
         diagnosticsRepository: any SyncDiagnosticsRepository,
         settingsSynchronizer: any AppSettingsSyncing,
-        mutationStream: any ApplicationMutationStreaming
+        mutationStream: any ApplicationMutationStreaming = InactiveApplicationMutationStream()
     ) {
         self.herdRepository = herdRepository
         self.sharingRepository = sharingRepository
