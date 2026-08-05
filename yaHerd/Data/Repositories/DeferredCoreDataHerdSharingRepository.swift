@@ -78,12 +78,15 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
 
         let rawAccess = try await repository.fetchSharingAccess(for: herd, storageMode: storageMode)
         let access = try await creationGuard.evaluate(herd: herd, access: rawAccess)
-        guard access.creationState == .existingOwnerShare else {
+        guard access.creationState == .existingOwnerShare
+          || access.creationState == .unresolvedBridgeRecord
+        else {
             throw HerdSharingActionError.shareManagementUnavailable
         }
 
-        // Core Data reuses the existing CKShare when the root is already shared,
-        // so this opens Apple's management UI rather than creating a second share.
+        // Core Data reuses an existing CKShare for owners. When an interrupted
+        // first-share attempt left a private bridge root without a CKShare, this
+        // same path resumes that bridge instead of starting from a second root.
         return try await repository.startSharing(herd: herd, storageMode: storageMode)
     }
 
