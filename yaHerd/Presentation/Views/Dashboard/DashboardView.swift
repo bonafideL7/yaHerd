@@ -34,7 +34,16 @@ struct DashboardView: View {
             await loadDashboardData()
         }
         .task {
-            await loadDashboardDataIfNeeded()
+            async let dashboardObservation: Void = viewModel.observe(
+                configuration: configuration,
+                using: dashboardQueryReader,
+                mutationStream: homeDependencies.mutationStream
+            )
+            async let fieldCheckObservation: Void = fieldChecksModel.observe(
+                using: fieldCheckOverviewReader,
+                mutationStream: homeDependencies.mutationStream
+            )
+            _ = await (dashboardObservation, fieldCheckObservation)
         }
         .alert("Dashboard Error", isPresented: errorBinding) {
             Button("OK", role: .cancel) {
@@ -63,21 +72,12 @@ struct DashboardView: View {
         )
     }
 
-    private func loadDashboardDataIfNeeded() async {
-        async let dashboardLoad: Void = viewModel.loadIfNeeded(
-            configuration: configuration,
-            using: dashboardQueryReader
-        )
-        fieldChecksModel.loadIfNeeded(using: fieldCheckOverviewReader)
-        await dashboardLoad
-    }
-
     private func loadDashboardData() async {
-        async let dashboardLoad: Void = viewModel.load(
+        async let dashboardLoad: Bool = viewModel.load(
             configuration: configuration,
             using: dashboardQueryReader
         )
         fieldChecksModel.load(using: fieldCheckOverviewReader)
-        await dashboardLoad
+        _ = await dashboardLoad
     }
 }
