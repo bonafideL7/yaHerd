@@ -7,7 +7,6 @@ struct AnimalListContentList: View {
     let shouldUseSections: Bool
     let batchMode: Bool
     @Binding var selectedAnimalIDs: Set<UUID>
-    let hardDeleteOnSwipe: Bool
     @Binding var collapsedSectionIDs: Set<String>
     let inlineEntryIsActive: Bool
     let inlineEntryIdentity: UUID
