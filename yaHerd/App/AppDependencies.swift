@@ -7,6 +7,7 @@ final class AppDependencies {
     let fieldCheckFeatureDependencies: FieldCheckFeatureDependencies
     let workingSessionFeatureDependencies: WorkingSessionFeatureDependencies
     let homeFeatureDependencies: HomeFeatureDependencies
+    let navigationRestorationValidator: any AppNavigationRestorationValidating
 
     let tagColorRepository: any TagColorRepository
     let syncDiagnosticsRepository: any SyncDiagnosticsRepository
@@ -122,14 +123,12 @@ final class AppDependencies {
             mutationCenter: mutationCenter
         )
 
-        RepositoryAppNavigationRestorationValidator.configureForAppLaunch(
-            RepositoryAppNavigationRestorationValidator(
-                herdRepository: herdRepository,
-                animalRepository: animalRepository,
-                pastureRepository: pastureRepository,
-                fieldCheckRepository: fieldCheckRepository,
-                workingRepository: workingRepository
-            )
+        let navigationRestorationValidator = RepositoryAppNavigationRestorationValidator(
+            herdRepository: herdRepository,
+            animalRepository: animalRepository,
+            pastureRepository: pastureRepository,
+            fieldCheckRepository: fieldCheckRepository,
+            workingRepository: workingRepository
         )
 
         self.animalFeatureDependencies = AnimalFeatureDependencies(
@@ -167,6 +166,7 @@ final class AppDependencies {
             homeWorkingQueryReader: homeWorkingQueryReader,
             mutationStream: mutationCenter
         )
+        self.navigationRestorationValidator = navigationRestorationValidator
 
         self.tagColorRepository = tagColorRepository
         self.syncDiagnosticsRepository = syncDiagnosticsRepository
