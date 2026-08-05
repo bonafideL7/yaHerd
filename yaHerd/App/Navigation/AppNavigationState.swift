@@ -152,6 +152,9 @@ final class HerdRouter {
     func showPastures(_ configuration: PastureListLaunchConfiguration = .all) {
         path.removeAll()
         mode = .pastures
+        animalQuery.clearCriteria()
+        animalQuery.showingFilters = false
+        isSearchPresented = false
         pastureFilter = configuration.filter
     }
 
