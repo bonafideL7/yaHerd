@@ -16,7 +16,7 @@ final class FieldCheckSessionDetailViewModel {
         sessionID: UUID,
         using repository: any FieldCheckSessionDetailRepository,
         mutationStream: any ApplicationMutationStreaming,
-        didLoad: @MainActor () -> Void = {}
+        didLoad: @escaping @MainActor () -> Void = {}
     ) async {
         startObservingIfNeeded(
             sessionID: sessionID,
