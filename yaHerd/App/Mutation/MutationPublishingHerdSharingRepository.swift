@@ -1,5 +1,8 @@
 @MainActor
-final class MutationPublishingHerdSharingRepository: HerdSharingRepository {
+final class MutationPublishingHerdSharingRepository:
+    HerdSharingRepository,
+    ApplicationMutationStreamProviding
+{
     private let base: any HerdSharingRepository
     private let mutationCenter: ApplicationMutationCenter
 
@@ -9,6 +12,10 @@ final class MutationPublishingHerdSharingRepository: HerdSharingRepository {
     ) {
         self.base = base
         self.mutationCenter = mutationCenter
+    }
+
+    var applicationMutationStream: any ApplicationMutationStreaming {
+        mutationCenter
     }
 
     func fetchSharingReadiness(
