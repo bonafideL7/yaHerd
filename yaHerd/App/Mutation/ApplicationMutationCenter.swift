@@ -12,6 +12,7 @@ enum ApplicationFeatureArea: String, CaseIterable, Hashable, Sendable {
 
 enum ApplicationMutationSource: Equatable, Sendable {
     case local(SharedDataMutationReason)
+    case collaborationStateChange
     case sharedStoreImport
 }
 
@@ -76,6 +77,10 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
 
     func recordSuccessfulMutation(reason: SharedDataMutationReason) {
         publish(source: .local(reason))
+    }
+
+    func recordCollaborationStateChange() {
+        publish(source: .collaborationStateChange)
     }
 
     func recordSharedStoreImport() {
@@ -176,6 +181,8 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
 
     private func affectedAreas(for source: ApplicationMutationSource) -> Set<ApplicationFeatureArea> {
         switch source {
+        case .collaborationStateChange:
+            return [.collaboration]
         case .sharedStoreImport:
             return Set(ApplicationFeatureArea.allCases)
         case .local(let reason):
