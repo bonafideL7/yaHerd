@@ -347,7 +347,12 @@ struct AnimalListView: View {
             Text("This permanently deletes \(deleteConfirmationLabel(for: animal)) and cannot be undone.")
         }
         .task {
-            reloadIfNeeded()
+            refreshDerivedState()
+            await viewModel.observe(
+                using: repository,
+                pastureRepository: pastureReferenceDataReader,
+                mutationStream: animalDependencies.mutationStream
+            )
         }
         .onChange(of: searchTextValue) { _, _ in
             refreshDerivedState(debounced: true)
@@ -532,11 +537,6 @@ struct AnimalListView: View {
     private func seedLargeSampleData() {
         sampleDataSeeder.seedLargeSampleDataIfNeeded()
         reload()
-    }
-
-    private func reloadIfNeeded() {
-        viewModel.loadIfNeeded(using: repository, pastureRepository: pastureReferenceDataReader)
-        refreshDerivedState()
     }
 
     private func reload() {
