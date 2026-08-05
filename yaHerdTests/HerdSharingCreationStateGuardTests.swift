@@ -110,6 +110,32 @@ final class HerdSharingCreationStateGuardTests: XCTestCase {
     XCTAssertEqual(access.creationState, .pendingBridgeOperation)
   }
 
+  func testUnfinishedBridgeOperationBlocksInterruptedShareResume() async throws {
+    let container = try TestSupport.makeModelContainer()
+    let herd = try insertHerd(in: container.mainContext)
+    let journal = HerdSharingBridgeJournal(fileURL: makeTemporaryJournalURL())
+    _ = try await journal.begin(
+      herdPublicID: herd.publicID,
+      direction: .importFromBridge,
+      bridgeLocation: "owner private store"
+    )
+    let guardService = HerdSharingCreationStateGuard(
+      context: container.mainContext,
+      journal: journal,
+      ownershipRegistry: RecordingHerdSharingOwnershipRegistry()
+    )
+
+    let access = try await guardService.evaluate(
+      herd: herd.toSummary(),
+      access: .ownerPrivateStore(
+        participantCount: nil,
+        hasActiveSystemShare: false
+      )
+    )
+
+    XCTAssertEqual(access.creationState, .pendingBridgeOperation)
+  }
+
   func testParticipantOwnershipMarkerBlocksShareWhenBridgeHasNotLoadedYet() async throws {
     let container = try TestSupport.makeModelContainer()
     let herd = try insertHerd(in: container.mainContext)
