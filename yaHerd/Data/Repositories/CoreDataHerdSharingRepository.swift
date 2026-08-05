@@ -409,6 +409,49 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     )
   }
 
+  static func makeUpdatedRecordConflict(
+    from conflict: HerdSharingBridgeConflictDetail
+  ) -> HerdSharingUpdatedRecordConflict {
+    HerdSharingUpdatedRecordConflict(
+      sourceEntityName: conflict.sourceEntityName,
+      publicID: conflict.publicID,
+      localModifiedAt: conflict.localModifiedAt,
+      sharedModifiedAt: conflict.sharedModifiedAt,
+      fieldChanges: conflict.fieldChanges.map { fieldChange in
+        HerdSharingUpdatedRecordFieldChange(
+          fieldName: fieldChange.fieldName,
+          localValue: HerdSharingConflictStoredValue(
+            type: HerdSharingConflictStoredValue.ValueType(
+              rawValue: fieldChange.localValue.type.rawValue
+            ) ?? .string,
+            encodedValue: fieldChange.localValue.encodedValue
+          ),
+          sharedValue: HerdSharingConflictStoredValue(
+            type: HerdSharingConflictStoredValue.ValueType(
+              rawValue: fieldChange.sharedValue.type.rawValue
+            ) ?? .string,
+            encodedValue: fieldChange.sharedValue.encodedValue
+          )
+        )
+      },
+      lastCommonRevision: conflict.lastCommonRevision,
+      localRevision: conflict.localRevision,
+      sharedRevision: conflict.sharedRevision,
+      localBaseRevision: conflict.localBaseRevision,
+      sharedBaseRevision: conflict.sharedBaseRevision,
+      localModifiedByParticipantID: conflict.localModifiedByParticipantID,
+      localModifiedByDeviceID: conflict.localModifiedByDeviceID,
+      sharedModifiedByParticipantID: conflict.sharedModifiedByParticipantID,
+      sharedModifiedByDeviceID: conflict.sharedModifiedByDeviceID,
+      revisionComparison: conflict.revisionComparison.flatMap {
+        HerdSharingRevisionComparison(rawValue: $0.rawValue)
+      },
+      localChangedFields: conflict.localChangedFields,
+      sharedChangedFields: conflict.sharedChangedFields,
+      canMergeAutomatically: conflict.canMergeAutomatically
+    )
+  }
+
   private func makeConflictReview(
     from importResult: HerdSharingBridgeImportResult,
     sourceDescription: String
@@ -421,30 +464,8 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       sourceDescription: sourceDescription,
       detectedAt: .now,
       existingLocalRecordUpdateCount: report.existingLocalRecordUpdateCount,
-      updatedRecordConflicts: report.updatedRecordConflicts.map { conflict in
-        HerdSharingUpdatedRecordConflict(
-          sourceEntityName: conflict.sourceEntityName,
-          publicID: conflict.publicID,
-          localModifiedAt: conflict.localModifiedAt,
-          sharedModifiedAt: conflict.sharedModifiedAt,
-          fieldChanges: conflict.fieldChanges.map { fieldChange in
-            HerdSharingUpdatedRecordFieldChange(
-              fieldName: fieldChange.fieldName,
-              localValue: HerdSharingConflictStoredValue(
-                type: HerdSharingConflictStoredValue.ValueType(
-                  rawValue: fieldChange.localValue.type.rawValue
-                ) ?? .string,
-                encodedValue: fieldChange.localValue.encodedValue
-              ),
-              sharedValue: HerdSharingConflictStoredValue(
-                type: HerdSharingConflictStoredValue.ValueType(
-                  rawValue: fieldChange.sharedValue.type.rawValue
-                ) ?? .string,
-                encodedValue: fieldChange.sharedValue.encodedValue
-              )
-            )
-          }
-        )
+      updatedRecordConflicts: report.updatedRecordConflicts.map {
+        Self.makeUpdatedRecordConflict(from: $0)
       },
       preventedDeleteConflicts: report.preventedDeleteConflicts.map { conflict in
         HerdSharingPreventedDeleteConflict(
