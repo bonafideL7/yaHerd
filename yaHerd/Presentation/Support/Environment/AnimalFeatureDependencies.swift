@@ -12,6 +12,7 @@ nonisolated struct AnimalFeatureDependencies {
     let pregnancyCheckAdder: any AnimalPregnancyCheckAdding
     let pastureReferenceReader: any PastureReferenceDataReader
     let sampleDataSeeder: any SampleDataSeeding
+    let mutationStream: any ApplicationMutationStreaming
 
     nonisolated init(
         listRepository: any AnimalListRepository,
@@ -23,7 +24,8 @@ nonisolated struct AnimalFeatureDependencies {
         healthRecordAdder: any AnimalHealthRecordAdding,
         pregnancyCheckAdder: any AnimalPregnancyCheckAdding,
         pastureReferenceReader: any PastureReferenceDataReader,
-        sampleDataSeeder: any SampleDataSeeding
+        sampleDataSeeder: any SampleDataSeeding,
+        mutationStream: any ApplicationMutationStreaming
     ) {
         self.listRepository = listRepository
         self.listQueryReader = listQueryReader
@@ -35,6 +37,7 @@ nonisolated struct AnimalFeatureDependencies {
         self.pregnancyCheckAdder = pregnancyCheckAdder
         self.pastureReferenceReader = pastureReferenceReader
         self.sampleDataSeeder = sampleDataSeeder
+        self.mutationStream = mutationStream
     }
 
     @MainActor
@@ -42,7 +45,8 @@ nonisolated struct AnimalFeatureDependencies {
         repository: any AnimalRepository,
         listQueryReader: any AnimalListQueryReading,
         pastureReferenceReader: any PastureReferenceDataReader,
-        sampleDataSeeder: any SampleDataSeeding
+        sampleDataSeeder: any SampleDataSeeding,
+        mutationStream: any ApplicationMutationStreaming
     ) {
         self.init(
             listRepository: repository,
@@ -54,7 +58,8 @@ nonisolated struct AnimalFeatureDependencies {
             healthRecordAdder: repository,
             pregnancyCheckAdder: repository,
             pastureReferenceReader: pastureReferenceReader,
-            sampleDataSeeder: sampleDataSeeder
+            sampleDataSeeder: sampleDataSeeder,
+            mutationStream: mutationStream
         )
     }
 
@@ -69,7 +74,8 @@ nonisolated struct AnimalFeatureDependencies {
         healthRecordAdder: (any AnimalHealthRecordAdding)? = nil,
         pregnancyCheckAdder: (any AnimalPregnancyCheckAdding)? = nil,
         pastureReferenceReader: (any PastureReferenceDataReader)? = nil,
-        sampleDataSeeder: (any SampleDataSeeding)? = nil
+        sampleDataSeeder: (any SampleDataSeeding)? = nil,
+        mutationStream: (any ApplicationMutationStreaming)? = nil
     ) -> Self {
         let missingRepository = MissingAnimalRepository()
         return Self(
@@ -82,7 +88,8 @@ nonisolated struct AnimalFeatureDependencies {
             healthRecordAdder: healthRecordAdder ?? missingRepository,
             pregnancyCheckAdder: pregnancyCheckAdder ?? missingRepository,
             pastureReferenceReader: pastureReferenceReader ?? MissingAnimalPastureReferenceReader(),
-            sampleDataSeeder: sampleDataSeeder ?? MissingAnimalSampleDataSeeder()
+            sampleDataSeeder: sampleDataSeeder ?? MissingAnimalSampleDataSeeder(),
+            mutationStream: mutationStream ?? InactiveApplicationMutationStream()
         )
     }
 }
@@ -176,7 +183,8 @@ private struct AnimalFeatureDependenciesKey: EnvironmentKey {
             healthRecordAdder: MissingAnimalRepository(),
             pregnancyCheckAdder: MissingAnimalRepository(),
             pastureReferenceReader: MissingAnimalPastureReferenceReader(),
-            sampleDataSeeder: MissingAnimalSampleDataSeeder()
+            sampleDataSeeder: MissingAnimalSampleDataSeeder(),
+            mutationStream: InactiveApplicationMutationStream()
         )
     }
 }
