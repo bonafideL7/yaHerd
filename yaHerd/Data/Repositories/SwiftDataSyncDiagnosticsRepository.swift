@@ -8,10 +8,16 @@ import SwiftData
 
 @MainActor
 final class SwiftDataSyncDiagnosticsRepository: SyncDiagnosticsRepository {
+    let publicIDRepairService: any PublicIDRepairService
+
     private let context: ModelContext
 
-    init(context: ModelContext) {
+    init(
+        context: ModelContext,
+        publicIDRepairService: any PublicIDRepairService
+    ) {
         self.context = context
+        self.publicIDRepairService = publicIDRepairService
     }
 
     func fetchCounts() throws -> SyncDiagnosticsCounts {
