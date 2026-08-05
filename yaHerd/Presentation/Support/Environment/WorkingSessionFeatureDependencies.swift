@@ -15,6 +15,7 @@ nonisolated struct WorkingSessionFeatureDependencies {
     let treatmentTemplateEditorRepository: any WorkingTreatmentTemplateEditorRepository
     let animalSummaryReader: any AnimalSummaryReading
     let pastureReferenceReader: any PastureReferenceDataReader
+    let mutationStream: any ApplicationMutationStreaming
 
     nonisolated init(
         sessionsRepository: any WorkingSessionsRepository,
@@ -29,7 +30,8 @@ nonisolated struct WorkingSessionFeatureDependencies {
         treatmentTemplateCreator: any WorkingTreatmentTemplateCreating,
         treatmentTemplateEditorRepository: any WorkingTreatmentTemplateEditorRepository,
         animalSummaryReader: any AnimalSummaryReading,
-        pastureReferenceReader: any PastureReferenceDataReader
+        pastureReferenceReader: any PastureReferenceDataReader,
+        mutationStream: any ApplicationMutationStreaming
     ) {
         self.sessionsRepository = sessionsRepository
         self.sessionDetailRepository = sessionDetailRepository
@@ -44,13 +46,15 @@ nonisolated struct WorkingSessionFeatureDependencies {
         self.treatmentTemplateEditorRepository = treatmentTemplateEditorRepository
         self.animalSummaryReader = animalSummaryReader
         self.pastureReferenceReader = pastureReferenceReader
+        self.mutationStream = mutationStream
     }
 
     @MainActor
     init(
         repository: any WorkingRepository,
         animalSummaryReader: any AnimalSummaryReading,
-        pastureReferenceReader: any PastureReferenceDataReader
+        pastureReferenceReader: any PastureReferenceDataReader,
+        mutationStream: any ApplicationMutationStreaming
     ) {
         self.init(
             sessionsRepository: repository,
@@ -65,7 +69,8 @@ nonisolated struct WorkingSessionFeatureDependencies {
             treatmentTemplateCreator: repository,
             treatmentTemplateEditorRepository: repository,
             animalSummaryReader: animalSummaryReader,
-            pastureReferenceReader: pastureReferenceReader
+            pastureReferenceReader: pastureReferenceReader,
+            mutationStream: mutationStream
         )
     }
 
@@ -83,7 +88,8 @@ nonisolated struct WorkingSessionFeatureDependencies {
         treatmentTemplateCreator: (any WorkingTreatmentTemplateCreating)? = nil,
         treatmentTemplateEditorRepository: (any WorkingTreatmentTemplateEditorRepository)? = nil,
         animalSummaryReader: (any AnimalSummaryReading)? = nil,
-        pastureReferenceReader: (any PastureReferenceDataReader)? = nil
+        pastureReferenceReader: (any PastureReferenceDataReader)? = nil,
+        mutationStream: (any ApplicationMutationStreaming)? = nil
     ) -> Self {
         let missingRepository = MissingWorkingRepository()
         return Self(
@@ -99,7 +105,8 @@ nonisolated struct WorkingSessionFeatureDependencies {
             treatmentTemplateCreator: treatmentTemplateCreator ?? missingRepository,
             treatmentTemplateEditorRepository: treatmentTemplateEditorRepository ?? missingRepository,
             animalSummaryReader: animalSummaryReader ?? MissingWorkingAnimalSummaryReader(),
-            pastureReferenceReader: pastureReferenceReader ?? MissingWorkingPastureReferenceReader()
+            pastureReferenceReader: pastureReferenceReader ?? MissingWorkingPastureReferenceReader(),
+            mutationStream: mutationStream ?? InactiveApplicationMutationStream()
         )
     }
 }
@@ -227,7 +234,8 @@ private struct WorkingSessionFeatureDependenciesKey: EnvironmentKey {
             treatmentTemplateCreator: MissingWorkingRepository(),
             treatmentTemplateEditorRepository: MissingWorkingRepository(),
             animalSummaryReader: MissingWorkingAnimalSummaryReader(),
-            pastureReferenceReader: MissingWorkingPastureReferenceReader()
+            pastureReferenceReader: MissingWorkingPastureReferenceReader(),
+            mutationStream: InactiveApplicationMutationStream()
         )
     }
 }
