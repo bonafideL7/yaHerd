@@ -71,8 +71,13 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
 
     private struct PlannedReplacement {
         let report: PublicIDRepairReplacement
-        let aggregate: any CollaborativelyMutableAggregate
         let readPublicID: () -> UUID
+        let assignPublicID: (UUID) -> Void
+    }
+
+    private struct PlannedReferenceUpdate {
+        let report: PublicIDRepairReferenceUpdate
+        let readPublicID: () -> UUID?
         let assignPublicID: (UUID) -> Void
     }
 
@@ -156,23 +161,27 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
             loaded: loaded,
             replacementIDByStableRecordIdentifier: plan.replacementIDByStableRecordIdentifier
         )
+        let reportReferenceUpdates = referenceUpdates.map(\.report)
         let backupURL = try createBackup(
             loaded: loaded,
             plan: plan,
-            referenceUpdates: referenceUpdates
+            referenceUpdates: reportReferenceUpdates
         )
 
         do {
             for replacement in plan.replacements {
                 replacement.assignPublicID(replacement.report.replacementPublicID)
             }
+            for update in referenceUpdates {
+                update.assignPublicID(update.report.repairedPublicID)
+            }
 
-            applyRelationshipBackedReferenceUpdates(loaded: loaded)
             try synchronizeRevisionRecords(loaded: loaded)
 
             let validationIssues = try validationIssues(
                 loaded: loaded,
-                replacements: plan.replacements
+                replacements: plan.replacements,
+                referenceUpdates: referenceUpdates
             )
             guard validationIssues.isEmpty else {
                 throw PublicIDRepairError.validationFailed(validationIssues)
@@ -193,7 +202,7 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
                 completedAt: .now,
                 assessment: plan.assessment,
                 replacements: plan.reportReplacements,
-                referenceUpdates: referenceUpdates,
+                referenceUpdates: reportReferenceUpdates,
                 backupFilename: backupURL.lastPathComponent,
                 backupPath: backupURL.path,
                 validationIssueCount: 0
@@ -240,7 +249,7 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
         loaded: LoadedRecords,
         revisionMetadata: [CollaborationAggregateKey: CollaborationRevisionMetadata]
     ) -> RepairPlan {
-        let plans = [
+        var plans = [
             makeEntityPlan(
                 records: loaded.herds,
                 entityType: .herd,
@@ -423,6 +432,17 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
             ),
         ]
 
+        mergeTreatmentItemPlan(
+            makeTreatmentItemPlan(templates: loaded.workingProtocolTemplates),
+            into: &plans,
+            entityType: .workingProtocolTemplate
+        )
+        mergeTreatmentItemPlan(
+            makeTreatmentItemPlan(sessions: loaded.workingSessions),
+            into: &plans,
+            entityType: .workingSession
+        )
+
         return RepairPlan(
             assessment: PublicIDRepairAssessment(
                 scannedAt: .now,
@@ -479,7 +499,6 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
                             retainedPublicID: retainedID,
                             replacementPublicID: replacementID
                         ),
-                        aggregate: duplicate,
                         readPublicID: { publicID(duplicate) },
                         assignPublicID: { assignPublicID(duplicate, $0) }
                     )
@@ -495,6 +514,127 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
                 duplicateRecordCount: replacements.count
             ),
             replacements: replacements
+        )
+    }
+
+    private func makeTreatmentItemPlan(
+        templates: [WorkingProtocolTemplate]
+    ) -> EntityPlan {
+        makeTreatmentItemPlan(
+            owners: templates,
+            entityType: .workingProtocolTemplate,
+            items: { $0.items },
+            assignItems: { $0.items = $1 },
+            ownerDescription: { $0.name.isEmpty ? "Unnamed working protocol" : $0.name }
+        )
+    }
+
+    private func makeTreatmentItemPlan(
+        sessions: [WorkingSession]
+    ) -> EntityPlan {
+        makeTreatmentItemPlan(
+            owners: sessions,
+            entityType: .workingSession,
+            items: { $0.protocolItems },
+            assignItems: { $0.protocolItems = $1 },
+            ownerDescription: {
+                "Working session on \($0.date.formatted(date: .abbreviated, time: .omitted))"
+            }
+        )
+    }
+
+    private func makeTreatmentItemPlan<Owner: PersistentModel>(
+        owners: [Owner],
+        entityType: PublicIDRepairEntityType,
+        items: @escaping (Owner) -> [WorkingProtocolItem],
+        assignItems: @escaping (Owner, [WorkingProtocolItem]) -> Void,
+        ownerDescription: (Owner) -> String
+    ) -> EntityPlan {
+        var duplicateGroupCount = 0
+        var replacements: [PlannedReplacement] = []
+
+        for owner in owners {
+            let currentItems = items(owner)
+            let groups = Dictionary(grouping: currentItems.indices, by: { currentItems[$0].id })
+                .filter { $0.value.count > 1 }
+                .sorted { $0.key.uuidString < $1.key.uuidString }
+            duplicateGroupCount += groups.count
+            var usedIDs = Set(currentItems.map(\.id))
+
+            for (retainedID, indices) in groups {
+                let ordered = indices.sorted { lhs, rhs in
+                    let lhsKey = stableTreatmentItemKey(currentItems[lhs])
+                    let rhsKey = stableTreatmentItemKey(currentItems[rhs])
+                    if lhsKey != rhsKey { return lhsKey < rhsKey }
+                    return lhs < rhs
+                }
+
+                for index in ordered.dropFirst() {
+                    let stableIdentifier = treatmentItemStableIdentifier(owner: owner, index: index)
+                    let replacementID = makeReplacementID(
+                        entityType: entityType,
+                        retainedID: retainedID,
+                        stableRecordIdentifier: stableIdentifier,
+                        usedIDs: &usedIDs
+                    )
+                    let itemName = currentItems[index].name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let description = itemName.isEmpty ? "Unnamed treatment item" : itemName
+                    replacements.append(
+                        PlannedReplacement(
+                            report: PublicIDRepairReplacement(
+                                entityType: entityType,
+                                recordDescription: "\(description) in \(ownerDescription(owner))",
+                                stableRecordIdentifier: stableIdentifier,
+                                retainedPublicID: retainedID,
+                                replacementPublicID: replacementID
+                            ),
+                            readPublicID: {
+                                let ownerItems = items(owner)
+                                guard ownerItems.indices.contains(index) else { return retainedID }
+                                return ownerItems[index].id
+                            },
+                            assignPublicID: { replacementID in
+                                var ownerItems = items(owner)
+                                guard ownerItems.indices.contains(index) else { return }
+                                ownerItems[index].id = replacementID
+                                assignItems(owner, ownerItems)
+                            }
+                        )
+                    )
+                }
+            }
+        }
+
+        return EntityPlan(
+            assessment: PublicIDRepairEntityAssessment(
+                entityType: entityType,
+                scannedRecordCount: 0,
+                duplicateGroupCount: duplicateGroupCount,
+                duplicateRecordCount: replacements.count
+            ),
+            replacements: replacements
+        )
+    }
+
+    private func mergeTreatmentItemPlan(
+        _ itemPlan: EntityPlan,
+        into plans: inout [EntityPlan],
+        entityType: PublicIDRepairEntityType
+    ) {
+        guard let index = plans.firstIndex(where: { $0.assessment.entityType == entityType }) else {
+            return
+        }
+        let base = plans[index]
+        plans[index] = EntityPlan(
+            assessment: PublicIDRepairEntityAssessment(
+                entityType: entityType,
+                scannedRecordCount: base.assessment.scannedRecordCount,
+                duplicateGroupCount: base.assessment.duplicateGroupCount
+                    + itemPlan.assessment.duplicateGroupCount,
+                duplicateRecordCount: base.assessment.duplicateRecordCount
+                    + itemPlan.assessment.duplicateRecordCount
+            ),
+            replacements: base.replacements + itemPlan.replacements
         )
     }
 
@@ -554,7 +694,7 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
         var attempt = 0
         while true {
             let seed = [
-                "yaHerd-public-id-repair-v1",
+                "yaHerd-public-id-repair-v2",
                 entityType.rawValue,
                 retainedID.uuidString.lowercased(),
                 stableRecordIdentifier,
@@ -585,120 +725,340 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
     private func plannedReferenceUpdates(
         loaded: LoadedRecords,
         replacementIDByStableRecordIdentifier: [String: UUID]
-    ) -> [PublicIDRepairReferenceUpdate] {
-        var updates: [PublicIDRepairReferenceUpdate] = []
+    ) -> [PlannedReferenceUpdate] {
+        var updates: [PlannedReferenceUpdate] = []
+
+        for animal in loaded.animals {
+            appendOptionalReferenceUpdate(
+                entityType: .animal,
+                model: animal,
+                recordDescription: animalDescription(animal),
+                fieldName: "tagColorID",
+                currentID: { animal.tagColorID },
+                desiredID: repairedLookupID(
+                    currentID: animal.tagColorID,
+                    sourceHerd: animal.herd,
+                    records: loaded.tagColorDefinitions,
+                    publicID: { $0.id },
+                    herd: { $0.herd },
+                    replacementIDs: replacementIDByStableRecordIdentifier
+                ),
+                assign: { animal.tagColorID = $0 },
+                to: &updates
+            )
+            appendOptionalReferenceUpdate(
+                entityType: .animal,
+                model: animal,
+                recordDescription: animalDescription(animal),
+                fieldName: "statusReferenceID",
+                currentID: { animal.statusReferenceID },
+                desiredID: repairedLookupID(
+                    currentID: animal.statusReferenceID,
+                    sourceHerd: animal.herd,
+                    records: loaded.animalStatusReferences,
+                    publicID: { $0.id },
+                    herd: { $0.herd },
+                    replacementIDs: replacementIDByStableRecordIdentifier
+                ),
+                assign: { animal.statusReferenceID = $0 },
+                to: &updates
+            )
+        }
+
+        for tag in loaded.animalTags {
+            appendOptionalReferenceUpdate(
+                entityType: .animalTag,
+                model: tag,
+                recordDescription: tag.normalizedNumber.isEmpty ? "Untagged animal tag" : "Tag \(tag.normalizedNumber)",
+                fieldName: "colorID",
+                currentID: { tag.colorID },
+                desiredID: repairedLookupID(
+                    currentID: tag.colorID,
+                    sourceHerd: tag.herd ?? tag.animal?.herd,
+                    records: loaded.tagColorDefinitions,
+                    publicID: { $0.id },
+                    herd: { $0.herd },
+                    replacementIDs: replacementIDByStableRecordIdentifier
+                ),
+                assign: { tag.colorID = $0 },
+                to: &updates
+            )
+        }
+
+        for record in loaded.statusRecords {
+            let sourceHerd = record.herd ?? record.animal?.herd
+            appendOptionalReferenceUpdate(
+                entityType: .statusRecord,
+                model: record,
+                recordDescription: "Status change on \(record.date.formatted(date: .abbreviated, time: .omitted))",
+                fieldName: "oldStatusReferenceID",
+                currentID: { record.oldStatusReferenceID },
+                desiredID: repairedLookupID(
+                    currentID: record.oldStatusReferenceID,
+                    sourceHerd: sourceHerd,
+                    records: loaded.animalStatusReferences,
+                    publicID: { $0.id },
+                    herd: { $0.herd },
+                    replacementIDs: replacementIDByStableRecordIdentifier
+                ),
+                assign: { record.oldStatusReferenceID = $0 },
+                to: &updates
+            )
+            appendOptionalReferenceUpdate(
+                entityType: .statusRecord,
+                model: record,
+                recordDescription: "Status change on \(record.date.formatted(date: .abbreviated, time: .omitted))",
+                fieldName: "newStatusReferenceID",
+                currentID: { record.newStatusReferenceID },
+                desiredID: repairedLookupID(
+                    currentID: record.newStatusReferenceID,
+                    sourceHerd: sourceHerd,
+                    records: loaded.animalStatusReferences,
+                    publicID: { $0.id },
+                    herd: { $0.herd },
+                    replacementIDs: replacementIDByStableRecordIdentifier
+                ),
+                assign: { record.newStatusReferenceID = $0 },
+                to: &updates
+            )
+        }
 
         for session in loaded.fieldCheckSessions {
             guard let pasture = session.pasture else { continue }
-            let desiredID = replacementIDByStableRecordIdentifier[stableRecordIdentifier(pasture)]
-                ?? pasture.publicID
-            appendReferenceUpdate(
+            appendOptionalReferenceUpdate(
                 entityType: .fieldCheckSession,
                 model: session,
                 recordDescription: "Field check for \(session.pastureNameSnapshot.isEmpty ? "unknown pasture" : session.pastureNameSnapshot)",
                 fieldName: "pastureID",
-                previousID: session.pastureID,
-                desiredID: desiredID,
+                currentID: { session.pastureID },
+                desiredID: replacementIDByStableRecordIdentifier[stableRecordIdentifier(pasture)]
+                    ?? pasture.publicID,
+                assign: { session.pastureID = $0 },
                 to: &updates
             )
         }
 
         for check in loaded.fieldCheckAnimalChecks {
-            guard let animal = check.animal else { continue }
-            let desiredID = replacementIDByStableRecordIdentifier[stableRecordIdentifier(animal)]
-                ?? animal.publicID
-            appendReferenceUpdate(
+            let sourceHerd = check.herd ?? check.session?.herd ?? check.animal?.herd
+            if let animal = check.animal {
+                appendOptionalReferenceUpdate(
+                    entityType: .fieldCheckAnimalCheck,
+                    model: check,
+                    recordDescription: "Animal check \(check.displayTagNumber)",
+                    fieldName: "animalIDSnapshot",
+                    currentID: { check.animalIDSnapshot },
+                    desiredID: replacementIDByStableRecordIdentifier[stableRecordIdentifier(animal)]
+                        ?? animal.publicID,
+                    assign: { check.animalIDSnapshot = $0 },
+                    to: &updates
+                )
+            }
+            appendOptionalReferenceUpdate(
                 entityType: .fieldCheckAnimalCheck,
                 model: check,
                 recordDescription: "Animal check \(check.displayTagNumber)",
-                fieldName: "animalIDSnapshot",
-                previousID: check.animalIDSnapshot,
-                desiredID: desiredID,
+                fieldName: "rosterTagColorID",
+                currentID: { check.rosterTagColorID },
+                desiredID: repairedLookupID(
+                    currentID: check.rosterTagColorID,
+                    sourceHerd: sourceHerd,
+                    records: loaded.tagColorDefinitions,
+                    publicID: { $0.id },
+                    herd: { $0.herd },
+                    replacementIDs: replacementIDByStableRecordIdentifier
+                ),
+                assign: { check.rosterTagColorID = $0 },
+                to: &updates
+            )
+            appendOptionalReferenceUpdate(
+                entityType: .fieldCheckAnimalCheck,
+                model: check,
+                recordDescription: "Animal check \(check.displayTagNumber)",
+                fieldName: "damRosterTagColorID",
+                currentID: { check.damRosterTagColorID },
+                desiredID: repairedLookupID(
+                    currentID: check.damRosterTagColorID,
+                    sourceHerd: sourceHerd,
+                    records: loaded.tagColorDefinitions,
+                    publicID: { $0.id },
+                    herd: { $0.herd },
+                    replacementIDs: replacementIDByStableRecordIdentifier
+                ),
+                assign: { check.damRosterTagColorID = $0 },
                 to: &updates
             )
         }
 
         for finding in loaded.fieldCheckFindings {
+            let sourceHerd = finding.herd ?? finding.session?.herd ?? finding.animal?.herd
             if let animal = finding.animal {
-                let desiredID = replacementIDByStableRecordIdentifier[stableRecordIdentifier(animal)]
-                    ?? animal.publicID
-                appendReferenceUpdate(
+                appendOptionalReferenceUpdate(
                     entityType: .fieldCheckFinding,
                     model: finding,
                     recordDescription: finding.note.isEmpty ? "Field check finding" : finding.note,
                     fieldName: "animalIDSnapshot",
-                    previousID: finding.animalIDSnapshot,
-                    desiredID: desiredID,
+                    currentID: { finding.animalIDSnapshot },
+                    desiredID: replacementIDByStableRecordIdentifier[stableRecordIdentifier(animal)]
+                        ?? animal.publicID,
+                    assign: { finding.animalIDSnapshot = $0 },
                     to: &updates
                 )
             }
             if let session = finding.session {
-                let desiredID = replacementIDByStableRecordIdentifier[stableRecordIdentifier(session)]
-                    ?? session.publicID
-                appendReferenceUpdate(
+                appendOptionalReferenceUpdate(
                     entityType: .fieldCheckFinding,
                     model: finding,
                     recordDescription: finding.note.isEmpty ? "Field check finding" : finding.note,
                     fieldName: "sessionIDSnapshot",
-                    previousID: finding.sessionIDSnapshot,
-                    desiredID: desiredID,
+                    currentID: { finding.sessionIDSnapshot },
+                    desiredID: replacementIDByStableRecordIdentifier[stableRecordIdentifier(session)]
+                        ?? session.publicID,
+                    assign: { finding.sessionIDSnapshot = $0 },
                     to: &updates
                 )
             }
+            appendOptionalReferenceUpdate(
+                entityType: .fieldCheckFinding,
+                model: finding,
+                recordDescription: finding.note.isEmpty ? "Field check finding" : finding.note,
+                fieldName: "animalDisplayTagColorIDSnapshot",
+                currentID: { finding.animalDisplayTagColorIDSnapshot },
+                desiredID: repairedLookupID(
+                    currentID: finding.animalDisplayTagColorIDSnapshot,
+                    sourceHerd: sourceHerd,
+                    records: loaded.tagColorDefinitions,
+                    publicID: { $0.id },
+                    herd: { $0.herd },
+                    replacementIDs: replacementIDByStableRecordIdentifier
+                ),
+                assign: { finding.animalDisplayTagColorIDSnapshot = $0 },
+                to: &updates
+            )
+        }
+
+        for treatment in loaded.workingTreatmentRecords {
+            guard let desiredID = repairedTreatmentItemID(
+                for: treatment,
+                replacementIDs: replacementIDByStableRecordIdentifier
+            ) else { continue }
+            appendOptionalReferenceUpdate(
+                entityType: .workingTreatmentRecord,
+                model: treatment,
+                recordDescription: treatment.itemName.isEmpty ? "Unnamed treatment" : treatment.itemName,
+                fieldName: "treatmentItemID",
+                currentID: { treatment.treatmentItemID },
+                desiredID: desiredID,
+                assign: { treatment.treatmentItemID = $0 },
+                to: &updates
+            )
         }
 
         return updates.sorted {
-            if $0.entityType != $1.entityType {
-                return $0.entityType.rawValue < $1.entityType.rawValue
+            if $0.report.entityType != $1.report.entityType {
+                return $0.report.entityType.rawValue < $1.report.entityType.rawValue
             }
-            if $0.stableRecordIdentifier != $1.stableRecordIdentifier {
-                return $0.stableRecordIdentifier < $1.stableRecordIdentifier
+            if $0.report.stableRecordIdentifier != $1.report.stableRecordIdentifier {
+                return $0.report.stableRecordIdentifier < $1.report.stableRecordIdentifier
             }
-            return $0.fieldName < $1.fieldName
+            return $0.report.fieldName < $1.report.fieldName
         }
     }
 
-    private func appendReferenceUpdate<Model: PersistentModel>(
+    private func appendOptionalReferenceUpdate<Model: PersistentModel>(
         entityType: PublicIDRepairEntityType,
         model: Model,
         recordDescription: String,
         fieldName: String,
-        previousID: UUID?,
-        desiredID: UUID,
-        to updates: inout [PublicIDRepairReferenceUpdate]
+        currentID: @escaping () -> UUID?,
+        desiredID: UUID?,
+        assign: @escaping (UUID) -> Void,
+        to updates: inout [PlannedReferenceUpdate]
     ) {
-        guard previousID != desiredID else { return }
+        guard let desiredID, currentID() != desiredID else { return }
         updates.append(
-            PublicIDRepairReferenceUpdate(
-                entityType: entityType,
-                recordDescription: recordDescription,
-                stableRecordIdentifier: stableRecordIdentifier(model),
-                fieldName: fieldName,
-                previousPublicID: previousID,
-                repairedPublicID: desiredID
+            PlannedReferenceUpdate(
+                report: PublicIDRepairReferenceUpdate(
+                    entityType: entityType,
+                    recordDescription: recordDescription,
+                    stableRecordIdentifier: stableRecordIdentifier(model),
+                    fieldName: fieldName,
+                    previousPublicID: currentID(),
+                    repairedPublicID: desiredID
+                ),
+                readPublicID: currentID,
+                assignPublicID: assign
             )
         )
     }
 
-    private func applyRelationshipBackedReferenceUpdates(loaded: LoadedRecords) {
-        for session in loaded.fieldCheckSessions {
-            if let pasture = session.pasture {
-                session.pastureID = pasture.publicID
-            }
+    private func repairedLookupID<Model: PersistentModel>(
+        currentID: UUID?,
+        sourceHerd: Herd?,
+        records: [Model],
+        publicID: (Model) -> UUID,
+        herd: (Model) -> Herd?,
+        replacementIDs: [String: UUID]
+    ) -> UUID? {
+        guard let currentID else { return nil }
+        let candidates = records.filter { publicID($0) == currentID }
+        guard candidates.count > 1 else { return currentID }
+
+        let sourceScope = sourceHerd.map(stableRecordIdentifier)
+        let scopedCandidates = candidates.filter {
+            herd($0).map(stableRecordIdentifier) == sourceScope
         }
-        for check in loaded.fieldCheckAnimalChecks {
-            if let animal = check.animal {
-                check.animalIDSnapshot = animal.publicID
-            }
+        let pool = scopedCandidates.isEmpty ? candidates : scopedCandidates
+        if pool.count == 1, let selected = pool.first {
+            return replacementIDs[stableRecordIdentifier(selected)] ?? publicID(selected)
         }
-        for finding in loaded.fieldCheckFindings {
-            if let animal = finding.animal {
-                finding.animalIDSnapshot = animal.publicID
-            }
-            if let session = finding.session {
-                finding.sessionIDSnapshot = session.publicID
-            }
+
+        if let retained = pool.first(where: {
+            (replacementIDs[stableRecordIdentifier($0)] ?? publicID($0)) == currentID
+        }) {
+            return replacementIDs[stableRecordIdentifier(retained)] ?? publicID(retained)
         }
+
+        guard let selected = pool.sorted(by: {
+            stableRecordIdentifier($0) < stableRecordIdentifier($1)
+        }).first else {
+            return currentID
+        }
+        return replacementIDs[stableRecordIdentifier(selected)] ?? publicID(selected)
+    }
+
+    private func repairedTreatmentItemID(
+        for treatment: WorkingTreatmentRecord,
+        replacementIDs: [String: UUID]
+    ) -> UUID? {
+        guard let session = treatment.session else { return nil }
+        let items = session.protocolItems
+        let matchingOriginalID = items.indices.filter {
+            items[$0].id == treatment.treatmentItemID
+        }
+        let normalizedName = normalizedTreatmentName(treatment.itemName)
+        let nameMatches = matchingOriginalID.filter {
+            normalizedTreatmentName(items[$0].name) == normalizedName
+        }
+
+        let selectedIndex: Int?
+        if nameMatches.count == 1 {
+            selectedIndex = nameMatches.first
+        } else if matchingOriginalID.count == 1 {
+            selectedIndex = matchingOriginalID.first
+        } else if let canonical = matchingOriginalID.first(where: {
+            replacementIDs[treatmentItemStableIdentifier(owner: session, index: $0)] == nil
+        }) {
+            selectedIndex = canonical
+        } else {
+            let allNameMatches = items.indices.filter {
+                normalizedTreatmentName(items[$0].name) == normalizedName
+            }
+            selectedIndex = allNameMatches.count == 1 ? allNameMatches.first : nil
+        }
+
+        guard let selectedIndex else { return nil }
+        return replacementIDs[treatmentItemStableIdentifier(owner: session, index: selectedIndex)]
+            ?? items[selectedIndex].id
     }
 
     private func synchronizeRevisionRecords(loaded: LoadedRecords) throws {
@@ -785,7 +1145,8 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
 
     private func validationIssues(
         loaded: LoadedRecords,
-        replacements: [PlannedReplacement]
+        replacements: [PlannedReplacement],
+        referenceUpdates: [PlannedReferenceUpdate]
     ) throws -> [String] {
         var issues: [String] = []
         appendDuplicateValidationIssues(loaded.herds, entityType: .herd, publicID: { $0.publicID }, to: &issues)
@@ -807,26 +1168,28 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
         appendDuplicateValidationIssues(loaded.fieldCheckAnimalChecks, entityType: .fieldCheckAnimalCheck, publicID: { $0.publicID }, to: &issues)
         appendDuplicateValidationIssues(loaded.fieldCheckFindings, entityType: .fieldCheckFinding, publicID: { $0.publicID }, to: &issues)
 
+        appendTreatmentItemDuplicateIssues(
+            templates: loaded.workingProtocolTemplates,
+            to: &issues
+        )
+        appendTreatmentItemDuplicateIssues(
+            sessions: loaded.workingSessions,
+            to: &issues
+        )
+
         for replacement in replacements where replacement.readPublicID() != replacement.report.replacementPublicID {
             issues.append("\(replacement.report.entityType.displayName) replacement did not retain its assigned public ID.")
         }
+        for update in referenceUpdates where update.readPublicID() != update.report.repairedPublicID {
+            issues.append(
+                "\(update.report.entityType.displayName) \(update.report.fieldName) still points to an obsolete public ID."
+            )
+        }
 
-        for session in loaded.fieldCheckSessions {
-            if let pasture = session.pasture, session.pastureID != pasture.publicID {
-                issues.append("A field-check pasture reference still points to an obsolete public ID.")
-            }
-        }
-        for check in loaded.fieldCheckAnimalChecks {
-            if let animal = check.animal, check.animalIDSnapshot != animal.publicID {
-                issues.append("A field-check animal reference still points to an obsolete public ID.")
-            }
-        }
-        for finding in loaded.fieldCheckFindings {
-            if let animal = finding.animal, finding.animalIDSnapshot != animal.publicID {
-                issues.append("A field-check finding animal reference still points to an obsolete public ID.")
-            }
-            if let session = finding.session, finding.sessionIDSnapshot != session.publicID {
-                issues.append("A field-check finding session reference still points to an obsolete public ID.")
+        for treatment in loaded.workingTreatmentRecords {
+            guard let session = treatment.session else { continue }
+            if !session.protocolItems.contains(where: { $0.id == treatment.treatmentItemID }) {
+                issues.append("A working treatment record still points to an obsolete treatment item ID.")
             }
         }
 
@@ -863,13 +1226,35 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
         }
     }
 
+    private func appendTreatmentItemDuplicateIssues(
+        templates: [WorkingProtocolTemplate],
+        to issues: inout [String]
+    ) {
+        for template in templates {
+            if Set(template.items.map(\.id)).count != template.items.count {
+                issues.append("A working protocol template still contains duplicate treatment item IDs.")
+            }
+        }
+    }
+
+    private func appendTreatmentItemDuplicateIssues(
+        sessions: [WorkingSession],
+        to issues: inout [String]
+    ) {
+        for session in sessions {
+            if Set(session.protocolItems.map(\.id)).count != session.protocolItems.count {
+                issues.append("A working session still contains duplicate treatment item IDs.")
+            }
+        }
+    }
+
     private func createBackup(
         loaded: LoadedRecords,
         plan: RepairPlan,
         referenceUpdates: [PublicIDRepairReferenceUpdate]
     ) throws -> URL {
         let backup = PublicIDRepairBackup(
-            formatVersion: 1,
+            formatVersion: 2,
             createdAt: .now,
             assessment: plan.assessment,
             replacements: plan.reportReplacements,
@@ -971,6 +1356,13 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
         return String(describing: model.persistentModelID)
     }
 
+    private func treatmentItemStableIdentifier<Owner: PersistentModel>(
+        owner: Owner,
+        index: Int
+    ) -> String {
+        "\(stableRecordIdentifier(owner))|treatmentItem|\(index)"
+    }
+
     private func stableSnapshotKey(_ snapshot: CollaborationFieldSnapshot) -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -978,6 +1370,20 @@ actor SwiftDataPublicIDRepairService: PublicIDRepairService {
             return String(describing: snapshot)
         }
         return String(data: data, encoding: .utf8) ?? String(describing: snapshot)
+    }
+
+    private func stableTreatmentItemKey(_ item: WorkingProtocolItem) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(item) else {
+            return "\(normalizedTreatmentName(item.name))|\(item.id.uuidString.lowercased())"
+        }
+        return String(data: data, encoding: .utf8)
+            ?? "\(normalizedTreatmentName(item.name))|\(item.id.uuidString.lowercased())"
+    }
+
+    private func normalizedTreatmentName(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     private func publicIDRepairEntityType(
