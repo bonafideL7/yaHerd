@@ -80,14 +80,7 @@ enum CollaborationFieldSnapshotProvider {
                 ]
             )
         case let session as FieldCheckSession:
-            return snapshot(
-                HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: session),
-                preciseDates: [
-                    "startedAt": session.startedAt,
-                    "completedAt": session.completedAt,
-                    "pastureArchivedAt": session.pastureArchivedAt,
-                ]
-            )
+            return fieldCheckSessionSnapshot(session)
         case let check as FieldCheckAnimalCheck:
             return snapshot(
                 HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: check),
@@ -130,6 +123,27 @@ enum CollaborationFieldSnapshotProvider {
         fields["damAnimalPublicID"] = value(animal.damAnimal?.publicID)
         fields["distinguishingFeaturesJSON"] = jsonValue(
             animal.distinguishingFeatures.normalizedDistinguishingFeatureOrder
+        )
+        return fields
+    }
+
+    /// The bridge exports one pasture identifier, preferring the live relationship
+    /// and falling back to the persisted snapshot ID. Keep revision lineage aligned
+    /// so relationship hydration alone does not create a collaborative mutation.
+    private static func fieldCheckSessionSnapshot(
+        _ session: FieldCheckSession
+    ) -> CollaborationFieldSnapshot {
+        var fields = snapshot(
+            HerdSharingSwiftDataImportEngine.conflictFieldSnapshot(for: session),
+            preciseDates: [
+                "startedAt": session.startedAt,
+                "completedAt": session.completedAt,
+                "pastureArchivedAt": session.pastureArchivedAt,
+            ],
+            excluding: ["pastureID", "pasturePublicID"]
+        )
+        fields["pasturePublicID"] = value(
+            session.pasture?.publicID ?? session.pastureID
         )
         return fields
     }
