@@ -7,7 +7,7 @@ import SwiftData
 final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
     private let repositoryFactory: @MainActor () -> any HerdSharingRepository
     private let creationGuard: any HerdSharingCreationStateGuarding
-    private let creationOperationGate = HerdSharingBridgeOperationGate()
+    private let sharingOperationGate = HerdSharingBridgeOperationGate()
     private var resolvedRepository: (any HerdSharingRepository)?
 
     init(
@@ -59,8 +59,8 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
     ) async throws -> HerdSharingActionResult {
         try requireICloud(storageMode)
 
-        await creationOperationGate.acquire()
-        defer { creationOperationGate.release() }
+        await sharingOperationGate.acquire()
+        defer { sharingOperationGate.release() }
 
         let access = try await repository.fetchSharingAccess(for: herd, storageMode: storageMode)
         _ = try await creationGuard.validateNewShare(herd: herd, access: access)
@@ -73,8 +73,8 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
     ) async throws -> HerdSharingActionResult {
         try requireICloud(storageMode)
 
-        await creationOperationGate.acquire()
-        defer { creationOperationGate.release() }
+        await sharingOperationGate.acquire()
+        defer { sharingOperationGate.release() }
 
         let rawAccess = try await repository.fetchSharingAccess(for: herd, storageMode: storageMode)
         let access = try await creationGuard.evaluate(herd: herd, access: rawAccess)
@@ -105,6 +105,10 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingActionResult {
         try requireICloud(storageMode)
+
+        await sharingOperationGate.acquire()
+        defer { sharingOperationGate.release() }
+
         return try await repository.acceptShareInvitation(invitation, storageMode: storageMode)
     }
 
@@ -113,6 +117,10 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingActionResult {
         try requireICloud(storageMode)
+
+        await sharingOperationGate.acquire()
+        defer { sharingOperationGate.release() }
+
         return try await repository.importSharedBridgeData(herd: herd, storageMode: storageMode)
     }
 
@@ -121,6 +129,10 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingActionResult {
         try requireICloud(storageMode)
+
+        await sharingOperationGate.acquire()
+        defer { sharingOperationGate.release() }
+
         return try await repository.acceptPreventedSharedDeletes(in: review, storageMode: storageMode)
     }
 
@@ -130,6 +142,10 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingActionResult {
         try requireICloud(storageMode)
+
+        await sharingOperationGate.acquire()
+        defer { sharingOperationGate.release() }
+
         return try await repository.restoreLocalFields(
             selections,
             in: review,
@@ -142,6 +158,10 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingActionResult {
         try requireICloud(storageMode)
+
+        await sharingOperationGate.acquire()
+        defer { sharingOperationGate.release() }
+
         return try await repository.syncSharedBridgeData(herd: herd, storageMode: storageMode)
     }
 
