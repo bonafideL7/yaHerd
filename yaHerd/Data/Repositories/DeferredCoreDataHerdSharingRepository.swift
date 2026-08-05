@@ -5,20 +5,31 @@ import SwiftData
 /// can evaluate collaboration readiness without requiring CloudKit entitlements.
 @MainActor
 final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
-    private let context: ModelContext
-    private let shareAdapter: CloudKitShareAdapter
+    private let repositoryFactory: @MainActor () -> any HerdSharingRepository
     private let creationGuard: any HerdSharingCreationStateGuarding
     private let creationOperationGate = HerdSharingBridgeOperationGate()
-    private var resolvedRepository: CoreDataHerdSharingRepository?
+    private var resolvedRepository: (any HerdSharingRepository)?
 
     init(
         context: ModelContext,
         shareAdapter: CloudKitShareAdapter,
         creationGuard: (any HerdSharingCreationStateGuarding)? = nil
     ) {
-        self.context = context
-        self.shareAdapter = shareAdapter
+        repositoryFactory = {
+            CoreDataHerdSharingRepository(
+                context: context,
+                shareAdapter: shareAdapter
+            )
+        }
         self.creationGuard = creationGuard ?? HerdSharingCreationStateGuard(context: context)
+    }
+
+    init(
+        repository: any HerdSharingRepository,
+        creationGuard: any HerdSharingCreationStateGuarding
+    ) {
+        repositoryFactory = { repository }
+        self.creationGuard = creationGuard
     }
 
     func fetchSharingReadiness(
@@ -121,12 +132,9 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository {
         return try await repository.syncSharedBridgeData(herd: herd, storageMode: storageMode)
     }
 
-    private var repository: CoreDataHerdSharingRepository {
+    private var repository: any HerdSharingRepository {
         if let resolvedRepository { return resolvedRepository }
-        let repository = CoreDataHerdSharingRepository(
-            context: context,
-            shareAdapter: shareAdapter
-        )
+        let repository = repositoryFactory()
         resolvedRepository = repository
         return repository
     }
