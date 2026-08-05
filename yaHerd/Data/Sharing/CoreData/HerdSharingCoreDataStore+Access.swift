@@ -15,7 +15,10 @@ extension HerdSharingCoreDataStore {
       let privateHerdRecord = try fetchSharedHerdRecord(publicID: herd.publicID, in: privateStore)
     {
       let share = try existingShare(for: privateHerdRecord)
-      return .ownerPrivateStore(participantCount: share?.participants.count)
+      return .ownerPrivateStore(
+        participantCount: share?.participants.count,
+        hasActiveSystemShare: share != nil
+      )
     }
 
     if let sharedStore,
