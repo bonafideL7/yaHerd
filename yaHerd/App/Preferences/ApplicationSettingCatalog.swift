@@ -18,14 +18,14 @@ nonisolated enum ApplicationSettingKey: String, CaseIterable, Sendable {
 
     var scope: ApplicationSettingScope {
         switch self {
-        case .allowHardDelete,
-             .dashboardEnabled,
+        case .dashboardEnabled,
              .targetAcresPerHeadDefault,
              .usableAcreagePercentDefault,
              .homeDismissedSetupSuggestionIDs:
             .synchronized
 
         case .syncMode,
+             .allowHardDelete,
              .recentPastureIDs,
              .homeSetupSuggestionsExpanded,
              .legacyRecentPastureNames:
@@ -69,5 +69,9 @@ nonisolated enum ApplicationSettingsCatalog {
         $0.scope == .local
     }
 
-    static let deprecatedCloudKeys = ["recentPastureNames"]
+    static let deprecatedCloudKeys = [
+        ApplicationSettingKey.allowHardDelete.rawValue,
+        "allowHardDelete",
+        "recentPastureNames",
+    ]
 }
