@@ -275,8 +275,8 @@ enum WorkingQueueAnimalQueryEngine {
             let filterQuery = AnimalQuery(
                 filter: query.filter,
                 sortOrder: query.sortOrder,
-                showRemovedStatuses: query.showRemovedStatuses,
-                showArchivedRecords: query.showArchivedRecords
+                showRemovedStatuses: true,
+                showArchivedRecords: true
             )
             filterMatchingAnimalIDs = Set(
                 AnimalQueryEngine.apply(
