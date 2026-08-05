@@ -108,8 +108,11 @@ final class AppDependencies {
             mutationRecorder: mutationPipeline,
             writePolicy: writePolicy
         )
-        let syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(context: context)
         let publicIDRepairService = SwiftDataPublicIDRepairService(modelContainer: modelContainer)
+        let syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(
+            context: context,
+            publicIDRepairService: publicIDRepairService
+        )
         let baseHerdSharingRepository: any HerdSharingRepository
         if dataAccessMode.isRecoveryMode {
             baseHerdSharingRepository = RecoveryModeHerdSharingRepository()
