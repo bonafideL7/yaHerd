@@ -29,20 +29,24 @@ The navigation boundary uses Codable route values:
 - `AppNavigationRequest`
   - neutral input for deep links, notifications, widgets, shortcuts, and tests
 
-A new route must remain `Hashable` and `Codable`, and it must be represented in `AppNavigationSnapshot` when it affects restoration.
+A new route must remain `Hashable` and `Codable`. Only durable route state should be represented in `AppNavigationSnapshot`.
 
 ## Restoration
 
-`RootAppView` stores the current `AppNavigationSnapshot` in scene storage under `navigation.restoration.v1`. The snapshot is versioned. Unknown versions are ignored rather than partially restored.
+`RootAppView` stores the current `AppNavigationSnapshot` in scene storage under `navigation.restoration.v1`. The payload is versioned. The current decoder migrates the original version 1 payload and rejects unsupported future versions rather than partially restoring them.
 
 The restored state includes:
 
 - selected tab
+- current herd identifier
 - YaHerd and Search navigation paths
 - herd mode, search, sort, and filters
-- active workflow route
-- app sheet
-- full-screen workflow
+- animal and pasture identifiers that still resolve in the current herd
+- an active persisted field-check or working-session identifier
+
+Restoration does not preserve app sheets, confirmation dialogs, temporary menus, unsaved creation forms, generic workflow list presentations, or transient workflow detail such as a focused finding.
+
+Before restoring a record route, the app queries the corresponding repository. Missing animal and pasture destinations fall back to their existing list context. A full-screen field-check or working workflow is restored only when its session still exists and remains active. Missing, deleted, completed, finished, or cancelled sessions fall back to the relevant session list.
 
 ## Deep links
 
