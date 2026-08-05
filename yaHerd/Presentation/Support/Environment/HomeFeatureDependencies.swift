@@ -40,7 +40,7 @@ nonisolated struct HomeFeatureDependencies {
             dashboardQueryReader: dashboardQueryReader ?? MissingHomeDashboardQueryReader(),
             homeFieldCheckQueryReader: homeFieldCheckQueryReader ?? MissingHomeFieldCheckQueryReader(),
             homeWorkingQueryReader: homeWorkingQueryReader ?? MissingHomeWorkingQueryReader(),
-            mutationStream: mutationStream ?? MissingHomeMutationStream()
+            mutationStream: mutationStream ?? InactiveApplicationMutationStream()
         )
     }
 }
@@ -112,18 +112,6 @@ private struct MissingHomeWorkingQueryReader: HomeWorkingQueryReading {
     }
 }
 
-private struct MissingHomeMutationStream: ApplicationMutationStreaming {
-    nonisolated init(environmentFallback _: Void = ()) {}
-
-    var currentSequence: UInt64 { 0 }
-
-    func events(after sequence: UInt64) -> AsyncStream<ApplicationMutationEvent> {
-        AsyncStream { continuation in
-            continuation.finish()
-        }
-    }
-}
-
 private struct HomeFeatureDependenciesKey: EnvironmentKey {
     static var defaultValue: HomeFeatureDependencies {
         HomeFeatureDependencies(
@@ -132,7 +120,7 @@ private struct HomeFeatureDependenciesKey: EnvironmentKey {
             dashboardQueryReader: MissingHomeDashboardQueryReader(),
             homeFieldCheckQueryReader: MissingHomeFieldCheckQueryReader(),
             homeWorkingQueryReader: MissingHomeWorkingQueryReader(),
-            mutationStream: MissingHomeMutationStream()
+            mutationStream: InactiveApplicationMutationStream()
         )
     }
 }
