@@ -809,7 +809,7 @@ struct HerdCollaborationView: View {
       }
 
       Text(
-        "Exports the current SwiftData herd into the Core Data sharing bridge, then imports available accepted shared records back into SwiftData. This now also runs automatically on app launch and when the app returns to the foreground, with debounce/throttle protection so CloudKit is not hammered."
+        "Imports available shared bridge changes into SwiftData first, then exports the merged SwiftData herd back to the Core Data sharing bridge when access permits. This protects collaborator edits from being overwritten. Synchronization also runs automatically on app launch and when the app returns to the foreground, with debounce/throttle protection so CloudKit is not hammered."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
