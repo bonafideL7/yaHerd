@@ -43,16 +43,54 @@ final class HerdCollaborationViewModel {
   }
 
   var primarySharingActionTitle: String {
-    sharingAccess?.creationState.primaryActionTitle ?? "Checking Sharing State"
+    switch sharingAccess?.creationState {
+    case .ready:
+      "Share Herd"
+    case .existingOwnerShare:
+      "Manage Herd Sharing"
+    case .acceptedParticipantShare:
+      "Sync Shared Herd"
+    case .unresolvedBridgeRecord, .pendingBridgeOperation:
+      "Resolve Sharing State"
+    case .notOwnedByCurrentDevice:
+      "Sharing Unavailable"
+    case .unknown, nil:
+      "Checking Sharing State"
+    }
   }
 
   var primarySharingActionSystemImage: String {
-    sharingAccess?.creationState.primaryActionSystemImage ?? "hourglass"
+    switch sharingAccess?.creationState {
+    case .ready:
+      "square.and.arrow.up"
+    case .existingOwnerShare:
+      "person.2.badge.gearshape"
+    case .acceptedParticipantShare, .unresolvedBridgeRecord, .pendingBridgeOperation:
+      "arrow.triangle.2.circlepath.icloud"
+    case .notOwnedByCurrentDevice:
+      "person.crop.circle.badge.exclamationmark"
+    case .unknown, nil:
+      "hourglass"
+    }
   }
 
   var primarySharingActionMessage: String {
-    sharingAccess?.creationState.message
-      ?? "Refresh sharing access before creating or managing a CloudKit share."
+    switch sharingAccess?.creationState {
+    case .ready:
+      "No existing share, participant bridge, unresolved bridge record, or pending bridge operation was found. This device owns the local herd data and can create a new share."
+    case .existingOwnerShare:
+      "This herd already has an owner CloudKit share. Open sharing management instead of creating another share."
+    case .acceptedParticipantShare:
+      "This device participates in an accepted CloudKit share. Synchronize the shared herd instead of creating a second share."
+    case .unresolvedBridgeRecord:
+      "A bridge record exists without a valid owner share. Synchronize or repair the bridge before attempting to create a share."
+    case .pendingBridgeOperation:
+      "A previous bridge import, export, or reconciliation operation is unfinished. Resolve it before creating a share."
+    case .notOwnedByCurrentDevice:
+      "This device cannot prove ownership of the local herd root. It cannot create a CloudKit share for data owned by another device or participant."
+    case .unknown, nil:
+      "Refresh sharing access before creating or managing a CloudKit share."
+    }
   }
 
   func load(
