@@ -9,6 +9,7 @@ import SwiftUI
 struct SyncDiagnosticsView: View {
     @Environment(\.collaborationDependencies) private var collaborationDependencies
     private var diagnosticsRepository: (any SyncDiagnosticsRepository)? { collaborationDependencies.diagnosticsRepository }
+    private var publicIDRepairService: (any PublicIDRepairService)? { collaborationDependencies.publicIDRepairService }
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(\.recoveryModeController) private var recoveryModeController
     @Environment(ApplicationSettings.self) private var applicationSettings
@@ -25,6 +26,12 @@ struct SyncDiagnosticsView: View {
     @State private var resetResultMessage: String?
     @State private var isRunningSchemaCheck = false
     @State private var schemaCheckResult: CloudKitSchemaCheckResult?
+    @State private var publicIDAssessment: PublicIDRepairAssessment?
+    @State private var publicIDRepairReport: PublicIDRepairReport?
+    @State private var publicIDRepairError: String?
+    @State private var isScanningPublicIDs = false
+    @State private var isRepairingPublicIDs = false
+    @State private var isShowingPublicIDRepairConfirmation = false
 
     init() {
         self.checker = ICloudAvailabilityChecker()
@@ -96,6 +103,67 @@ struct SyncDiagnosticsView: View {
                 }
             }
 
+            Section("Public ID Integrity") {
+                Button {
+                    scanPublicIDs()
+                } label: {
+                    if isScanningPublicIDs {
+                        Label("Scanning Public IDs…", systemImage: "hourglass")
+                    } else {
+                        Label("Scan for Duplicate Public IDs", systemImage: "magnifyingglass")
+                    }
+                }
+                .disabled(isScanningPublicIDs || isRepairingPublicIDs)
+
+                Text("Checks every entity type used by herd sharing. The scan does not change data.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let assessment = publicIDAssessment {
+                    LabeledContent("Records Scanned", value: assessment.totalScannedRecordCount.formatted())
+                    LabeledContent("Duplicate Groups", value: assessment.duplicateGroupCount.formatted())
+                    LabeledContent("Records Requiring New IDs", value: assessment.duplicateRecordCount.formatted())
+
+                    if assessment.hasDuplicates {
+                        Button {
+                            isShowingPublicIDRepairConfirmation = true
+                        } label: {
+                            if isRepairingPublicIDs {
+                                Label("Repairing Duplicate IDs…", systemImage: "hourglass")
+                            } else {
+                                Label("Back Up and Repair Duplicate IDs", systemImage: "wrench.and.screwdriver")
+                            }
+                        }
+                        .disabled(
+                            isRepairingPublicIDs
+                                || isScanningPublicIDs
+                                || dataAccessMode.isRecoveryMode
+                        )
+
+                        Text("Creates a JSON backup before changing any IDs, repairs related references, and validates the result before saving.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Label("No duplicate public IDs found", systemImage: "checkmark.circle")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let publicIDRepairReport {
+                    Text(publicIDRepairReport.userReadableSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+
+                if let publicIDRepairError {
+                    Text(publicIDRepairError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                }
+            }
+
             Section("CloudKit Schema Check") {
                 Button {
                     runSchemaCheck()
@@ -163,6 +231,18 @@ struct SyncDiagnosticsView: View {
             await refreshDiagnostics()
         }
         .confirmationDialog(
+            "Repair Duplicate Public IDs?",
+            isPresented: $isShowingPublicIDRepairConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Back Up and Repair", role: .destructive) {
+                repairPublicIDs()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("yaHerd will create a backup, assign deterministic replacement IDs, update related references, and validate the entire repair before saving. If validation fails, the changes are rolled back.")
+        }
+        .confirmationDialog(
             "Delete iCloud Sync Data?",
             isPresented: $isShowingDeleteConfirmation,
             titleVisibility: .visible
@@ -173,6 +253,49 @@ struct SyncDiagnosticsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This is for development testing. It deletes yaHerd CloudKit herd data zones and synced app settings from iCloud. Local data on this device is not deleted. Restart yaHerd afterward.")
+        }
+    }
+
+    private func scanPublicIDs() {
+        guard let publicIDRepairService else {
+            publicIDRepairError = "The public-ID repair service is not configured."
+            return
+        }
+
+        isScanningPublicIDs = true
+        publicIDRepairError = nil
+        publicIDRepairReport = nil
+
+        Task { @MainActor in
+            do {
+                publicIDAssessment = try await publicIDRepairService.scan()
+            } catch {
+                publicIDRepairError = "Public-ID scan failed: \(UserVisibleErrorMessage.make(error))"
+            }
+            isScanningPublicIDs = false
+        }
+    }
+
+    private func repairPublicIDs() {
+        guard let publicIDRepairService else {
+            publicIDRepairError = "The public-ID repair service is not configured."
+            return
+        }
+
+        isRepairingPublicIDs = true
+        publicIDRepairError = nil
+        publicIDRepairReport = nil
+
+        Task { @MainActor in
+            do {
+                let report = try await publicIDRepairService.repair()
+                publicIDRepairReport = report
+                publicIDAssessment = try await publicIDRepairService.scan()
+                loadCounts()
+            } catch {
+                publicIDRepairError = "Public-ID repair failed: \(UserVisibleErrorMessage.make(error))"
+            }
+            isRepairingPublicIDs = false
         }
     }
 
@@ -212,7 +335,6 @@ struct SyncDiagnosticsView: View {
             isRunningSchemaCheck = false
         }
     }
-
 
     private var swiftDataCloudKitDescription: String {
         launchSnapshot.actualStorageMode == .iCloud
