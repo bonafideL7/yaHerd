@@ -105,16 +105,17 @@ final class HerdSharingCreationStateGuard: HerdSharingCreationStateGuarding {
       )
       return access.applyingCreationState(.existingOwnerShare)
 
-    case .ownerPrivateStore:
-      return access.applyingCreationState(.unresolvedBridgeRecord)
-
-    case .bridgeRecordMissing:
+    case .ownerPrivateStore, .bridgeRecordMissing:
       break
     }
 
     let unfinishedOperations = await journal.unfinishedOperations(for: herd.publicID)
     guard unfinishedOperations.isEmpty else {
       return access.applyingCreationState(.pendingBridgeOperation)
+    }
+
+    if access.bridgeLocation == .ownerPrivateStore {
+      return access.applyingCreationState(.unresolvedBridgeRecord)
     }
 
     if let ownership = ownershipRegistry.ownership(for: herd.publicID) {
