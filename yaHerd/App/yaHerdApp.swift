@@ -336,6 +336,9 @@ private struct RunningAppView: View {
 
     var body: some View {
         RootAppView(storageError: runtime.storageError, dataAccessMode: runtime.dataAccessMode)
+            .recoveryModeScenePresentation(
+                controller: runtime.dataAccessMode.isRecoveryMode ? recoveryModeController : nil
+            )
             .environment(applicationSettings)
             .environmentObject(tagColorLibrary)
             .environment(\.appDataAccessMode, runtime.dataAccessMode)
@@ -348,19 +351,13 @@ private struct RunningAppView: View {
             .environment(\.collaborationDependencies, collaborationDependencies)
             .modelContainer(runtime.modelContainer)
             .task {
-                if runtime.dataAccessMode.isRecoveryMode {
-                    RecoveryModeBannerOverlay.shared.show(controller: recoveryModeController)
-                } else {
-                    await herdSharingSyncCoordinator.refreshSharingAccessNow(trigger: .appLaunch)
-                    herdSharingSyncCoordinator.requestAutomaticSync(trigger: .appLaunch)
-                }
+                guard runtime.dataAccessMode.allowsDataMutations else { return }
+                await herdSharingSyncCoordinator.refreshSharingAccessNow(trigger: .appLaunch)
+                herdSharingSyncCoordinator.requestAutomaticSync(trigger: .appLaunch)
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
-                    guard runtime.dataAccessMode.allowsDataMutations else {
-                        RecoveryModeBannerOverlay.shared.show(controller: recoveryModeController)
-                        return
-                    }
+                    guard runtime.dataAccessMode.allowsDataMutations else { return }
                     appSettingsSynchronizer.refreshFromICloudIfStarted()
                     tagColorLibrary.refresh()
                     Task { @MainActor in
@@ -417,13 +414,6 @@ private struct RootAppView: View {
     var body: some View {
         MainTabView()
             .environment(navigation)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if dataAccessMode.isRecoveryMode {
-                    Color.clear
-                        .frame(height: RecoveryModePersistentBanner.reservedHeight)
-                        .accessibilityHidden(true)
-                }
-            }
             .task {
                 guard !hasRestoredNavigation else { return }
                 navigation.restore(from: navigationRestorationPayload)
