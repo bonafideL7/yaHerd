@@ -50,7 +50,9 @@ final class HerdCollaborationViewModel {
       "Manage Herd Sharing"
     case .acceptedParticipantShare:
       "Sync Shared Herd"
-    case .unresolvedBridgeRecord, .pendingBridgeOperation:
+    case .unresolvedBridgeRecord:
+      "Resume Herd Sharing"
+    case .pendingBridgeOperation:
       "Resolve Sharing State"
     case .notOwnedByCurrentDevice:
       "Sharing Unavailable"
@@ -65,7 +67,9 @@ final class HerdCollaborationViewModel {
       "square.and.arrow.up"
     case .existingOwnerShare:
       "person.2.badge.gearshape"
-    case .acceptedParticipantShare, .unresolvedBridgeRecord, .pendingBridgeOperation:
+    case .unresolvedBridgeRecord:
+      "arrow.clockwise.icloud"
+    case .acceptedParticipantShare, .pendingBridgeOperation:
       "arrow.triangle.2.circlepath.icloud"
     case .notOwnedByCurrentDevice:
       "person.crop.circle.badge.exclamationmark"
@@ -83,7 +87,7 @@ final class HerdCollaborationViewModel {
     case .acceptedParticipantShare:
       "This device participates in an accepted CloudKit share. Synchronize the shared herd instead of creating a second share."
     case .unresolvedBridgeRecord:
-      "A bridge record exists without a valid owner share. Synchronize or repair the bridge before attempting to create a share."
+      "An interrupted sharing attempt left the owner bridge root without a CloudKit share. Resume that existing bridge instead of creating a second root."
     case .pendingBridgeOperation:
       "A previous bridge import, export, or reconciliation operation is unfinished. Resolve it before creating a share."
     case .notOwnedByCurrentDevice:
@@ -188,13 +192,13 @@ final class HerdCollaborationViewModel {
         storageMode: storageMode,
         conflictReviewStore: conflictReviewStore
       )
-    case .existingOwnerShare:
+    case .existingOwnerShare, .unresolvedBridgeRecord:
       await manageExistingShare(
         using: sharingRepository,
         storageMode: storageMode,
         conflictReviewStore: conflictReviewStore
       )
-    case .acceptedParticipantShare, .unresolvedBridgeRecord, .pendingBridgeOperation:
+    case .acceptedParticipantShare, .pendingBridgeOperation:
       _ = await syncSharedBridgeData(
         using: sharingRepository,
         storageMode: storageMode,
