@@ -297,19 +297,6 @@ protocol AppNavigationRestorationValidating {
 }
 
 @MainActor
-private enum AppNavigationRestorationValidatorRegistry {
-    private static var validator: (any AppNavigationRestorationValidating)?
-
-    static func configure(_ validator: any AppNavigationRestorationValidating) {
-        self.validator = validator
-    }
-
-    static var configuredValidator: (any AppNavigationRestorationValidating)? {
-        validator
-    }
-}
-
-@MainActor
 struct RepositoryAppNavigationRestorationValidator: AppNavigationRestorationValidating {
     let herdRepository: any HerdRepository
     let animalRepository: any AnimalDetailReading
@@ -340,13 +327,6 @@ struct RepositoryAppNavigationRestorationValidator: AppNavigationRestorationVali
 }
 
 @MainActor
-extension RepositoryAppNavigationRestorationValidator {
-    static func configureForAppLaunch(_ validator: Self) {
-        AppNavigationRestorationValidatorRegistry.configure(validator)
-    }
-}
-
-@MainActor
 @Observable
 final class AppNavigationState {
     var selectedTab: AppTab = .home
@@ -366,11 +346,7 @@ final class AppNavigationState {
     }
 
     func restore(from payload: String) {
-        guard let validator = AppNavigationRestorationValidatorRegistry.configuredValidator else {
-            restoreDurableStateWithoutRepositoryTargets(from: payload)
-            return
-        }
-        restore(from: payload, using: validator)
+        restoreDurableStateWithoutRepositoryTargets(from: payload)
     }
 
     func restore(
