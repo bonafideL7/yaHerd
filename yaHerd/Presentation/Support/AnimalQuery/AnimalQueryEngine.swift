@@ -26,6 +26,7 @@ enum AnimalQueryEngine {
                 || formatTag($0.displayTagNumber, $0.displayTagColorID)
                     .localizedCaseInsensitiveContains(searchText)
                 || $0.name.localizedCaseInsensitiveContains(searchText)
+                || ($0.pastureName?.localizedCaseInsensitiveContains(searchText) ?? false)
             }
         }
 
