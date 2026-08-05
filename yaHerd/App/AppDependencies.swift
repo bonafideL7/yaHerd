@@ -122,6 +122,16 @@ final class AppDependencies {
             mutationCenter: mutationCenter
         )
 
+        RepositoryAppNavigationRestorationValidator.configureForAppLaunch(
+            RepositoryAppNavigationRestorationValidator(
+                herdRepository: herdRepository,
+                animalRepository: animalRepository,
+                pastureRepository: pastureRepository,
+                fieldCheckRepository: fieldCheckRepository,
+                workingRepository: workingRepository
+            )
+        )
+
         self.animalFeatureDependencies = AnimalFeatureDependencies(
             listRepository: animalListRepository,
             listQueryReader: animalListQueryReader,
