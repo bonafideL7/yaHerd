@@ -40,6 +40,11 @@ protocol ApplicationMutationStreaming {
 }
 
 @MainActor
+protocol ApplicationMutationStreamProviding {
+    var applicationMutationStream: any ApplicationMutationStreaming { get }
+}
+
+@MainActor
 protocol SuccessfulMutationRecording {
     func recordSuccessfulMutation(reason: SharedDataMutationReason)
 }
@@ -230,7 +235,10 @@ struct InactiveApplicationMutationStream: ApplicationMutationStreaming {
 
 /// Records one successful local command and fans it out to UI invalidation and collaboration sync.
 @MainActor
-final class ApplicationMutationPipeline: SuccessfulMutationRecording {
+final class ApplicationMutationPipeline:
+    SuccessfulMutationRecording,
+    ApplicationMutationStreamProviding
+{
     private let center: ApplicationMutationCenter
     private let sharingScheduler: HerdSharingMutationSyncScheduler
 
@@ -240,6 +248,10 @@ final class ApplicationMutationPipeline: SuccessfulMutationRecording {
     ) {
         self.center = center
         self.sharingScheduler = sharingScheduler
+    }
+
+    var applicationMutationStream: any ApplicationMutationStreaming {
+        center
     }
 
     func recordSuccessfulMutation(reason: SharedDataMutationReason) {
