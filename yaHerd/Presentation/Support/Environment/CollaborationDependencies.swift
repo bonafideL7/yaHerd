@@ -10,7 +10,6 @@ nonisolated struct CollaborationDependencies {
     let conflictReviewStore: HerdSharingConflictReviewStore?
     let diagnosticsRepository: (any SyncDiagnosticsRepository)?
     let settingsSynchronizer: (any AppSettingsSyncing)?
-    let mutationStream: any ApplicationMutationStreaming
 
     nonisolated init() {
         self.herdRepository = nil
@@ -22,7 +21,6 @@ nonisolated struct CollaborationDependencies {
         self.conflictReviewStore = nil
         self.diagnosticsRepository = nil
         self.settingsSynchronizer = nil
-        self.mutationStream = InactiveApplicationMutationStream()
     }
 
     @MainActor
@@ -35,8 +33,7 @@ nonisolated struct CollaborationDependencies {
         writePolicy: HerdCollaborationWritePolicy,
         conflictReviewStore: HerdSharingConflictReviewStore,
         diagnosticsRepository: any SyncDiagnosticsRepository,
-        settingsSynchronizer: any AppSettingsSyncing,
-        mutationStream: any ApplicationMutationStreaming = InactiveApplicationMutationStream()
+        settingsSynchronizer: any AppSettingsSyncing
     ) {
         self.herdRepository = herdRepository
         self.sharingRepository = sharingRepository
@@ -47,7 +44,6 @@ nonisolated struct CollaborationDependencies {
         self.conflictReviewStore = conflictReviewStore
         self.diagnosticsRepository = diagnosticsRepository
         self.settingsSynchronizer = settingsSynchronizer
-        self.mutationStream = mutationStream
     }
 }
 
