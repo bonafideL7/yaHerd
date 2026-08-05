@@ -194,6 +194,7 @@ PERSISTENCE_TEST_SUITES=(
   SwiftDataHerdSharingActorDuplicateIDPagingTests
   SwiftDataHerdSharingActorRelationshipScopeTests
   SwiftDataHerdSharingActorTests
+  SwiftDataPublicIDRepairServiceTests
   SwiftDataReadModelActorPaginationTests
   SwiftDataReadModelActorPasturePaginationTests
   SwiftDataReadModelActorTests
