@@ -86,6 +86,7 @@ final class AnimalListViewModel {
 
     func performPrimarySwipeAction(
         animalID: UUID,
+        hardDelete _: Bool,
         using repository: any AnimalListRepository,
         pastureRepository _: any PastureReferenceDataReader
     ) {
