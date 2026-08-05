@@ -131,8 +131,7 @@ struct PublicIDRepairReport: Codable, Equatable, Sendable {
     }
 }
 
-@MainActor
-protocol PublicIDRepairService: AnyObject {
-    func scan() throws -> PublicIDRepairAssessment
-    func repair() throws -> PublicIDRepairReport
+protocol PublicIDRepairService: Sendable {
+    func scan() async throws -> PublicIDRepairAssessment
+    func repair() async throws -> PublicIDRepairReport
 }
