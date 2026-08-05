@@ -12,10 +12,18 @@ extension HerdSharingCoreDataStore {
     try await loadIfNeeded()
 
     let privateHerdRecord = try privateStore.flatMap { store in
-      try fetchSharedHerdRecord(publicID: herd.publicID, in: store)
+      try fetchUniqueSharingHerdRecord(
+        publicID: herd.publicID,
+        in: store,
+        storeDescription: "owner private bridge store"
+      )
     }
     let sharedHerdRecord = try sharedStore.flatMap { store in
-      try fetchSharedHerdRecord(publicID: herd.publicID, in: store)
+      try fetchUniqueSharingHerdRecord(
+        publicID: herd.publicID,
+        in: store,
+        storeDescription: "accepted shared store"
+      )
     }
 
     if let privateHerdRecord, let sharedHerdRecord {
@@ -53,10 +61,18 @@ extension HerdSharingCoreDataStore {
     shouldUpdateShare: Bool
   ) {
     let privateHerdRecord = try privateStore.flatMap { store in
-      try fetchSharedHerdRecord(publicID: herd.publicID, in: store)
+      try fetchUniqueSharingHerdRecord(
+        publicID: herd.publicID,
+        in: store,
+        storeDescription: "owner private bridge store"
+      )
     }
     let sharedHerdRecord = try sharedStore.flatMap { store in
-      try fetchSharedHerdRecord(publicID: herd.publicID, in: store)
+      try fetchUniqueSharingHerdRecord(
+        publicID: herd.publicID,
+        in: store,
+        storeDescription: "accepted shared store"
+      )
     }
 
     guard privateHerdRecord == nil || sharedHerdRecord == nil else {
@@ -115,5 +131,19 @@ extension HerdSharingCoreDataStore {
         }
       }
     }
+  }
+
+  private func fetchUniqueSharingHerdRecord(
+    publicID: UUID,
+    in store: NSPersistentStore,
+    storeDescription: String
+  ) throws -> SharedHerdRecord? {
+    let records = try fetchSharedHerdRecords(publicID: publicID, in: store)
+    guard records.count <= 1 else {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "Multiple Herd bridge roots with public ID \(publicID.uuidString) exist in the \(storeDescription). Repair duplicate bridge records before sharing or synchronization."
+      )
+    }
+    return records.first
   }
 }
