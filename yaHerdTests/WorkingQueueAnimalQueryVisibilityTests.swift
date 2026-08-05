@@ -97,6 +97,53 @@ final class WorkingQueueAnimalQueryVisibilityTests: XCTestCase {
         XCTAssertEqual(result.map(\.id), [femaleItem.id])
     }
 
+    func testDestinationSearchMatchesRemovedAnimalAndHonorsStatusFilter() {
+        let soldAnimal = makeAnimal(tagNumber: "12", status: .sold)
+        let deadAnimal = makeAnimal(tagNumber: "34", status: .dead)
+        let soldItem = makeQueueItem(
+            animal: soldAnimal,
+            destinationPastureName: "North Holding"
+        )
+        let deadItem = makeQueueItem(
+            animal: deadAnimal,
+            destinationPastureName: "North Holding"
+        )
+
+        let result = WorkingQueueAnimalQueryEngine.apply(
+            to: [deadItem, soldItem],
+            summariesByID: [
+                soldAnimal.id: soldAnimal,
+                deadAnimal.id: deadAnimal
+            ],
+            query: AnimalQuery(
+                searchText: "North",
+                filter: AnimalFilter(status: .sold)
+            ),
+            formatTag: { number, _ in number }
+        )
+
+        XCTAssertEqual(result.map(\.id), [soldItem.id])
+    }
+
+    func testTagSearchMatchesArchivedAnimalWithoutInclusionToggle() {
+        let archivedAnimal = makeAnimal(tagNumber: "12", isArchived: true)
+        let activeAnimal = makeAnimal(tagNumber: "34")
+        let archivedItem = makeQueueItem(animal: archivedAnimal)
+        let activeItem = makeQueueItem(animal: activeAnimal)
+
+        let result = WorkingQueueAnimalQueryEngine.apply(
+            to: [activeItem, archivedItem],
+            summariesByID: [
+                archivedAnimal.id: archivedAnimal,
+                activeAnimal.id: activeAnimal
+            ],
+            query: AnimalQuery(searchText: "12"),
+            formatTag: { number, _ in number }
+        )
+
+        XCTAssertEqual(result.map(\.id), [archivedItem.id])
+    }
+
     func testEqualSortKeysPreserveSessionSourceOrder() {
         let animals = (0..<6).map { _ in makeAnimal(tagNumber: "12") }
         let items = animals.map { makeQueueItem(animal: $0) }
@@ -119,7 +166,9 @@ final class WorkingQueueAnimalQueryVisibilityTests: XCTestCase {
 
     private func makeAnimal(
         tagNumber: String,
-        sex: Sex = .female
+        sex: Sex = .female,
+        status: AnimalStatus = .active,
+        isArchived: Bool = false
     ) -> AnimalSummary {
         AnimalSummary(
             id: UUID(),
@@ -132,8 +181,8 @@ final class WorkingQueueAnimalQueryVisibilityTests: XCTestCase {
             animalType: sex == .male ? .bull : .cow,
             firstDistinguishingFeature: nil,
             birthDate: Date(timeIntervalSince1970: 0),
-            status: .active,
-            isArchived: false,
+            status: status,
+            isArchived: isArchived,
             pastureID: UUID(),
             pastureName: nil,
             location: .pasture
