@@ -8,6 +8,7 @@ struct HerdSharingAccess: Equatable {
     case bridgeRecordMissing
     case ownerPrivateStore
     case acceptedSharedStore
+    case conflictingStores
   }
 
   enum Permission: Equatable {
@@ -23,6 +24,7 @@ struct HerdSharingAccess: Equatable {
     case existingOwnerShare
     case acceptedParticipantShare
     case unresolvedBridgeRecord
+    case conflictingBridgeRecords
     case pendingBridgeOperation
     case notOwnedByCurrentDevice
 
@@ -68,6 +70,8 @@ struct HerdSharingAccess: Equatable {
       "owner private store"
     case .acceptedSharedStore:
       "accepted shared store"
+    case .conflictingStores:
+      "owner and accepted shared stores"
     }
   }
 
@@ -129,6 +133,19 @@ struct HerdSharingAccess: Equatable {
       permission: permission,
       participantCount: participantCount,
       hasActiveSystemShare: false,
+      creationState: .unknown
+    )
+  }
+
+  static func conflictingStores(
+    ownerHasActiveSystemShare: Bool,
+    participantCount: Int?
+  ) -> HerdSharingAccess {
+    HerdSharingAccess(
+      bridgeLocation: .conflictingStores,
+      permission: .unknown,
+      participantCount: participantCount,
+      hasActiveSystemShare: ownerHasActiveSystemShare,
       creationState: .unknown
     )
   }
