@@ -193,6 +193,10 @@ extension HerdSharingCoreDataStore {
         )
       }
       return (sharedStore, "accepted shared store")
+    case .conflictingStores:
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The Herd root exists in both owner and accepted shared bridge stores. Resolve the bridge conflict before importing."
+      )
     case .bridgeRecordMissing:
       throw HerdSharingActionError.bridgeImportFailed(
         "No bridge record exists for \(herd.name)."
