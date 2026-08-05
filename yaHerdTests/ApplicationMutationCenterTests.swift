@@ -32,6 +32,21 @@ final class ApplicationMutationCenterTests: XCTestCase {
         XCTAssertEqual(center.collaborationRevision, 0)
     }
 
+    func testCollaborationStateChangeOnlyInvalidatesCollaboration() {
+        let center = ApplicationMutationCenter()
+
+        center.recordCollaborationStateChange()
+
+        XCTAssertEqual(center.homeRevision, 0)
+        XCTAssertEqual(center.animalRevision, 0)
+        XCTAssertEqual(center.pastureRevision, 0)
+        XCTAssertEqual(center.fieldCheckRevision, 0)
+        XCTAssertEqual(center.workingSessionRevision, 0)
+        XCTAssertEqual(center.collaborationRevision, 1)
+        XCTAssertEqual(center.latestEvent?.source, .collaborationStateChange)
+        XCTAssertEqual(center.latestEvent?.affectedAreas, Set([.collaboration]))
+    }
+
     func testSharedImportIncrementsEveryFeatureRevision() {
         let center = ApplicationMutationCenter()
 
