@@ -86,20 +86,13 @@ final class AnimalListViewModel {
 
     func performPrimarySwipeAction(
         animalID: UUID,
-        hardDelete: Bool,
         using repository: any AnimalListRepository,
         pastureRepository _: any PastureReferenceDataReader
     ) {
         do {
-            if hardDelete {
-                try repository.delete(ids: [animalID])
-                invalidateCurrentLoad()
-                removeItems(ids: [animalID])
-            } else {
-                try repository.archive(ids: [animalID])
-                invalidateCurrentLoad()
-                updateArchiveState(ids: [animalID], isArchived: true)
-            }
+            try repository.archive(ids: [animalID])
+            invalidateCurrentLoad()
+            updateArchiveState(ids: [animalID], isArchived: true)
             errorMessage = nil
             hasLoaded = true
         } catch {
@@ -287,12 +280,6 @@ final class AnimalListViewModel {
         emptyStateConfiguration = snapshot.emptyStateConfiguration
         hasHiddenOffHerdAnimals = snapshot.hasHiddenOffHerdAnimals
         hasHiddenArchivedRecords = snapshot.hasHiddenArchivedRecords
-    }
-
-    private func removeItems(ids: [UUID]) {
-        let idsToRemove = Set(ids)
-        items.removeAll { idsToRemove.contains($0.id) }
-        refreshLastDerivedState()
     }
 
     private func updateArchiveState(ids: [UUID], isArchived: Bool) {
