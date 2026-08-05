@@ -10,6 +10,13 @@ enum HerdSharingActionError: LocalizedError, Equatable {
   case recoveryModeReadOnly
   case iCloudSyncRequired
   case shareInvitationMissing
+  case shareAlreadyExists
+  case acceptedParticipantShareCannotReshare
+  case unresolvedSharingBridge
+  case sharingOperationPending
+  case herdOwnershipRequired
+  case sharingStateUnavailable
+  case shareManagementUnavailable
   case sharingStoreUnavailable(String)
   case readOnlyShareCannotWrite
   case cloudKitSharingFailed(String)
@@ -26,6 +33,20 @@ enum HerdSharingActionError: LocalizedError, Equatable {
       "Enable iCloud Sync before sharing this herd with other iCloud users."
     case .shareInvitationMissing:
       "No pending CloudKit share invitation is available to accept."
+    case .shareAlreadyExists:
+      "This herd already has an active owner share. Open sharing management instead of creating another share."
+    case .acceptedParticipantShareCannotReshare:
+      "This herd was accepted from another owner. Synchronize the accepted share instead of creating a second share."
+    case .unresolvedSharingBridge:
+      "A sharing bridge record exists without a valid owner share. Synchronize or repair the bridge before creating a share."
+    case .sharingOperationPending:
+      "A previous sharing import, export, or reconciliation operation is unfinished. Resolve it before creating a share."
+    case .herdOwnershipRequired:
+      "This device cannot prove ownership of the Herd root and cannot create a CloudKit share for it."
+    case .sharingStateUnavailable:
+      "The repository could not verify the current sharing state. Refresh access before trying again."
+    case .shareManagementUnavailable:
+      "An active owner share was not available to manage. Refresh sharing access and try again."
     case .sharingStoreUnavailable(let message):
       "The CloudKit sharing store is unavailable. \(message)"
     case .readOnlyShareCannotWrite:
