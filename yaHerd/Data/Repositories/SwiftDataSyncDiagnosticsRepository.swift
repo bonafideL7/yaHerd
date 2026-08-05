@@ -14,10 +14,11 @@ final class SwiftDataSyncDiagnosticsRepository: SyncDiagnosticsRepository {
 
     init(
         context: ModelContext,
-        publicIDRepairService: any PublicIDRepairService
+        publicIDRepairService: (any PublicIDRepairService)? = nil
     ) {
         self.context = context
         self.publicIDRepairService = publicIDRepairService
+            ?? SwiftDataPublicIDRepairService(modelContainer: context.container)
     }
 
     func fetchCounts() throws -> SyncDiagnosticsCounts {
