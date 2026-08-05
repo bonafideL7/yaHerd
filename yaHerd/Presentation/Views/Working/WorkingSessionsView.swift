@@ -91,7 +91,7 @@ struct WorkingSessionsView: View {
         }
         .task {
             viewModel.configure(repository: repository)
-            viewModel.load()
+            await viewModel.observe(mutationStream: workingDependencies.mutationStream)
         }
         .onChange(of: showingNewSession) { _, isPresented in
             if !isPresented {
