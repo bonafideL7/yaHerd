@@ -77,7 +77,10 @@ struct WorkingSessionDetailView: View {
         }
         .task {
             viewModel.configure(repository: repository)
-            reload()
+            await viewModel.observe(
+                mutationStream: workingDependencies.mutationStream,
+                didLoad: resetFilterForCompletedSession
+            )
         }
         .sheet(isPresented: $showingAddAnimals, onDismiss: reload) {
             if let session = viewModel.session {
@@ -457,11 +460,15 @@ struct WorkingSessionDetailView: View {
         searchText = ""
     }
 
-    private func reload() {
-        viewModel.load()
+    private func resetFilterForCompletedSession() {
         if viewModel.session?.status != .active {
             animalFilter = .all
         }
+    }
+
+    private func reload() {
+        viewModel.load()
+        resetFilterForCompletedSession()
     }
 
     private func deleteSession() {
