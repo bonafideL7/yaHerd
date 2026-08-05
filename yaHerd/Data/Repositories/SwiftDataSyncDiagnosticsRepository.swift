@@ -8,7 +8,7 @@ import SwiftData
 
 @MainActor
 final class SwiftDataSyncDiagnosticsRepository: SyncDiagnosticsRepository {
-    let publicIDRepairService: any PublicIDRepairService
+    let publicIDRepairService: (any PublicIDRepairService)?
 
     private let context: ModelContext
 
