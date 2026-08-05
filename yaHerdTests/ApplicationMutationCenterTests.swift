@@ -3,32 +3,83 @@ import XCTest
 
 @MainActor
 final class ApplicationMutationCenterTests: XCTestCase {
-    func testMutationStreamReplaysEventsPublishedAfterCursor() async {
+    func testAnimalMutationInvalidatesEveryAnimalPresentationArea() {
         let center = ApplicationMutationCenter()
-        let cursor = center.currentSequence
 
         center.recordSuccessfulMutation(reason: .animal)
 
-        var iterator = center.events(after: cursor).makeAsyncIterator()
-        let event = await iterator.next()
-
-        XCTAssertEqual(event?.source, .local(.animal))
-        XCTAssertEqual(event?.sequence, 1)
-        XCTAssertTrue(event?.affectedAreas.contains(.home) == true)
-        XCTAssertTrue(event?.affectedAreas.contains(.animals) == true)
-        XCTAssertTrue(event?.affectedAreas.contains(.dashboard) == true)
+        XCTAssertEqual(center.homeRevision, 1)
+        XCTAssertEqual(center.animalRevision, 1)
+        XCTAssertEqual(center.pastureRevision, 1)
+        XCTAssertEqual(center.fieldCheckRevision, 1)
+        XCTAssertEqual(center.workingSessionRevision, 1)
+        XCTAssertEqual(center.collaborationRevision, 0)
+        XCTAssertEqual(
+            center.latestEvent?.affectedAreas,
+            [.home, .animals, .pastures, .fieldChecks, .workingSessions]
+        )
     }
 
-    func testSharedImportInvalidatesEveryFeatureArea() async {
+    func testTagColorMutationInvalidatesEmbeddedAnimalRows() {
+        let center = ApplicationMutationCenter()
+
+        center.recordSuccessfulMutation(reason: .tagColor)
+
+        XCTAssertEqual(center.animalRevision, 1)
+        XCTAssertEqual(center.pastureRevision, 1)
+        XCTAssertEqual(center.fieldCheckRevision, 1)
+        XCTAssertEqual(center.workingSessionRevision, 1)
+        XCTAssertEqual(center.collaborationRevision, 0)
+    }
+
+    func testSharedImportIncrementsEveryFeatureRevision() {
         let center = ApplicationMutationCenter()
 
         center.recordSharedStoreImport()
 
-        var iterator = center.events(after: 0).makeAsyncIterator()
+        XCTAssertEqual(center.homeRevision, 1)
+        XCTAssertEqual(center.animalRevision, 1)
+        XCTAssertEqual(center.pastureRevision, 1)
+        XCTAssertEqual(center.fieldCheckRevision, 1)
+        XCTAssertEqual(center.workingSessionRevision, 1)
+        XCTAssertEqual(center.collaborationRevision, 1)
+        XCTAssertEqual(center.latestEvent?.source, .sharedStoreImport)
+        XCTAssertEqual(center.latestEvent?.affectedAreas, Set(ApplicationFeatureArea.allCases))
+    }
+
+    func testLateRevisionSubscriberReceivesCurrentRevision() async {
+        let center = ApplicationMutationCenter()
+        center.recordSuccessfulMutation(reason: .animal)
+
+        var iterator = center.revisions(for: .animals, after: 0).makeAsyncIterator()
+
+        XCTAssertEqual(await iterator.next(), 1)
+    }
+
+    func testRevisionStreamBuffersOnlyNewestValue() async {
+        let center = ApplicationMutationCenter()
+        var iterator = center.revisions(for: .animals, after: 0).makeAsyncIterator()
+
+        center.recordSuccessfulMutation(reason: .animal)
+        center.recordSuccessfulMutation(reason: .animal)
+        center.recordSuccessfulMutation(reason: .animal)
+
+        XCTAssertEqual(await iterator.next(), 3)
+    }
+
+    func testEventStreamCarriesMutationMetadata() async {
+        let center = ApplicationMutationCenter()
+        var iterator = center.events().makeAsyncIterator()
+
+        center.recordSuccessfulMutation(reason: .animal)
         let event = await iterator.next()
 
-        XCTAssertEqual(event?.source, .sharedStoreImport)
-        XCTAssertEqual(event?.affectedAreas, Set(ApplicationFeatureArea.allCases))
+        XCTAssertEqual(event?.source, .local(.animal))
+        XCTAssertEqual(event?.sequence, 1)
+        XCTAssertEqual(
+            event?.affectedAreas,
+            [.home, .animals, .pastures, .fieldChecks, .workingSessions]
+        )
     }
 
     func testHomeModelReloadsAfterAnimalFieldCheckAndWorkingMutations() async throws {
