@@ -14,9 +14,6 @@ struct AnimalDetailView: View {
     private var pastureReferenceDataReader: any PastureReferenceDataReader { animalDependencies.pastureReferenceReader }
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-    @Environment(ApplicationSettings.self) private var applicationSettings
-
-    private var hardDeleteOnSwipe: Bool { applicationSettings.allowHardDelete }
 
     @State private var viewModel = AnimalDetailViewModel()
     @State private var activeParentPicker: ParentPickerType?
@@ -25,13 +22,12 @@ struct AnimalDetailView: View {
     @State private var editingTag: AnimalTagSnapshot?
     @State private var isLineageExpanded = false
     @State private var showingAddOffspring = false
-    
+
     let animalID: UUID
 
     init(animalID: UUID) {
         self.animalID = animalID
     }
-
 
     private var displayedTagNumber: String {
         if viewModel.isEditing {
@@ -269,11 +265,9 @@ struct AnimalDetailView: View {
         }
         AnimalDetailRecordManagementSection(
             detail: detail,
-            hardDeleteOnSwipe: hardDeleteOnSwipe,
             onRestore: { viewModel.restore(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader) },
             onArchive: { viewModel.archive(animalID: animalID, using: repository, pastureRepository: pastureReferenceDataReader) },
             onDelete: { viewModel.delete(animalID: animalID, using: repository) }
         )
     }
-
 }
