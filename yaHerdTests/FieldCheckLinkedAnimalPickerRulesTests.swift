@@ -14,37 +14,6 @@ final class FieldCheckLinkedAnimalPickerRulesTests: XCTestCase {
         XCTAssertFalse(options.contains { $0.animalID == nil })
     }
 
-    func testSearchMatchesDamTagStatusAndType() {
-        let calf = makeAnimal(
-            tag: "C12",
-            name: "",
-            damTag: "D55",
-            animalType: .calf,
-            isMissing: true
-        )
-        let cow = makeAnimal(tag: "101", name: "Daisy", animalType: .cow)
-
-        let damMatches = FieldCheckLinkedAnimalPickerRules.filteredAnimals(
-            from: [calf, cow],
-            searchText: "D55",
-            filter: .all
-        )
-        let statusMatches = FieldCheckLinkedAnimalPickerRules.filteredAnimals(
-            from: [calf, cow],
-            searchText: "missing",
-            filter: .all
-        )
-        let typeMatches = FieldCheckLinkedAnimalPickerRules.filteredAnimals(
-            from: [calf, cow],
-            searchText: "calf",
-            filter: .all
-        )
-
-        XCTAssertEqual(damMatches.map(\.displayTagNumber), ["C12"])
-        XCTAssertEqual(statusMatches.map(\.displayTagNumber), ["C12"])
-        XCTAssertEqual(typeMatches.map(\.displayTagNumber), ["C12"])
-    }
-
     func testFilterByRosterStatus() {
         let remaining = makeAnimal(tag: "101")
         let missing = makeAnimal(tag: "102", isMissing: true)
@@ -54,23 +23,23 @@ final class FieldCheckLinkedAnimalPickerRulesTests: XCTestCase {
         let animals = [remaining, missing, flagged, checked, added]
 
         XCTAssertEqual(
-            FieldCheckLinkedAnimalPickerRules.filteredAnimals(from: animals, searchText: "", filter: .remaining).map(\.displayTagNumber),
+            FieldCheckLinkedAnimalPickerRules.filteredAnimals(from: animals, filter: .remaining).map(\.displayTagNumber),
             ["101", "103"]
         )
         XCTAssertEqual(
-            FieldCheckLinkedAnimalPickerRules.filteredAnimals(from: animals, searchText: "", filter: .missing).map(\.displayTagNumber),
+            FieldCheckLinkedAnimalPickerRules.filteredAnimals(from: animals, filter: .missing).map(\.displayTagNumber),
             ["102"]
         )
         XCTAssertEqual(
-            FieldCheckLinkedAnimalPickerRules.filteredAnimals(from: animals, searchText: "", filter: .flagged).map(\.displayTagNumber),
+            FieldCheckLinkedAnimalPickerRules.filteredAnimals(from: animals, filter: .flagged).map(\.displayTagNumber),
             ["103"]
         )
         XCTAssertEqual(
-            FieldCheckLinkedAnimalPickerRules.filteredAnimals(from: animals, searchText: "", filter: .checked).map(\.displayTagNumber),
+            FieldCheckLinkedAnimalPickerRules.filteredAnimals(from: animals, filter: .checked).map(\.displayTagNumber),
             ["104", "105"]
         )
         XCTAssertEqual(
-            FieldCheckLinkedAnimalPickerRules.filteredAnimals(from: animals, searchText: "", filter: .added).map(\.displayTagNumber),
+            FieldCheckLinkedAnimalPickerRules.filteredAnimals(from: animals, filter: .added).map(\.displayTagNumber),
             ["105"]
         )
     }
@@ -108,9 +77,6 @@ final class FieldCheckLinkedAnimalPickerRulesTests: XCTestCase {
         tag: String,
         name: String = "",
         animalID: UUID? = UUID(),
-        damTag: String? = nil,
-        animalType: AnimalType = .cow,
-        sex: Sex = .female,
         wasExpectedAtStart: Bool = true,
         wasCounted: Bool = false,
         needsAttention: Bool = false,
@@ -121,11 +87,11 @@ final class FieldCheckLinkedAnimalPickerRulesTests: XCTestCase {
             animalID: animalID,
             displayTagNumber: tag,
             displayTagColorID: nil,
-            damDisplayTagNumber: damTag,
+            damDisplayTagNumber: nil,
             damDisplayTagColorID: nil,
             animalName: name,
-            animalSex: sex,
-            animalType: animalType,
+            animalSex: .female,
+            animalType: .cow,
             wasExpectedAtStart: wasExpectedAtStart,
             wasCounted: wasCounted,
             needsAttention: needsAttention,

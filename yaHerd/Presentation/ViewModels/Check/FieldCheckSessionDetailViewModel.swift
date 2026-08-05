@@ -323,7 +323,6 @@ final class FieldCheckAnimalDetailViewModel {
 @Observable
 final class FieldCheckTrackedAnimalPickerViewModel {
     private(set) var animals: [AnimalSummary] = []
-    var searchText = ""
     var errorMessage: String?
     var hasLoaded = false
 
@@ -338,29 +337,4 @@ final class FieldCheckTrackedAnimalPickerViewModel {
         }
     }
 
-    func eligibleAnimals(
-        forPastureID pastureID: UUID?,
-        excluding checkedAnimalIDs: Set<UUID>
-    ) -> [AnimalSummary] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return animals
-            .filter { animal in
-                animal.status == .active
-                    && !animal.isArchived
-                    && animal.pastureID != pastureID
-                    && !checkedAnimalIDs.contains(animal.id)
-            }
-            .filter { animal in
-                guard !query.isEmpty else { return true }
-                return animal.displayTagNumber.localizedCaseInsensitiveContains(query)
-                    || animal.name.localizedCaseInsensitiveContains(query)
-                    || (animal.pastureName?.localizedCaseInsensitiveContains(query) ?? false)
-            }
-            .sorted { left, right in
-                let lhs = left.displayTagNumber.isEmpty ? left.name : left.displayTagNumber
-                let rhs = right.displayTagNumber.isEmpty ? right.name : right.displayTagNumber
-                return lhs.localizedStandardCompare(rhs) == .orderedAscending
-            }
-    }
 }

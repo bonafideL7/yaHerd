@@ -22,118 +22,17 @@ enum AnimalListDerivations {
         showArchivedRecords: Bool,
         formatTag: (String, UUID?) -> String
     ) -> [AnimalSummary] {
-        var result = items
-
-        if !showRemovedStatuses {
-            result = result.filter { $0.status == .active }
-        }
-
-        if !showArchivedRecords {
-            result = result.filter { !$0.isArchived }
-        }
-
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !query.isEmpty {
-            result = result.filter {
-                $0.displayTagNumber.localizedCaseInsensitiveContains(query)
-                || formatTag($0.displayTagNumber, $0.displayTagColorID).localizedCaseInsensitiveContains(query)
-                || $0.name.localizedCaseInsensitiveContains(query)
-            }
-        }
-
-        if let selectedSex = filter.sex {
-            result = result.filter { $0.sex == selectedSex }
-        }
-
-        if let selectedAnimalType = filter.animalType {
-            result = result.filter { $0.animalType == selectedAnimalType }
-        }
-
-        if let selectedStatus = filter.status {
-            result = result.filter { $0.status == selectedStatus }
-        }
-
-        switch filter.pasture {
-        case .any:
-            break
-        case .noPasture:
-            result = result.filter { isNoPasture($0) }
-        case let .pasture(selectedPastureID):
-            result = result.filter { $0.pastureID == selectedPastureID }
-        }
-
-        switch filter.location {
-        case .any:
-            break
-        case .pasture:
-            result = result.filter { $0.location == .pasture }
-        case .workingPen:
-            result = result.filter { $0.location == .workingPen }
-        }
-
-        switch filter.recordIssue {
-        case .any:
-            break
-        case .missingPasture:
-            result = result.filter { $0.isActiveInVisibleHerd && isNoPasture($0) }
-        case .missingTag:
-            result = result.filter { $0.isActiveInVisibleHerd && $0.displayTagNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        case .unknownSex:
-            result = result.filter { $0.isActiveInVisibleHerd && $0.sex == .unknown }
-        case .archivedActive:
-            result = result.filter { $0.isArchived && $0.status == .active }
-        }
-
-        switch sortOrder {
-        case .tagAscending:
-            result.sort { $0.displayTagNumber.localizedStandardCompare($1.displayTagNumber) == .orderedAscending }
-        case .tagDescending:
-            result.sort { $0.displayTagNumber.localizedStandardCompare($1.displayTagNumber) == .orderedDescending }
-        case .birthDateNewest:
-            result.sort { $0.birthDate > $1.birthDate }
-        case .birthDateOldest:
-            result.sort { $0.birthDate < $1.birthDate }
-        case .sex:
-            result.sort { lhs, rhs in
-                if lhs.sex.rawValue != rhs.sex.rawValue {
-                    return lhs.sex.rawValue < rhs.sex.rawValue
-                }
-
-                return tagAscending(lhs, rhs)
-            }
-        case .animalType:
-            result.sort { lhs, rhs in
-                let lhsKey = animalTypeSortKey(for: lhs.animalType)
-                let rhsKey = animalTypeSortKey(for: rhs.animalType)
-
-                if lhsKey != rhsKey {
-                    return lhsKey < rhsKey
-                }
-
-                return tagAscending(lhs, rhs)
-            }
-        case .status:
-            result.sort { lhs, rhs in
-                if lhs.status.rawValue != rhs.status.rawValue {
-                    return lhs.status.rawValue < rhs.status.rawValue
-                }
-
-                return tagAscending(lhs, rhs)
-            }
-        case .pasture:
-            result.sort { lhs, rhs in
-                let lhsKey = pastureSortKey(for: lhs)
-                let rhsKey = pastureSortKey(for: rhs)
-
-                if lhsKey != rhsKey {
-                    return lhsKey < rhsKey
-                }
-
-                return tagAscending(lhs, rhs)
-            }
-        }
-
-        return result
+        AnimalQueryEngine.apply(
+            to: items,
+            query: AnimalQuery(
+                searchText: searchText,
+                filter: filter,
+                sortOrder: sortOrder,
+                showRemovedStatuses: showRemovedStatuses,
+                showArchivedRecords: showArchivedRecords
+            ),
+            formatTag: formatTag
+        )
     }
 
     static func groupedAnimals(_ animals: [AnimalSummary], sortOrder: AnimalSortOrder) -> [AnimalSection] {
@@ -266,7 +165,6 @@ enum AnimalListDerivations {
         items.contains(where: \.isArchived)
     }
 
-
     private static func animalTypeSectionSortKey(for title: String) -> String {
         switch title {
         case AnimalType.calf.label:
@@ -284,10 +182,6 @@ enum AnimalListDerivations {
         }
     }
 
-    private static func animalTypeSortKey(for animalType: AnimalType) -> String {
-        animalTypeSectionSortKey(for: animalType.label)
-    }
-
     private static func pastureSectionTitle(for animal: AnimalSummary) -> String {
         if animal.location == .workingPen {
             return "Working Pen"
@@ -300,10 +194,6 @@ enum AnimalListDerivations {
         return "No Pasture"
     }
 
-    private static func isNoPasture(_ animal: AnimalSummary) -> Bool {
-        animal.location != .workingPen && animal.pastureID == nil
-    }
-
     private static func pastureSectionSortKey(for title: String) -> String {
         switch title {
         case "Working Pen":
@@ -313,19 +203,5 @@ enum AnimalListDerivations {
         default:
             return "1-\(title.lowercased())"
         }
-    }
-
-    private static func pastureSortKey(for animal: AnimalSummary) -> String {
-        pastureSectionSortKey(for: pastureSectionTitle(for: animal))
-    }
-
-    private static func tagAscending(_ lhs: AnimalSummary, _ rhs: AnimalSummary) -> Bool {
-        lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
-    }
-}
-
-private extension AnimalSummary {
-    var isActiveInVisibleHerd: Bool {
-        status == .active && !isArchived
     }
 }

@@ -125,6 +125,10 @@ private extension FieldCheckMapper {
     }
 
     static func displayTagNumber(from tagNumber: String) -> String? {
+        guard !tagNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+
         let display = AnimalDisplayTagFormatter.displayTagNumber(from: tagNumber)
         return display.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : display
     }

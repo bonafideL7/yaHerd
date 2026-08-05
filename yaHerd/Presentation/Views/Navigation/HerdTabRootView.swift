@@ -11,14 +11,15 @@ struct HerdTabRootView: View {
     }
 
     private var router: HerdRouter { navigation.herdRouter }
+    private var query: AnimalQueryState { navigation.animalQuery }
 
     var body: some View {
-        @Bindable var router = router
+        @Bindable var query = query
 
         if tab == .search {
             herdNavigationStack
                 .searchable(
-                    text: $router.searchText,
+                    text: $query.searchText,
                     prompt: "Search tag, color, or name"
                 )
                 .searchFocused($searchFieldIsFocused)
@@ -45,16 +46,17 @@ struct HerdTabRootView: View {
 
     private var herdContent: some View {
         @Bindable var router = router
+        @Bindable var query = query
 
         return HerdView(
-            searchText: $router.searchText,
+            searchText: $query.searchText,
             isSearchPresented: searchPresentationBinding,
             mode: $router.mode,
-            sortOrder: $router.sortOrder,
-            filter: $router.filter,
-            showRemovedStatuses: $router.showRemovedStatuses,
-            showArchivedRecords: $router.showArchivedRecords,
-            showingFilters: $router.showingFilters,
+            sortOrder: $query.sortOrder,
+            filter: $query.filter,
+            showRemovedStatuses: $query.showRemovedStatuses,
+            showArchivedRecords: $query.showArchivedRecords,
+            showingFilters: $query.showingFilters,
             pastureFilter: $router.pastureFilter,
             usesShellBottomAccessory: true,
             onOpenAnimal: { router.openAnimal($0, in: tab) },
@@ -75,7 +77,7 @@ struct HerdTabRootView: View {
 
     private var searchPresentationBinding: Binding<Bool> {
         Binding {
-            navigation.selectedTab == .search || hasSearchText
+            navigation.selectedTab == .search || query.hasSearchText
         } set: { isPresented in
             if isPresented {
                 navigation.selectSearchTab()
@@ -85,13 +87,8 @@ struct HerdTabRootView: View {
         }
     }
 
-    private var hasSearchText: Bool {
-        !router.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
     private func prepareSearchTabIfSelected() {
         guard navigation.selectedTab == .search else { return }
-        router.mode = .animals
         router.isSearchPresented = true
 
         Task { @MainActor in
@@ -102,7 +99,6 @@ struct HerdTabRootView: View {
 
     private func handleTabSelectionChange(from oldValue: AppTab, to newValue: AppTab) {
         if newValue == .search {
-            router.mode = .animals
             router.isSearchPresented = true
 
             Task { @MainActor in
@@ -113,7 +109,7 @@ struct HerdTabRootView: View {
 
         if oldValue == .search && newValue != .search {
             searchFieldIsFocused = false
-            router.isSearchPresented = hasSearchText
+            router.isSearchPresented = query.hasSearchText
         }
     }
 
@@ -124,6 +120,14 @@ struct HerdTabRootView: View {
             AnimalDetailView(animalID: animalID)
         case .pasture(let pastureID):
             PastureDetailView(pastureID: pastureID)
+        case .pastureGroups:
+            PastureGroupListView()
+        case .fieldCheckSetup(let pastureID):
+            FieldCheckSessionSetupView(suggestedPastureID: pastureID) { sessionID in
+                navigation.openFieldCheckArea(
+                    .session(FieldCheckSessionLaunchConfiguration(sessionID: sessionID))
+                )
+            }
         case .fieldChecks(let mode):
             FieldChecksView(mode: mode, onSessionLaunch: { configuration in
                 navigation.openFieldCheckArea(.session(configuration))
@@ -152,50 +156,18 @@ struct HerdTabRootView: View {
 struct HerdTabBottomAccessory: View {
     @Environment(AppNavigationState.self) private var navigation
 
-    private var router: HerdRouter { navigation.herdRouter }
+    private var query: AnimalQueryState { navigation.animalQuery }
 
     var body: some View {
-        @Bindable var router = router
+        @Bindable var query = query
 
         AnimalListAdaptiveTabAccessoryControls(
-            sortOrder: $router.sortOrder,
-            filtersAreActive: filtersAreActive,
-            activeFilterCount: activeFilterCount,
-            hasAnyActiveCriteria: hasAnyActiveCriteria,
-            onShowFilters: { router.showingFilters = true },
-            onClearAllCriteria: { router.clearAnimalCriteria() }
+            sortOrder: $query.sortOrder,
+            filtersAreActive: query.filtersAreActive,
+            activeFilterCount: query.activeFilterCount,
+            hasAnyActiveCriteria: query.hasAnyActiveCriteria,
+            onShowFilters: { query.showingFilters = true },
+            onClearAllCriteria: { query.clearCriteria() }
         )
-    }
-
-    private var hasSearchText: Bool {
-        !router.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private var filtersAreActive: Bool {
-        router.filter.isActive || router.showRemovedStatuses || router.showArchivedRecords
-    }
-
-    private var hasAnyActiveCriteria: Bool {
-        hasSearchText || filtersAreActive
-    }
-
-    private var activeFilterCount: Int {
-        var count = 0
-        if router.showRemovedStatuses { count += 1 }
-        if router.showArchivedRecords { count += 1 }
-        if router.filter.sex != nil { count += 1 }
-        if router.filter.animalType != nil { count += 1 }
-        if router.filter.status != nil { count += 1 }
-
-        switch router.filter.pasture {
-        case .any:
-            break
-        case .noPasture, .pasture:
-            count += 1
-        }
-
-        if router.filter.location.isActive { count += 1 }
-        if router.filter.recordIssue.isActive { count += 1 }
-        return count
     }
 }

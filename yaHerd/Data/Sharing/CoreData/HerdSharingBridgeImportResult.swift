@@ -43,7 +43,7 @@ struct HerdSharingBridgeImportResult: Equatable, Sendable {
   let updatedFieldCheckFindingCount: Int
   let deletedRecordCount: Int
   let conflictReport: HerdSharingBridgeConflictReport
-  let reconciliationReport: HerdSharingBridgeReconciliationReport
+  var reconciliationReport: HerdSharingBridgeReconciliationReport
 
   var conflictSummary: String {
     conflictReport.summary

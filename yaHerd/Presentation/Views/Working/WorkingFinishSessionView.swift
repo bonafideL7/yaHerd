@@ -4,6 +4,7 @@ struct WorkingFinishSessionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(AppNavigationState.self) private var navigation
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     private var repository: any WorkingFinishSessionRepository {
@@ -14,9 +15,15 @@ struct WorkingFinishSessionView: View {
         workingDependencies.pastureReferenceReader
     }
 
+    private var animalSummaryReader: any AnimalSummaryReading {
+        workingDependencies.animalSummaryReader
+    }
+
     @StateObject private var viewModel: WorkingFinishSessionViewModel
+    @State private var animalSummariesByID: [UUID: AnimalSummary] = [:]
     @State private var exceptionAnimalIDs: Set<UUID> = []
     @State private var exceptionDestinationIDs: [UUID: UUID] = [:]
+    @State private var showingQueryFilters = false
     @State private var showingExceptionPicker = false
     @State private var showingUnfinishedConfirmation = false
     @State private var errorMessage: String?
@@ -32,6 +39,8 @@ struct WorkingFinishSessionView: View {
         )
     }
 
+    private var query: AnimalQueryState { navigation.animalQuery }
+
     private var session: WorkingSessionDetailSnapshot? {
         viewModel.session
     }
@@ -42,6 +51,15 @@ struct WorkingFinishSessionView: View {
 
     private var unfinishedItems: [WorkingQueueItemSnapshot] {
         orderedItems.filter { $0.status != .done }
+    }
+
+    private var visibleUnfinishedItems: [WorkingQueueItemSnapshot] {
+        WorkingQueueAnimalQueryEngine.apply(
+            to: unfinishedItems,
+            summariesByID: animalSummariesByID,
+            query: query.query,
+            formatTag: tagColorLibrary.formattedTag(tagNumber:colorID:)
+        )
     }
 
     private var selectedExceptionItems: [WorkingQueueItemSnapshot] {
@@ -85,9 +103,12 @@ struct WorkingFinishSessionView: View {
     }
 
     var body: some View {
+        @Bindable var query = query
+
         NavigationStack {
             Form {
                 summarySection
+                querySection
                 defaultDestinationSection
                 exceptionSection
 
@@ -97,6 +118,7 @@ struct WorkingFinishSessionView: View {
             }
             .navigationTitle("Finish Session")
             .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $query.searchText, prompt: "Search session animals")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     ToolbarCancelButton { dismiss() }
@@ -108,6 +130,7 @@ struct WorkingFinishSessionView: View {
                     pastureRepository: pastureRepository
                 )
                 viewModel.load()
+                loadAnimalSummaries()
                 seedExceptions()
             }
             .onChange(of: viewModel.session?.id) { _, _ in
@@ -116,9 +139,19 @@ struct WorkingFinishSessionView: View {
             .onChange(of: exceptionAnimalIDs) { _, _ in
                 synchronizeExceptionDestinations()
             }
+            .sheet(isPresented: $showingQueryFilters) {
+                AnimalFilterView(
+                    filter: $query.filter,
+                    showRemovedStatuses: $query.showRemovedStatuses,
+                    showArchivedRecords: $query.showArchivedRecords,
+                    pastureOptions: viewModel.pastures
+                )
+            }
             .sheet(isPresented: $showingExceptionPicker) {
                 WorkingFinishExceptionSelectionView(
                     items: orderedItems,
+                    summariesByID: animalSummariesByID,
+                    pastureOptions: viewModel.pastures,
                     selection: $exceptionAnimalIDs
                 )
             }
@@ -148,6 +181,29 @@ struct WorkingFinishSessionView: View {
                 Text(errorMessage ?? viewModel.errorMessage ?? "Unknown error")
             }
         }
+    }
+
+    private var querySection: some View {
+        Section {
+            queryControls
+        } header: {
+            Text("Animal View")
+        } footer: {
+            Text("Search, filters, and sorting change only the animal rows shown here. Session totals and finish assignments still include every animal.")
+        }
+    }
+
+    private var queryControls: some View {
+        @Bindable var query = query
+
+        return AnimalListInlineTabAccessoryControls(
+            sortOrder: $query.sortOrder,
+            filtersAreActive: query.filtersAreActive,
+            activeFilterCount: query.activeFilterCount,
+            hasAnyActiveCriteria: query.hasAnyActiveCriteria,
+            onShowFilters: { showingQueryFilters = true },
+            onClearAllCriteria: { query.clearCriteria() }
+        )
     }
 
     private var summarySection: some View {
@@ -230,8 +286,13 @@ struct WorkingFinishSessionView: View {
 
     private var unfinishedSection: some View {
         Section {
-            ForEach(unfinishedItems) { item in
-                WorkingFinishAnimalStatusRow(item: item)
+            if visibleUnfinishedItems.isEmpty {
+                Text("No unworked animals match the current search and filters.")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(visibleUnfinishedItems) { item in
+                    WorkingFinishAnimalStatusRow(item: item)
+                }
             }
         } header: {
             Text("Not Worked")
@@ -322,6 +383,16 @@ struct WorkingFinishSessionView: View {
         }
     }
 
+    private func loadAnimalSummaries() {
+        do {
+            let animals = try animalSummaryReader.fetchAnimals()
+            animalSummariesByID = Dictionary(uniqueKeysWithValues: animals.map { ($0.id, $0) })
+        } catch {
+            errorMessage = UserVisibleErrorMessage.make(error)
+            showingError = true
+        }
+    }
+
     private func animalSortOrder(
         _ left: WorkingQueueItemSnapshot,
         _ right: WorkingQueueItemSnapshot
@@ -367,22 +438,28 @@ private struct WorkingFinishSessionActionBar: View {
 
 private struct WorkingFinishExceptionSelectionView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppNavigationState.self) private var navigation
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     let items: [WorkingQueueItemSnapshot]
+    let summariesByID: [UUID: AnimalSummary]
+    let pastureOptions: [PastureOption]
     @Binding var selection: Set<UUID>
-    @State private var searchText = ""
+    @State private var showingQueryFilters = false
+
+    private var query: AnimalQueryState { navigation.animalQuery }
 
     private var filteredItems: [WorkingQueueItemSnapshot] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return items }
-
-        return items.filter {
-            ($0.animalDisplayTagNumber ?? "")
-                .localizedCaseInsensitiveContains(query)
-                || $0.animalSex.label.localizedCaseInsensitiveContains(query)
-        }
+        WorkingQueueAnimalQueryEngine.apply(
+            to: items,
+            summariesByID: summariesByID,
+            query: query.query,
+            formatTag: tagColorLibrary.formattedTag(tagNumber:colorID:)
+        )
     }
 
     var body: some View {
+        @Bindable var query = query
+
         NavigationStack {
             List(selection: $selection) {
                 ForEach(filteredItems) { item in
@@ -390,10 +467,27 @@ private struct WorkingFinishExceptionSelectionView: View {
                         .tag(item.id)
                 }
             }
+            .overlay {
+                if filteredItems.isEmpty {
+                    ContentUnavailableView(
+                        query.hasAnyActiveCriteria ? "No Matching Animals" : "No Animals",
+                        systemImage: query.hasAnyActiveCriteria ? "magnifyingglass" : "tag",
+                        description: Text(
+                            query.hasAnyActiveCriteria
+                                ? "No session animals match the current search and filters."
+                                : "This session does not contain any animals."
+                        )
+                    )
+                }
+            }
             .environment(\.editMode, .constant(.active))
             .navigationTitle("Destination Exceptions")
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "Search tag")
+            .searchable(text: $query.searchText, prompt: "Search tag, color, or name")
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                queryControls
+                    .background(.bar)
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Clear") {
@@ -407,7 +501,28 @@ private struct WorkingFinishExceptionSelectionView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showingQueryFilters) {
+                AnimalFilterView(
+                    filter: $query.filter,
+                    showRemovedStatuses: $query.showRemovedStatuses,
+                    showArchivedRecords: $query.showArchivedRecords,
+                    pastureOptions: pastureOptions
+                )
+            }
         }
+    }
+
+    private var queryControls: some View {
+        @Bindable var query = query
+
+        return AnimalListAdaptiveTabAccessoryControls(
+            sortOrder: $query.sortOrder,
+            filtersAreActive: query.filtersAreActive,
+            activeFilterCount: query.activeFilterCount,
+            hasAnyActiveCriteria: query.hasAnyActiveCriteria,
+            onShowFilters: { showingQueryFilters = true },
+            onClearAllCriteria: { query.clearCriteria() }
+        )
     }
 }
 

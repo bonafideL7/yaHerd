@@ -27,22 +27,32 @@ struct FieldCheckLinkedAnimalSelectorRow: View {
 
 struct FieldCheckAnimalPickerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppNavigationState.self) private var navigation
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     let animals: [FieldCheckAnimalCheckSnapshot]
     @Binding var selectedAnimalID: UUID?
     var allowsNone = true
 
-    @State private var searchText = ""
     @State private var selectedFilter: FieldCheckLinkedAnimalPickerFilter = .all
+
+    private var query: AnimalQueryState { navigation.animalQuery }
 
     private var animalOptions: [FieldCheckAnimalCheckSnapshot] {
         FieldCheckLinkedAnimalPickerRules.animalOptions(from: animals)
     }
 
+    private var globallyFilteredAnimals: [FieldCheckAnimalCheckSnapshot] {
+        FieldCheckAnimalQueryEngine.apply(
+            to: animalOptions,
+            query: query.query,
+            formatTag: tagColorLibrary.formattedTag(tagNumber:colorID:)
+        )
+    }
+
     private var filteredAnimals: [FieldCheckAnimalCheckSnapshot] {
         FieldCheckLinkedAnimalPickerRules.filteredAnimals(
-            from: animalOptions,
-            searchText: searchText,
+            from: globallyFilteredAnimals,
             filter: selectedFilter
         )
     }
@@ -58,10 +68,9 @@ struct FieldCheckAnimalPickerView: View {
     }
 
     private var suggestionAnimals: [FieldCheckAnimalCheckSnapshot] {
-        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedSearch.isEmpty {
+        if query.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return FieldCheckLinkedAnimalPickerRules.priorityAnimals(
-                from: animalOptions,
+                from: filteredAnimals,
                 excluding: selectedAnimalID,
                 limit: 6
             )
@@ -87,10 +96,12 @@ struct FieldCheckAnimalPickerView: View {
             return "This check does not have any roster animals that can be linked to a finding."
         }
 
-        return "Try a different tag number, name, dam tag, status, or filter."
+        return "Try a different global animal search or check-specific filter."
     }
 
     var body: some View {
+        @Bindable var query = query
+
         List {
             if allowsNone {
                 noneSection
@@ -102,9 +113,9 @@ struct FieldCheckAnimalPickerView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationSubtitle(navigationSubtitle)
         .searchable(
-            text: $searchText,
+            text: $query.searchText,
             placement: .automatic,
-            prompt: "Search tag, name, dam, status"
+            prompt: "Search tag, name, or dam"
         )
         .searchSuggestions {
             ForEach(suggestionAnimals) { animal in
@@ -153,7 +164,7 @@ struct FieldCheckAnimalPickerView: View {
             } header: {
                 Text("Current Selection")
             } footer: {
-                Text("The selected animal does not match the current search or filter, but it remains linked unless you choose another animal or None.")
+                Text("The selected animal does not match the current query, but it remains linked unless you choose another animal or None.")
             }
         }
     }
@@ -180,7 +191,7 @@ struct FieldCheckAnimalPickerView: View {
             }
         } footer: {
             if allowsNone {
-                Text("Search tag number, name, dam tag, type, sex, and check status. Use filters for missing, flagged, to check, seen, or added animals.")
+                Text("The global animal query is combined with the check-specific Missing, Flagged, To Check, Seen, and Added filters.")
             } else {
                 Text("This finding requires a linked animal. Select the animal that should be marked missing.")
             }
@@ -196,10 +207,10 @@ struct FieldCheckAnimalPickerView: View {
                 }
             }
 
-            if !searchText.isEmpty || selectedFilter != .all {
+            if query.hasAnyActiveCriteria || selectedFilter != .all {
                 Section {
                     Button {
-                        searchText = ""
+                        query.clearCriteria()
                         selectedFilter = .all
                     } label: {
                         Label("Reset Search and Filter", systemImage: "arrow.counterclockwise")
@@ -355,22 +366,35 @@ private struct FieldCheckAnimalPickerStatusPills: View {
 struct FieldCheckTrackedAnimalPickerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.fieldCheckFeatureDependencies) private var fieldCheckDependencies
+    @Environment(AppNavigationState.self) private var navigation
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     private var animalRepository: any AnimalListRepository { fieldCheckDependencies.animalListRepository }
 
     @State private var model = FieldCheckTrackedAnimalPickerViewModel()
     @State private var pendingAnimal: AnimalSummary?
+    @State private var pastureOptions: [PastureOption] = []
+    @State private var showingQueryFilters = false
 
     let session: FieldCheckSessionDetailSnapshot
     let onSelect: (UUID) -> Bool
+
+    private var query: AnimalQueryState { navigation.animalQuery }
 
     private var existingAnimalIDs: Set<UUID> {
         Set(session.animalChecks.compactMap(\.animalID))
     }
 
     private var eligibleAnimals: [AnimalSummary] {
-        model.eligibleAnimals(
-            forPastureID: session.pastureID,
-            excluding: existingAnimalIDs
+        AnimalQueryEngine.apply(
+            to: model.animals,
+            query: query.query,
+            mandatoryConstraint: { animal in
+                animal.status == .active
+                    && !animal.isArchived
+                    && animal.pastureID != session.pastureID
+                    && !existingAnimalIDs.contains(animal.id)
+            },
+            formatTag: tagColorLibrary.formattedTag(tagNumber:colorID:)
         )
     }
 
@@ -379,13 +403,19 @@ struct FieldCheckTrackedAnimalPickerView: View {
     }
 
     var body: some View {
+        @Bindable var query = query
+
         List {
             Section {
                 if eligibleAnimals.isEmpty {
                     ContentUnavailableView(
-                        "No Animals Available",
-                        systemImage: "tag",
-                        description: Text("No active herd animals from other pastures match this search.")
+                        query.hasAnyActiveCriteria ? "No Matching Animals" : "No Animals Available",
+                        systemImage: query.hasAnyActiveCriteria ? "magnifyingglass" : "tag",
+                        description: Text(
+                            query.hasAnyActiveCriteria
+                                ? "No eligible animals match the current global search and filters."
+                                : "No active herd animals from other pastures are available."
+                        )
                     )
                 } else {
                     ForEach(eligibleAnimals) { animal in
@@ -412,11 +442,24 @@ struct FieldCheckTrackedAnimalPickerView: View {
         }
         .navigationTitle("Add to Pasture")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $model.searchText, prompt: "Search animals")
+        .searchable(text: $query.searchText, prompt: "Search tag, color, or name")
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            queryControls
+                .background(.bar)
+        }
         .task {
             if !model.hasLoaded {
                 model.load(using: animalRepository)
             }
+            loadPastureOptions()
+        }
+        .sheet(isPresented: $showingQueryFilters) {
+            AnimalFilterView(
+                filter: $query.filter,
+                showRemovedStatuses: $query.showRemovedStatuses,
+                showArchivedRecords: $query.showArchivedRecords,
+                pastureOptions: pastureOptions
+            )
         }
         .confirmationDialog(
             "Move Animal?",
@@ -441,6 +484,27 @@ struct FieldCheckTrackedAnimalPickerView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(model.errorMessage ?? "Unknown error")
+        }
+    }
+
+    private var queryControls: some View {
+        @Bindable var query = query
+
+        return AnimalListAdaptiveTabAccessoryControls(
+            sortOrder: $query.sortOrder,
+            filtersAreActive: query.filtersAreActive,
+            activeFilterCount: query.activeFilterCount,
+            hasAnyActiveCriteria: query.hasAnyActiveCriteria,
+            onShowFilters: { showingQueryFilters = true },
+            onClearAllCriteria: { query.clearCriteria() }
+        )
+    }
+
+    private func loadPastureOptions() {
+        do {
+            pastureOptions = try fieldCheckDependencies.pastureReferenceReader.fetchPastureOptions()
+        } catch {
+            model.errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

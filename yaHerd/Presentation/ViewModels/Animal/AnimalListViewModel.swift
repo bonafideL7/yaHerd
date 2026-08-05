@@ -23,8 +23,8 @@ final class AnimalListViewModel {
     private static let pageSize = ReadPageRequest.defaultLimit
 
     private var isLoading = false
-    private var loadTask: Task<Void, Never>?
     private var loadGeneration = 0
+    private var loadTask: Task<Void, Never>?
     private var derivedStateTask: Task<Void, Never>?
     private var derivedStateGeneration = 0
     private var lastDerivedStateRequest: DerivedStateRequest?

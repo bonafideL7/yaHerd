@@ -155,6 +155,8 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
       let animalTags = mergeRelatedModels(
         directAnimalTags,
         with: animals.flatMap { $0.tags },
+        requestedHerdPublicID: herdID,
+        relatedHerdPublicID: { $0.herd?.publicID },
         publicID: { $0.publicID }
       )
       let directMovements = try fetchAll(
@@ -168,6 +170,8 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
       let movements = mergeRelatedModels(
         directMovements,
         with: animals.flatMap { $0.movementRecords },
+        requestedHerdPublicID: herdID,
+        relatedHerdPublicID: { $0.herd?.publicID },
         publicID: { $0.publicID }
       )
       let directStatusRecords = try fetchAll(
@@ -181,6 +185,8 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
       let statusRecords = mergeRelatedModels(
         directStatusRecords,
         with: animals.flatMap { $0.statusRecords },
+        requestedHerdPublicID: herdID,
+        relatedHerdPublicID: { $0.herd?.publicID },
         publicID: { $0.publicID }
       )
       let directHealthRecords = try fetchAll(
@@ -194,6 +200,8 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
       let healthRecords = mergeRelatedModels(
         directHealthRecords,
         with: animals.flatMap { $0.healthRecords },
+        requestedHerdPublicID: herdID,
+        relatedHerdPublicID: { $0.herd?.publicID },
         publicID: { $0.publicID }
       )
       let directPregnancyChecks = try fetchAll(
@@ -207,6 +215,8 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
       let pregnancyChecks = mergeRelatedModels(
         directPregnancyChecks,
         with: animals.flatMap { $0.pregnancyChecks },
+        requestedHerdPublicID: herdID,
+        relatedHerdPublicID: { $0.herd?.publicID },
         publicID: { $0.publicID }
       )
       let workingProtocolTemplates = try fetchAll(
@@ -237,6 +247,8 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
         directWorkingQueueItems,
         with: workingSessions.flatMap { $0.queueItems }
           + animals.flatMap { $0.workingQueueItemStorage ?? [] },
+        requestedHerdPublicID: herdID,
+        relatedHerdPublicID: { $0.herd?.publicID },
         publicID: { $0.publicID }
       )
       let directWorkingTreatmentRecords = try fetchAll(
@@ -251,6 +263,8 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
         directWorkingTreatmentRecords,
         with: workingSessions.flatMap { $0.treatmentRecordStorage ?? [] }
           + animals.flatMap { $0.workingTreatmentRecordStorage ?? [] },
+        requestedHerdPublicID: herdID,
+        relatedHerdPublicID: { $0.herd?.publicID },
         publicID: { $0.publicID }
       )
       let directFieldCheckSessions = try fetchAll(
@@ -264,6 +278,8 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
       let fieldCheckSessions = mergeRelatedModels(
         directFieldCheckSessions,
         with: pastures.flatMap { $0.fieldCheckSessionStorage ?? [] },
+        requestedHerdPublicID: herdID,
+        relatedHerdPublicID: { $0.herd?.publicID },
         publicID: { $0.publicID }
       )
       let directFieldCheckAnimalChecks = try fetchAll(
@@ -278,6 +294,8 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
         directFieldCheckAnimalChecks,
         with: fieldCheckSessions.flatMap { $0.animalChecks }
           + animals.flatMap { $0.fieldCheckAnimalCheckStorage ?? [] },
+        requestedHerdPublicID: herdID,
+        relatedHerdPublicID: { $0.herd?.publicID },
         publicID: { $0.publicID }
       )
       let directFieldCheckFindings = try fetchAll(
@@ -292,6 +310,8 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
         directFieldCheckFindings,
         with: fieldCheckSessions.flatMap { $0.findings }
           + animals.flatMap { $0.fieldCheckFindingStorage ?? [] },
+        requestedHerdPublicID: herdID,
+        relatedHerdPublicID: { $0.herd?.publicID },
         publicID: { $0.publicID }
       )
 
@@ -526,6 +546,8 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
   private func mergeRelatedModels<Model: AnyObject>(
     _ directModels: [Model],
     with relatedModels: [Model],
+    requestedHerdPublicID: UUID,
+    relatedHerdPublicID: (Model) -> UUID?,
     publicID: (Model) -> UUID
   ) -> [Model] {
     var seenModels = Set<ObjectIdentifier>()
@@ -537,6 +559,11 @@ actor SwiftDataHerdSharingActor: HerdSharingExportSnapshotReading, HerdSharingIm
       mergedModels.append(model)
     }
     for model in relatedModels {
+      if let scopedHerdPublicID = relatedHerdPublicID(model),
+        scopedHerdPublicID != requestedHerdPublicID
+      {
+        continue
+      }
       guard seenModels.insert(ObjectIdentifier(model)).inserted else { continue }
       mergedModels.append(model)
     }

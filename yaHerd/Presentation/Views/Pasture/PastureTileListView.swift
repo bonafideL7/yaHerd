@@ -1,10 +1,14 @@
 import SwiftUI
 
 struct PastureTileListView: View {
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.pastureFeatureDependencies) private var pastureDependencies
+    @Environment(\.animalFeatureDependencies) private var animalDependencies
+    @Environment(AppNavigationState.self) private var navigation
     private var repository: any PastureListRepository { pastureDependencies.listRepository }
     private var animalMover: any AnimalPastureMoving { pastureDependencies.animalMover }
     private var fieldCheckArchiveWriter: any FieldCheckPastureArchiveWriter { pastureDependencies.fieldCheckArchiveWriter }
+    private var animalQueryReader: any AnimalListQueryReading { animalDependencies.listQueryReader }
     @Environment(\.appDataAccessMode) private var dataAccessMode
 
     @State private var model = PastureTileListViewModel()
@@ -49,10 +53,20 @@ struct PastureTileListView: View {
     }
 
     private var filteredItems: [PastureSummary] {
-        model.filteredItems(for: filterValue)
+        model.filteredItems(
+            for: filterValue,
+            query: navigation.animalQuery.query,
+            formatTag: tagColorLibrary.formattedTag(tagNumber:colorID:)
+        )
+    }
+
+    private var filterPastureOptions: [PastureOption] {
+        model.items.map { PastureOption(id: $0.id, name: $0.name) }
     }
 
     var body: some View {
+        @Bindable var query = navigation.animalQuery
+
         Group {
             if model.items.isEmpty {
                 PastureEmptyStateView(onAddPasture: model.requestAddPasture)
@@ -74,6 +88,7 @@ struct PastureTileListView: View {
             } else if filteredItems.isEmpty {
                 PastureNoMatchesStateView(filter: filterValue) {
                     filterBinding.wrappedValue = .all
+                    navigation.animalQuery.clearCriteria()
                 }
             } else {
                 PastureTileGrid(
@@ -117,8 +132,21 @@ struct PastureTileListView: View {
         }
         .sheet(isPresented: $model.isPresentingAddPasture) {
             AddPastureView {
-                model.load(using: repository)
+                Task { @MainActor in
+                    await model.load(
+                        using: repository,
+                        animalQueryReader: animalQueryReader
+                    )
+                }
             }
+        }
+        .sheet(isPresented: $query.showingFilters) {
+            AnimalFilterView(
+                filter: $query.filter,
+                showRemovedStatuses: $query.showRemovedStatuses,
+                showArchivedRecords: $query.showArchivedRecords,
+                pastureOptions: filterPastureOptions
+            )
         }
         .confirmationDialog(
             "Delete Pasture?",
@@ -147,7 +175,10 @@ struct PastureTileListView: View {
             }
         }
         .task {
-            model.load(using: repository)
+            await model.load(
+                using: repository,
+                animalQueryReader: animalQueryReader
+            )
         }
         .alert("Can’t Complete Request", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
@@ -184,6 +215,7 @@ struct PastureTileListView: View {
             }
         )
     }
+
     private func openPasture(_ pasture: PastureSummary) {
         if let onOpenPasture {
             onOpenPasture(pasture.id)
@@ -191,5 +223,4 @@ struct PastureTileListView: View {
             model.select(pasture)
         }
     }
-
 }

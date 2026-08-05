@@ -86,7 +86,7 @@ final class PastureDetailViewModel {
         do {
             let loadedDetail = try LoadPastureDetailUseCase(repository: repository).execute(id: pastureID)
             detail = loadedDetail
-            residentAnimals = try repository.fetchResidentAnimals(pastureID: pastureID)
+            residentAnimals = try repository.fetchAssignedAnimals(pastureID: pastureID)
             if !isEditing {
                 form.populate(from: loadedDetail)
             }
@@ -111,7 +111,7 @@ final class PastureDetailViewModel {
         isEditing = false
     }
 
-    func save(pastureID: UUID, using repository: any PastureUpdateRepository & PastureResidentAnimalReader) {
+    func save(pastureID: UUID, using repository: any PastureUpdateRepository & PastureDetailRepository) {
         do {
             let input = try form.makeUpdateInput()
             let updated = try UpdatePastureUseCase(repository: repository).execute(
@@ -119,7 +119,7 @@ final class PastureDetailViewModel {
                 input: input
             )
             detail = updated
-            residentAnimals = try repository.fetchResidentAnimals(pastureID: pastureID)
+            residentAnimals = try repository.fetchAssignedAnimals(pastureID: pastureID)
             form.populate(from: updated)
             isEditing = false
             errorMessage = nil

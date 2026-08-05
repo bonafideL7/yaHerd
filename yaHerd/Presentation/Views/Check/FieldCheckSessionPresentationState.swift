@@ -96,19 +96,9 @@ enum FieldCheckLinkedAnimalPickerRules {
 
     static func filteredAnimals(
         from animals: [FieldCheckAnimalCheckSnapshot],
-        searchText: String,
         filter: FieldCheckLinkedAnimalPickerFilter
     ) -> [FieldCheckAnimalCheckSnapshot] {
-        let query = normalizedSearchText(searchText)
-
-        return animals
-            .filter { matches(filter: filter, animal: $0) }
-            .filter { animal in
-                guard !query.isEmpty else { return true }
-                return searchTokens(for: animal).contains { token in
-                    token.localizedCaseInsensitiveContains(query)
-                }
-            }
+        animals.filter { matches(filter: filter, animal: $0) }
     }
 
     static func priorityAnimals(
@@ -202,22 +192,6 @@ enum FieldCheckLinkedAnimalPickerRules {
         .joined(separator: " ")
     }
 
-    private static func searchTokens(for animal: FieldCheckAnimalCheckSnapshot) -> [String] {
-        [
-            animal.displayTagNumber,
-            animal.animalName,
-            animal.animalType.label,
-            animal.animalSex.label,
-            animal.damDisplayTagNumber ?? "",
-            statusSummary(for: animal)
-        ]
-        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        .filter { !$0.isEmpty }
-    }
-
-    private static func normalizedSearchText(_ searchText: String) -> String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
 }
 
 enum FieldCheckSessionPane: String, CaseIterable, Identifiable {
