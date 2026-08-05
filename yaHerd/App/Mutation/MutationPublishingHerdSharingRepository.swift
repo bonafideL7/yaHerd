@@ -36,7 +36,9 @@ final class MutationPublishingHerdSharingRepository:
         herd: HerdSummary,
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingActionResult {
-        try await base.startSharing(herd: herd, storageMode: storageMode)
+        let result = try await base.startSharing(herd: herd, storageMode: storageMode)
+        mutationCenter.recordCollaborationStateChange()
+        return result
     }
 
     func acceptShareInvitation(
