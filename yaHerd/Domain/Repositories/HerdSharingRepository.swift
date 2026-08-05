@@ -20,6 +20,11 @@ protocol HerdSharingRepository: AnyObject {
     storageMode: HerdStorageMode
   ) async throws -> HerdSharingActionResult
 
+  func manageExistingShare(
+    herd: HerdSummary,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult
+
   func acceptShareInvitation(
     _ invitation: HerdShareInvitation,
     storageMode: HerdStorageMode
@@ -45,4 +50,13 @@ protocol HerdSharingRepository: AnyObject {
     herd: HerdSummary?,
     storageMode: HerdStorageMode
   ) async throws -> HerdSharingActionResult
+}
+
+extension HerdSharingRepository {
+  func manageExistingShare(
+    herd: HerdSummary,
+    storageMode: HerdStorageMode
+  ) async throws -> HerdSharingActionResult {
+    throw HerdSharingActionError.shareManagementUnavailable
+  }
 }
