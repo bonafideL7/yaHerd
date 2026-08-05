@@ -13,13 +13,41 @@ final class PastureTileListViewModel {
     var errorMessage: String?
 
     private var dragStartOrder: [PastureSummary] = []
+    private var hasLoaded = false
+    private var lastLoadedRevision: UInt64 = 0
 
-    func load(using repository: any PastureListReader) {
+    func observe(
+        using repository: any PastureListReader,
+        mutationStream: any ApplicationMutationStreaming
+    ) async {
+        let startingRevision = mutationStream.pastureRevision
+        if !hasLoaded || lastLoadedRevision < startingRevision {
+            if load(using: repository) {
+                lastLoadedRevision = startingRevision
+            }
+        }
+
+        for await revision in mutationStream.revisions(
+            for: .pastures,
+            after: lastLoadedRevision
+        ) {
+            guard !Task.isCancelled else { return }
+            if load(using: repository) {
+                lastLoadedRevision = revision
+            }
+        }
+    }
+
+    @discardableResult
+    func load(using repository: any PastureListReader) -> Bool {
         do {
             items = try repository.fetchPastures()
             errorMessage = nil
+            hasLoaded = true
+            return true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
+            return false
         }
     }
 
