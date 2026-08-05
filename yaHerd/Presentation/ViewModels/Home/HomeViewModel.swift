@@ -7,7 +7,7 @@ final class HomeViewModel {
     private(set) var snapshot: HomeSnapshot?
     private(set) var hasLoaded = false
     private var isLoading = false
-    private var lastAppliedMutationSequence: UInt64 = 0
+    private var lastLoadedRevision: UInt64 = 0
     var errorMessage: String?
 
     func observe(
@@ -15,19 +15,21 @@ final class HomeViewModel {
         useCase: LoadHomeUseCase,
         mutationStream: any ApplicationMutationStreaming
     ) async {
-        let startingSequence = mutationStream.currentSequence
-        if !hasLoaded || lastAppliedMutationSequence < startingSequence {
+        let startingRevision = mutationStream.homeRevision
+        if !hasLoaded || lastLoadedRevision < startingRevision {
             if await load(configuration: configuration, useCase: useCase) {
-                lastAppliedMutationSequence = startingSequence
+                lastLoadedRevision = startingRevision
             }
         }
 
-        for await event in mutationStream.events(after: startingSequence) {
+        for await revision in mutationStream.revisions(
+            for: .home,
+            after: lastLoadedRevision
+        ) {
             guard !Task.isCancelled else { return }
-            guard event.affectedAreas.contains(.home) else { continue }
 
             if await load(configuration: configuration, useCase: useCase) {
-                lastAppliedMutationSequence = event.sequence
+                lastLoadedRevision = revision
             }
         }
     }
