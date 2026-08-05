@@ -9,6 +9,7 @@ nonisolated struct CollaborationDependencies {
     let writePolicy: HerdCollaborationWritePolicy?
     let conflictReviewStore: HerdSharingConflictReviewStore?
     let diagnosticsRepository: (any SyncDiagnosticsRepository)?
+    let publicIDRepairService: (any PublicIDRepairService)?
     let settingsSynchronizer: (any AppSettingsSyncing)?
 
     nonisolated init() {
@@ -20,6 +21,7 @@ nonisolated struct CollaborationDependencies {
         self.writePolicy = nil
         self.conflictReviewStore = nil
         self.diagnosticsRepository = nil
+        self.publicIDRepairService = nil
         self.settingsSynchronizer = nil
     }
 
@@ -33,6 +35,7 @@ nonisolated struct CollaborationDependencies {
         writePolicy: HerdCollaborationWritePolicy,
         conflictReviewStore: HerdSharingConflictReviewStore,
         diagnosticsRepository: any SyncDiagnosticsRepository,
+        publicIDRepairService: any PublicIDRepairService,
         settingsSynchronizer: any AppSettingsSyncing
     ) {
         self.herdRepository = herdRepository
@@ -43,6 +46,7 @@ nonisolated struct CollaborationDependencies {
         self.writePolicy = writePolicy
         self.conflictReviewStore = conflictReviewStore
         self.diagnosticsRepository = diagnosticsRepository
+        self.publicIDRepairService = publicIDRepairService
         self.settingsSynchronizer = settingsSynchronizer
     }
 }
