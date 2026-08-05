@@ -227,6 +227,7 @@ struct HerdCollaborationView: View {
         LabeledContent("Bridge Location", value: access.locationDescription)
         LabeledContent("Permission", value: access.permissionDescription)
         LabeledContent("Participants", value: access.participantDescription)
+        LabeledContent("Share Creation", value: access.creationState.primaryActionTitle)
         LabeledContent(
           "Can Export Local Edits",
           value: access.canExportLocalChangesToBridge ? "Yes" : "No"
@@ -820,19 +821,31 @@ struct HerdCollaborationView: View {
     Section("Share Actions") {
       Button {
         Task { @MainActor in
-          await viewModel.startSharing(
+          await viewModel.performPrimarySharingAction(
             using: sharingRepository,
             storageMode: applicationSettings.syncMode.herdStorageMode,
             conflictReviewStore: conflictReviewStore
           )
+          await viewModel.refreshSharingAccess(
+            using: sharingRepository,
+            storageMode: applicationSettings.syncMode.herdStorageMode,
+            writePolicy: writePolicy
+          )
         }
       } label: {
-        Label("Share Herd", systemImage: "square.and.arrow.up")
+        Label(
+          viewModel.primarySharingActionTitle,
+          systemImage: viewModel.primarySharingActionSystemImage
+        )
       }
-      .disabled(!viewModel.canStartSharing)
+      .disabled(!viewModel.canPerformPrimarySharingAction)
+
+      Text(viewModel.primarySharingActionMessage)
+        .font(.caption)
+        .foregroundStyle(.secondary)
 
       Text(
-        "This mirrors the current SwiftData herd, support records, pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working treatment templates, working sessions, queue items, treatment records, and field checks into the isolated Core Data bridge, then opens Apple's CloudKit sharing sheet. It does not move yaHerd's normal app data out of SwiftData."
+        "New sharing is only available after the repository verifies that no owner or participant share exists, no unresolved bridge or pending import/reconciliation remains, and this device owns the local Herd root. Existing owners open Apple's sharing management UI; participants and unresolved bridge states synchronize instead."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
