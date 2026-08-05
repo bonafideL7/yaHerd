@@ -133,7 +133,9 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
 
     private func publish(source: ApplicationMutationSource) {
         let affectedAreas = affectedAreas(for: source)
-        affectedAreas.forEach(incrementRevision(for:))
+        for area in affectedAreas {
+            incrementRevision(for: area)
+        }
 
         nextSequence &+= 1
         let event = ApplicationMutationEvent(
