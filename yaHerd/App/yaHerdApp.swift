@@ -335,7 +335,11 @@ private struct RunningAppView: View {
     }
 
     var body: some View {
-        RootAppView(storageError: runtime.storageError, dataAccessMode: runtime.dataAccessMode)
+        RootAppView(
+            storageError: runtime.storageError,
+            dataAccessMode: runtime.dataAccessMode,
+            navigationRestorationValidator: runtime.dependencies.navigationRestorationValidator
+        )
             .environment(applicationSettings)
             .environmentObject(tagColorLibrary)
             .environment(\.appDataAccessMode, runtime.dataAccessMode)
@@ -400,15 +404,21 @@ private struct RunningAppView: View {
 private struct RootAppView: View {
     let storageError: String?
     let dataAccessMode: AppDataAccessMode
+    let navigationRestorationValidator: any AppNavigationRestorationValidating
 
     @State private var showsStorageError: Bool
     @State private var navigation = AppNavigationState()
     @State private var hasRestoredNavigation = false
     @SceneStorage("navigation.restoration.v1") private var navigationRestorationPayload = ""
 
-    init(storageError: String?, dataAccessMode: AppDataAccessMode) {
+    init(
+        storageError: String?,
+        dataAccessMode: AppDataAccessMode,
+        navigationRestorationValidator: any AppNavigationRestorationValidating
+    ) {
         self.storageError = storageError
         self.dataAccessMode = dataAccessMode
+        self.navigationRestorationValidator = navigationRestorationValidator
         self._showsStorageError = State(
             initialValue: storageError != nil && !dataAccessMode.isRecoveryMode
         )
@@ -426,7 +436,10 @@ private struct RootAppView: View {
             }
             .task {
                 guard !hasRestoredNavigation else { return }
-                navigation.restore(from: navigationRestorationPayload)
+                navigation.restore(
+                    from: navigationRestorationPayload,
+                    using: navigationRestorationValidator
+                )
                 hasRestoredNavigation = true
                 navigationRestorationPayload = navigation.restorationPayload() ?? ""
             }
