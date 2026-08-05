@@ -106,6 +106,29 @@ final class DeferredHerdSharingStateGuardTests: XCTestCase {
     XCTAssertEqual(result.title, "Base Start")
   }
 
+  func testRepositoryResumesInterruptedShareFromExistingBridgeRoot() async throws {
+    let container = try TestSupport.makeModelContainer()
+    let herd = try insertHerd(in: container.mainContext)
+    let base = RecordingGuardedBaseRepository(
+      access: .ownerPrivateStore(
+        participantCount: nil,
+        hasActiveSystemShare: false
+      )
+    )
+    let repository = makeRepository(
+      context: container.mainContext,
+      base: base
+    )
+
+    let result = try await repository.manageExistingShare(
+      herd: herd.toSummary(),
+      storageMode: .iCloud
+    )
+
+    XCTAssertEqual(base.startSharingCallCount, 1)
+    XCTAssertEqual(result.title, "Base Start")
+  }
+
   private func makeRepository(
     context: ModelContext,
     base: RecordingGuardedBaseRepository
