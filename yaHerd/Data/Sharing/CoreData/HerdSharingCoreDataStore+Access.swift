@@ -11,9 +11,23 @@ extension HerdSharingCoreDataStore {
   func fetchSharingAccess(for herd: HerdSummary) async throws -> HerdSharingAccess {
     try await loadIfNeeded()
 
-    if let privateStore,
-      let privateHerdRecord = try fetchSharedHerdRecord(publicID: herd.publicID, in: privateStore)
-    {
+    let privateHerdRecord = try privateStore.flatMap { store in
+      try fetchSharedHerdRecord(publicID: herd.publicID, in: store)
+    }
+    let sharedHerdRecord = try sharedStore.flatMap { store in
+      try fetchSharedHerdRecord(publicID: herd.publicID, in: store)
+    }
+
+    if let privateHerdRecord, let sharedHerdRecord {
+      let ownerShare = try existingShare(for: privateHerdRecord)
+      let participantShare = try existingShare(for: sharedHerdRecord)
+      return .conflictingStores(
+        ownerHasActiveSystemShare: ownerShare != nil,
+        participantCount: participantShare?.participants.count
+      )
+    }
+
+    if let privateHerdRecord {
       let share = try existingShare(for: privateHerdRecord)
       return .ownerPrivateStore(
         participantCount: share?.participants.count,
@@ -21,9 +35,7 @@ extension HerdSharingCoreDataStore {
       )
     }
 
-    if let sharedStore,
-      let sharedHerdRecord = try fetchSharedHerdRecord(publicID: herd.publicID, in: sharedStore)
-    {
+    if let sharedHerdRecord {
       let share = try existingShare(for: sharedHerdRecord)
       let permission = share.map { sharingPermission(from: $0) } ?? .unknown
       return .acceptedSharedStore(
@@ -40,16 +52,25 @@ extension HerdSharingCoreDataStore {
     description: String,
     shouldUpdateShare: Bool
   ) {
-    if let privateStore,
-      let privateHerdRecord = try fetchSharedHerdRecord(publicID: herd.publicID, in: privateStore)
-    {
+    let privateHerdRecord = try privateStore.flatMap { store in
+      try fetchSharedHerdRecord(publicID: herd.publicID, in: store)
+    }
+    let sharedHerdRecord = try sharedStore.flatMap { store in
+      try fetchSharedHerdRecord(publicID: herd.publicID, in: store)
+    }
+
+    guard privateHerdRecord == nil || sharedHerdRecord == nil else {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The Herd root exists in both the owner private bridge store and the accepted shared store. Resolve the conflicting bridge records before exporting changes."
+      )
+    }
+
+    if let privateStore, let privateHerdRecord {
       let hasExistingShare = try existingShare(for: privateHerdRecord) != nil
       return (privateStore, "owner private store", hasExistingShare)
     }
 
-    if let sharedStore,
-      let sharedHerdRecord = try fetchSharedHerdRecord(publicID: herd.publicID, in: sharedStore)
-    {
+    if let sharedStore, let sharedHerdRecord {
       let share = try existingShare(for: sharedHerdRecord)
       let permission = share.map { sharingPermission(from: $0) } ?? .unknown
       guard permission == .readWrite || permission == .owner else {
