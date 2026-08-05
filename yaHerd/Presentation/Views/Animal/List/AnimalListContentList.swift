@@ -114,7 +114,7 @@ struct AnimalListContentList: View {
             } else {
                 if dataAccessMode.allowsDataMutations {
                     editableAnimalRow(animal)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: !(animal.isArchived || hardDeleteOnSwipe)) {
+                        .swipeActions(edge: .trailing, allowsFullSwipe: !animal.isArchived) {
                             trailingSwipeActions(for: animal)
                         }
                         .swipeActions(edge: .leading, allowsFullSwipe: false) {
@@ -177,13 +177,7 @@ struct AnimalListContentList: View {
 
     @ViewBuilder
     private func trailingSwipeActions(for animal: AnimalSummary) -> some View {
-        if animal.isArchived || hardDeleteOnSwipe {
-            Button(role: .destructive) {
-                onPrimarySwipeAction(animal)
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        } else {
+        if !animal.isArchived {
             Button {
                 onPrimarySwipeAction(animal)
             } label: {
