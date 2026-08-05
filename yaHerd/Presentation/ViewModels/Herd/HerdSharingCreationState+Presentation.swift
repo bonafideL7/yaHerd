@@ -14,6 +14,8 @@ extension HerdSharingAccess.CreationState {
       "Sync Shared Herd"
     case .unresolvedBridgeRecord:
       "Resume Herd Sharing"
+    case .conflictingBridgeRecords:
+      "Resolve Bridge Conflict"
     case .pendingBridgeOperation:
       "Resolve Sharing State"
     case .notOwnedByCurrentDevice:
