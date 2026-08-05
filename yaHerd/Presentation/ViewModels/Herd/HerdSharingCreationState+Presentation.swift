@@ -12,7 +12,9 @@ extension HerdSharingAccess.CreationState {
       "Manage Herd Sharing"
     case .acceptedParticipantShare:
       "Sync Shared Herd"
-    case .unresolvedBridgeRecord, .pendingBridgeOperation:
+    case .unresolvedBridgeRecord:
+      "Resume Herd Sharing"
+    case .pendingBridgeOperation:
       "Resolve Sharing State"
     case .notOwnedByCurrentDevice:
       "Sharing Unavailable"
