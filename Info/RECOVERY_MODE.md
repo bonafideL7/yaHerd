@@ -6,7 +6,9 @@ Recovery mode is entered only when yaHerd cannot open the requested persistent S
 
 While recovery mode is active:
 
-- A persistent red `RECOVERY MODE — READ ONLY` banner remains above every app screen and presentation.
+- Every SwiftUI scene renders its own red `RECOVERY MODE — READ ONLY` banner at the scene root.
+- The Storage Recovery screen is presented by the scene that initiated it through native SwiftUI presentation.
+- Recovery presentation does not create a secondary `UIWindow`, search `UIApplication.connectedScenes`, or share presentation state through a singleton overlay.
 - The SwiftData recovery configuration is in memory and has `allowsSave` disabled.
 - All application repositories validate `AppDataAccessMode` before a mutation and reject writes.
 - Create, edit, archive, delete, status, field-check, working-session, and settings mutation controls are disabled or removed.
@@ -50,7 +52,10 @@ The repair action attempts to open the original persistent store through `ModelC
 ## Required tests before release
 
 - Force both iCloud and local SwiftData container creation to fail and verify recovery mode starts.
-- Verify the banner remains visible over every tab, pushed navigation destination, sheet, full-screen cover, alert, and CloudKit invitation callback.
+- Open multiple iPad windows and verify every scene shows its own recovery banner.
+- Open Storage Recovery from one window and verify only that scene presents the sheet.
+- Close, background, and reactivate scenes and verify recovery presentation remains attached to the correct scene without stale windows.
+- Verify VoiceOver focus moves into the native recovery sheet and returns to the initiating scene when dismissed.
 - Verify every repository mutation fails before touching SwiftData or the sharing bridge.
 - Verify `ModelContainerFactory.makeRecoveryContainer()` rejects `ModelContext.save()`.
 - Verify automatic and manual sharing/sync entry points are never invoked.
