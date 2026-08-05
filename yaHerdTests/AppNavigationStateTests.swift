@@ -88,12 +88,17 @@ final class AppNavigationStateTests: XCTestCase {
     func testMissingAnimalAndPastureRoutesFallBackToTheirLists() throws {
         let herdID = UUID()
         let validAnimalID = UUID()
+        let validRouteAfterMissingTargetID = UUID()
         let missingPastureID = UUID()
         let navigation = AppNavigationState()
         navigation.selectedHerdID = herdID
         navigation.selectedTab = .herd
         navigation.herdRouter.mode = .animals
-        navigation.herdRouter.path = [.animal(validAnimalID), .pasture(missingPastureID)]
+        navigation.herdRouter.path = [
+            .animal(validAnimalID),
+            .pasture(missingPastureID),
+            .animal(validRouteAfterMissingTargetID)
+        ]
         navigation.herdRouter.searchPath = [.pasture(missingPastureID)]
 
         let payload = try XCTUnwrap(navigation.restorationPayload())
@@ -102,7 +107,7 @@ final class AppNavigationStateTests: XCTestCase {
             from: payload,
             using: TestNavigationRestorationValidator(
                 currentHerdID: herdID,
-                animalIDs: [validAnimalID]
+                animalIDs: [validAnimalID, validRouteAfterMissingTargetID]
             )
         )
 
