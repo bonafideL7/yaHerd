@@ -32,6 +32,13 @@ final class MutationPublishingHerdSharingRepository: HerdSharingRepository {
         try await base.startSharing(herd: herd, storageMode: storageMode)
     }
 
+    func manageExistingShare(
+        herd: HerdSummary,
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult {
+        try await base.manageExistingShare(herd: herd, storageMode: storageMode)
+    }
+
     func acceptShareInvitation(
         _ invitation: HerdShareInvitation,
         storageMode: HerdStorageMode
