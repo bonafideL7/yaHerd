@@ -37,7 +37,7 @@ final class HerdCollaborationViewModel {
     case .ready, .existingOwnerShare, .acceptedParticipantShare, .unresolvedBridgeRecord,
       .pendingBridgeOperation:
       return true
-    case .unknown, .notOwnedByCurrentDevice, nil:
+    case .unknown, .conflictingBridgeRecords, .notOwnedByCurrentDevice, nil:
       return false
     }
   }
@@ -52,6 +52,8 @@ final class HerdCollaborationViewModel {
       "Sync Shared Herd"
     case .unresolvedBridgeRecord:
       "Resume Herd Sharing"
+    case .conflictingBridgeRecords:
+      "Resolve Bridge Conflict"
     case .pendingBridgeOperation:
       "Resolve Sharing State"
     case .notOwnedByCurrentDevice:
@@ -71,6 +73,8 @@ final class HerdCollaborationViewModel {
       "arrow.clockwise.icloud"
     case .acceptedParticipantShare, .pendingBridgeOperation:
       "arrow.triangle.2.circlepath.icloud"
+    case .conflictingBridgeRecords:
+      "exclamationmark.triangle"
     case .notOwnedByCurrentDevice:
       "person.crop.circle.badge.exclamationmark"
     case .unknown, nil:
@@ -88,6 +92,8 @@ final class HerdCollaborationViewModel {
       "This device participates in an accepted CloudKit share. Synchronize the shared herd instead of creating a second share."
     case .unresolvedBridgeRecord:
       "An interrupted sharing attempt left the owner bridge root without a CloudKit share. Resume that existing bridge instead of creating a second root."
+    case .conflictingBridgeRecords:
+      "The Herd root exists in both the owner private bridge store and an accepted shared store. Sharing and export remain blocked until diagnostics resolves the conflicting bridge records."
     case .pendingBridgeOperation:
       "A previous bridge import, export, or reconciliation operation is unfinished. Resolve it before creating a share."
     case .notOwnedByCurrentDevice:
@@ -204,6 +210,11 @@ final class HerdCollaborationViewModel {
         storageMode: storageMode,
         conflictReviewStore: conflictReviewStore
       )
+    case .conflictingBridgeRecords:
+      errorMessage = HerdSharingActionError.bridgeConsistencyFailed(
+        "The Herd root exists in both owner and accepted shared bridge stores. Resolve the bridge conflict in diagnostics before continuing."
+      ).errorDescription
+      successMessage = nil
     case .notOwnedByCurrentDevice:
       errorMessage = HerdSharingActionError.herdOwnershipRequired.errorDescription
       successMessage = nil
