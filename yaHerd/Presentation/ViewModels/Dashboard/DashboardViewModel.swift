@@ -7,24 +7,49 @@ final class DashboardViewModel {
     private(set) var snapshot: DashboardSnapshot?
     private(set) var hasLoaded = false
     private var isLoading = false
+    private var lastLoadedRevision: UInt64 = 0
     var errorMessage: String?
     var isPresentingAddAnimal = false
     var isPresentingAddPasture = false
     var isPresentingNewWorkingSession = false
+
+    func observe(
+        configuration: DashboardConfiguration,
+        using repository: any DashboardQueryReading,
+        mutationStream: any ApplicationMutationStreaming
+    ) async {
+        let startingRevision = mutationStream.homeRevision
+        if !hasLoaded || lastLoadedRevision < startingRevision {
+            if await load(configuration: configuration, using: repository) {
+                lastLoadedRevision = startingRevision
+            }
+        }
+
+        for await revision in mutationStream.revisions(
+            for: .home,
+            after: lastLoadedRevision
+        ) {
+            guard !Task.isCancelled else { return }
+            if await load(configuration: configuration, using: repository) {
+                lastLoadedRevision = revision
+            }
+        }
+    }
 
     func loadIfNeeded(
         configuration: DashboardConfiguration,
         using repository: any DashboardQueryReading
     ) async {
         guard !hasLoaded else { return }
-        await load(configuration: configuration, using: repository)
+        _ = await load(configuration: configuration, using: repository)
     }
 
+    @discardableResult
     func load(
         configuration: DashboardConfiguration,
         using repository: any DashboardQueryReading
-    ) async {
-        guard !isLoading else { return }
+    ) async -> Bool {
+        guard !isLoading else { return false }
         isLoading = true
         defer {
             isLoading = false
@@ -35,8 +60,10 @@ final class DashboardViewModel {
                 .execute(configuration: configuration)
             errorMessage = nil
             hasLoaded = true
+            return true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
+            return false
         }
     }
 
