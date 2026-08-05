@@ -14,7 +14,6 @@
 
 Synchronized preferences:
 
-- hard-delete behavior;
 - dashboard visibility;
 - default target acres per head;
 - default usable acreage percentage;
@@ -25,9 +24,16 @@ Device-local state:
 - selected data storage mode;
 - recent pasture IDs;
 - home setup-section expansion state;
-- the temporary legacy recent-pasture-name value used during migration.
+- the temporary legacy recent-pasture-name value used during migration;
+- the retired hard-delete key retained only for migration cleanup.
 
 The storage mode remains local because enabling CloudKit changes how the persistent store opens on a specific installation. Recent navigation and disclosure state remain local because they describe activity on one device rather than herd policy.
+
+## Retired hard-delete preference
+
+`allowHardDelete` is no longer a user-configurable setting and does not control application behavior. Its catalog case remains temporarily so supported upgrades can remove both the canonical and legacy values from local storage and iCloud key-value storage.
+
+Animal-list swipe actions archive records. Permanent deletion is available only from an archived animal's detail screen, where the app presents the affected records and requires a deliberate destructive confirmation. Permanent deletion remains a synchronized data mutation because the animal belongs to the shared herd; the ability to initiate that mutation is not enabled by a synchronized preference.
 
 ## Adding or changing a setting
 
