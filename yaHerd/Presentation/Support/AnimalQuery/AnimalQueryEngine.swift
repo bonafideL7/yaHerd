@@ -157,7 +157,7 @@ enum AnimalQueryEngine {
             if sortsBefore(rhs, lhs) {
                 return false
             }
-            return tieBreaker?(lhs, rhs) ?? lhs.id.uuidString < rhs.id.uuidString
+            return tieBreaker?(lhs, rhs) ?? (lhs.id.uuidString < rhs.id.uuidString)
         }
     }
 
