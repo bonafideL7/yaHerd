@@ -30,6 +30,10 @@ struct MainTabView: View {
                     yaherdTabIcon
                 }
             }
+
+            Tab("Search", systemImage: "magnifyingglass", value: AppTab.search, role: .search) {
+                HerdTabRootView(tab: .search)
+            }
         }
         .yaherdTabBarMinimizeBehavior()
         .tabViewBottomAccessory {
@@ -39,6 +43,11 @@ struct MainTabView: View {
         }
         .appNavigationPresentations()
         .sharingAccessRefreshesForNavigation()
+        .onChange(of: navigation.selectedTab) { _, selectedTab in
+            if selectedTab == .search {
+                navigation.selectSearchTab()
+            }
+        }
         .onChange(of: applicationSettings.isDashboardEnabled) { _, isEnabled in
             if !isEnabled && navigation.selectedTab == .dashboard {
                 navigation.selectedTab = .home
