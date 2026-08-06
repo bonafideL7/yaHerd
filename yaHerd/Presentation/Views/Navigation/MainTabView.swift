@@ -30,14 +30,12 @@ struct MainTabView: View {
                     yaherdTabIcon
                 }
             }
-
-            Tab("Search", systemImage: "magnifyingglass", value: AppTab.search, role: .search) {
-                HerdTabRootView(tab: .search)
-            }
         }
         .yaherdTabBarMinimizeBehavior()
-        .yaherdTabViewBottomAccessory(isVisible: showsAnimalQueryAccessory) {
-            HerdTabBottomAccessory()
+        .tabViewBottomAccessory {
+            if showsAnimalQueryAccessory {
+                HerdTabBottomAccessory()
+            }
         }
         .appNavigationPresentations()
         .sharingAccessRefreshesForNavigation()
@@ -49,11 +47,11 @@ struct MainTabView: View {
     }
 
     private var showsAnimalQueryAccessory: Bool {
-        guard navigation.selectedTab == .herd || navigation.selectedTab == .search else {
+        guard navigation.selectedTab == .herd else {
             return false
         }
 
-        guard let destination = navigation.herdRouter.path(for: navigation.selectedTab).last else {
+        guard let destination = navigation.herdRouter.path.last else {
             return true
         }
 
@@ -83,19 +81,5 @@ struct MainTabView: View {
 private extension View {
     func yaherdTabBarMinimizeBehavior() -> some View {
         tabBarMinimizeBehavior(.onScrollDown)
-    }
-
-    @ViewBuilder
-    func yaherdTabViewBottomAccessory<Accessory: View>(
-        isVisible: Bool,
-        @ViewBuilder accessory: () -> Accessory
-    ) -> some View {
-        if isVisible {
-            tabViewBottomAccessory {
-                accessory()
-            }
-        } else {
-            self
-        }
     }
 }
