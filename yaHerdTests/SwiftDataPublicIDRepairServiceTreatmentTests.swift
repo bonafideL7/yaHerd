@@ -84,6 +84,91 @@ extension SwiftDataPublicIDRepairServiceTests {
         XCTAssertEqual(treatment.treatmentItemID, selectedCandidate.resultingPublicID)
     }
 
+    func testStaleTreatmentIDStillPresentsEveryMatchingSessionItemCandidate() async throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = container.mainContext
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let duplicateAnimalID = UUID(uuidString: "DDDDDDDD-DDDD-4DDD-8DDD-DDDDDDDDDDDD")!
+        let firstItemID = UUID(uuidString: "11111111-2222-4333-8444-555555555555")!
+        let secondItemID = UUID(uuidString: "66666666-7777-4888-8999-AAAAAAAAAAAA")!
+        let staleItemID = UUID(uuidString: "BBBBBBBB-CCCC-4DDD-8EEE-FFFFFFFFFFFF")!
+        let sharedDose = WorkingTreatmentDose(
+            amount: 2,
+            unit: .milliliter,
+            route: .subcutaneous
+        )
+        let herd = Herd(name: "Stale treatment reference", createdAt: timestamp, updatedAt: timestamp)
+        context.insert(herd)
+
+        let firstAnimal = Animal(
+            publicID: duplicateAnimalID,
+            name: "",
+            tagNumber: "610",
+            birthDate: timestamp,
+            sex: .female
+        )
+        firstAnimal.herd = herd
+        context.insert(firstAnimal)
+        let secondAnimal = Animal(
+            publicID: duplicateAnimalID,
+            name: "",
+            tagNumber: "611",
+            birthDate: timestamp,
+            sex: .female
+        )
+        secondAnimal.herd = herd
+        context.insert(secondAnimal)
+
+        let session = WorkingSession(
+            date: timestamp,
+            protocolName: "Stale treatment protocol",
+            protocolItems: [
+                WorkingProtocolItem(id: firstItemID, name: "Vaccine", suggestedDose: sharedDose),
+                WorkingProtocolItem(id: secondItemID, name: "Vaccine", suggestedDose: sharedDose),
+            ]
+        )
+        session.herd = herd
+        context.insert(session)
+        let treatment = WorkingTreatmentRecord(
+            date: timestamp,
+            treatmentItemID: staleItemID,
+            itemName: "Vaccine",
+            given: true,
+            dose: sharedDose,
+            animal: firstAnimal,
+            session: session
+        )
+        treatment.herd = herd
+        context.insert(treatment)
+        try context.save()
+
+        let service = SwiftDataPublicIDRepairService(modelContainer: container)
+        let assessment = try await service.scan()
+        let issue = try XCTUnwrap(
+            assessment.unresolvedReferences.first { $0.fieldName == "treatmentItemID" }
+        )
+        XCTAssertEqual(Set(issue.candidates.map(\.resultingPublicID)), Set([firstItemID, secondItemID]))
+
+        let selectedCandidate = try XCTUnwrap(
+            issue.candidates.first { $0.resultingPublicID == secondItemID }
+        )
+        let report = try await service.repair(
+            resolutions: [
+                PublicIDRepairReferenceResolution(
+                    unresolvedReferenceID: issue.id,
+                    selectedCandidateStableRecordIdentifier: selectedCandidate.stableRecordIdentifier
+                )
+            ]
+        )
+        defer { try? FileManager.default.removeItem(atPath: report.backupPath) }
+
+        let verificationContext = ModelContext(container)
+        let repairedTreatment = try XCTUnwrap(
+            verificationContext.fetch(FetchDescriptor<WorkingTreatmentRecord>()).first
+        )
+        XCTAssertEqual(repairedTreatment.treatmentItemID, secondItemID)
+    }
+
     func testGraphAwareCanonicalSelectionProducesIdenticalExportGraphAcrossInsertionOrders() async throws {
         let first = try makeGraphDeterminismContainer(reverseInsertion: false)
         let second = try makeGraphDeterminismContainer(reverseInsertion: true)
