@@ -4,37 +4,35 @@ import Observation
 @MainActor
 @Observable
 final class AnimalParentPickerViewModel {
-    private(set) var items: [AnimalParentOption] = []
-    var searchText = ""
+    private(set) var items: [AnimalSummary] = []
     var showAllSexes = false
     var errorMessage: String?
 
     func load(
         excluding excludedAnimalID: UUID?,
-        using repository: any AnimalParentOptionReading
+        using repository: any AnimalListRepository
     ) {
         do {
-            items = try repository.fetchParentOptions(excluding: excludedAnimalID)
+            items = try repository.fetchAnimals().filter { $0.id != excludedAnimalID }
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
-    func filtered(suggestedSexes: Set<Sex>, formattedTag: (AnimalParentOption) -> String) -> [AnimalParentOption] {
-        items
-            .filter { animal in
-                guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return true }
-                let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-                return animal.displayTagNumber.localizedCaseInsensitiveContains(query)
-                    || animal.displayName.localizedCaseInsensitiveContains(query)
-                    || animal.name.localizedCaseInsensitiveContains(query)
-                    || formattedTag(animal).localizedCaseInsensitiveContains(query)
-            }
-            .filter { animal in
-                guard !showAllSexes else { return true }
-                let hasSuggested = items.contains { suggestedSexes.contains($0.sex) }
-                guard hasSuggested else { return true }
-                return suggestedSexes.contains(animal.sex)
-            }
+    func filtered(
+        query: AnimalQuery,
+        suggestedSexes: Set<Sex>,
+        formattedTag: (String, UUID?) -> String
+    ) -> [AnimalSummary] {
+        let hasSuggestedSex = items.contains { suggestedSexes.contains($0.sex) }
+
+        return AnimalQueryEngine.apply(
+            to: items,
+            query: query,
+            mandatoryConstraint: { animal in
+                showAllSexes || !hasSuggestedSex || suggestedSexes.contains(animal.sex)
+            },
+            formatTag: formattedTag
+        )
     }
 }
