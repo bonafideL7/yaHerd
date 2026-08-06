@@ -26,6 +26,7 @@ enum AnimalQueryEngine {
                 || formatTag($0.displayTagNumber, $0.displayTagColorID)
                     .localizedCaseInsensitiveContains(searchText)
                 || $0.name.localizedCaseInsensitiveContains(searchText)
+                || ($0.firstDistinguishingFeature?.localizedCaseInsensitiveContains(searchText) ?? false)
                 || ($0.pastureName?.localizedCaseInsensitiveContains(searchText) ?? false)
             }
         }
@@ -156,7 +157,7 @@ enum AnimalQueryEngine {
             if sortsBefore(rhs, lhs) {
                 return false
             }
-            return tieBreaker?(lhs, rhs) ?? false
+            return tieBreaker?(lhs, rhs) ?? lhs.id.uuidString < rhs.id.uuidString
         }
     }
 
