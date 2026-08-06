@@ -5,8 +5,6 @@ import XCTest
 @testable import yaHerd
 
 @MainActor
-
-@MainActor
 final class SwiftDataPublicIDRepairServiceTests: XCTestCase {
     func testScanIncludesEveryShareableEntityType() async throws {
         let container = try TestSupport.makeModelContainer()
