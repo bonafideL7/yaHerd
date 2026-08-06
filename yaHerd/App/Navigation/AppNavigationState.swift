@@ -14,7 +14,6 @@ enum HerdRoute: Codable, Hashable {
     case animal(UUID)
     case pasture(UUID)
     case pastureGroups
-    case fieldCheckSetup(UUID)
     case fieldChecks(FieldChecksViewMode)
     case workingSessions
 }
@@ -152,9 +151,6 @@ final class HerdRouter {
     func showPastures(_ configuration: PastureListLaunchConfiguration = .all) {
         path.removeAll()
         mode = .pastures
-        animalQuery.clearCriteria()
-        animalQuery.showingFilters = false
-        isSearchPresented = false
         pastureFilter = configuration.filter
     }
 
@@ -193,8 +189,6 @@ final class HerdRouter {
     }
 
     func showSearch(query: String = "") {
-        searchPath.removeAll()
-        mode = .animals
         searchText = query
         isSearchPresented = true
     }
@@ -277,7 +271,7 @@ final class AppNavigationState {
               snapshot.version == AppNavigationSnapshot.currentVersion
         else { return }
 
-        selectedTab = snapshot.selectedTab
+        selectedTab = snapshot.selectedTab == .search ? .herd : snapshot.selectedTab
         herdRouter.restore(snapshot.herdRouter)
         workflowRouter.restore(snapshot.workflowRouter)
         presentedSheet = snapshot.presentedSheet
@@ -314,19 +308,16 @@ final class AppNavigationState {
 
     func openPasture(_ pastureID: UUID) {
         selectedTab = .herd
-        herdRouter.clearAnimalCriteria()
-        herdRouter.showingFilters = false
-        herdRouter.isSearchPresented = false
         herdRouter.openPasture(pastureID)
     }
 
     func selectSearchTab() {
-        selectedTab = .search
+        selectedTab = .herd
         herdRouter.isSearchPresented = true
     }
 
     func openSearch(query: String = "") {
-        selectedTab = .search
+        selectedTab = .herd
         herdRouter.showSearch(query: query)
     }
 
