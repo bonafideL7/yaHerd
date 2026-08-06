@@ -191,9 +191,11 @@ PERSISTENCE_TEST_SUITES=(
   HerdSharingDeletionTombstoneIdentityTests
   HerdSharingImportCommitBoundaryTests
   HerdSharingRepositoryTests
+  HerdDataMutationGateTests
   SwiftDataHerdSharingActorDuplicateIDPagingTests
   SwiftDataHerdSharingActorRelationshipScopeTests
   SwiftDataHerdSharingActorTests
+  SwiftDataPublicIDRepairServiceTests
   SwiftDataReadModelActorPaginationTests
   SwiftDataReadModelActorPasturePaginationTests
   SwiftDataReadModelActorTests

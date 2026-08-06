@@ -7,24 +7,32 @@ import SwiftUI
 
 @MainActor
 struct SyncDiagnosticsView: View {
-    @Environment(\.collaborationDependencies) private var collaborationDependencies
-    private var diagnosticsRepository: (any SyncDiagnosticsRepository)? { collaborationDependencies.diagnosticsRepository }
-    @Environment(\.appDataAccessMode) private var dataAccessMode
-    @Environment(\.recoveryModeController) private var recoveryModeController
-    @Environment(ApplicationSettings.self) private var applicationSettings
+    @Environment(\.collaborationDependencies) var collaborationDependencies
+    var diagnosticsRepository: (any SyncDiagnosticsRepository)? { collaborationDependencies.diagnosticsRepository }
+    var publicIDRepairService: (any PublicIDRepairService)? { collaborationDependencies.publicIDRepairService }
+    @Environment(\.appDataAccessMode) var dataAccessMode
+    @Environment(\.recoveryModeController) var recoveryModeController
+    @Environment(ApplicationSettings.self) var applicationSettings
 
-    private let checker: ICloudAvailabilityChecking
-    private let schemaChecker: CloudKitSchemaChecking
+    let checker: ICloudAvailabilityChecking
+    let schemaChecker: CloudKitSchemaChecking
 
-    @State private var launchSnapshot = AppLaunchDiagnostics.snapshot()
-    @State private var iCloudStatusText = "Checking…"
-    @State private var counts = SyncDiagnosticsCounts.empty
-    @State private var countError: String?
-    @State private var isShowingDeleteConfirmation = false
-    @State private var isDeletingSyncData = false
-    @State private var resetResultMessage: String?
-    @State private var isRunningSchemaCheck = false
-    @State private var schemaCheckResult: CloudKitSchemaCheckResult?
+    @State var launchSnapshot = AppLaunchDiagnostics.snapshot()
+    @State var iCloudStatusText = "Checking…"
+    @State var counts = SyncDiagnosticsCounts.empty
+    @State var countError: String?
+    @State var isShowingDeleteConfirmation = false
+    @State var isDeletingSyncData = false
+    @State var resetResultMessage: String?
+    @State var isRunningSchemaCheck = false
+    @State var schemaCheckResult: CloudKitSchemaCheckResult?
+    @State var publicIDAssessment: PublicIDRepairAssessment?
+    @State var publicIDRepairReport: PublicIDRepairReport?
+    @State var publicIDRepairError: String?
+    @State var publicIDResolutionSelections: [String: String] = [:]
+    @State var isScanningPublicIDs = false
+    @State var isRepairingPublicIDs = false
+    @State var isShowingPublicIDRepairConfirmation = false
 
     init() {
         self.checker = ICloudAvailabilityChecker()
@@ -96,6 +104,119 @@ struct SyncDiagnosticsView: View {
                 }
             }
 
+            Section("Public ID Integrity") {
+                Button {
+                    scanPublicIDs()
+                } label: {
+                    if isScanningPublicIDs {
+                        Label("Scanning Public IDs…", systemImage: "hourglass")
+                    } else {
+                        Label("Scan for Duplicate Public IDs", systemImage: "magnifyingglass")
+                    }
+                }
+                .disabled(isScanningPublicIDs || isRepairingPublicIDs)
+
+                Text("Checks every entity type used by herd sharing. The scan does not change data.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let assessment = publicIDAssessment {
+                    LabeledContent("Records Scanned", value: assessment.totalScannedRecordCount.formatted())
+                    LabeledContent("Duplicate Groups", value: assessment.duplicateGroupCount.formatted())
+                    LabeledContent("Records Requiring New IDs", value: assessment.duplicateRecordCount.formatted())
+                    LabeledContent("Choices Required", value: assessment.unresolvedReferences.count.formatted())
+
+                    if assessment.requiresBridgeConvergence {
+                        Label("Shared-data convergence must be completed", systemImage: "arrow.triangle.2.circlepath.icloud")
+                            .foregroundStyle(.orange)
+                        Text("SwiftData was repaired previously, but export verification did not complete. Normal changes and synchronization remain blocked until this action succeeds.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if assessment.hasBlockingIssues {
+                        Label("Choose the intended record for every reference", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+
+                        ForEach(assessment.unresolvedReferences) { issue in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("\(issue.recordDescription) — \(issue.fieldName)")
+                                    .font(.subheadline.weight(.semibold))
+                                Text(issue.reason)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+
+                                Picker(
+                                    "Intended record",
+                                    selection: resolutionBinding(for: issue.id)
+                                ) {
+                                    Text("Choose a record").tag("")
+                                    ForEach(issue.candidates) { candidate in
+                                        Text(candidate.recordDescription)
+                                            .tag(candidate.stableRecordIdentifier)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .accessibilityLabel("Intended record for \(issue.recordDescription) \(issue.fieldName)")
+
+                                if let selectedCandidate = selectedCandidate(for: issue) {
+                                    Text(selectedCandidate.detail)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                    Text("Resulting public ID: \(selectedCandidate.resultingPublicID.uuidString)")
+                                        .font(.caption2.monospaced())
+                                        .foregroundStyle(.secondary)
+                                        .textSelection(.enabled)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+
+                    if assessment.hasRepairWork {
+                        Button {
+                            isShowingPublicIDRepairConfirmation = true
+                        } label: {
+                            if isRepairingPublicIDs {
+                                Label("Repairing Duplicate IDs…", systemImage: "hourglass")
+                            } else if assessment.requiresBridgeConvergence && !assessment.hasDuplicates {
+                                Label("Finish Shared-Data Convergence", systemImage: "arrow.triangle.2.circlepath.icloud")
+                            } else {
+                                Label("Back Up and Repair Duplicate IDs", systemImage: "wrench.and.screwdriver")
+                            }
+                        }
+                        .disabled(
+                            isRepairingPublicIDs
+                                || isScanningPublicIDs
+                                || dataAccessMode.isRecoveryMode
+                                || !hasCompleteReferenceSelections(for: assessment)
+                        )
+
+                        Text("Creates a JSON backup before changing IDs, applies your reference choices in the same repair transaction, exports repaired IDs without importing stale bridge data, and validates both stores before unblocking edits.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Label("No duplicate public IDs found", systemImage: "checkmark.circle")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let publicIDRepairReport {
+                    Text(publicIDRepairReport.userReadableSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+
+                if let publicIDRepairError {
+                    Text(publicIDRepairError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                }
+            }
+
             Section("CloudKit Schema Check") {
                 Button {
                     runSchemaCheck()
@@ -163,6 +284,27 @@ struct SyncDiagnosticsView: View {
             await refreshDiagnostics()
         }
         .confirmationDialog(
+            publicIDAssessment?.requiresBridgeConvergence == true
+                && publicIDAssessment?.hasDuplicates == false
+                ? "Finish Shared-Data Convergence?"
+                : "Repair Duplicate Public IDs?",
+            isPresented: $isShowingPublicIDRepairConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(
+                publicIDAssessment?.requiresBridgeConvergence == true
+                    && publicIDAssessment?.hasDuplicates == false
+                    ? "Finish Convergence"
+                    : "Back Up and Repair",
+                role: .destructive
+            ) {
+                repairPublicIDs()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("yaHerd will hold the mutation gate, import current shared data before repair, create a backup, apply deliberate choices, assign deterministic replacement IDs, export the repaired graph without re-importing stale bridge records, and validate reconciliation before allowing edits again.")
+        }
+        .confirmationDialog(
             "Delete iCloud Sync Data?",
             isPresented: $isShowingDeleteConfirmation,
             titleVisibility: .visible
@@ -176,141 +318,4 @@ struct SyncDiagnosticsView: View {
         }
     }
 
-    private func deleteSyncData() {
-        isDeletingSyncData = true
-        resetResultMessage = nil
-
-        Task { @MainActor in
-            do {
-                guard let settingsSynchronizer = collaborationDependencies.settingsSynchronizer else {
-                    throw SyncDiagnosticsSettingsError.settingsSynchronizerUnavailable
-                }
-                let resetService = SyncDataResetService(
-                    applicationSettings: applicationSettings,
-                    settingsSynchronizer: settingsSynchronizer
-                )
-                let summary = try await resetService.deleteICloudSyncData()
-
-                resetResultMessage = "Deleted \(summary.deletedCloudKitZoneCount.formatted()) CloudKit zones and \(summary.deletedCloudSettingsCount.formatted()) synced settings from iCloud. Local data was not deleted. Force quit and reopen yaHerd. Sync Mode is now Local Only."
-                isDeletingSyncData = false
-
-                await refreshDiagnostics()
-            } catch {
-                resetResultMessage = "Delete failed: \(UserVisibleErrorMessage.make(error))"
-                isDeletingSyncData = false
-            }
-        }
-    }
-
-    private func runSchemaCheck() {
-        isRunningSchemaCheck = true
-        schemaCheckResult = nil
-
-        Task { @MainActor in
-            let result = await schemaChecker.runCheck()
-            schemaCheckResult = result
-            isRunningSchemaCheck = false
-        }
-    }
-
-
-    private var swiftDataCloudKitDescription: String {
-        launchSnapshot.actualStorageMode == .iCloud
-            ? "Private: \(ModelContainerFactory.cloudKitContainerIdentifier)"
-            : "Disabled"
-    }
-
-    private var activeStoreDescription: String {
-        switch launchSnapshot.actualStorageMode {
-        case .recovery:
-            ModelContainerFactory.recoveryStoreName
-        case .unavailable:
-            "None"
-        case .localOnly, .iCloud:
-            ModelContainerFactory.storeName
-        }
-    }
-
-    private var buildConfiguration: String {
-        #if DEBUG
-        return "Debug"
-        #else
-        return "Release"
-        #endif
-    }
-
-    private var iCloudEnvironmentDescription: String {
-        if let environment = Bundle.main.object(forInfoDictionaryKey: "com.apple.developer.icloud-container-environment") as? String {
-            return environment
-        }
-
-        #if DEBUG
-        return "Development (Debug build inferred)"
-        #else
-        return "Production (Release build inferred)"
-        #endif
-    }
-
-    private var explanation: String {
-        if applicationSettings.syncMode == .iCloud, launchSnapshot.actualStorageMode == .iCloud, launchSnapshot.cloudKitOpened {
-            return "This install opened the SwiftData store with CloudKit mirroring enabled. If another install does not show the same state, that install is not participating in sync."
-        }
-
-        if launchSnapshot.actualStorageMode == .recovery {
-            return "This install is running in recovery mode. Changes from this session are not being saved normally and will not sync."
-        }
-
-        if launchSnapshot.actualStorageMode == .unavailable {
-            return "This install could not open persistent storage or an in-memory recovery store. Data was not loaded for that launch."
-        }
-
-        if applicationSettings.syncMode == .iCloud, launchSnapshot.actualStorageMode != .iCloud {
-            return "The stored preference says iCloud Sync, but this launch did not open CloudKit. Sync will not work from this install until the app opens in iCloud Sync mode."
-        }
-
-        return "This install is running Local Only. It will not sync until iCloud Sync is enabled and the app is restarted."
-    }
-
-    @MainActor
-    private func refreshDiagnostics() async {
-        launchSnapshot = AppLaunchDiagnostics.snapshot()
-        loadCounts()
-
-        guard !dataAccessMode.isRecoveryMode else {
-            iCloudStatusText = "Disabled in recovery mode"
-            return
-        }
-
-        let status = await checker.checkAvailability()
-        switch status {
-        case .available:
-            iCloudStatusText = "Available"
-        case .unavailable(let reason):
-            iCloudStatusText = reason.message
-        }
-    }
-
-    @MainActor
-    private func loadCounts() {
-        guard let diagnosticsRepository else {
-            counts = .empty
-            countError = "Diagnostics repository is not configured."
-            return
-        }
-
-        do {
-            counts = try diagnosticsRepository.fetchCounts()
-            countError = nil
-        } catch {
-            countError = "Could not read local data counts: \(UserVisibleErrorMessage.make(error))"
-        }
-    }
-}
-
-private enum SyncDiagnosticsSettingsError: LocalizedError {
-    case settingsSynchronizerUnavailable
-
-    var errorDescription: String? {
-        "The application settings synchronizer is unavailable."
-    }
 }

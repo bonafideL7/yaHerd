@@ -51,6 +51,7 @@ final class HerdSharingSyncCoordinator {
   private let sharingRepository: any HerdSharingRepository
   private let storageMode: HerdStorageMode
   private let writePolicy: HerdCollaborationWritePolicy?
+  private let mutationGate: HerdDataMutationGate?
   private let conflictReviewStore: HerdSharingConflictReviewStore?
   private let automaticDebounceNanoseconds: UInt64
   private let minimumAutomaticSyncInterval: TimeInterval
@@ -81,6 +82,7 @@ final class HerdSharingSyncCoordinator {
     sharingRepository: any HerdSharingRepository,
     storageMode: HerdStorageMode,
     writePolicy: HerdCollaborationWritePolicy? = nil,
+    mutationGate: HerdDataMutationGate? = nil,
     conflictReviewStore: HerdSharingConflictReviewStore? = nil,
     automaticDebounceNanoseconds: UInt64 = 3_000_000_000,
     minimumAutomaticSyncInterval: TimeInterval = 60
@@ -89,6 +91,7 @@ final class HerdSharingSyncCoordinator {
     self.sharingRepository = sharingRepository
     self.storageMode = storageMode
     self.writePolicy = writePolicy
+    self.mutationGate = mutationGate
     self.conflictReviewStore = conflictReviewStore
     self.automaticDebounceNanoseconds = automaticDebounceNanoseconds
     self.minimumAutomaticSyncInterval = minimumAutomaticSyncInterval
@@ -383,6 +386,19 @@ final class HerdSharingSyncCoordinator {
       return false
     }
 
+    let synchronizationToken: UUID?
+    do {
+      synchronizationToken = try mutationGate?.beginSynchronization()
+    } catch {
+      lastSkippedReason = error.localizedDescription
+      ReliabilityLog.syncEvent(
+        "HerdSharingSyncCoordinator.performSync.blocked",
+        trigger: trigger.displayName,
+        detail: lastSkippedReason
+      )
+      return false
+    }
+
     isSyncing = true
     ReliabilityLog.syncEvent("HerdSharingSyncCoordinator.performSync.started", trigger: trigger.displayName)
     lastTriggerDescription = trigger.displayName
@@ -390,6 +406,9 @@ final class HerdSharingSyncCoordinator {
     lastSkippedReason = nil
     let performanceStartedAt = Date()
     defer {
+      if let synchronizationToken {
+        mutationGate?.endSynchronization(synchronizationToken)
+      }
       isSyncing = false
       lastFinishedAt = .now
       PerformanceLog.logDuration("HerdSharingSyncCoordinator.performSync.\(trigger.displayName)", startedAt: performanceStartedAt)
