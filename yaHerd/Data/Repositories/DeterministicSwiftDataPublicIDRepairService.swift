@@ -152,12 +152,15 @@ actor DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransactionalSe
         willCommit: PublicIDRepairWillCommit
     ) async throws -> PublicIDRepairReport {
         let loaded = try loadRecords()
-        let plan = makeRepairPlan(loaded: loaded)
+        let resolutionMap = try validatedResolutionMap(resolutions)
+        let plan = makeRepairPlan(
+            loaded: loaded,
+            resolutions: resolutionMap
+        )
         guard plan.assessment.hasDuplicates else {
             throw PublicIDRepairError.noDuplicatesFound
         }
 
-        let resolutionMap = try validatedResolutionMap(resolutions)
         let unresolved = unresolvedReferences(
             loaded: loaded,
             plan: plan,
