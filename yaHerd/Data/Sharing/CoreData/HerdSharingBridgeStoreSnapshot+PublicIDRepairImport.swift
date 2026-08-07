@@ -101,7 +101,7 @@ extension HerdSharingBridgeStoreSnapshot {
                     )
                 }
 
-                translatedBySourceURI[bridgeRecord.sourceObjectURI] = try bridgeRecord
+                translatedBySourceURI[bridgeRecord.sourceObjectURI] = bridgeRecord
                     .translatingForPublicIDRepairImport(
                         resultingPublicID: resultingPublicID,
                         localMatch: localMatch,
@@ -126,11 +126,12 @@ extension HerdSharingBridgeStoreSnapshot {
                 continue
             }
 
-            let matchingGroup = repairGroups.values.first { group in
+            guard let matchingGroup = repairGroups.values.first(where: { group in
                 group.key.entityName == sourceEntityName
                     && group.resultingPublicIDs.contains(tombstonePublicID)
+            }) else {
+                continue
             }
-            guard let matchingGroup else { continue }
 
             throw HerdSharingActionError.bridgeConsistencyFailed(
                 "A shared deletion tombstone targets \(sourceEntityName) public ID \(tombstonePublicID.uuidString), which belongs to the repaired duplicate group that originally used \(matchingGroup.key.retainedPublicID.uuidString). The tombstone cannot identify which former physical duplicate it meant to delete, so public-ID repair stopped without applying the deletion."
@@ -144,7 +145,7 @@ private extension HerdSharingBridgeRecordSnapshot {
         resultingPublicID: UUID,
         localMatch: HerdSharingBridgeRecordSnapshot,
         repairGroups: [PublicIDRepairBridgeGroupKey: PublicIDRepairBridgeGroup]
-    ) throws -> HerdSharingBridgeRecordSnapshot {
+    ) -> HerdSharingBridgeRecordSnapshot {
         var updatedAttributes = attributes
         updatedAttributes["publicID"] = .string(resultingPublicID.uuidString)
 
@@ -260,16 +261,17 @@ private extension PublicIDRepairReport {
                 .insert(replacement.replacementPublicID)
         }
 
-        return IDsByKey.mapValues { resultingPublicIDs in
-            let key = IDsByKey.first(where: { $0.value == resultingPublicIDs })?.key
-            return PublicIDRepairBridgeGroup(
-                key: key ?? PublicIDRepairBridgeGroupKey(
-                    entityName: "",
-                    retainedPublicID: resultingPublicIDs.first ?? UUID()
-                ),
-                resultingPublicIDs: resultingPublicIDs
-            )
-        }
+        return Dictionary(
+            uniqueKeysWithValues: IDsByKey.map { key, resultingPublicIDs in
+                (
+                    key,
+                    PublicIDRepairBridgeGroup(
+                        key: key,
+                        resultingPublicIDs: resultingPublicIDs
+                    )
+                )
+            }
+        )
     }
 }
 
