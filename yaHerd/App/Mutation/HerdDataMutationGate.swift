@@ -87,18 +87,18 @@ final class HerdDataMutationGate {
         var errorDescription: String? {
             switch self {
             case .publicIDRepairInProgress(let reason):
-                "Duplicate public-ID repair is in progress. The \(reason.displayName) change was blocked until the repair finishes."
+                return "Duplicate public-ID repair is in progress. The \(reason.displayName) change was blocked until the repair finishes."
             case .publicIDRepairBlocksSynchronization:
-                "Duplicate public-ID repair is in progress. Shared-herd synchronization was blocked until the repair finishes."
+                return "Duplicate public-ID repair is in progress. Shared-herd synchronization was blocked until the repair finishes."
             case .bridgeConvergenceRequired(let reason):
                 if let reason {
                     return "The repaired public IDs have not been verified in the shared-data bridge. The \(reason.displayName) change remains blocked. Open Sync Diagnostics and finish public-ID repair convergence."
                 }
                 return "The repaired public IDs have not been verified in the shared-data bridge. Synchronization remains blocked. Open Sync Diagnostics and finish public-ID repair convergence."
             case .synchronizationInProgress:
-                "Shared-herd synchronization is currently importing or exporting data. Wait for synchronization to finish before repairing duplicate public IDs."
+                return "Shared-herd synchronization is currently importing or exporting data. Wait for synchronization to finish before repairing duplicate public IDs."
             case .publicIDRepairAlreadyInProgress:
-                "Duplicate public-ID repair is already running."
+                return "Duplicate public-ID repair is already running."
             }
         }
     }
@@ -240,7 +240,7 @@ final class HerdDataMutationGate {
 }
 
 @MainActor
-protocol PublicIDRepairBridgeCoordinating: AnyObject {
+protocol PublicIDRepairBridgeCoordinating: AnyObject, Sendable {
     var bridgeIdentity: PublicIDRepairBridgeIdentity { get }
     func prepareForRepair() async throws -> PublicIDRepairBridgePreparation
     func convergeAfterRepair(
