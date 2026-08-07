@@ -374,7 +374,8 @@ protocol PublicIDRepairBridgeCoordinating: AnyObject, Sendable {
     var bridgeIdentity: PublicIDRepairBridgeIdentity { get }
     func prepareForRepair() async throws -> PublicIDRepairBridgePreparation
     func convergeAfterRepair(
-        preparation: PublicIDRepairBridgePreparation
+        preparation: PublicIDRepairBridgePreparation,
+        report: PublicIDRepairReport
     ) async throws
 }
 
@@ -387,7 +388,8 @@ final class LocalOnlyPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordi
     }
 
     func convergeAfterRepair(
-        preparation: PublicIDRepairBridgePreparation
+        preparation: PublicIDRepairBridgePreparation,
+        report: PublicIDRepairReport
     ) async throws {
         guard preparation.identity == .localOnly else {
             throw PublicIDRepairBridgeError.bridgeIdentityMismatch(
@@ -471,7 +473,10 @@ final class CoordinatedPublicIDRepairService: PublicIDRepairService {
                 resolutions: resolutions,
                 willCommit: { [mutationGate] plannedReport in
                     try mutationGate.requireLocalCommitCompletion(
-                        preparation: preparation,
+                        preparation: Self.preparationForCommittedRepair(
+                            preparation,
+                            report: plannedReport
+                        ),
                         report: plannedReport,
                         resolutions: resolutions
                     )
@@ -482,8 +487,15 @@ final class CoordinatedPublicIDRepairService: PublicIDRepairService {
             throw error
         }
 
+        let convergencePreparation = Self.preparationForCommittedRepair(
+            preparation,
+            report: report
+        )
         try mutationGate.markLocalCommitSucceeded()
-        try await bridgeCoordinator.convergeAfterRepair(preparation: preparation)
+        try await bridgeCoordinator.convergeAfterRepair(
+            preparation: convergencePreparation,
+            report: report
+        )
         try mutationGate.completeBridgeConvergence()
         return report
     }
@@ -509,7 +521,10 @@ final class CoordinatedPublicIDRepairService: PublicIDRepairService {
                         resolutions: pending.resolutions,
                         willCommit: { [mutationGate] refreshedReport in
                             try mutationGate.requireLocalCommitCompletion(
-                                preparation: pending.preparation,
+                                preparation: Self.preparationForCommittedRepair(
+                                    pending.preparation,
+                                    report: refreshedReport
+                                ),
                                 report: refreshedReport,
                                 resolutions: pending.resolutions
                             )
@@ -534,10 +549,34 @@ final class CoordinatedPublicIDRepairService: PublicIDRepairService {
             }
         }
 
+        let convergencePreparation = Self.preparationForCommittedRepair(
+            mutationGate.pendingState?.preparation ?? pending.preparation,
+            report: report
+        )
         try await bridgeCoordinator.convergeAfterRepair(
-            preparation: pending.preparation
+            preparation: convergencePreparation,
+            report: report
         )
         try mutationGate.completeBridgeConvergence()
         return report
+    }
+
+    private static func preparationForCommittedRepair(
+        _ preparation: PublicIDRepairBridgePreparation,
+        report: PublicIDRepairReport
+    ) -> PublicIDRepairBridgePreparation {
+        guard preparation.identity == .iCloud else { return preparation }
+        let replacementHerdTargets = report.replacements.compactMap { replacement in
+            guard replacement.entityType == .herd else { return nil }
+            return PublicIDRepairBridgeTargetIdentity(
+                herdPublicID: replacement.replacementPublicID,
+                location: .bridgeRecordMissing
+            )
+        }
+        guard !replacementHerdTargets.isEmpty else { return preparation }
+        return PublicIDRepairBridgePreparation(
+            identity: preparation.identity,
+            targets: preparation.targets + replacementHerdTargets
+        )
     }
 }
