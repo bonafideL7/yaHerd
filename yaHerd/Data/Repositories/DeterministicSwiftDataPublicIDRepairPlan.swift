@@ -2,7 +2,10 @@ import Foundation
 import SwiftData
 
 extension DeterministicSwiftDataPublicIDRepairService {
-    func makeRepairPlan(loaded: LoadedRecords) -> RepairPlan {
+    func makeRepairPlan(
+        loaded: LoadedRecords,
+        resolutions: [String: String] = [:]
+    ) -> RepairPlan {
         let nodes = makeAggregateNodes(loaded: loaded)
         let graphFingerprints = relationshipFingerprints(loaded: loaded, nodes: nodes)
         let revisionMetadata = preferredRevisionMetadata(loaded.revisionRecords)
@@ -12,7 +15,8 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 nodes: nodes.filter { $0.entityType == entityType },
                 entityType: entityType,
                 graphFingerprintByLocalIdentifier: graphFingerprints,
-                revisionMetadata: revisionMetadata
+                revisionMetadata: revisionMetadata,
+                resolutions: resolutions
             )
         }
 
