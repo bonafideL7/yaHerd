@@ -99,21 +99,12 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     )
                 }
                 for (ordinal, location) in ordered.enumerated() {
-                    let itemKey = stableTreatmentItemKey(location.item)
-                    let ownerGraph = graphFingerprintByLocalIdentifier[location.ownerLocalIdentifier] ?? ""
-                    let ownerStableIdentifier = [
-                        entityType.rawValue,
-                        location.ownerPublicID.uuidString.lowercased(),
-                        deterministicDigest(location.ownerSnapshotKey),
-                        ownerGraph,
-                    ].joined(separator: "|")
-                    let stableIdentifier = [
-                        ownerStableIdentifier,
-                        retainedID.uuidString.lowercased(),
-                        deterministicDigest(itemKey),
-                        "item-\(location.itemIndex)",
-                        "candidate-\(ordinal)",
-                    ].joined(separator: "|")
+                    let stableIdentifier = treatmentItemCandidateIdentifier(
+                        location,
+                        entityType: entityType,
+                        graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+                        suffix: "candidate-\(ordinal)"
+                    )
                     let resultingID: UUID
                     if ordinal == 0 {
                         resultingID = retainedID
@@ -154,6 +145,32 @@ extension DeterministicSwiftDataPublicIDRepairService {
                         )
                     )
                 }
+            }
+
+            // Stale treatment references can point to an ID that is no longer present in the
+            // session. Keep every current item addressable as a portable manual-repair
+            // candidate, even when that item's own ID is already unique.
+            let plannedLocalIdentifiers = Set(candidates.map(\.localIdentifier))
+            for location in ownerLocations where !plannedLocalIdentifiers.contains(location.localIdentifier) {
+                candidates.append(
+                    DuplicateCandidate(
+                        entityType: entityType,
+                        localIdentifier: location.localIdentifier,
+                        stableRecordIdentifier: treatmentItemCandidateIdentifier(
+                            location,
+                            entityType: entityType,
+                            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+                            suffix: "candidate-current"
+                        ),
+                        recordDescription: location.item.name.isEmpty ? "Unnamed treatment item" : location.item.name,
+                        detail: treatmentCandidateDetail(
+                            location.item,
+                            retainsOriginalID: true
+                        ),
+                        retainedPublicID: location.originalID,
+                        resultingPublicID: location.originalID
+                    )
+                )
             }
         }
 
@@ -202,6 +219,25 @@ extension DeterministicSwiftDataPublicIDRepairService {
             deterministicDigest(stableTreatmentItemKey(location.item)),
             graphFingerprintByLocalIdentifier[location.ownerLocalIdentifier] ?? "",
             String(format: "%08d", location.itemIndex),
+        ].joined(separator: "|")
+    }
+
+    func treatmentItemCandidateIdentifier(
+        _ location: TreatmentItemLocation,
+        entityType: PublicIDRepairEntityType,
+        graphFingerprintByLocalIdentifier: [String: String],
+        suffix: String
+    ) -> String {
+        let ownerGraph = graphFingerprintByLocalIdentifier[location.ownerLocalIdentifier] ?? ""
+        return [
+            entityType.rawValue,
+            location.ownerPublicID.uuidString.lowercased(),
+            deterministicDigest(location.ownerSnapshotKey),
+            ownerGraph,
+            location.originalID.uuidString.lowercased(),
+            deterministicDigest(stableTreatmentItemKey(location.item)),
+            "item-\(location.itemIndex)",
+            suffix,
         ].joined(separator: "|")
     }
 
