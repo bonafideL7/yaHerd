@@ -4,8 +4,8 @@ import Foundation
 /// Disk-backed journal used for the public-ID repair commit boundary.
 ///
 /// Writes are performed to a sibling temporary file, synchronized with `fsync`, atomically
-/// renamed into place, and synchronized again after the rename. `persist` therefore does not
-/// return until the journal contents have crossed an explicit file-system durability boundary.
+/// renamed into place, and synchronized again after the rename. The containing directory is
+/// also synchronized so the renamed directory entry is durable before `persist` returns.
 struct PublicIDRepairDurableJournal {
     enum JournalError: LocalizedError, Equatable {
         case io(operation: String, path: String, errorCode: Int32)
@@ -91,12 +91,27 @@ struct PublicIDRepairDurableJournal {
         }
         defer { Darwin.close(persistedDescriptor) }
         try synchronize(descriptor: persistedDescriptor, path: fileURL.path)
+        try synchronizeDirectory(at: directoryURL)
     }
 
     func remove() throws {
+        let directoryURL = fileURL.deletingLastPathComponent()
         let result = fileURL.path.withCString { Darwin.unlink($0) }
-        if result == 0 || errno == ENOENT { return }
+        if result == 0 {
+            try synchronizeDirectory(at: directoryURL)
+            return
+        }
+        if errno == ENOENT { return }
         throw posixError(operation: "remove", path: fileURL.path)
+    }
+
+    private func synchronizeDirectory(at directoryURL: URL) throws {
+        let descriptor = Darwin.open(directoryURL.path, O_RDONLY)
+        guard descriptor >= 0 else {
+            throw posixError(operation: "open directory", path: directoryURL.path)
+        }
+        defer { Darwin.close(descriptor) }
+        try synchronize(descriptor: descriptor, path: directoryURL.path)
     }
 
     private func synchronize(descriptor: Int32, path: String) throws {
