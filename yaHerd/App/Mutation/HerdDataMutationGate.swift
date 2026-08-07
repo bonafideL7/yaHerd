@@ -15,6 +15,17 @@ enum PublicIDRepairBridgeLocationIdentity: String, Codable, Equatable, Sendable 
 struct PublicIDRepairBridgeTargetIdentity: Codable, Equatable, Sendable {
     let herdPublicID: UUID
     let location: PublicIDRepairBridgeLocationIdentity
+    let bridgeFingerprint: String?
+
+    init(
+        herdPublicID: UUID,
+        location: PublicIDRepairBridgeLocationIdentity,
+        bridgeFingerprint: String? = nil
+    ) {
+        self.herdPublicID = herdPublicID
+        self.location = location
+        self.bridgeFingerprint = bridgeFingerprint
+    }
 }
 
 struct PublicIDRepairBridgePreparation: Codable, Equatable, Sendable {
@@ -173,6 +184,19 @@ final class HerdDataMutationGate {
         }
         guard pendingRepairState == nil else {
             throw GateError.bridgeConvergenceRequired(reason: reason)
+        }
+    }
+
+    func validateSyncDataResetAllowed() throws {
+        try validateJournalAvailable()
+        guard repairToken == nil else {
+            throw GateError.publicIDRepairBlocksSynchronization
+        }
+        guard pendingRepairState == nil else {
+            throw GateError.bridgeConvergenceRequired(reason: nil)
+        }
+        guard synchronizationTokens.isEmpty else {
+            throw GateError.synchronizationInProgress
         }
     }
 
@@ -343,6 +367,17 @@ final class LocalOnlyPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordi
     }
 }
 
+enum CoordinatedPublicIDRepairError: LocalizedError, Equatable {
+    case localCommitStateIndeterminate
+
+    var errorDescription: String? {
+        switch self {
+        case .localCommitStateIndeterminate:
+            "yaHerd cannot prove whether the journaled public-ID repair transaction committed. Normal edits and synchronization remain blocked. Restore the repair backup or retry after the local store state is recovered."
+        }
+    }
+}
+
 @MainActor
 final class CoordinatedPublicIDRepairService: PublicIDRepairService {
     private let worker: any PublicIDRepairTransactionalService
@@ -434,8 +469,10 @@ final class CoordinatedPublicIDRepairService: PublicIDRepairService {
 
         var report = pending.report
         if pending.phase == .localCommitPending {
-            let assessment = try await worker.scan()
-            if assessment.hasDuplicates {
+            switch try await worker.commitState(for: pending.report) {
+            case .committed:
+                try mutationGate.markLocalCommitSucceeded()
+            case .notCommitted:
                 do {
                     report = try await worker.repair(
                         resolutions: pending.resolutions,
@@ -447,12 +484,23 @@ final class CoordinatedPublicIDRepairService: PublicIDRepairService {
                             )
                         }
                     )
+                    try mutationGate.markLocalCommitSucceeded()
                 } catch {
-                    mutationGate.clearPendingLocalCommitAfterRollback()
-                    throw error
+                    let currentReport = mutationGate.pendingState?.report ?? pending.report
+                    switch try await worker.commitState(for: currentReport) {
+                    case .committed:
+                        report = currentReport
+                        try mutationGate.markLocalCommitSucceeded()
+                    case .notCommitted:
+                        mutationGate.clearPendingLocalCommitAfterRollback()
+                        throw error
+                    case .indeterminate:
+                        throw CoordinatedPublicIDRepairError.localCommitStateIndeterminate
+                    }
                 }
+            case .indeterminate:
+                throw CoordinatedPublicIDRepairError.localCommitStateIndeterminate
             }
-            try mutationGate.markLocalCommitSucceeded()
         }
 
         try await bridgeCoordinator.convergeAfterRepair(
