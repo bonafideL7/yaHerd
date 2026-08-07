@@ -36,21 +36,29 @@ private struct PublicIDRepairResolvedBridgeTarget {
   let shouldUpdateShare: Bool
 }
 
+private struct PublicIDRepairResolvedBridgeState {
+  let target: PublicIDRepairResolvedBridgeTarget
+  let snapshot: HerdSharingBridgeStoreSnapshot?
+  let fingerprint: String
+}
+
+private struct PublicIDRepairBridgeWriteOutcome {
+  let snapshot: HerdSharingBridgeStoreSnapshot
+  let managedObjectURIs: [String]
+}
+
 extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
   func publicIDRepairFingerprint(
     for herd: HerdSummary,
     expectedLocation: HerdSharingAccess.BridgeLocation
   ) async throws -> String {
     try await loadIfNeeded()
-    let target = try publicIDRepairBridgeTarget(
-      for: herd,
-      expectedLocation: expectedLocation
-    )
-    return try await publicIDRepairBridgeFingerprint(
+    let state = try await publicIDRepairBridgeState(
       for: herd,
       expectedLocation: expectedLocation,
-      target: target
+      allowCreatedOwnerPrivateStore: false
     )
+    return state.fingerprint
   }
 
   func syncPublicIDRepairBridgeRecordsFromSnapshot(
@@ -60,54 +68,85 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
   ) async throws -> HerdSharingBridgeExportResult {
     try await loadIfNeeded()
     let herd = export.herd
-
-    // Resolve the prepared store after the SwiftData export snapshot has been built. Unlike the
-    // normal sharing path, repair convergence is not allowed to fall through to another store.
-    let target = try publicIDRepairBridgeTarget(
-      for: herd,
-      expectedLocation: expectedLocation
+    let desiredSnapshot = HerdSharingBridgeStoreSnapshot(
+      herdPublicID: export.snapshot.herdPublicID,
+      storeDescription: "public-ID repair desired snapshot",
+      recordsByStep: export.snapshot.recordsByStep
     )
-    let currentFingerprint = try await publicIDRepairBridgeFingerprint(
+    let desiredFingerprint = desiredSnapshot.publicIDRepairFingerprint
+
+    // Resolve the prepared target after the SwiftData export has been built. A bridge can be in
+    // only two safe states here: the exact pre-repair baseline, or the exact repaired snapshot
+    // from an earlier convergence attempt that committed before a crash/journal-clear failure.
+    let initialState = try await publicIDRepairBridgeState(
       for: herd,
       expectedLocation: expectedLocation,
-      target: target
+      allowCreatedOwnerPrivateStore: true
     )
-    guard currentFingerprint == expectedFingerprint else {
-      throw HerdSharingPublicIDRepairBridgeError.bridgeContentChanged(
-        herdPublicID: herd.publicID
-      )
-    }
+    try validatePublicIDRepairBridgeState(
+      initialState,
+      baselineFingerprint: expectedFingerprint,
+      desiredFingerprint: desiredFingerprint,
+      herdPublicID: herd.publicID
+    )
 
     let operation = try await operationCoordinator.begin(
       herdPublicID: herd.publicID,
       direction: .exportToBridge,
-      bridgeLocation: target.description
+      bridgeLocation: initialState.target.description
     )
 
     do {
-      // Re-check after the operation-journal await and immediately before the first bridge write.
-      // This keeps a collaborator change during export preparation from being overwritten.
-      let preWriteFingerprint = try await publicIDRepairBridgeFingerprint(
+      // Re-resolve both the exact store location and its content after the operation-journal
+      // await. This prevents normal writable-store fallback and catches a target/content change
+      // immediately before the first bridge mutation.
+      let preWriteState = try await publicIDRepairBridgeState(
         for: herd,
         expectedLocation: expectedLocation,
-        target: target
+        allowCreatedOwnerPrivateStore: true
       )
-      guard preWriteFingerprint == expectedFingerprint else {
-        throw HerdSharingPublicIDRepairBridgeError.bridgeContentChanged(
-          herdPublicID: herd.publicID
+      try validatePublicIDRepairBridgeState(
+        preWriteState,
+        baselineFingerprint: expectedFingerprint,
+        desiredFingerprint: desiredFingerprint,
+        herdPublicID: herd.publicID
+      )
+
+      let outcome: PublicIDRepairBridgeWriteOutcome
+      if preWriteState.fingerprint == desiredFingerprint {
+        guard let currentSnapshot = preWriteState.snapshot else {
+          throw HerdSharingPublicIDRepairBridgeError.bridgeContentChanged(
+            herdPublicID: herd.publicID
+          )
+        }
+        outcome = PublicIDRepairBridgeWriteOutcome(
+          snapshot: currentSnapshot,
+          managedObjectURIs: publicIDRepairManagedObjectURIs(
+            for: currentSnapshot
+          )
+        )
+      } else {
+        let targetSnapshot = HerdSharingBridgeStoreSnapshot(
+          herdPublicID: export.snapshot.herdPublicID,
+          storeDescription: preWriteState.target.description,
+          recordsByStep: export.snapshot.recordsByStep
+        )
+        let writeResult = try await writeBridgeSnapshot(
+          targetSnapshot,
+          to: preWriteState.target.store,
+          failureInjector: operationCoordinator.backgroundFailureInjector
+        )
+        guard writeResult.snapshot.publicIDRepairFingerprint == desiredFingerprint else {
+          throw HerdSharingPublicIDRepairBridgeError.bridgeContentChanged(
+            herdPublicID: herd.publicID
+          )
+        }
+        outcome = PublicIDRepairBridgeWriteOutcome(
+          snapshot: writeResult.snapshot,
+          managedObjectURIs: writeResult.managedObjectURIs
         )
       }
 
-      let targetSnapshot = HerdSharingBridgeStoreSnapshot(
-        herdPublicID: export.snapshot.herdPublicID,
-        storeDescription: target.description,
-        recordsByStep: export.snapshot.recordsByStep
-      )
-      let writeResult = try await writeBridgeSnapshot(
-        targetSnapshot,
-        to: target.store,
-        failureInjector: operationCoordinator.backgroundFailureInjector
-      )
       try await operationCoordinator.recordCompletedSteps(
         HerdSharingBridgeStep.entitySteps + [.persistentStoreCommit],
         operationID: operation.id
@@ -119,13 +158,13 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
       ) {
         HerdSharingBridgeReconciler.makeReport(
           localPublicIDs: export.localPublicIDs,
-          bridgePublicIDs: writeResult.snapshot.publicIDsByStep,
-          deletionTombstoneCount: writeResult.snapshot.deletionTombstoneCount
+          bridgePublicIDs: outcome.snapshot.publicIDsByStep,
+          deletionTombstoneCount: outcome.snapshot.deletionTombstoneCount
         )
       }
 
       let recordsToShare = try publicIDRepairManagedObjects(
-        for: writeResult.managedObjectURIs
+        for: outcome.managedObjectURIs
       )
       guard let herdRecord = recordsToShare.first(where: {
         $0.entity.name == SharedHerdRecord.entityName
@@ -135,7 +174,7 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
       }
 
       var didUpdateExistingCloudKitShare = false
-      if target.shouldUpdateShare, try existingShare(for: herdRecord) != nil {
+      if preWriteState.target.shouldUpdateShare, try existingShare(for: herdRecord) != nil {
         _ = try await operationCoordinator.execute(
           .cloudKitShareUpdate,
           operationID: operation.id
@@ -145,10 +184,10 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
         didUpdateExistingCloudKitShare = true
       }
 
-      let finalSnapshot = writeResult.snapshot
+      let finalSnapshot = outcome.snapshot
       let result = HerdSharingBridgeExportResult(
         herdName: herd.name,
-        writeTargetDescription: target.description,
+        writeTargetDescription: preWriteState.target.description,
         didUpdateExistingCloudKitShare: didUpdateExistingCloudKitShare,
         exportedTagColorDefinitionCount: finalSnapshot.records(for: .tagColorDefinitions).count,
         exportedStatusReferenceCount: finalSnapshot.records(for: .statusReferences).count,
@@ -185,10 +224,11 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
     }
   }
 
-  private func publicIDRepairBridgeTarget(
+  private func publicIDRepairBridgeState(
     for herd: HerdSummary,
-    expectedLocation: HerdSharingAccess.BridgeLocation
-  ) throws -> PublicIDRepairResolvedBridgeTarget {
+    expectedLocation: HerdSharingAccess.BridgeLocation,
+    allowCreatedOwnerPrivateStore: Bool
+  ) async throws -> PublicIDRepairResolvedBridgeState {
     let privateRecord = try privateStore.flatMap {
       try fetchSharedHerdRecord(publicID: herd.publicID, in: $0)
     }
@@ -200,6 +240,9 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
       sharedRecordExists: sharedRecord != nil
     )
 
+    let target: PublicIDRepairResolvedBridgeTarget
+    let snapshot: HerdSharingBridgeStoreSnapshot?
+
     switch expectedLocation {
     case .ownerPrivateStore:
       guard let privateStore, let privateRecord, sharedRecord == nil else {
@@ -208,10 +251,15 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
           actual: actualDescription
         )
       }
-      return PublicIDRepairResolvedBridgeTarget(
+      target = PublicIDRepairResolvedBridgeTarget(
         store: privateStore,
         description: "owner private store",
         shouldUpdateShare: try existingShare(for: privateRecord) != nil
+      )
+      snapshot = try await readBridgeSnapshot(
+        from: privateStore,
+        requestedHerdPublicID: herd.publicID,
+        storeDescription: target.description
       )
 
     case .acceptedSharedStore:
@@ -226,14 +274,19 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
       guard permission == .readWrite || permission == .owner else {
         throw HerdSharingActionError.readOnlyShareCannotWrite
       }
-      return PublicIDRepairResolvedBridgeTarget(
+      target = PublicIDRepairResolvedBridgeTarget(
         store: sharedStore,
         description: "accepted shared store",
         shouldUpdateShare: false
       )
+      snapshot = try await readBridgeSnapshot(
+        from: sharedStore,
+        requestedHerdPublicID: herd.publicID,
+        storeDescription: target.description
+      )
 
     case .bridgeRecordMissing:
-      guard privateRecord == nil, sharedRecord == nil else {
+      guard sharedRecord == nil else {
         throw HerdSharingPublicIDRepairBridgeError.targetChanged(
           expected: "no bridge record yet",
           actual: actualDescription
@@ -244,31 +297,58 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
           "The private sharing bridge store was not loaded."
         )
       }
-      return PublicIDRepairResolvedBridgeTarget(
-        store: privateStore,
-        description: "owner private store",
-        shouldUpdateShare: false
-      )
-    }
-  }
 
-  private func publicIDRepairBridgeFingerprint(
-    for herd: HerdSummary,
-    expectedLocation: HerdSharingAccess.BridgeLocation,
-    target: PublicIDRepairResolvedBridgeTarget
-  ) async throws -> String {
-    if expectedLocation == .bridgeRecordMissing {
-      return Self.publicIDRepairDigest(
+      if let privateRecord {
+        guard allowCreatedOwnerPrivateStore else {
+          throw HerdSharingPublicIDRepairBridgeError.targetChanged(
+            expected: "no bridge record yet",
+            actual: actualDescription
+          )
+        }
+        target = PublicIDRepairResolvedBridgeTarget(
+          store: privateStore,
+          description: "owner private store",
+          shouldUpdateShare: try existingShare(for: privateRecord) != nil
+        )
+        snapshot = try await readBridgeSnapshot(
+          from: privateStore,
+          requestedHerdPublicID: herd.publicID,
+          storeDescription: target.description
+        )
+      } else {
+        target = PublicIDRepairResolvedBridgeTarget(
+          store: privateStore,
+          description: "owner private store",
+          shouldUpdateShare: false
+        )
+        snapshot = nil
+      }
+    }
+
+    let fingerprint = snapshot?.publicIDRepairFingerprint
+      ?? Self.publicIDRepairDigest(
         "missing|\(herd.publicID.uuidString.lowercased())"
       )
-    }
-
-    let snapshot = try await readBridgeSnapshot(
-      from: target.store,
-      requestedHerdPublicID: herd.publicID,
-      storeDescription: target.description
+    return PublicIDRepairResolvedBridgeState(
+      target: target,
+      snapshot: snapshot,
+      fingerprint: fingerprint
     )
-    return snapshot.publicIDRepairFingerprint
+  }
+
+  private func validatePublicIDRepairBridgeState(
+    _ state: PublicIDRepairResolvedBridgeState,
+    baselineFingerprint: String,
+    desiredFingerprint: String,
+    herdPublicID: UUID
+  ) throws {
+    guard state.fingerprint == baselineFingerprint
+      || state.fingerprint == desiredFingerprint
+    else {
+      throw HerdSharingPublicIDRepairBridgeError.bridgeContentChanged(
+        herdPublicID: herdPublicID
+      )
+    }
   }
 
   private func publicIDRepairActualTargetDescription(
@@ -285,6 +365,16 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
     case (false, false):
       return "no bridge record yet"
     }
+  }
+
+  private func publicIDRepairManagedObjectURIs(
+    for snapshot: HerdSharingBridgeStoreSnapshot
+  ) -> [String] {
+    HerdSharingBridgeStep.entitySteps
+      .filter { $0 != .deletions }
+      .flatMap { step in
+        snapshot.records(for: step).map(\.sourceObjectURI)
+      }
   }
 
   private func publicIDRepairManagedObjects(
@@ -307,7 +397,7 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
   }
 }
 
-private extension HerdSharingBridgeStoreSnapshot {
+extension HerdSharingBridgeStoreSnapshot {
   var publicIDRepairFingerprint: String {
     var components = ["herd|\(herdPublicID.uuidString.lowercased())"]
     for step in HerdSharingBridgeStep.entitySteps {
