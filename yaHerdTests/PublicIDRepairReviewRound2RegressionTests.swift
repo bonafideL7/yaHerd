@@ -121,20 +121,21 @@ final class PublicIDRepairReviewRound2RegressionTests: XCTestCase {
         )
     }
 
-    func testReplacementIDTombstoneIsFingerprintVisibleRemovedByConvergenceAndCannotDeleteLiveImport() async throws {
+    func testReplacementIDTombstoneOnlyIsIgnoredDuringRepairThenRemovedBeforeNormalImport() async throws {
         let herdID = UUID(uuidString: "33333333-CCCC-4333-8333-333333333333")!
+        let retainedAnimalID = UUID(uuidString: "66666666-FFFF-4666-8666-666666666666")!
         let replacementAnimalID = UUID(uuidString: "44444444-DDDD-4444-8444-444444444444")!
         let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
 
-        let exportContainer = try TestSupport.makeModelContainer()
-        let exportContext = exportContainer.mainContext
-        let herd = Herd(
+        let repairedContainer = try TestSupport.makeModelContainer()
+        let repairedContext = repairedContainer.mainContext
+        let repairedHerd = Herd(
             publicID: herdID,
             name: "Tombstone herd",
             createdAt: timestamp,
             updatedAt: timestamp
         )
-        exportContext.insert(herd)
+        repairedContext.insert(repairedHerd)
         let repairedAnimal = Animal(
             publicID: replacementAnimalID,
             name: "Repaired live animal",
@@ -142,13 +143,13 @@ final class PublicIDRepairReviewRound2RegressionTests: XCTestCase {
             birthDate: timestamp,
             sex: .female
         )
-        repairedAnimal.herd = herd
-        exportContext.insert(repairedAnimal)
-        try exportContext.save()
+        repairedAnimal.herd = repairedHerd
+        repairedContext.insert(repairedAnimal)
+        try repairedContext.save()
 
-        let reader = SwiftDataHerdSharingActor(modelContainer: exportContainer)
-        let export = try await reader.makeExport(
-            for: herd.toSummary(),
+        let repairedActor = SwiftDataHerdSharingActor(modelContainer: repairedContainer)
+        let desiredExport = try await repairedActor.makeExport(
+            for: repairedHerd.toSummary(),
             storeDescription: "round-two-tombstone-desired"
         )
 
@@ -171,13 +172,23 @@ final class PublicIDRepairReviewRound2RegressionTests: XCTestCase {
         try await store.loadIfNeeded()
         let privateStore = try XCTUnwrap(store.privateStore)
 
-        _ = try await store.writeBridgeSnapshot(export.snapshot, to: privateStore)
+        // Seed the bridge once to create the root and then model an interrupted earlier repair:
+        // the deterministic replacement's live bridge row is gone but its deletion tombstone
+        // remains. The repaired SwiftData graph still contains the live replacement record.
+        _ = try await store.writeBridgeSnapshot(desiredExport.snapshot, to: privateStore)
 
         let coreDataContext = store.persistentContainer.viewContext
         let herdRequest = SharedHerdRecord.fetchRequest()
         herdRequest.affectedStores = [privateStore]
         herdRequest.predicate = NSPredicate(format: "publicID == %@", herdID.uuidString)
         let sharedHerd = try XCTUnwrap(coreDataContext.fetch(herdRequest).first)
+
+        let animalRequest = SharedAnimalRecord.fetchRequest()
+        animalRequest.affectedStores = [privateStore]
+        animalRequest.predicate = NSPredicate(format: "publicID == %@", replacementAnimalID.uuidString)
+        let staleLiveRecord = try XCTUnwrap(coreDataContext.fetch(animalRequest).first)
+        coreDataContext.delete(staleLiveRecord)
+
         let tombstone = SharedDeletedRecord(context: coreDataContext)
         coreDataContext.assign(tombstone, to: privateStore)
         tombstone.mirrorDeletion(
@@ -193,47 +204,109 @@ final class PublicIDRepairReviewRound2RegressionTests: XCTestCase {
         let contaminated = try await store.readBridgeSnapshot(
             from: privateStore,
             requestedHerdPublicID: herdID,
-            storeDescription: "round-two-contaminated"
+            storeDescription: "round-two-tombstone-only"
         )
+        XCTAssertTrue(contaminated.records(for: .animals).isEmpty)
         XCTAssertEqual(contaminated.records(for: .deletions).count, 1)
         XCTAssertNotEqual(
             contaminated.publicIDRepairFingerprint,
-            export.snapshot.publicIDRepairFingerprint,
+            desiredExport.snapshot.publicIDRepairFingerprint,
             "A semantic deletion tombstone must participate in repair fingerprint validation"
         )
 
-        _ = try await store.writeBridgeSnapshot(export.snapshot, to: privateStore)
+        let report = PublicIDRepairReport(
+            completedAt: timestamp,
+            assessment: PublicIDRepairAssessment(
+                scannedAt: timestamp,
+                entities: [
+                    PublicIDRepairEntityAssessment(
+                        entityType: .animal,
+                        scannedRecordCount: 2,
+                        duplicateGroupCount: 1,
+                        duplicateRecordCount: 1
+                    )
+                ]
+            ),
+            replacements: [
+                PublicIDRepairReplacement(
+                    entityType: .animal,
+                    recordDescription: "Repaired live animal",
+                    stableRecordIdentifier: "animal|replacement-regression",
+                    retainedPublicID: retainedAnimalID,
+                    replacementPublicID: replacementAnimalID
+                )
+            ],
+            referenceUpdates: [],
+            backupFilename: "round-two-tombstone.json",
+            backupPath: "/tmp/round-two-tombstone.json",
+            validationIssueCount: 0
+        )
+
+        _ = try await store.importPublicIDRepairBridgeRecordsIntoSwiftData(
+            for: repairedHerd.toSummary(),
+            expectedLocation: .ownerPrivateStore,
+            expectedFingerprint: contaminated.publicIDRepairFingerprint,
+            importer: repairedActor,
+            report: report
+        )
+
+        let postRepairImportAnimals = try ModelContext(repairedContainer).fetch(
+            FetchDescriptor<Animal>()
+        )
+        XCTAssertEqual(
+            postRepairImportAnimals.map(\.publicID),
+            [replacementAnimalID],
+            "The repair-only import must not apply a stale tombstone for this transaction's replacement ID"
+        )
+
+        let postImportHerd = try XCTUnwrap(
+            ModelContext(repairedContainer).fetch(FetchDescriptor<Herd>()).first
+        )
+        let postImportExport = try await repairedActor.makeExport(
+            for: postImportHerd.toSummary(),
+            storeDescription: "round-two-tombstone-convergence"
+        )
+        let convergence = try await store.syncPublicIDRepairBridgeRecordsFromSnapshot(
+            postImportExport,
+            expectedLocation: .ownerPrivateStore,
+            expectedFingerprint: contaminated.publicIDRepairFingerprint
+        )
+        XCTAssertFalse(convergence.reconciliationReport.hasUnresolvedDifferences)
+
         let converged = try await store.readBridgeSnapshot(
             from: privateStore,
             requestedHerdPublicID: herdID,
             storeDescription: "round-two-converged"
         )
         XCTAssertTrue(converged.records(for: .deletions).isEmpty)
+        XCTAssertEqual(converged.records(for: .animals).map(\.publicID), [replacementAnimalID.uuidString])
         XCTAssertEqual(
             converged.publicIDRepairFingerprint,
-            export.snapshot.publicIDRepairFingerprint
+            postImportExport.snapshot.publicIDRepairFingerprint
         )
 
-        let importContainer = try TestSupport.makeModelContainer()
-        let importContext = importContainer.mainContext
-        importContext.insert(
+        let normalImportContainer = try TestSupport.makeModelContainer()
+        let normalImportContext = normalImportContainer.mainContext
+        normalImportContext.insert(
             Herd(
                 publicID: herdID,
-                name: "Import target",
+                name: "Normal import target",
                 createdAt: timestamp,
                 updatedAt: timestamp
             )
         )
-        try importContext.save()
-        let importer = SwiftDataHerdSharingActor(modelContainer: importContainer)
-        _ = try await importer.applyImport(
+        try normalImportContext.save()
+        let normalImporter = SwiftDataHerdSharingActor(modelContainer: normalImportContainer)
+        _ = try await normalImporter.applyImport(
             converged,
             pendingConflictReport: nil,
             failureInjector: .disabled
         )
 
-        let importedAnimals = try ModelContext(importContainer).fetch(FetchDescriptor<Animal>())
-        XCTAssertEqual(importedAnimals.map(\.publicID), [replacementAnimalID])
+        let normallyImportedAnimals = try ModelContext(normalImportContainer).fetch(
+            FetchDescriptor<Animal>()
+        )
+        XCTAssertEqual(normallyImportedAnimals.map(\.publicID), [replacementAnimalID])
     }
 
     private func verifyDuplicateHerdRecovery(
