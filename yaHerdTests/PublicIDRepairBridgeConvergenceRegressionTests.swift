@@ -37,7 +37,10 @@ final class PublicIDRepairBridgeConvergenceRegressionTests: XCTestCase {
         await inventory.setHerds([original, duplicate])
 
         do {
-            try await coordinator.convergeAfterRepair(preparation: preparation)
+            try await coordinator.convergeAfterRepair(
+                preparation: preparation,
+                report: bridgeBoundaryReport()
+            )
             XCTFail("Expected late duplicate Herd to block convergence")
         } catch let error as PublicIDRepairBridgeError {
             XCTAssertEqual(
@@ -50,10 +53,11 @@ final class PublicIDRepairBridgeConvergenceRegressionTests: XCTestCase {
         }
 
         XCTAssertEqual(repository.fetchAccessCallCount, accessCallsAfterPreparation)
+        XCTAssertEqual(exporter.importedHerdIDs, [])
         XCTAssertEqual(exporter.exportedHerdIDs, [])
     }
 
-    func testAcceptedSharedBridgeImportIntroducingDuplicateHerdBlocksPreparation() async throws {
+    func testAcceptedSharedDuplicateHerdCanPrepareWithoutCallingNormalImporter() async throws {
         let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
         let herdID = UUID(uuidString: "E5E5E5E5-E5E5-45E5-85E5-E5E5E5E5E5E5")!
         let original = HerdSummary(
@@ -65,20 +69,17 @@ final class PublicIDRepairBridgeConvergenceRegressionTests: XCTestCase {
         )
         let duplicate = HerdSummary(
             publicID: herdID,
-            name: "Duplicate from bridge import",
+            name: "Duplicate local herd",
             createdAt: timestamp.addingTimeInterval(1),
             updatedAt: timestamp.addingTimeInterval(1),
             schemaVersion: 1
         )
-        let inventory = BridgeBoundaryHerdInventory(herds: [original])
+        let inventory = BridgeBoundaryHerdInventory(herds: [original, duplicate])
         let repository = BridgeBoundarySharingRepository(
             access: .acceptedSharedStore(
                 permission: .readWrite,
                 participantCount: 2
-            ),
-            onImport: {
-                await inventory.setHerds([original, duplicate])
-            }
+            )
         )
         let exporter = BridgeBoundaryExporter()
         let coordinator = DefaultPublicIDRepairBridgeCoordinator(
@@ -88,25 +89,17 @@ final class PublicIDRepairBridgeConvergenceRegressionTests: XCTestCase {
             exporter: exporter
         )
 
-        do {
-            _ = try await coordinator.prepareForRepair()
-            XCTFail("Expected duplicate Herd introduced by bridge import to block repair")
-        } catch let error as PublicIDRepairBridgeError {
-            XCTAssertEqual(
-                error,
-                .duplicateHerdBridgeTargetAmbiguous(
-                    herdPublicID: herdID,
-                    recordCount: 2
-                )
-            )
-        }
+        let preparation = try await coordinator.prepareForRepair()
 
-        XCTAssertEqual(repository.fetchAccessCallCount, 1)
-        XCTAssertEqual(repository.importCallCount, 1)
+        XCTAssertEqual(preparation.targets.count, 1)
+        XCTAssertEqual(preparation.targets.first?.herdPublicID, herdID)
+        XCTAssertEqual(preparation.targets.first?.location, .acceptedSharedStore)
+        XCTAssertEqual(repository.importCallCount, 0)
+        XCTAssertEqual(exporter.importedHerdIDs, [])
         XCTAssertEqual(exporter.exportedHerdIDs, [])
     }
 
-    func testBridgeMutationAfterPreparationBlocksConvergenceBeforeExport() async throws {
+    func testBridgeMutationAfterPreparationIsImportedBeforeRepairedExport() async throws {
         let herd = makeBridgeBoundaryHerd()
         let inventory = BridgeBoundaryHerdInventory(herds: [herd])
         let repository = BridgeBoundarySharingRepository()
@@ -122,13 +115,14 @@ final class PublicIDRepairBridgeConvergenceRegressionTests: XCTestCase {
         XCTAssertEqual(preparation.targets.first?.bridgeFingerprint, "baseline-a")
         exporter.currentFingerprint = "baseline-b"
 
-        do {
-            try await coordinator.convergeAfterRepair(preparation: preparation)
-            XCTFail("Expected intervening bridge mutation to block convergence")
-        } catch let error as PublicIDRepairBridgeError {
-            XCTAssertEqual(error, .bridgeContentChanged(herdPublicID: herd.publicID))
-        }
-        XCTAssertEqual(exporter.exportedHerdIDs, [])
+        try await coordinator.convergeAfterRepair(
+            preparation: preparation,
+            report: bridgeBoundaryReport()
+        )
+
+        XCTAssertEqual(exporter.importedHerdIDs, [herd.publicID])
+        XCTAssertEqual(exporter.exportedHerdIDs, [herd.publicID])
+        XCTAssertEqual(exporter.exportedTargets.first?.bridgeFingerprint, "baseline-b")
     }
 
     func testBridgeTargetChangeDuringExportSnapshotBuildCannotFallThroughToAnotherStore() async throws {
@@ -227,7 +221,10 @@ final class PublicIDRepairBridgeConvergenceRegressionTests: XCTestCase {
         await inventory.setHerds([original, replacement])
 
         do {
-            try await coordinator.convergeAfterRepair(preparation: preparation)
+            try await coordinator.convergeAfterRepair(
+                preparation: preparation,
+                report: bridgeBoundaryReport()
+            )
             XCTFail("Expected unprepared replacement Herd to keep convergence blocked")
         } catch let error as PublicIDRepairBridgeError {
             XCTAssertEqual(
@@ -241,6 +238,7 @@ final class PublicIDRepairBridgeConvergenceRegressionTests: XCTestCase {
             accessCallsAfterPreparation,
             "Convergence must not query the replacement ID and infer local-owner access"
         )
+        XCTAssertEqual(exporter.importedHerdIDs, [])
         XCTAssertEqual(exporter.exportedHerdIDs, [])
     }
 }
@@ -253,6 +251,18 @@ private func makeBridgeBoundaryHerd() -> HerdSummary {
         createdAt: timestamp,
         updatedAt: timestamp,
         schemaVersion: 1
+    )
+}
+
+private func bridgeBoundaryReport() -> PublicIDRepairReport {
+    PublicIDRepairReport(
+        completedAt: .now,
+        assessment: PublicIDRepairAssessment(scannedAt: .now, entities: []),
+        replacements: [],
+        referenceUpdates: [],
+        backupFilename: "bridge-boundary.json",
+        backupPath: "/tmp/bridge-boundary.json",
+        validationIssueCount: 0
     )
 }
 
@@ -275,7 +285,9 @@ private actor BridgeBoundaryHerdInventory: PublicIDRepairHerdInventoryReading {
 @MainActor
 private final class BridgeBoundaryExporter: PublicIDRepairBridgeExporting {
     var currentFingerprint: String
+    private(set) var importedHerdIDs: [UUID] = []
     private(set) var exportedHerdIDs: [UUID] = []
+    private(set) var exportedTargets: [PublicIDRepairBridgeTargetIdentity] = []
 
     init(currentFingerprint: String = "bridge-boundary-baseline") {
         self.currentFingerprint = currentFingerprint
@@ -288,6 +300,20 @@ private final class BridgeBoundaryExporter: PublicIDRepairBridgeExporting {
         currentFingerprint
     }
 
+    func importCurrentBridgeGraph(
+        for herd: HerdSummary,
+        access: HerdSharingAccess,
+        expectedFingerprint: String,
+        report: PublicIDRepairReport
+    ) async throws {
+        guard expectedFingerprint == currentFingerprint else {
+            throw PublicIDRepairBridgeError.bridgeContentChanged(
+                herdPublicID: herd.publicID
+            )
+        }
+        importedHerdIDs.append(herd.publicID)
+    }
+
     func exportRepairedGraph(
         for herd: HerdSummary,
         target: PublicIDRepairBridgeTargetIdentity
@@ -298,6 +324,7 @@ private final class BridgeBoundaryExporter: PublicIDRepairBridgeExporting {
             )
         }
         exportedHerdIDs.append(herd.publicID)
+        exportedTargets.append(target)
         return .empty
     }
 }
@@ -344,6 +371,16 @@ private final class TargetChangingRepairBridgeStore: PublicIDRepairBridgeStore {
     ) async throws -> String {
         try validateLocation(expectedLocation)
         return currentFingerprint
+    }
+
+    func importPublicIDRepairBridgeRecordsIntoSwiftData(
+        for herd: HerdSummary,
+        expectedLocation: HerdSharingAccess.BridgeLocation,
+        expectedFingerprint: String,
+        importer: any HerdSharingImportApplying,
+        report: PublicIDRepairReport
+    ) async throws -> HerdSharingBridgeImportResult {
+        throw BridgeBoundaryTestError.unexpectedWrite
     }
 
     func syncPublicIDRepairBridgeRecordsFromSnapshot(
