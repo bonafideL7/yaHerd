@@ -204,6 +204,12 @@ struct PublicIDRepairReport: Codable, Equatable, Sendable {
     }
 }
 
+enum PublicIDRepairCommitState: Equatable, Sendable {
+    case committed
+    case notCommitted
+    case indeterminate
+}
+
 /// Main-actor façade consumed by diagnostics/UI orchestration.
 @MainActor
 protocol PublicIDRepairService: AnyObject, Sendable {
@@ -223,6 +229,7 @@ protocol PublicIDRepairTransactionalService: Sendable {
         resolutions: [PublicIDRepairReferenceResolution],
         willCommit: PublicIDRepairWillCommit
     ) async throws -> PublicIDRepairReport
+    func commitState(for report: PublicIDRepairReport) async throws -> PublicIDRepairCommitState
 }
 
 extension PublicIDRepairTransactionalService {
@@ -234,6 +241,10 @@ extension PublicIDRepairTransactionalService {
 
     func repair() async throws -> PublicIDRepairReport {
         try await repair(resolutions: [])
+    }
+
+    func commitState(for report: PublicIDRepairReport) async throws -> PublicIDRepairCommitState {
+        .indeterminate
     }
 }
 
