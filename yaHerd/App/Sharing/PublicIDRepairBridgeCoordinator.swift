@@ -295,7 +295,7 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
         let expectedTargetByHerdID = Dictionary(
             uniqueKeysWithValues: preparation.targets.map { ($0.herdPublicID, $0) }
         )
-        let repairedHerds = try validatedConvergenceHerds(
+        let repairedHerds = try await validatedConvergenceHerds(
             preparation: preparation,
             expectedTargetByHerdID: expectedTargetByHerdID
         )
@@ -347,7 +347,7 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
 
         // The bridge import can add/update shared records. Re-read the Herd inventory before
         // export and verify that the local repair still produced exactly the journaled root set.
-        let convergedHerds = try validatedConvergenceHerds(
+        let convergedHerds = try await validatedConvergenceHerds(
             preparation: preparation,
             expectedTargetByHerdID: expectedTargetByHerdID
         )
