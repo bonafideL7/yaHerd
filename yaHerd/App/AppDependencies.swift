@@ -141,7 +141,9 @@ final class AppDependencies {
         let bridgeCoordinator: any PublicIDRepairBridgeCoordinating
         if resolvedStorageMode == .iCloud && dataAccessMode.allowsDataMutations {
             bridgeCoordinator = DefaultPublicIDRepairBridgeCoordinator(
-                herdRepository: herdRepository,
+                herdInventory: SwiftDataPublicIDRepairHerdInventory(
+                    modelContainer: modelContainer
+                ),
                 sharingRepository: baseHerdSharingRepository,
                 storageMode: resolvedStorageMode,
                 exporter: SwiftDataPublicIDRepairBridgeExporter(

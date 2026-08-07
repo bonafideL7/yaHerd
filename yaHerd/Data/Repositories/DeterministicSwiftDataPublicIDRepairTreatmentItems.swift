@@ -5,12 +5,17 @@ extension DeterministicSwiftDataPublicIDRepairService {
     func makeTreatmentItemLocations(loaded: LoadedRecords) -> [TreatmentItemLocation] {
         var locations: [TreatmentItemLocation] = []
         for template in loaded.workingProtocolTemplates {
+            let ownerSnapshotKey = stableSnapshotKey(
+                CollaborationFieldSnapshotProvider.snapshot(for: template)
+            )
             for index in template.items.indices {
                 let original = template.items[index]
                 locations.append(
                     TreatmentItemLocation(
                         entityType: .workingProtocolTemplate,
                         ownerLocalIdentifier: localRecordIdentifier(template),
+                        ownerPublicID: template.publicID,
+                        ownerSnapshotKey: ownerSnapshotKey,
                         itemIndex: index,
                         localIdentifier: localTreatmentItemIdentifier(owner: template, index: index),
                         originalID: original.id,
@@ -32,12 +37,17 @@ extension DeterministicSwiftDataPublicIDRepairService {
             }
         }
         for session in loaded.workingSessions {
+            let ownerSnapshotKey = stableSnapshotKey(
+                CollaborationFieldSnapshotProvider.snapshot(for: session)
+            )
             for index in session.protocolItems.indices {
                 let original = session.protocolItems[index]
                 locations.append(
                     TreatmentItemLocation(
                         entityType: .workingSession,
                         ownerLocalIdentifier: localRecordIdentifier(session),
+                        ownerPublicID: session.publicID,
+                        ownerSnapshotKey: ownerSnapshotKey,
                         itemIndex: index,
                         localIdentifier: localTreatmentItemIdentifier(owner: session, index: index),
                         originalID: original.id,
@@ -91,12 +101,17 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 for (ordinal, location) in ordered.enumerated() {
                     let itemKey = stableTreatmentItemKey(location.item)
                     let ownerGraph = graphFingerprintByLocalIdentifier[location.ownerLocalIdentifier] ?? ""
-                    let stableIdentifier = [
+                    let ownerStableIdentifier = [
                         entityType.rawValue,
-                        location.ownerDescription,
+                        location.ownerPublicID.uuidString.lowercased(),
+                        deterministicDigest(location.ownerSnapshotKey),
+                        ownerGraph,
+                    ].joined(separator: "|")
+                    let stableIdentifier = [
+                        ownerStableIdentifier,
                         retainedID.uuidString.lowercased(),
                         deterministicDigest(itemKey),
-                        ownerGraph,
+                        "item-\(location.itemIndex)",
                         "candidate-\(ordinal)",
                     ].joined(separator: "|")
                     let resultingID: UUID
@@ -150,7 +165,8 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 duplicateRecordCount: replacements.count
             ),
             replacements: replacements,
-            candidates: candidates
+            candidates: candidates,
+            unresolvedIssues: []
         )
     }
 
@@ -173,7 +189,8 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     + itemPlan.assessment.duplicateRecordCount
             ),
             replacements: base.replacements + itemPlan.replacements,
-            candidates: base.candidates + itemPlan.candidates
+            candidates: base.candidates + itemPlan.candidates,
+            unresolvedIssues: base.unresolvedIssues + itemPlan.unresolvedIssues
         )
     }
 
@@ -184,6 +201,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
         [
             deterministicDigest(stableTreatmentItemKey(location.item)),
             graphFingerprintByLocalIdentifier[location.ownerLocalIdentifier] ?? "",
+            String(format: "%08d", location.itemIndex),
         ].joined(separator: "|")
     }
 

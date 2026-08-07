@@ -68,6 +68,84 @@ extension DeterministicSwiftDataPublicIDRepairService {
         )
     }
 
+    func appendSnapshotReferenceUpdate<Target, Source>(
+        entityType: PublicIDRepairEntityType,
+        model: Source,
+        recordDescription: String,
+        fieldName: String,
+        currentID: @escaping () -> UUID?,
+        sourceHerd: Herd?,
+        records: [Target],
+        publicID: (Target) -> UUID,
+        herd: (Target) -> Herd?,
+        targetDescription: String,
+        evidenceMatches: (Target) -> Bool,
+        plan: RepairPlan,
+        resolutions: [String: String],
+        assign: @escaping (UUID) -> Void,
+        to updates: inout [PlannedReferenceUpdate]
+    ) throws where Target: PersistentModel, Target: CollaborativelyMutableAggregate,
+                   Source: PersistentModel, Source: CollaborativelyMutableAggregate {
+        guard let current = currentID() else { return }
+        let pool = scopedLookupCandidates(
+            currentID: current,
+            sourceHerd: sourceHerd,
+            records: records,
+            publicID: publicID,
+            herd: herd
+        )
+        guard !pool.isEmpty else { return }
+
+        let selected: Target
+        if pool.count == 1 {
+            selected = pool[0]
+        } else {
+            let evidencePool = pool.filter(evidenceMatches)
+            if evidencePool.count == 1 {
+                selected = evidencePool[0]
+            } else {
+                let candidates = pool.compactMap { target -> (Target, DuplicateCandidate)? in
+                    guard let candidate = plan.candidateByLocalIdentifier[localRecordIdentifier(target)] else {
+                        return nil
+                    }
+                    return (target, candidate)
+                }
+                let issue = PublicIDRepairUnresolvedReference(
+                    kind: .lookupReference,
+                    entityType: entityType,
+                    recordDescription: recordDescription,
+                    stableRecordIdentifier: stableSourceIdentifier(model, plan: plan),
+                    fieldName: fieldName,
+                    referencedPublicID: current,
+                    reason: "The live relationship is unavailable and the stored snapshot does not identify exactly one \(targetDescription). Choose the intended record.",
+                    candidates: candidates.map { makeResolutionCandidate($0.1) }
+                )
+                guard let selectedIdentifier = resolutions[issue.id],
+                      let resolved = candidates.first(where: {
+                          $0.1.stableRecordIdentifier == selectedIdentifier
+                      })
+                else {
+                    throw PublicIDRepairError.invalidResolution(issue.id)
+                }
+                selected = resolved.0
+            }
+        }
+
+        let desiredID = plan.candidateByLocalIdentifier[localRecordIdentifier(selected)]?.resultingPublicID
+            ?? publicID(selected)
+        appendOptionalReferenceUpdate(
+            entityType: entityType,
+            model: model,
+            recordDescription: recordDescription,
+            fieldName: fieldName,
+            currentID: currentID,
+            desiredID: desiredID,
+            assign: assign,
+            plan: plan,
+            to: &updates
+        )
+    }
+
     func appendOptionalReferenceUpdate<Model>(
         entityType: PublicIDRepairEntityType,
         model: Model,
@@ -94,6 +172,55 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 assignPublicID: assign
             )
         )
+    }
+
+    func fieldCheckPastureSnapshotMatches(
+        _ session: FieldCheckSession,
+        _ pasture: Pasture
+    ) -> Bool {
+        let name = normalizedSnapshotText(session.pastureNameSnapshot)
+        guard !name.isEmpty else { return false }
+        return normalizedSnapshotText(pasture.name) == name
+    }
+
+    func fieldCheckAnimalSnapshotMatches(
+        _ check: FieldCheckAnimalCheck,
+        _ animal: Animal
+    ) -> Bool {
+        let tag = normalizedSnapshotText(check.rosterTagNumber)
+        let name = normalizedSnapshotText(check.animalName)
+        let sex = check.animalSex
+        let hasEvidence = !tag.isEmpty || !name.isEmpty || sex != .unknown
+        guard hasEvidence else { return false }
+        if !tag.isEmpty, normalizedSnapshotText(animal.tagNumber) != tag { return false }
+        if !name.isEmpty, normalizedSnapshotText(animal.name) != name { return false }
+        if sex != .unknown, animal.sex != sex { return false }
+        return true
+    }
+
+    func fieldCheckFindingAnimalSnapshotMatches(
+        _ finding: FieldCheckFinding,
+        _ animal: Animal
+    ) -> Bool {
+        let tag = normalizedSnapshotText(finding.animalDisplayTagNumberSnapshot)
+        let name = normalizedSnapshotText(finding.animalNameSnapshot)
+        guard !tag.isEmpty || !name.isEmpty else { return false }
+        if !tag.isEmpty, normalizedSnapshotText(animal.tagNumber) != tag { return false }
+        if !name.isEmpty, normalizedSnapshotText(animal.name) != name { return false }
+        return true
+    }
+
+    func fieldCheckFindingSessionSnapshotMatches(
+        _ finding: FieldCheckFinding,
+        _ session: FieldCheckSession
+    ) -> Bool {
+        let pastureName = normalizedSnapshotText(finding.pastureNameSnapshot)
+        guard !pastureName.isEmpty else { return false }
+        return normalizedSnapshotText(session.pastureNameSnapshot) == pastureName
+    }
+
+    func normalizedSnapshotText(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     func treatmentCandidateLocations(

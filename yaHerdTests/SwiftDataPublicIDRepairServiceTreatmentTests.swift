@@ -191,6 +191,81 @@ extension SwiftDataPublicIDRepairServiceTests {
         XCTAssertEqual(firstGraph, secondGraph)
     }
 
+    func testIndistinguishableDuplicateRecordsBlockInsteadOfUsingFetchOrder() async throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = container.mainContext
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let duplicateID = UUID(uuidString: "91919191-9191-4191-8191-919191919191")!
+        let herd = Herd(name: "Exact duplicates", createdAt: timestamp, updatedAt: timestamp)
+        context.insert(herd)
+
+        for _ in 0..<2 {
+            let animal = Animal(
+                publicID: duplicateID,
+                name: "Same",
+                tagNumber: "900",
+                birthDate: timestamp,
+                sex: .female
+            )
+            animal.herd = herd
+            context.insert(animal)
+        }
+        try context.save()
+
+        let service = SwiftDataPublicIDRepairService(modelContainer: container)
+        let assessment = try await service.scan()
+        let issue = try XCTUnwrap(
+            assessment.unresolvedReferences.first { $0.kind == .canonicalRecord }
+        )
+
+        XCTAssertTrue(assessment.hasDuplicates)
+        XCTAssertTrue(issue.candidates.isEmpty)
+        XCTAssertTrue(issue.reason.contains("no store-local identity"))
+        await XCTAssertThrowsErrorAsync(try await service.repair())
+    }
+
+    func testTreatmentReplacementIDsAreStableAcrossTimeZones() async throws {
+        let originalTimeZone = NSTimeZone.default
+        defer { NSTimeZone.default = originalTimeZone }
+        let secondDose = WorkingTreatmentDose(
+            amount: 5,
+            unit: .milliliter,
+            route: .intramuscular
+        )
+
+        NSTimeZone.default = TimeZone(secondsFromGMT: 0)!
+        let utcFixture = try makeTreatmentFixture(
+            secondDose: secondDose,
+            treatmentDose: secondDose
+        )
+        let utcReport = try await SwiftDataPublicIDRepairService(
+            modelContainer: utcFixture.container
+        ).repair()
+        defer { try? FileManager.default.removeItem(atPath: utcReport.backupPath) }
+        let utcReplacement = try XCTUnwrap(
+            utcReport.replacements.first {
+                $0.entityType == .workingSession && $0.retainedPublicID == utcFixture.duplicateID
+            }?.replacementPublicID
+        )
+
+        NSTimeZone.default = TimeZone(identifier: "America/Los_Angeles")!
+        let pacificFixture = try makeTreatmentFixture(
+            secondDose: secondDose,
+            treatmentDose: secondDose
+        )
+        let pacificReport = try await SwiftDataPublicIDRepairService(
+            modelContainer: pacificFixture.container
+        ).repair()
+        defer { try? FileManager.default.removeItem(atPath: pacificReport.backupPath) }
+        let pacificReplacement = try XCTUnwrap(
+            pacificReport.replacements.first {
+                $0.entityType == .workingSession && $0.retainedPublicID == pacificFixture.duplicateID
+            }?.replacementPublicID
+        )
+
+        XCTAssertEqual(utcReplacement, pacificReplacement)
+    }
+
     func testRevisionMetadataStillWinsBeforeGraphFingerprint() async throws {
         let container = try TestSupport.makeModelContainer()
         let context = container.mainContext
@@ -247,4 +322,16 @@ extension SwiftDataPublicIDRepairServiceTests {
         XCTAssertEqual(retained.tagNumber, "200")
     }
 
+    private func XCTAssertThrowsErrorAsync(
+        _ expression: @autoclosure () async throws -> Any,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        do {
+            _ = try await expression()
+            XCTFail("Expected expression to throw", file: file, line: line)
+        } catch {
+            // Expected.
+        }
+    }
 }

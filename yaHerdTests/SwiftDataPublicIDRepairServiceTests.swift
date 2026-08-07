@@ -197,4 +197,185 @@ final class SwiftDataPublicIDRepairServiceTests: XCTestCase {
         })
     }
 
+    func testNilFieldCheckRelationshipsUseSnapshotsToRepairScalarReferences() async throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = container.mainContext
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let duplicatePastureID = UUID(uuidString: "10101010-1010-4010-8010-101010101010")!
+        let duplicateAnimalID = UUID(uuidString: "20202020-2020-4020-8020-202020202020")!
+        let duplicateSessionID = UUID(uuidString: "30303030-3030-4030-8030-303030303030")!
+        let herd = Herd(name: "Snapshot repair", createdAt: timestamp, updatedAt: timestamp)
+        context.insert(herd)
+
+        let north = Pasture(publicID: duplicatePastureID, name: "North")
+        north.herd = herd
+        context.insert(north)
+        let south = Pasture(publicID: duplicatePastureID, name: "South")
+        south.herd = herd
+        context.insert(south)
+
+        let animal101 = Animal(
+            publicID: duplicateAnimalID,
+            name: "Alpha",
+            tagNumber: "101",
+            birthDate: timestamp,
+            sex: .female
+        )
+        animal101.herd = herd
+        context.insert(animal101)
+        let animal202 = Animal(
+            publicID: duplicateAnimalID,
+            name: "Bravo",
+            tagNumber: "202",
+            birthDate: timestamp,
+            sex: .female
+        )
+        animal202.herd = herd
+        context.insert(animal202)
+
+        let northSession = FieldCheckSession(
+            publicID: duplicateSessionID,
+            startedAt: timestamp,
+            pastureNameSnapshot: "North",
+            pastureID: duplicatePastureID,
+            pasture: nil
+        )
+        northSession.herd = herd
+        context.insert(northSession)
+        let southSession = FieldCheckSession(
+            publicID: duplicateSessionID,
+            startedAt: timestamp.addingTimeInterval(60),
+            pastureNameSnapshot: "South",
+            pastureID: duplicatePastureID,
+            pasture: nil
+        )
+        southSession.herd = herd
+        context.insert(southSession)
+
+        let check = FieldCheckAnimalCheck(
+            animalIDSnapshot: duplicateAnimalID,
+            rosterTagNumber: "202",
+            animalName: "Bravo",
+            animalSex: .female,
+            animal: nil,
+            session: southSession
+        )
+        check.herd = herd
+        context.insert(check)
+        let finding = FieldCheckFinding(
+            recordedAt: timestamp,
+            type: .generalObservation,
+            severity: .warning,
+            note: "Snapshot-only references",
+            animalIDSnapshot: duplicateAnimalID,
+            animalDisplayTagNumberSnapshot: "202",
+            animalNameSnapshot: "Bravo",
+            pastureNameSnapshot: "South",
+            sessionIDSnapshot: duplicateSessionID,
+            animal: nil,
+            session: nil
+        )
+        finding.herd = herd
+        context.insert(finding)
+        try context.save()
+
+        let service = SwiftDataPublicIDRepairService(modelContainer: container)
+        let assessment = try await service.scan()
+        XCTAssertFalse(assessment.unresolvedReferences.contains {
+            ["pastureID", "animalIDSnapshot", "sessionIDSnapshot"].contains($0.fieldName)
+        })
+
+        let report = try await service.repair()
+        defer { try? FileManager.default.removeItem(atPath: report.backupPath) }
+
+        let verificationContext = ModelContext(container)
+        let repairedSouth = try XCTUnwrap(
+            verificationContext.fetch(FetchDescriptor<Pasture>()).first { $0.name == "South" }
+        )
+        let repairedAnimal202 = try XCTUnwrap(
+            verificationContext.fetch(FetchDescriptor<Animal>()).first { $0.tagNumber == "202" }
+        )
+        let repairedSouthSession = try XCTUnwrap(
+            verificationContext.fetch(FetchDescriptor<FieldCheckSession>()).first {
+                $0.pastureNameSnapshot == "South"
+            }
+        )
+        XCTAssertEqual(repairedSouthSession.pastureID, repairedSouth.publicID)
+
+        let repairedCheck = try XCTUnwrap(
+            verificationContext.fetch(FetchDescriptor<FieldCheckAnimalCheck>()).first
+        )
+        XCTAssertNil(repairedCheck.animal)
+        XCTAssertEqual(repairedCheck.animalIDSnapshot, repairedAnimal202.publicID)
+
+        let repairedFinding = try XCTUnwrap(
+            verificationContext.fetch(FetchDescriptor<FieldCheckFinding>()).first
+        )
+        XCTAssertNil(repairedFinding.animal)
+        XCTAssertNil(repairedFinding.session)
+        XCTAssertEqual(repairedFinding.animalIDSnapshot, repairedAnimal202.publicID)
+        XCTAssertEqual(repairedFinding.sessionIDSnapshot, repairedSouthSession.publicID)
+    }
+
+    func testNilFieldCheckRelationshipWithoutUniqueSnapshotRequiresChoice() async throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = container.mainContext
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let duplicatePastureID = UUID(uuidString: "40404040-4040-4040-8040-404040404040")!
+        let herd = Herd(name: "Manual snapshot choice", createdAt: timestamp, updatedAt: timestamp)
+        context.insert(herd)
+
+        let north = Pasture(publicID: duplicatePastureID, name: "North")
+        north.herd = herd
+        context.insert(north)
+        let south = Pasture(publicID: duplicatePastureID, name: "South")
+        south.herd = herd
+        context.insert(south)
+        let session = FieldCheckSession(
+            startedAt: timestamp,
+            pastureNameSnapshot: "",
+            pastureID: duplicatePastureID,
+            pasture: nil
+        )
+        session.herd = herd
+        context.insert(session)
+        try context.save()
+
+        let service = SwiftDataPublicIDRepairService(modelContainer: container)
+        let assessment = try await service.scan()
+        let issue = try XCTUnwrap(
+            assessment.unresolvedReferences.first { $0.fieldName == "pastureID" }
+        )
+        XCTAssertEqual(issue.candidates.map(\.recordDescription).sorted(), ["North", "South"])
+
+        do {
+            _ = try await service.repair()
+            XCTFail("Expected snapshot-only ambiguity to block repair")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("deliberate choice"))
+        }
+
+        let southCandidate = try XCTUnwrap(
+            issue.candidates.first { $0.recordDescription == "South" }
+        )
+        let report = try await service.repair(
+            resolutions: [
+                PublicIDRepairReferenceResolution(
+                    unresolvedReferenceID: issue.id,
+                    selectedCandidateStableRecordIdentifier: southCandidate.stableRecordIdentifier
+                )
+            ]
+        )
+        defer { try? FileManager.default.removeItem(atPath: report.backupPath) }
+
+        let verificationContext = ModelContext(container)
+        let repairedSouth = try XCTUnwrap(
+            verificationContext.fetch(FetchDescriptor<Pasture>()).first { $0.name == "South" }
+        )
+        let repairedSession = try XCTUnwrap(
+            verificationContext.fetch(FetchDescriptor<FieldCheckSession>()).first
+        )
+        XCTAssertNil(repairedSession.pasture)
+        XCTAssertEqual(repairedSession.pastureID, repairedSouth.publicID)
+    }
 }

@@ -127,15 +127,15 @@ struct SyncDiagnosticsView: View {
                     LabeledContent("Choices Required", value: assessment.unresolvedReferences.count.formatted())
 
                     if assessment.requiresBridgeConvergence {
-                        Label("Shared-data convergence must be completed", systemImage: "arrow.triangle.2.circlepath.icloud")
+                        Label("Repair recovery or shared-data convergence must be completed", systemImage: "arrow.triangle.2.circlepath.icloud")
                             .foregroundStyle(.orange)
-                        Text("SwiftData was repaired previously, but export verification did not complete. Normal changes and synchronization remain blocked until this action succeeds.")
+                        Text("A durable public-ID repair journal is pending. Normal changes and synchronization remain blocked until the local repair state and shared-data export are verified using the original storage mode.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
 
                     if assessment.hasBlockingIssues {
-                        Label("Choose the intended record for every reference", systemImage: "exclamationmark.triangle")
+                        Label("Resolve every repair blocker", systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
 
                         ForEach(assessment.unresolvedReferences) { issue in
@@ -147,27 +147,33 @@ struct SyncDiagnosticsView: View {
                                     .foregroundStyle(.secondary)
                                     .textSelection(.enabled)
 
-                                Picker(
-                                    "Intended record",
-                                    selection: resolutionBinding(for: issue.id)
-                                ) {
-                                    Text("Choose a record").tag("")
-                                    ForEach(issue.candidates) { candidate in
-                                        Text(candidate.recordDescription)
-                                            .tag(candidate.stableRecordIdentifier)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                                .accessibilityLabel("Intended record for \(issue.recordDescription) \(issue.fieldName)")
-
-                                if let selectedCandidate = selectedCandidate(for: issue) {
-                                    Text(selectedCandidate.detail)
+                                if issue.candidates.isEmpty {
+                                    Text("Make these duplicate records distinguishable, then scan again. yaHerd will not use a device-local record identity to guess which record keeps the public ID.")
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
-                                    Text("Resulting public ID: \(selectedCandidate.resultingPublicID.uuidString)")
-                                        .font(.caption2.monospaced())
-                                        .foregroundStyle(.secondary)
-                                        .textSelection(.enabled)
+                                } else {
+                                    Picker(
+                                        "Intended record",
+                                        selection: resolutionBinding(for: issue.id)
+                                    ) {
+                                        Text("Choose a record").tag("")
+                                        ForEach(issue.candidates) { candidate in
+                                            Text(candidate.recordDescription)
+                                                .tag(candidate.stableRecordIdentifier)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .accessibilityLabel("Intended record for \(issue.recordDescription) \(issue.fieldName)")
+
+                                    if let selectedCandidate = selectedCandidate(for: issue) {
+                                        Text(selectedCandidate.detail)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                        Text("Resulting public ID: \(selectedCandidate.resultingPublicID.uuidString)")
+                                            .font(.caption2.monospaced())
+                                            .foregroundStyle(.secondary)
+                                            .textSelection(.enabled)
+                                    }
                                 }
                             }
                             .padding(.vertical, 4)
@@ -302,7 +308,7 @@ struct SyncDiagnosticsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("yaHerd will hold the mutation gate, import current shared data before repair, create a backup, apply deliberate choices, assign deterministic replacement IDs, export the repaired graph without re-importing stale bridge records, and validate reconciliation before allowing edits again.")
+            Text("yaHerd will hold the mutation gate, import current shared data before repair, create a backup, durably journal the repair before the local commit, apply deliberate choices, assign deterministic replacement IDs, export every repaired herd graph without re-importing stale bridge records, and validate reconciliation before allowing edits again.")
         }
         .confirmationDialog(
             "Delete iCloud Sync Data?",

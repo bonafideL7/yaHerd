@@ -1,5 +1,79 @@
 import Foundation
 
+enum PublicIDRepairBridgeIdentity: String, Codable, Equatable, Sendable {
+    case localOnly
+    case iCloud
+}
+
+enum PublicIDRepairBridgeLocationIdentity: String, Codable, Equatable, Sendable {
+    case unspecified
+    case bridgeRecordMissing
+    case ownerPrivateStore
+    case acceptedSharedStore
+}
+
+struct PublicIDRepairBridgeTargetIdentity: Codable, Equatable, Sendable {
+    let herdPublicID: UUID
+    let location: PublicIDRepairBridgeLocationIdentity
+}
+
+struct PublicIDRepairBridgePreparation: Codable, Equatable, Sendable {
+    let identity: PublicIDRepairBridgeIdentity
+    let targets: [PublicIDRepairBridgeTargetIdentity]
+
+    init(
+        identity: PublicIDRepairBridgeIdentity,
+        targets: [PublicIDRepairBridgeTargetIdentity]
+    ) {
+        self.identity = identity
+        var targetByHerdID: [UUID: PublicIDRepairBridgeTargetIdentity] = [:]
+        for target in targets.sorted(by: Self.targetSort) where targetByHerdID[target.herdPublicID] == nil {
+            targetByHerdID[target.herdPublicID] = target
+        }
+        self.targets = targetByHerdID.values.sorted(by: Self.targetSort)
+    }
+
+    init(identity: PublicIDRepairBridgeIdentity, herdPublicIDs: [UUID]) {
+        self.init(
+            identity: identity,
+            targets: herdPublicIDs.map {
+                PublicIDRepairBridgeTargetIdentity(
+                    herdPublicID: $0,
+                    location: .unspecified
+                )
+            }
+        )
+    }
+
+    var herdPublicIDs: [UUID] { targets.map(\.herdPublicID) }
+
+    var requiresConvergence: Bool {
+        identity == .iCloud && !targets.isEmpty
+    }
+
+    private static func targetSort(
+        _ lhs: PublicIDRepairBridgeTargetIdentity,
+        _ rhs: PublicIDRepairBridgeTargetIdentity
+    ) -> Bool {
+        if lhs.herdPublicID != rhs.herdPublicID {
+            return lhs.herdPublicID.uuidString < rhs.herdPublicID.uuidString
+        }
+        return lhs.location.rawValue < rhs.location.rawValue
+    }
+}
+
+fileprivate struct PublicIDRepairPendingState: Codable, Equatable, Sendable {
+    enum Phase: String, Codable, Equatable, Sendable {
+        case localCommitPending
+        case bridgeConvergenceRequired
+    }
+
+    let phase: Phase
+    let preparation: PublicIDRepairBridgePreparation
+    let report: PublicIDRepairReport
+    let resolutions: [PublicIDRepairReferenceResolution]
+}
+
 /// Excludes duplicate-ID maintenance and incomplete bridge convergence from normal writes.
 @MainActor
 final class HerdDataMutationGate {
@@ -29,30 +103,45 @@ final class HerdDataMutationGate {
         }
     }
 
-    private static let pendingBridgeReportKey = "PublicIDRepair.PendingBridgeConvergenceReport.v1"
+    private static let pendingRepairStateKey = "PublicIDRepair.PendingState.v2"
+    private static let legacyPendingBridgeReportKey = "PublicIDRepair.PendingBridgeConvergenceReport.v1"
 
     private var repairToken: UUID?
     private var synchronizationTokens: Set<UUID> = []
     private let defaults: UserDefaults
-    private var pendingBridgeReport: PublicIDRepairReport?
+    private var pendingRepairState: PublicIDRepairPendingState?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        if let data = defaults.data(forKey: Self.pendingBridgeReportKey) {
-            pendingBridgeReport = try? JSONDecoder().decode(PublicIDRepairReport.self, from: data)
+        if let data = defaults.data(forKey: Self.pendingRepairStateKey),
+           let state = try? JSONDecoder().decode(PublicIDRepairPendingState.self, from: data) {
+            pendingRepairState = state
+        } else if let data = defaults.data(forKey: Self.legacyPendingBridgeReportKey),
+                  let report = try? JSONDecoder().decode(PublicIDRepairReport.self, from: data) {
+            let state = PublicIDRepairPendingState(
+                phase: .bridgeConvergenceRequired,
+                preparation: PublicIDRepairBridgePreparation(
+                    identity: .iCloud,
+                    herdPublicIDs: []
+                ),
+                report: report,
+                resolutions: []
+            )
+            pendingRepairState = state
+            try? persist(state)
         }
     }
 
     var isPublicIDRepairInProgress: Bool { repairToken != nil }
     var isSynchronizing: Bool { !synchronizationTokens.isEmpty }
-    var requiresBridgeConvergence: Bool { pendingBridgeReport != nil }
-    var pendingBridgeConvergenceReport: PublicIDRepairReport? { pendingBridgeReport }
+    var requiresBridgeConvergence: Bool { pendingRepairState != nil }
+    var pendingBridgeConvergenceReport: PublicIDRepairReport? { pendingRepairState?.report }
 
     func validateLocalMutationAllowed(reason: SharedDataMutationReason) throws {
         guard repairToken == nil else {
             throw GateError.publicIDRepairInProgress(reason: reason)
         }
-        guard pendingBridgeReport == nil else {
+        guard pendingRepairState == nil else {
             throw GateError.bridgeConvergenceRequired(reason: reason)
         }
     }
@@ -61,7 +150,7 @@ final class HerdDataMutationGate {
         guard repairToken == nil else {
             throw GateError.publicIDRepairBlocksSynchronization
         }
-        guard pendingBridgeReport == nil else {
+        guard pendingRepairState == nil else {
             throw GateError.bridgeConvergenceRequired(reason: nil)
         }
         let token = UUID()
@@ -90,42 +179,103 @@ final class HerdDataMutationGate {
         repairToken = nil
     }
 
-    func requireBridgeConvergence(for report: PublicIDRepairReport) throws {
-        let data = try JSONEncoder().encode(report)
-        defaults.set(data, forKey: Self.pendingBridgeReportKey)
-        pendingBridgeReport = report
+    fileprivate var pendingState: PublicIDRepairPendingState? {
+        pendingRepairState
+    }
+
+    func requireLocalCommitCompletion(
+        preparation: PublicIDRepairBridgePreparation,
+        report: PublicIDRepairReport,
+        resolutions: [PublicIDRepairReferenceResolution]
+    ) throws {
+        guard preparation.requiresConvergence else { return }
+        try setPendingState(
+            PublicIDRepairPendingState(
+                phase: .localCommitPending,
+                preparation: preparation,
+                report: report,
+                resolutions: resolutions
+            )
+        )
+    }
+
+    func markLocalCommitSucceeded() throws {
+        guard let state = pendingRepairState else { return }
+        guard state.phase == .localCommitPending else { return }
+        try setPendingState(
+            PublicIDRepairPendingState(
+                phase: .bridgeConvergenceRequired,
+                preparation: state.preparation,
+                report: state.report,
+                resolutions: state.resolutions
+            )
+        )
+    }
+
+    func clearPendingLocalCommitAfterRollback() {
+        guard pendingRepairState?.phase == .localCommitPending else { return }
+        clearPendingState()
     }
 
     func completeBridgeConvergence() {
-        defaults.removeObject(forKey: Self.pendingBridgeReportKey)
-        pendingBridgeReport = nil
+        clearPendingState()
+    }
+
+    private func setPendingState(_ state: PublicIDRepairPendingState) throws {
+        try persist(state)
+        pendingRepairState = state
+    }
+
+    private func persist(_ state: PublicIDRepairPendingState) throws {
+        let data = try JSONEncoder().encode(state)
+        defaults.set(data, forKey: Self.pendingRepairStateKey)
+        defaults.removeObject(forKey: Self.legacyPendingBridgeReportKey)
+    }
+
+    private func clearPendingState() {
+        defaults.removeObject(forKey: Self.pendingRepairStateKey)
+        defaults.removeObject(forKey: Self.legacyPendingBridgeReportKey)
+        pendingRepairState = nil
     }
 }
 
 @MainActor
 protocol PublicIDRepairBridgeCoordinating: AnyObject {
-    /// Imports the current bridge state and verifies that this device can write the repaired graph.
-    /// Returns true when export-only convergence is required after SwiftData repair.
-    func prepareForRepair() async throws -> Bool
-
-    /// Exports the repaired SwiftData graph without importing the stale bridge first, then validates it.
-    func convergeAfterRepair() async throws
+    var bridgeIdentity: PublicIDRepairBridgeIdentity { get }
+    func prepareForRepair() async throws -> PublicIDRepairBridgePreparation
+    func convergeAfterRepair(
+        preparation: PublicIDRepairBridgePreparation
+    ) async throws
 }
 
 @MainActor
 final class LocalOnlyPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordinating {
-    func prepareForRepair() async throws -> Bool { false }
-    func convergeAfterRepair() async throws {}
+    let bridgeIdentity: PublicIDRepairBridgeIdentity = .localOnly
+
+    func prepareForRepair() async throws -> PublicIDRepairBridgePreparation {
+        PublicIDRepairBridgePreparation(identity: .localOnly, herdPublicIDs: [])
+    }
+
+    func convergeAfterRepair(
+        preparation: PublicIDRepairBridgePreparation
+    ) async throws {
+        guard preparation.identity == .localOnly else {
+            throw PublicIDRepairBridgeError.bridgeIdentityMismatch(
+                expected: preparation.identity,
+                actual: bridgeIdentity
+            )
+        }
+    }
 }
 
 @MainActor
 final class CoordinatedPublicIDRepairService: PublicIDRepairService {
-    private let worker: any PublicIDRepairService
+    private let worker: any PublicIDRepairTransactionalService
     private let mutationGate: HerdDataMutationGate
     private let bridgeCoordinator: any PublicIDRepairBridgeCoordinating
 
     init(
-        worker: any PublicIDRepairService,
+        worker: any PublicIDRepairTransactionalService,
         mutationGate: HerdDataMutationGate,
         bridgeCoordinator: any PublicIDRepairBridgeCoordinating = LocalOnlyPublicIDRepairBridgeCoordinator()
     ) {
@@ -136,10 +286,25 @@ final class CoordinatedPublicIDRepairService: PublicIDRepairService {
 
     func scan() async throws -> PublicIDRepairAssessment {
         let assessment = try await worker.scan()
+        var unresolvedReferences = assessment.unresolvedReferences
+        if let pending = mutationGate.pendingState,
+           pending.phase == .localCommitPending {
+            var persistedSelections: [String: String] = [:]
+            for resolution in pending.resolutions {
+                persistedSelections[resolution.unresolvedReferenceID]
+                    = resolution.selectedCandidateStableRecordIdentifier
+            }
+            unresolvedReferences.removeAll { issue in
+                guard let selected = persistedSelections[issue.id] else { return false }
+                return issue.candidates.contains {
+                    $0.stableRecordIdentifier == selected
+                }
+            }
+        }
         return PublicIDRepairAssessment(
             scannedAt: assessment.scannedAt,
             entities: assessment.entities,
-            unresolvedReferences: assessment.unresolvedReferences,
+            unresolvedReferences: unresolvedReferences,
             requiresBridgeConvergence: mutationGate.requiresBridgeConvergence
         )
     }
@@ -150,20 +315,74 @@ final class CoordinatedPublicIDRepairService: PublicIDRepairService {
         let token = try mutationGate.beginPublicIDRepair()
         defer { mutationGate.endPublicIDRepair(token) }
 
-        if let pendingReport = mutationGate.pendingBridgeConvergenceReport {
-            try await bridgeCoordinator.convergeAfterRepair()
-            mutationGate.completeBridgeConvergence()
-            return pendingReport
+        if let pending = mutationGate.pendingState {
+            return try await resumePendingRepair(pending)
         }
 
-        let requiresBridgeConvergence = try await bridgeCoordinator.prepareForRepair()
-        let report = try await worker.repair(resolutions: resolutions)
-        guard requiresBridgeConvergence else { return report }
+        let preparation = try await bridgeCoordinator.prepareForRepair()
+        guard preparation.requiresConvergence else {
+            return try await worker.repair(resolutions: resolutions)
+        }
 
-        // Persist this before bridge work so a failure or process termination cannot release
-        // normal writes/sync into an import-first path that still contains obsolete IDs.
-        try mutationGate.requireBridgeConvergence(for: report)
-        try await bridgeCoordinator.convergeAfterRepair()
+        let report: PublicIDRepairReport
+        do {
+            report = try await worker.repair(
+                resolutions: resolutions,
+                willCommit: { [mutationGate] plannedReport in
+                    try mutationGate.requireLocalCommitCompletion(
+                        preparation: preparation,
+                        report: plannedReport,
+                        resolutions: resolutions
+                    )
+                }
+            )
+        } catch {
+            mutationGate.clearPendingLocalCommitAfterRollback()
+            throw error
+        }
+
+        try mutationGate.markLocalCommitSucceeded()
+        try await bridgeCoordinator.convergeAfterRepair(preparation: preparation)
+        mutationGate.completeBridgeConvergence()
+        return report
+    }
+
+    private func resumePendingRepair(
+        _ pending: PublicIDRepairPendingState
+    ) async throws -> PublicIDRepairReport {
+        guard pending.preparation.identity == bridgeCoordinator.bridgeIdentity else {
+            throw PublicIDRepairBridgeError.bridgeIdentityMismatch(
+                expected: pending.preparation.identity,
+                actual: bridgeCoordinator.bridgeIdentity
+            )
+        }
+
+        var report = pending.report
+        if pending.phase == .localCommitPending {
+            let assessment = try await worker.scan()
+            if assessment.hasDuplicates {
+                do {
+                    report = try await worker.repair(
+                        resolutions: pending.resolutions,
+                        willCommit: { [mutationGate] refreshedReport in
+                            try mutationGate.requireLocalCommitCompletion(
+                                preparation: pending.preparation,
+                                report: refreshedReport,
+                                resolutions: pending.resolutions
+                            )
+                        }
+                    )
+                } catch {
+                    mutationGate.clearPendingLocalCommitAfterRollback()
+                    throw error
+                }
+            }
+            try mutationGate.markLocalCommitSucceeded()
+        }
+
+        try await bridgeCoordinator.convergeAfterRepair(
+            preparation: pending.preparation
+        )
         mutationGate.completeBridgeConvergence()
         return report
     }

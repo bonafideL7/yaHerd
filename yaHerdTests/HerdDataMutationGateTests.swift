@@ -63,7 +63,7 @@ final class HerdDataMutationGateTests: XCTestCase {
         XCTAssertFalse(gate.isPublicIDRepairInProgress)
     }
 
-    func testCoordinatedRepairImportsThenRepairsThenExportsWithoutNormalSync() async throws {
+    func testCoordinatedRepairJournalsBeforeCommitThenExportsWithoutNormalSync() async throws {
         let events = RepairEventRecorder()
         let gate = HerdDataMutationGate(defaults: isolatedDefaults())
         let worker = RecordingPublicIDRepairService(events: events)
@@ -76,7 +76,10 @@ final class HerdDataMutationGateTests: XCTestCase {
 
         _ = try await service.repair()
 
-        XCTAssertEqual(events.events, ["prepare-import", "repair", "export-only-converge"])
+        XCTAssertEqual(
+            events.events,
+            ["prepare-import", "repair-will-commit", "repair-save", "export-only-converge"]
+        )
         XCTAssertEqual(worker.repairCallCount, 1)
         XCTAssertEqual(bridge.prepareCallCount, 1)
         XCTAssertEqual(bridge.convergeCallCount, 1)
@@ -127,25 +130,189 @@ final class HerdDataMutationGateTests: XCTestCase {
         ).validateCanWrite(reason: .animal))
     }
 
+    func testRelaunchBetweenLocalSaveAndBridgePhaseConvergesWithoutRepeatingRepair() async throws {
+        let defaults = isolatedDefaults()
+        let preparation = testICloudPreparation()
+        let report = makeTestRepairReport()
+        let firstGate = HerdDataMutationGate(defaults: defaults)
+
+        // This is the process-death window: the pre-commit journal exists, the SwiftData
+        // save has completed, but the coordinator never advanced the journal phase.
+        try firstGate.requireLocalCommitCompletion(
+            preparation: preparation,
+            report: report,
+            resolutions: []
+        )
+
+        let relaunchedGate = HerdDataMutationGate(defaults: defaults)
+        let events = RepairEventRecorder()
+        let worker = RecordingPublicIDRepairService(
+            events: events,
+            scanHasDuplicates: false
+        )
+        let bridge = RecordingPublicIDRepairBridgeCoordinator(events: events)
+        let service = CoordinatedPublicIDRepairService(
+            worker: worker,
+            mutationGate: relaunchedGate,
+            bridgeCoordinator: bridge
+        )
+
+        let resumedReport = try await service.repair()
+
+        XCTAssertEqual(resumedReport, report)
+        XCTAssertEqual(worker.repairCallCount, 0)
+        XCTAssertEqual(bridge.convergeCallCount, 1)
+        XCTAssertFalse(relaunchedGate.requiresBridgeConvergence)
+    }
+
+    func testRelaunchBeforeLocalSaveRetriesRepairUsingPersistedJournal() async throws {
+        let defaults = isolatedDefaults()
+        let preparation = testICloudPreparation()
+        let report = makeTestRepairReport()
+        let firstGate = HerdDataMutationGate(defaults: defaults)
+        try firstGate.requireLocalCommitCompletion(
+            preparation: preparation,
+            report: report,
+            resolutions: []
+        )
+
+        let relaunchedGate = HerdDataMutationGate(defaults: defaults)
+        let events = RepairEventRecorder()
+        let worker = RecordingPublicIDRepairService(
+            events: events,
+            scanHasDuplicates: true
+        )
+        let bridge = RecordingPublicIDRepairBridgeCoordinator(events: events)
+        let service = CoordinatedPublicIDRepairService(
+            worker: worker,
+            mutationGate: relaunchedGate,
+            bridgeCoordinator: bridge
+        )
+
+        _ = try await service.repair()
+
+        XCTAssertEqual(worker.repairCallCount, 1)
+        XCTAssertEqual(bridge.convergeCallCount, 1)
+        XCTAssertFalse(relaunchedGate.requiresBridgeConvergence)
+    }
+
+    func testPendingICloudConvergenceCannotBeClearedByLocalOnlyRelaunch() async throws {
+        let defaults = isolatedDefaults()
+        let preparation = testICloudPreparation()
+        let report = makeTestRepairReport()
+        let firstGate = HerdDataMutationGate(defaults: defaults)
+        try firstGate.requireLocalCommitCompletion(
+            preparation: preparation,
+            report: report,
+            resolutions: []
+        )
+        try firstGate.markLocalCommitSucceeded()
+
+        let localGate = HerdDataMutationGate(defaults: defaults)
+        let worker = RecordingPublicIDRepairService(events: RepairEventRecorder())
+        let localService = CoordinatedPublicIDRepairService(
+            worker: worker,
+            mutationGate: localGate,
+            bridgeCoordinator: LocalOnlyPublicIDRepairBridgeCoordinator()
+        )
+
+        do {
+            _ = try await localService.repair()
+            XCTFail("Expected Local Only launch to preserve the pending iCloud requirement")
+        } catch let error as PublicIDRepairBridgeError {
+            XCTAssertEqual(
+                error,
+                .bridgeIdentityMismatch(expected: .iCloud, actual: .localOnly)
+            )
+        }
+        XCTAssertTrue(localGate.requiresBridgeConvergence)
+
+        let iCloudGate = HerdDataMutationGate(defaults: defaults)
+        let bridge = RecordingPublicIDRepairBridgeCoordinator(events: RepairEventRecorder())
+        let iCloudService = CoordinatedPublicIDRepairService(
+            worker: worker,
+            mutationGate: iCloudGate,
+            bridgeCoordinator: bridge
+        )
+        _ = try await iCloudService.repair()
+
+        XCTAssertEqual(bridge.convergeCallCount, 1)
+        XCTAssertFalse(iCloudGate.requiresBridgeConvergence)
+    }
+
+    func testDefaultBridgeCoordinatorPreparesAndConvergesEveryHerd() async throws {
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let first = HerdSummary(
+            publicID: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
+            name: "First",
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            schemaVersion: 1
+        )
+        let second = HerdSummary(
+            publicID: UUID(uuidString: "22222222-2222-4222-8222-222222222222")!,
+            name: "Second",
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            schemaVersion: 1
+        )
+        let repairedDuplicate = HerdSummary(
+            publicID: UUID(uuidString: "33333333-3333-4333-8333-333333333333")!,
+            name: "Second duplicate",
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            schemaVersion: 1
+        )
+        let inventory = RecordingHerdInventory(herds: [first, second])
+        let repository = RecordingHerdSharingRepository()
+        let exporter = RecordingPublicIDRepairBridgeExporter()
+        let coordinator = DefaultPublicIDRepairBridgeCoordinator(
+            herdInventory: inventory,
+            sharingRepository: repository,
+            storageMode: .iCloud,
+            exporter: exporter
+        )
+
+        let preparation = try await coordinator.prepareForRepair()
+        XCTAssertEqual(Set(preparation.herdPublicIDs), Set([first.publicID, second.publicID]))
+        XCTAssertEqual(Set(repository.importedHerdIDs), Set([first.publicID, second.publicID]))
+
+        await inventory.setHerds([first, second, repairedDuplicate])
+        try await coordinator.convergeAfterRepair(preparation: preparation)
+
+        XCTAssertEqual(
+            Set(exporter.exportedHerdIDs),
+            Set([first.publicID, second.publicID, repairedDuplicate.publicID])
+        )
+    }
+
     private func isolatedDefaults() -> UserDefaults {
         let suiteName = "HerdDataMutationGateTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
     }
+
+    private func testICloudPreparation() -> PublicIDRepairBridgePreparation {
+        PublicIDRepairBridgePreparation(
+            identity: .iCloud,
+            herdPublicIDs: [UUID(uuidString: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA")!]
+        )
+    }
 }
 
-private actor SuspendedPublicIDRepairService: PublicIDRepairService {
+private actor SuspendedPublicIDRepairService: PublicIDRepairTransactionalService {
     private var hasStartedRepair = false
     private var startWaiters: [CheckedContinuation<Void, Never>] = []
     private var finishContinuation: CheckedContinuation<Void, Never>?
 
     func scan() async throws -> PublicIDRepairAssessment {
-        PublicIDRepairAssessment(scannedAt: .now, entities: [])
+        duplicateAssessment()
     }
 
     func repair(
-        resolutions: [PublicIDRepairReferenceResolution]
+        resolutions: [PublicIDRepairReferenceResolution],
+        willCommit: PublicIDRepairWillCommit
     ) async throws -> PublicIDRepairReport {
         hasStartedRepair = true
         let waiters = startWaiters
@@ -154,7 +321,9 @@ private actor SuspendedPublicIDRepairService: PublicIDRepairService {
         await withCheckedContinuation { continuation in
             finishContinuation = continuation
         }
-        return makeTestRepairReport()
+        let report = makeTestRepairReport()
+        try await willCommit(report)
+        return report
     }
 
     func waitUntilRepairStarts() async {
@@ -177,29 +346,41 @@ private final class RepairEventRecorder {
 }
 
 @MainActor
-private final class RecordingPublicIDRepairService: PublicIDRepairService {
+private final class RecordingPublicIDRepairService: PublicIDRepairTransactionalService {
     private let events: RepairEventRecorder
+    private var scanHasDuplicates: Bool
     private(set) var repairCallCount = 0
 
-    init(events: RepairEventRecorder) {
+    init(
+        events: RepairEventRecorder,
+        scanHasDuplicates: Bool = true
+    ) {
         self.events = events
+        self.scanHasDuplicates = scanHasDuplicates
     }
 
     func scan() async throws -> PublicIDRepairAssessment {
-        PublicIDRepairAssessment(scannedAt: .now, entities: [])
+        scanHasDuplicates ? duplicateAssessment() : emptyAssessment()
     }
 
     func repair(
-        resolutions: [PublicIDRepairReferenceResolution]
+        resolutions: [PublicIDRepairReferenceResolution],
+        willCommit: PublicIDRepairWillCommit
     ) async throws -> PublicIDRepairReport {
         repairCallCount += 1
-        events.events.append("repair")
-        return makeTestRepairReport()
+        events.events.append("repair-will-commit")
+        let report = makeTestRepairReport()
+        try willCommit(report)
+        events.events.append("repair-save")
+        scanHasDuplicates = false
+        return report
     }
 }
 
 @MainActor
 private final class RecordingPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordinating {
+    let bridgeIdentity: PublicIDRepairBridgeIdentity = .iCloud
+
     private let events: RepairEventRecorder
     private var convergenceFailuresRemaining: Int
     private(set) var prepareCallCount = 0
@@ -213,25 +394,63 @@ private final class RecordingPublicIDRepairBridgeCoordinator: PublicIDRepairBrid
         self.convergenceFailuresRemaining = convergenceFailuresRemaining
     }
 
-    func prepareForRepair() async throws -> Bool {
+    func prepareForRepair() async throws -> PublicIDRepairBridgePreparation {
         prepareCallCount += 1
         events.events.append("prepare-import")
-        return true
+        return PublicIDRepairBridgePreparation(
+            identity: .iCloud,
+            herdPublicIDs: [UUID(uuidString: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA")!]
+        )
     }
 
-    func convergeAfterRepair() async throws {
+    func convergeAfterRepair(
+        preparation: PublicIDRepairBridgePreparation
+    ) async throws {
         convergeCallCount += 1
         events.events.append("export-only-converge")
         if convergenceFailuresRemaining > 0 {
             convergenceFailuresRemaining -= 1
-            throw PublicIDRepairBridgeError.reconciliationFailed("Injected failure")
+            throw PublicIDRepairBridgeError.reconciliationFailed(
+                herdPublicID: preparation.herdPublicIDs[0],
+                summary: "Injected failure"
+            )
         }
+    }
+}
+
+private actor RecordingHerdInventory: PublicIDRepairHerdInventoryReading {
+    private var herds: [HerdSummary]
+
+    init(herds: [HerdSummary]) {
+        self.herds = herds
+    }
+
+    func fetchHerds() async throws -> [HerdSummary] {
+        herds
+    }
+
+    func setHerds(_ herds: [HerdSummary]) {
+        self.herds = herds
+    }
+}
+
+@MainActor
+private final class RecordingPublicIDRepairBridgeExporter: PublicIDRepairBridgeExporting {
+    private(set) var exportedHerdIDs: [UUID] = []
+
+    func exportRepairedGraph(
+        for herd: HerdSummary,
+        access: HerdSharingAccess
+    ) async throws -> HerdSharingBridgeReconciliationReport {
+        exportedHerdIDs.append(herd.publicID)
+        return .empty
     }
 }
 
 @MainActor
 private final class RecordingHerdSharingRepository: HerdSharingRepository {
     private(set) var importCallCount = 0
+    private(set) var importedHerdIDs: [UUID] = []
 
     func fetchSharingReadiness(
         for herd: HerdSummary?,
@@ -244,7 +463,7 @@ private final class RecordingHerdSharingRepository: HerdSharingRepository {
         for herd: HerdSummary?,
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingAccess {
-        .localOwnerBridgePending
+        .ownerPrivateStore(participantCount: 1)
     }
 
     func startSharing(
@@ -266,6 +485,7 @@ private final class RecordingHerdSharingRepository: HerdSharingRepository {
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingActionResult {
         importCallCount += 1
+        if let herd { importedHerdIDs.append(herd.publicID) }
         return result("import")
     }
 
@@ -294,6 +514,24 @@ private final class RecordingHerdSharingRepository: HerdSharingRepository {
     private func result(_ title: String) -> HerdSharingActionResult {
         HerdSharingActionResult(title: title, message: title)
     }
+}
+
+private func emptyAssessment() -> PublicIDRepairAssessment {
+    PublicIDRepairAssessment(scannedAt: .now, entities: [])
+}
+
+private func duplicateAssessment() -> PublicIDRepairAssessment {
+    PublicIDRepairAssessment(
+        scannedAt: .now,
+        entities: [
+            PublicIDRepairEntityAssessment(
+                entityType: .animal,
+                scannedRecordCount: 2,
+                duplicateGroupCount: 1,
+                duplicateRecordCount: 1
+            )
+        ]
+    )
 }
 
 private func makeTestRepairReport() -> PublicIDRepairReport {

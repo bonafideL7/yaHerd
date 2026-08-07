@@ -7,7 +7,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
         plan: RepairPlan,
         resolutions: [String: String]
     ) -> [PublicIDRepairUnresolvedReference] {
-        var issues: [PublicIDRepairUnresolvedReference] = []
+        var issues = plan.unresolvedIssues
 
         for animal in loaded.animals {
             appendLookupIssue(
@@ -94,8 +94,45 @@ extension DeterministicSwiftDataPublicIDRepairService {
             )
         }
 
+        for session in loaded.fieldCheckSessions where session.pasture == nil {
+            appendSnapshotReferenceIssue(
+                currentID: session.pastureID,
+                sourceHerd: session.herd,
+                records: loaded.pastures,
+                publicID: { $0.publicID },
+                herd: { $0.herd },
+                sourceEntityType: .fieldCheckSession,
+                sourceModel: session,
+                recordDescription: "Field check for \(session.pastureNameSnapshot.isEmpty ? "unknown pasture" : session.pastureNameSnapshot)",
+                fieldName: "pastureID",
+                targetDescription: "pasture",
+                evidenceMatches: { self.fieldCheckPastureSnapshotMatches(session, $0) },
+                plan: plan,
+                resolutions: resolutions,
+                to: &issues
+            )
+        }
+
         for check in loaded.fieldCheckAnimalChecks {
             let sourceHerd = check.herd ?? check.session?.herd ?? check.animal?.herd
+            if check.animal == nil {
+                appendSnapshotReferenceIssue(
+                    currentID: check.animalIDSnapshot,
+                    sourceHerd: sourceHerd,
+                    records: loaded.animals,
+                    publicID: { $0.publicID },
+                    herd: { $0.herd },
+                    sourceEntityType: .fieldCheckAnimalCheck,
+                    sourceModel: check,
+                    recordDescription: "Animal check \(check.displayTagNumber)",
+                    fieldName: "animalIDSnapshot",
+                    targetDescription: "animal",
+                    evidenceMatches: { self.fieldCheckAnimalSnapshotMatches(check, $0) },
+                    plan: plan,
+                    resolutions: resolutions,
+                    to: &issues
+                )
+            }
             appendLookupIssue(
                 currentID: check.rosterTagColorID,
                 sourceHerd: sourceHerd,
@@ -129,9 +166,46 @@ extension DeterministicSwiftDataPublicIDRepairService {
         }
 
         for finding in loaded.fieldCheckFindings {
+            let sourceHerd = finding.herd ?? finding.session?.herd ?? finding.animal?.herd
+            if finding.animal == nil {
+                appendSnapshotReferenceIssue(
+                    currentID: finding.animalIDSnapshot,
+                    sourceHerd: sourceHerd,
+                    records: loaded.animals,
+                    publicID: { $0.publicID },
+                    herd: { $0.herd },
+                    sourceEntityType: .fieldCheckFinding,
+                    sourceModel: finding,
+                    recordDescription: finding.note.isEmpty ? "Field check finding" : finding.note,
+                    fieldName: "animalIDSnapshot",
+                    targetDescription: "animal",
+                    evidenceMatches: { self.fieldCheckFindingAnimalSnapshotMatches(finding, $0) },
+                    plan: plan,
+                    resolutions: resolutions,
+                    to: &issues
+                )
+            }
+            if finding.session == nil {
+                appendSnapshotReferenceIssue(
+                    currentID: finding.sessionIDSnapshot,
+                    sourceHerd: sourceHerd,
+                    records: loaded.fieldCheckSessions,
+                    publicID: { $0.publicID },
+                    herd: { $0.herd },
+                    sourceEntityType: .fieldCheckFinding,
+                    sourceModel: finding,
+                    recordDescription: finding.note.isEmpty ? "Field check finding" : finding.note,
+                    fieldName: "sessionIDSnapshot",
+                    targetDescription: "field check session",
+                    evidenceMatches: { self.fieldCheckFindingSessionSnapshotMatches(finding, $0) },
+                    plan: plan,
+                    resolutions: resolutions,
+                    to: &issues
+                )
+            }
             appendLookupIssue(
                 currentID: finding.animalDisplayTagColorIDSnapshot,
-                sourceHerd: finding.herd ?? finding.session?.herd ?? finding.animal?.herd,
+                sourceHerd: sourceHerd,
                 lookupRecords: loaded.tagColorDefinitions,
                 lookupPublicID: { $0.id },
                 lookupHerd: { $0.herd },
@@ -196,6 +270,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
         let candidates = pool.compactMap {
             plan.candidateByLocalIdentifier[localRecordIdentifier($0)]
         }.map(makeResolutionCandidate)
+        guard !candidates.isEmpty else { return }
         let sourceIdentifier = stableSourceIdentifier(sourceModel, plan: plan)
         let issue = PublicIDRepairUnresolvedReference(
             kind: .lookupReference,
@@ -205,6 +280,56 @@ extension DeterministicSwiftDataPublicIDRepairService {
             fieldName: fieldName,
             referencedPublicID: currentID,
             reason: "Multiple \(lookupDescription) records share this ID in the source herd. Choose the intended record before repair.",
+            candidates: candidates
+        )
+        guard let selected = resolutions[issue.id],
+              candidates.contains(where: { $0.stableRecordIdentifier == selected })
+        else {
+            issues.append(issue)
+            return
+        }
+    }
+
+    func appendSnapshotReferenceIssue<Target, Source>(
+        currentID: UUID?,
+        sourceHerd: Herd?,
+        records: [Target],
+        publicID: (Target) -> UUID,
+        herd: (Target) -> Herd?,
+        sourceEntityType: PublicIDRepairEntityType,
+        sourceModel: Source,
+        recordDescription: String,
+        fieldName: String,
+        targetDescription: String,
+        evidenceMatches: (Target) -> Bool,
+        plan: RepairPlan,
+        resolutions: [String: String],
+        to issues: inout [PublicIDRepairUnresolvedReference]
+    ) where Target: PersistentModel, Target: CollaborativelyMutableAggregate,
+            Source: PersistentModel, Source: CollaborativelyMutableAggregate {
+        guard let currentID else { return }
+        let pool = scopedLookupCandidates(
+            currentID: currentID,
+            sourceHerd: sourceHerd,
+            records: records,
+            publicID: publicID,
+            herd: herd
+        )
+        guard pool.count > 1 else { return }
+        if pool.filter(evidenceMatches).count == 1 { return }
+
+        let candidates = pool.compactMap {
+            plan.candidateByLocalIdentifier[localRecordIdentifier($0)]
+        }.map(makeResolutionCandidate)
+        guard !candidates.isEmpty else { return }
+        let issue = PublicIDRepairUnresolvedReference(
+            kind: .lookupReference,
+            entityType: sourceEntityType,
+            recordDescription: recordDescription,
+            stableRecordIdentifier: stableSourceIdentifier(sourceModel, plan: plan),
+            fieldName: fieldName,
+            referencedPublicID: currentID,
+            reason: "The live relationship is unavailable and the stored snapshot does not identify exactly one \(targetDescription). Choose the intended record before repair.",
             candidates: candidates
         )
         guard let selected = resolutions[issue.id],

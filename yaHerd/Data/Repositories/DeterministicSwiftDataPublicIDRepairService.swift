@@ -3,7 +3,7 @@ import Foundation
 import SwiftData
 
 @ModelActor
-actor DeterministicSwiftDataPublicIDRepairService: PublicIDRepairService {
+actor DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransactionalService {
     struct LoadedRecords {
         let herds: [Herd]
         let tagColorDefinitions: [TagColorDefinition]
@@ -87,11 +87,14 @@ actor DeterministicSwiftDataPublicIDRepairService: PublicIDRepairService {
         let assessment: PublicIDRepairEntityAssessment
         let replacements: [PlannedReplacement]
         let candidates: [DuplicateCandidate]
+        let unresolvedIssues: [PublicIDRepairUnresolvedReference]
     }
 
     struct TreatmentItemLocation {
         let entityType: PublicIDRepairEntityType
         let ownerLocalIdentifier: String
+        let ownerPublicID: UUID
+        let ownerSnapshotKey: String
         let itemIndex: Int
         let localIdentifier: String
         let originalID: UUID
@@ -106,6 +109,7 @@ actor DeterministicSwiftDataPublicIDRepairService: PublicIDRepairService {
         let assessment: PublicIDRepairAssessment
         let replacements: [PlannedReplacement]
         let candidates: [DuplicateCandidate]
+        let unresolvedIssues: [PublicIDRepairUnresolvedReference]
         let graphFingerprintByLocalIdentifier: [String: String]
         let treatmentLocations: [TreatmentItemLocation]
 
@@ -144,8 +148,9 @@ actor DeterministicSwiftDataPublicIDRepairService: PublicIDRepairService {
     }
 
     func repair(
-        resolutions: [PublicIDRepairReferenceResolution]
-    ) throws -> PublicIDRepairReport {
+        resolutions: [PublicIDRepairReferenceResolution],
+        willCommit: PublicIDRepairWillCommit
+    ) async throws -> PublicIDRepairReport {
         let loaded = try loadRecords()
         let plan = makeRepairPlan(loaded: loaded)
         guard plan.assessment.hasDuplicates else {
@@ -180,6 +185,19 @@ actor DeterministicSwiftDataPublicIDRepairService: PublicIDRepairService {
             referenceUpdates: reportReferenceUpdates,
             resolutions: resolutions
         )
+        let report = PublicIDRepairReport(
+            completedAt: .now,
+            assessment: assessment,
+            replacements: plan.reportReplacements,
+            referenceUpdates: reportReferenceUpdates,
+            backupFilename: backupURL.lastPathComponent,
+            backupPath: backupURL.path,
+            validationIssueCount: 0
+        )
+
+        // This callback is the durable crash-recovery boundary. No SwiftData mutation has
+        // occurred yet, but the complete deterministic transaction and backup are known.
+        try await willCommit(report)
 
         do {
             for replacement in plan.replacements {
@@ -210,15 +228,7 @@ actor DeterministicSwiftDataPublicIDRepairService: PublicIDRepairService {
                 detail: "reassigned=\(plan.replacements.count) references=\(referenceUpdates.count)"
             )
 
-            return PublicIDRepairReport(
-                completedAt: .now,
-                assessment: assessment,
-                replacements: plan.reportReplacements,
-                referenceUpdates: reportReferenceUpdates,
-                backupFilename: backupURL.lastPathComponent,
-                backupPath: backupURL.path,
-                validationIssueCount: 0
-            )
+            return report
         } catch {
             modelContext.rollback()
             ReliabilityLog.persistenceFailure(

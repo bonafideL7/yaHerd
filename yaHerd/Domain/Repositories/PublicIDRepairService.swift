@@ -211,6 +211,25 @@ protocol PublicIDRepairService: Sendable {
     ) async throws -> PublicIDRepairReport
 }
 
+typealias PublicIDRepairWillCommit = @MainActor @Sendable (PublicIDRepairReport) throws -> Void
+
+/// A repair worker that can durably announce its complete transaction plan immediately
+/// before the SwiftData save. Coordinators use this boundary to make crash recovery safe.
+protocol PublicIDRepairTransactionalService: PublicIDRepairService {
+    func repair(
+        resolutions: [PublicIDRepairReferenceResolution],
+        willCommit: PublicIDRepairWillCommit
+    ) async throws -> PublicIDRepairReport
+}
+
+extension PublicIDRepairTransactionalService {
+    func repair(
+        resolutions: [PublicIDRepairReferenceResolution]
+    ) async throws -> PublicIDRepairReport {
+        try await repair(resolutions: resolutions, willCommit: { _ in })
+    }
+}
+
 extension PublicIDRepairService {
     func repair() async throws -> PublicIDRepairReport {
         try await repair(resolutions: [])

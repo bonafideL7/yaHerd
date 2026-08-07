@@ -39,8 +39,12 @@ extension DeterministicSwiftDataPublicIDRepairService {
         let duplicateGroups = grouped
             .filter { $0.value.count > 1 }
             .sorted { $0.key.uuidString < $1.key.uuidString }
+        let duplicateRecordCount = duplicateGroups.reduce(0) { partial, group in
+            partial + group.value.count - 1
+        }
         var replacements: [PlannedReplacement] = []
         var candidates: [DuplicateCandidate] = []
+        var unresolvedIssues: [PublicIDRepairUnresolvedReference] = []
         var usedIDs = Set(nodes.map { $0.readPublicID() })
 
         for (retainedID, duplicateNodes) in duplicateGroups {
@@ -49,18 +53,38 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     CollaborationAggregateKey(type: $0.collaborationType, publicID: retainedID)
                 ]
             } ?? nil
-            let ordered = duplicateNodes.sorted { lhs, rhs in
-                canonicalSortKey(
-                    node: lhs,
-                    metadata: metadata,
-                    graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier
-                ) < canonicalSortKey(
-                    node: rhs,
-                    metadata: metadata,
-                    graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier
+            let keyedNodes = duplicateNodes.map { node in
+                (
+                    node,
+                    canonicalSortKey(
+                        node: node,
+                        metadata: metadata,
+                        graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier
+                    )
                 )
             }
+            let tiedKeys = Dictionary(grouping: keyedNodes, by: { $0.1 })
+                .filter { $0.value.count > 1 }
+            guard tiedKeys.isEmpty else {
+                unresolvedIssues.append(
+                    PublicIDRepairUnresolvedReference(
+                        kind: .canonicalRecord,
+                        entityType: entityType,
+                        recordDescription: "Indistinguishable duplicate \(entityType.displayName.lowercased())",
+                        stableRecordIdentifier: [
+                            entityType.rawValue,
+                            retainedID.uuidString.lowercased(),
+                            "canonical-order-unresolved",
+                        ].joined(separator: "|"),
+                        fieldName: "publicID",
+                        referencedPublicID: retainedID,
+                        reason: "These duplicate records still have identical portable field and relationship fingerprints. Change one record or one of its relationships so the records can be distinguished before repair; no store-local identity is used to guess a canonical record."
+                    )
+                )
+                continue
+            }
 
+            let ordered = keyedNodes.sorted { $0.1 < $1.1 }.map { $0.0 }
             for (ordinal, node) in ordered.enumerated() {
                 let graphFingerprint = graphFingerprintByLocalIdentifier[node.localIdentifier] ?? ""
                 let stableIdentifier = duplicateCandidateIdentifier(
@@ -118,10 +142,11 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 entityType: entityType,
                 scannedRecordCount: nodes.count,
                 duplicateGroupCount: duplicateGroups.count,
-                duplicateRecordCount: replacements.count
+                duplicateRecordCount: duplicateRecordCount
             ),
             replacements: replacements,
-            candidates: candidates
+            candidates: candidates,
+            unresolvedIssues: unresolvedIssues
         )
     }
 

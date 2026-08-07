@@ -1,5 +1,18 @@
 import SwiftData
 
+protocol PublicIDRepairHerdInventoryReading: Sendable {
+    func fetchHerds() async throws -> [HerdSummary]
+}
+
+@ModelActor
+actor SwiftDataPublicIDRepairHerdInventory: PublicIDRepairHerdInventoryReading {
+    func fetchHerds() throws -> [HerdSummary] {
+        try modelContext.fetch(FetchDescriptor<Herd>())
+            .map { $0.toSummary() }
+            .sorted { $0.publicID.uuidString < $1.publicID.uuidString }
+    }
+}
+
 @MainActor
 protocol PublicIDRepairBridgeExporting: AnyObject {
     func exportRepairedGraph(
@@ -38,67 +51,125 @@ final class SwiftDataPublicIDRepairBridgeExporter: PublicIDRepairBridgeExporting
 
 @MainActor
 final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordinating {
-    private let herdRepository: any HerdRepository
+    let bridgeIdentity: PublicIDRepairBridgeIdentity = .iCloud
+
+    private let herdInventory: any PublicIDRepairHerdInventoryReading
     private let sharingRepository: any HerdSharingRepository
     private let storageMode: HerdStorageMode
     private let exporter: any PublicIDRepairBridgeExporting
-    private var preparedHerd: HerdSummary?
 
     init(
-        herdRepository: any HerdRepository,
+        herdInventory: any PublicIDRepairHerdInventoryReading,
         sharingRepository: any HerdSharingRepository,
         storageMode: HerdStorageMode,
         exporter: any PublicIDRepairBridgeExporting
     ) {
-        self.herdRepository = herdRepository
+        self.herdInventory = herdInventory
         self.sharingRepository = sharingRepository
         self.storageMode = storageMode
         self.exporter = exporter
     }
 
-    func prepareForRepair() async throws -> Bool {
+    func prepareForRepair() async throws -> PublicIDRepairBridgePreparation {
         guard storageMode == .iCloud else {
-            preparedHerd = nil
-            return false
-        }
-
-        let herd = try requireCurrentHerd()
-        let access = try await requireWritableAccess(for: herd)
-        preparedHerd = herd
-
-        // Import before scanning and repairing. This operation intentionally uses the
-        // ungated base repository while the exclusive repair token is already held.
-        if access.bridgeLocation != .bridgeRecordMissing {
-            _ = try await sharingRepository.importSharedBridgeData(
-                herd: herd,
-                storageMode: storageMode
+            throw PublicIDRepairBridgeError.bridgeIdentityMismatch(
+                expected: .iCloud,
+                actual: .localOnly
             )
         }
-        return true
-    }
 
-    func convergeAfterRepair() async throws {
-        guard storageMode == .iCloud else { return }
-        let herd = try preparedHerd ?? requireCurrentHerd()
-        let access = try await requireWritableAccess(for: herd)
+        let herds = uniqueHerds(try await herdInventory.fetchHerds())
+        var accessByHerdID: [UUID: HerdSharingAccess] = [:]
 
-        // Do not call normal sync here. Normal sync imports first and would reintroduce
-        // obsolete identifiers from the bridge before the repaired graph is exported.
-        let reconciliation = try await exporter.exportRepairedGraph(
-            for: herd,
-            access: access
+        // Preflight every herd before importing any bridge. The global repair can mutate
+        // records from every herd, so one read-only bridge must block the whole operation.
+        for herd in herds {
+            accessByHerdID[herd.publicID] = try await requireWritableAccess(for: herd)
+        }
+
+        // Import all existing bridges while the exclusive repair gate is held. Missing
+        // bridges are still journaled because convergence will create/update their bridge
+        // representation from the repaired SwiftData graph.
+        for herd in herds {
+            guard let access = accessByHerdID[herd.publicID] else { continue }
+            if access.bridgeLocation != .bridgeRecordMissing {
+                _ = try await sharingRepository.importSharedBridgeData(
+                    herd: herd,
+                    storageMode: storageMode
+                )
+            }
+        }
+
+        return PublicIDRepairBridgePreparation(
+            identity: bridgeIdentity,
+            targets: herds.compactMap { herd in
+                guard let access = accessByHerdID[herd.publicID] else { return nil }
+                return PublicIDRepairBridgeTargetIdentity(
+                    herdPublicID: herd.publicID,
+                    location: bridgeLocationIdentity(access.bridgeLocation)
+                )
+            }
         )
-        guard !reconciliation.hasUnresolvedDifferences else {
-            throw PublicIDRepairBridgeError.reconciliationFailed(reconciliation.summary)
-        }
-        preparedHerd = nil
     }
 
-    private func requireCurrentHerd() throws -> HerdSummary {
-        guard let herd = try herdRepository.fetchCurrentHerd() else {
-            throw PublicIDRepairBridgeError.herdMissing
+    func convergeAfterRepair(
+        preparation: PublicIDRepairBridgePreparation
+    ) async throws {
+        guard preparation.identity == bridgeIdentity else {
+            throw PublicIDRepairBridgeError.bridgeIdentityMismatch(
+                expected: preparation.identity,
+                actual: bridgeIdentity
+            )
         }
-        return herd
+        guard storageMode == .iCloud else {
+            throw PublicIDRepairBridgeError.bridgeIdentityMismatch(
+                expected: .iCloud,
+                actual: .localOnly
+            )
+        }
+
+        let expectedTargetByHerdID = Dictionary(
+            uniqueKeysWithValues: preparation.targets.map { ($0.herdPublicID, $0) }
+        )
+
+        // Refetch after repair rather than relying on pre-repair IDs. A duplicated Herd can
+        // itself receive a replacement public ID; its repaired graph must be exported too.
+        let repairedHerds = uniqueHerds(try await herdInventory.fetchHerds())
+        let repairedHerdIDs = Set(repairedHerds.map(\.publicID))
+        if let missingTarget = preparation.targets.first(where: {
+            $0.location != .unspecified && !repairedHerdIDs.contains($0.herdPublicID)
+        }) {
+            throw PublicIDRepairBridgeError.preparedHerdMissing(
+                herdPublicID: missingTarget.herdPublicID
+            )
+        }
+
+        for herd in repairedHerds {
+            let access = try await requireWritableAccess(for: herd)
+            if let expectedTarget = expectedTargetByHerdID[herd.publicID],
+               expectedTarget.location != .unspecified {
+                let actualLocation = bridgeLocationIdentity(access.bridgeLocation)
+                guard actualLocation == expectedTarget.location else {
+                    throw PublicIDRepairBridgeError.bridgeTargetMismatch(
+                        herdPublicID: herd.publicID,
+                        expected: expectedTarget.location,
+                        actual: actualLocation
+                    )
+                }
+            }
+
+            // Never call normal sync here. It imports first and can reintroduce obsolete IDs.
+            let reconciliation = try await exporter.exportRepairedGraph(
+                for: herd,
+                access: access
+            )
+            guard !reconciliation.hasUnresolvedDifferences else {
+                throw PublicIDRepairBridgeError.reconciliationFailed(
+                    herdPublicID: herd.publicID,
+                    summary: reconciliation.summary
+                )
+            }
+        }
     }
 
     private func requireWritableAccess(
@@ -110,26 +181,75 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
         )
         guard access.canExportLocalChangesToBridge else {
             throw PublicIDRepairBridgeError.writePermissionRequired(
-                access.permissionDescription
+                herdPublicID: herd.publicID,
+                permission: access.permissionDescription
             )
         }
         return access
     }
+
+    private func bridgeLocationIdentity(
+        _ location: HerdSharingAccess.BridgeLocation
+    ) -> PublicIDRepairBridgeLocationIdentity {
+        switch location {
+        case .bridgeRecordMissing: .bridgeRecordMissing
+        case .ownerPrivateStore: .ownerPrivateStore
+        case .acceptedSharedStore: .acceptedSharedStore
+        }
+    }
+
+    private func uniqueHerds(_ herds: [HerdSummary]) -> [HerdSummary] {
+        Dictionary(grouping: herds, by: \.publicID)
+            .values
+            .compactMap { group in
+                group.sorted(by: herdPortableSort).first
+            }
+            .sorted { $0.publicID.uuidString < $1.publicID.uuidString }
+    }
+
+    private func herdPortableSort(_ lhs: HerdSummary, _ rhs: HerdSummary) -> Bool {
+        let lhsKey = [
+            lhs.name,
+            String(lhs.createdAt.timeIntervalSinceReferenceDate),
+            String(lhs.updatedAt.timeIntervalSinceReferenceDate),
+            String(lhs.schemaVersion),
+        ].joined(separator: "|")
+        let rhsKey = [
+            rhs.name,
+            String(rhs.createdAt.timeIntervalSinceReferenceDate),
+            String(rhs.updatedAt.timeIntervalSinceReferenceDate),
+            String(rhs.schemaVersion),
+        ].joined(separator: "|")
+        return lhsKey < rhsKey
+    }
 }
 
 enum PublicIDRepairBridgeError: LocalizedError, Equatable {
-    case herdMissing
-    case writePermissionRequired(String)
-    case reconciliationFailed(String)
+    case writePermissionRequired(herdPublicID: UUID, permission: String)
+    case reconciliationFailed(herdPublicID: UUID, summary: String)
+    case bridgeIdentityMismatch(
+        expected: PublicIDRepairBridgeIdentity,
+        actual: PublicIDRepairBridgeIdentity
+    )
+    case bridgeTargetMismatch(
+        herdPublicID: UUID,
+        expected: PublicIDRepairBridgeLocationIdentity,
+        actual: PublicIDRepairBridgeLocationIdentity
+    )
+    case preparedHerdMissing(herdPublicID: UUID)
 
     var errorDescription: String? {
         switch self {
-        case .herdMissing:
-            "Public-ID repair cannot converge shared data because the current herd is unavailable."
-        case .writePermissionRequired(let permission):
-            "This device has \(permission) shared-herd access and cannot rewrite the repaired bridge. Run repair from the owner or a participant with read/write permission."
-        case .reconciliationFailed(let summary):
-            "The repaired SwiftData graph was exported, but bridge reconciliation did not pass. Normal edits and synchronization remain blocked. \(summary)"
+        case .writePermissionRequired(let herdPublicID, let permission):
+            "Herd \(herdPublicID.uuidString) has \(permission) shared-herd access and cannot rewrite its repaired bridge. Run repair from an owner or participant with read/write permission for every affected herd."
+        case .reconciliationFailed(let herdPublicID, let summary):
+            "The repaired SwiftData graph for herd \(herdPublicID.uuidString) was exported, but bridge reconciliation did not pass. Normal edits and synchronization remain blocked. \(summary)"
+        case .bridgeIdentityMismatch(let expected, let actual):
+            "Public-ID repair is waiting for the \(expected.rawValue) shared-data bridge, but this launch is using \(actual.rawValue) storage. Switch back to the original storage mode and retry repair convergence."
+        case .bridgeTargetMismatch(let herdPublicID, let expected, let actual):
+            "Public-ID repair was prepared against the \(expected.rawValue) bridge for herd \(herdPublicID.uuidString), but this launch sees \(actual.rawValue). Restore the original iCloud/share context before retrying convergence."
+        case .preparedHerdMissing(let herdPublicID):
+            "Herd \(herdPublicID.uuidString) was part of the public-ID repair bridge journal but is no longer present. Shared-data convergence remains blocked until the original herd graph is restored or repaired."
         }
     }
 }

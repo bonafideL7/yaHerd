@@ -95,17 +95,36 @@ extension DeterministicSwiftDataPublicIDRepairService {
         }
 
         for session in loaded.fieldCheckSessions {
+            let description = "Field check for \(session.pastureNameSnapshot.isEmpty ? "unknown pasture" : session.pastureNameSnapshot)"
             if let pasture = session.pasture {
                 appendOptionalReferenceUpdate(
                     entityType: .fieldCheckSession,
                     model: session,
-                    recordDescription: "Field check for \(session.pastureNameSnapshot.isEmpty ? "unknown pasture" : session.pastureNameSnapshot)",
+                    recordDescription: description,
                     fieldName: "pastureID",
                     currentID: { session.pastureID },
                     desiredID: plan.candidateByLocalIdentifier[localRecordIdentifier(pasture)]?.resultingPublicID
                         ?? pasture.publicID,
                     assign: { session.pastureID = $0 },
                     plan: plan,
+                    to: &updates
+                )
+            } else {
+                try appendSnapshotReferenceUpdate(
+                    entityType: .fieldCheckSession,
+                    model: session,
+                    recordDescription: description,
+                    fieldName: "pastureID",
+                    currentID: { session.pastureID },
+                    sourceHerd: session.herd,
+                    records: loaded.pastures,
+                    publicID: { $0.publicID },
+                    herd: { $0.herd },
+                    targetDescription: "pasture",
+                    evidenceMatches: { self.fieldCheckPastureSnapshotMatches(session, $0) },
+                    plan: plan,
+                    resolutions: resolutions,
+                    assign: { session.pastureID = $0 },
                     to: &updates
                 )
             }
@@ -124,6 +143,24 @@ extension DeterministicSwiftDataPublicIDRepairService {
                         ?? animal.publicID,
                     assign: { check.animalIDSnapshot = $0 },
                     plan: plan,
+                    to: &updates
+                )
+            } else {
+                try appendSnapshotReferenceUpdate(
+                    entityType: .fieldCheckAnimalCheck,
+                    model: check,
+                    recordDescription: "Animal check \(check.displayTagNumber)",
+                    fieldName: "animalIDSnapshot",
+                    currentID: { check.animalIDSnapshot },
+                    sourceHerd: sourceHerd,
+                    records: loaded.animals,
+                    publicID: { $0.publicID },
+                    herd: { $0.herd },
+                    targetDescription: "animal",
+                    evidenceMatches: { self.fieldCheckAnimalSnapshotMatches(check, $0) },
+                    plan: plan,
+                    resolutions: resolutions,
+                    assign: { check.animalIDSnapshot = $0 },
                     to: &updates
                 )
             }
@@ -174,6 +211,24 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     plan: plan,
                     to: &updates
                 )
+            } else {
+                try appendSnapshotReferenceUpdate(
+                    entityType: .fieldCheckFinding,
+                    model: finding,
+                    recordDescription: finding.note.isEmpty ? "Field check finding" : finding.note,
+                    fieldName: "animalIDSnapshot",
+                    currentID: { finding.animalIDSnapshot },
+                    sourceHerd: sourceHerd,
+                    records: loaded.animals,
+                    publicID: { $0.publicID },
+                    herd: { $0.herd },
+                    targetDescription: "animal",
+                    evidenceMatches: { self.fieldCheckFindingAnimalSnapshotMatches(finding, $0) },
+                    plan: plan,
+                    resolutions: resolutions,
+                    assign: { finding.animalIDSnapshot = $0 },
+                    to: &updates
+                )
             }
             if let session = finding.session {
                 appendOptionalReferenceUpdate(
@@ -186,6 +241,24 @@ extension DeterministicSwiftDataPublicIDRepairService {
                         ?? session.publicID,
                     assign: { finding.sessionIDSnapshot = $0 },
                     plan: plan,
+                    to: &updates
+                )
+            } else {
+                try appendSnapshotReferenceUpdate(
+                    entityType: .fieldCheckFinding,
+                    model: finding,
+                    recordDescription: finding.note.isEmpty ? "Field check finding" : finding.note,
+                    fieldName: "sessionIDSnapshot",
+                    currentID: { finding.sessionIDSnapshot },
+                    sourceHerd: sourceHerd,
+                    records: loaded.fieldCheckSessions,
+                    publicID: { $0.publicID },
+                    herd: { $0.herd },
+                    targetDescription: "field check session",
+                    evidenceMatches: { self.fieldCheckFindingSessionSnapshotMatches(finding, $0) },
+                    plan: plan,
+                    resolutions: resolutions,
+                    assign: { finding.sessionIDSnapshot = $0 },
                     to: &updates
                 )
             }

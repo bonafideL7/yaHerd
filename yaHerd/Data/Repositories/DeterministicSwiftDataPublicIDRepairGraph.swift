@@ -11,6 +11,14 @@ extension DeterministicSwiftDataPublicIDRepairService {
         })
         var descriptors: [String: [String]] = [:]
 
+        func portableSemantic(_ node: AggregateNode) -> String {
+            [
+                node.entityType.rawValue,
+                node.readPublicID().uuidString.lowercased(),
+                deterministicDigest(node.snapshotKey),
+            ].joined(separator: "|")
+        }
+
         func addEdge(
             _ source: (any CollaborativelyMutableAggregate)?,
             _ target: (any CollaborativelyMutableAggregate)?,
@@ -20,8 +28,8 @@ extension DeterministicSwiftDataPublicIDRepairService {
                   let sourceNode = nodeByObject[ObjectIdentifier(source)],
                   let targetNode = nodeByObject[ObjectIdentifier(target)]
             else { return }
-            let sourceSemantic = "\(sourceNode.entityType.rawValue)|\(deterministicDigest(sourceNode.snapshotKey))"
-            let targetSemantic = "\(targetNode.entityType.rawValue)|\(deterministicDigest(targetNode.snapshotKey))"
+            let sourceSemantic = portableSemantic(sourceNode)
+            let targetSemantic = portableSemantic(targetNode)
             descriptors[sourceNode.localIdentifier, default: []].append(
                 "out|\(label)|\(targetSemantic)"
             )

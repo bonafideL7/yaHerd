@@ -40,6 +40,9 @@ extension DeterministicSwiftDataPublicIDRepairService {
         for update in referenceUpdates where update.readPublicID() != update.report.repairedPublicID {
             issues.append("\(update.report.entityType.displayName) \(update.report.fieldName) still points to an obsolete public ID.")
         }
+
+        appendFieldCheckScalarReferenceValidationIssues(loaded: loaded, to: &issues)
+
         for treatment in loaded.workingTreatmentRecords {
             guard let session = treatment.session else { continue }
             if !session.protocolItems.contains(where: { $0.id == treatment.treatmentItemID }) {
@@ -65,6 +68,89 @@ extension DeterministicSwiftDataPublicIDRepairService {
             }
         }
         return issues
+    }
+
+    func appendFieldCheckScalarReferenceValidationIssues(
+        loaded: LoadedRecords,
+        to issues: inout [String]
+    ) {
+        for session in loaded.fieldCheckSessions {
+            if let pasture = session.pasture {
+                if session.pastureID != pasture.publicID {
+                    issues.append("A field check pastureID does not match its live pasture relationship.")
+                }
+                continue
+            }
+            let candidates = validationScope(
+                records: loaded.pastures,
+                sourceHerd: session.herd,
+                herd: { $0.herd }
+            ).filter { fieldCheckPastureSnapshotMatches(session, $0) }
+            if candidates.count == 1, session.pastureID != candidates[0].publicID {
+                issues.append("A field check pastureID does not match the uniquely identified pasture snapshot.")
+            }
+        }
+
+        for check in loaded.fieldCheckAnimalChecks {
+            if let animal = check.animal {
+                if check.animalIDSnapshot != animal.publicID {
+                    issues.append("A field check animalIDSnapshot does not match its live animal relationship.")
+                }
+                continue
+            }
+            let sourceHerd = check.herd ?? check.session?.herd
+            let candidates = validationScope(
+                records: loaded.animals,
+                sourceHerd: sourceHerd,
+                herd: { $0.herd }
+            ).filter { fieldCheckAnimalSnapshotMatches(check, $0) }
+            if candidates.count == 1, check.animalIDSnapshot != candidates[0].publicID {
+                issues.append("A field check animalIDSnapshot does not match the uniquely identified animal snapshot.")
+            }
+        }
+
+        for finding in loaded.fieldCheckFindings {
+            let sourceHerd = finding.herd ?? finding.session?.herd ?? finding.animal?.herd
+            if let animal = finding.animal {
+                if finding.animalIDSnapshot != animal.publicID {
+                    issues.append("A field check finding animalIDSnapshot does not match its live animal relationship.")
+                }
+            } else {
+                let candidates = validationScope(
+                    records: loaded.animals,
+                    sourceHerd: sourceHerd,
+                    herd: { $0.herd }
+                ).filter { fieldCheckFindingAnimalSnapshotMatches(finding, $0) }
+                if candidates.count == 1, finding.animalIDSnapshot != candidates[0].publicID {
+                    issues.append("A field check finding animalIDSnapshot does not match the uniquely identified animal snapshot.")
+                }
+            }
+
+            if let session = finding.session {
+                if finding.sessionIDSnapshot != session.publicID {
+                    issues.append("A field check finding sessionIDSnapshot does not match its live session relationship.")
+                }
+            } else {
+                let candidates = validationScope(
+                    records: loaded.fieldCheckSessions,
+                    sourceHerd: sourceHerd,
+                    herd: { $0.herd }
+                ).filter { fieldCheckFindingSessionSnapshotMatches(finding, $0) }
+                if candidates.count == 1, finding.sessionIDSnapshot != candidates[0].publicID {
+                    issues.append("A field check finding sessionIDSnapshot does not match the uniquely identified session snapshot.")
+                }
+            }
+        }
+    }
+
+    func validationScope<Model>(
+        records: [Model],
+        sourceHerd: Herd?,
+        herd: (Model) -> Herd?
+    ) -> [Model] {
+        let sourceScope = sourceHerd.map(ObjectIdentifier.init)
+        let scoped = records.filter { herd($0).map(ObjectIdentifier.init) == sourceScope }
+        return scoped.isEmpty ? records : scoped
     }
 
     func appendDuplicateValidationIssues<Model>(

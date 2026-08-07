@@ -47,6 +47,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
             ),
             replacements: plans.flatMap(\.replacements),
             candidates: plans.flatMap(\.candidates),
+            unresolvedIssues: plans.flatMap(\.unresolvedIssues),
             graphFingerprintByLocalIdentifier: graphFingerprints,
             treatmentLocations: treatmentLocations
         )
