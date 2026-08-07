@@ -199,7 +199,7 @@ struct SyncDiagnosticsView: View {
                                 || !hasCompleteReferenceSelections(for: assessment)
                         )
 
-                        Text("Creates a JSON backup before changing IDs, applies your reference choices in the same repair transaction, exports repaired IDs without importing stale bridge data, and validates both stores before unblocking edits.")
+                        Text("Creates a JSON backup before changing IDs, applies your repair choices in the same transaction, then imports the current bound shared-data bridge after IDs are unique and exports the converged repaired graph before unblocking edits.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -308,7 +308,7 @@ struct SyncDiagnosticsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("yaHerd will hold the mutation gate, import current shared data before repair, create a backup, durably journal the repair before the local commit, apply deliberate choices, assign deterministic replacement IDs, export every repaired herd graph without re-importing stale bridge records, and validate reconciliation before allowing edits again.")
+            Text("yaHerd will hold the mutation gate, verify the bound shared-data target, create a backup, durably journal the repair before the local commit, apply deliberate choices, assign deterministic replacement IDs, then import the current exact shared-data bridge after IDs are unique and export the converged repaired graph. Edits stay blocked until reconciliation passes.")
         }
         .confirmationDialog(
             "Delete iCloud Sync Data?",
