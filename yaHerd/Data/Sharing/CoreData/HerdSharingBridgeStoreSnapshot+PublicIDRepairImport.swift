@@ -10,20 +10,38 @@ private struct PublicIDRepairBridgeGroup {
     let resultingPublicIDs: Set<UUID>
 }
 
+private struct PublicIDRepairReferenceGroupKey: Hashable {
+    let entityTypeRawValue: String
+    let retainedPublicID: UUID
+    let isEmbeddedTreatmentItem: Bool
+}
+
+private struct PublicIDRepairReferenceGroup {
+    let key: PublicIDRepairReferenceGroupKey
+    let resultingPublicIDs: Set<UUID>
+}
+
+private enum PublicIDRepairReferenceTarget {
+    case entity(PublicIDRepairEntityType)
+    case embeddedTreatmentItem
+}
+
 extension HerdSharingBridgeStoreSnapshot {
     func preparingForPublicIDRepairImport(
         report: PublicIDRepairReport,
         localRepairedSnapshot: HerdSharingBridgeStoreSnapshot
     ) throws -> HerdSharingBridgeStoreSnapshot {
-        let repairGroups = report.publicIDRepairBridgeGroups
-        try rejectAmbiguousRepairTombstones(repairGroups: repairGroups)
+        let bridgeGroups = report.publicIDRepairBridgeGroups
+        let referenceGroups = report.publicIDRepairReferenceGroups
+        try rejectAmbiguousRepairTombstones(repairGroups: bridgeGroups)
 
         var updatedRecords = recordsByStep
         for step in HerdSharingBridgeStep.entitySteps where step != .deletions {
             updatedRecords[step] = try translatedRepairImportRecords(
                 for: step,
                 localRepairedSnapshot: localRepairedSnapshot,
-                repairGroups: repairGroups
+                bridgeGroups: bridgeGroups,
+                referenceGroups: referenceGroups
             )
         }
 
@@ -37,14 +55,15 @@ extension HerdSharingBridgeStoreSnapshot {
     private func translatedRepairImportRecords(
         for step: HerdSharingBridgeStep,
         localRepairedSnapshot: HerdSharingBridgeStoreSnapshot,
-        repairGroups: [PublicIDRepairBridgeGroupKey: PublicIDRepairBridgeGroup]
+        bridgeGroups: [PublicIDRepairBridgeGroupKey: PublicIDRepairBridgeGroup],
+        referenceGroups: [PublicIDRepairReferenceGroup]
     ) throws -> [HerdSharingBridgeRecordSnapshot] {
         let bridgeRecords = records(for: step)
         guard !bridgeRecords.isEmpty else { return [] }
 
         let localRecords = localRepairedSnapshot.records(for: step)
         let entityName = step.coreDataEntityName
-        let groupsForEntity = repairGroups.values.filter { group in
+        let groupsForEntity = bridgeGroups.values.filter { group in
             group.key.entityName == entityName
         }
 
@@ -88,13 +107,15 @@ extension HerdSharingBridgeStoreSnapshot {
             }
 
             let localByFingerprint = Dictionary(grouping: localCandidates) { record in
-                record.publicIDRepairPortableMatchFingerprint(repairGroups: repairGroups)
+                record.publicIDRepairPortableMatchFingerprint(
+                    referenceGroups: referenceGroups
+                )
             }
             var usedLocalPublicIDs = Set<UUID>()
 
             for bridgeRecord in sourceRecords.sorted(by: { $0.sourceObjectURI < $1.sourceObjectURI }) {
                 let fingerprint = bridgeRecord.publicIDRepairPortableMatchFingerprint(
-                    repairGroups: repairGroups
+                    referenceGroups: referenceGroups
                 )
                 guard let matches = localByFingerprint[fingerprint],
                       matches.count == 1,
@@ -106,11 +127,11 @@ extension HerdSharingBridgeStoreSnapshot {
                     )
                 }
 
-                translatedBySourceURI[bridgeRecord.sourceObjectURI] = bridgeRecord
+                translatedBySourceURI[bridgeRecord.sourceObjectURI] = try bridgeRecord
                     .translatingForPublicIDRepairImport(
                         resultingPublicID: resultingPublicID,
                         localMatch: localMatch,
-                        repairGroups: repairGroups
+                        referenceGroups: referenceGroups
                     )
             }
         }
@@ -118,7 +139,7 @@ extension HerdSharingBridgeStoreSnapshot {
         let localByPublicID = Dictionary(grouping: localRecords) { record in
             record.publicID.lowercased()
         }
-        return bridgeRecords.map { record in
+        return try bridgeRecords.map { record in
             if let translated = translatedBySourceURI[record.sourceObjectURI] {
                 return translated
             }
@@ -128,10 +149,10 @@ extension HerdSharingBridgeStoreSnapshot {
                   let publicID = record.parsedPublicID else {
                 return record
             }
-            return record.translatingForPublicIDRepairImport(
+            return try record.translatingForPublicIDRepairImport(
                 resultingPublicID: publicID,
                 localMatch: localMatch,
-                repairGroups: repairGroups
+                referenceGroups: referenceGroups
             )
         }
     }
@@ -165,27 +186,49 @@ private extension HerdSharingBridgeRecordSnapshot {
     func translatingForPublicIDRepairImport(
         resultingPublicID: UUID,
         localMatch: HerdSharingBridgeRecordSnapshot,
-        repairGroups: [PublicIDRepairBridgeGroupKey: PublicIDRepairBridgeGroup]
-    ) -> HerdSharingBridgeRecordSnapshot {
+        referenceGroups: [PublicIDRepairReferenceGroup]
+    ) throws -> HerdSharingBridgeRecordSnapshot {
         var updatedAttributes = attributes
         updatedAttributes["publicID"] = .string(resultingPublicID.uuidString)
 
-        for (name, bridgeValue) in attributes {
-            guard name != "publicID",
-                  case .string(let bridgeString) = bridgeValue,
-                  let bridgePublicID = UUID(uuidString: bridgeString),
-                  case .string(let localString) = localMatch.attributes[name],
-                  let localPublicID = UUID(uuidString: localString),
-                  bridgePublicID != localPublicID else {
+        for (name, bridgeValue) in attributes where name != "publicID" {
+            guard let target = publicIDRepairReferenceTarget(
+                entityName: entityName,
+                attributeName: name
+            ) else {
+                continue
+            }
+            let groups = referenceGroups.filter { $0.matches(target: target) }
+            guard !groups.isEmpty, let localValue = localMatch.attributes[name] else {
                 continue
             }
 
-            let identifiesSameRepairGroup = repairGroups.values.contains { group in
-                group.resultingPublicIDs.contains(bridgePublicID)
-                    && group.resultingPublicIDs.contains(localPublicID)
-            }
-            if identifiesSameRepairGroup {
+            switch (bridgeValue, localValue) {
+            case (.string(let bridgeString), .string(let localString)):
+                guard let bridgePublicID = UUID(uuidString: bridgeString),
+                      let localPublicID = UUID(uuidString: localString),
+                      bridgePublicID != localPublicID,
+                      groups.contains(where: { group in
+                          group.resultingPublicIDs.contains(bridgePublicID)
+                              && group.resultingPublicIDs.contains(localPublicID)
+                      }) else {
+                    continue
+                }
                 updatedAttributes[name] = .string(localString)
+
+            case (.data(let bridgeData), .data(let localData)):
+                guard case .embeddedTreatmentItem = target else { continue }
+                updatedAttributes[name] = .data(
+                    try translatingTreatmentItemIDs(
+                        bridgeData: bridgeData,
+                        localData: localData,
+                        referenceGroups: groups,
+                        recordDescription: "\(entityName).\(name)"
+                    )
+                )
+
+            default:
+                continue
             }
         }
 
@@ -198,7 +241,7 @@ private extension HerdSharingBridgeRecordSnapshot {
     }
 
     func publicIDRepairPortableMatchFingerprint(
-        repairGroups: [PublicIDRepairBridgeGroupKey: PublicIDRepairBridgeGroup]
+        referenceGroups: [PublicIDRepairReferenceGroup]
     ) -> String {
         let excludedAttributes: Set<String> = [
             "publicID",
@@ -216,8 +259,15 @@ private extension HerdSharingBridgeRecordSnapshot {
         var components = ["entity|\(entityName)"]
         for key in attributes.keys.sorted() where !excludedAttributes.contains(key) {
             guard let value = attributes[key] else { continue }
+            let target = publicIDRepairReferenceTarget(
+                entityName: entityName,
+                attributeName: key
+            )
+            let groups = target.map { target in
+                referenceGroups.filter { $0.matches(target: target) }
+            } ?? []
             components.append(
-                "attribute|\(key)|\(value.publicIDRepairPortableMatchValue(repairGroups: repairGroups))"
+                "attribute|\(key)|\(value.publicIDRepairPortableMatchValue(referenceGroups: groups, target: target))"
             )
         }
         return components.joined(separator: "\n")
@@ -226,20 +276,31 @@ private extension HerdSharingBridgeRecordSnapshot {
 
 private extension HerdSharingBridgeAttributeValue {
     func publicIDRepairPortableMatchValue(
-        repairGroups: [PublicIDRepairBridgeGroupKey: PublicIDRepairBridgeGroup]
+        referenceGroups: [PublicIDRepairReferenceGroup],
+        target: PublicIDRepairReferenceTarget?
     ) -> String {
         switch self {
         case .null:
             return "null"
         case .string(let value):
-            if let publicID = UUID(uuidString: value),
-               let normalized = publicID.publicIDRepairNormalizedID(repairGroups: repairGroups) {
+            if target != nil,
+               let publicID = UUID(uuidString: value),
+               let normalized = publicID.publicIDRepairNormalizedID(
+                   referenceGroups: referenceGroups
+               ) {
                 return "uuid|\(normalized.uuidString.lowercased())"
             }
             return "string|\(Data(value.utf8).base64EncodedString())"
         case .date(let value):
             return "date|\(value.timeIntervalSinceReferenceDate.bitPattern)"
         case .data(let value):
+            if case .embeddedTreatmentItem = target,
+               let normalized = normalizedTreatmentItemsData(
+                   value,
+                   referenceGroups: referenceGroups
+               ) {
+                return "treatment-items|\(normalized.base64EncodedString())"
+            }
             return "data|\(value.base64EncodedString())"
         case .integer(let value):
             return "integer|\(value)"
@@ -251,17 +312,167 @@ private extension HerdSharingBridgeAttributeValue {
     }
 }
 
+private extension PublicIDRepairReferenceGroup {
+    func matches(target: PublicIDRepairReferenceTarget) -> Bool {
+        switch target {
+        case .entity(let entityType):
+            return !key.isEmbeddedTreatmentItem
+                && key.entityTypeRawValue == entityType.rawValue
+        case .embeddedTreatmentItem:
+            return key.isEmbeddedTreatmentItem
+        }
+    }
+}
+
 private extension UUID {
     func publicIDRepairNormalizedID(
-        repairGroups: [PublicIDRepairBridgeGroupKey: PublicIDRepairBridgeGroup]
+        referenceGroups: [PublicIDRepairReferenceGroup]
     ) -> UUID? {
         let retainedIDs = Set(
-            repairGroups.values.compactMap { group in
+            referenceGroups.compactMap { group in
                 group.resultingPublicIDs.contains(self) ? group.key.retainedPublicID : nil
             }
         )
         guard retainedIDs.count == 1 else { return nil }
         return retainedIDs.first
+    }
+}
+
+private func publicIDRepairReferenceTarget(
+    entityName: String,
+    attributeName: String
+) -> PublicIDRepairReferenceTarget? {
+    switch (entityName, attributeName) {
+    case (SharedAnimalRecord.entityName, "tagColorID"):
+        return .entity(.tagColorDefinition)
+    case (SharedAnimalRecord.entityName, "statusReferenceID"):
+        return .entity(.animalStatusReference)
+    case (SharedAnimalRecord.entityName, "pasturePublicID"):
+        return .entity(.pasture)
+    case (SharedAnimalRecord.entityName, "sireAnimalPublicID"),
+         (SharedAnimalRecord.entityName, "damAnimalPublicID"):
+        return .entity(.animal)
+    case (SharedAnimalTagRecord.entityName, "animalPublicID"):
+        return .entity(.animal)
+    case (SharedAnimalTagRecord.entityName, "colorID"):
+        return .entity(.tagColorDefinition)
+    case (SharedPastureRecord.entityName, "groupPublicID"):
+        return .entity(.pastureGroup)
+    case (SharedMovementRecord.entityName, "animalPublicID"),
+         (SharedStatusRecord.entityName, "animalPublicID"),
+         (SharedHealthRecord.entityName, "animalPublicID"),
+         (SharedPregnancyCheckRecord.entityName, "animalPublicID"):
+        return .entity(.animal)
+    case (SharedStatusRecord.entityName, "oldStatusReferenceID"),
+         (SharedStatusRecord.entityName, "newStatusReferenceID"):
+        return .entity(.animalStatusReference)
+    case (SharedHealthRecord.entityName, "workingSessionPublicID"),
+         (SharedPregnancyCheckRecord.entityName, "workingSessionPublicID"):
+        return .entity(.workingSession)
+    case (SharedPregnancyCheckRecord.entityName, "sireAnimalPublicID"):
+        return .entity(.animal)
+    case (SharedWorkingProtocolTemplateRecord.entityName, "itemsJSON"),
+         (SharedWorkingSessionRecord.entityName, "protocolItemsJSON"),
+         (SharedWorkingTreatmentRecord.entityName, "treatmentItemID"):
+        return .embeddedTreatmentItem
+    case (SharedWorkingSessionRecord.entityName, "sourcePasturePublicID"):
+        return .entity(.pasture)
+    case (SharedWorkingQueueItemRecord.entityName, "sessionPublicID"),
+         (SharedWorkingTreatmentRecord.entityName, "sessionPublicID"):
+        return .entity(.workingSession)
+    case (SharedWorkingQueueItemRecord.entityName, "animalPublicID"),
+         (SharedWorkingTreatmentRecord.entityName, "animalPublicID"):
+        return .entity(.animal)
+    case (SharedWorkingQueueItemRecord.entityName, "collectedFromPasturePublicID"),
+         (SharedWorkingQueueItemRecord.entityName, "destinationPasturePublicID"):
+        return .entity(.pasture)
+    case (SharedFieldCheckSessionRecord.entityName, "pasturePublicID"):
+        return .entity(.pasture)
+    case (SharedFieldCheckAnimalCheckRecord.entityName, "sessionPublicID"),
+         (SharedFieldCheckFindingRecord.entityName, "sessionPublicID"),
+         (SharedFieldCheckFindingRecord.entityName, "sessionIDSnapshot"):
+        return .entity(.fieldCheckSession)
+    case (SharedFieldCheckAnimalCheckRecord.entityName, "animalPublicID"),
+         (SharedFieldCheckAnimalCheckRecord.entityName, "animalIDSnapshot"),
+         (SharedFieldCheckFindingRecord.entityName, "animalPublicID"),
+         (SharedFieldCheckFindingRecord.entityName, "animalIDSnapshot"):
+        return .entity(.animal)
+    case (SharedFieldCheckAnimalCheckRecord.entityName, "rosterTagColorID"),
+         (SharedFieldCheckAnimalCheckRecord.entityName, "damRosterTagColorID"),
+         (SharedFieldCheckFindingRecord.entityName, "animalDisplayTagColorIDSnapshot"):
+        return .entity(.tagColorDefinition)
+    default:
+        return nil
+    }
+}
+
+private func normalizedTreatmentItemsData(
+    _ data: Data,
+    referenceGroups: [PublicIDRepairReferenceGroup]
+) -> Data? {
+    guard var items = try? JSONDecoder().decode([WorkingProtocolItem].self, from: data) else {
+        return nil
+    }
+    for index in items.indices {
+        if let retainedID = items[index].id.publicIDRepairNormalizedID(
+            referenceGroups: referenceGroups
+        ) {
+            items[index].id = retainedID
+        }
+    }
+    return try? publicIDRepairTreatmentItemsEncoder().encode(items)
+}
+
+private func translatingTreatmentItemIDs(
+    bridgeData: Data,
+    localData: Data,
+    referenceGroups: [PublicIDRepairReferenceGroup],
+    recordDescription: String
+) throws -> Data {
+    guard var bridgeItems = try? JSONDecoder().decode([WorkingProtocolItem].self, from: bridgeData),
+          let localItems = try? JSONDecoder().decode([WorkingProtocolItem].self, from: localData) else {
+        throw HerdSharingActionError.bridgeConsistencyFailed(
+            "The shared bridge contains unreadable treatment-plan data in \(recordDescription). Public-ID repair stopped rather than replace embedded IDs blindly."
+        )
+    }
+
+    for index in bridgeItems.indices {
+        let bridgeItem = bridgeItems[index]
+        let matchingGroups = referenceGroups.filter {
+            $0.resultingPublicIDs.contains(bridgeItem.id)
+        }
+        guard !matchingGroups.isEmpty else { continue }
+
+        let contentFingerprint = bridgeItem.publicIDRepairTreatmentItemContentFingerprint
+        let candidates = localItems.filter { localItem in
+            localItem.publicIDRepairTreatmentItemContentFingerprint == contentFingerprint
+                && matchingGroups.contains(where: { group in
+                    group.resultingPublicIDs.contains(localItem.id)
+                })
+        }
+        guard candidates.count == 1, let localItem = candidates.first else {
+            throw HerdSharingActionError.bridgeConsistencyFailed(
+                "The shared bridge contains a treatment-plan item with duplicate public ID \(bridgeItem.id.uuidString), but its portable fields do not identify one repaired local item in \(recordDescription). Public-ID repair stopped rather than guess which item receives an ID."
+            )
+        }
+        bridgeItems[index].id = localItem.id
+    }
+
+    return try publicIDRepairTreatmentItemsEncoder().encode(bridgeItems)
+}
+
+private func publicIDRepairTreatmentItemsEncoder() -> JSONEncoder {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    return encoder
+}
+
+private extension WorkingProtocolItem {
+    var publicIDRepairTreatmentItemContentFingerprint: String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let doseData = (try? encoder.encode(suggestedDose)) ?? Data()
+        return "name|\(Data(name.utf8).base64EncodedString())|dose|\(doseData.base64EncodedString())"
     }
 }
 
@@ -293,6 +504,25 @@ private extension PublicIDRepairReport {
                 )
             }
         )
+    }
+
+    var publicIDRepairReferenceGroups: [PublicIDRepairReferenceGroup] {
+        var IDsByKey: [PublicIDRepairReferenceGroupKey: Set<UUID>] = [:]
+        for replacement in replacements {
+            let key = PublicIDRepairReferenceGroupKey(
+                entityTypeRawValue: replacement.entityType.rawValue,
+                retainedPublicID: replacement.retainedPublicID,
+                isEmbeddedTreatmentItem: replacement.stableRecordIdentifier.contains("|item-")
+            )
+            IDsByKey[key, default: [replacement.retainedPublicID]]
+                .insert(replacement.replacementPublicID)
+        }
+        return IDsByKey.map { key, resultingPublicIDs in
+            PublicIDRepairReferenceGroup(
+                key: key,
+                resultingPublicIDs: resultingPublicIDs
+            )
+        }
     }
 }
 
