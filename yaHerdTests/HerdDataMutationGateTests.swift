@@ -80,7 +80,8 @@ final class HerdDataMutationGateTests: XCTestCase {
             events.events,
             ["prepare-import", "repair-will-commit", "repair-save", "export-only-converge"]
         )
-        XCTAssertEqual(worker.repairCallCount, 1)
+        let repairCallCount = await worker.repairCallCountValue()
+        XCTAssertEqual(repairCallCount, 1)
         XCTAssertEqual(bridge.prepareCallCount, 1)
         XCTAssertEqual(bridge.convergeCallCount, 1)
         XCTAssertFalse(gate.requiresBridgeConvergence)
@@ -121,7 +122,8 @@ final class HerdDataMutationGateTests: XCTestCase {
         )
         _ = try await retryService.repair()
 
-        XCTAssertEqual(worker.repairCallCount, 1)
+        let repairCallCount = await worker.repairCallCountValue()
+        XCTAssertEqual(repairCallCount, 1)
         XCTAssertEqual(bridge.prepareCallCount, 1)
         XCTAssertEqual(bridge.convergeCallCount, 2)
         XCTAssertFalse(relaunchedGate.requiresBridgeConvergence)
@@ -160,7 +162,8 @@ final class HerdDataMutationGateTests: XCTestCase {
         let resumedReport = try await service.repair()
 
         XCTAssertEqual(resumedReport, report)
-        XCTAssertEqual(worker.repairCallCount, 0)
+        let repairCallCount = await worker.repairCallCountValue()
+        XCTAssertEqual(repairCallCount, 0)
         XCTAssertEqual(bridge.convergeCallCount, 1)
         XCTAssertFalse(relaunchedGate.requiresBridgeConvergence)
     }
@@ -191,7 +194,8 @@ final class HerdDataMutationGateTests: XCTestCase {
 
         _ = try await service.repair()
 
-        XCTAssertEqual(worker.repairCallCount, 1)
+        let repairCallCount = await worker.repairCallCountValue()
+        XCTAssertEqual(repairCallCount, 1)
         XCTAssertEqual(bridge.convergeCallCount, 1)
         XCTAssertFalse(relaunchedGate.requiresBridgeConvergence)
     }
@@ -342,14 +346,17 @@ private actor SuspendedPublicIDRepairService: PublicIDRepairTransactionalService
 
 @MainActor
 private final class RepairEventRecorder {
-    var events: [String] = []
+    private(set) var events: [String] = []
+
+    func record(_ event: String) {
+        events.append(event)
+    }
 }
 
-@MainActor
-private final class RecordingPublicIDRepairService: PublicIDRepairTransactionalService {
+private actor RecordingPublicIDRepairService: PublicIDRepairTransactionalService {
     private let events: RepairEventRecorder
     private var scanHasDuplicates: Bool
-    private(set) var repairCallCount = 0
+    private var repairCallCount = 0
 
     init(
         events: RepairEventRecorder,
@@ -368,12 +375,16 @@ private final class RecordingPublicIDRepairService: PublicIDRepairTransactionalS
         willCommit: PublicIDRepairWillCommit
     ) async throws -> PublicIDRepairReport {
         repairCallCount += 1
-        events.events.append("repair-will-commit")
+        await events.record("repair-will-commit")
         let report = makeTestRepairReport()
-        try willCommit(report)
-        events.events.append("repair-save")
+        try await willCommit(report)
+        await events.record("repair-save")
         scanHasDuplicates = false
         return report
+    }
+
+    func repairCallCountValue() -> Int {
+        repairCallCount
     }
 }
 
@@ -396,7 +407,7 @@ private final class RecordingPublicIDRepairBridgeCoordinator: PublicIDRepairBrid
 
     func prepareForRepair() async throws -> PublicIDRepairBridgePreparation {
         prepareCallCount += 1
-        events.events.append("prepare-import")
+        events.record("prepare-import")
         return PublicIDRepairBridgePreparation(
             identity: .iCloud,
             herdPublicIDs: [UUID(uuidString: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA")!]
@@ -407,7 +418,7 @@ private final class RecordingPublicIDRepairBridgeCoordinator: PublicIDRepairBrid
         preparation: PublicIDRepairBridgePreparation
     ) async throws {
         convergeCallCount += 1
-        events.events.append("export-only-converge")
+        events.record("export-only-converge")
         if convergenceFailuresRemaining > 0 {
             convergenceFailuresRemaining -= 1
             throw PublicIDRepairBridgeError.reconciliationFailed(
