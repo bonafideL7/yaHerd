@@ -89,10 +89,11 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
       )
     }
 
-    // A deterministic replacement ID can already have a stale deletion tombstone if another
-    // device or an interrupted repair partially converged. Prefer the known live replacement
-    // record only for IDs produced by this repair transaction; unrelated delete/live conflicts
-    // continue through the normal conflict machinery.
+    // Deterministic replacement IDs produced by this still-pending repair are known-live local
+    // identities. An interrupted earlier convergence can leave a tombstone for one of those IDs
+    // even when the bridge's live row was never committed. Suppress only those repair-generated
+    // tombstones during the repair import; unrelated remote deletions still use normal conflict
+    // handling. The subsequent exact repaired export removes the tombstones from the bridge.
     let snapshot = sourceSnapshot.removingConflictingRepairTombstones(report: report)
 
     if let revisionHydrator = importer as? any CollaborationRevisionHydrating {
@@ -509,13 +510,11 @@ extension HerdSharingBridgeStoreSnapshot {
   ) -> HerdSharingBridgeStoreSnapshot {
     let repairedIdentities = report.publicIDRepairReplacementBridgeIdentities
     guard !repairedIdentities.isEmpty else { return self }
-    let liveRepairIdentities = publicIDRepairLiveIdentities.intersection(repairedIdentities)
-    guard !liveRepairIdentities.isEmpty else { return self }
 
     var updatedRecords = recordsByStep
     updatedRecords[.deletions] = records(for: .deletions).filter { record in
       guard let identity = record.publicIDRepairDeletionIdentity else { return true }
-      return !liveRepairIdentities.contains(identity)
+      return !repairedIdentities.contains(identity)
     }
     return HerdSharingBridgeStoreSnapshot(
       herdPublicID: herdPublicID,
