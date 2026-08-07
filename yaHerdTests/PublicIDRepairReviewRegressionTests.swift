@@ -141,7 +141,10 @@ final class PublicIDRepairReviewRegressionTests: XCTestCase {
         repository.access = .localOwnerBridgePending
 
         do {
-            try await coordinator.convergeAfterRepair(preparation: preparation)
+            try await coordinator.convergeAfterRepair(
+                preparation: preparation,
+                report: makeReport()
+            )
             XCTFail("Expected bridge location change to block convergence")
         } catch let error as PublicIDRepairBridgeError {
             XCTAssertEqual(
@@ -156,14 +159,17 @@ final class PublicIDRepairReviewRegressionTests: XCTestCase {
         XCTAssertEqual(exporter.exportedHerdIDs, [])
     }
 
-    func testRelaunchAfterLocalCommitRefusesInterveningBridgeChangeAndKeepsJournal() async throws {
+    func testRelaunchImportsInterveningBridgeChangeButBlocksAChangeAfterImportBaseline() async throws {
         let defaults = isolatedDefaults()
         let herd = makeHerdSummary()
         let inventory = ReviewHerdInventory(herds: [herd])
         let repository = ReviewHerdSharingRepository(
             access: .ownerPrivateStore(participantCount: 1)
         )
-        let exporter = ReviewBridgeExporter(currentFingerprint: "bridge-before-crash")
+        let exporter = ReviewBridgeExporter(
+            currentFingerprint: "bridge-before-crash",
+            fingerprintAfterImport: "bridge-after-second-edit"
+        )
         let coordinator = DefaultPublicIDRepairBridgeCoordinator(
             herdInventory: inventory,
             sharingRepository: repository,
@@ -174,8 +180,9 @@ final class PublicIDRepairReviewRegressionTests: XCTestCase {
         let report = makeReport()
         let firstGate = HerdDataMutationGate(defaults: defaults)
 
-        // Simulate process death after SwiftData save but before the phase transition. The
-        // prepared bridge contents then change on another device before this device relaunches.
+        // Simulate process death after SwiftData save. A collaborator change that happens before
+        // relaunch is now intentionally imported; a second change after the exact import baseline
+        // was captured must still block export rather than be overwritten.
         try firstGate.requireLocalCommitCompletion(
             preparation: preparation,
             report: report,
@@ -192,12 +199,13 @@ final class PublicIDRepairReviewRegressionTests: XCTestCase {
 
         do {
             _ = try await service.repair()
-            XCTFail("Expected changed bridge baseline to block resumed convergence")
+            XCTFail("Expected a bridge change after import baseline capture to block export")
         } catch let error as PublicIDRepairBridgeError {
             XCTAssertEqual(error, .bridgeContentChanged(herdPublicID: herd.publicID))
         }
 
         XCTAssertTrue(relaunchedGate.requiresBridgeConvergence)
+        XCTAssertEqual(exporter.importedHerdIDs, [herd.publicID])
         XCTAssertEqual(exporter.exportedHerdIDs, [])
         XCTAssertThrowsError(try relaunchedGate.beginSynchronization())
     }
@@ -220,7 +228,10 @@ final class PublicIDRepairReviewRegressionTests: XCTestCase {
         await inventory.setHerds([])
 
         do {
-            try await coordinator.convergeAfterRepair(preparation: preparation)
+            try await coordinator.convergeAfterRepair(
+                preparation: preparation,
+                report: makeReport()
+            )
             XCTFail("Expected missing prepared herd to block convergence")
         } catch let error as PublicIDRepairBridgeError {
             XCTAssertEqual(error, .preparedHerdMissing(herdPublicID: herd.publicID))
@@ -228,7 +239,7 @@ final class PublicIDRepairReviewRegressionTests: XCTestCase {
         XCTAssertEqual(exporter.exportedHerdIDs, [])
     }
 
-    func testDuplicateHerdOnReadWriteParticipantIsBlockedBeforeBridgeImport() async throws {
+    func testDuplicateHerdOnReadWriteParticipantCanPrepareWithoutNormalBridgeImport() async throws {
         let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
         let duplicatedPublicID = UUID(uuidString: "A1A1A1A1-A1A1-41A1-81A1-A1A1A1A1A1A1")!
         let first = HerdSummary(
@@ -260,21 +271,14 @@ final class PublicIDRepairReviewRegressionTests: XCTestCase {
             exporter: exporter
         )
 
-        do {
-            _ = try await coordinator.prepareForRepair()
-            XCTFail("Expected duplicate Herd bridge ownership to be treated as ambiguous")
-        } catch let error as PublicIDRepairBridgeError {
-            XCTAssertEqual(
-                error,
-                .duplicateHerdBridgeTargetAmbiguous(
-                    herdPublicID: duplicatedPublicID,
-                    recordCount: 2
-                )
-            )
-        }
+        let preparation = try await coordinator.prepareForRepair()
 
-        XCTAssertEqual(repository.fetchAccessCallCount, 0)
+        XCTAssertEqual(preparation.targets.count, 1)
+        XCTAssertEqual(preparation.targets.first?.herdPublicID, duplicatedPublicID)
+        XCTAssertEqual(preparation.targets.first?.location, .acceptedSharedStore)
+        XCTAssertGreaterThan(repository.fetchAccessCallCount, 0)
         XCTAssertEqual(repository.importedHerdIDs, [])
+        XCTAssertEqual(exporter.importedHerdIDs, [])
         XCTAssertEqual(exporter.exportedHerdIDs, [])
     }
 
@@ -384,10 +388,16 @@ private actor ReviewHerdInventory: PublicIDRepairHerdInventoryReading {
 @MainActor
 private final class ReviewBridgeExporter: PublicIDRepairBridgeExporting {
     var currentFingerprint: String
+    var fingerprintAfterImport: String?
+    private(set) var importedHerdIDs: [UUID] = []
     private(set) var exportedHerdIDs: [UUID] = []
 
-    init(currentFingerprint: String = "review-baseline") {
+    init(
+        currentFingerprint: String = "review-baseline",
+        fingerprintAfterImport: String? = nil
+    ) {
         self.currentFingerprint = currentFingerprint
+        self.fingerprintAfterImport = fingerprintAfterImport
     }
 
     func captureBridgeFingerprint(
@@ -395,6 +405,23 @@ private final class ReviewBridgeExporter: PublicIDRepairBridgeExporting {
         access: HerdSharingAccess
     ) async throws -> String {
         currentFingerprint
+    }
+
+    func importCurrentBridgeGraph(
+        for herd: HerdSummary,
+        access: HerdSharingAccess,
+        expectedFingerprint: String,
+        report: PublicIDRepairReport
+    ) async throws {
+        guard expectedFingerprint == currentFingerprint else {
+            throw PublicIDRepairBridgeError.bridgeContentChanged(
+                herdPublicID: herd.publicID
+            )
+        }
+        importedHerdIDs.append(herd.publicID)
+        if let fingerprintAfterImport {
+            currentFingerprint = fingerprintAfterImport
+        }
     }
 
     func exportRepairedGraph(
