@@ -257,6 +257,13 @@ extension HerdSharingCoreDataStore {
           finalRecords[recordSnapshot.publicID] = record
         }
         try recordSnapshot.apply(to: record)
+        try removeDeletionTombstones(
+          publicID: recordSnapshot.publicID,
+          sourceEntityName: entityName,
+          herdPublicID: snapshot.herdPublicID,
+          in: context,
+          store: store
+        )
       }
 
       if step != .herd {
@@ -358,6 +365,26 @@ extension HerdSharingCoreDataStore {
       )
     }
     return recordsByIdentity
+  }
+
+  nonisolated private static func removeDeletionTombstones(
+    publicID: String,
+    sourceEntityName: String,
+    herdPublicID: UUID,
+    in context: NSManagedObjectContext,
+    store: NSPersistentStore
+  ) throws {
+    let request = NSFetchRequest<NSManagedObject>(entityName: SharedDeletedRecord.entityName)
+    request.affectedStores = [store]
+    request.predicate = NSPredicate(
+      format: "publicID == %@ AND sourceEntityName == %@ AND herdPublicID == %@",
+      publicID,
+      sourceEntityName,
+      herdPublicID.uuidString
+    )
+    for tombstone in try context.fetch(request) {
+      context.delete(tombstone)
+    }
   }
 
   nonisolated private static func upsertDeletionTombstone(

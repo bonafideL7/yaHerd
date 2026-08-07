@@ -21,15 +21,18 @@ protocol SyncDataResetting {
 final class SyncDataResetService: SyncDataResetting {
     private let applicationSettings: ApplicationSettings
     private let settingsSynchronizer: AppSettingsSyncing
+    private let mutationGate: HerdDataMutationGate
     private let cloudKitContainerIdentifier: String
 
     convenience init(
         applicationSettings: ApplicationSettings,
-        settingsSynchronizer: AppSettingsSyncing
+        settingsSynchronizer: AppSettingsSyncing,
+        mutationGate: HerdDataMutationGate
     ) {
         self.init(
             applicationSettings: applicationSettings,
             settingsSynchronizer: settingsSynchronizer,
+            mutationGate: mutationGate,
             cloudKitContainerIdentifier: ModelContainerFactory.cloudKitContainerIdentifier
         )
     }
@@ -37,14 +40,19 @@ final class SyncDataResetService: SyncDataResetting {
     init(
         applicationSettings: ApplicationSettings,
         settingsSynchronizer: AppSettingsSyncing,
+        mutationGate: HerdDataMutationGate,
         cloudKitContainerIdentifier: String
     ) {
         self.applicationSettings = applicationSettings
         self.settingsSynchronizer = settingsSynchronizer
+        self.mutationGate = mutationGate
         self.cloudKitContainerIdentifier = cloudKitContainerIdentifier
     }
 
     func deleteICloudSyncData() async throws -> SyncDataResetSummary {
+        let resetToken = try mutationGate.beginSyncDataReset()
+        defer { mutationGate.endSyncDataReset(resetToken) }
+
         let cloudKitSummary = try await deletePrivateCloudKitData()
 
         applicationSettings.syncMode = .localOnly

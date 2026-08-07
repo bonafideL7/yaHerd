@@ -307,6 +307,7 @@ private struct RunningAppView: View {
             sharingRepository: runtime.dependencies.herdSharingRepository,
             storageMode: runtime.syncMode.herdStorageMode,
             writePolicy: runtime.dependencies.herdCollaborationWritePolicy,
+            mutationGate: runtime.dependencies.herdDataMutationGate,
             conflictReviewStore: runtime.dependencies.herdSharingConflictReviewStore
         )
         if runtime.dataAccessMode.allowsDataMutations {
