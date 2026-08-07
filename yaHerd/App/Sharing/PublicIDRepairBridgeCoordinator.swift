@@ -16,37 +16,108 @@ actor SwiftDataPublicIDRepairHerdInventory: PublicIDRepairHerdInventoryReading {
 
 @MainActor
 protocol PublicIDRepairBridgeExporting: AnyObject {
-    func exportRepairedGraph(
+    func captureBridgeFingerprint(
         for herd: HerdSummary,
         access: HerdSharingAccess
+    ) async throws -> String
+
+    func exportRepairedGraph(
+        for herd: HerdSummary,
+        target: PublicIDRepairBridgeTargetIdentity
     ) async throws -> HerdSharingBridgeReconciliationReport
 }
 
 @MainActor
 final class SwiftDataPublicIDRepairBridgeExporter: PublicIDRepairBridgeExporting {
     private let exportReader: any HerdSharingExportSnapshotReading
-    private let bridgeStore: any HerdSharingBridgeSyncStore
+    private let bridgeStore: any PublicIDRepairBridgeStore
 
     init(
         modelContainer: ModelContainer,
         exportReader: (any HerdSharingExportSnapshotReading)? = nil,
-        bridgeStore: (any HerdSharingBridgeSyncStore)? = nil
+        bridgeStore: (any PublicIDRepairBridgeStore)? = nil
     ) {
         self.exportReader = exportReader
             ?? SwiftDataHerdSharingActor(modelContainer: modelContainer)
         self.bridgeStore = bridgeStore ?? HerdSharingCoreDataStore()
     }
 
-    func exportRepairedGraph(
+    func captureBridgeFingerprint(
         for herd: HerdSummary,
         access: HerdSharingAccess
+    ) async throws -> String {
+        try await bridgeStore.publicIDRepairFingerprint(
+            for: herd,
+            expectedLocation: access.bridgeLocation
+        )
+    }
+
+    func exportRepairedGraph(
+        for herd: HerdSummary,
+        target: PublicIDRepairBridgeTargetIdentity
     ) async throws -> HerdSharingBridgeReconciliationReport {
+        let expectedLocation = try bridgeLocation(for: target)
+        guard let expectedFingerprint = target.bridgeFingerprint else {
+            throw PublicIDRepairBridgeError.bridgeBaselineUnavailable(
+                herdPublicID: herd.publicID
+            )
+        }
+
+        // Detect changes before spending time building the local export, then let the
+        // specialized Core Data write path check again after that await and before writing.
+        let currentFingerprint = try await bridgeStore.publicIDRepairFingerprint(
+            for: herd,
+            expectedLocation: expectedLocation
+        )
+        guard currentFingerprint == expectedFingerprint else {
+            throw PublicIDRepairBridgeError.bridgeContentChanged(
+                herdPublicID: herd.publicID
+            )
+        }
+
         let export = try await exportReader.makeExport(
             for: herd,
-            storeDescription: "public-ID repair convergence: \(access.locationDescription)"
+            storeDescription: "public-ID repair convergence: \(target.location.rawValue)"
         )
-        let result = try await bridgeStore.syncBridgeRecordsFromSnapshot(export)
-        return result.reconciliationReport
+
+        do {
+            let result = try await bridgeStore.syncPublicIDRepairBridgeRecordsFromSnapshot(
+                export,
+                expectedLocation: expectedLocation,
+                expectedFingerprint: expectedFingerprint
+            )
+            return result.reconciliationReport
+        } catch let error as HerdSharingPublicIDRepairBridgeError {
+            switch error {
+            case .targetChanged(_, let actual):
+                throw PublicIDRepairBridgeError.bridgeTargetChangedDuringExport(
+                    herdPublicID: herd.publicID,
+                    expected: target.location,
+                    actual: actual
+                )
+            case .bridgeContentChanged:
+                throw PublicIDRepairBridgeError.bridgeContentChanged(
+                    herdPublicID: herd.publicID
+                )
+            }
+        }
+    }
+
+    private func bridgeLocation(
+        for target: PublicIDRepairBridgeTargetIdentity
+    ) throws -> HerdSharingAccess.BridgeLocation {
+        switch target.location {
+        case .bridgeRecordMissing:
+            return .bridgeRecordMissing
+        case .ownerPrivateStore:
+            return .ownerPrivateStore
+        case .acceptedSharedStore:
+            return .acceptedSharedStore
+        case .unspecified:
+            throw PublicIDRepairBridgeError.bridgeBaselineUnavailable(
+                herdPublicID: target.herdPublicID
+            )
+        }
     }
 }
 
@@ -106,18 +177,63 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
         // A stale bridge import can itself reveal/create duplicate Herd rows after the first
         // preflight. Re-check before the repair worker is allowed to mutate SwiftData so a
         // newly ambiguous physical Herd is never repaired without a trustworthy bridge target.
-        let postImportHerds = try await herdInventory.fetchHerds()
-        try rejectAmbiguousDuplicateHerdTargets(in: postImportHerds)
+        let postImportInventory = try await herdInventory.fetchHerds()
+        try rejectAmbiguousDuplicateHerdTargets(in: postImportInventory)
+        let postImportHerds = uniqueHerds(postImportInventory)
+        let preflightIDs = Set(herds.map(\.publicID))
+        if let unpreparedHerd = postImportHerds.first(where: {
+            !preflightIDs.contains($0.publicID)
+        }) {
+            throw PublicIDRepairBridgeError.unpreparedHerdBridgeTarget(
+                herdPublicID: unpreparedHerd.publicID
+            )
+        }
+
+        let postImportHerdByID = Dictionary(
+            uniqueKeysWithValues: postImportHerds.map { ($0.publicID, $0) }
+        )
+        var targets: [PublicIDRepairBridgeTargetIdentity] = []
+        targets.reserveCapacity(herds.count)
+
+        // Capture the exact bridge contents that were imported. This baseline is persisted in
+        // the durable repair journal and must still match before convergence may export.
+        for originalHerd in herds {
+            guard let herd = postImportHerdByID[originalHerd.publicID] else {
+                throw PublicIDRepairBridgeError.preparedHerdMissing(
+                    herdPublicID: originalHerd.publicID
+                )
+            }
+            guard let preflightAccess = accessByHerdID[herd.publicID] else {
+                throw PublicIDRepairBridgeError.unpreparedHerdBridgeTarget(
+                    herdPublicID: herd.publicID
+                )
+            }
+            let currentAccess = try await requireWritableAccess(for: herd)
+            let expectedLocation = bridgeLocationIdentity(preflightAccess.bridgeLocation)
+            let actualLocation = bridgeLocationIdentity(currentAccess.bridgeLocation)
+            guard actualLocation == expectedLocation else {
+                throw PublicIDRepairBridgeError.bridgeTargetMismatch(
+                    herdPublicID: herd.publicID,
+                    expected: expectedLocation,
+                    actual: actualLocation
+                )
+            }
+            let fingerprint = try await exporter.captureBridgeFingerprint(
+                for: herd,
+                access: currentAccess
+            )
+            targets.append(
+                PublicIDRepairBridgeTargetIdentity(
+                    herdPublicID: herd.publicID,
+                    location: actualLocation,
+                    bridgeFingerprint: fingerprint
+                )
+            )
+        }
 
         return PublicIDRepairBridgePreparation(
             identity: bridgeIdentity,
-            targets: herds.compactMap { herd in
-                guard let access = accessByHerdID[herd.publicID] else { return nil }
-                return PublicIDRepairBridgeTargetIdentity(
-                    herdPublicID: herd.publicID,
-                    location: bridgeLocationIdentity(access.bridgeLocation)
-                )
-            }
+            targets: targets
         )
     }
 
@@ -156,42 +272,44 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
             )
         }
 
-        // Current builds refuse duplicate Herd IDs during preparation, so a new Herd ID cannot
-        // legitimately be created by this repair. A legacy pending repair can still contain a
-        // reassigned Herd from an earlier build. If any prepared target was shared (or the old
-        // journal did not record a target), never let that new ID fall through access lookup to
-        // `.localOwnerBridgePending`, which would export participant data into the private store.
-        let requiresExplicitPreparedTarget = preparation.targets.isEmpty
-            || preparation.targets.contains {
-                $0.location == .acceptedSharedStore || $0.location == .unspecified
-            }
-        if requiresExplicitPreparedTarget,
-           let unpreparedHerd = repairedHerds.first(where: {
-               expectedTargetByHerdID[$0.publicID] == nil
-           }) {
+        // Current repair preparation rejects duplicate Herd roots, so the repair itself cannot
+        // legitimately create a new Herd ID. Every herd exported during convergence must have
+        // an exact, persisted pre-repair bridge target and content baseline.
+        if let unpreparedHerd = repairedHerds.first(where: {
+            expectedTargetByHerdID[$0.publicID] == nil
+        }) {
             throw PublicIDRepairBridgeError.unpreparedHerdBridgeTarget(
                 herdPublicID: unpreparedHerd.publicID
             )
         }
 
         for herd in repairedHerds {
+            guard let expectedTarget = expectedTargetByHerdID[herd.publicID] else {
+                throw PublicIDRepairBridgeError.unpreparedHerdBridgeTarget(
+                    herdPublicID: herd.publicID
+                )
+            }
+            guard expectedTarget.location != .unspecified,
+                  expectedTarget.bridgeFingerprint != nil else {
+                throw PublicIDRepairBridgeError.bridgeBaselineUnavailable(
+                    herdPublicID: herd.publicID
+                )
+            }
+
             let access = try await requireWritableAccess(for: herd)
-            if let expectedTarget = expectedTargetByHerdID[herd.publicID],
-               expectedTarget.location != .unspecified {
-                let actualLocation = bridgeLocationIdentity(access.bridgeLocation)
-                guard actualLocation == expectedTarget.location else {
-                    throw PublicIDRepairBridgeError.bridgeTargetMismatch(
-                        herdPublicID: herd.publicID,
-                        expected: expectedTarget.location,
-                        actual: actualLocation
-                    )
-                }
+            let actualLocation = bridgeLocationIdentity(access.bridgeLocation)
+            guard actualLocation == expectedTarget.location else {
+                throw PublicIDRepairBridgeError.bridgeTargetMismatch(
+                    herdPublicID: herd.publicID,
+                    expected: expectedTarget.location,
+                    actual: actualLocation
+                )
             }
 
             // Never call normal sync here. It imports first and can reintroduce obsolete IDs.
             let reconciliation = try await exporter.exportRepairedGraph(
                 for: herd,
-                access: access
+                target: expectedTarget
             )
             guard !reconciliation.hasUnresolvedDifferences else {
                 throw PublicIDRepairBridgeError.reconciliationFailed(
@@ -283,6 +401,13 @@ enum PublicIDRepairBridgeError: LocalizedError, Equatable {
         expected: PublicIDRepairBridgeLocationIdentity,
         actual: PublicIDRepairBridgeLocationIdentity
     )
+    case bridgeTargetChangedDuringExport(
+        herdPublicID: UUID,
+        expected: PublicIDRepairBridgeLocationIdentity,
+        actual: String
+    )
+    case bridgeBaselineUnavailable(herdPublicID: UUID)
+    case bridgeContentChanged(herdPublicID: UUID)
     case preparedHerdMissing(herdPublicID: UUID)
     case duplicateHerdBridgeTargetAmbiguous(herdPublicID: UUID, recordCount: Int)
     case unpreparedHerdBridgeTarget(herdPublicID: UUID)
@@ -297,6 +422,12 @@ enum PublicIDRepairBridgeError: LocalizedError, Equatable {
             "Public-ID repair is waiting for the \(expected.rawValue) shared-data bridge, but this launch is using \(actual.rawValue) storage. Switch back to the original storage mode and retry repair convergence."
         case .bridgeTargetMismatch(let herdPublicID, let expected, let actual):
             "Public-ID repair was prepared against the \(expected.rawValue) bridge for herd \(herdPublicID.uuidString), but this launch sees \(actual.rawValue). Restore the original iCloud/share context before retrying convergence."
+        case .bridgeTargetChangedDuringExport(let herdPublicID, let expected, let actual):
+            "Public-ID repair was prepared against the \(expected.rawValue) bridge for herd \(herdPublicID.uuidString), but the bridge changed to \(actual) while the repaired export was being prepared. No repair export was written."
+        case .bridgeBaselineUnavailable(let herdPublicID):
+            "The durable public-ID repair journal for herd \(herdPublicID.uuidString) does not contain a verified pre-repair bridge fingerprint. Convergence remains blocked rather than risk overwriting shared data."
+        case .bridgeContentChanged(let herdPublicID):
+            "Shared bridge data for herd \(herdPublicID.uuidString) changed after public-ID repair preparation. Convergence remains blocked so newer collaborator changes are not overwritten."
         case .preparedHerdMissing(let herdPublicID):
             "Herd \(herdPublicID.uuidString) was part of the public-ID repair bridge journal but is no longer present. Shared-data convergence remains blocked until the original herd graph is restored or repaired."
         case .duplicateHerdBridgeTargetAmbiguous(let herdPublicID, let recordCount):
