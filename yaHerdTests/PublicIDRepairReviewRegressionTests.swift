@@ -111,6 +111,11 @@ final class PublicIDRepairReviewRegressionTests: XCTestCase {
                 return XCTFail("Expected repairJournalUnavailable, got \(error)")
             }
         }
+        XCTAssertThrowsError(try gate.beginSyncDataReset()) { error in
+            guard case .repairJournalUnavailable = error as? HerdDataMutationGate.GateError else {
+                return XCTFail("Expected repairJournalUnavailable, got \(error)")
+            }
+        }
     }
 
     func testPreparedBridgeLocationChangeBlocksConvergence() async throws {
@@ -128,15 +133,10 @@ final class PublicIDRepairReviewRegressionTests: XCTestCase {
         )
 
         let preparation = try await coordinator.prepareForRepair()
-        XCTAssertEqual(
-            preparation.targets,
-            [
-                PublicIDRepairBridgeTargetIdentity(
-                    herdPublicID: herd.publicID,
-                    location: .ownerPrivateStore
-                )
-            ]
-        )
+        XCTAssertEqual(preparation.targets.count, 1)
+        XCTAssertEqual(preparation.targets.first?.herdPublicID, herd.publicID)
+        XCTAssertEqual(preparation.targets.first?.location, .ownerPrivateStore)
+        XCTAssertEqual(preparation.targets.first?.bridgeFingerprint, "review-baseline")
 
         repository.access = .localOwnerBridgePending
 
@@ -154,6 +154,52 @@ final class PublicIDRepairReviewRegressionTests: XCTestCase {
             )
         }
         XCTAssertEqual(exporter.exportedHerdIDs, [])
+    }
+
+    func testRelaunchAfterLocalCommitRefusesInterveningBridgeChangeAndKeepsJournal() async throws {
+        let defaults = isolatedDefaults()
+        let herd = makeHerdSummary()
+        let inventory = ReviewHerdInventory(herds: [herd])
+        let repository = ReviewHerdSharingRepository(
+            access: .ownerPrivateStore(participantCount: 1)
+        )
+        let exporter = ReviewBridgeExporter(currentFingerprint: "bridge-before-crash")
+        let coordinator = DefaultPublicIDRepairBridgeCoordinator(
+            herdInventory: inventory,
+            sharingRepository: repository,
+            storageMode: .iCloud,
+            exporter: exporter
+        )
+        let preparation = try await coordinator.prepareForRepair()
+        let report = makeReport()
+        let firstGate = HerdDataMutationGate(defaults: defaults)
+
+        // Simulate process death after SwiftData save but before the phase transition. The
+        // prepared bridge contents then change on another device before this device relaunches.
+        try firstGate.requireLocalCommitCompletion(
+            preparation: preparation,
+            report: report,
+            resolutions: []
+        )
+        exporter.currentFingerprint = "bridge-after-collaborator-edit"
+
+        let relaunchedGate = HerdDataMutationGate(defaults: defaults)
+        let service = CoordinatedPublicIDRepairService(
+            worker: ReviewCommittedRepairWorker(),
+            mutationGate: relaunchedGate,
+            bridgeCoordinator: coordinator
+        )
+
+        do {
+            _ = try await service.repair()
+            XCTFail("Expected changed bridge baseline to block resumed convergence")
+        } catch let error as PublicIDRepairBridgeError {
+            XCTAssertEqual(error, .bridgeContentChanged(herdPublicID: herd.publicID))
+        }
+
+        XCTAssertTrue(relaunchedGate.requiresBridgeConvergence)
+        XCTAssertEqual(exporter.exportedHerdIDs, [])
+        XCTAssertThrowsError(try relaunchedGate.beginSynchronization())
     }
 
     func testPreparedHerdDisappearingKeepsConvergenceBlocked() async throws {
@@ -297,6 +343,28 @@ private actor ReviewNoopRepairWorker: PublicIDRepairTransactionalService {
     }
 }
 
+private actor ReviewCommittedRepairWorker: PublicIDRepairTransactionalService {
+    func scan() async throws -> PublicIDRepairAssessment {
+        PublicIDRepairAssessment(scannedAt: .now, entities: [])
+    }
+
+    func repair(
+        resolutions: [PublicIDRepairReferenceResolution],
+        willCommit: PublicIDRepairWillCommit
+    ) async throws -> PublicIDRepairReport {
+        XCTFail("A committed journaled repair must not be repeated")
+        throw ReviewRepairError.unexpectedRepair
+    }
+
+    func commitState(for report: PublicIDRepairReport) async throws -> PublicIDRepairCommitState {
+        .committed
+    }
+}
+
+private enum ReviewRepairError: Error {
+    case unexpectedRepair
+}
+
 private actor ReviewHerdInventory: PublicIDRepairHerdInventoryReading {
     private var herds: [HerdSummary]
 
@@ -315,12 +383,29 @@ private actor ReviewHerdInventory: PublicIDRepairHerdInventoryReading {
 
 @MainActor
 private final class ReviewBridgeExporter: PublicIDRepairBridgeExporting {
+    var currentFingerprint: String
     private(set) var exportedHerdIDs: [UUID] = []
+
+    init(currentFingerprint: String = "review-baseline") {
+        self.currentFingerprint = currentFingerprint
+    }
+
+    func captureBridgeFingerprint(
+        for herd: HerdSummary,
+        access: HerdSharingAccess
+    ) async throws -> String {
+        currentFingerprint
+    }
 
     func exportRepairedGraph(
         for herd: HerdSummary,
-        access: HerdSharingAccess
+        target: PublicIDRepairBridgeTargetIdentity
     ) async throws -> HerdSharingBridgeReconciliationReport {
+        guard target.bridgeFingerprint == currentFingerprint else {
+            throw PublicIDRepairBridgeError.bridgeContentChanged(
+                herdPublicID: herd.publicID
+            )
+        }
         exportedHerdIDs.append(herd.publicID)
         return .empty
     }
