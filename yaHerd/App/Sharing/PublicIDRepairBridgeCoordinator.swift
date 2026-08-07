@@ -79,7 +79,9 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
             )
         }
 
-        let herds = uniqueHerds(try await herdInventory.fetchHerds())
+        let inventoryHerds = try await herdInventory.fetchHerds()
+        try rejectAmbiguousDuplicateHerdTargets(in: inventoryHerds)
+        let herds = uniqueHerds(inventoryHerds)
         var accessByHerdID: [UUID: HerdSharingAccess] = [:]
 
         // Preflight every herd before importing any bridge. The global repair can mutate
@@ -133,8 +135,9 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
             uniqueKeysWithValues: preparation.targets.map { ($0.herdPublicID, $0) }
         )
 
-        // Refetch after repair rather than relying on pre-repair IDs. A duplicated Herd can
-        // itself receive a replacement public ID; its repaired graph must be exported too.
+        // Refetch after repair rather than relying on pre-repair IDs. Duplicate Herd IDs are
+        // rejected during preparation because the bridge cannot distinguish their physical
+        // rows before repair. Any remaining herd therefore has one prepared bridge identity.
         let repairedHerds = uniqueHerds(try await herdInventory.fetchHerds())
         let repairedHerdIDs = Set(repairedHerds.map(\.publicID))
         if let missingTarget = preparation.targets.first(where: {
@@ -189,6 +192,24 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
         return access
     }
 
+    private func rejectAmbiguousDuplicateHerdTargets(
+        in herds: [HerdSummary]
+    ) throws {
+        let duplicateGroups = Dictionary(grouping: herds, by: \.publicID)
+            .filter { $0.value.count > 1 }
+            .sorted { $0.key.uuidString < $1.key.uuidString }
+        guard let duplicate = duplicateGroups.first else { return }
+
+        // Core Data bridge ownership/access is looked up by Herd.publicID. Before repair,
+        // duplicate physical Herd rows with the same public ID are therefore indistinguishable
+        // to the bridge. Guessing a target would let a read/write participant's reassigned row
+        // fall through to the private owner store after it receives a new ID.
+        throw PublicIDRepairBridgeError.duplicateHerdBridgeTargetAmbiguous(
+            herdPublicID: duplicate.key,
+            recordCount: duplicate.value.count
+        )
+    }
+
     private func bridgeLocationIdentity(
         _ location: HerdSharingAccess.BridgeLocation
     ) -> PublicIDRepairBridgeLocationIdentity {
@@ -238,6 +259,7 @@ enum PublicIDRepairBridgeError: LocalizedError, Equatable {
         actual: PublicIDRepairBridgeLocationIdentity
     )
     case preparedHerdMissing(herdPublicID: UUID)
+    case duplicateHerdBridgeTargetAmbiguous(herdPublicID: UUID, recordCount: Int)
 
     var errorDescription: String? {
         switch self {
@@ -251,6 +273,8 @@ enum PublicIDRepairBridgeError: LocalizedError, Equatable {
             "Public-ID repair was prepared against the \(expected.rawValue) bridge for herd \(herdPublicID.uuidString), but this launch sees \(actual.rawValue). Restore the original iCloud/share context before retrying convergence."
         case .preparedHerdMissing(let herdPublicID):
             "Herd \(herdPublicID.uuidString) was part of the public-ID repair bridge journal but is no longer present. Shared-data convergence remains blocked until the original herd graph is restored or repaired."
+        case .duplicateHerdBridgeTargetAmbiguous(let herdPublicID, let recordCount):
+            "Public-ID repair found \(recordCount) Herd records sharing \(herdPublicID.uuidString). The iCloud bridge identifies herd ownership by that same public ID, so it cannot safely determine which bridge target belongs to each physical duplicate. Repair was blocked before importing or changing shared data."
         }
     }
 }
