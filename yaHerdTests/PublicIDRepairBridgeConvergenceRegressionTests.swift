@@ -52,6 +52,59 @@ final class PublicIDRepairBridgeConvergenceRegressionTests: XCTestCase {
         XCTAssertEqual(exporter.exportedHerdIDs, [])
     }
 
+    func testAcceptedSharedBridgeImportIntroducingDuplicateHerdBlocksPreparation() async throws {
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let herdID = UUID(uuidString: "E5E5E5E5-E5E5-45E5-85E5-E5E5E5E5E5E5")!
+        let original = HerdSummary(
+            publicID: herdID,
+            name: "Accepted shared herd",
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            schemaVersion: 1
+        )
+        let duplicate = HerdSummary(
+            publicID: herdID,
+            name: "Duplicate from bridge import",
+            createdAt: timestamp.addingTimeInterval(1),
+            updatedAt: timestamp.addingTimeInterval(1),
+            schemaVersion: 1
+        )
+        let inventory = BridgeBoundaryHerdInventory(herds: [original])
+        let repository = BridgeBoundarySharingRepository(
+            access: .acceptedSharedStore(
+                permission: .readWrite,
+                participantCount: 2
+            ),
+            onImport: {
+                await inventory.setHerds([original, duplicate])
+            }
+        )
+        let exporter = BridgeBoundaryExporter()
+        let coordinator = DefaultPublicIDRepairBridgeCoordinator(
+            herdInventory: inventory,
+            sharingRepository: repository,
+            storageMode: .iCloud,
+            exporter: exporter
+        )
+
+        do {
+            _ = try await coordinator.prepareForRepair()
+            XCTFail("Expected duplicate Herd introduced by bridge import to block repair")
+        } catch let error as PublicIDRepairBridgeError {
+            XCTAssertEqual(
+                error,
+                .duplicateHerdBridgeTargetAmbiguous(
+                    herdPublicID: herdID,
+                    recordCount: 2
+                )
+            )
+        }
+
+        XCTAssertEqual(repository.fetchAccessCallCount, 1)
+        XCTAssertEqual(repository.importCallCount, 1)
+        XCTAssertEqual(exporter.exportedHerdIDs, [])
+    }
+
     func testLegacyReplacementHerdCannotFallBackFromAcceptedShareToPrivateStore() async throws {
         let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
         let originalID = UUID(uuidString: "C3C3C3C3-C3C3-43C3-83C3-C3C3C3C3C3C3")!
@@ -146,10 +199,16 @@ private final class BridgeBoundaryExporter: PublicIDRepairBridgeExporting {
 @MainActor
 private final class BridgeBoundarySharingRepository: HerdSharingRepository {
     private(set) var fetchAccessCallCount = 0
+    private(set) var importCallCount = 0
     private let access: HerdSharingAccess
+    private let onImport: (@MainActor () async -> Void)?
 
-    init(access: HerdSharingAccess = .ownerPrivateStore(participantCount: 1)) {
+    init(
+        access: HerdSharingAccess = .ownerPrivateStore(participantCount: 1),
+        onImport: (@MainActor () async -> Void)? = nil
+    ) {
         self.access = access
+        self.onImport = onImport
     }
 
     func fetchSharingReadiness(
@@ -185,7 +244,9 @@ private final class BridgeBoundarySharingRepository: HerdSharingRepository {
         herd: HerdSummary?,
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingActionResult {
-        result("import")
+        importCallCount += 1
+        await onImport?()
+        return result("import")
     }
 
     func acceptPreventedSharedDeletes(
