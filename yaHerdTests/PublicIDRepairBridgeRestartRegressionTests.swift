@@ -96,13 +96,16 @@ final class PublicIDRepairBridgeRestartRegressionTests: XCTestCase {
         XCTAssertEqual(preparation.targets.first?.bridgeFingerprint, exporter.baselineFingerprint)
 
         // A successful convergence attempt legitimately creates the owner-private bridge. If the
-        // process dies before the repair journal clears, retry must reach the exporter so it can
-        // prove that bridge content is the exact repaired snapshot rather than rejecting location
-        // change before content validation.
+        // process dies before the repair journal clears, retry imports that exact created bridge,
+        // then proves it is still the captured baseline before accepting the repaired export.
         repository.access = .ownerPrivateStore(participantCount: 1)
 
-        try await coordinator.convergeAfterRepair(preparation: preparation)
+        try await coordinator.convergeAfterRepair(
+            preparation: preparation,
+            report: restartRepairReport()
+        )
 
+        XCTAssertEqual(exporter.importedHerdIDs, [herd.publicID])
         XCTAssertEqual(exporter.exportedHerdIDs, [herd.publicID])
         XCTAssertEqual(exporter.receivedTargets.first?.location, .bridgeRecordMissing)
     }
@@ -110,6 +113,7 @@ final class PublicIDRepairBridgeRestartRegressionTests: XCTestCase {
 
 private enum BridgeRestartTestError: Error, Sendable {
     case injectedPostWriteCrash
+    case unexpectedImport
 }
 
 private func restartTestHerd() -> HerdSummary {
@@ -120,6 +124,18 @@ private func restartTestHerd() -> HerdSummary {
         createdAt: timestamp,
         updatedAt: timestamp,
         schemaVersion: 1
+    )
+}
+
+private func restartRepairReport() -> PublicIDRepairReport {
+    PublicIDRepairReport(
+        completedAt: .now,
+        assessment: PublicIDRepairAssessment(scannedAt: .now, entities: []),
+        replacements: [],
+        referenceUpdates: [],
+        backupFilename: "restart.json",
+        backupPath: "/tmp/restart.json",
+        validationIssueCount: 0
     )
 }
 
@@ -208,6 +224,16 @@ private final class RestartableRepairBridgeStore: PublicIDRepairBridgeStore {
         return currentFingerprint
     }
 
+    func importPublicIDRepairBridgeRecordsIntoSwiftData(
+        for herd: HerdSummary,
+        expectedLocation: HerdSharingAccess.BridgeLocation,
+        expectedFingerprint: String,
+        importer: any HerdSharingImportApplying,
+        report: PublicIDRepairReport
+    ) async throws -> HerdSharingBridgeImportResult {
+        throw BridgeRestartTestError.unexpectedImport
+    }
+
     func syncPublicIDRepairBridgeRecordsFromSnapshot(
         _ export: HerdSharingSwiftDataExport,
         expectedLocation: HerdSharingAccess.BridgeLocation,
@@ -256,6 +282,7 @@ private actor RestartHerdInventory: PublicIDRepairHerdInventoryReading {
 @MainActor
 private final class RestartBoundaryExporter: PublicIDRepairBridgeExporting {
     let baselineFingerprint = "missing-bridge-baseline"
+    private(set) var importedHerdIDs: [UUID] = []
     private(set) var exportedHerdIDs: [UUID] = []
     private(set) var receivedTargets: [PublicIDRepairBridgeTargetIdentity] = []
 
@@ -264,6 +291,20 @@ private final class RestartBoundaryExporter: PublicIDRepairBridgeExporting {
         access: HerdSharingAccess
     ) async throws -> String {
         baselineFingerprint
+    }
+
+    func importCurrentBridgeGraph(
+        for herd: HerdSummary,
+        access: HerdSharingAccess,
+        expectedFingerprint: String,
+        report: PublicIDRepairReport
+    ) async throws {
+        guard expectedFingerprint == baselineFingerprint else {
+            throw PublicIDRepairBridgeError.bridgeContentChanged(
+                herdPublicID: herd.publicID
+            )
+        }
+        importedHerdIDs.append(herd.publicID)
     }
 
     func exportRepairedGraph(
