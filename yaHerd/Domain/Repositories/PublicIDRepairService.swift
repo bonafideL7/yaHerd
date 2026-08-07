@@ -215,8 +215,8 @@ protocol PublicIDRepairService: AnyObject, Sendable {
 
 typealias PublicIDRepairWillCommit = @MainActor @Sendable (PublicIDRepairReport) throws -> Void
 
-/// Sendable persistence worker. The model actor owns its ModelContext and only crosses
-/// to the main actor at the durable pre-commit callback boundary.
+/// Sendable persistence worker. Its persistence details stay behind this domain abstraction,
+/// and it crosses to the main actor only at the durable pre-commit callback boundary.
 protocol PublicIDRepairTransactionalService: Sendable {
     func scan() async throws -> PublicIDRepairAssessment
     func repair(
