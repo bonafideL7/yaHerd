@@ -150,6 +150,24 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
             )
         }
 
+        // Current builds refuse duplicate Herd IDs during preparation, so a new Herd ID cannot
+        // legitimately be created by this repair. A legacy pending repair can still contain a
+        // reassigned Herd from an earlier build. If any prepared target was shared (or the old
+        // journal did not record a target), never let that new ID fall through access lookup to
+        // `.localOwnerBridgePending`, which would export participant data into the private store.
+        let requiresExplicitPreparedTarget = preparation.targets.isEmpty
+            || preparation.targets.contains {
+                $0.location == .acceptedSharedStore || $0.location == .unspecified
+            }
+        if requiresExplicitPreparedTarget,
+           let unpreparedHerd = repairedHerds.first(where: {
+               expectedTargetByHerdID[$0.publicID] == nil
+           }) {
+            throw PublicIDRepairBridgeError.unpreparedHerdBridgeTarget(
+                herdPublicID: unpreparedHerd.publicID
+            )
+        }
+
         for herd in repairedHerds {
             let access = try await requireWritableAccess(for: herd)
             if let expectedTarget = expectedTargetByHerdID[herd.publicID],
@@ -261,6 +279,7 @@ enum PublicIDRepairBridgeError: LocalizedError, Equatable {
     )
     case preparedHerdMissing(herdPublicID: UUID)
     case duplicateHerdBridgeTargetAmbiguous(herdPublicID: UUID, recordCount: Int)
+    case unpreparedHerdBridgeTarget(herdPublicID: UUID)
 
     var errorDescription: String? {
         switch self {
@@ -276,6 +295,8 @@ enum PublicIDRepairBridgeError: LocalizedError, Equatable {
             "Herd \(herdPublicID.uuidString) was part of the public-ID repair bridge journal but is no longer present. Shared-data convergence remains blocked until the original herd graph is restored or repaired."
         case .duplicateHerdBridgeTargetAmbiguous(let herdPublicID, let recordCount):
             "Public-ID repair found \(recordCount) Herd records sharing \(herdPublicID.uuidString). The iCloud bridge identifies herd ownership by that same public ID, so it cannot safely determine which bridge target belongs to each physical duplicate. Repair was blocked before importing or changing shared data."
+        case .unpreparedHerdBridgeTarget(let herdPublicID):
+            "Herd \(herdPublicID.uuidString) appeared after public-ID repair bridge preparation without a durable bridge target. Shared-data convergence remains blocked rather than guessing an owner/private versus accepted-shared store."
         }
     }
 }
