@@ -1,3 +1,4 @@
+import SwiftData
 import XCTest
 
 @testable import yaHerd
@@ -130,6 +131,57 @@ final class PublicIDRepairBridgeConvergenceRegressionTests: XCTestCase {
         XCTAssertEqual(exporter.exportedHerdIDs, [])
     }
 
+    func testBridgeTargetChangeDuringExportSnapshotBuildCannotFallThroughToAnotherStore() async throws {
+        let herd = makeBridgeBoundaryHerd()
+        let baseline = "accepted-shared-baseline"
+        let bridgeStore = TargetChangingRepairBridgeStore(
+            currentLocation: .acceptedSharedStore,
+            currentFingerprint: baseline
+        )
+        let export = HerdSharingSwiftDataExport(
+            herd: herd,
+            snapshot: HerdSharingBridgeStoreSnapshot(
+                herdPublicID: herd.publicID,
+                storeDescription: "target-binding-test",
+                recordsByStep: [:]
+            ),
+            localPublicIDs: [:]
+        )
+        let exportReader = TargetChangingExportReader(export: export) {
+            bridgeStore.currentLocation = .ownerPrivateStore
+        }
+        let exporter = SwiftDataPublicIDRepairBridgeExporter(
+            modelContainer: try TestSupport.makeModelContainer(),
+            exportReader: exportReader,
+            bridgeStore: bridgeStore
+        )
+        let target = PublicIDRepairBridgeTargetIdentity(
+            herdPublicID: herd.publicID,
+            location: .acceptedSharedStore,
+            bridgeFingerprint: baseline
+        )
+
+        do {
+            _ = try await exporter.exportRepairedGraph(
+                for: herd,
+                target: target
+            )
+            XCTFail("Expected the changed bridge target to block the repair export")
+        } catch let error as PublicIDRepairBridgeError {
+            XCTAssertEqual(
+                error,
+                .bridgeTargetChangedDuringExport(
+                    herdPublicID: herd.publicID,
+                    expected: .acceptedSharedStore,
+                    actual: "owner private store"
+                )
+            )
+        }
+
+        XCTAssertEqual(bridgeStore.syncCallCount, 1)
+        XCTAssertEqual(bridgeStore.successfulWriteCount, 0)
+    }
+
     func testLegacyReplacementHerdCannotFallBackFromAcceptedShareToPrivateStore() async throws {
         let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
         let originalID = UUID(uuidString: "C3C3C3C3-C3C3-43C3-83C3-C3C3C3C3C3C3")!
@@ -248,6 +300,95 @@ private final class BridgeBoundaryExporter: PublicIDRepairBridgeExporting {
         exportedHerdIDs.append(herd.publicID)
         return .empty
     }
+}
+
+private actor TargetChangingExportReader: HerdSharingExportSnapshotReading {
+    private let export: HerdSharingSwiftDataExport
+    private let onMakeExport: @MainActor @Sendable () -> Void
+
+    init(
+        export: HerdSharingSwiftDataExport,
+        onMakeExport: @escaping @MainActor @Sendable () -> Void
+    ) {
+        self.export = export
+        self.onMakeExport = onMakeExport
+    }
+
+    func makeExport(
+        for herd: HerdSummary,
+        storeDescription: String
+    ) async throws -> HerdSharingSwiftDataExport {
+        await onMakeExport()
+        return export
+    }
+}
+
+@MainActor
+private final class TargetChangingRepairBridgeStore: PublicIDRepairBridgeStore {
+    var currentLocation: HerdSharingAccess.BridgeLocation
+    var currentFingerprint: String
+    private(set) var syncCallCount = 0
+    private(set) var successfulWriteCount = 0
+
+    init(
+        currentLocation: HerdSharingAccess.BridgeLocation,
+        currentFingerprint: String
+    ) {
+        self.currentLocation = currentLocation
+        self.currentFingerprint = currentFingerprint
+    }
+
+    func publicIDRepairFingerprint(
+        for herd: HerdSummary,
+        expectedLocation: HerdSharingAccess.BridgeLocation
+    ) async throws -> String {
+        try validateLocation(expectedLocation)
+        return currentFingerprint
+    }
+
+    func syncPublicIDRepairBridgeRecordsFromSnapshot(
+        _ export: HerdSharingSwiftDataExport,
+        expectedLocation: HerdSharingAccess.BridgeLocation,
+        expectedFingerprint: String
+    ) async throws -> HerdSharingBridgeExportResult {
+        syncCallCount += 1
+        try validateLocation(expectedLocation)
+        guard currentFingerprint == expectedFingerprint else {
+            throw HerdSharingPublicIDRepairBridgeError.bridgeContentChanged(
+                herdPublicID: export.herd.publicID
+            )
+        }
+        successfulWriteCount += 1
+        throw BridgeBoundaryTestError.unexpectedWrite
+    }
+
+    private func validateLocation(
+        _ expectedLocation: HerdSharingAccess.BridgeLocation
+    ) throws {
+        guard currentLocation == expectedLocation else {
+            throw HerdSharingPublicIDRepairBridgeError.targetChanged(
+                expected: bridgeDescription(expectedLocation),
+                actual: bridgeDescription(currentLocation)
+            )
+        }
+    }
+
+    private func bridgeDescription(
+        _ location: HerdSharingAccess.BridgeLocation
+    ) -> String {
+        switch location {
+        case .bridgeRecordMissing:
+            "no bridge record yet"
+        case .ownerPrivateStore:
+            "owner private store"
+        case .acceptedSharedStore:
+            "accepted shared store"
+        }
+    }
+}
+
+private enum BridgeBoundaryTestError: Error, Sendable {
+    case unexpectedWrite
 }
 
 @MainActor
