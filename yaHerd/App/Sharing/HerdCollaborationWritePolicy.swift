@@ -54,6 +54,10 @@ final class HerdCollaborationWritePolicy {
     )
   }
 
+  var dataMutationGate: HerdDataMutationGate {
+    mutationGate
+  }
+
   func update(access: HerdSharingAccess) {
     self.access = access
     lastUpdatedAt = .now
