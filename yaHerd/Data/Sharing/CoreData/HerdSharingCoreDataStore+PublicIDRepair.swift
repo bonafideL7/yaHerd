@@ -89,12 +89,19 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
       )
     }
 
-    // Deterministic replacement IDs produced by this still-pending repair are known-live local
-    // identities. An interrupted earlier convergence can leave a tombstone for one of those IDs
-    // even when the bridge's live row was never committed. Suppress only those repair-generated
-    // tombstones during the repair import; unrelated remote deletions still use normal conflict
-    // handling. The subsequent exact repaired export removes the tombstones from the bridge.
-    let snapshot = sourceSnapshot.removingConflictingRepairTombstones(report: report)
+    guard let exportReader = importer as? any HerdSharingExportSnapshotReading else {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "Public-ID repair could not read the repaired local graph before importing shared data. Convergence remains blocked rather than canonicalize duplicate bridge records without a portable mapping."
+      )
+    }
+    let localExport = try await exportReader.makeExport(
+      for: herd,
+      storeDescription: "public-ID repair import mapping"
+    )
+    let snapshot = try sourceSnapshot.preparingForPublicIDRepairImport(
+      report: report,
+      localRepairedSnapshot: localExport.snapshot
+    )
 
     if let revisionHydrator = importer as? any CollaborationRevisionHydrating {
       try await revisionHydrator.hydrateCollaborationRevisions(
@@ -505,24 +512,6 @@ extension HerdSharingBridgeStoreSnapshot {
     )
   }
 
-  fileprivate func removingConflictingRepairTombstones(
-    report: PublicIDRepairReport
-  ) -> HerdSharingBridgeStoreSnapshot {
-    let repairedIdentities = report.publicIDRepairReplacementBridgeIdentities
-    guard !repairedIdentities.isEmpty else { return self }
-
-    var updatedRecords = recordsByStep
-    updatedRecords[.deletions] = records(for: .deletions).filter { record in
-      guard let identity = record.publicIDRepairDeletionIdentity else { return true }
-      return !repairedIdentities.contains(identity)
-    }
-    return HerdSharingBridgeStoreSnapshot(
-      herdPublicID: herdPublicID,
-      storeDescription: storeDescription,
-      recordsByStep: updatedRecords
-    )
-  }
-
   private var publicIDRepairLiveIdentities: Set<String> {
     Set(
       HerdSharingBridgeStep.entitySteps
@@ -564,47 +553,6 @@ extension HerdSharingBridgeStoreSnapshot {
     return HerdSharingCoreDataStore.publicIDRepairDigest(
       components.joined(separator: "\n")
     )
-  }
-}
-
-private extension PublicIDRepairReport {
-  var publicIDRepairReplacementBridgeIdentities: Set<String> {
-    Set(replacements.compactMap { replacement in
-      // Treatment-item IDs are embedded inside template/session JSON and are not bridge-record
-      // identities even though their report entity type is the owning aggregate type.
-      guard !replacement.stableRecordIdentifier.contains("|item-") else { return nil }
-      guard let entityName = replacement.entityType.publicIDRepairBridgeEntityName else {
-        return nil
-      }
-      return "\(entityName)\u{1F}\(replacement.replacementPublicID.uuidString.lowercased())"
-    })
-  }
-}
-
-private extension PublicIDRepairEntityType {
-  var publicIDRepairBridgeEntityName: String? {
-    let step: HerdSharingBridgeStep
-    switch self {
-    case .herd: step = .herd
-    case .tagColorDefinition: step = .tagColorDefinitions
-    case .animalStatusReference: step = .statusReferences
-    case .pastureGroup: step = .pastureGroups
-    case .pasture: step = .pastures
-    case .animal: step = .animals
-    case .animalTag: step = .animalTags
-    case .movement: step = .movements
-    case .statusRecord: step = .statusRecords
-    case .workingProtocolTemplate: step = .workingProtocolTemplates
-    case .workingSession: step = .workingSessions
-    case .workingQueueItem: step = .workingQueueItems
-    case .workingTreatmentRecord: step = .workingTreatmentRecords
-    case .healthRecord: step = .healthRecords
-    case .pregnancyCheck: step = .pregnancyChecks
-    case .fieldCheckSession: step = .fieldCheckSessions
-    case .fieldCheckAnimalCheck: step = .fieldCheckAnimalChecks
-    case .fieldCheckFinding: step = .fieldCheckFindings
-    }
-    return step.coreDataEntityName
   }
 }
 
