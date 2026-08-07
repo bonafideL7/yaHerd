@@ -102,12 +102,12 @@ final class PublicIDRepairReviewRegressionTests: XCTestCase {
 
         XCTAssertTrue(gate.requiresBridgeConvergence)
         XCTAssertThrowsError(try gate.beginSynchronization()) { error in
-            guard case HerdDataMutationGate.GateError.repairJournalUnavailable = error else {
+            guard case .repairJournalUnavailable = error as? HerdDataMutationGate.GateError else {
                 return XCTFail("Expected repairJournalUnavailable, got \(error)")
             }
         }
         XCTAssertThrowsError(try gate.beginPublicIDRepair()) { error in
-            guard case HerdDataMutationGate.GateError.repairJournalUnavailable = error else {
+            guard case .repairJournalUnavailable = error as? HerdDataMutationGate.GateError else {
                 return XCTFail("Expected repairJournalUnavailable, got \(error)")
             }
         }
