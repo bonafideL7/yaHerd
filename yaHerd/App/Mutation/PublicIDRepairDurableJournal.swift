@@ -1,4 +1,8 @@
+#if canImport(Darwin)
 import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 import Foundation
 
 /// Disk-backed journal used for the public-ID repair commit boundary.
@@ -40,11 +44,15 @@ struct PublicIDRepairDurableJournal {
         )
         defer { try? fileManager.removeItem(at: temporaryURL) }
 
-        var descriptor = Darwin.open(
-            temporaryURL.path,
-            O_WRONLY | O_CREAT | O_TRUNC,
-            S_IRUSR | S_IWUSR
-        )
+        guard fileManager.createFile(
+            atPath: temporaryURL.path,
+            contents: nil,
+            attributes: [.posixPermissions: 0o600]
+        ) else {
+            throw posixError(operation: "create", path: temporaryURL.path)
+        }
+
+        let descriptor = systemOpen(temporaryURL.path, flags: O_WRONLY | O_TRUNC)
         guard descriptor >= 0 else {
             throw posixError(operation: "open", path: temporaryURL.path)
         }
@@ -54,10 +62,10 @@ struct PublicIDRepairDurableJournal {
                 guard let baseAddress = bytes.baseAddress else { return }
                 var offset = 0
                 while offset < bytes.count {
-                    let written = Darwin.write(
+                    let written = systemWrite(
                         descriptor,
-                        baseAddress.advanced(by: offset),
-                        bytes.count - offset
+                        buffer: baseAddress.advanced(by: offset),
+                        count: bytes.count - offset
                     )
                     if written < 0 {
                         if errno == EINTR { continue }
@@ -68,35 +76,28 @@ struct PublicIDRepairDurableJournal {
             }
             try synchronize(descriptor: descriptor, path: temporaryURL.path)
         } catch {
-            Darwin.close(descriptor)
-            descriptor = -1
+            systemClose(descriptor)
             throw error
         }
 
-        Darwin.close(descriptor)
-        descriptor = -1
+        systemClose(descriptor)
 
-        let renameResult = temporaryURL.path.withCString { source in
-            fileURL.path.withCString { destination in
-                Darwin.rename(source, destination)
-            }
-        }
-        guard renameResult == 0 else {
+        guard systemRename(from: temporaryURL.path, to: fileURL.path) == 0 else {
             throw posixError(operation: "rename", path: fileURL.path)
         }
 
-        let persistedDescriptor = Darwin.open(fileURL.path, O_RDONLY)
+        let persistedDescriptor = systemOpen(fileURL.path, flags: O_RDONLY)
         guard persistedDescriptor >= 0 else {
             throw posixError(operation: "reopen", path: fileURL.path)
         }
-        defer { Darwin.close(persistedDescriptor) }
+        defer { systemClose(persistedDescriptor) }
         try synchronize(descriptor: persistedDescriptor, path: fileURL.path)
         try synchronizeDirectory(at: directoryURL)
     }
 
     func remove() throws {
         let directoryURL = fileURL.deletingLastPathComponent()
-        let result = fileURL.path.withCString { Darwin.unlink($0) }
+        let result = systemUnlink(fileURL.path)
         if result == 0 {
             try synchronizeDirectory(at: directoryURL)
             return
@@ -106,21 +107,81 @@ struct PublicIDRepairDurableJournal {
     }
 
     private func synchronizeDirectory(at directoryURL: URL) throws {
-        let descriptor = Darwin.open(directoryURL.path, O_RDONLY)
+        let descriptor = systemOpen(directoryURL.path, flags: O_RDONLY)
         guard descriptor >= 0 else {
             throw posixError(operation: "open directory", path: directoryURL.path)
         }
-        defer { Darwin.close(descriptor) }
+        defer { systemClose(descriptor) }
         try synchronize(descriptor: descriptor, path: directoryURL.path)
     }
 
     private func synchronize(descriptor: Int32, path: String) throws {
-        guard Darwin.fsync(descriptor) == 0 else {
+        guard systemFsync(descriptor) == 0 else {
             throw posixError(operation: "fsync", path: path)
         }
     }
 
     private func posixError(operation: String, path: String) -> JournalError {
         JournalError.io(operation: operation, path: path, errorCode: errno)
+    }
+
+    private func systemOpen(_ path: String, flags: Int32) -> Int32 {
+        path.withCString { pointer in
+            #if canImport(Darwin)
+            Darwin.open(pointer, flags)
+            #else
+            Glibc.open(pointer, flags)
+            #endif
+        }
+    }
+
+    private func systemWrite(
+        _ descriptor: Int32,
+        buffer: UnsafeRawPointer,
+        count: Int
+    ) -> Int {
+        #if canImport(Darwin)
+        Darwin.write(descriptor, buffer, count)
+        #else
+        Glibc.write(descriptor, buffer, count)
+        #endif
+    }
+
+    private func systemFsync(_ descriptor: Int32) -> Int32 {
+        #if canImport(Darwin)
+        Darwin.fsync(descriptor)
+        #else
+        Glibc.fsync(descriptor)
+        #endif
+    }
+
+    private func systemClose(_ descriptor: Int32) {
+        #if canImport(Darwin)
+        _ = Darwin.close(descriptor)
+        #else
+        _ = Glibc.close(descriptor)
+        #endif
+    }
+
+    private func systemRename(from source: String, to destination: String) -> Int32 {
+        source.withCString { sourcePointer in
+            destination.withCString { destinationPointer in
+                #if canImport(Darwin)
+                Darwin.rename(sourcePointer, destinationPointer)
+                #else
+                Glibc.rename(sourcePointer, destinationPointer)
+                #endif
+            }
+        }
+    }
+
+    private func systemUnlink(_ path: String) -> Int32 {
+        path.withCString { pointer in
+            #if canImport(Darwin)
+            Darwin.unlink(pointer)
+            #else
+            Glibc.unlink(pointer)
+            #endif
+        }
     }
 }
