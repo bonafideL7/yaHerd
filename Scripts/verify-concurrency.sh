@@ -192,6 +192,7 @@ PERSISTENCE_TEST_SUITES=(
   HerdSharingImportCommitBoundaryTests
   HerdSharingRepositoryTests
   HerdDataMutationGateTests
+  PublicIDRepairBridgeConvergenceRegressionTests
   PublicIDRepairReviewRegressionTests
   SwiftDataHerdSharingActorDuplicateIDPagingTests
   SwiftDataHerdSharingActorRelationshipScopeTests
