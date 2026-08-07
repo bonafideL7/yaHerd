@@ -195,6 +195,7 @@ PERSISTENCE_TEST_SUITES=(
   PublicIDRepairBridgeConvergenceRegressionTests
   PublicIDRepairBridgeRestartRegressionTests
   PublicIDRepairReviewRegressionTests
+  PublicIDRepairReviewRound2RegressionTests
   SwiftDataHerdSharingActorDuplicateIDPagingTests
   SwiftDataHerdSharingActorRelationshipScopeTests
   SwiftDataHerdSharingActorTests
