@@ -40,45 +40,50 @@ extension HerdSharingBridgeStoreSnapshot {
         repairGroups: [PublicIDRepairBridgeGroupKey: PublicIDRepairBridgeGroup]
     ) throws -> [HerdSharingBridgeRecordSnapshot] {
         let bridgeRecords = records(for: step)
-        let duplicateGroups = Dictionary(grouping: bridgeRecords) { record in
-            record.publicID.lowercased()
-        }.filter { $0.value.count > 1 }
-
-        guard !duplicateGroups.isEmpty else { return bridgeRecords }
-        guard step != .herd else {
-            throw HerdSharingActionError.bridgeConsistencyFailed(
-                "The shared bridge contains multiple physical Herd records with the same public ID. Public-ID repair will not split one prepared share target between multiple Herd roots."
-            )
-        }
+        guard !bridgeRecords.isEmpty else { return [] }
 
         let localRecords = localRepairedSnapshot.records(for: step)
-        var translatedBySourceURI: [String: HerdSharingBridgeRecordSnapshot] = [:]
+        let entityName = step.coreDataEntityName
+        let groupsForEntity = repairGroups.values.filter { group in
+            group.key.entityName == entityName
+        }
 
-        for (_, duplicateRecords) in duplicateGroups.sorted(by: { $0.key < $1.key }) {
+        let physicalDuplicateGroups = Dictionary(grouping: bridgeRecords) { record in
+            record.publicID.lowercased()
+        }.filter { $0.value.count > 1 }
+        for (_, duplicateRecords) in physicalDuplicateGroups {
             guard let first = duplicateRecords.first,
-                  let retainedPublicID = first.parsedPublicID else {
+                  let duplicatePublicID = first.parsedPublicID else {
                 throw HerdSharingActionError.bridgeConsistencyFailed(
                     "The shared bridge contains a duplicate \(step.rawValue) record with an invalid public ID. Public-ID repair stopped before importing shared data."
                 )
             }
-
-            let key = PublicIDRepairBridgeGroupKey(
-                entityName: first.entityName,
-                retainedPublicID: retainedPublicID
-            )
-            guard let repairGroup = repairGroups[key] else {
+            let belongsToRepairGroup = groupsForEntity.contains { group in
+                group.key.retainedPublicID == duplicatePublicID
+            }
+            guard belongsToRepairGroup else {
                 throw HerdSharingActionError.bridgeConsistencyFailed(
-                    "The shared bridge contains \(duplicateRecords.count) physical \(first.entityName) records with public ID \(retainedPublicID.uuidString), but the durable repair plan has no matching duplicate group. Public-ID repair stopped rather than discard a bridge record."
+                    "The shared bridge contains \(duplicateRecords.count) physical \(first.entityName) records with public ID \(duplicatePublicID.uuidString), but the durable repair plan has no matching duplicate group. Public-ID repair stopped rather than discard a bridge record."
                 )
             }
+        }
+
+        var translatedBySourceURI: [String: HerdSharingBridgeRecordSnapshot] = [:]
+        for repairGroup in groupsForEntity.sorted(by: { lhs, rhs in
+            lhs.key.retainedPublicID.uuidString < rhs.key.retainedPublicID.uuidString
+        }) {
+            let sourceRecords = bridgeRecords.filter {
+                $0.parsedPublicID == repairGroup.key.retainedPublicID
+            }
+            guard !sourceRecords.isEmpty else { continue }
 
             let localCandidates = localRecords.filter { record in
                 guard let publicID = record.parsedPublicID else { return false }
                 return repairGroup.resultingPublicIDs.contains(publicID)
             }
-            guard localCandidates.count >= duplicateRecords.count else {
+            guard localCandidates.count >= sourceRecords.count else {
                 throw HerdSharingActionError.bridgeConsistencyFailed(
-                    "The shared bridge contains more duplicate \(first.entityName) records for \(retainedPublicID.uuidString) than the repaired local graph can identify. Public-ID repair stopped rather than merge records together."
+                    "The shared bridge contains more \(repairGroup.key.entityName) records for duplicate public ID \(repairGroup.key.retainedPublicID.uuidString) than the repaired local graph can identify. Public-ID repair stopped rather than merge records together."
                 )
             }
 
@@ -87,7 +92,7 @@ extension HerdSharingBridgeStoreSnapshot {
             }
             var usedLocalPublicIDs = Set<UUID>()
 
-            for bridgeRecord in duplicateRecords.sorted(by: { $0.sourceObjectURI < $1.sourceObjectURI }) {
+            for bridgeRecord in sourceRecords.sorted(by: { $0.sourceObjectURI < $1.sourceObjectURI }) {
                 let fingerprint = bridgeRecord.publicIDRepairPortableMatchFingerprint(
                     repairGroups: repairGroups
                 )
@@ -97,7 +102,7 @@ extension HerdSharingBridgeStoreSnapshot {
                       let resultingPublicID = localMatch.parsedPublicID,
                       usedLocalPublicIDs.insert(resultingPublicID).inserted else {
                     throw HerdSharingActionError.bridgeConsistencyFailed(
-                        "Multiple shared \(first.entityName) records use public ID \(retainedPublicID.uuidString), but their portable fields do not identify one repaired local record each. Public-ID repair stopped rather than guess which record keeps or receives an ID."
+                        "Shared \(repairGroup.key.entityName) data still uses duplicate public ID \(repairGroup.key.retainedPublicID.uuidString), but its portable fields do not identify one repaired local record. Public-ID repair stopped rather than guess which record keeps or receives an ID."
                     )
                 }
 
@@ -110,8 +115,24 @@ extension HerdSharingBridgeStoreSnapshot {
             }
         }
 
+        let localByPublicID = Dictionary(grouping: localRecords) { record in
+            record.publicID.lowercased()
+        }
         return bridgeRecords.map { record in
-            translatedBySourceURI[record.sourceObjectURI] ?? record
+            if let translated = translatedBySourceURI[record.sourceObjectURI] {
+                return translated
+            }
+            guard let matches = localByPublicID[record.publicID.lowercased()],
+                  matches.count == 1,
+                  let localMatch = matches.first,
+                  let publicID = record.parsedPublicID else {
+                return record
+            }
+            return record.translatingForPublicIDRepairImport(
+                resultingPublicID: publicID,
+                localMatch: localMatch,
+                repairGroups: repairGroups
+            )
         }
     }
 
