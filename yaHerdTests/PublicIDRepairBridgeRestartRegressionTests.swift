@@ -5,6 +5,37 @@ import XCTest
 
 @MainActor
 final class PublicIDRepairBridgeRestartRegressionTests: XCTestCase {
+    func testRepairFingerprintIsStableAcrossRepeatedExportsOfUnchangedLiveGraph() async throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = container.mainContext
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let herdModel = Herd(
+            name: "Fingerprint herd",
+            createdAt: timestamp,
+            updatedAt: timestamp
+        )
+        context.insert(herdModel)
+        try context.save()
+
+        let herd = herdModel.toSummary()
+        let reader = SwiftDataHerdSharingActor(modelContainer: container)
+        let first = try await reader.makeExport(
+            for: herd,
+            storeDescription: "fingerprint-first"
+        )
+        try await ContinuousClock().sleep(for: .milliseconds(10))
+        let second = try await reader.makeExport(
+            for: herd,
+            storeDescription: "fingerprint-second"
+        )
+
+        XCTAssertEqual(
+            first.snapshot.publicIDRepairFingerprint,
+            second.snapshot.publicIDRepairFingerprint,
+            "Transport-only lastMirroredAt changes must not make repair recovery look like a collaborator edit"
+        )
+    }
+
     func testExporterRetryAcceptsExactRepairedSnapshotAfterPostWriteCrashWithoutRewriting() async throws {
         let herd = restartTestHerd()
         let baselineFingerprint = "restart-baseline"
