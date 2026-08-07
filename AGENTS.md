@@ -96,7 +96,7 @@ When the repository provides additional lint, formatting, migration, integration
 
 ## Required self-review
 
-Before pushing a branch or opening or updating a pull request:
+Before final delivery or marking a pull request ready for review:
 
 1. Inspect the entire resulting diff.
 2. Review changed and unchanged surrounding code.
@@ -133,7 +133,14 @@ Each commit must represent a coherent and reviewable change. Avoid mixing unrela
 
 ## Completion requirements
 
-Do not describe work as complete, return generated project files, push a final branch, or open a pull request until the required implementation, testing, verification, self-review, corrections, and final review have been completed.
+Do not describe work as complete, merge to main, or mark a pull request ready
+for review until the required implementation, testing, verification,
+self-review, corrections, and final review have been completed.
+
+Updating a feature branch or draft pull request during implementation is
+permitted even when required verification cannot be performed in the current
+execution environment. Unavailable verification must be reported and the work
+must not be represented as fully verified or complete.
 
 If required verification cannot be performed:
 
@@ -172,6 +179,33 @@ List every test added or updated and the behavior it verifies.
 ### Verification
 
 Provide the exact commands run and their results.
+
+## Verification Cadence
+
+Do not run full repository verification scripts during routine code inspection,
+exploration, incremental edits, or after each individual fix.
+
+During implementation:
+- Use code inspection first.
+- Run only narrowly targeted tests when needed to validate a specific change.
+- Do not run Scripts/verify-concurrency.sh or other full verification suites
+  after every edit or review finding.
+- Batch related fixes together before verification.
+
+Run the full required verification suite only at these checkpoints:
+1. After the implementation and tests are substantially complete.
+2. After the adversarial self-review, if that review causes material code changes.
+3. Before final completion. If the required verification cannot run locally,
+   push the feature-branch changes so the repository's automated verification
+   can run against the exact commit before the work is considered complete.
+
+Do not rerun an unchanged verification suite merely because additional code was
+inspected or another review pass was performed.
+
+For code-review-only tasks:
+- Do not run local build/test/verification scripts unless reproducing a suspected
+  defect requires them.
+- Prefer inspecting the existing CI result for the exact PR head commit.
 
 ### Self-review findings
 
