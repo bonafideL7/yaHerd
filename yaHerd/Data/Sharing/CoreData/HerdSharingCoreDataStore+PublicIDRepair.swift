@@ -9,6 +9,14 @@ protocol PublicIDRepairBridgeStore: AnyObject {
     expectedLocation: HerdSharingAccess.BridgeLocation
   ) async throws -> String
 
+  func importPublicIDRepairBridgeRecordsIntoSwiftData(
+    for herd: HerdSummary,
+    expectedLocation: HerdSharingAccess.BridgeLocation,
+    expectedFingerprint: String,
+    importer: any HerdSharingImportApplying,
+    report: PublicIDRepairReport
+  ) async throws -> HerdSharingBridgeImportResult
+
   func syncPublicIDRepairBridgeRecordsFromSnapshot(
     _ export: HerdSharingSwiftDataExport,
     expectedLocation: HerdSharingAccess.BridgeLocation,
@@ -25,7 +33,7 @@ enum HerdSharingPublicIDRepairBridgeError: LocalizedError, Equatable {
     case .targetChanged(let expected, let actual):
       return "The public-ID repair bridge target changed from \(expected) to \(actual). The repair remains blocked so no shared data is overwritten."
     case .bridgeContentChanged(let herdPublicID):
-      return "Shared bridge data for herd \(herdPublicID.uuidString) changed after public-ID repair preparation. The repair remains blocked so collaborator changes are not overwritten."
+      return "Shared bridge data for herd \(herdPublicID.uuidString) changed after the public-ID repair convergence baseline was captured. The repair remains blocked so collaborator changes are not overwritten."
     }
   }
 }
@@ -61,6 +69,70 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
     return state.fingerprint
   }
 
+  func importPublicIDRepairBridgeRecordsIntoSwiftData(
+    for herd: HerdSummary,
+    expectedLocation: HerdSharingAccess.BridgeLocation,
+    expectedFingerprint: String,
+    importer: any HerdSharingImportApplying,
+    report: PublicIDRepairReport
+  ) async throws -> HerdSharingBridgeImportResult {
+    try await loadIfNeeded()
+    let state = try await publicIDRepairBridgeState(
+      for: herd,
+      expectedLocation: expectedLocation,
+      allowCreatedOwnerPrivateStore: false
+    )
+    guard state.fingerprint == expectedFingerprint,
+          let sourceSnapshot = state.snapshot else {
+      throw HerdSharingPublicIDRepairBridgeError.bridgeContentChanged(
+        herdPublicID: herd.publicID
+      )
+    }
+
+    // A deterministic replacement ID can already have a stale deletion tombstone if another
+    // device or an interrupted repair partially converged. Prefer the known live replacement
+    // record only for IDs produced by this repair transaction; unrelated delete/live conflicts
+    // continue through the normal conflict machinery.
+    let snapshot = sourceSnapshot.removingConflictingRepairTombstones(report: report)
+
+    if let revisionHydrator = importer as? any CollaborationRevisionHydrating {
+      try await revisionHydrator.hydrateCollaborationRevisions(
+        for: snapshot.herdPublicID
+      )
+    }
+
+    let operation = try await operationCoordinator.begin(
+      herdPublicID: snapshot.herdPublicID,
+      direction: .importFromBridge,
+      bridgeLocation: state.target.description
+    )
+
+    do {
+      let application = try await importer.applyImport(
+        snapshot,
+        pendingConflictReport: operation.pendingConflictReport,
+        failureInjector: operationCoordinator.backgroundFailureInjector
+      )
+      await operationCoordinator.recordCommittedImportSuccess(
+        completedSteps: application.completedSteps,
+        conflictReport: application.result.conflictReport,
+        operationID: operation.id,
+        recordCounts: [:],
+        reconciliationSummary: application.result.reconciliationSummary
+      )
+      return application.result
+    } catch let committedFailure as HerdSharingSwiftDataCommittedImportFailure {
+      await operationCoordinator.recordCommittedImportFailure(
+        committedFailure,
+        operationID: operation.id
+      )
+      throw committedFailure.underlyingError
+    } catch {
+      await operationCoordinator.fail(operationID: operation.id, error: error)
+      throw error
+    }
+  }
+
   func syncPublicIDRepairBridgeRecordsFromSnapshot(
     _ export: HerdSharingSwiftDataExport,
     expectedLocation: HerdSharingAccess.BridgeLocation,
@@ -73,16 +145,18 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
       storeDescription: "public-ID repair desired snapshot",
       recordsByStep: export.snapshot.recordsByStep
     )
-    let desiredFingerprint = desiredSnapshot.publicIDRepairFingerprint
 
     // Resolve the prepared target after the SwiftData export has been built. A bridge can be in
-    // only two safe states here: the exact pre-repair live graph, or the exact repaired live graph
-    // from an earlier convergence attempt that committed before a crash/journal-clear failure.
+    // only two safe states here: the exact post-import baseline, or the exact repaired graph from
+    // an earlier convergence attempt that committed before a crash/journal-clear failure.
     let initialState = try await publicIDRepairBridgeState(
       for: herd,
       expectedLocation: expectedLocation,
       allowCreatedOwnerPrivateStore: true
     )
+    let desiredFingerprint = initialState.snapshot?.publicIDRepairExpectedFingerprint(
+      afterApplying: desiredSnapshot
+    ) ?? desiredSnapshot.publicIDRepairFingerprint
     try validatePublicIDRepairBridgeState(
       initialState,
       baselineFingerprint: expectedFingerprint,
@@ -398,12 +472,85 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
 }
 
 extension HerdSharingBridgeStoreSnapshot {
-  /// Stable fingerprint of the live shared graph. Deletion tombstones are intentionally excluded:
-  /// the repair writer can create tombstones for replaced IDs, and their revision/timestamp metadata
-  /// is generated at commit time. `lastMirroredAt` is transport bookkeeping and changes on every
-  /// export. All live entity IDs, domain attributes, and collaboration revision metadata remain in
-  /// the fingerprint, so collaborator additions, edits, or deletions of live records still change it.
+  /// Stable fingerprint of the shared graph. Live records include domain and collaboration
+  /// revision metadata except transport-only `lastMirroredAt`. Deletion records contribute only
+  /// their semantic identity (source entity + public ID), so generated delete timestamps and
+  /// revision metadata do not make crash recovery non-idempotent.
   var publicIDRepairFingerprint: String {
+    publicIDRepairFingerprint(
+      tombstoneIdentities: publicIDRepairTombstoneIdentities
+    )
+  }
+
+  fileprivate func publicIDRepairExpectedFingerprint(
+    afterApplying desired: HerdSharingBridgeStoreSnapshot
+  ) -> String {
+    var finalTombstones = publicIDRepairTombstoneIdentities
+    let desiredLiveIdentities = desired.publicIDRepairLiveIdentities
+
+    // A desired live record supersedes a stale tombstone for the same aggregate.
+    finalTombstones.subtract(desiredLiveIdentities)
+
+    // The bridge writer generates a tombstone for every non-Herd live record removed by the
+    // desired snapshot. Include those semantic identities in the expected post-write state.
+    let desiredNonHerdLiveIdentities = desired.publicIDRepairNonHerdLiveIdentities
+    for identity in publicIDRepairNonHerdLiveIdentities
+    where !desiredNonHerdLiveIdentities.contains(identity) {
+      finalTombstones.insert(identity)
+    }
+
+    return desired.publicIDRepairFingerprint(
+      tombstoneIdentities: finalTombstones
+    )
+  }
+
+  fileprivate func removingConflictingRepairTombstones(
+    report: PublicIDRepairReport
+  ) -> HerdSharingBridgeStoreSnapshot {
+    let repairedIdentities = report.publicIDRepairReplacementBridgeIdentities
+    guard !repairedIdentities.isEmpty else { return self }
+    let liveRepairIdentities = publicIDRepairLiveIdentities.intersection(repairedIdentities)
+    guard !liveRepairIdentities.isEmpty else { return self }
+
+    var updatedRecords = recordsByStep
+    updatedRecords[.deletions] = records(for: .deletions).filter { record in
+      guard let identity = record.publicIDRepairDeletionIdentity else { return true }
+      return !liveRepairIdentities.contains(identity)
+    }
+    return HerdSharingBridgeStoreSnapshot(
+      herdPublicID: herdPublicID,
+      storeDescription: storeDescription,
+      recordsByStep: updatedRecords
+    )
+  }
+
+  private var publicIDRepairLiveIdentities: Set<String> {
+    Set(
+      HerdSharingBridgeStep.entitySteps
+        .filter { $0 != .deletions }
+        .flatMap { step in
+          records(for: step).map(\.publicIDRepairBridgeIdentity)
+        }
+    )
+  }
+
+  private var publicIDRepairNonHerdLiveIdentities: Set<String> {
+    Set(
+      HerdSharingBridgeStep.entitySteps
+        .filter { $0 != .deletions && $0 != .herd }
+        .flatMap { step in
+          records(for: step).map(\.publicIDRepairBridgeIdentity)
+        }
+    )
+  }
+
+  private var publicIDRepairTombstoneIdentities: Set<String> {
+    Set(records(for: .deletions).map(\.publicIDRepairTombstoneFingerprintIdentity))
+  }
+
+  private func publicIDRepairFingerprint(
+    tombstoneIdentities: Set<String>
+  ) -> String {
     var components = ["herd|\(herdPublicID.uuidString.lowercased())"]
     for step in HerdSharingBridgeStep.entitySteps where step != .deletions {
       let records = records(for: step)
@@ -412,13 +559,77 @@ extension HerdSharingBridgeStoreSnapshot {
       components.append("step|\(step.rawValue)|\(records.count)")
       components.append(contentsOf: records)
     }
+    let sortedTombstones = tombstoneIdentities.sorted()
+    components.append("step|\(HerdSharingBridgeStep.deletions.rawValue)|\(sortedTombstones.count)")
+    components.append(contentsOf: sortedTombstones.map { "tombstone|\($0)" })
     return HerdSharingCoreDataStore.publicIDRepairDigest(
       components.joined(separator: "\n")
     )
   }
 }
 
+private extension PublicIDRepairReport {
+  var publicIDRepairReplacementBridgeIdentities: Set<String> {
+    Set(replacements.compactMap { replacement in
+      // Treatment-item IDs are embedded inside template/session JSON and are not bridge-record
+      // identities even though their report entity type is the owning aggregate type.
+      guard !replacement.stableRecordIdentifier.contains("|item-") else { return nil }
+      guard let entityName = replacement.entityType.publicIDRepairBridgeEntityName else {
+        return nil
+      }
+      return "\(entityName)\u{1F}\(replacement.replacementPublicID.uuidString.lowercased())"
+    })
+  }
+}
+
+private extension PublicIDRepairEntityType {
+  var publicIDRepairBridgeEntityName: String? {
+    let step: HerdSharingBridgeStep
+    switch self {
+    case .herd: step = .herd
+    case .tagColorDefinition: step = .tagColorDefinitions
+    case .animalStatusReference: step = .statusReferences
+    case .pastureGroup: step = .pastureGroups
+    case .pasture: step = .pastures
+    case .animal: step = .animals
+    case .animalTag: step = .animalTags
+    case .movement: step = .movements
+    case .statusRecord: step = .statusRecords
+    case .workingProtocolTemplate: step = .workingProtocolTemplates
+    case .workingSession: step = .workingSessions
+    case .workingQueueItem: step = .workingQueueItems
+    case .workingTreatmentRecord: step = .workingTreatmentRecords
+    case .healthRecord: step = .healthRecords
+    case .pregnancyCheck: step = .pregnancyChecks
+    case .fieldCheckSession: step = .fieldCheckSessions
+    case .fieldCheckAnimalCheck: step = .fieldCheckAnimalChecks
+    case .fieldCheckFinding: step = .fieldCheckFindings
+    }
+    return step.coreDataEntityName
+  }
+}
+
 private extension HerdSharingBridgeRecordSnapshot {
+  var publicIDRepairBridgeIdentity: String {
+    "\(entityName)\u{1F}\(publicID.lowercased())"
+  }
+
+  var publicIDRepairDeletionIdentity: String? {
+    guard entityName == SharedDeletedRecord.entityName,
+          case .string(let sourceEntityName) = attributes["sourceEntityName"],
+          !sourceEntityName.isEmpty else {
+      return nil
+    }
+    return "\(sourceEntityName)\u{1F}\(publicID.lowercased())"
+  }
+
+  var publicIDRepairTombstoneFingerprintIdentity: String {
+    if let publicIDRepairDeletionIdentity {
+      return publicIDRepairDeletionIdentity
+    }
+    return "<invalid-source>\u{1F}\(publicID.lowercased())"
+  }
+
   var publicIDRepairCanonicalValue: String {
     var components = [
       "entity|\(entityName)",
