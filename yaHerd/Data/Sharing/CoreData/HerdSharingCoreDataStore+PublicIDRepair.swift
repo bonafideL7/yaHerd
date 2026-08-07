@@ -121,7 +121,7 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
         }
         outcome = PublicIDRepairBridgeWriteOutcome(
           snapshot: currentSnapshot,
-          managedObjectURIs: publicIDRepairManagedObjectURIs(
+          managedObjectURIs: repairSnapshotManagedObjectURIs(
             for: currentSnapshot
           )
         )
@@ -367,7 +367,7 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
     }
   }
 
-  private func publicIDRepairManagedObjectURIs(
+  private func repairSnapshotManagedObjectURIs(
     for snapshot: HerdSharingBridgeStoreSnapshot
   ) -> [String] {
     HerdSharingBridgeStep.entitySteps
