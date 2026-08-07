@@ -63,18 +63,9 @@ final class SwiftDataPublicIDRepairBridgeExporter: PublicIDRepairBridgeExporting
             )
         }
 
-        // Detect changes before spending time building the local export, then let the
-        // specialized Core Data write path check again after that await and before writing.
-        let currentFingerprint = try await bridgeStore.publicIDRepairFingerprint(
-            for: herd,
-            expectedLocation: expectedLocation
-        )
-        guard currentFingerprint == expectedFingerprint else {
-            throw PublicIDRepairBridgeError.bridgeContentChanged(
-                herdPublicID: herd.publicID
-            )
-        }
-
+        // Building the local export is read-only. The bridge store then validates the exact
+        // prepared location and accepts only the pre-repair baseline or the exact desired
+        // repaired snapshot from an earlier interrupted convergence attempt.
         let export = try await exportReader.makeExport(
             for: herd,
             storeDescription: "public-ID repair convergence: \(target.location.rawValue)"
@@ -298,7 +289,10 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
 
             let access = try await requireWritableAccess(for: herd)
             let actualLocation = bridgeLocationIdentity(access.bridgeLocation)
-            guard actualLocation == expectedTarget.location else {
+            guard isCompatibleConvergenceLocation(
+                expected: expectedTarget.location,
+                actual: actualLocation
+            ) else {
                 throw PublicIDRepairBridgeError.bridgeTargetMismatch(
                     herdPublicID: herd.publicID,
                     expected: expectedTarget.location,
@@ -307,6 +301,9 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
             }
 
             // Never call normal sync here. It imports first and can reintroduce obsolete IDs.
+            // Export is idempotent: a bridge already matching the exact repaired snapshot is
+            // finalized/reconciled without rewriting it, so partial multi-herd convergence can
+            // resume safely after process death or journal-clear failure.
             let reconciliation = try await exporter.exportRepairedGraph(
                 for: herd,
                 target: expectedTarget
@@ -334,6 +331,19 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
             )
         }
         return access
+    }
+
+    private func isCompatibleConvergenceLocation(
+        expected: PublicIDRepairBridgeLocationIdentity,
+        actual: PublicIDRepairBridgeLocationIdentity
+    ) -> Bool {
+        if expected == .bridgeRecordMissing {
+            // A successful earlier convergence attempt legitimately transitions a missing bridge
+            // to the owner-private store. The exporter still requires its content to equal the
+            // exact desired repaired snapshot before accepting this recovery state.
+            return actual == .bridgeRecordMissing || actual == .ownerPrivateStore
+        }
+        return actual == expected
     }
 
     private func rejectAmbiguousDuplicateHerdTargets(
