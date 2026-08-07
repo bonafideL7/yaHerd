@@ -8,6 +8,7 @@ import XCTest
 final class PublicIDRepairBridgeDuplicateRecordRegressionTests: XCTestCase {
     func testDuplicateBridgeAnimalsAreMappedToBothRepairedIDsAndSurviveConvergence() async throws {
         let fixture = try makeFixture()
+        try await fixture.load()
         defer { fixture.removeStoreDirectory() }
 
         let local = try makeAnimalGraph(
@@ -103,6 +104,7 @@ final class PublicIDRepairBridgeDuplicateRecordRegressionTests: XCTestCase {
 
     func testDuplicateBridgeAnimalsWithoutPortableOneToOneMappingFailClosed() async throws {
         let fixture = try makeFixture()
+        try await fixture.load()
         defer { fixture.removeStoreDirectory() }
 
         let local = try makeAnimalGraph(
@@ -178,6 +180,7 @@ final class PublicIDRepairBridgeDuplicateRecordRegressionTests: XCTestCase {
         targetsReplacementID: Bool
     ) async throws {
         let fixture = try makeFixture()
+        try await fixture.load()
         defer { fixture.removeStoreDirectory() }
         let local = try makeAnimalGraph(
             herdID: fixture.herdID,
