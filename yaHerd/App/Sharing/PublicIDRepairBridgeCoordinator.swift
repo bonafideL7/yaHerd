@@ -135,10 +135,12 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
             uniqueKeysWithValues: preparation.targets.map { ($0.herdPublicID, $0) }
         )
 
-        // Refetch after repair rather than relying on pre-repair IDs. Duplicate Herd IDs are
-        // rejected during preparation because the bridge cannot distinguish their physical
-        // rows before repair. Any remaining herd therefore has one prepared bridge identity.
-        let repairedHerds = uniqueHerds(try await herdInventory.fetchHerds())
+        // Refetch after repair rather than relying on pre-repair IDs. Do not collapse a
+        // duplicate that appeared after preparation: bridge ownership is still keyed by the
+        // duplicated public ID, so convergence must remain blocked rather than guess a store.
+        let repairedInventoryHerds = try await herdInventory.fetchHerds()
+        try rejectAmbiguousDuplicateHerdTargets(in: repairedInventoryHerds)
+        let repairedHerds = uniqueHerds(repairedInventoryHerds)
         let repairedHerdIDs = Set(repairedHerds.map(\.publicID))
         if let missingTarget = preparation.targets.first(where: {
             $0.location != .unspecified && !repairedHerdIDs.contains($0.herdPublicID)
@@ -200,10 +202,9 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
             .sorted { $0.key.uuidString < $1.key.uuidString }
         guard let duplicate = duplicateGroups.first else { return }
 
-        // Core Data bridge ownership/access is looked up by Herd.publicID. Before repair,
-        // duplicate physical Herd rows with the same public ID are therefore indistinguishable
-        // to the bridge. Guessing a target would let a read/write participant's reassigned row
-        // fall through to the private owner store after it receives a new ID.
+        // Core Data bridge ownership/access is looked up by Herd.publicID. Duplicate physical
+        // Herd rows with the same public ID are therefore indistinguishable to the bridge.
+        // Guessing a target could place a participant's reassigned row in the owner store.
         throw PublicIDRepairBridgeError.duplicateHerdBridgeTargetAmbiguous(
             herdPublicID: duplicate.key,
             recordCount: duplicate.value.count
