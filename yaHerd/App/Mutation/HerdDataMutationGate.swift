@@ -566,7 +566,7 @@ final class CoordinatedPublicIDRepairService: PublicIDRepairService {
         report: PublicIDRepairReport
     ) -> PublicIDRepairBridgePreparation {
         guard preparation.identity == .iCloud else { return preparation }
-        let replacementHerdTargets = report.replacements.compactMap { replacement in
+        let replacementHerdTargets: [PublicIDRepairBridgeTargetIdentity] = report.replacements.compactMap { replacement -> PublicIDRepairBridgeTargetIdentity? in
             guard replacement.entityType == .herd else { return nil }
             return PublicIDRepairBridgeTargetIdentity(
                 herdPublicID: replacement.replacementPublicID,
