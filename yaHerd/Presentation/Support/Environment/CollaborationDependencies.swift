@@ -7,7 +7,6 @@ nonisolated struct CollaborationDependencies {
     let shareAdapter: CloudKitShareAdapter?
     let syncCoordinator: HerdSharingSyncCoordinator?
     let writePolicy: HerdCollaborationWritePolicy?
-    let mutationGate: HerdDataMutationGate?
     let conflictReviewStore: HerdSharingConflictReviewStore?
     let diagnosticsRepository: (any SyncDiagnosticsRepository)?
     let publicIDRepairService: (any PublicIDRepairService)?
@@ -20,7 +19,6 @@ nonisolated struct CollaborationDependencies {
         self.shareAdapter = nil
         self.syncCoordinator = nil
         self.writePolicy = nil
-        self.mutationGate = nil
         self.conflictReviewStore = nil
         self.diagnosticsRepository = nil
         self.publicIDRepairService = nil
@@ -35,7 +33,6 @@ nonisolated struct CollaborationDependencies {
         shareAdapter: CloudKitShareAdapter,
         syncCoordinator: HerdSharingSyncCoordinator,
         writePolicy: HerdCollaborationWritePolicy,
-        mutationGate: HerdDataMutationGate,
         conflictReviewStore: HerdSharingConflictReviewStore,
         diagnosticsRepository: any SyncDiagnosticsRepository,
         settingsSynchronizer: any AppSettingsSyncing
@@ -46,7 +43,6 @@ nonisolated struct CollaborationDependencies {
         self.shareAdapter = shareAdapter
         self.syncCoordinator = syncCoordinator
         self.writePolicy = writePolicy
-        self.mutationGate = mutationGate
         self.conflictReviewStore = conflictReviewStore
         self.diagnosticsRepository = diagnosticsRepository
         self.publicIDRepairService = diagnosticsRepository.publicIDRepairService
