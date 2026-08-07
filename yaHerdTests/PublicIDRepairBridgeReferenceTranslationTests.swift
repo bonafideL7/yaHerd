@@ -76,8 +76,14 @@ final class PublicIDRepairBridgeReferenceTranslationTests: XCTestCase {
         let prepared = try bridge.preparingForPublicIDRepairImport(
             report: repairReport(
                 timestamp: timestamp,
-                retainedAnimalID: retainedAnimalID,
-                replacementAnimalID: replacementAnimalID
+                replacements: [
+                    replacement(
+                        entityType: .animal,
+                        stableRecordIdentifier: "animal|reference-translation",
+                        retainedID: retainedAnimalID,
+                        replacementID: replacementAnimalID
+                    )
+                ]
             ),
             localRepairedSnapshot: local
         )
@@ -91,6 +97,182 @@ final class PublicIDRepairBridgeReferenceTranslationTests: XCTestCase {
             return XCTFail("Expected translated animalPublicID")
         }
         XCTAssertEqual(UUID(uuidString: translatedAnimalID), replacementAnimalID)
+    }
+
+    func testUUIDShapedFreeTextIsNotTreatedAsRepairReference() throws {
+        let herdID = UUID(uuidString: "E1111111-1111-4111-8111-111111111111")!
+        let retainedAnimalID = UUID(uuidString: "E2222222-2222-4222-8222-222222222222")!
+        let replacementAnimalID = UUID(uuidString: "E3333333-3333-4333-8333-333333333333")!
+        let healthID = UUID(uuidString: "E4444444-4444-4444-8444-444444444444")!
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let bridgeRecord = HerdSharingBridgeRecordSnapshot(
+            entityName: SharedHealthRecord.entityName,
+            publicID: healthID.uuidString,
+            sourceObjectURI: "yaherd-snapshot://bridge-health",
+            attributes: [
+                "publicID": .string(healthID.uuidString),
+                "herdPublicID": .string(herdID.uuidString),
+                "animalPublicID": .string(retainedAnimalID.uuidString),
+                "notes": .string(retainedAnimalID.uuidString),
+                "lastMirroredAt": .date(timestamp),
+            ]
+        )
+        let localRecord = HerdSharingBridgeRecordSnapshot(
+            entityName: SharedHealthRecord.entityName,
+            publicID: healthID.uuidString,
+            sourceObjectURI: "yaherd-snapshot://local-health",
+            attributes: [
+                "publicID": .string(healthID.uuidString),
+                "herdPublicID": .string(herdID.uuidString),
+                "animalPublicID": .string(replacementAnimalID.uuidString),
+                "notes": .string(replacementAnimalID.uuidString),
+                "lastMirroredAt": .date(timestamp),
+            ]
+        )
+        let bridge = HerdSharingBridgeStoreSnapshot(
+            herdPublicID: herdID,
+            storeDescription: "free-text bridge",
+            recordsByStep: [.healthRecords: [bridgeRecord]]
+        )
+        let local = HerdSharingBridgeStoreSnapshot(
+            herdPublicID: herdID,
+            storeDescription: "free-text local",
+            recordsByStep: [.healthRecords: [localRecord]]
+        )
+
+        let prepared = try bridge.preparingForPublicIDRepairImport(
+            report: repairReport(
+                timestamp: timestamp,
+                replacements: [
+                    replacement(
+                        entityType: .animal,
+                        stableRecordIdentifier: "animal|free-text",
+                        retainedID: retainedAnimalID,
+                        replacementID: replacementAnimalID
+                    )
+                ]
+            ),
+            localRepairedSnapshot: local
+        )
+        let preparedRecord = try XCTUnwrap(prepared.records(for: .healthRecords).first)
+        guard case .string(let animalID) = preparedRecord.attributes["animalPublicID"],
+              case .string(let notes) = preparedRecord.attributes["notes"] else {
+            return XCTFail("Expected string attributes")
+        }
+        XCTAssertEqual(UUID(uuidString: animalID), replacementAnimalID)
+        XCTAssertEqual(notes, retainedAnimalID.uuidString)
+    }
+
+    func testEmbeddedTreatmentItemIDsAndTreatmentReferencesUseRepairedIdentity() throws {
+        let herdID = UUID(uuidString: "F1111111-1111-4111-8111-111111111111")!
+        let sessionID = UUID(uuidString: "F2222222-2222-4222-8222-222222222222")!
+        let treatmentRecordID = UUID(uuidString: "F3333333-3333-4333-8333-333333333333")!
+        let retainedItemID = UUID(uuidString: "F4444444-4444-4444-8444-444444444444")!
+        let replacementItemID = UUID(uuidString: "F5555555-5555-4555-8555-555555555555")!
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let bridgeItems = try JSONEncoder().encode([
+            WorkingProtocolItem(id: retainedItemID, name: "Vaccine")
+        ])
+        let localItems = try JSONEncoder().encode([
+            WorkingProtocolItem(id: replacementItemID, name: "Vaccine")
+        ])
+
+        let bridge = HerdSharingBridgeStoreSnapshot(
+            herdPublicID: herdID,
+            storeDescription: "embedded item bridge",
+            recordsByStep: [
+                .workingSessions: [
+                    HerdSharingBridgeRecordSnapshot(
+                        entityName: SharedWorkingSessionRecord.entityName,
+                        publicID: sessionID.uuidString,
+                        sourceObjectURI: "yaherd-snapshot://bridge-session",
+                        attributes: [
+                            "publicID": .string(sessionID.uuidString),
+                            "herdPublicID": .string(herdID.uuidString),
+                            "protocolItemsJSON": .data(bridgeItems),
+                            "lastMirroredAt": .date(timestamp),
+                        ]
+                    )
+                ],
+                .workingTreatmentRecords: [
+                    HerdSharingBridgeRecordSnapshot(
+                        entityName: SharedWorkingTreatmentRecord.entityName,
+                        publicID: treatmentRecordID.uuidString,
+                        sourceObjectURI: "yaherd-snapshot://bridge-treatment",
+                        attributes: [
+                            "publicID": .string(treatmentRecordID.uuidString),
+                            "herdPublicID": .string(herdID.uuidString),
+                            "treatmentItemID": .string(retainedItemID.uuidString),
+                            "lastMirroredAt": .date(timestamp),
+                        ]
+                    )
+                ],
+            ]
+        )
+        let local = HerdSharingBridgeStoreSnapshot(
+            herdPublicID: herdID,
+            storeDescription: "embedded item local",
+            recordsByStep: [
+                .workingSessions: [
+                    HerdSharingBridgeRecordSnapshot(
+                        entityName: SharedWorkingSessionRecord.entityName,
+                        publicID: sessionID.uuidString,
+                        sourceObjectURI: "yaherd-snapshot://local-session",
+                        attributes: [
+                            "publicID": .string(sessionID.uuidString),
+                            "herdPublicID": .string(herdID.uuidString),
+                            "protocolItemsJSON": .data(localItems),
+                            "lastMirroredAt": .date(timestamp),
+                        ]
+                    )
+                ],
+                .workingTreatmentRecords: [
+                    HerdSharingBridgeRecordSnapshot(
+                        entityName: SharedWorkingTreatmentRecord.entityName,
+                        publicID: treatmentRecordID.uuidString,
+                        sourceObjectURI: "yaherd-snapshot://local-treatment",
+                        attributes: [
+                            "publicID": .string(treatmentRecordID.uuidString),
+                            "herdPublicID": .string(herdID.uuidString),
+                            "treatmentItemID": .string(replacementItemID.uuidString),
+                            "lastMirroredAt": .date(timestamp),
+                        ]
+                    )
+                ],
+            ]
+        )
+
+        let prepared = try bridge.preparingForPublicIDRepairImport(
+            report: repairReport(
+                timestamp: timestamp,
+                replacements: [
+                    replacement(
+                        entityType: .workingSession,
+                        stableRecordIdentifier: "workingSession|\(sessionID.uuidString)|item-0",
+                        retainedID: retainedItemID,
+                        replacementID: replacementItemID
+                    )
+                ]
+            ),
+            localRepairedSnapshot: local
+        )
+
+        let session = try XCTUnwrap(prepared.records(for: .workingSessions).first)
+        guard case .data(let translatedItemsData) = session.attributes["protocolItemsJSON"] else {
+            return XCTFail("Expected translated protocolItemsJSON")
+        }
+        let translatedItems = try JSONDecoder().decode(
+            [WorkingProtocolItem].self,
+            from: translatedItemsData
+        )
+        XCTAssertEqual(translatedItems.map(\.id), [replacementItemID])
+
+        let treatment = try XCTUnwrap(prepared.records(for: .workingTreatmentRecords).first)
+        guard case .string(let translatedTreatmentItemID) = treatment.attributes["treatmentItemID"] else {
+            return XCTFail("Expected translated treatmentItemID")
+        }
+        XCTAssertEqual(UUID(uuidString: translatedTreatmentItemID), replacementItemID)
     }
 
     private func animalSnapshot(
@@ -134,33 +316,32 @@ final class PublicIDRepairBridgeReferenceTranslationTests: XCTestCase {
         )
     }
 
+    private func replacement(
+        entityType: PublicIDRepairEntityType,
+        stableRecordIdentifier: String,
+        retainedID: UUID,
+        replacementID: UUID
+    ) -> PublicIDRepairReplacement {
+        PublicIDRepairReplacement(
+            entityType: entityType,
+            recordDescription: "Repair regression",
+            stableRecordIdentifier: stableRecordIdentifier,
+            retainedPublicID: retainedID,
+            replacementPublicID: replacementID
+        )
+    }
+
     private func repairReport(
         timestamp: Date,
-        retainedAnimalID: UUID,
-        replacementAnimalID: UUID
+        replacements: [PublicIDRepairReplacement]
     ) -> PublicIDRepairReport {
         PublicIDRepairReport(
             completedAt: timestamp,
             assessment: PublicIDRepairAssessment(
                 scannedAt: timestamp,
-                entities: [
-                    PublicIDRepairEntityAssessment(
-                        entityType: .animal,
-                        scannedRecordCount: 2,
-                        duplicateGroupCount: 1,
-                        duplicateRecordCount: 1
-                    )
-                ]
+                entities: []
             ),
-            replacements: [
-                PublicIDRepairReplacement(
-                    entityType: .animal,
-                    recordDescription: "Beta",
-                    stableRecordIdentifier: "animal|reference-translation",
-                    retainedPublicID: retainedAnimalID,
-                    replacementPublicID: replacementAnimalID
-                )
-            ],
+            replacements: replacements,
             referenceUpdates: [],
             backupFilename: "reference-translation.json",
             backupPath: "/tmp/reference-translation.json",
