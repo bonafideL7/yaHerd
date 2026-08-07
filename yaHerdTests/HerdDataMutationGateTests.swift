@@ -1,3 +1,4 @@
+import SwiftData
 import XCTest
 
 @testable import yaHerd
@@ -212,10 +213,50 @@ final class HerdDataMutationGateTests: XCTestCase {
 
         _ = try await service.repair()
 
-        XCTAssertEqual(await worker.scanCallCountValue(), 0)
-        XCTAssertEqual(await worker.repairCallCountValue(), 0)
+        let scanCallCount = await worker.scanCallCountValue()
+        let repairCallCount = await worker.repairCallCountValue()
+        XCTAssertEqual(scanCallCount, 0)
+        XCTAssertEqual(repairCallCount, 0)
         XCTAssertEqual(bridge.convergeCallCount, 1)
         XCTAssertFalse(relaunchedGate.requiresBridgeConvergence)
+    }
+
+    func testConcreteCommitVerificationStaysCommittedWhenUnrelatedDuplicateArrives() async throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = container.mainContext
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let repairedDuplicateID = UUID(uuidString: "71717171-7171-4171-8171-717171717171")!
+        let herd = Herd(name: "Commit witness", createdAt: timestamp, updatedAt: timestamp)
+        context.insert(herd)
+
+        let north = Pasture(publicID: repairedDuplicateID, name: "North")
+        north.herd = herd
+        context.insert(north)
+        let south = Pasture(publicID: repairedDuplicateID, name: "South")
+        south.herd = herd
+        context.insert(south)
+        try context.save()
+
+        let worker = SwiftDataPublicIDRepairService(modelContainer: container)
+        let report = try await worker.repair()
+        defer { try? FileManager.default.removeItem(atPath: report.backupPath) }
+        XCTAssertEqual(try await worker.commitState(for: report), .committed)
+
+        let lateContext = ModelContext(container)
+        let persistedHerd = try XCTUnwrap(
+            lateContext.fetch(FetchDescriptor<Herd>()).first
+        )
+        let unrelatedDuplicateID = UUID(uuidString: "72727272-7272-4272-8272-727272727272")!
+        let east = Pasture(publicID: unrelatedDuplicateID, name: "East")
+        east.herd = persistedHerd
+        lateContext.insert(east)
+        let west = Pasture(publicID: unrelatedDuplicateID, name: "West")
+        west.herd = persistedHerd
+        lateContext.insert(west)
+        try lateContext.save()
+
+        let commitState = try await worker.commitState(for: report)
+        XCTAssertEqual(commitState, .committed)
     }
 
     func testRelaunchBeforeLocalSaveRetriesRepairUsingPersistedJournal() async throws {
@@ -444,7 +485,7 @@ final class HerdDataMutationGateTests: XCTestCase {
     }
 }
 
-private enum GateTestError: Error {
+private enum GateTestError: Error, Sendable {
     case injectedRepairFailure
 }
 
