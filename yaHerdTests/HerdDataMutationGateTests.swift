@@ -240,7 +240,8 @@ final class HerdDataMutationGateTests: XCTestCase {
         let worker = SwiftDataPublicIDRepairService(modelContainer: container)
         let report = try await worker.repair()
         defer { try? FileManager.default.removeItem(atPath: report.backupPath) }
-        XCTAssertEqual(try await worker.commitState(for: report), .committed)
+        let initialCommitState = try await worker.commitState(for: report)
+        XCTAssertEqual(initialCommitState, .committed)
 
         let lateContext = ModelContext(container)
         let persistedHerd = try XCTUnwrap(
