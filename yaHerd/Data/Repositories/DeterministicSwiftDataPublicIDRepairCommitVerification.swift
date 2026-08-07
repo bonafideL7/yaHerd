@@ -1,7 +1,7 @@
 import Foundation
 
 extension DeterministicSwiftDataPublicIDRepairService {
-    func commitState(for report: PublicIDRepairReport) throws -> PublicIDRepairCommitState {
+    func commitState(for report: PublicIDRepairReport) async throws -> PublicIDRepairCommitState {
         guard !report.replacements.isEmpty else { return .indeterminate }
 
         let loaded = try loadRecords()
