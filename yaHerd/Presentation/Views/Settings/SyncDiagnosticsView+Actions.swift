@@ -38,17 +38,17 @@ extension SyncDiagnosticsView {
             do {
                 let assessment = try await publicIDRepairService.scan()
                 publicIDAssessment = assessment
-                let validSelections = Dictionary(uniqueKeysWithValues:
-                    assessment.unresolvedReferences.compactMap { issue in
-                        guard let selected = publicIDResolutionSelections[issue.id],
-                              issue.candidates.contains(where: {
-                                  $0.stableRecordIdentifier == selected
-                              })
-                        else { return nil }
-                        return (issue.id, selected)
-                    }
+                let validSelectionPairs: [(String, String)] = assessment.unresolvedReferences.compactMap { issue in
+                    guard let selected = publicIDResolutionSelections[issue.id],
+                          issue.candidates.contains(where: {
+                              $0.stableRecordIdentifier == selected
+                          })
+                    else { return nil }
+                    return (issue.id, selected)
+                }
+                publicIDResolutionSelections = Dictionary(
+                    uniqueKeysWithValues: validSelectionPairs
                 )
-                publicIDResolutionSelections = validSelections
             } catch {
                 publicIDRepairError = "Public-ID scan failed: \(UserVisibleErrorMessage.make(error))"
             }
@@ -65,7 +65,9 @@ extension SyncDiagnosticsView {
         isRepairingPublicIDs = true
         publicIDRepairError = nil
         publicIDRepairReport = nil
-        let resolutions = (publicIDAssessment?.unresolvedReferences ?? []).compactMap { issue in
+        let resolutions: [PublicIDRepairReferenceResolution] = (
+            publicIDAssessment?.unresolvedReferences ?? []
+        ).compactMap { issue in
             guard let selected = publicIDResolutionSelections[issue.id], !selected.isEmpty else {
                 return nil
             }
