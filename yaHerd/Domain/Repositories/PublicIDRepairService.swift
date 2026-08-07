@@ -204,7 +204,9 @@ struct PublicIDRepairReport: Codable, Equatable, Sendable {
     }
 }
 
-protocol PublicIDRepairService: Sendable {
+/// Main-actor façade consumed by diagnostics/UI orchestration.
+@MainActor
+protocol PublicIDRepairService: AnyObject, Sendable {
     func scan() async throws -> PublicIDRepairAssessment
     func repair(
         resolutions: [PublicIDRepairReferenceResolution]
@@ -213,9 +215,10 @@ protocol PublicIDRepairService: Sendable {
 
 typealias PublicIDRepairWillCommit = @MainActor @Sendable (PublicIDRepairReport) throws -> Void
 
-/// A repair worker that can durably announce its complete transaction plan immediately
-/// before the SwiftData save. Coordinators use this boundary to make crash recovery safe.
-protocol PublicIDRepairTransactionalService: PublicIDRepairService {
+/// Sendable persistence worker. The model actor owns its ModelContext and only crosses
+/// to the main actor at the durable pre-commit callback boundary.
+protocol PublicIDRepairTransactionalService: Sendable {
+    func scan() async throws -> PublicIDRepairAssessment
     func repair(
         resolutions: [PublicIDRepairReferenceResolution],
         willCommit: PublicIDRepairWillCommit
@@ -227,6 +230,10 @@ extension PublicIDRepairTransactionalService {
         resolutions: [PublicIDRepairReferenceResolution]
     ) async throws -> PublicIDRepairReport {
         try await repair(resolutions: resolutions, willCommit: { _ in })
+    }
+
+    func repair() async throws -> PublicIDRepairReport {
+        try await repair(resolutions: [])
     }
 }
 
