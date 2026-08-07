@@ -173,6 +173,32 @@ List every test added or updated and the behavior it verifies.
 
 Provide the exact commands run and their results.
 
+## Verification Cadence
+
+Do not run full repository verification scripts during routine code inspection,
+exploration, incremental edits, or after each individual fix.
+
+During implementation:
+- Use code inspection first.
+- Run only narrowly targeted tests when needed to validate a specific change.
+- Do not run Scripts/verify-concurrency.sh or other full verification suites
+  after every edit or review finding.
+- Batch related fixes together before verification.
+
+Run the full required verification suite only at these checkpoints:
+1. After the implementation and tests are substantially complete.
+2. After the adversarial self-review, if that review causes material code changes.
+3. Immediately before pushing/updating the PR, if the previous full verification
+   is no longer valid because code changed.
+
+Do not rerun an unchanged verification suite merely because additional code was
+inspected or another review pass was performed.
+
+For code-review-only tasks:
+- Do not run local build/test/verification scripts unless reproducing a suspected
+  defect requires them.
+- Prefer inspecting the existing CI result for the exact PR head commit.
+
 ### Self-review findings
 
 Report material issues found during internal review and how they were corrected.
