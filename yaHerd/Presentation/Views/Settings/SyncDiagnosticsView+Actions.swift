@@ -103,9 +103,13 @@ extension SyncDiagnosticsView {
                 guard let settingsSynchronizer = collaborationDependencies.settingsSynchronizer else {
                     throw SyncDiagnosticsSettingsError.settingsSynchronizerUnavailable
                 }
+                guard let writePolicy = collaborationDependencies.writePolicy else {
+                    throw SyncDiagnosticsSettingsError.writePolicyUnavailable
+                }
                 let resetService = SyncDataResetService(
                     applicationSettings: applicationSettings,
-                    settingsSynchronizer: settingsSynchronizer
+                    settingsSynchronizer: settingsSynchronizer,
+                    mutationGate: writePolicy.dataMutationGate
                 )
                 let summary = try await resetService.deleteICloudSyncData()
 
@@ -227,8 +231,14 @@ extension SyncDiagnosticsView {
 
 enum SyncDiagnosticsSettingsError: LocalizedError {
     case settingsSynchronizerUnavailable
+    case writePolicyUnavailable
 
     var errorDescription: String? {
-        "The application settings synchronizer is unavailable."
+        switch self {
+        case .settingsSynchronizerUnavailable:
+            "The application settings synchronizer is unavailable."
+        case .writePolicyUnavailable:
+            "The collaboration write policy is unavailable."
+        }
     }
 }
