@@ -76,7 +76,7 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
     let desiredFingerprint = desiredSnapshot.publicIDRepairFingerprint
 
     // Resolve the prepared target after the SwiftData export has been built. A bridge can be in
-    // only two safe states here: the exact pre-repair baseline, or the exact repaired snapshot
+    // only two safe states here: the exact pre-repair live graph, or the exact repaired live graph
     // from an earlier convergence attempt that committed before a crash/journal-clear failure.
     let initialState = try await publicIDRepairBridgeState(
       for: herd,
@@ -398,9 +398,14 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
 }
 
 extension HerdSharingBridgeStoreSnapshot {
+  /// Stable fingerprint of the live shared graph. Deletion tombstones are intentionally excluded:
+  /// the repair writer can create tombstones for replaced IDs, and their revision/timestamp metadata
+  /// is generated at commit time. `lastMirroredAt` is transport bookkeeping and changes on every
+  /// export. All live entity IDs, domain attributes, and collaboration revision metadata remain in
+  /// the fingerprint, so collaborator additions, edits, or deletions of live records still change it.
   var publicIDRepairFingerprint: String {
     var components = ["herd|\(herdPublicID.uuidString.lowercased())"]
-    for step in HerdSharingBridgeStep.entitySteps {
+    for step in HerdSharingBridgeStep.entitySteps where step != .deletions {
       let records = records(for: step)
         .map(\.publicIDRepairCanonicalValue)
         .sorted()
@@ -419,7 +424,7 @@ private extension HerdSharingBridgeRecordSnapshot {
       "entity|\(entityName)",
       "publicID|\(publicID.lowercased())",
     ]
-    for key in attributes.keys.sorted() {
+    for key in attributes.keys.sorted() where key != "lastMirroredAt" {
       guard let value = attributes[key] else { continue }
       components.append("attribute|\(key)|\(value.publicIDRepairCanonicalValue)")
     }
