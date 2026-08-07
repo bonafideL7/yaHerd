@@ -51,6 +51,67 @@ final class PublicIDRepairBridgeConvergenceRegressionTests: XCTestCase {
         XCTAssertEqual(repository.fetchAccessCallCount, accessCallsAfterPreparation)
         XCTAssertEqual(exporter.exportedHerdIDs, [])
     }
+
+    func testLegacyReplacementHerdCannotFallBackFromAcceptedShareToPrivateStore() async throws {
+        let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let originalID = UUID(uuidString: "C3C3C3C3-C3C3-43C3-83C3-C3C3C3C3C3C3")!
+        let replacementID = UUID(uuidString: "D4D4D4D4-D4D4-44D4-84D4-D4D4D4D4D4D4")!
+        let original = HerdSummary(
+            publicID: originalID,
+            name: "Accepted shared herd",
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            schemaVersion: 1
+        )
+        let replacement = HerdSummary(
+            publicID: replacementID,
+            name: "Legacy repaired duplicate",
+            createdAt: timestamp.addingTimeInterval(1),
+            updatedAt: timestamp.addingTimeInterval(1),
+            schemaVersion: 1
+        )
+        let inventory = BridgeBoundaryHerdInventory(herds: [original])
+        let repository = BridgeBoundarySharingRepository(
+            access: .acceptedSharedStore(
+                permission: .readWrite,
+                participantCount: 2
+            )
+        )
+        let exporter = BridgeBoundaryExporter()
+        let coordinator = DefaultPublicIDRepairBridgeCoordinator(
+            herdInventory: inventory,
+            sharingRepository: repository,
+            storageMode: .iCloud,
+            exporter: exporter
+        )
+
+        let preparation = try await coordinator.prepareForRepair()
+        XCTAssertEqual(preparation.targets.count, 1)
+        XCTAssertEqual(preparation.targets.first?.herdPublicID, originalID)
+        XCTAssertEqual(preparation.targets.first?.location, .acceptedSharedStore)
+        let accessCallsAfterPreparation = repository.fetchAccessCallCount
+
+        // Models a pending repair produced by an earlier build that reassigned a duplicate Herd
+        // before the current preflight prohibition existed. The new ID has no prepared target.
+        await inventory.setHerds([original, replacement])
+
+        do {
+            try await coordinator.convergeAfterRepair(preparation: preparation)
+            XCTFail("Expected unprepared replacement Herd to keep convergence blocked")
+        } catch let error as PublicIDRepairBridgeError {
+            XCTAssertEqual(
+                error,
+                .unpreparedHerdBridgeTarget(herdPublicID: replacementID)
+            )
+        }
+
+        XCTAssertEqual(
+            repository.fetchAccessCallCount,
+            accessCallsAfterPreparation,
+            "Convergence must not query the replacement ID and infer local-owner access"
+        )
+        XCTAssertEqual(exporter.exportedHerdIDs, [])
+    }
 }
 
 private actor BridgeBoundaryHerdInventory: PublicIDRepairHerdInventoryReading {
@@ -85,6 +146,11 @@ private final class BridgeBoundaryExporter: PublicIDRepairBridgeExporting {
 @MainActor
 private final class BridgeBoundarySharingRepository: HerdSharingRepository {
     private(set) var fetchAccessCallCount = 0
+    private let access: HerdSharingAccess
+
+    init(access: HerdSharingAccess = .ownerPrivateStore(participantCount: 1)) {
+        self.access = access
+    }
 
     func fetchSharingReadiness(
         for herd: HerdSummary?,
@@ -98,7 +164,7 @@ private final class BridgeBoundarySharingRepository: HerdSharingRepository {
         storageMode: HerdStorageMode
     ) async throws -> HerdSharingAccess {
         fetchAccessCallCount += 1
-        return .ownerPrivateStore(participantCount: 1)
+        return access
     }
 
     func startSharing(
