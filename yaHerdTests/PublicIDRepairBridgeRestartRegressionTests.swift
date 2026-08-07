@@ -17,12 +17,12 @@ final class PublicIDRepairBridgeRestartRegressionTests: XCTestCase {
         )
         let exporter = SwiftDataPublicIDRepairBridgeExporter(
             modelContainer: try TestSupport.makeModelContainer(),
-            exportReader: RestartExportReader(export: export),
+            exportReader: RestartExportReader(export),
             bridgeStore: bridgeStore
         )
         let target = PublicIDRepairBridgeTargetIdentity(
             herdPublicID: herd.publicID,
-            location: .ownerPrivateStore,
+            location: PublicIDRepairBridgeLocationIdentity.ownerPrivateStore,
             bridgeFingerprint: baselineFingerprint
         )
 
@@ -134,7 +134,7 @@ private func restartExportResult(for herd: HerdSummary) -> HerdSharingBridgeExpo
 private actor RestartExportReader: HerdSharingExportSnapshotReading {
     private let export: HerdSharingSwiftDataExport
 
-    init(export: HerdSharingSwiftDataExport) {
+    init(_ export: HerdSharingSwiftDataExport) {
         self.export = export
     }
 
