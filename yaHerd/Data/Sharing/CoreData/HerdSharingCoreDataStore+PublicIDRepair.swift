@@ -300,7 +300,7 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
     }
   }
 
-  fileprivate static func publicIDRepairDigest(_ value: String) -> String {
+  nonisolated fileprivate static func publicIDRepairDigest(_ value: String) -> String {
     SHA256.hash(data: Data(value.utf8))
       .map { String(format: "%02x", $0) }
       .joined()
