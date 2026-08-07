@@ -103,6 +103,12 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
             }
         }
 
+        // A stale bridge import can itself reveal/create duplicate Herd rows after the first
+        // preflight. Re-check before the repair worker is allowed to mutate SwiftData so a
+        // newly ambiguous physical Herd is never repaired without a trustworthy bridge target.
+        let postImportHerds = try await herdInventory.fetchHerds()
+        try rejectAmbiguousDuplicateHerdTargets(in: postImportHerds)
+
         return PublicIDRepairBridgePreparation(
             identity: bridgeIdentity,
             targets: herds.compactMap { herd in
