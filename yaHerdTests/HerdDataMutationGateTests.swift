@@ -30,6 +30,22 @@ final class HerdDataMutationGateTests: XCTestCase {
         gate.endPublicIDRepair(repairToken)
     }
 
+    func testActiveSyncDataResetBlocksWritesSynchronizationAndRepair() throws {
+        let gate = HerdDataMutationGate(defaults: isolatedDefaults())
+        let writePolicy = HerdCollaborationWritePolicy(mutationGate: gate)
+        let resetToken = try gate.beginSyncDataReset()
+
+        XCTAssertTrue(gate.isSyncDataResetInProgress)
+        XCTAssertThrowsError(try writePolicy.validateCanWrite(reason: .animal))
+        XCTAssertThrowsError(try gate.beginSynchronization())
+        XCTAssertThrowsError(try gate.beginPublicIDRepair())
+        XCTAssertThrowsError(try gate.beginSyncDataReset())
+
+        gate.endSyncDataReset(resetToken)
+        XCTAssertFalse(gate.isSyncDataResetInProgress)
+        XCTAssertNoThrow(try writePolicy.validateCanWrite(reason: .animal))
+    }
+
     func testDirectSharedImportIsBlockedWhileRepairWorkerIsSuspended() async throws {
         let gate = HerdDataMutationGate(defaults: isolatedDefaults())
         let worker = SuspendedPublicIDRepairService()
@@ -150,7 +166,7 @@ final class HerdDataMutationGateTests: XCTestCase {
         let events = RepairEventRecorder()
         let worker = RecordingPublicIDRepairService(
             events: events,
-            scanHasDuplicates: false
+            commitState: .committed
         )
         let bridge = RecordingPublicIDRepairBridgeCoordinator(events: events)
         let service = CoordinatedPublicIDRepairService(
@@ -164,6 +180,40 @@ final class HerdDataMutationGateTests: XCTestCase {
         XCTAssertEqual(resumedReport, report)
         let repairCallCount = await worker.repairCallCountValue()
         XCTAssertEqual(repairCallCount, 0)
+        XCTAssertEqual(bridge.convergeCallCount, 1)
+        XCTAssertFalse(relaunchedGate.requiresBridgeConvergence)
+    }
+
+    func testPostSaveCrashWithNewDuplicateDoesNotRetryOrClearCommittedRepair() async throws {
+        let defaults = isolatedDefaults()
+        let preparation = testICloudPreparation()
+        let report = makeTestRepairReport()
+        let firstGate = HerdDataMutationGate(defaults: defaults)
+        try firstGate.requireLocalCommitCompletion(
+            preparation: preparation,
+            report: report,
+            resolutions: []
+        )
+
+        let relaunchedGate = HerdDataMutationGate(defaults: defaults)
+        let events = RepairEventRecorder()
+        let worker = RecordingPublicIDRepairService(
+            events: events,
+            scanHasDuplicates: true,
+            commitState: .committed,
+            repairShouldFail: true
+        )
+        let bridge = RecordingPublicIDRepairBridgeCoordinator(events: events)
+        let service = CoordinatedPublicIDRepairService(
+            worker: worker,
+            mutationGate: relaunchedGate,
+            bridgeCoordinator: bridge
+        )
+
+        _ = try await service.repair()
+
+        XCTAssertEqual(await worker.scanCallCountValue(), 0)
+        XCTAssertEqual(await worker.repairCallCountValue(), 0)
         XCTAssertEqual(bridge.convergeCallCount, 1)
         XCTAssertFalse(relaunchedGate.requiresBridgeConvergence)
     }
@@ -183,7 +233,7 @@ final class HerdDataMutationGateTests: XCTestCase {
         let events = RepairEventRecorder()
         let worker = RecordingPublicIDRepairService(
             events: events,
-            scanHasDuplicates: true
+            commitState: .notCommitted
         )
         let bridge = RecordingPublicIDRepairBridgeCoordinator(events: events)
         let service = CoordinatedPublicIDRepairService(
@@ -198,6 +248,102 @@ final class HerdDataMutationGateTests: XCTestCase {
         XCTAssertEqual(repairCallCount, 1)
         XCTAssertEqual(bridge.convergeCallCount, 1)
         XCTAssertFalse(relaunchedGate.requiresBridgeConvergence)
+    }
+
+    func testFailedRetryClearsPreCommitJournalOnlyWhenNotCommittedIsProven() async throws {
+        let defaults = isolatedDefaults()
+        let firstGate = HerdDataMutationGate(defaults: defaults)
+        try firstGate.requireLocalCommitCompletion(
+            preparation: testICloudPreparation(),
+            report: makeTestRepairReport(),
+            resolutions: []
+        )
+
+        let relaunchedGate = HerdDataMutationGate(defaults: defaults)
+        let worker = RecordingPublicIDRepairService(
+            events: RepairEventRecorder(),
+            commitState: .notCommitted,
+            repairShouldFail: true
+        )
+        let bridge = RecordingPublicIDRepairBridgeCoordinator(events: RepairEventRecorder())
+        let service = CoordinatedPublicIDRepairService(
+            worker: worker,
+            mutationGate: relaunchedGate,
+            bridgeCoordinator: bridge
+        )
+
+        do {
+            _ = try await service.repair()
+            XCTFail("Expected the retry to fail")
+        } catch GateTestError.injectedRepairFailure {
+            XCTAssertFalse(relaunchedGate.requiresBridgeConvergence)
+            XCTAssertEqual(bridge.convergeCallCount, 0)
+        }
+    }
+
+    func testIndeterminateCommitStateFailsClosedAndKeepsJournal() async throws {
+        let defaults = isolatedDefaults()
+        let firstGate = HerdDataMutationGate(defaults: defaults)
+        try firstGate.requireLocalCommitCompletion(
+            preparation: testICloudPreparation(),
+            report: makeTestRepairReport(),
+            resolutions: []
+        )
+
+        let relaunchedGate = HerdDataMutationGate(defaults: defaults)
+        let worker = RecordingPublicIDRepairService(
+            events: RepairEventRecorder(),
+            commitState: .indeterminate
+        )
+        let bridge = RecordingPublicIDRepairBridgeCoordinator(events: RepairEventRecorder())
+        let service = CoordinatedPublicIDRepairService(
+            worker: worker,
+            mutationGate: relaunchedGate,
+            bridgeCoordinator: bridge
+        )
+
+        do {
+            _ = try await service.repair()
+            XCTFail("Expected recovery to fail closed")
+        } catch let error as CoordinatedPublicIDRepairError {
+            XCTAssertEqual(error, .localCommitStateIndeterminate)
+            XCTAssertTrue(relaunchedGate.requiresBridgeConvergence)
+            XCTAssertEqual(bridge.convergeCallCount, 0)
+        }
+    }
+
+    func testPendingBridgeConvergenceBlocksDestructiveSyncResetBeforeCloudKitMutation() async throws {
+        let defaults = isolatedDefaults()
+        let gate = HerdDataMutationGate(defaults: defaults)
+        try gate.requireLocalCommitCompletion(
+            preparation: testICloudPreparation(),
+            report: makeTestRepairReport(),
+            resolutions: []
+        )
+        try gate.markLocalCommitSucceeded()
+
+        let settings = ApplicationSettings(
+            store: InMemoryApplicationSettingsStore(values: [
+                ApplicationSettingKey.syncMode.rawValue: SyncMode.iCloud.rawValue
+            ])
+        )
+        let synchronizer = RecordingSettingsSynchronizer()
+        let resetService = SyncDataResetService(
+            applicationSettings: settings,
+            settingsSynchronizer: synchronizer,
+            mutationGate: gate,
+            cloudKitContainerIdentifier: "iCloud.com.example.gate-test"
+        )
+
+        do {
+            _ = try await resetService.deleteICloudSyncData()
+            XCTFail("Expected reset to be blocked before CloudKit deletion")
+        } catch let error as HerdDataMutationGate.GateError {
+            XCTAssertEqual(error, .bridgeConvergenceRequired(reason: nil))
+            XCTAssertEqual(settings.syncMode, .iCloud)
+            XCTAssertEqual(synchronizer.deleteCloudSettingsCallCount, 0)
+            XCTAssertTrue(gate.requiresBridgeConvergence)
+        }
     }
 
     func testPendingICloudConvergenceCannotBeClearedByLocalOnlyRelaunch() async throws {
@@ -244,7 +390,7 @@ final class HerdDataMutationGateTests: XCTestCase {
         XCTAssertFalse(iCloudGate.requiresBridgeConvergence)
     }
 
-    func testDefaultBridgeCoordinatorPreparesAndConvergesEveryHerd() async throws {
+    func testDefaultBridgeCoordinatorPreparesAndConvergesEveryPreparedHerd() async throws {
         let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
         let first = HerdSummary(
             publicID: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
@@ -256,13 +402,6 @@ final class HerdDataMutationGateTests: XCTestCase {
         let second = HerdSummary(
             publicID: UUID(uuidString: "22222222-2222-4222-8222-222222222222")!,
             name: "Second",
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            schemaVersion: 1
-        )
-        let repairedDuplicate = HerdSummary(
-            publicID: UUID(uuidString: "33333333-3333-4333-8333-333333333333")!,
-            name: "Second duplicate",
             createdAt: timestamp,
             updatedAt: timestamp,
             schemaVersion: 1
@@ -280,13 +419,13 @@ final class HerdDataMutationGateTests: XCTestCase {
         let preparation = try await coordinator.prepareForRepair()
         XCTAssertEqual(Set(preparation.herdPublicIDs), Set([first.publicID, second.publicID]))
         XCTAssertEqual(Set(repository.importedHerdIDs), Set([first.publicID, second.publicID]))
+        XCTAssertTrue(preparation.targets.allSatisfy { $0.bridgeFingerprint != nil })
 
-        await inventory.setHerds([first, second, repairedDuplicate])
         try await coordinator.convergeAfterRepair(preparation: preparation)
 
         XCTAssertEqual(
             Set(exporter.exportedHerdIDs),
-            Set([first.publicID, second.publicID, repairedDuplicate.publicID])
+            Set([first.publicID, second.publicID])
         )
     }
 
@@ -303,6 +442,10 @@ final class HerdDataMutationGateTests: XCTestCase {
             herdPublicIDs: [UUID(uuidString: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA")!]
         )
     }
+}
+
+private enum GateTestError: Error {
+    case injectedRepairFailure
 }
 
 private actor SuspendedPublicIDRepairService: PublicIDRepairTransactionalService {
@@ -356,18 +499,26 @@ private final class RepairEventRecorder {
 private actor RecordingPublicIDRepairService: PublicIDRepairTransactionalService {
     private let events: RepairEventRecorder
     private var scanHasDuplicates: Bool
+    private var commitStateValue: PublicIDRepairCommitState
+    private let repairShouldFail: Bool
     private var repairCallCount = 0
+    private var scanCallCount = 0
 
     init(
         events: RepairEventRecorder,
-        scanHasDuplicates: Bool = true
+        scanHasDuplicates: Bool = true,
+        commitState: PublicIDRepairCommitState = .notCommitted,
+        repairShouldFail: Bool = false
     ) {
         self.events = events
         self.scanHasDuplicates = scanHasDuplicates
+        self.commitStateValue = commitState
+        self.repairShouldFail = repairShouldFail
     }
 
     func scan() async throws -> PublicIDRepairAssessment {
-        scanHasDuplicates ? duplicateAssessment() : emptyAssessment()
+        scanCallCount += 1
+        return scanHasDuplicates ? duplicateAssessment() : emptyAssessment()
     }
 
     func repair(
@@ -378,13 +529,25 @@ private actor RecordingPublicIDRepairService: PublicIDRepairTransactionalService
         await events.record("repair-will-commit")
         let report = makeTestRepairReport()
         try await willCommit(report)
+        if repairShouldFail {
+            throw GateTestError.injectedRepairFailure
+        }
         await events.record("repair-save")
         scanHasDuplicates = false
+        commitStateValue = .committed
         return report
+    }
+
+    func commitState(for report: PublicIDRepairReport) async throws -> PublicIDRepairCommitState {
+        commitStateValue
     }
 
     func repairCallCountValue() -> Int {
         repairCallCount
+    }
+
+    func scanCallCountValue() -> Int {
+        scanCallCount
     }
 }
 
@@ -449,10 +612,22 @@ private actor RecordingHerdInventory: PublicIDRepairHerdInventoryReading {
 private final class RecordingPublicIDRepairBridgeExporter: PublicIDRepairBridgeExporting {
     private(set) var exportedHerdIDs: [UUID] = []
 
-    func exportRepairedGraph(
+    func captureBridgeFingerprint(
         for herd: HerdSummary,
         access: HerdSharingAccess
+    ) async throws -> String {
+        "fingerprint|\(herd.publicID.uuidString)|\(access.locationDescription)"
+    }
+
+    func exportRepairedGraph(
+        for herd: HerdSummary,
+        target: PublicIDRepairBridgeTargetIdentity
     ) async throws -> HerdSharingBridgeReconciliationReport {
+        guard target.bridgeFingerprint != nil else {
+            throw PublicIDRepairBridgeError.bridgeBaselineUnavailable(
+                herdPublicID: herd.publicID
+            )
+        }
         exportedHerdIDs.append(herd.publicID)
         return .empty
     }
@@ -524,6 +699,20 @@ private final class RecordingHerdSharingRepository: HerdSharingRepository {
 
     private func result(_ title: String) -> HerdSharingActionResult {
         HerdSharingActionResult(title: title, message: title)
+    }
+}
+
+@MainActor
+private final class RecordingSettingsSynchronizer: AppSettingsSyncing {
+    private(set) var deleteCloudSettingsCallCount = 0
+
+    func startIfNeeded(syncMode: SyncMode) {}
+    func stop() {}
+    func refreshFromICloudIfStarted() {}
+
+    func deleteCloudSettings() -> Int {
+        deleteCloudSettingsCallCount += 1
+        return 0
     }
 }
 
