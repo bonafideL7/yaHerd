@@ -80,7 +80,7 @@ final class HerdDataMutationGateTests: XCTestCase {
         XCTAssertFalse(gate.isPublicIDRepairInProgress)
     }
 
-    func testCoordinatedRepairJournalsBeforeCommitThenExportsWithoutNormalSync() async throws {
+    func testCoordinatedRepairJournalsBeforeCommitThenConvergesBridge() async throws {
         let events = RepairEventRecorder()
         let gate = HerdDataMutationGate(defaults: isolatedDefaults())
         let worker = RecordingPublicIDRepairService(events: events)
@@ -95,7 +95,7 @@ final class HerdDataMutationGateTests: XCTestCase {
 
         XCTAssertEqual(
             events.events,
-            ["prepare-import", "repair-will-commit", "repair-save", "export-only-converge"]
+            ["prepare", "repair-will-commit", "repair-save", "converge"]
         )
         let repairCallCount = await worker.repairCallCountValue()
         XCTAssertEqual(repairCallCount, 1)
@@ -432,7 +432,7 @@ final class HerdDataMutationGateTests: XCTestCase {
         XCTAssertFalse(iCloudGate.requiresBridgeConvergence)
     }
 
-    func testDefaultBridgeCoordinatorPreparesAndConvergesEveryPreparedHerd() async throws {
+    func testDefaultBridgeCoordinatorPreparesThenImportsAndConvergesEveryPreparedHerd() async throws {
         let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
         let first = HerdSummary(
             publicID: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
@@ -460,15 +460,23 @@ final class HerdDataMutationGateTests: XCTestCase {
 
         let preparation = try await coordinator.prepareForRepair()
         XCTAssertEqual(Set(preparation.herdPublicIDs), Set([first.publicID, second.publicID]))
-        XCTAssertEqual(Set(repository.importedHerdIDs), Set([first.publicID, second.publicID]))
+        XCTAssertEqual(repository.importedHerdIDs, [])
         XCTAssertTrue(preparation.targets.allSatisfy { $0.bridgeFingerprint != nil })
 
-        try await coordinator.convergeAfterRepair(preparation: preparation)
+        try await coordinator.convergeAfterRepair(
+            preparation: preparation,
+            report: makeTestRepairReport()
+        )
 
+        XCTAssertEqual(
+            Set(exporter.importedHerdIDs),
+            Set([first.publicID, second.publicID])
+        )
         XCTAssertEqual(
             Set(exporter.exportedHerdIDs),
             Set([first.publicID, second.publicID])
         )
+        XCTAssertEqual(repository.importedHerdIDs, [])
     }
 
     private func isolatedDefaults() -> UserDefaults {
@@ -612,7 +620,7 @@ private final class RecordingPublicIDRepairBridgeCoordinator: PublicIDRepairBrid
 
     func prepareForRepair() async throws -> PublicIDRepairBridgePreparation {
         prepareCallCount += 1
-        events.record("prepare-import")
+        events.record("prepare")
         return PublicIDRepairBridgePreparation(
             identity: .iCloud,
             herdPublicIDs: [UUID(uuidString: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA")!]
@@ -620,10 +628,11 @@ private final class RecordingPublicIDRepairBridgeCoordinator: PublicIDRepairBrid
     }
 
     func convergeAfterRepair(
-        preparation: PublicIDRepairBridgePreparation
+        preparation: PublicIDRepairBridgePreparation,
+        report: PublicIDRepairReport
     ) async throws {
         convergeCallCount += 1
-        events.record("export-only-converge")
+        events.record("converge")
         if convergenceFailuresRemaining > 0 {
             convergenceFailuresRemaining -= 1
             throw PublicIDRepairBridgeError.reconciliationFailed(
@@ -652,6 +661,7 @@ private actor RecordingHerdInventory: PublicIDRepairHerdInventoryReading {
 
 @MainActor
 private final class RecordingPublicIDRepairBridgeExporter: PublicIDRepairBridgeExporting {
+    private(set) var importedHerdIDs: [UUID] = []
     private(set) var exportedHerdIDs: [UUID] = []
 
     func captureBridgeFingerprint(
@@ -659,6 +669,16 @@ private final class RecordingPublicIDRepairBridgeExporter: PublicIDRepairBridgeE
         access: HerdSharingAccess
     ) async throws -> String {
         "fingerprint|\(herd.publicID.uuidString)|\(access.locationDescription)"
+    }
+
+    func importCurrentBridgeGraph(
+        for herd: HerdSummary,
+        access: HerdSharingAccess,
+        expectedFingerprint: String,
+        report: PublicIDRepairReport
+    ) async throws {
+        XCTAssertFalse(expectedFingerprint.isEmpty)
+        importedHerdIDs.append(herd.publicID)
     }
 
     func exportRepairedGraph(
