@@ -83,6 +83,7 @@ final class HerdDataMutationGate {
         case bridgeConvergenceRequired(reason: SharedDataMutationReason?)
         case synchronizationInProgress
         case publicIDRepairAlreadyInProgress
+        case repairJournalUnavailable(details: String)
 
         var errorDescription: String? {
             switch self {
@@ -99,23 +100,49 @@ final class HerdDataMutationGate {
                 return "Shared-herd synchronization is currently importing or exporting data. Wait for synchronization to finish before repairing duplicate public IDs."
             case .publicIDRepairAlreadyInProgress:
                 return "Duplicate public-ID repair is already running."
+            case .repairJournalUnavailable(let details):
+                return "The durable public-ID repair journal could not be read or written. Normal edits and synchronization remain blocked to protect shared data. \(details)"
             }
         }
     }
 
     private static let pendingRepairStateKey = "PublicIDRepair.PendingState.v2"
     private static let legacyPendingBridgeReportKey = "PublicIDRepair.PendingBridgeConvergenceReport.v1"
+    private static let pendingRepairJournalFileName = "PublicIDRepairPendingState.v3.json"
 
     private var repairToken: UUID?
     private var synchronizationTokens: Set<UUID> = []
     private let defaults: UserDefaults
+    private let journal: PublicIDRepairDurableJournal
     private var pendingRepairState: PublicIDRepairPendingState?
+    private var journalFailureDescription: String?
 
-    init(defaults: UserDefaults = .standard) {
+    init(
+        defaults: UserDefaults = .standard,
+        journalFileURL: URL? = nil
+    ) {
         self.defaults = defaults
+        self.journal = PublicIDRepairDurableJournal(
+            fileURL: journalFileURL ?? Self.defaultJournalURL(defaults: defaults)
+        )
+
+        do {
+            if let data = try journal.read() {
+                pendingRepairState = try JSONDecoder().decode(
+                    PublicIDRepairPendingState.self,
+                    from: data
+                )
+                return
+            }
+        } catch {
+            journalFailureDescription = error.localizedDescription
+            return
+        }
+
         if let data = defaults.data(forKey: Self.pendingRepairStateKey),
            let state = try? JSONDecoder().decode(PublicIDRepairPendingState.self, from: data) {
             pendingRepairState = state
+            migrateLegacyStateToJournal(state)
         } else if let data = defaults.data(forKey: Self.legacyPendingBridgeReportKey),
                   let report = try? JSONDecoder().decode(PublicIDRepairReport.self, from: data) {
             let state = PublicIDRepairPendingState(
@@ -128,16 +155,19 @@ final class HerdDataMutationGate {
                 resolutions: []
             )
             pendingRepairState = state
-            try? persist(state)
+            migrateLegacyStateToJournal(state)
         }
     }
 
     var isPublicIDRepairInProgress: Bool { repairToken != nil }
     var isSynchronizing: Bool { !synchronizationTokens.isEmpty }
-    var requiresBridgeConvergence: Bool { pendingRepairState != nil }
+    var requiresBridgeConvergence: Bool {
+        pendingRepairState != nil || journalFailureDescription != nil
+    }
     var pendingBridgeConvergenceReport: PublicIDRepairReport? { pendingRepairState?.report }
 
     func validateLocalMutationAllowed(reason: SharedDataMutationReason) throws {
+        try validateJournalAvailable()
         guard repairToken == nil else {
             throw GateError.publicIDRepairInProgress(reason: reason)
         }
@@ -147,6 +177,7 @@ final class HerdDataMutationGate {
     }
 
     func beginSynchronization() throws -> UUID {
+        try validateJournalAvailable()
         guard repairToken == nil else {
             throw GateError.publicIDRepairBlocksSynchronization
         }
@@ -163,6 +194,7 @@ final class HerdDataMutationGate {
     }
 
     func beginPublicIDRepair() throws -> UUID {
+        try validateJournalAvailable()
         guard repairToken == nil else {
             throw GateError.publicIDRepairAlreadyInProgress
         }
@@ -214,28 +246,71 @@ final class HerdDataMutationGate {
 
     func clearPendingLocalCommitAfterRollback() {
         guard pendingRepairState?.phase == .localCommitPending else { return }
-        clearPendingState()
+        do {
+            try clearPendingState()
+        } catch {
+            journalFailureDescription = error.localizedDescription
+        }
     }
 
-    func completeBridgeConvergence() {
-        clearPendingState()
+    func completeBridgeConvergence() throws {
+        try clearPendingState()
     }
 
     private func setPendingState(_ state: PublicIDRepairPendingState) throws {
         try persist(state)
         pendingRepairState = state
+        journalFailureDescription = nil
     }
 
     private func persist(_ state: PublicIDRepairPendingState) throws {
         let data = try JSONEncoder().encode(state)
-        defaults.set(data, forKey: Self.pendingRepairStateKey)
+        try journal.persist(data)
+        defaults.removeObject(forKey: Self.pendingRepairStateKey)
         defaults.removeObject(forKey: Self.legacyPendingBridgeReportKey)
     }
 
-    private func clearPendingState() {
+    private func clearPendingState() throws {
+        try journal.remove()
         defaults.removeObject(forKey: Self.pendingRepairStateKey)
         defaults.removeObject(forKey: Self.legacyPendingBridgeReportKey)
         pendingRepairState = nil
+        journalFailureDescription = nil
+    }
+
+    private func migrateLegacyStateToJournal(_ state: PublicIDRepairPendingState) {
+        do {
+            try persist(state)
+        } catch {
+            journalFailureDescription = error.localizedDescription
+        }
+    }
+
+    private func validateJournalAvailable() throws {
+        if let journalFailureDescription {
+            throw GateError.repairJournalUnavailable(details: journalFailureDescription)
+        }
+    }
+
+    private static func defaultJournalURL(defaults: UserDefaults) -> URL {
+        #if DEBUG
+        if defaults !== UserDefaults.standard {
+            return FileManager.default.temporaryDirectory
+                .appendingPathComponent("yaHerd-PublicIDRepairTests", isDirectory: true)
+                .appendingPathComponent(
+                    "\(ObjectIdentifier(defaults).hashValue)-\(pendingRepairJournalFileName)"
+                )
+        }
+        #endif
+
+        let baseURL = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first ?? FileManager.default.temporaryDirectory
+        return baseURL
+            .appendingPathComponent("yaHerd", isDirectory: true)
+            .appendingPathComponent("PublicIDRepair", isDirectory: true)
+            .appendingPathComponent(pendingRepairJournalFileName)
     }
 }
 
@@ -343,7 +418,7 @@ final class CoordinatedPublicIDRepairService: PublicIDRepairService {
 
         try mutationGate.markLocalCommitSucceeded()
         try await bridgeCoordinator.convergeAfterRepair(preparation: preparation)
-        mutationGate.completeBridgeConvergence()
+        try mutationGate.completeBridgeConvergence()
         return report
     }
 
@@ -383,7 +458,7 @@ final class CoordinatedPublicIDRepairService: PublicIDRepairService {
         try await bridgeCoordinator.convergeAfterRepair(
             preparation: pending.preparation
         )
-        mutationGate.completeBridgeConvergence()
+        try mutationGate.completeBridgeConvergence()
         return report
     }
 }
