@@ -193,6 +193,8 @@ PERSISTENCE_TEST_SUITES=(
   HerdSharingRepositoryTests
   HerdDataMutationGateTests
   PublicIDRepairBridgeConvergenceRegressionTests
+  PublicIDRepairBridgeDuplicateRecordRegressionTests
+  PublicIDRepairBridgeReferenceTranslationTests
   PublicIDRepairBridgeRestartRegressionTests
   PublicIDRepairReviewRegressionTests
   PublicIDRepairReviewRound2RegressionTests
