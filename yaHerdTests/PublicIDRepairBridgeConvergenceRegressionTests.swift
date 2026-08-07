@@ -105,6 +105,31 @@ final class PublicIDRepairBridgeConvergenceRegressionTests: XCTestCase {
         XCTAssertEqual(exporter.exportedHerdIDs, [])
     }
 
+    func testBridgeMutationAfterPreparationBlocksConvergenceBeforeExport() async throws {
+        let herd = makeBridgeBoundaryHerd()
+        let inventory = BridgeBoundaryHerdInventory(herds: [herd])
+        let repository = BridgeBoundarySharingRepository()
+        let exporter = BridgeBoundaryExporter(currentFingerprint: "baseline-a")
+        let coordinator = DefaultPublicIDRepairBridgeCoordinator(
+            herdInventory: inventory,
+            sharingRepository: repository,
+            storageMode: .iCloud,
+            exporter: exporter
+        )
+
+        let preparation = try await coordinator.prepareForRepair()
+        XCTAssertEqual(preparation.targets.first?.bridgeFingerprint, "baseline-a")
+        exporter.currentFingerprint = "baseline-b"
+
+        do {
+            try await coordinator.convergeAfterRepair(preparation: preparation)
+            XCTFail("Expected intervening bridge mutation to block convergence")
+        } catch let error as PublicIDRepairBridgeError {
+            XCTAssertEqual(error, .bridgeContentChanged(herdPublicID: herd.publicID))
+        }
+        XCTAssertEqual(exporter.exportedHerdIDs, [])
+    }
+
     func testLegacyReplacementHerdCannotFallBackFromAcceptedShareToPrivateStore() async throws {
         let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
         let originalID = UUID(uuidString: "C3C3C3C3-C3C3-43C3-83C3-C3C3C3C3C3C3")!
@@ -142,6 +167,7 @@ final class PublicIDRepairBridgeConvergenceRegressionTests: XCTestCase {
         XCTAssertEqual(preparation.targets.count, 1)
         XCTAssertEqual(preparation.targets.first?.herdPublicID, originalID)
         XCTAssertEqual(preparation.targets.first?.location, .acceptedSharedStore)
+        XCTAssertNotNil(preparation.targets.first?.bridgeFingerprint)
         let accessCallsAfterPreparation = repository.fetchAccessCallCount
 
         // Models a pending repair produced by an earlier build that reassigned a duplicate Herd
@@ -167,6 +193,17 @@ final class PublicIDRepairBridgeConvergenceRegressionTests: XCTestCase {
     }
 }
 
+private func makeBridgeBoundaryHerd() -> HerdSummary {
+    let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+    return HerdSummary(
+        publicID: UUID(uuidString: "F6F6F6F6-F6F6-46F6-86F6-F6F6F6F6F6F6")!,
+        name: "Boundary herd",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        schemaVersion: 1
+    )
+}
+
 private actor BridgeBoundaryHerdInventory: PublicIDRepairHerdInventoryReading {
     private var herds: [HerdSummary]
 
@@ -185,12 +222,29 @@ private actor BridgeBoundaryHerdInventory: PublicIDRepairHerdInventoryReading {
 
 @MainActor
 private final class BridgeBoundaryExporter: PublicIDRepairBridgeExporting {
+    var currentFingerprint: String
     private(set) var exportedHerdIDs: [UUID] = []
+
+    init(currentFingerprint: String = "bridge-boundary-baseline") {
+        self.currentFingerprint = currentFingerprint
+    }
+
+    func captureBridgeFingerprint(
+        for herd: HerdSummary,
+        access: HerdSharingAccess
+    ) async throws -> String {
+        currentFingerprint
+    }
 
     func exportRepairedGraph(
         for herd: HerdSummary,
-        access: HerdSharingAccess
+        target: PublicIDRepairBridgeTargetIdentity
     ) async throws -> HerdSharingBridgeReconciliationReport {
+        guard target.bridgeFingerprint == currentFingerprint else {
+            throw PublicIDRepairBridgeError.bridgeContentChanged(
+                herdPublicID: herd.publicID
+            )
+        }
         exportedHerdIDs.append(herd.publicID)
         return .empty
     }
@@ -200,7 +254,7 @@ private final class BridgeBoundaryExporter: PublicIDRepairBridgeExporting {
 private final class BridgeBoundarySharingRepository: HerdSharingRepository {
     private(set) var fetchAccessCallCount = 0
     private(set) var importCallCount = 0
-    private let access: HerdSharingAccess
+    var access: HerdSharingAccess
     private let onImport: (@MainActor () async -> Void)?
 
     init(
