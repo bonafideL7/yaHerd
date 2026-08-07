@@ -85,7 +85,7 @@ fileprivate struct PublicIDRepairPendingState: Codable, Equatable, Sendable {
     let resolutions: [PublicIDRepairReferenceResolution]
 }
 
-/// Excludes duplicate-ID maintenance and incomplete bridge convergence from normal writes.
+/// Excludes duplicate-ID maintenance, destructive reset, and incomplete bridge convergence from normal writes.
 @MainActor
 final class HerdDataMutationGate {
     enum GateError: LocalizedError, Equatable {
@@ -94,6 +94,8 @@ final class HerdDataMutationGate {
         case bridgeConvergenceRequired(reason: SharedDataMutationReason?)
         case synchronizationInProgress
         case publicIDRepairAlreadyInProgress
+        case syncDataResetInProgress(reason: SharedDataMutationReason?)
+        case syncDataResetAlreadyInProgress
         case repairJournalUnavailable(details: String)
 
         var errorDescription: String? {
@@ -108,9 +110,16 @@ final class HerdDataMutationGate {
                 }
                 return "The repaired public IDs have not been verified in the shared-data bridge. Synchronization remains blocked. Open Sync Diagnostics and finish public-ID repair convergence."
             case .synchronizationInProgress:
-                return "Shared-herd synchronization is currently importing or exporting data. Wait for synchronization to finish before repairing duplicate public IDs."
+                return "Shared-herd synchronization is currently importing or exporting data. Wait for synchronization to finish before repairing duplicate public IDs or resetting iCloud sync data."
             case .publicIDRepairAlreadyInProgress:
                 return "Duplicate public-ID repair is already running."
+            case .syncDataResetInProgress(let reason):
+                if let reason {
+                    return "iCloud sync data is being reset. The \(reason.displayName) change was blocked until the reset finishes."
+                }
+                return "iCloud sync data is being reset. Synchronization and duplicate public-ID repair are blocked until the reset finishes."
+            case .syncDataResetAlreadyInProgress:
+                return "iCloud sync data is already being reset."
             case .repairJournalUnavailable(let details):
                 return "The durable public-ID repair journal could not be read or written. Normal edits and synchronization remain blocked to protect shared data. \(details)"
             }
@@ -123,6 +132,7 @@ final class HerdDataMutationGate {
 
     private var repairToken: UUID?
     private var synchronizationTokens: Set<UUID> = []
+    private var syncDataResetToken: UUID?
     private let defaults: UserDefaults
     private let journal: PublicIDRepairDurableJournal
     private var pendingRepairState: PublicIDRepairPendingState?
@@ -172,6 +182,7 @@ final class HerdDataMutationGate {
 
     var isPublicIDRepairInProgress: Bool { repairToken != nil }
     var isSynchronizing: Bool { !synchronizationTokens.isEmpty }
+    var isSyncDataResetInProgress: Bool { syncDataResetToken != nil }
     var requiresBridgeConvergence: Bool {
         pendingRepairState != nil || journalFailureDescription != nil
     }
@@ -185,18 +196,8 @@ final class HerdDataMutationGate {
         guard pendingRepairState == nil else {
             throw GateError.bridgeConvergenceRequired(reason: reason)
         }
-    }
-
-    func validateSyncDataResetAllowed() throws {
-        try validateJournalAvailable()
-        guard repairToken == nil else {
-            throw GateError.publicIDRepairBlocksSynchronization
-        }
-        guard pendingRepairState == nil else {
-            throw GateError.bridgeConvergenceRequired(reason: nil)
-        }
-        guard synchronizationTokens.isEmpty else {
-            throw GateError.synchronizationInProgress
+        guard syncDataResetToken == nil else {
+            throw GateError.syncDataResetInProgress(reason: reason)
         }
     }
 
@@ -207,6 +208,9 @@ final class HerdDataMutationGate {
         }
         guard pendingRepairState == nil else {
             throw GateError.bridgeConvergenceRequired(reason: nil)
+        }
+        guard syncDataResetToken == nil else {
+            throw GateError.syncDataResetInProgress(reason: nil)
         }
         let token = UUID()
         synchronizationTokens.insert(token)
@@ -225,6 +229,9 @@ final class HerdDataMutationGate {
         guard synchronizationTokens.isEmpty else {
             throw GateError.synchronizationInProgress
         }
+        guard syncDataResetToken == nil else {
+            throw GateError.syncDataResetInProgress(reason: nil)
+        }
         let token = UUID()
         repairToken = token
         return token
@@ -233,6 +240,30 @@ final class HerdDataMutationGate {
     func endPublicIDRepair(_ token: UUID) {
         guard repairToken == token else { return }
         repairToken = nil
+    }
+
+    func beginSyncDataReset() throws -> UUID {
+        try validateJournalAvailable()
+        guard pendingRepairState == nil else {
+            throw GateError.bridgeConvergenceRequired(reason: nil)
+        }
+        guard repairToken == nil else {
+            throw GateError.publicIDRepairBlocksSynchronization
+        }
+        guard synchronizationTokens.isEmpty else {
+            throw GateError.synchronizationInProgress
+        }
+        guard syncDataResetToken == nil else {
+            throw GateError.syncDataResetAlreadyInProgress
+        }
+        let token = UUID()
+        syncDataResetToken = token
+        return token
+    }
+
+    func endSyncDataReset(_ token: UUID) {
+        guard syncDataResetToken == token else { return }
+        syncDataResetToken = nil
     }
 
     fileprivate var pendingState: PublicIDRepairPendingState? {
