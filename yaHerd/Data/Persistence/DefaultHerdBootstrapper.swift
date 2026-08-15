@@ -24,8 +24,15 @@ enum DefaultHerdBootstrapper {
     static func ensureDefaultHerdForAppLaunch(
         in context: ModelContext,
         storageScope: String,
-        migrationState: UserDefaults = .standard
+        migrationState: UserDefaults = .standard,
+        mutationGate: HerdDataMutationGate = HerdDataMutationGate()
     ) throws {
+        // The durable repair gate must be loaded before this startup writer does anything.
+        // A pending or unreadable repair journal means public IDs may be between the local
+        // commit and shared-bridge convergence phases, so creating/re-scoping records here
+        // would mutate the graph outside the repair transaction. Defer until a later launch.
+        guard !mutationGate.requiresBridgeConvergence else { return }
+
         let herd = try defaultHerd(in: context)
         let migrationVersionKey = "\(migrationVersionKeyPrefix).\(storageScope)"
         let shouldRunMigration = migrationState.integer(forKey: migrationVersionKey) < currentMigrationVersion

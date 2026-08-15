@@ -10,11 +10,13 @@ final class AppDependencies {
 
     let tagColorRepository: any TagColorRepository
     let syncDiagnosticsRepository: any SyncDiagnosticsRepository
+    let publicIDRepairService: any PublicIDRepairService
     let herdRepository: any HerdRepository
     let herdSharingRepository: any HerdSharingRepository
     let applicationMutationCenter: ApplicationMutationCenter
     let herdSharingMutationSyncScheduler: HerdSharingMutationSyncScheduler
     let herdCollaborationWritePolicy: HerdCollaborationWritePolicy
+    let herdDataMutationGate: HerdDataMutationGate
     let herdSharingConflictReviewStore: HerdSharingConflictReviewStore
     let cloudKitShareAdapter: CloudKitShareAdapter
 
@@ -24,23 +26,29 @@ final class AppDependencies {
     convenience init(
         context: ModelContext,
         tagColorDuplicateResolutionPolicy: TagColorDuplicateResolutionPolicy = .stableSortOrderWins,
-        dataAccessMode: AppDataAccessMode = .readWrite
+        dataAccessMode: AppDataAccessMode = .readWrite,
+        storageMode: HerdStorageMode? = nil
     ) {
         self.init(
             modelContainer: context.container,
             tagColorDuplicateResolutionPolicy: tagColorDuplicateResolutionPolicy,
-            dataAccessMode: dataAccessMode
+            dataAccessMode: dataAccessMode,
+            storageMode: storageMode
         )
     }
 
     init(
         modelContainer: ModelContainer,
         tagColorDuplicateResolutionPolicy: TagColorDuplicateResolutionPolicy = .stableSortOrderWins,
-        dataAccessMode: AppDataAccessMode = .readWrite
+        dataAccessMode: AppDataAccessMode = .readWrite,
+        storageMode: HerdStorageMode? = nil
     ) {
         let context = modelContainer.mainContext
         self.context = context
         self.dataAccessMode = dataAccessMode
+        let resolvedStorageMode = storageMode ?? Self.inferredStorageMode(
+            dataAccessMode: dataAccessMode
+        )
 
         let mutationCenter = ApplicationMutationCenter()
         let mutationSyncScheduler = HerdSharingMutationSyncScheduler()
@@ -48,7 +56,11 @@ final class AppDependencies {
             center: mutationCenter,
             sharingScheduler: mutationSyncScheduler
         )
-        let writePolicy = HerdCollaborationWritePolicy(dataAccessMode: dataAccessMode)
+        let mutationGate = HerdDataMutationGate()
+        let writePolicy = HerdCollaborationWritePolicy(
+            dataAccessMode: dataAccessMode,
+            mutationGate: mutationGate
+        )
         let conflictReviewStore = HerdSharingConflictReviewStore()
         let cloudKitShareAdapter = CloudKitShareAdapter()
 
@@ -107,7 +119,7 @@ final class AppDependencies {
             mutationRecorder: mutationPipeline,
             writePolicy: writePolicy
         )
-        let syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(context: context)
+
         let baseHerdSharingRepository: any HerdSharingRepository
         if dataAccessMode.isRecoveryMode {
             baseHerdSharingRepository = RecoveryModeHerdSharingRepository()
@@ -117,9 +129,42 @@ final class AppDependencies {
                 shareAdapter: cloudKitShareAdapter
             )
         }
-        let herdSharingRepository = MutationPublishingHerdSharingRepository(
+        let gatedHerdSharingRepository = GatedHerdSharingRepository(
             base: baseHerdSharingRepository,
+            mutationGate: mutationGate
+        )
+        let herdSharingRepository = MutationPublishingHerdSharingRepository(
+            base: gatedHerdSharingRepository,
             mutationCenter: mutationCenter
+        )
+
+        let bridgeCoordinator: any PublicIDRepairBridgeCoordinating
+        if resolvedStorageMode == .iCloud && dataAccessMode.allowsDataMutations {
+            bridgeCoordinator = DefaultPublicIDRepairBridgeCoordinator(
+                herdInventory: SwiftDataPublicIDRepairHerdInventory(
+                    modelContainer: modelContainer
+                ),
+                sharingRepository: baseHerdSharingRepository,
+                storageMode: resolvedStorageMode,
+                exporter: SwiftDataPublicIDRepairBridgeExporter(
+                    modelContainer: modelContainer,
+                    bridgeStore: PublicIDRepairOwnershipSafeBridgeStore()
+                )
+            )
+        } else {
+            bridgeCoordinator = LocalOnlyPublicIDRepairBridgeCoordinator()
+        }
+        let publicIDRepairWorker = SwiftDataPublicIDRepairService(
+            modelContainer: modelContainer
+        )
+        let publicIDRepairService = CoordinatedPublicIDRepairService(
+            worker: publicIDRepairWorker,
+            mutationGate: mutationGate,
+            bridgeCoordinator: bridgeCoordinator
+        )
+        let syncDiagnosticsRepository = SwiftDataSyncDiagnosticsRepository(
+            context: context,
+            publicIDRepairService: publicIDRepairService
         )
 
         self.animalFeatureDependencies = AnimalFeatureDependencies(
@@ -160,11 +205,13 @@ final class AppDependencies {
 
         self.tagColorRepository = tagColorRepository
         self.syncDiagnosticsRepository = syncDiagnosticsRepository
+        self.publicIDRepairService = publicIDRepairService
         self.herdRepository = herdRepository
         self.herdSharingRepository = herdSharingRepository
         self.applicationMutationCenter = mutationCenter
         self.herdSharingMutationSyncScheduler = mutationSyncScheduler
         self.herdCollaborationWritePolicy = writePolicy
+        self.herdDataMutationGate = mutationGate
         self.herdSharingConflictReviewStore = conflictReviewStore
         self.cloudKitShareAdapter = cloudKitShareAdapter
     }
@@ -172,5 +219,14 @@ final class AppDependencies {
     func seedDefaultsIfNeeded() {
         guard dataAccessMode.allowsDataMutations else { return }
         SampleDataService.seedDefaultsIfNeeded(context: context)
+    }
+
+    private static func inferredStorageMode(
+        dataAccessMode: AppDataAccessMode
+    ) -> HerdStorageMode {
+        guard dataAccessMode.allowsDataMutations else { return .localOnly }
+        return AppLaunchDiagnostics.snapshot().actualStorageMode == .iCloud
+            ? .iCloud
+            : .localOnly
     }
 }

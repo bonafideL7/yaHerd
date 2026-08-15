@@ -191,6 +191,8 @@ PERSISTENCE_TEST_SUITES=(
   HerdSharingDeletionTombstoneIdentityTests
   HerdSharingImportCommitBoundaryTests
   HerdSharingRepositoryTests
+  HerdDataMutationGateTests
+  StartupMigrationRepairGateTests
   SwiftDataHerdSharingActorDuplicateIDPagingTests
   SwiftDataHerdSharingActorRelationshipScopeTests
   SwiftDataHerdSharingActorTests
@@ -198,12 +200,66 @@ PERSISTENCE_TEST_SUITES=(
   SwiftDataReadModelActorPasturePaginationTests
   SwiftDataReadModelActorTests
 )
-TEST_SELECTION_ARGS=()
+
 for suite in "${PERSISTENCE_TEST_SUITES[@]}"; do
   if [[ ! -f "yaHerdTests/$suite.swift" ]]; then
     echo "Configured persistence test suite source is missing: yaHerdTests/$suite.swift" >&2
     exit 1
   fi
+done
+
+# Public-ID repair is a single persistence feature area spread across behavioral suites and
+# extension-only test files. Discover actual XCTestCase types touched by every repair test source,
+# rather than assuming each filename is also a test class, so new repair coverage cannot compile
+# successfully while being silently omitted from the verification run.
+repair_test_suites="$(python3 - <<'PYTHON'
+from pathlib import Path
+import re
+import sys
+
+all_test_sources = sorted(Path('yaHerdTests').glob('*.swift'))
+repair_sources = [
+    path for path in all_test_sources
+    if 'PublicIDRepair' in path.name and path.name.endswith('Tests.swift')
+]
+if not repair_sources:
+    print('No public-ID repair test sources were found.', file=sys.stderr)
+    raise SystemExit(1)
+
+class_pattern = re.compile(r'\b(?:final\s+)?class\s+(\w+)\s*:\s*XCTestCase\b')
+extension_pattern = re.compile(r'\bextension\s+(\w+)\b')
+
+testcase_types = set()
+source_text = {}
+for path in all_test_sources:
+    text = path.read_text()
+    source_text[path] = text
+    testcase_types.update(class_pattern.findall(text))
+
+selected = set()
+for path in repair_sources:
+    text = source_text[path]
+    selected.update(class_pattern.findall(text))
+    selected.update(
+        name for name in extension_pattern.findall(text)
+        if name in testcase_types
+    )
+
+if not selected:
+    print('No XCTestCase types were discovered for public-ID repair tests.', file=sys.stderr)
+    raise SystemExit(1)
+
+print('\n'.join(sorted(selected)))
+PYTHON
+)"
+
+while IFS= read -r suite; do
+  [[ -z "$suite" ]] && continue
+  PERSISTENCE_TEST_SUITES+=("$suite")
+done <<< "$repair_test_suites"
+
+TEST_SELECTION_ARGS=()
+for suite in "${PERSISTENCE_TEST_SUITES[@]}"; do
   TEST_SELECTION_ARGS+=("-only-testing:yaHerdTests/$suite")
 done
 
