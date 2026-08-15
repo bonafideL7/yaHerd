@@ -28,6 +28,7 @@ enum HerdCollaborationWritePolicyError: LocalizedError, Equatable {
 @MainActor
 final class HerdCollaborationWritePolicy {
   private let dataAccessMode: AppDataAccessMode
+  private let mutationGate: HerdDataMutationGate
   private var access: HerdSharingAccess?
   private var accessRefreshRequestHandler: ((SharedDataMutationReason) -> Void)?
   private var lastAccessRefreshRequestedAt: Date?
@@ -35,8 +36,12 @@ final class HerdCollaborationWritePolicy {
   private(set) var lastBlockedMutationReason: SharedDataMutationReason?
   private(set) var lastAccessRefreshRequestedReason: SharedDataMutationReason?
 
-  init(dataAccessMode: AppDataAccessMode = .readWrite) {
+  init(
+    dataAccessMode: AppDataAccessMode = .readWrite,
+    mutationGate: HerdDataMutationGate = HerdDataMutationGate()
+  ) {
     self.dataAccessMode = dataAccessMode
+    self.mutationGate = mutationGate
   }
 
   var snapshot: HerdCollaborationWritePolicySnapshot {
@@ -47,6 +52,10 @@ final class HerdCollaborationWritePolicy {
       lastBlockedMutationReason: lastBlockedMutationReason,
       lastAccessRefreshRequestedReason: lastAccessRefreshRequestedReason
     )
+  }
+
+  var dataMutationGate: HerdDataMutationGate {
+    mutationGate
   }
 
   func update(access: HerdSharingAccess) {
@@ -74,6 +83,8 @@ final class HerdCollaborationWritePolicy {
   }
 
   func validateCanWrite(reason: SharedDataMutationReason) throws {
+    try mutationGate.validateLocalMutationAllowed(reason: reason)
+
     guard dataAccessMode.allowsDataMutations else {
       lastBlockedMutationReason = reason
       throw HerdCollaborationWritePolicyError.recoveryModeReadOnly(reason: reason)

@@ -4,10 +4,14 @@ import SwiftData
 enum CollaborationMutationSavePolicy: Sendable {
     case localMutation
     case acceptIncomingSharedRevision
+    case restoreExactRepairBoundary
 
     static func policy(for operation: String) -> CollaborationMutationSavePolicy {
         if operation == "SwiftDataHerdSharingActor.atomicImport" {
             return .acceptIncomingSharedRevision
+        }
+        if operation == "DeterministicSwiftDataPublicIDRepairService.restoreRepairBoundary" {
+            return .restoreExactRepairBoundary
         }
         return .localMutation
     }
@@ -34,6 +38,16 @@ enum CollaborationMutationPipeline {
         operation: String
     ) throws -> CollaborationPreparedSave {
         let policy = CollaborationMutationSavePolicy.policy(for: operation)
+        if case .restoreExactRepairBoundary = policy {
+            // Indeterminate public-ID recovery explicitly reconstructs revision rows from the
+            // transaction-bound backup before saving. Re-stamping those aggregates here would
+            // immediately replace the restored lineage and make exact backup verification
+            // impossible. The recovery service verifies the restored revision boundary before it
+            // resumes normal manifest replay, so this one save intentionally preserves the rows
+            // already staged in the ModelContext verbatim.
+            return CollaborationPreparedSave(localMetadataUpdates: [:])
+        }
+
         let pendingAggregates = pendingAggregates(in: context)
         guard !pendingAggregates.isEmpty else {
             return CollaborationPreparedSave(localMetadataUpdates: [:])
@@ -74,6 +88,8 @@ enum CollaborationMutationPipeline {
                     currentFields: currentFields,
                     isDeleted: pending.isDeleted
                 )
+            case .restoreExactRepairBoundary:
+                preconditionFailure("Exact repair-boundary saves return before revision stamping.")
             }
 
             let record: CollaborationRevisionRecord

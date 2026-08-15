@@ -9,8 +9,14 @@ enum FieldCheckHistoricalSnapshotMigrator {
     static func runIfNeeded(
         in context: ModelContext,
         storageScope: String,
-        migrationState: UserDefaults = .standard
+        migrationState: UserDefaults = .standard,
+        mutationGate: HerdDataMutationGate = HerdDataMutationGate()
     ) throws {
+        // Snapshot backfill writes public-ID references. It must not run while a durable
+        // duplicate-ID repair transaction is pending or its journal cannot be recovered.
+        // Defer the migration until a later launch after convergence has completed.
+        guard !mutationGate.requiresBridgeConvergence else { return }
+
         let migrationVersionKey = "\(migrationVersionKeyPrefix).\(storageScope)"
         guard migrationState.integer(forKey: migrationVersionKey) < currentMigrationVersion else { return }
 
