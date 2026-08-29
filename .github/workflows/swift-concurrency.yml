@@ -12,7 +12,7 @@ on:
         type: boolean
         default: true
       run_concurrency:
-        description: Run Swift 6 checks, build, and foundation persistence/concurrency tests
+        description: Run Swift 6 concurrency checks and production build
         required: true
         type: boolean
         default: true
@@ -79,30 +79,9 @@ jobs:
           set -euo pipefail
           bash Scripts/verify-architecture.sh
 
-      - name: Verify Swift 6 concurrency, build, and foundation tests
+      - name: Verify Swift 6 concurrency and production build
         if: ${{ github.event_name == 'pull_request' || inputs.run_concurrency }}
         shell: bash
         run: |
           set -euo pipefail
           bash Scripts/verify-concurrency.sh
-
-      - name: Collect persistence test diagnostics
-        if: ${{ failure() && (github.event_name == 'pull_request' || inputs.run_concurrency) }}
-        shell: bash
-        run: |
-          mkdir -p .build/PersistenceDiagnostics
-          if [[ -d .build/PersistenceTests.xcresult ]]; then
-            cp -R .build/PersistenceTests.xcresult .build/PersistenceDiagnostics/
-          fi
-          find "$HOME/Library/Logs/DiagnosticReports" -type f \
-            \( -name 'yaHerd*.ips' -o -name 'yaHerd*.crash' -o -name 'xctest*.ips' -o -name 'xctest*.crash' \) \
-            -mmin -30 -exec cp {} .build/PersistenceDiagnostics/ \; || true
-
-      - name: Upload persistence test diagnostics
-        if: ${{ failure() && (github.event_name == 'pull_request' || inputs.run_concurrency) }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: persistence-test-diagnostics
-          path: .build/PersistenceDiagnostics
-          retention-days: 3
-          if-no-files-found: ignore
