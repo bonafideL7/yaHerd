@@ -435,6 +435,12 @@ final class HerdSharingCreationStateGuard: HerdSharingCreationStateGuarding {
       return .fullSync
     }
 
+    if access.bridgeLocation == .acceptedSharedStore,
+       access.permission == .readOnly
+    {
+      return .importOnly
+    }
+
     let evaluatedAccess = try await evaluate(herd: herd, access: access)
     switch evaluatedAccess.creationState {
     case .ready, .existingOwnerShare, .acceptedParticipantShare, .unresolvedBridgeRecord:

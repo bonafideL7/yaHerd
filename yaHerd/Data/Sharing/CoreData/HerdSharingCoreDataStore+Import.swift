@@ -42,7 +42,7 @@ extension HerdSharingCoreDataStore {
           participantRelationshipWasExplicitlyAccepted: true,
           importer: importer
         )
-        acceptedShareImportScopeStore.remove(scopedImport.scope)
+        try acceptedShareImportScopeStore.removeRecoverably(scopedImport.scope)
         return result
       }
 
@@ -56,7 +56,7 @@ extension HerdSharingCoreDataStore {
           participantRelationshipWasExplicitlyAccepted: true,
           importer: importer
         )
-        acceptedShareImportScopeStore.remove(scopedImport.scope)
+        try acceptedShareImportScopeStore.removeRecoverably(scopedImport.scope)
         return result
       }
       if !pendingScopes.isEmpty {
@@ -147,24 +147,9 @@ extension HerdSharingCoreDataStore {
   {
     let activeScopes = try await acceptedShareImportScopeStore.pendingScopesForCurrentAccount()
     for scope in activeScopes {
-      if try acceptedShareImport(matching: scope) != nil {
-        if scope.acceptanceState != .accepted {
-          let accountRecordName: String
-          if let participantAccountRecordName = scope.participantAccountRecordName {
-            accountRecordName = participantAccountRecordName
-          } else {
-            accountRecordName = try await acceptedShareImportScopeStore.currentAccountRecordName()
-          }
-          acceptedShareImportScopeStore.markAccepted(
-            scope,
-            participantAccountRecordName: accountRecordName
-          )
-        } else if scope.remoteAbsenceObservedAt != nil {
-          acceptedShareImportScopeStore.clearRemoteAbsence(for: scope)
-        }
-        continue
-      }
-
+      // A matching local row proves only that Core Data cached this exact root previously. The
+      // owner may have revoked participation since that cache was written, so every pending scope
+      // must be revalidated against the current CloudKit account before it can be imported.
       let remoteStatus = try await acceptedParticipantRemoteVerifier.status(
         for: HerdSharingAcceptedParticipantReference(scope: scope)
       )

@@ -17,6 +17,7 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository,
     private let unresolvedOwnerShareResumePreflight: @MainActor (UUID) async throws -> Void
     private let ownerSharePreparation: @MainActor (HerdSharingActionResult, UUID) throws -> Void
     private let discardedOwnerShareProvenanceCleanup: @MainActor (UUID) -> Void
+    private let discardedAcceptedParticipantProvenanceCleanup: @MainActor (UUID) -> Void
     private let creationGuard: any HerdSharingCreationStateGuarding
     private let localContext: ModelContext?
     private let acceptedShareImportScopeStore: HerdSharingAcceptedShareImportScopeStore
@@ -85,6 +86,9 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository,
             ownerShareRevalidationStore.clear(herdPublicID)
             discardedOwnerShareReferenceCleanup(herdPublicID)
         }
+        discardedAcceptedParticipantProvenanceCleanup = { herdPublicID in
+            resolvedAcceptedParticipantReferenceStore.clearReference(for: herdPublicID)
+        }
         self.unresolvedOwnerShareResumePreflight = unresolvedOwnerShareResumePreflight
         self.ownerSharePreparation = ownerSharePreparation
         self.acceptedShareImportScopeStore = acceptedShareImportScopeStore
@@ -102,6 +106,7 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository,
         newOwnerShareRemoteOwnerShareLookup: @escaping @MainActor () async throws -> Bool = { false },
         remoteOwnerShareRevalidationStore: HerdSharingRemoteOwnerShareRevalidationStore = HerdSharingRemoteOwnerShareRevalidationStore(),
         discardedOwnerShareProvenanceCleanup: @escaping @MainActor (UUID) -> Void = { _ in },
+        discardedAcceptedParticipantProvenanceCleanup: @escaping @MainActor (UUID) -> Void = { _ in },
         unresolvedOwnerShareResumePreflight: @escaping @MainActor (UUID) async throws -> Void = { _ in },
         ownerSharePreparation: @escaping @MainActor (HerdSharingActionResult, UUID) throws -> Void = { _, _ in }
     ) {
@@ -114,6 +119,7 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository,
         self.newOwnerShareRemoteOwnerShareLookup = newOwnerShareRemoteOwnerShareLookup
         self.remoteOwnerShareRevalidationStore = remoteOwnerShareRevalidationStore
         self.discardedOwnerShareProvenanceCleanup = discardedOwnerShareProvenanceCleanup
+        self.discardedAcceptedParticipantProvenanceCleanup = discardedAcceptedParticipantProvenanceCleanup
         self.unresolvedOwnerShareResumePreflight = unresolvedOwnerShareResumePreflight
         self.ownerSharePreparation = ownerSharePreparation
         self.acceptedShareImportScopeStore = acceptedShareImportScopeStore
@@ -343,12 +349,17 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository,
             access: rawAccess
         )
         let cleanup = discardedOwnerShareProvenanceCleanup
+        let acceptedCleanup = discardedAcceptedParticipantProvenanceCleanup
         let retainedAccess = try await conflictResolver.resolveBridgeConflict(
             for: herd,
             keeping: resolution,
             discardedRelationshipDidCommit: {
-                guard resolution == .keepAcceptedShare else { return }
-                cleanup(herd.publicID)
+                switch resolution {
+                case .keepAcceptedShare:
+                    cleanup(herd.publicID)
+                case .keepOwnerShare:
+                    acceptedCleanup(herd.publicID)
+                }
             }
         )
         try await prepareExistingOwnerShareIfNeeded(herd: herd, access: retainedAccess)

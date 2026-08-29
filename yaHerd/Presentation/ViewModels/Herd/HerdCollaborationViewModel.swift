@@ -167,6 +167,7 @@ final class HerdCollaborationViewModel {
       return
     }
 
+    let sharingStateGeneration = writePolicy?.sharingStateGeneration
     do {
       let requestedHerd = herd
       let access = try await sharingRepository.fetchSharingAccess(
@@ -181,25 +182,56 @@ final class HerdCollaborationViewModel {
           )
         }
       }
+      if let sharingStateGeneration,
+         writePolicy?.sharingStateGeneration != sharingStateGeneration
+      {
+        throw HerdSharingActionError.bridgeImportRequiresAccessVerification(
+          "CloudKit sharing state changed while access was being verified. The stale access result was discarded."
+        )
+      }
       sharingAccess = access
       writePolicy?.update(access: access)
       sharingAccessMessage = nil
     } catch HerdSharingActionError.iCloudSyncRequired {
-      sharingAccess = nil
-      writePolicy?.clearAccessAfterFailedSynchronization()
+      sharingAccess = displayedAccessAfterFailedRefresh(
+        writePolicy,
+        ifGenerationIsStill: sharingStateGeneration
+      )
       sharingAccessMessage = "Enable iCloud Sync to inspect CloudKit share permissions."
     } catch HerdSharingActionError.shareRootMissing {
-      sharingAccess = nil
-      writePolicy?.clearAccessAfterFailedSynchronization()
+      sharingAccess = displayedAccessAfterFailedRefresh(
+        writePolicy,
+        ifGenerationIsStill: sharingStateGeneration
+      )
       sharingAccessMessage = "No Herd share root is available yet."
     } catch {
-      sharingAccess = nil
       // An authoritative access read can fail because the iCloud account or remote share changed.
       // Invalidate prior writable authority; requiring a successful refresh also preserves the
       // fail-closed behavior of previously read-only, conflicting, and recovery-blocked states.
-      writePolicy?.clearAccessAfterFailedSynchronization()
+      sharingAccess = displayedAccessAfterFailedRefresh(
+        writePolicy,
+        ifGenerationIsStill: sharingStateGeneration
+      )
       sharingAccessMessage = UserVisibleErrorMessage.make(error)
     }
+  }
+
+  private func displayedAccessAfterFailedRefresh(
+    _ writePolicy: HerdCollaborationWritePolicy?,
+    ifGenerationIsStill sharingStateGeneration: UInt64?
+  ) -> HerdSharingAccess? {
+    guard let writePolicy else { return nil }
+    if let sharingStateGeneration {
+      guard writePolicy.sharingStateGeneration == sharingStateGeneration else {
+        return writePolicy.snapshot.access
+      }
+      writePolicy.clearAccessAfterFailedSynchronization(
+        ifGenerationIsStill: sharingStateGeneration
+      )
+    } else {
+      writePolicy.clearAccessAfterFailedSynchronization()
+    }
+    return nil
   }
 
   func saveName(

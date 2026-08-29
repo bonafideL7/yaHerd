@@ -196,25 +196,40 @@ final class HerdSharingSyncCoordinator {
       PerformanceLog.logDuration("HerdSharingSyncCoordinator.refreshSharingAccessNow.\(trigger.displayName)", startedAt: performanceStartedAt)
     }
 
+    let sharingStateGeneration = writePolicy?.sharingStateGeneration
     do {
       let herd = try herdRepository.fetchCurrentHerd()
-      let access = try await sharingAccessForUnchangedCurrentHerd(herd)
+      let access = try await sharingAccessForUnchangedCurrentHerd(
+        herd,
+        sharingStateGeneration: sharingStateGeneration
+      )
       writePolicy?.update(access: access)
       lastAccessRefreshErrorMessage = nil
       return true
     } catch HerdSharingActionError.iCloudSyncRequired {
-      writePolicy?.clearAccessAfterFailedSynchronization()
+      clearWritePolicyIfGenerationIsStill(sharingStateGeneration)
       lastAccessRefreshErrorMessage = "Enable iCloud Sync to inspect CloudKit share permissions."
       return false
     } catch HerdSharingActionError.shareRootMissing {
-      writePolicy?.clearAccessAfterFailedSynchronization()
+      clearWritePolicyIfGenerationIsStill(sharingStateGeneration)
       lastAccessRefreshErrorMessage = "No Herd share root is available yet."
       return false
     } catch {
       ReliabilityLog.syncFailure("HerdSharingSyncCoordinator.refreshSharingAccessNow", trigger: trigger.displayName, error: error)
-      writePolicy?.clearAccessAfterFailedSynchronization()
+      clearWritePolicyIfGenerationIsStill(sharingStateGeneration)
       lastAccessRefreshErrorMessage = UserVisibleErrorMessage.syncFailed(error)
       return false
+    }
+  }
+
+  private func clearWritePolicyIfGenerationIsStill(_ sharingStateGeneration: UInt64?) {
+    guard let writePolicy else { return }
+    if let sharingStateGeneration {
+      writePolicy.clearAccessAfterFailedSynchronization(
+        ifGenerationIsStill: sharingStateGeneration
+      )
+    } else {
+      writePolicy.clearAccessAfterFailedSynchronization()
     }
   }
 
@@ -416,10 +431,15 @@ final class HerdSharingSyncCoordinator {
       }
     }
 
+    var writePolicyGenerationForFailure = writePolicy?.sharingStateGeneration
     do {
       let herd = try herdRepository.fetchCurrentHerd()
-      let access = try await sharingAccessForUnchangedCurrentHerd(herd)
+      let access = try await sharingAccessForUnchangedCurrentHerd(
+        herd,
+        sharingStateGeneration: writePolicyGenerationForFailure
+      )
       writePolicy?.update(access: access)
+      writePolicyGenerationForFailure = writePolicy?.sharingStateGeneration
       let result = try await SyncSharedHerdDataUseCase(repository: sharingRepository).execute(
         herd: herd,
         storageMode: storageMode
@@ -428,19 +448,17 @@ final class HerdSharingSyncCoordinator {
       recordConflictReview(result.conflictReview)
 
       if let writePolicy {
-        do {
-          // A pending accepted invitation can replace the current SwiftData Herd during import.
-          // Re-read the durable current Herd after sync before verifying access so a read-only
-          // participant relationship can never inherit the pre-import Herd's writable snapshot.
-          let refreshedHerd = try herdRepository.fetchCurrentHerd()
-          let refreshedAccess = try await sharingAccessForUnchangedCurrentHerd(
-            refreshedHerd
-          )
-          writePolicy.update(access: refreshedAccess)
-        } catch {
-          writePolicy.clearAccessAfterFailedSynchronization()
-          throw error
-        }
+        // A pending accepted invitation can replace the current SwiftData Herd during import.
+        // Re-read the durable current Herd after sync before verifying access so a read-only
+        // participant relationship can never inherit the pre-import Herd's writable snapshot.
+        let refreshedHerd = try herdRepository.fetchCurrentHerd()
+        let postSyncGeneration = writePolicy.sharingStateGeneration
+        writePolicyGenerationForFailure = postSyncGeneration
+        let refreshedAccess = try await sharingAccessForUnchangedCurrentHerd(
+          refreshedHerd,
+          sharingStateGeneration: postSyncGeneration
+        )
+        writePolicy.update(access: refreshedAccess)
       }
 
       lastSuccessMessage = "\(result.title): \(result.message)"
@@ -448,7 +466,7 @@ final class HerdSharingSyncCoordinator {
       lastErrorMessage = nil
       return true
     } catch {
-      writePolicy?.clearAccessAfterFailedSynchronization()
+      clearWritePolicyIfGenerationIsStill(writePolicyGenerationForFailure)
       ReliabilityLog.syncFailure("HerdSharingSyncCoordinator.performSync", trigger: trigger.displayName, error: error)
       lastErrorMessage = UserVisibleErrorMessage.syncFailed(error)
       lastSuccessMessage = nil
@@ -457,7 +475,8 @@ final class HerdSharingSyncCoordinator {
   }
 
   private func sharingAccessForUnchangedCurrentHerd(
-    _ herd: HerdSummary
+    _ herd: HerdSummary,
+    sharingStateGeneration: UInt64?
   ) async throws -> HerdSharingAccess {
     let access = try await sharingRepository.fetchSharingAccess(
       for: herd,
@@ -467,6 +486,13 @@ final class HerdSharingSyncCoordinator {
     guard durableHerd.publicID == herd.publicID else {
       throw HerdSharingActionError.bridgeImportRequiresAccessVerification(
         "The current Herd changed while CloudKit sharing access was being verified. The stale access result was discarded."
+      )
+    }
+    if let sharingStateGeneration,
+       writePolicy?.sharingStateGeneration != sharingStateGeneration
+    {
+      throw HerdSharingActionError.bridgeImportRequiresAccessVerification(
+        "CloudKit sharing state changed while access was being verified. The stale access result was discarded."
       )
     }
     return access

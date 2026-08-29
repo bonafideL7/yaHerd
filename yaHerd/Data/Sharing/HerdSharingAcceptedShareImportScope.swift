@@ -610,18 +610,24 @@ final class HerdSharingAcceptedShareImportScopeStore {
   private let storageKey: String
   private let participantReferenceStore: any HerdSharingAcceptedParticipantReferenceRecording
   private let currentAccountRecordNameProvider: @MainActor () async throws -> String
+  private let persistenceVerifier: (UserDefaults, String, Data) -> Bool
   private(set) var immediateImportScope: HerdSharingAcceptedShareImportScope?
 
   init(
     defaults: UserDefaults = .standard,
     storageKey: String = "HerdSharingAcceptedShareImportScopes.v1",
     participantReferenceStore: (any HerdSharingAcceptedParticipantReferenceRecording)? = nil,
-    currentAccountRecordNameProvider: (@MainActor () async throws -> String)? = nil
+    currentAccountRecordNameProvider: (@MainActor () async throws -> String)? = nil,
+    persistenceVerifier: ((UserDefaults, String, Data) -> Bool)? = nil
   ) {
     self.defaults = defaults
     self.storageKey = storageKey
     self.participantReferenceStore = participantReferenceStore
       ?? UserDefaultsHerdSharingAcceptedParticipantReferenceStore(defaults: defaults)
+    self.persistenceVerifier = persistenceVerifier ?? { defaults, key, expectedData in
+      _ = defaults.synchronize()
+      return defaults.data(forKey: key) == expectedData
+    }
     if let currentAccountRecordNameProvider {
       self.currentAccountRecordNameProvider = currentAccountRecordNameProvider
     } else {
@@ -669,15 +675,29 @@ final class HerdSharingAcceptedShareImportScopeStore {
 
     let backupKey = "\(storageKey).corrupt-backup-\(UUID().uuidString.lowercased())"
     defaults.set(corruptData, forKey: backupKey)
-    guard defaults.data(forKey: backupKey) == corruptData else {
+    guard persistenceVerifier(defaults, backupKey, corruptData) else {
       defaults.removeObject(forKey: backupKey)
       throw HerdSharingActionError.bridgeConsistencyFailed(
-        "The corrupt retained invitation state could not be backed up. The active recovery state was left unchanged."
+        "The corrupt retained invitation state could not be backed up durably. The active recovery state was left unchanged."
       )
     }
 
     defaults.set(backupKey, forKey: corruptRecoveryBackupPointerKey)
     defaults.set(true, forKey: corruptRecoveryPendingKey)
+    _ = defaults.synchronize()
+    guard defaults.data(forKey: backupKey) == corruptData,
+          defaults.string(forKey: corruptRecoveryBackupPointerKey) == backupKey,
+          defaults.object(forKey: corruptRecoveryPendingKey) != nil,
+          defaults.bool(forKey: corruptRecoveryPendingKey)
+    else {
+      defaults.removeObject(forKey: corruptRecoveryPendingKey)
+      defaults.removeObject(forKey: corruptRecoveryBackupPointerKey)
+      _ = defaults.synchronize()
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The corrupt retained invitation recovery markers did not survive durable storage read-back. The active corrupt scope remains in place and sharing stays blocked."
+      )
+    }
+
     defaults.removeObject(forKey: corruptRecoveryCandidateKey)
     defaults.removeObject(forKey: storageKey)
     immediateImportScope = nil
@@ -729,8 +749,6 @@ final class HerdSharingAcceptedShareImportScopeStore {
 
       if scope.acceptanceState == .legacyUnknown {
         if scope.ignoredParticipantAccountRecordNames.contains(accountRecordName) {
-          // This account already confirmed the account-less legacy root absent twice. Preserve
-          // the scope so another account can still recover it, but retire it as a blocker here.
           continue
         }
         matchingScopes.append(scope.bindingParticipantAccountForRecovery(accountRecordName))
@@ -746,9 +764,6 @@ final class HerdSharingAcceptedShareImportScopeStore {
   }
 
   func hasPendingScopeForCurrentAccount() async throws -> Bool {
-    // A recovery marker remains a write/share block after the corrupt bytes are moved aside. It is
-    // cleared only after the user explicitly confirms the same exact invitation identity twice or
-    // a scoped recovery completes.
     if hasCorruptRecoveryPending { return true }
     return !(try await pendingScopesForCurrentAccount()).isEmpty
   }
@@ -762,10 +777,10 @@ final class HerdSharingAcceptedShareImportScopeStore {
       if let candidate = corruptRecoveryCandidate(),
          Self.sameCorruptRecoveryCandidate(candidate, scope)
       {
+        try persistRecoverably([scope])
         defaults.removeObject(forKey: corruptRecoveryPendingKey)
         defaults.removeObject(forKey: corruptRecoveryBackupPointerKey)
         defaults.removeObject(forKey: corruptRecoveryCandidateKey)
-        persist([scope])
         immediateImportScope = scope
         return
       }
@@ -778,7 +793,7 @@ final class HerdSharingAcceptedShareImportScopeStore {
 
     var scopes = try pendingScopes().filter { !Self.sameScope($0, scope) }
     scopes.append(scope)
-    persist(scopes.sorted(by: Self.scopeSort))
+    try persistRecoverably(scopes.sorted(by: Self.scopeSort))
     immediateImportScope = scope
   }
 
@@ -867,6 +882,30 @@ final class HerdSharingAcceptedShareImportScopeStore {
     }
   }
 
+  func removeRecoverably(_ scope: HerdSharingAcceptedShareImportScope) throws {
+    let scopes = try pendingScopes()
+    let remainingScopes = scopes.filter { !Self.sameScope($0, scope) }
+    guard remainingScopes.count != scopes.count else {
+      if let immediateImportScope, Self.sameScope(immediateImportScope, scope) {
+        self.immediateImportScope = nil
+      }
+      return
+    }
+
+    do {
+      try persistRecoverably(remainingScopes.sorted(by: Self.scopeSort))
+    } catch {
+      // The import may already have committed. Restore the prior blocking scope in this process
+      // before propagating the persistence failure so an unverified retirement cannot fail open.
+      try? persistRecoverably(scopes.sorted(by: Self.scopeSort))
+      throw error
+    }
+
+    if let immediateImportScope, Self.sameScope(immediateImportScope, scope) {
+      self.immediateImportScope = nil
+    }
+  }
+
   private func update(
     _ scope: HerdSharingAcceptedShareImportScope,
     transform: (HerdSharingAcceptedShareImportScope) -> HerdSharingAcceptedShareImportScope
@@ -891,6 +930,24 @@ final class HerdSharingAcceptedShareImportScopeStore {
     }
     guard let data = try? JSONEncoder().encode(scopes) else { return }
     defaults.set(data, forKey: storageKey)
+  }
+
+  private func persistRecoverably(_ scopes: [HerdSharingAcceptedShareImportScope]) throws {
+    let data: Data
+    do {
+      data = try JSONEncoder().encode(scopes)
+    } catch {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The exact CloudKit invitation recovery scope could not be encoded."
+      )
+    }
+
+    defaults.set(data, forKey: storageKey)
+    guard persistenceVerifier(defaults, storageKey, data) else {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The exact CloudKit invitation recovery scope did not survive durable storage read-back."
+      )
+    }
   }
 
   private func corruptRecoveryCandidate() -> HerdSharingAcceptedShareImportScope? {
