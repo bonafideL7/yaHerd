@@ -41,6 +41,7 @@ final class HerdCollaborationWritePolicy {
   private var access: HerdSharingAccess?
   private var requiresVerifiedAccessBeforeWrite: Bool
   private var accessRefreshRequestHandler: ((SharedDataMutationReason) -> Void)?
+  private(set) var sharingStateGeneration: UInt64 = 0
   private var lastAccessRefreshRequestedAt: Date?
   private(set) var lastUpdatedAt: Date?
   private(set) var lastBlockedMutationReason: SharedDataMutationReason?
@@ -70,6 +71,7 @@ final class HerdCollaborationWritePolicy {
   var dataMutationGate: HerdDataMutationGate { mutationGate }
 
   func update(access: HerdSharingAccess) {
+    sharingStateGeneration &+= 1
     self.access = access
     requiresVerifiedAccessBeforeWrite = false
     lastUpdatedAt = .now
@@ -94,7 +96,13 @@ final class HerdCollaborationWritePolicy {
     clearAccess(requiresVerificationBeforeWrite: true)
   }
 
+  func clearAccessAfterFailedSynchronization(ifGenerationIsStill generation: UInt64) {
+    guard sharingStateGeneration == generation else { return }
+    clearAccessAfterFailedSynchronization()
+  }
+
   private func clearAccess(requiresVerificationBeforeWrite: Bool) {
+    sharingStateGeneration &+= 1
     access = nil
     requiresVerifiedAccessBeforeWrite = requiresVerificationBeforeWrite
     lastUpdatedAt = .now

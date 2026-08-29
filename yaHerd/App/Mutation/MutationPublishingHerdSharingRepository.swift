@@ -102,9 +102,6 @@ final class MutationPublishingHerdSharingRepository: HerdSharingRepository {
             for: herd,
             storageMode: storageMode
         )
-        if gatedAccess.creationState == .ownerStopCleanupPending {
-            writePolicy?.clearAccessAfterFailedSynchronization()
-        }
         return gatedAccess
     }
 
@@ -187,23 +184,27 @@ final class MutationPublishingHerdSharingRepository: HerdSharingRepository {
 
     func acceptShareInvitation(_ invitation: HerdShareInvitation, storageMode: HerdStorageMode) async throws -> HerdSharingActionResult {
         try requireNoPendingOwnerStopCleanupForCurrentHerd(storageMode: storageMode)
+
+        let preAcceptanceHerd: HerdSummary?
+        if storageMode == .iCloud, let herdRepository {
+            preAcceptanceHerd = try? herdRepository.fetchCurrentHerd()
+        } else {
+            preAcceptanceHerd = nil
+        }
+        let invalidatedGeneration = invalidateWritePolicyForAcceptedInvitationTransition(
+            storageMode: storageMode
+        )
+
         do {
             let result = try await base.acceptShareInvitation(invitation, storageMode: storageMode)
-            invalidateWritePolicyAfterAcceptedInvitationCommit(storageMode: storageMode)
             mutationCenter.recordSharedStoreImport()
             return result
         } catch {
-            if let actionError = error as? HerdSharingActionError {
-                switch actionError {
-                case .bridgeImportRequiresAccessVerification, .bridgeConsistencyFailed:
-                    // Invitation acceptance may commit a durable import/recovery gate before
-                    // reporting either error. Never retain writable authority from before that
-                    // commit; a later authoritative refresh can restore access if nothing changed.
-                    invalidateWritePolicyAfterAcceptedInvitationCommit(storageMode: storageMode)
-                default:
-                    break
-                }
-            }
+            await refreshWritePolicyAfterFailedSharedBridgeOperation(
+                herd: preAcceptanceHerd,
+                storageMode: storageMode,
+                alreadyInvalidatedGeneration: invalidatedGeneration
+            )
             throw error
         }
     }
@@ -307,11 +308,12 @@ final class MutationPublishingHerdSharingRepository: HerdSharingRepository {
         )
     }
 
-    private func invalidateWritePolicyAfterAcceptedInvitationCommit(
+    private func invalidateWritePolicyForAcceptedInvitationTransition(
         storageMode: HerdStorageMode
-    ) {
-        guard storageMode == .iCloud, let writePolicy else { return }
+    ) -> UInt64? {
+        guard storageMode == .iCloud, let writePolicy else { return nil }
         writePolicy.clearAccessAfterFailedSynchronization()
+        return writePolicy.sharingStateGeneration
     }
 
     private func installOwnerShareStopObserver(
@@ -448,14 +450,22 @@ final class MutationPublishingHerdSharingRepository: HerdSharingRepository {
 
     private func refreshWritePolicyAfterFailedSharedBridgeOperation(
         herd: HerdSummary?,
-        storageMode: HerdStorageMode
+        storageMode: HerdStorageMode,
+        alreadyInvalidatedGeneration: UInt64? = nil
     ) async {
         guard storageMode == .iCloud, let writePolicy else { return }
 
-        // A failed bridge operation may already have committed sharing state or replaced the
-        // current Herd before throwing. Block writes before any recovery read so stale
-        // pre-operation access can never remain writable while durable state is re-established.
-        writePolicy.clearAccessAfterFailedSynchronization()
+        let recoveryGeneration: UInt64
+        if let alreadyInvalidatedGeneration {
+            guard writePolicy.sharingStateGeneration == alreadyInvalidatedGeneration else { return }
+            recoveryGeneration = alreadyInvalidatedGeneration
+        } else {
+            // A failed bridge operation may already have committed sharing state or replaced the
+            // current Herd before throwing. Block writes before any recovery read so stale
+            // pre-operation access can never remain writable while durable state is re-established.
+            writePolicy.clearAccessAfterFailedSynchronization()
+            recoveryGeneration = writePolicy.sharingStateGeneration
+        }
 
         do {
             let accessHerd: HerdSummary
@@ -486,12 +496,13 @@ final class MutationPublishingHerdSharingRepository: HerdSharingRepository {
                 let durableHerd = try herdRepository.fetchCurrentHerd()
                 guard durableHerd.publicID == accessHerd.publicID else { return }
             }
+            guard writePolicy.sharingStateGeneration == recoveryGeneration else { return }
             guard canPublishWritableAccess || !access.allowsLocalMutations else { return }
             writePolicy.update(access: access)
         } catch {
-            // The policy was invalidated before the refresh began. Keep it verification-required
-            // when the durable Herd or authoritative sharing access cannot be re-read.
-            writePolicy.clearAccessAfterFailedSynchronization()
+            // The existing invalidation already established a fail-closed policy. If another
+            // sharing transition advanced the generation while this recovery read was suspended,
+            // preserve that newer state rather than invalidating or replacing it here.
         }
     }
 
