@@ -345,15 +345,16 @@ extension HerdSharingCoreDataStore: PublicIDRepairBridgeStore {
       )
 
     case .acceptedSharedStore:
-      guard let sharedStore, let sharedRecord, privateRecord == nil else {
+      guard let sharedStore, sharedRecord != nil, privateRecord == nil else {
         throw HerdSharingPublicIDRepairBridgeError.targetChanged(
           expected: "accepted shared store",
           actual: actualDescription
         )
       }
-      let share = try existingShare(for: sharedRecord)
-      let permission = share.map { sharingPermission(from: $0) } ?? .unknown
-      guard permission == .readWrite || permission == .owner else {
+      let verifiedAccess = try await fetchSharingAccess(for: herd)
+      guard verifiedAccess.bridgeLocation == .acceptedSharedStore,
+            verifiedAccess.permission == .readWrite
+      else {
         throw HerdSharingActionError.readOnlyShareCannotWrite
       }
       target = PublicIDRepairResolvedBridgeTarget(

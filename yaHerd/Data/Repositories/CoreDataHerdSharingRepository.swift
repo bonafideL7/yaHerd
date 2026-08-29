@@ -19,7 +19,6 @@ protocol HerdSharingBridgeSyncStore: AnyObject {
   func syncBridgeRecordsFromSnapshot(
     _ export: HerdSharingSwiftDataExport
   ) async throws -> HerdSharingBridgeExportResult
-
 }
 
 extension HerdSharingCoreDataStore: HerdSharingBridgeSyncStore {}
@@ -195,7 +194,9 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     defer { operationGate.release() }
 
     let importResult: HerdSharingBridgeImportResult
-    if let herd {
+    if try await store.hasPendingAcceptedShareImportScope() {
+      importResult = try await store.importSharedRecordsIntoSwiftData(importer: swiftDataImporter)
+    } else if let herd {
       let access = try await syncStore.fetchSharingAccess(for: herd)
       importResult = try await syncStore.importBridgeRecordsIntoSwiftData(
         for: herd,
@@ -303,14 +304,27 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
     await operationGate.acquire()
     defer { operationGate.release() }
 
+    if try await store.hasPendingAcceptedShareImportScope() {
+      let importResult = try await store.importSharedRecordsIntoSwiftData(importer: swiftDataImporter)
+      return HerdSharingActionResult(
+        title: "Accepted invitation imported",
+        message:
+          "Resumed the pending CloudKit invitation and imported shared bridge records for \(importResult.herdName) before binding synchronization to \(herd.name). No local export was attempted during invitation recovery. Conflict report: \(importResult.conflictSummary) Reconciliation: \(importResult.reconciliationSummary)",
+        conflictReview: makeConflictReview(
+          from: importResult,
+          sourceDescription: "Pending invitation recovery"
+        ),
+        reconciliationReview: makeReconciliationReview(
+          from: importResult.reconciliationReport
+        )
+      )
+    }
+
     let access = try await syncStore.fetchSharingAccess(for: herd)
     guard access.canExportLocalChangesToBridge else {
       return try await importOnlySyncResult(herd: herd, access: access)
     }
 
-    // Any existing shared bridge record must be imported before SwiftData snapshots are fetched.
-    // Owner shares live in the private bridge store, while accepted shares live in the shared
-    // bridge store. Exporting first can overwrite collaborator changes in either location.
     let importResult: HerdSharingBridgeImportResult?
     if access.bridgeLocation == .bridgeRecordMissing {
       importResult = nil
@@ -477,6 +491,4 @@ final class CoreDataHerdSharingRepository: HerdSharingRepository {
       }
     )
   }
-
-
 }

@@ -1,3 +1,4 @@
+import Foundation
 import SwiftData
 
 @MainActor
@@ -59,10 +60,17 @@ final class AppDependencies {
         let mutationGate = HerdDataMutationGate()
         let writePolicy = HerdCollaborationWritePolicy(
             dataAccessMode: dataAccessMode,
-            mutationGate: mutationGate
+            mutationGate: mutationGate,
+            requiresInitialAccessVerification: resolvedStorageMode == .iCloud
+                && dataAccessMode.allowsDataMutations
         )
         let conflictReviewStore = HerdSharingConflictReviewStore()
         let cloudKitShareAdapter = CloudKitShareAdapter()
+        let ownerShareReferenceStore = MirroredHerdSharingOwnerShareReferenceStore()
+        let observedOwnerShareReferenceStore = HerdSharingObservedOwnerShareReferenceStore()
+        let remoteOwnerShareVerifier = CloudKitHerdSharingRemoteOwnerShareVerifier()
+        let participantOwnershipRegistry = MirroredHerdSharingOwnershipRegistry()
+        let acceptedParticipantReferenceStore = MirroredHerdSharingAcceptedParticipantReferenceStore()
 
         // Each read model actor owns its own ModelContext. Separate actors allow
         // independent home queries to run concurrently instead of serializing on
@@ -126,29 +134,105 @@ final class AppDependencies {
         } else {
             baseHerdSharingRepository = DeferredCoreDataHerdSharingRepository(
                 context: context,
-                shareAdapter: cloudKitShareAdapter
+                shareAdapter: cloudKitShareAdapter,
+                ownershipRegistry: participantOwnershipRegistry,
+                acceptedParticipantReferenceStore: acceptedParticipantReferenceStore,
+                newOwnerShareRemoteVerifier: remoteOwnerShareVerifier,
+                existingOwnerShareReferenceRecorder: { systemShare, herdPublicID in
+                    let share = systemShare.share
+                    let zoneID = share.recordID.zoneID
+                    observedOwnerShareReferenceStore.record(
+                        HerdSharingRemoteOwnerShareReference(
+                            shareURL: share.url,
+                            shareIdentifier: share.recordID.recordName,
+                            shareRecordZoneName: zoneID.zoneName,
+                            shareRecordOwnerName: zoneID.ownerName,
+                            shareOwnerAccountRecordName: share.currentUserParticipant?.userIdentity.userRecordID?.recordName
+                        ),
+                        for: herdPublicID
+                    )
+                },
+                discardedOwnerShareReferenceCleanup: { herdPublicID in
+                    ownerShareReferenceStore.clearReference(for: herdPublicID)
+                    observedOwnerShareReferenceStore.clearReference(for: herdPublicID)
+                },
+                unresolvedOwnerShareResumePreflight: { herdPublicID in
+                    try await HerdSharingOwnerShareProvenance.verifyRecordedShareIsAbsent(
+                        for: herdPublicID,
+                        referenceStore: ownerShareReferenceStore,
+                        remoteVerifier: remoteOwnerShareVerifier
+                    )
+                },
+                ownerSharePreparation: { result, herdPublicID in
+                    guard let presentation = result.sharePresentation,
+                          HerdSharingOwnerShareProvenance.recordPresentationReferenceIfVerifiable(
+                            presentation,
+                            herdPublicID: herdPublicID,
+                            referenceStore: ownerShareReferenceStore
+                          )
+                    else {
+                        throw HerdSharingActionError.bridgeConsistencyFailed(
+                            "Owner-share creation did not expose an exact CloudKit URL or record-zone identity. The owner-share provenance marker was not committed."
+                        )
+                    }
+                }
             )
         }
         let gatedHerdSharingRepository = GatedHerdSharingRepository(
             base: baseHerdSharingRepository,
-            mutationGate: mutationGate
+            mutationGate: mutationGate,
+            ownerShareReferenceStore: ownerShareReferenceStore,
+            remoteOwnerShareVerifier: remoteOwnerShareVerifier,
+            acceptedParticipantReferenceStore: acceptedParticipantReferenceStore,
+            observedOwnerShareReferenceProvider: { herdPublicID in
+                observedOwnerShareReferenceStore.reference(for: herdPublicID)
+            },
+            savedOwnerShareObserverInstaller: { request, recorder in
+                guard let systemShare = cloudKitShareAdapter.systemShare(for: request) else {
+                    return false
+                }
+                systemShare.observePersistedShare { shareURL, shareIdentifier in
+                    recorder.record(
+                        shareURL: shareURL,
+                        shareIdentifier: shareIdentifier
+                    )
+                }
+                return true
+            }
         )
         let herdSharingRepository = MutationPublishingHerdSharingRepository(
             base: gatedHerdSharingRepository,
-            mutationCenter: mutationCenter
+            mutationCenter: mutationCenter,
+            writePolicy: writePolicy,
+            herdRepository: herdRepository,
+            ownerShareSystemShareResolver: { request in
+                cloudKitShareAdapter.systemShare(for: request)
+            }
         )
 
         let bridgeCoordinator: any PublicIDRepairBridgeCoordinating
         if resolvedStorageMode == .iCloud && dataAccessMode.allowsDataMutations {
+            // Repair preparation must observe the physical Core Data bridge without requiring a
+            // unique/healthy SwiftData Herd graph first. Reuse this repair-specific store for both
+            // read-only access observation and ownership-safe convergence so both phases inspect
+            // the same bridge state. Mutation authority is fetched independently through the
+            // normal guarded sharing repository immediately before repair can change either graph.
+            let publicIDRepairBridgeStore = HerdSharingCoreDataStore()
+            let publicIDRepairObservationRepository = PublicIDRepairBridgeObservationRepository(
+                accessReader: publicIDRepairBridgeStore
+            )
             bridgeCoordinator = DefaultPublicIDRepairBridgeCoordinator(
                 herdInventory: SwiftDataPublicIDRepairHerdInventory(
                     modelContainer: modelContainer
                 ),
-                sharingRepository: baseHerdSharingRepository,
+                sharingRepository: publicIDRepairObservationRepository,
+                mutationAuthorityRepository: herdSharingRepository,
                 storageMode: resolvedStorageMode,
                 exporter: SwiftDataPublicIDRepairBridgeExporter(
                     modelContainer: modelContainer,
-                    bridgeStore: PublicIDRepairOwnershipSafeBridgeStore()
+                    bridgeStore: PublicIDRepairOwnershipSafeBridgeStore(
+                        base: publicIDRepairBridgeStore
+                    )
                 )
             )
         } else {
@@ -228,5 +312,77 @@ final class AppDependencies {
         return AppLaunchDiagnostics.snapshot().actualStorageMode == .iCloud
             ? .iCloud
             : .localOnly
+    }
+}
+
+@MainActor
+final class HerdSharingObservedOwnerShareReferenceStore {
+    private var references: [UUID: HerdSharingRemoteOwnerShareReference] = [:]
+
+    func reference(for herdPublicID: UUID) -> HerdSharingRemoteOwnerShareReference? {
+        references[herdPublicID]
+    }
+
+    func record(
+        _ reference: HerdSharingRemoteOwnerShareReference,
+        for herdPublicID: UUID
+    ) {
+        references[herdPublicID] = reference
+    }
+
+    func clearReference(for herdPublicID: UUID) {
+        references.removeValue(forKey: herdPublicID)
+    }
+}
+
+@MainActor
+enum HerdSharingExistingOwnerShareBackfill {
+    static func recordObservedReference(
+        _ observed: HerdSharingRemoteOwnerShareReference,
+        for herdPublicID: UUID,
+        referenceStore: any HerdSharingOwnerShareReferenceRecording
+    ) throws {
+        guard observed.hasVerifiableLocator,
+              observed.shareOwnerAccountRecordName != nil
+        else {
+            throw HerdSharingActionError.bridgeConsistencyFailed(
+                "The existing owner share did not expose both an originating iCloud account identity and a verifiable CloudKit URL or record-zone identity. Owner-share provenance was not committed."
+            )
+        }
+
+        let existing: HerdSharingRemoteOwnerShareReference?
+        do {
+            existing = try referenceStore.recoverableReference(for: herdPublicID)
+        } catch let error as HerdSharingActionError {
+            guard case .bridgeConsistencyFailed = error,
+                  referenceStore.hasBackedUpUnusableReference(for: herdPublicID)
+            else {
+                throw error
+            }
+            try referenceStore.recordRecoverably(observed, for: herdPublicID)
+            return
+        }
+
+        if let existing,
+           sameExactIdentity(existing, observed),
+           existing.shareURL != nil,
+           observed.shareURL == nil
+        {
+            // The saved URL is a stronger locator than a provisional observation of the same exact
+            // CKShare. Preserve it rather than downgrading provenance during an access refresh.
+            return
+        }
+
+        try referenceStore.recordRecoverably(observed, for: herdPublicID)
+    }
+
+    static func sameExactIdentity(
+        _ lhs: HerdSharingRemoteOwnerShareReference,
+        _ rhs: HerdSharingRemoteOwnerShareReference
+    ) -> Bool {
+        lhs.shareIdentifier == rhs.shareIdentifier
+            && lhs.shareRecordZoneName == rhs.shareRecordZoneName
+            && lhs.shareRecordOwnerName == rhs.shareRecordOwnerName
+            && lhs.shareOwnerAccountRecordName == rhs.shareOwnerAccountRecordName
     }
 }

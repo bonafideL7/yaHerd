@@ -47,24 +47,6 @@ extension HerdSharingCoreDataStore {
     return shares[record.objectID]
   }
 
-  func sharingPermission(from share: CKShare) -> HerdSharingAccess.Permission {
-    guard let currentUserParticipant = share.currentUserParticipant else {
-      return .unknown
-    }
-    registerCurrentParticipant(from: currentUserParticipant)
-
-    switch currentUserParticipant.permission {
-    case .readOnly:
-      return .readOnly
-    case .readWrite:
-      return .readWrite
-    case .unknown, .none:
-      return .unknown
-    @unknown default:
-      return .unknown
-    }
-  }
-
   func persistUpdatedShare(_ share: CKShare) async {
     guard let privateStore else { return }
 
@@ -78,15 +60,27 @@ extension HerdSharingCoreDataStore {
     }
   }
 
-  func purgeStoppedShare(_ share: CKShare) async {
-    guard let privateStore else { return }
+  func purgeStoppedShare(_ share: CKShare) async throws {
+    guard let privateStore else {
+      throw HerdSharingActionError.sharingStoreUnavailable(
+        "The private owner bridge store was unavailable while finishing Stop Sharing. Local sharing state remains blocked until access is refreshed."
+      )
+    }
 
-    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       persistentContainer.purgeObjectsAndRecordsInZone(
         with: share.recordID.zoneID,
         in: privateStore
-      ) { _, _ in
-        continuation.resume()
+      ) { _, error in
+        if let error {
+          continuation.resume(
+            throwing: HerdSharingActionError.cloudKitSharingFailed(
+              "The system share stopped, but the local owner bridge could not be purged: \(error.localizedDescription)"
+            )
+          )
+          return
+        }
+        continuation.resume(returning: ())
       }
     }
   }

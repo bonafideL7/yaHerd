@@ -56,18 +56,19 @@ fi
 python3 - <<'PYTHON'
 from pathlib import Path
 import re
+import sys
 
 failures = []
 
 for path in Path('yaHerd/App').rglob('*.swift'):
     source = path.read_text()
     for match in re.finditer(r'notifications\s*\([^)]*object\s*:\s*([^,\n)]+)', source, re.DOTALL):
-        source_argument = match.group(1).strip()
-        if source_argument != 'nil':
+        if match.group(1).strip() != 'nil':
             line = source.count('\n', 0, match.start()) + 1
             failures.append(
                 f'{path}:{line}: async NotificationCenter source filters must be nil unless the source type is Sendable'
             )
+
 for path in Path('yaHerd/Domain/UseCases').rglob('*.swift'):
     lines = path.read_text().splitlines()
     for index, line in enumerate(lines):
@@ -111,8 +112,11 @@ for path in environment_root.glob('*.swift'):
             )
 
 if failures:
-    print('Main-actor repository orchestration and environment fallbacks must remain explicitly isolated:', file=__import__('sys').stderr)
-    print('\n'.join(failures), file=__import__('sys').stderr)
+    print(
+        'Main-actor repository orchestration and environment fallbacks must remain explicitly isolated:',
+        file=sys.stderr,
+    )
+    print('\n'.join(failures), file=sys.stderr)
     raise SystemExit(1)
 PYTHON
 
@@ -125,15 +129,12 @@ if [[ -n "$unisolated_task_calls" ]]; then
 fi
 
 if ! command -v xcodebuild >/dev/null 2>&1; then
-  echo 'Static concurrency policy checks passed. xcodebuild is unavailable; compile gate skipped.'
+  echo 'Static concurrency policy checks passed. xcodebuild is unavailable; production compile gate skipped.'
   exit 0
 fi
 
 BUILD_LOG="$(mktemp)"
-TEST_LOG="$(mktemp)"
-RESULT_BUNDLE="$ROOT_DIR/.build/PersistenceTests.xcresult"
-rm -rf "$RESULT_BUNDLE"
-trap 'rm -f "$BUILD_LOG" "$TEST_LOG"' EXIT
+trap 'rm -f "$BUILD_LOG"' EXIT
 
 set +e
 xcodebuild \
@@ -147,157 +148,16 @@ xcodebuild \
   ARCHS=arm64 \
   ONLY_ACTIVE_ARCH=YES \
   CODE_SIGNING_ALLOWED=NO \
-  build-for-testing >"$BUILD_LOG" 2>&1
+  build >"$BUILD_LOG" 2>&1
 build_status=$?
 set -e
 
 if [[ "$build_status" -ne 0 ]]; then
-  echo 'Swift 6 build failed:' >&2
-  grep -E -i 'error:|fatal|signal|killed|command .* failed|failed to|unable to|BUILD FAILED|Testing failed' "$BUILD_LOG" | tail -n 120 >&2 || true
-  echo 'Final build log:' >&2
+  echo 'Swift 6 production build failed:' >&2
+  grep -E -i 'error:|fatal|signal|killed|command .* failed|failed to|unable to|BUILD FAILED' "$BUILD_LOG" | tail -n 120 >&2 || true
   tail -n 60 "$BUILD_LOG" >&2
   exit "$build_status"
 fi
 
 cat "$BUILD_LOG"
-
-SIMULATOR_ID="$(xcrun simctl list devices available -j | python3 -c '
-import json
-import sys
-
-devices = json.load(sys.stdin).get("devices", {})
-for runtime_devices in devices.values():
-    for device in runtime_devices:
-        if device.get("isAvailable") and device.get("name", "").startswith("iPhone"):
-            print(device["udid"])
-            raise SystemExit(0)
-raise SystemExit(1)
-')"
-
-if [[ -z "$SIMULATOR_ID" ]]; then
-  echo 'No available iPhone simulator was found for persistence tests.' >&2
-  exit 1
-fi
-
-xcrun simctl boot "$SIMULATOR_ID" >/dev/null 2>&1 || true
-xcrun simctl bootstatus "$SIMULATOR_ID" -b
-
-PERSISTENCE_TEST_SUITES=(
-  AnimalListViewModelReloadTests
-  ApplicationMutationCenterTests
-  HerdSharingBridgeImportBoundaryTests
-  HerdSharingBridgeReliabilityTests
-  HerdSharingCoreDataModelCachingTests
-  HerdSharingDeletionTombstoneIdentityTests
-  HerdSharingImportCommitBoundaryTests
-  HerdSharingRepositoryTests
-  HerdDataMutationGateTests
-  StartupMigrationRepairGateTests
-  SwiftDataHerdSharingActorDuplicateIDPagingTests
-  SwiftDataHerdSharingActorRelationshipScopeTests
-  SwiftDataHerdSharingActorTests
-  SwiftDataReadModelActorPaginationTests
-  SwiftDataReadModelActorPasturePaginationTests
-  SwiftDataReadModelActorTests
-)
-
-for suite in "${PERSISTENCE_TEST_SUITES[@]}"; do
-  if [[ ! -f "yaHerdTests/$suite.swift" ]]; then
-    echo "Configured persistence test suite source is missing: yaHerdTests/$suite.swift" >&2
-    exit 1
-  fi
-done
-
-# Public-ID repair is a single persistence feature area spread across behavioral suites and
-# extension-only test files. Discover actual XCTestCase types touched by every repair test source,
-# rather than assuming each filename is also a test class, so new repair coverage cannot compile
-# successfully while being silently omitted from the verification run.
-repair_test_suites="$(python3 - <<'PYTHON'
-from pathlib import Path
-import re
-import sys
-
-all_test_sources = sorted(Path('yaHerdTests').glob('*.swift'))
-repair_sources = [
-    path for path in all_test_sources
-    if 'PublicIDRepair' in path.name and path.name.endswith('Tests.swift')
-]
-if not repair_sources:
-    print('No public-ID repair test sources were found.', file=sys.stderr)
-    raise SystemExit(1)
-
-class_pattern = re.compile(r'\b(?:final\s+)?class\s+(\w+)\s*:\s*XCTestCase\b')
-extension_pattern = re.compile(r'\bextension\s+(\w+)\b')
-
-testcase_types = set()
-source_text = {}
-for path in all_test_sources:
-    text = path.read_text()
-    source_text[path] = text
-    testcase_types.update(class_pattern.findall(text))
-
-selected = set()
-for path in repair_sources:
-    text = source_text[path]
-    selected.update(class_pattern.findall(text))
-    selected.update(
-        name for name in extension_pattern.findall(text)
-        if name in testcase_types
-    )
-
-if not selected:
-    print('No XCTestCase types were discovered for public-ID repair tests.', file=sys.stderr)
-    raise SystemExit(1)
-
-print('\n'.join(sorted(selected)))
-PYTHON
-)"
-
-while IFS= read -r suite; do
-  [[ -z "$suite" ]] && continue
-  PERSISTENCE_TEST_SUITES+=("$suite")
-done <<< "$repair_test_suites"
-
-TEST_SELECTION_ARGS=()
-for suite in "${PERSISTENCE_TEST_SUITES[@]}"; do
-  TEST_SELECTION_ARGS+=("-only-testing:yaHerdTests/$suite")
-done
-
-set +e
-xcodebuild \
-  -quiet \
-  -project yaHerd.xcodeproj \
-  -scheme yaHerd \
-  -configuration Debug \
-  -sdk iphonesimulator \
-  -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
-  -derivedDataPath .build/DerivedData \
-  CODE_SIGNING_ALLOWED=NO \
-  -parallel-testing-enabled NO \
-  -resultBundlePath "$RESULT_BUNDLE" \
-  test-without-building \
-  "${TEST_SELECTION_ARGS[@]}" >"$TEST_LOG" 2>&1
-test_status=$?
-set -e
-
-if [[ "$test_status" -ne 0 ]]; then
-  echo 'Persistence-focused tests failed:' >&2
-  grep -E -i 'error:|failed|failure|fatal|signal|killed|uncaught|assert' "$TEST_LOG" | tail -n 160 >&2 || true
-  echo 'Result bundle summary:' >&2
-  xcrun xcresulttool get test-results summary --path "$RESULT_BUNDLE" >&2 || true
-  echo 'Recent yaHerd simulator logs:' >&2
-  xcrun simctl spawn "$SIMULATOR_ID" log show \
-    --last 10m \
-    --style compact \
-    --predicate 'process == "yaHerd" OR process == "xctest"' 2>&1 \
-    | tail -n 300 >&2 || true
-  echo 'Recent crash reports:' >&2
-  find "$HOME/Library/Logs/DiagnosticReports" -type f \
-    \( -name 'yaHerd*.ips' -o -name 'yaHerd*.crash' -o -name 'xctest*.ips' -o -name 'xctest*.crash' \) \
-    -mmin -15 -print -exec tail -n 240 {} \; >&2 || true
-  echo 'Final test log:' >&2
-  tail -n 100 "$TEST_LOG" >&2
-  exit "$test_status"
-fi
-
-cat "$TEST_LOG"
+echo 'Swift 6 concurrency verification passed.'

@@ -47,12 +47,16 @@ final class CloudKitShareAdapter {
   func registerSystemShare(_ systemShare: CloudKitSystemShare) -> HerdSharePresentationRequest {
     let token = HerdShareToken()
     systemSharesByToken[token] = systemShare
+    let zoneID = systemShare.share.recordID.zoneID
 
     return HerdSharePresentationRequest(
       token: token,
       title: systemShare.title,
       shareIdentifier: systemShare.share.recordID.recordName,
-      shareURL: systemShare.share.url
+      shareURL: systemShare.share.url,
+      shareRecordZoneName: zoneID.zoneName,
+      shareRecordOwnerName: zoneID.ownerName,
+      shareOwnerAccountRecordName: systemShare.share.currentUserParticipant?.userIdentity.userRecordID?.recordName
     )
   }
 

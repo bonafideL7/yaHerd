@@ -1,56 +1,87 @@
-name: Swift 6 Concurrency
+name: yaHerd Verification
+
+run-name: >-
+  Verification · ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
 
 on:
+  workflow_dispatch:
+    inputs:
+      run_architecture:
+        description: Run repository architecture checks
+        required: true
+        type: boolean
+        default: true
+      run_concurrency:
+        description: Run Swift 6 concurrency checks and production build
+        required: true
+        type: boolean
+        default: true
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-  push:
-    branches:
-      - main
+    types: [ready_for_review]
 
 jobs:
-  strict-concurrency:
+  verify:
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
-      - name: Check out repository
+      - name: Validate verification selection
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.run_architecture }}" != "true" && "${{ inputs.run_concurrency }}" != "true" ]]; then
+            echo "Select at least one verification option." >&2
+            exit 1
+          fi
+
+      - name: Check out exact verification commit
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           git init -q .
           git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git -c protocol.version=2 fetch -q --no-tags --depth=1 origin "${GITHUB_REF}"
+
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            TARGET_REF="refs/heads/${GITHUB_HEAD_REF}"
+          else
+            TARGET_REF="${GITHUB_REF}"
+          fi
+
+          git -c protocol.version=2 fetch -q --no-tags --depth=1 origin "${TARGET_REF}"
           git checkout -q --force FETCH_HEAD
 
-      - name: Validate architecture and Swift 6 build
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          echo "Verifying commit ${ACTUAL_SHA} from ${TARGET_REF}"
+          if [[ "${ACTUAL_SHA}" != "${EXPECTED_SHA}" ]]; then
+            echo "Checked-out commit ${ACTUAL_SHA} does not match expected verification commit ${EXPECTED_SHA}." >&2
+            exit 1
+          fi
+
+      - name: Select Xcode 26
+        if: ${{ github.event_name == 'pull_request' || inputs.run_concurrency }}
         shell: bash
         run: |
           set -euo pipefail
           XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' -print | sort -V | tail -1)"
           if [[ -z "$XCODE_PATH" ]]; then
-            echo "Xcode 26 is required for the iOS 26 target and Swift 6 concurrency gate." >&2
+            echo "Xcode 26 is required for the iOS 26 target and Swift 6 verification." >&2
             exit 1
           fi
           sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
-          bash Scripts/verify-architecture.sh
-          bash Scripts/verify-concurrency.sh
+          xcodebuild -version
 
-      - name: Collect persistence test diagnostics
-        if: failure()
+      - name: Verify architecture
+        if: ${{ github.event_name == 'pull_request' || inputs.run_architecture }}
         shell: bash
         run: |
-          mkdir -p .build/PersistenceDiagnostics
-          if [[ -d .build/PersistenceTests.xcresult ]]; then
-            cp -R .build/PersistenceTests.xcresult .build/PersistenceDiagnostics/
-          fi
-          find "$HOME/Library/Logs/DiagnosticReports" -type f \
-            \( -name 'yaHerd*.ips' -o -name 'yaHerd*.crash' -o -name 'xctest*.ips' -o -name 'xctest*.crash' \) \
-            -mmin -30 -exec cp {} .build/PersistenceDiagnostics/ \; || true
+          set -euo pipefail
+          bash Scripts/verify-architecture.sh
 
-      - name: Upload persistence test diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: persistence-test-diagnostics
-          path: .build/PersistenceDiagnostics
-          retention-days: 3
-          if-no-files-found: warn
+      - name: Verify Swift 6 concurrency and production build
+        if: ${{ github.event_name == 'pull_request' || inputs.run_concurrency }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash Scripts/verify-concurrency.sh

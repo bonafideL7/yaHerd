@@ -127,7 +127,17 @@ extension YaHerdSchemaV1 {
         var baseRevision: Int = 0
         var baseFieldValuesData: Data?
         var currentFieldValuesData: Data?
-        var isDeleted: Bool = false
+        // `PersistentModel.isDeleted` is SwiftData lifecycle state and cannot store
+        // collaboration tombstones. Keep the revision tombstone in its own attribute.
+        var deletionTombstone: Bool = false
+
+        /// Source-compatibility alias for existing collaboration code. This is intentionally
+        /// computed so SwiftData persists `deletionTombstone` rather than colliding with
+        /// `PersistentModel.isDeleted` lifecycle state.
+        var isDeleted: Bool {
+            get { deletionTombstone }
+            set { deletionTombstone = newValue }
+        }
 
         init(
             publicID: UUID = UUID(),
@@ -159,7 +169,7 @@ extension YaHerdSchemaV1 {
                 baseRevision: baseRevision,
                 baseFieldValues: CollaborationRevisionMetadata.decodeFieldSnapshot(baseFieldValuesData),
                 currentFieldValues: CollaborationRevisionMetadata.decodeFieldSnapshot(currentFieldValuesData),
-                isDeleted: isDeleted
+                isDeleted: deletionTombstone
             )
         }
 
@@ -171,7 +181,7 @@ extension YaHerdSchemaV1 {
             baseRevision = metadata.baseRevision
             baseFieldValuesData = CollaborationRevisionMetadata.encodeFieldSnapshot(metadata.baseFieldValues)
             currentFieldValuesData = CollaborationRevisionMetadata.encodeFieldSnapshot(metadata.currentFieldValues)
-            isDeleted = metadata.isDeleted
+            deletionTombstone = metadata.isDeleted
         }
     }
 }
