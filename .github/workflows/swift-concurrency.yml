@@ -1,7 +1,7 @@
 name: yaHerd Verification
 
 run-name: >-
-  Verification · ${{ github.ref_name }} · architecture=${{ inputs.run_architecture }} · concurrency=${{ inputs.run_concurrency }}
+  Verification · ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
 
 on:
   workflow_dispatch:
@@ -16,6 +16,8 @@ on:
         required: true
         type: boolean
         default: true
+  pull_request:
+    types: [ready_for_review]
 
 jobs:
   verify:
@@ -23,6 +25,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Validate verification selection
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -31,18 +34,33 @@ jobs:
             exit 1
           fi
 
-      - name: Check out selected branch or tag
+      - name: Check out exact verification commit
         shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           git init -q .
           git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git -c protocol.version=2 fetch -q --no-tags --depth=1 origin "${GITHUB_REF}"
+
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            TARGET_REF="refs/heads/${GITHUB_HEAD_REF}"
+          else
+            TARGET_REF="${GITHUB_REF}"
+          fi
+
+          git -c protocol.version=2 fetch -q --no-tags --depth=1 origin "${TARGET_REF}"
           git checkout -q --force FETCH_HEAD
-          echo "Verifying commit $(git rev-parse HEAD) from ${GITHUB_REF}"
+
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          echo "Verifying commit ${ACTUAL_SHA} from ${TARGET_REF}"
+          if [[ "${ACTUAL_SHA}" != "${EXPECTED_SHA}" ]]; then
+            echo "Checked-out commit ${ACTUAL_SHA} does not match expected verification commit ${EXPECTED_SHA}." >&2
+            exit 1
+          fi
 
       - name: Select Xcode 26
-        if: ${{ inputs.run_concurrency }}
+        if: ${{ github.event_name == 'pull_request' || inputs.run_concurrency }}
         shell: bash
         run: |
           set -euo pipefail
@@ -55,21 +73,21 @@ jobs:
           xcodebuild -version
 
       - name: Verify architecture
-        if: ${{ inputs.run_architecture }}
+        if: ${{ github.event_name == 'pull_request' || inputs.run_architecture }}
         shell: bash
         run: |
           set -euo pipefail
           bash Scripts/verify-architecture.sh
 
       - name: Verify Swift 6 concurrency, build, and foundation tests
-        if: ${{ inputs.run_concurrency }}
+        if: ${{ github.event_name == 'pull_request' || inputs.run_concurrency }}
         shell: bash
         run: |
           set -euo pipefail
           bash Scripts/verify-concurrency.sh
 
       - name: Collect persistence test diagnostics
-        if: ${{ failure() && inputs.run_concurrency }}
+        if: ${{ failure() && (github.event_name == 'pull_request' || inputs.run_concurrency) }}
         shell: bash
         run: |
           mkdir -p .build/PersistenceDiagnostics
@@ -81,10 +99,10 @@ jobs:
             -mmin -30 -exec cp {} .build/PersistenceDiagnostics/ \; || true
 
       - name: Upload persistence test diagnostics
-        if: ${{ failure() && inputs.run_concurrency }}
-        uses: actions/upload-artifact@v4
+        if: ${{ failure() && (github.event_name == 'pull_request' || inputs.run_concurrency) }}
+        uses: actions/upload-artifact@v7
         with:
           name: persistence-test-diagnostics
           path: .build/PersistenceDiagnostics
           retention-days: 3
-          if-no-files-found: warn
+          if-no-files-found: ignore
