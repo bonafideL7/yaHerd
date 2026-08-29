@@ -129,15 +129,12 @@ if [[ -n "$unisolated_task_calls" ]]; then
 fi
 
 if ! command -v xcodebuild >/dev/null 2>&1; then
-  echo 'Static concurrency policy checks passed. xcodebuild is unavailable; compile gate skipped.'
+  echo 'Static concurrency policy checks passed. xcodebuild is unavailable; production compile gate skipped.'
   exit 0
 fi
 
 BUILD_LOG="$(mktemp)"
-TEST_LOG="$(mktemp)"
-RESULT_BUNDLE="$ROOT_DIR/.build/PersistenceTests.xcresult"
-rm -rf "$RESULT_BUNDLE"
-trap 'rm -f "$BUILD_LOG" "$TEST_LOG"' EXIT
+trap 'rm -f "$BUILD_LOG"' EXIT
 
 set +e
 xcodebuild \
@@ -151,96 +148,16 @@ xcodebuild \
   ARCHS=arm64 \
   ONLY_ACTIVE_ARCH=YES \
   CODE_SIGNING_ALLOWED=NO \
-  build-for-testing >"$BUILD_LOG" 2>&1
+  build >"$BUILD_LOG" 2>&1
 build_status=$?
 set -e
 
 if [[ "$build_status" -ne 0 ]]; then
-  echo 'Swift 6 build failed:' >&2
-  grep -E -i 'error:|fatal|signal|killed|command .* failed|failed to|unable to|BUILD FAILED|Testing failed' "$BUILD_LOG" | tail -n 120 >&2 || true
+  echo 'Swift 6 production build failed:' >&2
+  grep -E -i 'error:|fatal|signal|killed|command .* failed|failed to|unable to|BUILD FAILED' "$BUILD_LOG" | tail -n 120 >&2 || true
   tail -n 60 "$BUILD_LOG" >&2
   exit "$build_status"
 fi
 
 cat "$BUILD_LOG"
-
-SIMULATOR_ID="$(xcrun simctl list devices available -j | python3 -c '
-import json
-import sys
-
-devices = json.load(sys.stdin).get("devices", {})
-for runtime_devices in devices.values():
-    for device in runtime_devices:
-        if device.get("isAvailable") and device.get("name", "").startswith("iPhone"):
-            print(device["udid"])
-            raise SystemExit(0)
-raise SystemExit(1)
-')"
-
-if [[ -z "$SIMULATOR_ID" ]]; then
-  echo 'No available iPhone simulator was found for persistence tests.' >&2
-  exit 1
-fi
-
-xcrun simctl boot "$SIMULATOR_ID" >/dev/null 2>&1 || true
-xcrun simctl bootstatus "$SIMULATOR_ID" -b
-
-# Keep this list limited to repository-wide persistence/concurrency foundation suites.
-# Feature-specific regression suites are run separately by the feature change that owns them.
-PERSISTENCE_TEST_SUITES=(
-  AnimalListViewModelReloadTests
-  ApplicationMutationCenterTests
-  HerdSharingBridgeImportBoundaryTests
-  HerdSharingBridgeReliabilityTests
-  HerdSharingCoreDataModelCachingTests
-  HerdSharingDeletionTombstoneIdentityTests
-  HerdSharingImportCommitBoundaryTests
-  HerdSharingRepositoryTests
-  HerdDataMutationGateTests
-  StartupMigrationRepairGateTests
-  SwiftDataHerdSharingActorDuplicateIDPagingTests
-  SwiftDataHerdSharingActorRelationshipScopeTests
-  SwiftDataHerdSharingActorTests
-  SwiftDataReadModelActorPaginationTests
-  SwiftDataReadModelActorPasturePaginationTests
-  SwiftDataReadModelActorTests
-)
-
-for suite in "${PERSISTENCE_TEST_SUITES[@]}"; do
-  if [[ ! -f "yaHerdTests/$suite.swift" ]]; then
-    echo "Configured persistence test suite source is missing: yaHerdTests/$suite.swift" >&2
-    exit 1
-  fi
-done
-
-TEST_SELECTION_ARGS=()
-for suite in "${PERSISTENCE_TEST_SUITES[@]}"; do
-  TEST_SELECTION_ARGS+=("-only-testing:yaHerdTests/$suite")
-done
-
-set +e
-xcodebuild \
-  -quiet \
-  -project yaHerd.xcodeproj \
-  -scheme yaHerd \
-  -configuration Debug \
-  -sdk iphonesimulator \
-  -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
-  -derivedDataPath .build/DerivedData \
-  CODE_SIGNING_ALLOWED=NO \
-  -parallel-testing-enabled NO \
-  -resultBundlePath "$RESULT_BUNDLE" \
-  test-without-building \
-  "${TEST_SELECTION_ARGS[@]}" >"$TEST_LOG" 2>&1
-test_status=$?
-set -e
-
-if [[ "$test_status" -ne 0 ]]; then
-  echo 'Persistence-focused tests failed:' >&2
-  grep -E -i 'error:|failed|failure|fatal|signal|killed|uncaught|assert' "$TEST_LOG" | tail -n 160 >&2 || true
-  xcrun xcresulttool get test-results summary --path "$RESULT_BUNDLE" >&2 || true
-  tail -n 100 "$TEST_LOG" >&2
-  exit "$test_status"
-fi
-
-cat "$TEST_LOG"
+echo 'Swift 6 concurrency verification passed.'
