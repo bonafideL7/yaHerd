@@ -50,8 +50,21 @@ struct HerdCloudSharingControllerView: UIViewControllerRepresentable {
     }
 
     func cloudSharingControllerDidStopSharing(_ csc: UICloudSharingController) {
+      do {
+        // Persist the conservative write gate synchronously in the delegate callback. The
+        // asynchronous purge task must not be the first durable evidence that CloudKit has
+        // already stopped the remote share.
+        try systemShare.prepareToStopSharing()
+      } catch {
+        ReliabilityLog.syncFailure("CloudKitSystemShare.prepareToStopSharing", error: error)
+        return
+      }
       Task { @MainActor in
-        await systemShare.stopSharing()
+        do {
+          try await systemShare.stopSharing()
+        } catch {
+          ReliabilityLog.syncFailure("CloudKitSystemShare.stopSharing", error: error)
+        }
       }
     }
 

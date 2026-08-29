@@ -12,14 +12,22 @@ extension HerdSharingCoreDataStore {
   ) async throws -> HerdSharingBridgeExportResult {
     try await loadIfNeeded()
     let herd = export.herd
-    let target = try writableBridgeStore(for: herd)
+    let preparedTarget = try await writableBridgeStore(for: herd)
     let operation = try await operationCoordinator.begin(
       herdPublicID: herd.publicID,
       direction: .exportToBridge,
-      bridgeLocation: target.description
+      bridgeLocation: preparedTarget.description
     )
 
     do {
+      let target = try await writableBridgeStore(for: herd)
+      guard target.store === preparedTarget.store,
+            target.description == preparedTarget.description
+      else {
+        throw HerdSharingActionError.bridgeConsistencyFailed(
+          "The writable sharing bridge changed while export was being prepared. No bridge records were written."
+        )
+      }
       let targetSnapshot = HerdSharingBridgeStoreSnapshot(
         herdPublicID: export.snapshot.herdPublicID,
         storeDescription: target.description,
@@ -134,7 +142,7 @@ extension HerdSharingCoreDataStore {
         await self?.persistUpdatedShare(share)
       },
       stopSharingHandler: { [weak self] share in
-        await self?.purgeStoppedShare(share)
+        try await self?.purgeStoppedShare(share)
       }
     )
   }

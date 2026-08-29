@@ -53,7 +53,10 @@ struct HerdCollaborationView: View {
           herdRepository: herdRepository,
           sharingRepository: herdSharingRepository
         )
-        shareActionSection(sharingRepository: herdSharingRepository)
+        shareActionSection(
+          herdRepository: herdRepository,
+          sharingRepository: herdSharingRepository
+        )
       } else {
         Section("Herd") {
           ContentUnavailableView(
@@ -125,7 +128,6 @@ struct HerdCollaborationView: View {
     }
   }
 
-
   private var recoveryModeView: some View {
     List {
       Section {
@@ -167,9 +169,125 @@ struct HerdCollaborationView: View {
           }
         }
       }
+
+    case .confirmLocalOwnership:
+      Button("Confirm Local Ownership") {
+        Task { @MainActor in
+          guard let herdSharingRepository else { return }
+          let confirmed = await viewModel.confirmLocalHerdOwnership(
+            using: herdSharingRepository,
+            storageMode: applicationSettings.syncMode.herdStorageMode
+          )
+          if confirmed {
+            await viewModel.refreshSharingAccess(
+              using: herdSharingRepository,
+              storageMode: applicationSettings.syncMode.herdStorageMode,
+              writePolicy: writePolicy
+            )
+          }
+        }
+      }
+
+    case .resolveOwnerBridgeVerification:
+      Button("Refresh CloudKit Access") {
+        Task { @MainActor in
+          await refreshSharingAccessAfterRecoveryAction()
+        }
+      }
+
+      Button("Reset Stale Owner State", role: .destructive) {
+        Task { @MainActor in
+          guard let herdSharingRepository else { return }
+          let reset = await viewModel.resetStaleOwnerSharingState(
+            using: herdSharingRepository,
+            storageMode: applicationSettings.syncMode.herdStorageMode
+          )
+          if reset {
+            await refreshSharingAccessAfterRecoveryAction()
+          }
+        }
+      }
+
+    case .retryOwnerStopCleanup:
+      Button("Retry Stop Sharing Cleanup") {
+        Task { @MainActor in
+          guard let herdSharingRepository else { return }
+          let cleaned = await viewModel.resetStaleOwnerSharingState(
+            using: herdSharingRepository,
+            storageMode: applicationSettings.syncMode.herdStorageMode
+          )
+          if cleaned {
+            await refreshSharingAccessAfterRecoveryAction()
+          }
+        }
+      }
+
+    case .detachStaleParticipant:
+      Button("Detach Stale Shared Herd", role: .destructive) {
+        Task { @MainActor in
+          guard let herdSharingRepository else { return }
+          let detached = await viewModel.detachStaleParticipantState(
+            using: herdSharingRepository,
+            storageMode: applicationSettings.syncMode.herdStorageMode
+          )
+          if detached {
+            await refreshSharingAccessAfterRecoveryAction()
+          }
+        }
+      }
+
+    case .resolveBridgeConflict:
+      Button("Keep Owner Share", role: .destructive) {
+        Task { @MainActor in
+          await resolveBridgeConflict(
+            keeping: .keepOwnerShare
+          )
+        }
+      }
+
+      Button("Keep Accepted Share", role: .destructive) {
+        Task { @MainActor in
+          await resolveBridgeConflict(
+            keeping: .keepAcceptedShare
+          )
+        }
+      }
     }
 
     Button("Cancel", role: .cancel) {}
+  }
+
+  private func refreshSharingAccessAfterRecoveryAction() async {
+    guard let herdSharingRepository else { return }
+    if let sharingSyncCoordinator {
+      await sharingSyncCoordinator.refreshSharingAccessNow(
+        trigger: .manual,
+        minimumInterval: 0
+      )
+    }
+    await viewModel.refreshSharingAccess(
+      using: herdSharingRepository,
+      storageMode: applicationSettings.syncMode.herdStorageMode,
+      writePolicy: writePolicy
+    )
+  }
+
+  private func resolveBridgeConflict(
+    keeping resolution: HerdSharingBridgeConflictResolution
+  ) async {
+    guard let herdSharingRepository else { return }
+    let resolved = await viewModel.resolveBridgeConflict(
+      keeping: resolution,
+      using: herdSharingRepository,
+      storageMode: applicationSettings.syncMode.herdStorageMode
+    )
+    if resolved {
+      await viewModel.refreshSharingAccess(
+        using: herdSharingRepository,
+        storageMode: applicationSettings.syncMode.herdStorageMode,
+        writePolicy: writePolicy
+      )
+    }
   }
 
   private func currentHerdSection(
@@ -227,6 +345,7 @@ struct HerdCollaborationView: View {
         LabeledContent("Bridge Location", value: access.locationDescription)
         LabeledContent("Permission", value: access.permissionDescription)
         LabeledContent("Participants", value: access.participantDescription)
+        LabeledContent("Share Creation", value: access.creationState.primaryActionTitle)
         LabeledContent(
           "Can Export Local Edits",
           value: access.canExportLocalChangesToBridge ? "Yes" : "No"
@@ -809,30 +928,61 @@ struct HerdCollaborationView: View {
       }
 
       Text(
-        "Exports the current SwiftData herd into the Core Data sharing bridge, then imports available accepted shared records back into SwiftData. This now also runs automatically on app launch and when the app returns to the foreground, with debounce/throttle protection so CloudKit is not hammered."
+        "Imports available bridge records into SwiftData first, then exports the current SwiftData herd back into the writable Core Data sharing bridge. This also runs automatically on app launch and when the app returns to the foreground, with debounce/throttle protection so CloudKit is not hammered."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
     }
   }
 
-  private func shareActionSection(sharingRepository: any HerdSharingRepository) -> some View {
+  private func shareActionSection(
+    herdRepository: any HerdRepository,
+    sharingRepository: any HerdSharingRepository
+  ) -> some View {
     Section("Share Actions") {
       Button {
-        Task { @MainActor in
-          await viewModel.startSharing(
-            using: sharingRepository,
-            storageMode: applicationSettings.syncMode.herdStorageMode,
-            conflictReviewStore: conflictReviewStore
+        switch viewModel.sharingAccess?.creationState {
+        case .ownershipConfirmationRequired:
+          pendingConflictConfirmation = .confirmLocalOwnership
+        case .ownerBridgeVerificationRequired:
+          pendingConflictConfirmation = .resolveOwnerBridgeVerification
+        case .ownerStopCleanupPending:
+          pendingConflictConfirmation = .retryOwnerStopCleanup
+        case .notOwnedByCurrentDevice:
+          pendingConflictConfirmation = .detachStaleParticipant
+        case .conflictingBridgeRecords:
+          pendingConflictConfirmation = .resolveBridgeConflict(
+            ownerHasActiveSystemShare: viewModel.sharingAccess?.hasActiveSystemShare == true
           )
+        default:
+          Task { @MainActor in
+            await viewModel.performPrimarySharingAction(
+              herdRepository: herdRepository,
+              using: sharingRepository,
+              storageMode: applicationSettings.syncMode.herdStorageMode,
+              conflictReviewStore: conflictReviewStore
+            )
+            await viewModel.refreshSharingAccess(
+              using: sharingRepository,
+              storageMode: applicationSettings.syncMode.herdStorageMode,
+              writePolicy: writePolicy
+            )
+          }
         }
       } label: {
-        Label("Share Herd", systemImage: "square.and.arrow.up")
+        Label(
+          viewModel.primarySharingActionTitle,
+          systemImage: viewModel.primarySharingActionSystemImage
+        )
       }
-      .disabled(!viewModel.canStartSharing)
+      .disabled(!viewModel.canPerformPrimarySharingAction)
+
+      Text(viewModel.primarySharingActionMessage)
+        .font(.caption)
+        .foregroundStyle(.secondary)
 
       Text(
-        "This mirrors the current SwiftData herd, support records, pasture groups, pastures, animals, movement records, status history, health records, pregnancy checks, working treatment templates, working sessions, queue items, treatment records, and field checks into the isolated Core Data bridge, then opens Apple's CloudKit sharing sheet. It does not move yaHerd's normal app data out of SwiftData."
+        "New sharing is available only after repository state checks pass and local-owner authority is explicitly confirmed for a fresh local Herd or a deliberately detached stale participant copy. Existing owners open Apple's sharing management UI; participants and pending bridge operations synchronize import-first; interrupted owner bridge roots resume only after ownership checks; conflicting owner/shared roots require an explicit choice; missing owner or participant bridges require deliberate recovery before edits or new sharing resume."
       )
       .font(.caption)
       .foregroundStyle(.secondary)
@@ -882,11 +1032,26 @@ struct HerdCollaborationView: View {
 
 private enum HerdCollaborationConflictConfirmation: Identifiable {
   case acceptSharedDeletes(review: HerdSharingConflictReview, affectedRecordCount: Int)
+  case confirmLocalOwnership
+  case resolveOwnerBridgeVerification
+  case retryOwnerStopCleanup
+  case detachStaleParticipant
+  case resolveBridgeConflict(ownerHasActiveSystemShare: Bool)
 
   var id: String {
     switch self {
     case .acceptSharedDeletes(let review, let affectedRecordCount):
       "accept-shared-deletes-\(review.id)-\(affectedRecordCount)"
+    case .confirmLocalOwnership:
+      "confirm-local-ownership"
+    case .resolveOwnerBridgeVerification:
+      "resolve-owner-bridge-verification"
+    case .retryOwnerStopCleanup:
+      "retry-owner-stop-cleanup"
+    case .detachStaleParticipant:
+      "detach-stale-participant"
+    case .resolveBridgeConflict(let ownerHasActiveSystemShare):
+      "resolve-bridge-conflict-\(ownerHasActiveSystemShare)"
     }
   }
 
@@ -894,6 +1059,16 @@ private enum HerdCollaborationConflictConfirmation: Identifiable {
     switch self {
     case .acceptSharedDeletes:
       "Accept Shared Deletes?"
+    case .confirmLocalOwnership:
+      "Confirm Local Herd Ownership?"
+    case .resolveOwnerBridgeVerification:
+      "Resolve Owner Sharing State?"
+    case .retryOwnerStopCleanup:
+      "Retry Stop Sharing Cleanup?"
+    case .detachStaleParticipant:
+      "Detach Stale Shared Herd?"
+    case .resolveBridgeConflict:
+      "Resolve Bridge Conflict?"
     }
   }
 
@@ -901,6 +1076,20 @@ private enum HerdCollaborationConflictConfirmation: Identifiable {
     switch self {
     case .acceptSharedDeletes(_, let affectedRecordCount):
       "This deletes \(affectedRecordCount) local SwiftData record(s) that matched skipped shared deletes, then runs shared-data sync. This cannot be undone from the conflict report."
+    case .confirmLocalOwnership:
+      "Confirm only if this is a newly created local owner Herd, or if you deliberately detached a stale participant relationship and intend the retained local Herd to become independently owned by this iCloud account. Do not confirm a still-active accepted or restored shared copy. Confirmation authorizes this installation to create or resume the owner share; last-writer device metadata is not treated as ownership proof."
+    case .resolveOwnerBridgeVerification:
+      "yaHerd cannot currently see the owner bridge, but this Herd has evidence that it may already have owner-sharing history. Refresh CloudKit access first. Reset Stale Owner State only after you have verified that no owner share remains on another device or installation. Resetting can authorize this device to create a new owner share."
+    case .retryOwnerStopCleanup:
+      "yaHerd will retry purging the stopped owner share from the local bridge. Local edits remain blocked unless cleanup succeeds."
+    case .detachStaleParticipant:
+      "Detach only if the accepted share was revoked, you left it, or the shared relationship was permanently removed. This records a durable detached-participant state and does not import missing remote data or grant owner authority. After detaching, confirm local ownership separately only if this retained Herd should become independently owned."
+    case .resolveBridgeConflict(let ownerHasActiveSystemShare):
+      if ownerHasActiveSystemShare {
+        "Both an owner CloudKit share and an accepted shared relationship exist for this Herd root. Choose one relationship to keep. Keeping Owner stops participation in the accepted share. Keeping Accepted stops the owner share. SwiftData remains the app data store, and a recovery import from the retained bridge is required before export resumes."
+      } else {
+        "Both an orphan owner-private bridge root and an accepted shared relationship exist for this Herd root. Choose one relationship to keep. Keeping Owner stops participation in the accepted share. Keeping Accepted removes the orphan private bridge graph. SwiftData remains the app data store, and a recovery import from the retained bridge is required before export resumes."
+      }
     }
   }
 }

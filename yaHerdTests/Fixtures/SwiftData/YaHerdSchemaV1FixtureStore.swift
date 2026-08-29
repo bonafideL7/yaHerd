@@ -15,6 +15,8 @@ enum YaHerdSchemaV1FixtureStore {
     static let workingSessionID = UUID(uuidString: "2D0DB468-EB8F-4D73-A55C-B25790F42757")!
     static let queueItemID = UUID(uuidString: "74707056-A030-4A48-B7EA-6461B0B24342")!
     static let treatmentRecordID = UUID(uuidString: "B93D61C9-C9E9-423C-8A19-925D719BA768")!
+    static let revisionRecordID = UUID(uuidString: "E5E76852-ED60-46B6-9832-99A25B5A1F61")!
+    static let deletedAggregateID = UUID(uuidString: "A8583D06-7D72-4BA8-B09B-A12D16764712")!
 
     static func create(at storeURL: URL) throws {
         let schema = Schema(versionedSchema: YaHerdSchemaV1.self)
@@ -124,6 +126,21 @@ enum YaHerdSchemaV1FixtureStore {
             animal: animal,
             session: session
         )
+        let deletedRevision = YaHerdSchemaV1.CollaborationRevisionRecord(
+            publicID: revisionRecordID,
+            key: CollaborationAggregateKey(type: .animal, publicID: deletedAggregateID),
+            herdPublicID: herdID,
+            metadata: CollaborationRevisionMetadata(
+                modifiedAt: completedAt,
+                revision: 4,
+                modifiedByParticipantID: "fixture-participant",
+                modifiedByDeviceID: "fixture-device",
+                baseRevision: 3,
+                baseFieldValues: [:],
+                currentFieldValues: [:],
+                isDeleted: true
+            )
+        )
 
         pasture.herd = herd
         animal.herd = herd
@@ -141,6 +158,7 @@ enum YaHerdSchemaV1FixtureStore {
         context.insert(session)
         context.insert(queueItem)
         context.insert(treatmentRecord)
+        context.insert(deletedRevision)
         try context.save()
     }
 
@@ -157,6 +175,8 @@ enum YaHerdSchemaV1FixtureStore {
             .filter { $0.publicID == queueItemID }
         let treatmentRecords = try context.fetch(FetchDescriptor<WorkingTreatmentRecord>())
             .filter { $0.publicID == treatmentRecordID }
+        let revisionRecords = try context.fetch(FetchDescriptor<CollaborationRevisionRecord>())
+            .filter { $0.publicID == revisionRecordID }
 
         guard let herd = herds.first,
               let animal = animals.first,
@@ -165,7 +185,8 @@ enum YaHerdSchemaV1FixtureStore {
               let template = templates.first,
               let session = sessions.first,
               let queueItem = queueItems.first,
-              let treatmentRecord = treatmentRecords.first else {
+              let treatmentRecord = treatmentRecords.first,
+              let deletedRevision = revisionRecords.first else {
             throw FixtureValidationError.missingSeedData
         }
 
@@ -211,7 +232,11 @@ enum YaHerdSchemaV1FixtureStore {
               treatmentRecord.treatmentItemID == treatmentItemID,
               treatmentRecord.doseAmount == 2.5,
               treatmentRecord.doseUnit == .milliliter,
-              treatmentRecord.administrationRoute == .intramuscular else {
+              treatmentRecord.administrationRoute == .intramuscular,
+              deletedRevision.aggregatePublicID == deletedAggregateID,
+              deletedRevision.herdPublicID == herdID,
+              deletedRevision.deletionTombstone,
+              deletedRevision.metadata.isDeleted else {
             throw FixtureValidationError.invalidSeedData
         }
 

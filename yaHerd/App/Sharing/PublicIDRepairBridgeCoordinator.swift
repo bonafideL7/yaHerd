@@ -1,6 +1,20 @@
 import Foundation
 import SwiftData
 
+private extension HerdSharingAccess {
+    var allowsPublicIDRepairBridgeMutation: Bool {
+        guard canExportLocalChangesToBridge else { return false }
+        return switch creationState {
+        case .ready, .existingOwnerShare, .acceptedParticipantShare, .unresolvedBridgeRecord:
+            true
+        case .unknown, .conflictingBridgeRecords, .pendingBridgeOperation,
+             .ownerStopCleanupPending, .ownershipConfirmationRequired,
+             .ownerBridgeVerificationRequired, .notOwnedByCurrentDevice:
+            false
+        }
+    }
+}
+
 protocol PublicIDRepairHerdInventoryReading: Sendable {
     func fetchHerds() async throws -> [HerdSummary]
 }
@@ -321,17 +335,20 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
 
     private let herdInventory: any PublicIDRepairHerdInventoryReading
     private let sharingRepository: any HerdSharingRepository
+    private let mutationAuthorityRepository: (any HerdSharingRepository)?
     private let storageMode: HerdStorageMode
     private let exporter: any PublicIDRepairBridgeExporting
 
     init(
         herdInventory: any PublicIDRepairHerdInventoryReading,
         sharingRepository: any HerdSharingRepository,
+        mutationAuthorityRepository: (any HerdSharingRepository)? = nil,
         storageMode: HerdStorageMode,
         exporter: any PublicIDRepairBridgeExporting
     ) {
         self.herdInventory = herdInventory
         self.sharingRepository = sharingRepository
+        self.mutationAuthorityRepository = mutationAuthorityRepository
         self.storageMode = storageMode
         self.exporter = exporter
     }
@@ -443,7 +460,7 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
                     herdPublicID: herdID
                 )
             }
-            try requireWritableAccess(access, for: herd)
+            try await requireMutationAuthority(observedAccess: access, for: herd)
         }
         return preparation
     }
@@ -600,7 +617,7 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
                     herdPublicID: herd.publicID
                 )
             }
-            try requireWritableAccess(access, for: herd)
+            try await requireMutationAuthority(observedAccess: access, for: herd)
             importBaselineByHerdID[herd.publicID] = preflight.fingerprint
             if access.bridgeLocation != .bridgeRecordMissing {
                 try await exporter.importCurrentBridgeGraph(
@@ -627,7 +644,7 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
             }
 
             let access = try await observedAccess(for: herd)
-            try requireWritableAccess(access, for: herd)
+            try await requireMutationAuthority(observedAccess: access, for: herd)
             let actualLocation = bridgeLocationIdentity(access.bridgeLocation)
             guard isCompatibleConvergenceLocation(
                 expected: expectedTarget.location,
@@ -1109,7 +1126,10 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
                         actual: actualLocation
                     )
                 }
-                try requireWritableAccess(access, for: placeholder)
+                // A missing SwiftData Herd cannot pass the normal creation-state guard. This
+                // destructive path instead remains bound to the user's exact durable retirement
+                // decision plus the prepared location/fingerprint checks below.
+                try requireObservedWritableAccess(access, for: placeholder)
                 guard let expectedFingerprint = target.bridgeFingerprint else {
                     throw PublicIDRepairBridgeError.bridgeBaselineUnavailable(
                         herdPublicID: target.herdPublicID
@@ -1219,7 +1239,45 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
         )
     }
 
-    private func requireWritableAccess(
+    private func requireMutationAuthority(
+        observedAccess: HerdSharingAccess,
+        for herd: HerdSummary
+    ) async throws {
+        let access: HerdSharingAccess
+        if let mutationAuthorityRepository {
+            access = try await mutationAuthorityRepository.fetchSharingAccess(
+                for: herd,
+                storageMode: storageMode
+            )
+            guard access.bridgeLocation == observedAccess.bridgeLocation else {
+                throw PublicIDRepairBridgeError.bridgeTargetChangedDuringExport(
+                    herdPublicID: herd.publicID,
+                    expected: bridgeLocationIdentity(observedAccess.bridgeLocation),
+                    actual: access.locationDescription
+                )
+            }
+            guard access.canExportLocalChangesToBridge else {
+                throw PublicIDRepairBridgeError.writePermissionRequired(
+                    herdPublicID: herd.publicID,
+                    permission: access.permissionDescription
+                )
+            }
+            guard access.allowsPublicIDRepairBridgeMutation else {
+                throw PublicIDRepairBridgeError.sharingRecoveryRequired(
+                    herdPublicID: herd.publicID,
+                    state: access.creationState.primaryActionTitle
+                )
+            }
+        } else {
+            // Compatibility for capability-level callers that already supply a repository whose
+            // only contract is physical permission. App wiring must provide the guarded repository
+            // above so durable sharing recovery state participates in mutation authorization.
+            access = observedAccess
+        }
+        try requireObservedWritableAccess(access, for: herd)
+    }
+
+    private func requireObservedWritableAccess(
         _ access: HerdSharingAccess,
         for herd: HerdSummary
     ) throws {
@@ -1411,6 +1469,7 @@ final class DefaultPublicIDRepairBridgeCoordinator: PublicIDRepairBridgeCoordina
 
 enum PublicIDRepairBridgeError: LocalizedError, Equatable {
     case writePermissionRequired(herdPublicID: UUID, permission: String)
+    case sharingRecoveryRequired(herdPublicID: UUID, state: String)
     case reconciliationFailed(herdPublicID: UUID, summary: String)
     case bridgeIdentityMismatch(
         expected: PublicIDRepairBridgeIdentity,
@@ -1442,6 +1501,8 @@ enum PublicIDRepairBridgeError: LocalizedError, Equatable {
         switch self {
         case .writePermissionRequired(let herdPublicID, let permission):
             "Herd \(herdPublicID.uuidString) has \(permission) shared-herd access and cannot rewrite its repaired bridge. Run repair from an owner or participant with read/write permission for every affected herd."
+        case .sharingRecoveryRequired(let herdPublicID, let state):
+            "Herd \(herdPublicID.uuidString) cannot rewrite its repaired bridge until its durable sharing recovery gate is cleared (\(state)). Complete that sharing recovery first, then retry public-ID repair."
         case .reconciliationFailed(let herdPublicID, let summary):
             "The repaired SwiftData graph for herd \(herdPublicID.uuidString) was exported, but bridge reconciliation did not pass. Normal edits and synchronization remain blocked. \(summary)"
         case .bridgeIdentityMismatch(let expected, let actual):

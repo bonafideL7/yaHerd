@@ -150,6 +150,34 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
     XCTAssertEqual(writePolicy.snapshot.access?.permission, .readOnly)
   }
 
+  func testSyncNowInvalidatesPriorWritablePolicyWhenInitialAccessRevalidationFails() async {
+    let herdRepository = StubHerdRepository(herd: makeHerdSummary())
+    let sharingRepository = RecordingHerdSharingRepository(
+      access: .ownerPrivateStore(participantCount: 1, hasActiveSystemShare: true)
+        .applyingCreationState(.existingOwnerShare)
+    )
+    let writePolicy = HerdCollaborationWritePolicy()
+    writePolicy.update(
+      access: .ownerPrivateStore(participantCount: 1, hasActiveSystemShare: true)
+        .applyingCreationState(.existingOwnerShare)
+    )
+    sharingRepository.setAccessError(HerdSharingActionError.ownerBridgeVerificationRequired)
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      writePolicy: writePolicy,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+
+    let didSync = await coordinator.syncNow(trigger: .manual)
+
+    XCTAssertFalse(didSync)
+    XCTAssertTrue(writePolicy.snapshot.requiresVerifiedAccessBeforeWrite)
+    XCTAssertNotNil(coordinator.lastErrorMessage)
+  }
+
   func testRefreshSharingAccessNowUpdatesWritePolicyWithoutSyncingData() async {
     let herdRepository = StubHerdRepository(herd: makeHerdSummary())
     let sharingRepository = RecordingHerdSharingRepository(
@@ -173,6 +201,83 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
     XCTAssertFalse(writePolicy.snapshot.allowsLocalMutations)
     XCTAssertEqual(coordinator.lastAccessRefreshTriggerDescription, "Animals opened")
     XCTAssertNil(coordinator.lastAccessRefreshErrorMessage)
+  }
+
+  func testRefreshSharingAccessNowInvalidatesWritablePolicyWhenRevalidationFails() async {
+    let herdRepository = StubHerdRepository(herd: makeHerdSummary())
+    let sharingRepository = RecordingHerdSharingRepository(
+      access: .ownerPrivateStore(participantCount: 1, hasActiveSystemShare: true)
+        .applyingCreationState(.existingOwnerShare)
+    )
+    let writePolicy = HerdCollaborationWritePolicy()
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      writePolicy: writePolicy,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+
+    let firstRefresh = await coordinator.refreshSharingAccessNow(trigger: .appLaunch)
+    XCTAssertTrue(firstRefresh)
+    XCTAssertTrue(writePolicy.snapshot.allowsLocalMutations)
+
+    sharingRepository.setAccessError(HerdSharingActionError.ownerBridgeVerificationRequired)
+    let failedRefresh = await coordinator.refreshSharingAccessNow(
+      trigger: .manual,
+      minimumInterval: 0
+    )
+
+    XCTAssertFalse(failedRefresh)
+    XCTAssertTrue(writePolicy.snapshot.requiresVerifiedAccessBeforeWrite)
+    XCTAssertNotNil(coordinator.lastAccessRefreshErrorMessage)
+    XCTAssertThrowsError(try writePolicy.validateCanWrite(reason: .herd)) { error in
+      XCTAssertEqual(
+        error as? HerdCollaborationWritePolicyError,
+        .sharingAccessVerificationRequired(reason: .herd)
+      )
+    }
+  }
+
+  func testRefreshSharingAccessDiscardsResultWhenCurrentHerdChangesDuringLookup() async {
+    let originalHerd = makeHerdSummary()
+    let replacementHerd = makeHerdSummary()
+    let herdRepository = StubHerdRepository(herd: originalHerd)
+    let sharingRepository = RecordingHerdSharingRepository(
+      access: .ownerPrivateStore(participantCount: 1, hasActiveSystemShare: true)
+        .applyingCreationState(.existingOwnerShare)
+    )
+    sharingRepository.suspendAccessLookups()
+    let writePolicy = HerdCollaborationWritePolicy(requiresInitialAccessVerification: true)
+    let coordinator = HerdSharingSyncCoordinator(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: .iCloud,
+      writePolicy: writePolicy,
+      automaticDebounceNanoseconds: 0,
+      minimumAutomaticSyncInterval: 0
+    )
+
+    let refreshTask = Task { @MainActor in
+      await coordinator.refreshSharingAccessNow(trigger: .manual, minimumInterval: 0)
+    }
+    while !sharingRepository.accessLookupStarted {
+      await Task.yield()
+    }
+    herdRepository.replaceCurrentHerd(with: replacementHerd)
+    sharingRepository.resumeAccessLookups()
+
+    let refreshed = await refreshTask.value
+
+    XCTAssertFalse(refreshed)
+    XCTAssertEqual(sharingRepository.accessedHerdPublicIDs, [originalHerd.publicID])
+    XCTAssertNil(writePolicy.snapshot.access)
+    XCTAssertTrue(writePolicy.snapshot.requiresVerifiedAccessBeforeWrite)
+    XCTAssertFalse(writePolicy.snapshot.allowsLocalMutations)
+    XCTAssertTrue(
+      coordinator.lastAccessRefreshErrorMessage?.contains("current Herd changed") == true
+    )
   }
 
   func testRefreshSharingAccessNowThrottlesScreenOpenRequests() async {
@@ -561,7 +666,7 @@ final class HerdSharingSyncCoordinatorTests: XCTestCase {
 
 @MainActor
 private final class StubHerdRepository: HerdRepository {
-  private let herd: HerdSummary
+  private var herd: HerdSummary
 
   init(herd: HerdSummary) {
     self.herd = herd
@@ -569,6 +674,10 @@ private final class StubHerdRepository: HerdRepository {
 
   func fetchCurrentHerd() throws -> HerdSummary {
     herd
+  }
+
+  func replaceCurrentHerd(with herd: HerdSummary) {
+    self.herd = herd
   }
 
   func renameCurrentHerd(to name: String) throws -> HerdSummary {
@@ -586,7 +695,11 @@ private final class StubHerdRepository: HerdRepository {
 private final class RecordingHerdSharingRepository: HerdSharingRepository {
   private let access: HerdSharingAccess
   private let conflictReview: HerdSharingConflictReview?
+  private var accessError: Error?
+  private var shouldSuspendAccessLookups = false
   private(set) var accessCallCount = 0
+  private(set) var accessLookupStarted = false
+  private(set) var accessedHerdPublicIDs: [UUID] = []
   private(set) var syncCallCount = 0
   private(set) var acceptSharedDeleteCallCount = 0
   private(set) var restoreLocalFieldsCallCount = 0
@@ -602,6 +715,18 @@ private final class RecordingHerdSharingRepository: HerdSharingRepository {
     self.conflictReview = conflictReview
   }
 
+  func setAccessError(_ error: Error) {
+    accessError = error
+  }
+
+  func suspendAccessLookups() {
+    shouldSuspendAccessLookups = true
+  }
+
+  func resumeAccessLookups() {
+    shouldSuspendAccessLookups = false
+  }
+
   func fetchSharingReadiness(
     for herd: HerdSummary?,
     storageMode: HerdStorageMode
@@ -614,6 +739,12 @@ private final class RecordingHerdSharingRepository: HerdSharingRepository {
     storageMode: HerdStorageMode
   ) async throws -> HerdSharingAccess {
     accessCallCount += 1
+    if let herd { accessedHerdPublicIDs.append(herd.publicID) }
+    accessLookupStarted = true
+    while shouldSuspendAccessLookups {
+      await Task.yield()
+    }
+    if let accessError { throw accessError }
     return access
   }
 

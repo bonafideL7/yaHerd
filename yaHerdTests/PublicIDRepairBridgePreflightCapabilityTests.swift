@@ -1,3 +1,5 @@
+import Foundation
+import SwiftData
 import XCTest
 
 @testable import yaHerd
@@ -168,6 +170,84 @@ final class PublicIDRepairBridgePreflightCapabilityTests: XCTestCase {
                 .writePermissionRequired(
                     herdPublicID: readOnly.publicID,
                     permission: "read-only"
+                )
+            )
+        }
+
+        XCTAssertEqual(exporter.importedHerdIDs, [])
+        XCTAssertEqual(exporter.exportedHerdIDs, [])
+    }
+
+    func testPendingInvitationGateBlocksRepairBeforeBridgeMutationAuthorityIsGranted() async throws {
+        let herd = makeScopeHerd(
+            id: "74757575-7575-4575-8575-757575757575",
+            name: "Pending invitation"
+        )
+        let inventory = ScopeInventory(herds: [herd])
+        let observationRepository = ScopeSharingRepository(
+            accessByHerdID: [
+                herd.publicID: .ownerPrivateStore(participantCount: 1)
+            ]
+        )
+        let mutationAuthorityRepository = ScopeSharingRepository(
+            accessByHerdID: [
+                herd.publicID: HerdSharingAccess
+                    .ownerPrivateStore(participantCount: 1)
+                    .applyingCreationState(.pendingBridgeOperation)
+            ]
+        )
+        let exporter = ScopeExporter(
+            preflightByHerdID: [
+                herd.publicID: PublicIDRepairBridgePreflight(
+                    fingerprint: "pending-invitation-baseline",
+                    recordIdentities: [
+                        PublicIDRepairBridgeRecordIdentity(
+                            step: .animals,
+                            publicID: scopeOriginalID
+                        )
+                    ]
+                )
+            ]
+        )
+        let coordinator = DefaultPublicIDRepairBridgeCoordinator(
+            herdInventory: inventory,
+            sharingRepository: observationRepository,
+            mutationAuthorityRepository: mutationAuthorityRepository,
+            storageMode: .iCloud,
+            exporter: exporter
+        )
+        let report = affectedScopeReport(herdID: herd.publicID)
+
+        let preparation = try await coordinator.prepareForRepair()
+
+        do {
+            _ = try await coordinator.validateMutationAuthority(
+                preparation: preparation,
+                report: report
+            )
+            XCTFail("Expected pending accepted-invitation recovery to block repair authority")
+        } catch let error as PublicIDRepairBridgeError {
+            XCTAssertEqual(
+                error,
+                .sharingRecoveryRequired(
+                    herdPublicID: herd.publicID,
+                    state: "Resolve Sharing State"
+                )
+            )
+        }
+
+        do {
+            try await coordinator.convergeAfterRepair(
+                preparation: preparation,
+                report: report
+            )
+            XCTFail("Expected convergence to recheck pending accepted-invitation recovery")
+        } catch let error as PublicIDRepairBridgeError {
+            XCTAssertEqual(
+                error,
+                .sharingRecoveryRequired(
+                    herdPublicID: herd.publicID,
+                    state: "Resolve Sharing State"
                 )
             )
         }
@@ -449,4 +529,296 @@ private enum ScopeTestError: Error {
 private enum PreflightCapabilityTestError: Error {
     case unexpectedImport
     case unexpectedExport
+}
+
+@MainActor
+extension PublicIDRepairBridgePreflightCapabilityTests {
+    func testRepairPreparationObservesPhysicalBridgeWhenInventoryContainsDuplicateHerdIDs() async throws {
+        let herdID = UUID(uuidString: "0A010101-0101-4101-8101-010101010101")!
+        let first = makeHerdSummary(
+            publicID: herdID,
+            name: "Duplicate A",
+            createdAt: Date(timeIntervalSince1970: 1)
+        )
+        let second = makeHerdSummary(
+            publicID: herdID,
+            name: "Duplicate B",
+            createdAt: Date(timeIntervalSince1970: 2)
+        )
+        let inventory = DuplicateHerdRepairInventory(herds: [first, second])
+        let accessReader = RecordingPublicIDRepairBridgeAccessReader(
+            access: .ownerPrivateStore(participantCount: 2, hasActiveSystemShare: true)
+        )
+        let observationRepository = PublicIDRepairBridgeObservationRepository(
+            accessReader: accessReader
+        )
+        let exporter = DuplicateHerdRepairExporter(fingerprint: "duplicate-herd-baseline")
+        let coordinator = DefaultPublicIDRepairBridgeCoordinator(
+            herdInventory: inventory,
+            sharingRepository: observationRepository,
+            storageMode: .iCloud,
+            exporter: exporter
+        )
+
+        let preparation = try await coordinator.prepareForRepair()
+
+        XCTAssertEqual(preparation.targets.count, 1)
+        XCTAssertEqual(preparation.targets.first?.herdPublicID, herdID)
+        XCTAssertEqual(preparation.targets.first?.location, .ownerPrivateStore)
+        XCTAssertEqual(preparation.targets.first?.bridgeFingerprint, "duplicate-herd-baseline")
+        XCTAssertEqual(accessReader.requestedHerdIDs, [herdID, herdID])
+        XCTAssertEqual(exporter.preflightHerdIDs, [herdID])
+    }
+
+    func testRepairObservationReturnsPhysicalAccessWithoutCreationAuthorityAndRejectsMutations() async throws {
+        let herd = makeHerdSummary(
+            publicID: UUID(uuidString: "0A020202-0202-4202-8202-020202020202")!,
+            name: "Observation only",
+            createdAt: Date(timeIntervalSince1970: 3)
+        )
+        let accessReader = RecordingPublicIDRepairBridgeAccessReader(
+            access: .acceptedSharedStore(permission: .readWrite, participantCount: 3)
+                .applyingCreationState(.acceptedParticipantShare)
+        )
+        let repository = PublicIDRepairBridgeObservationRepository(accessReader: accessReader)
+
+        let access = try await repository.fetchSharingAccess(for: herd, storageMode: .iCloud)
+
+        XCTAssertEqual(access.bridgeLocation, .acceptedSharedStore)
+        XCTAssertEqual(access.permission, .readWrite)
+        XCTAssertEqual(access.creationState, .unknown)
+
+        do {
+            _ = try await repository.startSharing(herd: herd, storageMode: .iCloud)
+            XCTFail("The repair observation adapter must never create a share.")
+        } catch let error as HerdSharingActionError {
+            XCTAssertEqual(error, .sharingStateUnavailable)
+        }
+    }
+
+    func testNormalDeferredSharingStillRejectsDuplicateLocalHerdRowsBeforeShareMutation() async throws {
+        let container = try TestSupport.makeModelContainer()
+        let context = container.mainContext
+        let herdID = UUID(uuidString: "0A030303-0303-4303-8303-030303030303")!
+        let first = Herd(
+            publicID: herdID,
+            name: "Duplicate local A",
+            createdAt: Date(timeIntervalSince1970: 4),
+            updatedAt: Date(timeIntervalSince1970: 5)
+        )
+        let second = Herd(
+            publicID: herdID,
+            name: "Duplicate local B",
+            createdAt: Date(timeIntervalSince1970: 6),
+            updatedAt: Date(timeIntervalSince1970: 7)
+        )
+        context.insert(first)
+        context.insert(second)
+        try context.save()
+
+        let base = DuplicateHerdGuardedBaseRepository(access: .localOwnerBridgePending)
+        let journal = HerdSharingBridgeJournal(
+            fileURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+                .appendingPathComponent("HerdSharingSyncJournal.json")
+        )
+        let guardState = HerdSharingCreationStateGuard(
+            context: context,
+            journal: journal,
+            ownershipRegistry: DuplicateHerdOwnershipRegistry(),
+            accountOwnershipRegistry: DuplicateHerdAccountOwnershipRegistry()
+        )
+        let repository = DeferredCoreDataHerdSharingRepository(
+            repository: base,
+            creationGuard: guardState
+        )
+        let summary = first.toSummary()
+
+        do {
+            _ = try await repository.fetchSharingAccess(for: summary, storageMode: .iCloud)
+            XCTFail("Normal sharing access must remain guarded when duplicate Herd rows exist.")
+        } catch let error as HerdSharingActionError {
+            guard case .bridgeConsistencyFailed = error else {
+                return XCTFail("Expected bridgeConsistencyFailed, got \(error).")
+            }
+        }
+
+        do {
+            _ = try await repository.startSharing(herd: summary, storageMode: .iCloud)
+            XCTFail("Duplicate Herd rows must prevent share creation.")
+        } catch let error as HerdSharingActionError {
+            guard case .bridgeConsistencyFailed = error else {
+                return XCTFail("Expected bridgeConsistencyFailed, got \(error).")
+            }
+        }
+        XCTAssertEqual(base.startSharingCallCount, 0)
+    }
+
+    private func makeHerdSummary(
+        publicID: UUID,
+        name: String,
+        createdAt: Date
+    ) -> HerdSummary {
+        HerdSummary(
+            publicID: publicID,
+            name: name,
+            createdAt: createdAt,
+            updatedAt: createdAt.addingTimeInterval(1),
+            schemaVersion: 1
+        )
+    }
+}
+
+private actor DuplicateHerdRepairInventory: PublicIDRepairHerdInventoryReading {
+    let herds: [HerdSummary]
+
+    init(herds: [HerdSummary]) {
+        self.herds = herds
+    }
+
+    func fetchHerds() async throws -> [HerdSummary] { herds }
+}
+
+@MainActor
+private final class RecordingPublicIDRepairBridgeAccessReader: PublicIDRepairBridgeAccessReading {
+    let access: HerdSharingAccess
+    private(set) var requestedHerdIDs: [UUID] = []
+
+    init(access: HerdSharingAccess) {
+        self.access = access
+    }
+
+    func fetchPublicIDRepairSharingAccess(for herd: HerdSummary) async throws -> HerdSharingAccess {
+        requestedHerdIDs.append(herd.publicID)
+        return access
+    }
+}
+
+@MainActor
+private final class DuplicateHerdRepairExporter: PublicIDRepairBridgeExporting {
+    let fingerprint: String
+    private(set) var preflightHerdIDs: [UUID] = []
+
+    init(fingerprint: String) {
+        self.fingerprint = fingerprint
+    }
+
+    func captureBridgeFingerprint(
+        for herd: HerdSummary,
+        access: HerdSharingAccess
+    ) async throws -> String {
+        fingerprint
+    }
+
+    func captureBridgePreflight(
+        for herd: HerdSummary,
+        access: HerdSharingAccess
+    ) async throws -> PublicIDRepairBridgePreflight {
+        preflightHerdIDs.append(herd.publicID)
+        return PublicIDRepairBridgePreflight(
+            fingerprint: fingerprint,
+            recordIdentities: []
+        )
+    }
+
+    func importCurrentBridgeGraph(
+        for herd: HerdSummary,
+        access: HerdSharingAccess,
+        expectedFingerprint: String,
+        report: PublicIDRepairReport
+    ) async throws {
+        throw DuplicateHerdRepairTestError.unexpectedMutation
+    }
+
+    func exportRepairedGraph(
+        for herd: HerdSummary,
+        target: PublicIDRepairBridgeTargetIdentity
+    ) async throws -> HerdSharingBridgeReconciliationReport {
+        throw DuplicateHerdRepairTestError.unexpectedMutation
+    }
+}
+
+@MainActor
+private final class DuplicateHerdGuardedBaseRepository: HerdSharingRepository {
+    let access: HerdSharingAccess
+    private(set) var startSharingCallCount = 0
+
+    init(access: HerdSharingAccess) {
+        self.access = access
+    }
+
+    func fetchSharingReadiness(
+        for herd: HerdSummary?,
+        storageMode: HerdStorageMode
+    ) -> HerdSharingReadiness {
+        .sharingAdapterAvailable
+    }
+
+    func fetchSharingAccess(
+        for herd: HerdSummary?,
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingAccess {
+        access
+    }
+
+    func startSharing(
+        herd: HerdSummary,
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult {
+        startSharingCallCount += 1
+        return HerdSharingActionResult(title: "Unexpected", message: "Unexpected")
+    }
+
+    func acceptShareInvitation(
+        _ invitation: HerdShareInvitation,
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult {
+        throw DuplicateHerdRepairTestError.unexpectedMutation
+    }
+
+    func importSharedBridgeData(
+        herd: HerdSummary?,
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult {
+        throw DuplicateHerdRepairTestError.unexpectedMutation
+    }
+
+    func acceptPreventedSharedDeletes(
+        in review: HerdSharingConflictReview,
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult {
+        throw DuplicateHerdRepairTestError.unexpectedMutation
+    }
+
+    func restoreLocalFields(
+        _ selections: [HerdSharingLocalFieldRestoreSelection],
+        in review: HerdSharingConflictReview,
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult {
+        throw DuplicateHerdRepairTestError.unexpectedMutation
+    }
+
+    func syncSharedBridgeData(
+        herd: HerdSummary?,
+        storageMode: HerdStorageMode
+    ) async throws -> HerdSharingActionResult {
+        throw DuplicateHerdRepairTestError.unexpectedMutation
+    }
+}
+
+private final class DuplicateHerdOwnershipRegistry: HerdSharingOwnershipRecording {
+    func ownership(for herdPublicID: UUID) -> HerdSharingOwnership? { nil }
+    func recordOwner(herdPublicID: UUID, deviceID: String) {}
+    func recordParticipant(herdPublicID: UUID) {}
+    func clearOwnership(for herdPublicID: UUID) {}
+}
+
+private final class DuplicateHerdAccountOwnershipRegistry: HerdSharingAccountOwnershipRecording {
+    func hasEstablishedOwnerShare(for herdPublicID: UUID) -> Bool { false }
+    func recordEstablishedOwnerShare(for herdPublicID: UUID) {}
+    func clearEstablishedOwnerShare(for herdPublicID: UUID) {}
+}
+
+private enum DuplicateHerdRepairTestError: Error {
+    case unexpectedMutation
 }

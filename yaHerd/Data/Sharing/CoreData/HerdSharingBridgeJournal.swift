@@ -10,6 +10,10 @@ struct HerdSharingBridgeOperationRecord: Codable, Equatable, Identifiable, Senda
     case running
     case failed
     case completed
+
+    var isUnfinished: Bool {
+      self == .running || self == .failed
+    }
   }
 
   let id: UUID
@@ -36,6 +40,11 @@ struct HerdSharingBridgeSyncCheckpoint: Codable, Equatable, Sendable {
   let reconciliationSummary: String
 }
 
+struct HerdSharingCorruptJournalRecoveryPlan: Equatable, Sendable {
+  let herdPublicID: UUID
+  let bridgeLocation: String
+}
+
 actor HerdSharingBridgeJournal {
   private struct Document: Codable, Sendable {
     var operations: [HerdSharingBridgeOperationRecord] = []
@@ -57,7 +66,7 @@ actor HerdSharingBridgeJournal {
     bridgeLocation: String,
     now: Date = .now
   ) throws -> HerdSharingBridgeOperationRecord {
-    var document = loadDocumentIfNeeded()
+    var document = try loadDocumentIfNeeded()
     let operationKey = key(
       herdPublicID: herdPublicID,
       direction: direction,
@@ -68,7 +77,7 @@ actor HerdSharingBridgeJournal {
         herdPublicID: operation.herdPublicID,
         direction: operation.direction,
         bridgeLocation: operation.bridgeLocation
-      ) == operationKey && operation.state != .completed
+      ) == operationKey && operation.state.isUnfinished
     }
 
     let operation: HerdSharingBridgeOperationRecord
@@ -105,7 +114,7 @@ actor HerdSharingBridgeJournal {
   }
 
   func markCompleted(_ step: HerdSharingBridgeStep, operationID: UUID) throws {
-    var document = loadDocumentIfNeeded()
+    var document = try loadDocumentIfNeeded()
     guard let index = document.operations.firstIndex(where: { $0.id == operationID }) else {
       return
     }
@@ -120,7 +129,7 @@ actor HerdSharingBridgeJournal {
     _ report: HerdSharingBridgeConflictReport,
     operationID: UUID
   ) throws {
-    var document = loadDocumentIfNeeded()
+    var document = try loadDocumentIfNeeded()
     guard let index = document.operations.firstIndex(where: { $0.id == operationID }) else {
       return
     }
@@ -133,7 +142,7 @@ actor HerdSharingBridgeJournal {
     _ failure: HerdSharingSwiftDataCommittedImportFailure,
     operationID: UUID
   ) throws {
-    var document = loadDocumentIfNeeded()
+    var document = try loadDocumentIfNeeded()
     guard let index = document.operations.firstIndex(where: { $0.id == operationID }) else {
       return
     }
@@ -155,7 +164,7 @@ actor HerdSharingBridgeJournal {
     reconciliationSummary: String,
     now: Date = .now
   ) throws {
-    var document = loadDocumentIfNeeded()
+    var document = try loadDocumentIfNeeded()
     guard let index = document.operations.firstIndex(where: { $0.id == operationID }) else {
       return
     }
@@ -185,7 +194,7 @@ actor HerdSharingBridgeJournal {
   }
 
   func fail(operationID: UUID, errorDescription: String) throws {
-    var document = loadDocumentIfNeeded()
+    var document = try loadDocumentIfNeeded()
     guard let index = document.operations.firstIndex(where: { $0.id == operationID }) else {
       return
     }
@@ -195,12 +204,66 @@ actor HerdSharingBridgeJournal {
     self.document = document
   }
 
+  /// Supersedes stale bridge work without introducing a new persisted enum value.
+  /// Using the existing `completed` state keeps journal files readable by the
+  /// previous app build during rollback while ensuring the operation no longer
+  /// participates in recovery selection.
+  func abandonUnfinishedOperations(
+    for herdPublicID: UUID,
+    reason: String,
+    now: Date = .now
+  ) throws {
+    var document = try loadDocumentIfNeeded()
+    var didChange = false
+    for index in document.operations.indices
+    where document.operations[index].herdPublicID == herdPublicID
+      && document.operations[index].state.isUnfinished
+    {
+      document.operations[index].state = .completed
+      document.operations[index].completedAt = now
+      document.operations[index].lastErrorDescription = reason
+      didChange = true
+    }
+    guard didChange else { return }
+    try persist(document)
+    self.document = document
+  }
+
+  /// Supersedes only export recovery work for one concrete bridge relationship.
+  /// This is used when an accepted share is still present but has become read-only:
+  /// the local SwiftData changes remain intact, while retrying that historical export
+  /// is no longer a valid recovery operation. Pending imports are deliberately retained.
+  func abandonUnfinishedExports(
+    for herdPublicID: UUID,
+    bridgeLocation: String,
+    reason: String,
+    now: Date = .now
+  ) throws {
+    var document = try loadDocumentIfNeeded()
+    var didChange = false
+    for index in document.operations.indices
+    where document.operations[index].herdPublicID == herdPublicID
+      && document.operations[index].direction == .exportToBridge
+      && document.operations[index].bridgeLocation == bridgeLocation
+      && document.operations[index].state.isUnfinished
+    {
+      document.operations[index].state = .completed
+      document.operations[index].completedAt = now
+      document.operations[index].lastErrorDescription = reason
+      didChange = true
+    }
+    guard didChange else { return }
+    try persist(document)
+    self.document = document
+  }
+
   func checkpoint(
     herdPublicID: UUID,
     direction: HerdSharingBridgeDirection,
     bridgeLocation: String
   ) -> HerdSharingBridgeSyncCheckpoint? {
-    loadDocumentIfNeeded().checkpoints[
+    guard let document = try? loadDocumentIfNeeded() else { return nil }
+    return document.checkpoints[
       key(
         herdPublicID: herdPublicID,
         direction: direction,
@@ -210,7 +273,105 @@ actor HerdSharingBridgeJournal {
   }
 
   func unfinishedOperations() -> [HerdSharingBridgeOperationRecord] {
-    loadDocumentIfNeeded().operations.filter { $0.state != .completed }
+    guard let document = try? loadDocumentIfNeeded() else {
+      return [corruptJournalSafetyOperation(for: Self.corruptJournalSentinelHerdID)]
+    }
+    return document.operations.filter { $0.state.isUnfinished }
+  }
+
+  func unfinishedOperations(for herdPublicID: UUID) -> [HerdSharingBridgeOperationRecord] {
+    guard let document = try? loadDocumentIfNeeded() else {
+      return [corruptJournalSafetyOperation(for: herdPublicID)]
+    }
+    return document.operations.filter {
+      $0.herdPublicID == herdPublicID && $0.state.isUnfinished
+    }
+  }
+
+  /// Preserves the exact unreadable journal bytes before replacing the active document. When a
+  /// concrete bridge is available, the replacement atomically includes the failed import-first
+  /// recovery operation so no empty-journal window can authorize writes or exports after backup.
+  /// If the source cannot be read, the backup cannot be written, or the replacement cannot be
+  /// installed, recovery throws and remains fail-closed.
+  func backupAndResetCorruptJournal(
+    recoveryPlan: HerdSharingCorruptJournalRecoveryPlan? = nil,
+    now: Date = .now
+  ) throws -> URL {
+    guard FileManager.default.fileExists(atPath: fileURL.path) else {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The persisted sharing recovery journal no longer exists. Refresh sharing state before attempting journal recovery."
+      )
+    }
+
+    let corruptData: Data
+    do {
+      corruptData = try Data(contentsOf: fileURL)
+    } catch {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The persisted sharing recovery journal could not be read for backup. The journal was not replaced. \(error.localizedDescription)"
+      )
+    }
+
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    if (try? decoder.decode(Document.self, from: corruptData)) != nil {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The persisted sharing recovery journal is readable and does not require corrupt-journal recovery."
+      )
+    }
+
+    let directoryURL = fileURL.deletingLastPathComponent()
+    try FileManager.default.createDirectory(
+      at: directoryURL,
+      withIntermediateDirectories: true,
+      attributes: nil
+    )
+    let backupName = "\(fileURL.deletingPathExtension().lastPathComponent).corrupt-backup-\(Int(now.timeIntervalSince1970))-\(UUID().uuidString.lowercased()).json"
+    let backupURL = directoryURL.appendingPathComponent(backupName)
+
+    do {
+      try corruptData.write(to: backupURL, options: .atomic)
+    } catch {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The corrupt sharing recovery journal could not be backed up. The active journal was not replaced. \(error.localizedDescription)"
+      )
+    }
+
+    var replacement = Document()
+    if let recoveryPlan {
+      replacement.operations = [
+        HerdSharingBridgeOperationRecord(
+          id: UUID(),
+          herdPublicID: recoveryPlan.herdPublicID,
+          direction: .importFromBridge,
+          bridgeLocation: recoveryPlan.bridgeLocation,
+          createdAt: now,
+          lastAttemptStartedAt: now,
+          completedAt: nil,
+          attemptCount: 1,
+          state: .failed,
+          completedSteps: [],
+          pendingConflictReport: nil,
+          lastErrorDescription: "Scheduled import-first recovery after backing up corrupt journal \(backupURL.lastPathComponent). No local export may resume until this import is reconciled."
+        )
+      ]
+    }
+
+    do {
+      try persist(replacement)
+      document = replacement
+      return backupURL
+    } catch {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The corrupt sharing recovery journal was backed up, but a safe replacement journal could not be installed. The original journal remains authoritative and sharing stays blocked. \(error.localizedDescription)"
+      )
+    }
+  }
+
+  nonisolated static func isCorruptJournalSafetyOperation(
+    _ operation: HerdSharingBridgeOperationRecord
+  ) -> Bool {
+    operation.id == corruptJournalSentinelOperationID
   }
 
   private func key(
@@ -239,17 +400,62 @@ actor HerdSharingBridgeJournal {
     try encoder.encode(document).write(to: fileURL, options: .atomic)
   }
 
-  private func loadDocumentIfNeeded() -> Document {
+  private func loadDocumentIfNeeded() throws -> Document {
     if let document { return document }
-    let loaded = Self.loadDocument(from: fileURL)
+    let loaded = try Self.loadDocument(from: fileURL)
     document = loaded
     return loaded
   }
 
-  nonisolated private static func loadDocument(from fileURL: URL) -> Document {
-    guard let data = try? Data(contentsOf: fileURL) else { return Document() }
+  nonisolated private static func loadDocument(from fileURL: URL) throws -> Document {
+    guard FileManager.default.fileExists(atPath: fileURL.path) else { return Document() }
+
+    let data: Data
+    do {
+      data = try Data(contentsOf: fileURL)
+    } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+      return Document()
+    } catch {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The persisted sharing recovery journal could not be read. Sharing remains blocked so existing recovery evidence is not overwritten. \(error.localizedDescription)"
+      )
+    }
+
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
-    return (try? decoder.decode(Document.self, from: data)) ?? Document()
+    do {
+      return try decoder.decode(Document.self, from: data)
+    } catch {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The persisted sharing recovery journal is malformed, truncated, or incompatible. Sharing remains blocked so unfinished recovery evidence is not treated as empty or overwritten."
+      )
+    }
   }
+
+  private func corruptJournalSafetyOperation(
+    for herdPublicID: UUID
+  ) -> HerdSharingBridgeOperationRecord {
+    HerdSharingBridgeOperationRecord(
+      id: Self.corruptJournalSentinelOperationID,
+      herdPublicID: herdPublicID,
+      direction: .importFromBridge,
+      bridgeLocation: "corrupt persisted bridge journal",
+      createdAt: Date(timeIntervalSince1970: 0),
+      lastAttemptStartedAt: Date(timeIntervalSince1970: 0),
+      completedAt: nil,
+      attemptCount: 0,
+      state: .failed,
+      completedSteps: [],
+      pendingConflictReport: nil,
+      lastErrorDescription:
+        "The persisted sharing recovery journal could not be decoded. This synthetic unfinished operation blocks sharing until the journal is repaired or recovered."
+    )
+  }
+
+  nonisolated private static let corruptJournalSentinelHerdID = UUID(
+    uuidString: "00000000-0000-0000-0000-000000000000"
+  )!
+  nonisolated private static let corruptJournalSentinelOperationID = UUID(
+    uuidString: "ffffffff-ffff-ffff-ffff-ffffffffffff"
+  )!
 }
