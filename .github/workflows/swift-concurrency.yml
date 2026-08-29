@@ -1,18 +1,37 @@
-name: Swift 6 Concurrency
+name: yaHerd Verification
+
+run-name: >-
+  Verification · ${{ github.ref_name }} · architecture=${{ inputs.run_architecture }} · concurrency=${{ inputs.run_concurrency }}
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      run_architecture:
+        description: Run repository architecture checks
+        required: true
+        type: boolean
+        default: true
+      run_concurrency:
+        description: Run Swift 6 checks, build, and foundation persistence/concurrency tests
+        required: true
+        type: boolean
+        default: true
 
 jobs:
-  strict-concurrency:
+  verify:
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
-      - name: Check out repository
+      - name: Validate verification selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.run_architecture }}" != "true" && "${{ inputs.run_concurrency }}" != "true" ]]; then
+            echo "Select at least one verification option." >&2
+            exit 1
+          fi
+
+      - name: Check out selected branch or tag
         shell: bash
         run: |
           set -euo pipefail
@@ -20,22 +39,37 @@ jobs:
           git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
           git -c protocol.version=2 fetch -q --no-tags --depth=1 origin "${GITHUB_REF}"
           git checkout -q --force FETCH_HEAD
+          echo "Verifying commit $(git rev-parse HEAD) from ${GITHUB_REF}"
 
-      - name: Validate architecture and Swift 6 build
+      - name: Select Xcode 26
+        if: ${{ inputs.run_concurrency }}
         shell: bash
         run: |
           set -euo pipefail
           XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' -print | sort -V | tail -1)"
           if [[ -z "$XCODE_PATH" ]]; then
-            echo "Xcode 26 is required for the iOS 26 target and Swift 6 concurrency gate." >&2
+            echo "Xcode 26 is required for the iOS 26 target and Swift 6 verification." >&2
             exit 1
           fi
           sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+
+      - name: Verify architecture
+        if: ${{ inputs.run_architecture }}
+        shell: bash
+        run: |
+          set -euo pipefail
           bash Scripts/verify-architecture.sh
+
+      - name: Verify Swift 6 concurrency, build, and foundation tests
+        if: ${{ inputs.run_concurrency }}
+        shell: bash
+        run: |
+          set -euo pipefail
           bash Scripts/verify-concurrency.sh
 
       - name: Collect persistence test diagnostics
-        if: failure()
+        if: ${{ failure() && inputs.run_concurrency }}
         shell: bash
         run: |
           mkdir -p .build/PersistenceDiagnostics
@@ -47,7 +81,7 @@ jobs:
             -mmin -30 -exec cp {} .build/PersistenceDiagnostics/ \; || true
 
       - name: Upload persistence test diagnostics
-        if: failure()
+        if: ${{ failure() && inputs.run_concurrency }}
         uses: actions/upload-artifact@v4
         with:
           name: persistence-test-diagnostics
