@@ -183,7 +183,7 @@ extension HerdSharingCoreDataStore {
               forParticipantAccount: accountRecordName
             )
           } else {
-            acceptedShareImportScopeStore.remove(scope)
+            try acceptedShareImportScopeStore.removeRecoverably(scope)
           }
           throw HerdSharingActionError.bridgeImportFailed(
             "The retained CloudKit invitation scope was remotely verified again and no accepted Herd root exists for this iCloud account. The stale recovery scope was retired for this account. Retry the requested import or synchronization."
