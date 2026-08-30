@@ -162,13 +162,13 @@ extension HerdSharingCoreDataStore {
           } else {
             accountRecordName = try await acceptedShareImportScopeStore.currentAccountRecordName()
           }
-          acceptedShareImportScopeStore.markAccepted(
-            scope,
-            participantAccountRecordName: accountRecordName
-          )
-        }
-        if scope.remoteAbsenceObservedAt != nil {
-          acceptedShareImportScopeStore.clearRemoteAbsence(for: scope)
+          try persistAcceptedShareScopeRecoveryTransition(matching: scope) {
+            $0.markingAccepted(participantAccountRecordName: accountRecordName)
+          }
+        } else if scope.remoteAbsenceObservedAt != nil {
+          try persistAcceptedShareScopeRecoveryTransition(matching: scope) {
+            $0.clearingRemoteAbsence()
+          }
         }
 
       case .absent:
@@ -178,10 +178,9 @@ extension HerdSharingCoreDataStore {
         {
           if scope.acceptanceState == .legacyUnknown {
             let accountRecordName = try await acceptedShareImportScopeStore.currentAccountRecordName()
-            acceptedShareImportScopeStore.retireLegacyScope(
-              scope,
-              forParticipantAccount: accountRecordName
-            )
+            try persistAcceptedShareScopeRecoveryTransition(matching: scope) {
+              $0.retiringForParticipantAccount(accountRecordName)
+            }
           } else {
             try acceptedShareImportScopeStore.removeRecoverably(scope)
           }
@@ -190,7 +189,9 @@ extension HerdSharingCoreDataStore {
           )
         }
 
-        acceptedShareImportScopeStore.recordRemoteAbsence(for: scope, at: now)
+        try persistAcceptedShareScopeRecoveryTransition(matching: scope) {
+          $0.recordingRemoteAbsence(at: now)
+        }
         throw HerdSharingActionError.bridgeImportFailed(
           "The retained CloudKit invitation scope has no accepted Herd root in this iCloud account yet. yaHerd kept the scope fail-closed and will verify remote absence again on a later retry before clearing it."
         )
@@ -198,6 +199,27 @@ extension HerdSharingCoreDataStore {
     }
 
     return try await acceptedShareImportScopeStore.pendingScopesForCurrentAccount()
+  }
+
+  private func persistAcceptedShareScopeRecoveryTransition(
+    matching scope: HerdSharingAcceptedShareImportScope,
+    transform: (HerdSharingAcceptedShareImportScope) -> HerdSharingAcceptedShareImportScope
+  ) throws {
+    // Recovery scopes returned for a legacy account-less invitation can be bound to the current
+    // account in memory. Always transform the persisted scope instead so durable recovery does not
+    // accidentally convert legacy account ownership before the explicit acceptance/retirement step.
+    let persistedScopes = try acceptedShareImportScopeStore.pendingScopes()
+    guard let persistedScope = persistedScopes.first(where: {
+      Self.sameAcceptedShareScope($0, scope)
+    }) else {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The retained CloudKit invitation recovery scope changed before its recovery state could be persisted. Sharing remains blocked until the exact invitation state can be verified again."
+      )
+    }
+
+    // record(_:) uses the store's synchronize/read-back persistence barrier. Do not report a
+    // recovery transition until that durable write succeeds.
+    try acceptedShareImportScopeStore.record(transform(persistedScope))
   }
 
   private func acceptedShareImport(
