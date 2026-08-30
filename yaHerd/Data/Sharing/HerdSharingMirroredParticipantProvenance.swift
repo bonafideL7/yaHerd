@@ -137,12 +137,12 @@ final class MirroredHerdSharingOwnershipRegistry: HerdSharingOwnershipRecording 
     defaults.set(generation, forKey: participantRetirementWritePendingKey(for: herdPublicID))
     _ = defaults.synchronize()
 
-    ubiquitous.set(generation, forKey: participantDetachmentGenerationKey)
+    ubiquitous.set(generation, forKey: participantDetachmentGenerationKey(for: herdPublicID))
     ubiquitous.set(true, forKey: participantRetirementKey(for: herdPublicID))
     _ = ubiquitous.synchronize()
 
     if ubiquitous.bool(forKey: participantRetirementKey(for: herdPublicID)),
-       ubiquitous.string(forKey: participantDetachmentGenerationKey) == generation
+       ubiquitous.string(forKey: participantDetachmentGenerationKey(for: herdPublicID)) == generation
     {
       defaults.removeObject(forKey: participantRetirementWritePendingKey(for: herdPublicID))
       _ = defaults.synchronize()
@@ -165,8 +165,8 @@ final class MirroredHerdSharingOwnershipRegistry: HerdSharingOwnershipRecording 
     "\(participantReferenceKeyPrefix).\(herdPublicID.uuidString.lowercased()).retirement-write-pending"
   }
 
-  private var participantDetachmentGenerationKey: String {
-    "\(participantReferenceKeyPrefix).detachment-generation"
+  private func participantDetachmentGenerationKey(for herdPublicID: UUID) -> String {
+    "\(participantReferenceKeyPrefix).\(herdPublicID.uuidString.lowercased()).detachment-generation"
   }
 
   private func participantKey(for herdPublicID: UUID) -> String {
@@ -297,13 +297,21 @@ final class MirroredHerdSharingAcceptedParticipantReferenceStore:
   func recordExplicitAcceptanceBoundary(
     for reference: HerdSharingAcceptedParticipantReference
   ) throws {
-    let generation = currentDetachmentGenerationToken()
+    let generationSnapshot = currentDetachmentGenerationSnapshot()
     let acceptanceKey = try explicitAcceptanceGenerationKey(for: reference)
-    defaults.set(generation, forKey: acceptanceKey)
-    _ = defaults.synchronize()
-    guard defaults.string(forKey: acceptanceKey) == generation else {
+    let snapshotData: Data
+    do {
+      snapshotData = try JSONEncoder().encode(generationSnapshot)
+    } catch {
       throw HerdSharingActionError.bridgeConsistencyFailed(
-        "The accepted invitation could not retain the participant-detachment generation needed for safe recovery. CloudKit acceptance was not started."
+        "The participant-detachment generation snapshot could not be encoded. CloudKit acceptance was not started."
+      )
+    }
+    defaults.set(snapshotData, forKey: acceptanceKey)
+    _ = defaults.synchronize()
+    guard defaults.data(forKey: acceptanceKey) == snapshotData else {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The accepted invitation could not retain the participant-detachment generations needed for safe recovery. CloudKit acceptance was not started."
       )
     }
   }
@@ -315,15 +323,26 @@ final class MirroredHerdSharingAcceptedParticipantReferenceStore:
     let acceptanceKey = try explicitAcceptanceGenerationKey(for: reference)
 
     refreshRetirementWritePendingIfDurable(for: herdPublicID)
+    let acceptedGeneration = try acceptedDetachmentGeneration(
+      for: herdPublicID,
+      acceptanceKey: acceptanceKey
+    )
+    let currentGeneration = currentDetachmentGenerationToken(for: herdPublicID)
+    if let acceptedGeneration,
+       acceptedGeneration != currentGeneration
+    {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "This accepted invitation predates the current participant-detachment tombstone. Reopen and deliberately accept the invitation again before participant state can be reactivated."
+      )
+    }
+
     if isRetired(for: herdPublicID) {
       guard defaults.string(forKey: retirementWritePendingKey(for: herdPublicID)) == nil else {
         throw HerdSharingActionError.bridgeConsistencyFailed(
           "Participant detachment has not finished mirroring to iCloud. The accepted invitation cannot supersede it yet."
         )
       }
-      _ = ubiquitous.synchronize()
-      let currentGeneration = currentDetachmentGenerationToken()
-      guard let acceptedGeneration = defaults.string(forKey: acceptanceKey),
+      guard let acceptedGeneration,
             acceptedGeneration == currentGeneration
       else {
         throw HerdSharingActionError.bridgeConsistencyFailed(
@@ -374,7 +393,7 @@ final class MirroredHerdSharingAcceptedParticipantReferenceStore:
 
   func clearReference(for herdPublicID: UUID) {
     // Set the exact expected generation locally before touching KVS. It remains set unless both the
-    // new account-level generation and this Herd's retirement tombstone read back for that same
+    // new per-Herd generation and this Herd's retirement tombstone read back for that same
     // generation; an older already-present tombstone cannot satisfy a newer failed detach write.
     let generation = UUID().uuidString.lowercased()
     defaults.set(generation, forKey: retirementWritePendingKey(for: herdPublicID))
@@ -384,14 +403,15 @@ final class MirroredHerdSharingAcceptedParticipantReferenceStore:
     defaults.removeObject(forKey: mirrorWriteFailureKey(for: herdPublicID))
     let primaryKey = key(for: herdPublicID)
     let recoveryKey = recoveryKey(for: herdPublicID)
+    let generationKey = detachmentGenerationKey(for: herdPublicID)
     ubiquitous.removeObject(forKey: primaryKey)
     ubiquitous.removeObject(forKey: recoveryKey)
-    ubiquitous.set(generation, forKey: detachmentGenerationKey)
+    ubiquitous.set(generation, forKey: generationKey)
     ubiquitous.set(true, forKey: retirementKey(for: herdPublicID))
     _ = ubiquitous.synchronize()
 
     if ubiquitous.bool(forKey: retirementKey(for: herdPublicID)),
-       ubiquitous.string(forKey: detachmentGenerationKey) == generation
+       ubiquitous.string(forKey: generationKey) == generation
     {
       defaults.removeObject(forKey: retirementWritePendingKey(for: herdPublicID))
       _ = defaults.synchronize()
@@ -482,25 +502,26 @@ final class MirroredHerdSharingAcceptedParticipantReferenceStore:
     let retirementKey = retirementKey(for: herdPublicID)
 
     // Stage and verify the replacement provenance while the previous detach tombstone remains
-    // authoritative. Also require the detachment generation to remain unchanged across both KVS
-    // synchronization points so another detach racing this import always wins.
+    // authoritative. Also require this Herd's detachment generation to remain unchanged across both
+    // KVS synchronization points so another detach racing this import always wins without allowing
+    // an unrelated Herd's detach to invalidate the acceptance.
     ubiquitous.set(data, forKey: primaryKey)
     ubiquitous.set(data, forKey: recoveryKey)
     _ = ubiquitous.synchronize()
     guard ubiquitous.bool(forKey: retirementKey),
-          detachmentGenerationMatches(expectedDetachmentGeneration),
+          detachmentGenerationMatches(expectedDetachmentGeneration, for: herdPublicID),
           ubiquitous.data(forKey: primaryKey) == data,
           ubiquitous.data(forKey: recoveryKey) == data
     else {
       throw HerdSharingActionError.bridgeConsistencyFailed(
-        "The explicitly accepted participant provenance did not survive iCloud read-back against the same detach generation. The prior detach tombstone remains authoritative."
+        "The explicitly accepted participant provenance did not survive iCloud read-back against the same Herd detach generation. The prior detach tombstone remains authoritative."
       )
     }
 
     ubiquitous.removeObject(forKey: retirementKey)
     _ = ubiquitous.synchronize()
     guard !ubiquitous.bool(forKey: retirementKey),
-          detachmentGenerationMatches(expectedDetachmentGeneration),
+          detachmentGenerationMatches(expectedDetachmentGeneration, for: herdPublicID),
           ubiquitous.data(forKey: primaryKey) == data,
           ubiquitous.data(forKey: recoveryKey) == data
     else {
@@ -592,7 +613,7 @@ final class MirroredHerdSharingAcceptedParticipantReferenceStore:
     ) else { return }
     _ = ubiquitous.synchronize()
     guard ubiquitous.bool(forKey: retirementKey(for: herdPublicID)),
-          ubiquitous.string(forKey: detachmentGenerationKey) == pendingGeneration
+          currentDetachmentGenerationToken(for: herdPublicID) == pendingGeneration
     else { return }
     defaults.removeObject(forKey: retirementWritePendingKey(for: herdPublicID))
     _ = defaults.synchronize()
@@ -606,16 +627,50 @@ final class MirroredHerdSharingAcceptedParticipantReferenceStore:
     return ubiquitous.bool(forKey: retirementKey(for: herdPublicID))
   }
 
-  private func currentDetachmentGenerationToken() -> String {
+  private func currentDetachmentGenerationSnapshot() -> [String: String] {
     _ = ubiquitous.synchronize()
-    return ubiquitous.string(forKey: detachmentGenerationKey)
+    return ubiquitous.dictionaryRepresentation.reduce(into: [:]) { snapshot, entry in
+      guard entry.key == legacyDetachmentGenerationKey
+        || (entry.key.hasPrefix("\(keyPrefix).")
+          && entry.key.hasSuffix(".detachment-generation")),
+        let generation = entry.value as? String
+      else { return }
+      snapshot[entry.key] = generation
+    }
+  }
+
+  private func acceptedDetachmentGeneration(
+    for herdPublicID: UUID,
+    acceptanceKey: String
+  ) throws -> String? {
+    guard let snapshotData = defaults.data(forKey: acceptanceKey) else {
+      return nil
+    }
+    let snapshot: [String: String]
+    do {
+      snapshot = try JSONDecoder().decode([String: String].self, from: snapshotData)
+    } catch {
+      throw HerdSharingActionError.bridgeConsistencyFailed(
+        "The retained participant-detachment generation snapshot is corrupt. The accepted invitation remains fail-closed."
+      )
+    }
+    return snapshot[detachmentGenerationKey(for: herdPublicID)]
+      ?? snapshot[legacyDetachmentGenerationKey]
       ?? Self.noDetachmentGenerationToken
   }
 
-  private func detachmentGenerationMatches(_ expectedGeneration: String) -> Bool {
-    let currentGeneration = ubiquitous.string(forKey: detachmentGenerationKey)
+  private func currentDetachmentGenerationToken(for herdPublicID: UUID) -> String {
+    _ = ubiquitous.synchronize()
+    return ubiquitous.string(forKey: detachmentGenerationKey(for: herdPublicID))
+      ?? ubiquitous.string(forKey: legacyDetachmentGenerationKey)
       ?? Self.noDetachmentGenerationToken
-    return currentGeneration == expectedGeneration
+  }
+
+  private func detachmentGenerationMatches(
+    _ expectedGeneration: String,
+    for herdPublicID: UUID
+  ) -> Bool {
+    currentDetachmentGenerationToken(for: herdPublicID) == expectedGeneration
   }
 
   private func explicitAcceptanceGenerationKey(
@@ -632,7 +687,11 @@ final class MirroredHerdSharingAcceptedParticipantReferenceStore:
     return "\(keyPrefix).explicit-acceptance-generation.\(data.base64EncodedString())"
   }
 
-  private var detachmentGenerationKey: String {
+  private func detachmentGenerationKey(for herdPublicID: UUID) -> String {
+    "\(key(for: herdPublicID)).detachment-generation"
+  }
+
+  private var legacyDetachmentGenerationKey: String {
     "\(keyPrefix).detachment-generation"
   }
 
