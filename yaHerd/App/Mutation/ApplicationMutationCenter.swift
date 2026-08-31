@@ -61,6 +61,7 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
 
     private(set) var latestEvent: ApplicationMutationEvent?
     private(set) var homeRevision: UInt64 = 0
+    private(set) var dashboardRevision: UInt64 = 0
     private(set) var animalRevision: UInt64 = 0
     private(set) var pastureRevision: UInt64 = 0
     private(set) var fieldCheckRevision: UInt64 = 0
@@ -92,8 +93,10 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
 
     func revision(for area: ApplicationFeatureArea) -> UInt64 {
         switch area {
-        case .home, .dashboard:
+        case .home:
             return homeRevision
+        case .dashboard:
+            return dashboardRevision
         case .animals:
             return animalRevision
         case .pastures:
@@ -168,8 +171,11 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
     }
 
     private func incrementRevisions(for affectedAreas: Set<ApplicationFeatureArea>) {
-        if affectedAreas.contains(.home) || affectedAreas.contains(.dashboard) {
+        if affectedAreas.contains(.home) {
             homeRevision &+= 1
+        }
+        if affectedAreas.contains(.dashboard) {
+            dashboardRevision &+= 1
         }
         if affectedAreas.contains(.animals) {
             animalRevision &+= 1
