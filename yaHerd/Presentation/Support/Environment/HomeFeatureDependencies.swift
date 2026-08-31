@@ -40,7 +40,7 @@ nonisolated struct HomeFeatureDependencies {
             dashboardQueryReader: dashboardQueryReader ?? MissingHomeDashboardQueryReader(),
             homeFieldCheckQueryReader: homeFieldCheckQueryReader ?? MissingHomeFieldCheckQueryReader(),
             homeWorkingQueryReader: homeWorkingQueryReader ?? MissingHomeWorkingQueryReader(),
-            mutationStream: mutationStream ?? InactiveApplicationMutationStream()
+            mutationStream: mutationStream ?? MissingHomeMutationStream()
         )
     }
 }
@@ -112,6 +112,37 @@ private struct MissingHomeWorkingQueryReader: HomeWorkingQueryReading {
     }
 }
 
+private struct MissingHomeMutationStream: ApplicationMutationStreaming {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
+    var currentSequence: UInt64 { 0 }
+    var homeRevision: UInt64 { 0 }
+    var animalRevision: UInt64 { 0 }
+    var pastureRevision: UInt64 { 0 }
+    var fieldCheckRevision: UInt64 { 0 }
+    var workingSessionRevision: UInt64 { 0 }
+    var collaborationRevision: UInt64 { 0 }
+
+    func revision(for area: ApplicationFeatureArea) -> UInt64 {
+        0
+    }
+
+    func revisions(
+        for area: ApplicationFeatureArea,
+        after revision: UInt64
+    ) -> AsyncStream<UInt64> {
+        AsyncStream { continuation in
+            continuation.finish()
+        }
+    }
+
+    func events(after sequence: UInt64) -> AsyncStream<ApplicationMutationEvent> {
+        AsyncStream { continuation in
+            continuation.finish()
+        }
+    }
+}
+
 private struct HomeFeatureDependenciesKey: EnvironmentKey {
     static var defaultValue: HomeFeatureDependencies {
         HomeFeatureDependencies(
@@ -120,7 +151,7 @@ private struct HomeFeatureDependenciesKey: EnvironmentKey {
             dashboardQueryReader: MissingHomeDashboardQueryReader(),
             homeFieldCheckQueryReader: MissingHomeFieldCheckQueryReader(),
             homeWorkingQueryReader: MissingHomeWorkingQueryReader(),
-            mutationStream: InactiveApplicationMutationStream()
+            mutationStream: MissingHomeMutationStream()
         )
     }
 }
