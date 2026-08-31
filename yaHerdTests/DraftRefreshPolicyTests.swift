@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 @testable import yaHerd
 
@@ -30,7 +31,7 @@ final class DraftRefreshPolicyTests: XCTestCase {
         XCTAssertEqual(result, "Local edit")
     }
 
-    func testDifferentRecordResetsEditedDraft() {
+    func testRecordIdentityMismatchResetsEditedDraft() {
         let result = DraftRefreshPolicy.reconciledValue(
             draft: "Local edit",
             previouslyLoadedValue: "Original",
