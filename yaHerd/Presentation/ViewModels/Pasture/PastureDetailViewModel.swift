@@ -39,6 +39,7 @@ final class PastureDetailViewModel {
     var isEditing = false
     var hasLoaded = false
     var errorMessage: String?
+    private var loadedPastureID: UUID?
     private var lastLoadedRevision: UInt64 = 0
 
     var navigationTitle: String {
@@ -87,7 +88,7 @@ final class PastureDetailViewModel {
         mutationStream: any ApplicationMutationStreaming
     ) async {
         let startingRevision = mutationStream.pastureRevision
-        if !hasLoaded || lastLoadedRevision < startingRevision {
+        if loadedPastureID != pastureID || !hasLoaded || lastLoadedRevision < startingRevision {
             if load(pastureID: pastureID, using: repository) {
                 lastLoadedRevision = startingRevision
             }
@@ -106,12 +107,16 @@ final class PastureDetailViewModel {
 
     @discardableResult
     func load(pastureID: UUID, using repository: any PastureDetailRepository) -> Bool {
+        if loadedPastureID != pastureID {
+            resetForPastureChange()
+        }
         defer { hasLoaded = true }
 
         do {
             let loadedDetail = try LoadPastureDetailUseCase(repository: repository).execute(id: pastureID)
             detail = loadedDetail
             residentAnimals = try repository.fetchResidentAnimals(pastureID: pastureID)
+            loadedPastureID = pastureID
             if !isEditing {
                 form.populate(from: loadedDetail)
             }
@@ -153,6 +158,15 @@ final class PastureDetailViewModel {
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
+    }
+
+    private func resetForPastureChange() {
+        detail = nil
+        residentAnimals = []
+        isEditing = false
+        hasLoaded = false
+        errorMessage = nil
+        loadedPastureID = nil
     }
 
     private func utilizationBadge(for metrics: PastureMetrics) -> PastureUtilizationBadge? {
