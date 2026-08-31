@@ -10,6 +10,7 @@ final class FieldCheckSessionDetailViewModel {
     var hasLoaded = false
 
     @ObservationIgnored private var mutationObservationTask: Task<Void, Never>?
+    @ObservationIgnored private var observedSessionID: UUID?
     private var lastLoadedRevision: UInt64 = 0
 
     func observe(
@@ -180,6 +181,11 @@ final class FieldCheckSessionDetailViewModel {
         mutationStream explicitMutationStream: (any ApplicationMutationStreaming)? = nil,
         didLoad: @escaping @MainActor () -> Void = {}
     ) {
+        if observedSessionID != sessionID {
+            mutationObservationTask?.cancel()
+            mutationObservationTask = nil
+            observedSessionID = sessionID
+        }
         guard mutationObservationTask == nil else { return }
 
         let mutationStream: any ApplicationMutationStreaming
