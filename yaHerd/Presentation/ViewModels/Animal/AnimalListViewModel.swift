@@ -25,10 +25,40 @@ final class AnimalListViewModel {
     private var isLoading = false
     private var loadTask: Task<Void, Never>?
     private var loadGeneration = 0
+    private var lastLoadedRevision: UInt64 = 0
     private var derivedStateTask: Task<Void, Never>?
     private var derivedStateGeneration = 0
     private var lastDerivedStateRequest: DerivedStateRequest?
     private let derivationActor = AnimalListDerivationActor()
+
+    func observe(
+        using repository: any AnimalListRepository,
+        pastureRepository: any PastureReferenceDataReader,
+        mutationStream: any ApplicationMutationStreaming
+    ) async {
+        let startingRevision = mutationStream.animalRevision
+        if !hasLoaded || lastLoadedRevision < startingRevision {
+            if await reloadAndWait(
+                using: repository,
+                pastureRepository: pastureRepository
+            ) {
+                lastLoadedRevision = startingRevision
+            }
+        }
+
+        for await revision in mutationStream.revisions(
+            for: .animals,
+            after: lastLoadedRevision
+        ) {
+            guard !Task.isCancelled else { return }
+            if await reloadAndWait(
+                using: repository,
+                pastureRepository: pastureRepository
+            ) {
+                lastLoadedRevision = revision
+            }
+        }
+    }
 
     func loadIfNeeded(
         using repository: any AnimalListRepository,
@@ -143,6 +173,16 @@ final class AnimalListViewModel {
     func pastureName(for id: UUID?) -> String? {
         guard let id else { return nil }
         return pastureOptions.first(where: { $0.id == id })?.name
+    }
+
+    private func reloadAndWait(
+        using repository: any AnimalListRepository,
+        pastureRepository: any PastureReferenceDataReader
+    ) async -> Bool {
+        load(using: repository, pastureRepository: pastureRepository)
+        let currentLoadTask = loadTask
+        await currentLoadTask?.value
+        return hasLoaded && errorMessage == nil
     }
 
     private func loadUsingReadModel(

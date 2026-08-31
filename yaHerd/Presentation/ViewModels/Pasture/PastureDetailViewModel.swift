@@ -39,6 +39,7 @@ final class PastureDetailViewModel {
     var isEditing = false
     var hasLoaded = false
     var errorMessage: String?
+    private var lastLoadedRevision: UInt64 = 0
 
     var navigationTitle: String {
         detail?.name ?? "Pasture"
@@ -80,7 +81,31 @@ final class PastureDetailViewModel {
         )
     }
 
-    func load(pastureID: UUID, using repository: any PastureDetailRepository) {
+    func observe(
+        pastureID: UUID,
+        using repository: any PastureDetailRepository,
+        mutationStream: any ApplicationMutationStreaming
+    ) async {
+        let startingRevision = mutationStream.pastureRevision
+        if !hasLoaded || lastLoadedRevision < startingRevision {
+            if load(pastureID: pastureID, using: repository) {
+                lastLoadedRevision = startingRevision
+            }
+        }
+
+        for await revision in mutationStream.revisions(
+            for: .pastures,
+            after: lastLoadedRevision
+        ) {
+            guard !Task.isCancelled else { return }
+            if load(pastureID: pastureID, using: repository) {
+                lastLoadedRevision = revision
+            }
+        }
+    }
+
+    @discardableResult
+    func load(pastureID: UUID, using repository: any PastureDetailRepository) -> Bool {
         defer { hasLoaded = true }
 
         do {
@@ -91,8 +116,10 @@ final class PastureDetailViewModel {
                 form.populate(from: loadedDetail)
             }
             errorMessage = nil
+            return true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
+            return false
         }
     }
 

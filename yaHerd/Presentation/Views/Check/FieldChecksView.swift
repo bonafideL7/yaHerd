@@ -169,7 +169,10 @@ struct FieldChecksView: View {
             }
         }
         .task {
-            model.load(using: fieldCheckOverviewReader)
+            await model.observe(
+                using: fieldCheckOverviewReader,
+                mutationStream: fieldCheckDependencies.mutationStream
+            )
         }
         .alert("Can't Load Checks", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
