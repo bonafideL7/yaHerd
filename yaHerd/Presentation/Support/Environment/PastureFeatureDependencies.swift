@@ -11,6 +11,7 @@ nonisolated struct PastureFeatureDependencies {
     let referenceReader: any PastureReferenceDataReader
     let animalMover: any AnimalPastureMoving
     let fieldCheckArchiveWriter: any FieldCheckPastureArchiveWriter
+    let mutationStream: any ApplicationMutationStreaming
 
     nonisolated init(
         listRepository: any PastureListRepository,
@@ -21,7 +22,8 @@ nonisolated struct PastureFeatureDependencies {
         groupEditorRepository: any PastureGroupEditorRepository,
         referenceReader: any PastureReferenceDataReader,
         animalMover: any AnimalPastureMoving,
-        fieldCheckArchiveWriter: any FieldCheckPastureArchiveWriter
+        fieldCheckArchiveWriter: any FieldCheckPastureArchiveWriter,
+        mutationStream: any ApplicationMutationStreaming
     ) {
         self.listRepository = listRepository
         self.createRepository = createRepository
@@ -32,13 +34,15 @@ nonisolated struct PastureFeatureDependencies {
         self.referenceReader = referenceReader
         self.animalMover = animalMover
         self.fieldCheckArchiveWriter = fieldCheckArchiveWriter
+        self.mutationStream = mutationStream
     }
 
     @MainActor
     init(
         pastureRepository: any PastureRepository,
         animalMover: any AnimalPastureMoving,
-        fieldCheckArchiveWriter: any FieldCheckPastureArchiveWriter
+        fieldCheckArchiveWriter: any FieldCheckPastureArchiveWriter,
+        mutationStream: any ApplicationMutationStreaming
     ) {
         self.init(
             listRepository: pastureRepository,
@@ -49,7 +53,8 @@ nonisolated struct PastureFeatureDependencies {
             groupEditorRepository: pastureRepository,
             referenceReader: pastureRepository,
             animalMover: animalMover,
-            fieldCheckArchiveWriter: fieldCheckArchiveWriter
+            fieldCheckArchiveWriter: fieldCheckArchiveWriter,
+            mutationStream: mutationStream
         )
     }
 
@@ -63,7 +68,8 @@ nonisolated struct PastureFeatureDependencies {
         groupEditorRepository: (any PastureGroupEditorRepository)? = nil,
         referenceReader: (any PastureReferenceDataReader)? = nil,
         animalMover: (any AnimalPastureMoving)? = nil,
-        fieldCheckArchiveWriter: (any FieldCheckPastureArchiveWriter)? = nil
+        fieldCheckArchiveWriter: (any FieldCheckPastureArchiveWriter)? = nil,
+        mutationStream: (any ApplicationMutationStreaming)? = nil
     ) -> Self {
         let missingRepository = MissingPastureRepository()
         return Self(
@@ -75,7 +81,8 @@ nonisolated struct PastureFeatureDependencies {
             groupEditorRepository: groupEditorRepository ?? missingRepository,
             referenceReader: referenceReader ?? missingRepository,
             animalMover: animalMover ?? MissingPastureAnimalMover(),
-            fieldCheckArchiveWriter: fieldCheckArchiveWriter ?? MissingPastureFieldCheckArchiveWriter()
+            fieldCheckArchiveWriter: fieldCheckArchiveWriter ?? MissingPastureFieldCheckArchiveWriter(),
+            mutationStream: mutationStream ?? InactiveApplicationMutationStream()
         )
     }
 }
@@ -145,7 +152,8 @@ private struct PastureFeatureDependenciesKey: EnvironmentKey {
             groupEditorRepository: MissingPastureRepository(),
             referenceReader: MissingPastureRepository(),
             animalMover: MissingPastureAnimalMover(),
-            fieldCheckArchiveWriter: MissingPastureFieldCheckArchiveWriter()
+            fieldCheckArchiveWriter: MissingPastureFieldCheckArchiveWriter(),
+            mutationStream: InactiveApplicationMutationStream()
         )
     }
 }

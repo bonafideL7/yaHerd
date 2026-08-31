@@ -147,7 +147,10 @@ struct PastureTileListView: View {
             }
         }
         .task {
-            model.load(using: repository)
+            await model.observe(
+                using: repository,
+                mutationStream: pastureDependencies.mutationStream
+            )
         }
         .alert("Can’t Complete Request", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}

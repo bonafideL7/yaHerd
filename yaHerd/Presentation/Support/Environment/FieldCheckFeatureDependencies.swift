@@ -9,6 +9,7 @@ nonisolated struct FieldCheckFeatureDependencies {
     let animalListRepository: any AnimalListRepository
     let animalRepository: any AnimalDetailRepository
     let pastureReferenceReader: any PastureReferenceDataReader
+    let mutationStream: any ApplicationMutationStreaming
 
     nonisolated init(
         overviewReader: any FieldCheckOverviewReading,
@@ -17,7 +18,8 @@ nonisolated struct FieldCheckFeatureDependencies {
         animalDetailRepository: any FieldCheckAnimalDetailRepository,
         animalListRepository: any AnimalListRepository,
         animalRepository: any AnimalDetailRepository,
-        pastureReferenceReader: any PastureReferenceDataReader
+        pastureReferenceReader: any PastureReferenceDataReader,
+        mutationStream: any ApplicationMutationStreaming
     ) {
         self.overviewReader = overviewReader
         self.sessionSetupRepository = sessionSetupRepository
@@ -26,13 +28,15 @@ nonisolated struct FieldCheckFeatureDependencies {
         self.animalListRepository = animalListRepository
         self.animalRepository = animalRepository
         self.pastureReferenceReader = pastureReferenceReader
+        self.mutationStream = mutationStream
     }
 
     @MainActor
     init(
         repository: any FieldCheckRepository,
         animalRepository: any AnimalRepository,
-        pastureReferenceReader: any PastureReferenceDataReader
+        pastureReferenceReader: any PastureReferenceDataReader,
+        mutationStream: any ApplicationMutationStreaming
     ) {
         self.init(
             overviewReader: repository,
@@ -41,7 +45,8 @@ nonisolated struct FieldCheckFeatureDependencies {
             animalDetailRepository: repository,
             animalListRepository: animalRepository,
             animalRepository: animalRepository,
-            pastureReferenceReader: pastureReferenceReader
+            pastureReferenceReader: pastureReferenceReader,
+            mutationStream: mutationStream
         )
     }
 
@@ -53,7 +58,8 @@ nonisolated struct FieldCheckFeatureDependencies {
         animalDetailRepository: (any FieldCheckAnimalDetailRepository)? = nil,
         animalListRepository: (any AnimalListRepository)? = nil,
         animalRepository: (any AnimalDetailRepository)? = nil,
-        pastureReferenceReader: (any PastureReferenceDataReader)? = nil
+        pastureReferenceReader: (any PastureReferenceDataReader)? = nil,
+        mutationStream: (any ApplicationMutationStreaming)? = nil
     ) -> Self {
         let missingRepository = MissingFieldCheckRepository()
         let missingAnimalRepository = MissingFieldCheckAnimalRepository()
@@ -64,7 +70,8 @@ nonisolated struct FieldCheckFeatureDependencies {
             animalDetailRepository: animalDetailRepository ?? missingRepository,
             animalListRepository: animalListRepository ?? missingAnimalRepository,
             animalRepository: animalRepository ?? missingAnimalRepository,
-            pastureReferenceReader: pastureReferenceReader ?? MissingFieldCheckPastureReferenceReader()
+            pastureReferenceReader: pastureReferenceReader ?? MissingFieldCheckPastureReferenceReader(),
+            mutationStream: mutationStream ?? InactiveApplicationMutationStream()
         )
     }
 }
@@ -171,7 +178,8 @@ private struct FieldCheckFeatureDependenciesKey: EnvironmentKey {
             animalDetailRepository: MissingFieldCheckRepository(),
             animalListRepository: MissingFieldCheckAnimalRepository(),
             animalRepository: MissingFieldCheckAnimalRepository(),
-            pastureReferenceReader: MissingFieldCheckPastureReferenceReader()
+            pastureReferenceReader: MissingFieldCheckPastureReferenceReader(),
+            mutationStream: InactiveApplicationMutationStream()
         )
     }
 }

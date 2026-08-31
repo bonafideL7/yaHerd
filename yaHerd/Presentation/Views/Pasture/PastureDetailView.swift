@@ -61,7 +61,11 @@ struct PastureDetailView: View {
             }
         }
         .task(id: pastureID) {
-            model.load(pastureID: pastureID, using: repository)
+            await model.observe(
+                pastureID: pastureID,
+                using: repository,
+                mutationStream: pastureDependencies.mutationStream
+            )
         }
         .onChange(of: navigation.fullScreenWorkflow) { oldValue, newValue in
             if oldValue == .fieldCheck && newValue == nil {
