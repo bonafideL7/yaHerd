@@ -3,6 +3,7 @@ import Observation
 
 enum ApplicationFeatureArea: String, CaseIterable, Hashable, Sendable {
     case home
+    case dashboard
     case animals
     case pastures
     case fieldChecks
@@ -37,7 +38,7 @@ protocol ApplicationMutationStreaming {
         for area: ApplicationFeatureArea,
         after revision: UInt64
     ) -> AsyncStream<UInt64>
-    func events() -> AsyncStream<ApplicationMutationEvent>
+    func events(after sequence: UInt64) -> AsyncStream<ApplicationMutationEvent>
 }
 
 @MainActor
@@ -50,11 +51,14 @@ protocol SuccessfulMutationRecording {
     func recordSuccessfulMutation(reason: SharedDataMutationReason)
 }
 
-/// Central application invalidation service. Repository decorators publish only after a command succeeds.
-/// Per-feature revisions make invalidation durable for screens that begin listening after a mutation.
+/// Central application change stream. Repository decorators publish only after a command succeeds.
+/// Existing event replay remains available while per-feature revisions make invalidation durable
+/// for screens that begin listening after a mutation.
 @MainActor
 @Observable
 final class ApplicationMutationCenter: ApplicationMutationStreaming {
+    private static let retainedEventLimit = 64
+
     private(set) var latestEvent: ApplicationMutationEvent?
     private(set) var homeRevision: UInt64 = 0
     private(set) var animalRevision: UInt64 = 0
@@ -64,9 +68,8 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
     private(set) var collaborationRevision: UInt64 = 0
 
     private var nextSequence: UInt64 = 0
-    private var eventContinuations: [
-        UUID: AsyncStream<ApplicationMutationEvent>.Continuation
-    ] = [:]
+    private var retainedEvents: [ApplicationMutationEvent] = []
+    private var eventContinuations: [UUID: AsyncStream<ApplicationMutationEvent>.Continuation] = [:]
     private var revisionContinuations: [
         ApplicationFeatureArea: [UUID: AsyncStream<UInt64>.Continuation]
     ] = [:]
@@ -89,7 +92,7 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
 
     func revision(for area: ApplicationFeatureArea) -> UInt64 {
         switch area {
-        case .home:
+        case .home, .dashboard:
             return homeRevision
         case .animals:
             return animalRevision
@@ -126,13 +129,13 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
         return stream
     }
 
-    func events() -> AsyncStream<ApplicationMutationEvent> {
+    func events(after sequence: UInt64) -> AsyncStream<ApplicationMutationEvent> {
         let subscriberID = UUID()
-        let (stream, continuation) = AsyncStream<ApplicationMutationEvent>.makeStream(
-            bufferingPolicy: .bufferingNewest(1)
-        )
+        let pendingEvents = retainedEvents.filter { $0.sequence > sequence }
+        let (stream, continuation) = AsyncStream<ApplicationMutationEvent>.makeStream()
 
         eventContinuations[subscriberID] = continuation
+        pendingEvents.forEach { continuation.yield($0) }
         continuation.onTermination = { @Sendable [weak self] _ in
             Task { @MainActor in
                 self?.eventContinuations.removeValue(forKey: subscriberID)
@@ -143,9 +146,7 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
 
     private func publish(source: ApplicationMutationSource) {
         let affectedAreas = affectedAreas(for: source)
-        for area in affectedAreas {
-            incrementRevision(for: area)
-        }
+        incrementRevisions(for: affectedAreas)
 
         nextSequence &+= 1
         let event = ApplicationMutationEvent(
@@ -154,27 +155,35 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
             affectedAreas: affectedAreas
         )
         latestEvent = event
-
+        retainedEvents.append(event)
+        if retainedEvents.count > Self.retainedEventLimit {
+            retainedEvents.removeFirst(retainedEvents.count - Self.retainedEventLimit)
+        }
         eventContinuations.values.forEach { $0.yield(event) }
+
         for area in affectedAreas {
             let currentRevision = revision(for: area)
             revisionContinuations[area]?.values.forEach { $0.yield(currentRevision) }
         }
     }
 
-    private func incrementRevision(for area: ApplicationFeatureArea) {
-        switch area {
-        case .home:
+    private func incrementRevisions(for affectedAreas: Set<ApplicationFeatureArea>) {
+        if affectedAreas.contains(.home) || affectedAreas.contains(.dashboard) {
             homeRevision &+= 1
-        case .animals:
+        }
+        if affectedAreas.contains(.animals) {
             animalRevision &+= 1
-        case .pastures:
+        }
+        if affectedAreas.contains(.pastures) {
             pastureRevision &+= 1
-        case .fieldChecks:
+        }
+        if affectedAreas.contains(.fieldChecks) {
             fieldCheckRevision &+= 1
-        case .workingSessions:
+        }
+        if affectedAreas.contains(.workingSessions) {
             workingSessionRevision &+= 1
-        case .collaboration:
+        }
+        if affectedAreas.contains(.collaboration) {
             collaborationRevision &+= 1
         }
     }
@@ -190,17 +199,17 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
             case .herd:
                 return [.home, .collaboration]
             case .animal:
-                return [.home, .animals, .pastures, .fieldChecks, .workingSessions]
+                return [.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions]
             case .pasture:
-                return [.home, .animals, .pastures, .fieldChecks, .workingSessions]
+                return [.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions]
             case .dashboard:
-                return [.home, .pastures]
+                return [.home, .dashboard, .pastures]
             case .fieldCheck:
-                return [.home, .pastures, .fieldChecks]
+                return [.home, .dashboard, .pastures, .fieldChecks]
             case .working:
-                return [.home, .animals, .pastures, .fieldChecks, .workingSessions]
+                return [.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions]
             case .tagColor:
-                return [.home, .animals, .pastures, .fieldChecks, .workingSessions]
+                return [.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions]
             case .sampleData:
                 return Set(ApplicationFeatureArea.allCases)
             }
@@ -233,7 +242,7 @@ struct InactiveApplicationMutationStream: ApplicationMutationStreaming {
         }
     }
 
-    func events() -> AsyncStream<ApplicationMutationEvent> {
+    func events(after sequence: UInt64) -> AsyncStream<ApplicationMutationEvent> {
         AsyncStream { continuation in
             continuation.finish()
         }
