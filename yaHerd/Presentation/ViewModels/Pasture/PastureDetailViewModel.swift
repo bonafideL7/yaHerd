@@ -144,6 +144,11 @@ final class PastureDetailViewModel {
     }
 
     func save(pastureID: UUID, using repository: any PastureUpdateRepository & PastureResidentAnimalReader) {
+        guard loadedPastureID == pastureID, detail?.id == pastureID else {
+            errorMessage = "The selected pasture changed before this edit could be saved. Please try again."
+            return
+        }
+
         do {
             let input = try form.makeUpdateInput()
             let updated = try UpdatePastureUseCase(repository: repository).execute(
@@ -152,6 +157,7 @@ final class PastureDetailViewModel {
             )
             detail = updated
             residentAnimals = try repository.fetchResidentAnimals(pastureID: pastureID)
+            loadedPastureID = pastureID
             form.populate(from: updated)
             isEditing = false
             errorMessage = nil
