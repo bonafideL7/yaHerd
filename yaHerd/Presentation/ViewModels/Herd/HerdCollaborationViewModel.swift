@@ -22,6 +22,9 @@ final class HerdCollaborationViewModel {
   var latestReconciliationReview: HerdSharingReconciliationReview?
   var sharePresentation: HerdSharePresentationRequest?
 
+  @ObservationIgnored private var mutationObservationTask: Task<Void, Never>?
+  private var lastLoadedRevision: UInt64 = 0
+
   var canStartSharing: Bool {
     readiness?.shareActionEnabled == true
       && herd != nil
@@ -123,11 +126,18 @@ final class HerdCollaborationViewModel {
     }
   }
 
+  @discardableResult
   func load(
     herdRepository: any HerdRepository,
     sharingRepository: any HerdSharingRepository,
     storageMode: HerdStorageMode
-  ) {
+  ) -> Bool {
+    startObservingIfNeeded(
+      herdRepository: herdRepository,
+      sharingRepository: sharingRepository,
+      storageMode: storageMode
+    )
+
     do {
       self.herdRepository = herdRepository
       let loadedHerd = try herdRepository.fetchCurrentHerd()
@@ -140,6 +150,8 @@ final class HerdCollaborationViewModel {
       sharingAccess = nil
       sharingAccessMessage = nil
       errorMessage = nil
+      markCurrentRevision(using: sharingRepository)
+      return true
     } catch {
       herd = nil
       sharingAccess = nil
@@ -149,6 +161,7 @@ final class HerdCollaborationViewModel {
         storageMode: storageMode
       )
       errorMessage = UserVisibleErrorMessage.make(error)
+      return false
     }
   }
 
@@ -638,6 +651,41 @@ final class HerdCollaborationViewModel {
 
   func clearConflictResolutionHistory(in conflictReviewStore: HerdSharingConflictReviewStore? = nil) {
     conflictReviewStore?.clearResolutionHistory()
+  }
+
+  private func startObservingIfNeeded(
+    herdRepository: any HerdRepository,
+    sharingRepository: any HerdSharingRepository,
+    storageMode: HerdStorageMode
+  ) {
+    guard mutationObservationTask == nil,
+          let provider = sharingRepository as? any ApplicationMutationStreamProviding
+    else {
+      return
+    }
+
+    let mutationStream = provider.applicationMutationStream
+    mutationObservationTask = Task { @MainActor [weak self] in
+      let startingRevision = self?.lastLoadedRevision ?? 0
+      for await revision in mutationStream.revisions(
+        for: .collaboration,
+        after: startingRevision
+      ) {
+        guard !Task.isCancelled, let self else { return }
+        if self.load(
+          herdRepository: herdRepository,
+          sharingRepository: sharingRepository,
+          storageMode: storageMode
+        ) {
+          self.lastLoadedRevision = revision
+        }
+      }
+    }
+  }
+
+  private func markCurrentRevision(using sharingRepository: any HerdSharingRepository) {
+    guard let provider = sharingRepository as? any ApplicationMutationStreamProviding else { return }
+    lastLoadedRevision = provider.applicationMutationStream.collaborationRevision
   }
 
   private func recordReconciliationReview(

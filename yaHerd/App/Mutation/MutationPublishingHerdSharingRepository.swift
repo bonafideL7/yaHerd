@@ -62,7 +62,10 @@ final class UserDefaultsHerdSharingOwnerStopCleanupStore:
 }
 
 @MainActor
-final class MutationPublishingHerdSharingRepository: HerdSharingRepository {
+final class MutationPublishingHerdSharingRepository:
+    HerdSharingRepository,
+    ApplicationMutationStreamProviding
+{
     private let base: any HerdSharingRepository
     private let mutationCenter: ApplicationMutationCenter
     private let writePolicy: HerdCollaborationWritePolicy?
@@ -90,6 +93,10 @@ final class MutationPublishingHerdSharingRepository: HerdSharingRepository {
         self.ownerShareSystemShareResolver = ownerShareSystemShareResolver
     }
 
+    var applicationMutationStream: any ApplicationMutationStreaming {
+        mutationCenter
+    }
+
     func fetchSharingReadiness(for herd: HerdSummary?, storageMode: HerdStorageMode) -> HerdSharingReadiness {
         base.fetchSharingReadiness(for: herd, storageMode: storageMode)
     }
@@ -114,6 +121,7 @@ final class MutationPublishingHerdSharingRepository: HerdSharingRepository {
                 herdPublicID: herd.publicID,
                 storageMode: storageMode
             )
+            mutationCenter.recordCollaborationStateChange()
             return result
         } catch {
             await refreshWritePolicyAfterFailedSharedBridgeOperation(
