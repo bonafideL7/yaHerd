@@ -74,10 +74,11 @@ struct DashboardView: View {
     }
 
     private func loadDashboardData() async {
-        _ = await viewModel.load(
+        async let dashboardLoad: Bool = viewModel.load(
             configuration: configuration,
             using: dashboardQueryReader
         )
         fieldChecksModel.load(using: fieldCheckOverviewReader)
+        _ = await dashboardLoad
     }
 }
