@@ -677,7 +677,11 @@ final class HerdCollaborationViewModel {
           sharingRepository: sharingRepository,
           storageMode: storageMode
         ) {
-          self.lastLoadedRevision = revision
+          await self.refreshSharingAccess(
+            using: sharingRepository,
+            storageMode: storageMode
+          )
+          self.lastLoadedRevision = max(self.lastLoadedRevision, revision)
         }
       }
     }
