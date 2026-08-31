@@ -672,11 +672,22 @@ final class HerdCollaborationViewModel {
         after: startingRevision
       ) {
         guard !Task.isCancelled, let self else { return }
+        let previousHerd = self.herd
+        let previousDraftName = self.draftName
         if self.load(
           herdRepository: herdRepository,
           sharingRepository: sharingRepository,
           storageMode: storageMode
         ) {
+          if let refreshedHerd = self.herd {
+            self.draftName = DraftRefreshPolicy.reconciledValue(
+              draft: previousDraftName,
+              previouslyLoadedValue: previousHerd?.name,
+              refreshedValue: refreshedHerd.name,
+              isSameRecord: previousHerd?.publicID == refreshedHerd.publicID,
+              normalize: { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            )
+          }
           await self.refreshSharingAccess(
             using: sharingRepository,
             storageMode: storageMode
