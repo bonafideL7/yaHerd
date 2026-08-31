@@ -7,6 +7,7 @@ final class DashboardViewModel {
     private(set) var snapshot: DashboardSnapshot?
     private(set) var hasLoaded = false
     private var isLoading = false
+    private var loadCompletionWaiters: [CheckedContinuation<Void, Never>] = []
     private var lastLoadedRevision: UInt64 = 0
     var errorMessage: String?
     var isPresentingAddAnimal = false
@@ -20,7 +21,7 @@ final class DashboardViewModel {
     ) async {
         let startingRevision = mutationStream.homeRevision
         if !hasLoaded || lastLoadedRevision < startingRevision {
-            if await load(configuration: configuration, using: repository) {
+            if await loadForRevision(configuration: configuration, using: repository) {
                 lastLoadedRevision = startingRevision
             }
         }
@@ -30,7 +31,7 @@ final class DashboardViewModel {
             after: lastLoadedRevision
         ) {
             guard !Task.isCancelled else { return }
-            if await load(configuration: configuration, using: repository) {
+            if await loadForRevision(configuration: configuration, using: repository) {
                 lastLoadedRevision = revision
             }
         }
@@ -53,6 +54,9 @@ final class DashboardViewModel {
         isLoading = true
         defer {
             isLoading = false
+            let waiters = loadCompletionWaiters
+            loadCompletionWaiters.removeAll()
+            waiters.forEach { $0.resume() }
         }
 
         do {
@@ -103,6 +107,30 @@ final class DashboardViewModel {
             }
             .prefix(10)
             .map { $0 }
+    }
+
+    private func loadForRevision(
+        configuration: DashboardConfiguration,
+        using repository: any DashboardQueryReading
+    ) async -> Bool {
+        while isLoading {
+            await waitForCurrentLoad()
+            guard !Task.isCancelled else { return false }
+        }
+
+        return await load(configuration: configuration, using: repository)
+    }
+
+    private func waitForCurrentLoad() async {
+        guard isLoading else { return }
+
+        await withCheckedContinuation { continuation in
+            if isLoading {
+                loadCompletionWaiters.append(continuation)
+            } else {
+                continuation.resume()
+            }
+        }
     }
 
     private func applyPastureGrazedToday(pastureID: UUID, date: Date) {
