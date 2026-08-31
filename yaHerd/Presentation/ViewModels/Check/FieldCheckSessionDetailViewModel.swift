@@ -52,14 +52,18 @@ final class FieldCheckSessionDetailViewModel {
         startObservingIfNeeded(sessionID: sessionID, using: repository)
 
         do {
+            let previousDetail = detail
             let loadedDetail = try repository.fetchSessionDetail(id: sessionID)
-            detail = loadedDetail
-            if let loadedDetail,
-               notesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-                == loadedDetail.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-            {
-                notesDraft = loadedDetail.notes
+            if let loadedDetail {
+                notesDraft = DraftRefreshPolicy.reconciledValue(
+                    draft: notesDraft,
+                    previouslyLoadedValue: previousDetail?.notes,
+                    refreshedValue: loadedDetail.notes,
+                    isSameRecord: previousDetail?.id == loadedDetail.id,
+                    normalize: { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                )
             }
+            detail = loadedDetail
             errorMessage = nil
             return true
         } catch {
