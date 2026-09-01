@@ -1,6 +1,20 @@
 import Foundation
 
 @MainActor
+private protocol FocusedFieldCheckFindingValidating {
+    func fieldCheckFindingExists(sessionID: UUID, findingID: UUID) throws -> Bool
+}
+
+extension RepositoryAppNavigationRestorationValidator: FocusedFieldCheckFindingValidating {
+    func fieldCheckFindingExists(sessionID: UUID, findingID: UUID) throws -> Bool {
+        guard let session = try fieldCheckRepository.fetchSessionDetail(id: sessionID) else {
+            return false
+        }
+        return session.findings.contains { $0.id == findingID }
+    }
+}
+
+@MainActor
 extension AppNavigationState {
     func revalidateIdentityBoundState(
         using validator: any AppNavigationRestorationValidating
@@ -67,6 +81,23 @@ extension AppNavigationState {
                 return
             }
 
+            if let findingID = configuration.focusedFindingID,
+               !focusedFindingExists(
+                    sessionID: configuration.sessionID,
+                    findingID: findingID,
+                    using: validator
+               ) {
+                workflowRouter.route = .fieldCheckSession(
+                    FieldCheckSessionLaunchConfiguration(
+                        sessionID: configuration.sessionID,
+                        opensFindings: configuration.opensFindings,
+                        opensFlaggedRoster: configuration.opensFlaggedRoster,
+                        opensRemainingRoster: configuration.opensRemainingRoster,
+                        opensMissingRoster: configuration.opensMissingRoster
+                    )
+                )
+            }
+
         case .workingSession(let sessionID):
             guard (try? validator.isActiveWorkingSession(id: sessionID)) == true else {
                 let wasPresented = fullScreenWorkflow == .workingSession
@@ -80,6 +111,20 @@ extension AppNavigationState {
         case .fieldCheckSessions, .workingSessions, .none:
             break
         }
+    }
+
+    private func focusedFindingExists(
+        sessionID: UUID,
+        findingID: UUID,
+        using validator: any AppNavigationRestorationValidating
+    ) -> Bool {
+        guard let findingValidator = validator as? any FocusedFieldCheckFindingValidating else {
+            return false
+        }
+        return (try? findingValidator.fieldCheckFindingExists(
+            sessionID: sessionID,
+            findingID: findingID
+        )) == true
     }
 
     private func clearIdentityBoundDestinations() {
