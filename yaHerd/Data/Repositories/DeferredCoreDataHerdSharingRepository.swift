@@ -32,6 +32,7 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository,
         ownershipRegistry: (any HerdSharingOwnershipRecording)? = nil,
         acceptedParticipantReferenceStore: (any HerdSharingAcceptedParticipantReferenceRecording)? = nil,
         newOwnerShareRemoteVerifier: (any HerdSharingRemoteOwnerShareVerifying)? = nil,
+        swiftDataImporterFactory: (@MainActor () -> any HerdSharingImportApplying)? = nil,
         existingOwnerShareReferenceRecorder: @escaping @MainActor (CloudKitSystemShare, UUID) throws -> Void = { _, _ in },
         discardedOwnerShareReferenceCleanup: @escaping @MainActor (UUID) -> Void = { _ in },
         unresolvedOwnerShareResumePreflight: @escaping @MainActor (UUID) async throws -> Void = { _ in },
@@ -65,7 +66,8 @@ final class DeferredCoreDataHerdSharingRepository: HerdSharingRepository,
             acceptedShareImportScopeStore: acceptedShareImportScopeStore,
             acceptedParticipantProvenanceRecorder: { herdPublicID in
                 resolvedOwnershipRegistry.recordParticipant(herdPublicID: herdPublicID)
-            }
+            },
+            swiftDataImporterFactory: swiftDataImporterFactory
         )
         let resolvedRemoteOwnerShareVerifier = newOwnerShareRemoteVerifier
             ?? CloudKitHerdSharingRemoteOwnerShareVerifier()
@@ -565,6 +567,7 @@ private final class DeferredHerdSharingBridgeBundle {
     private let acceptedParticipantReferenceStore: any HerdSharingAcceptedParticipantReferenceRecording
     private let acceptedShareImportScopeStore: HerdSharingAcceptedShareImportScopeStore
     private let acceptedParticipantProvenanceRecorder: @MainActor (UUID) -> Void
+    private let swiftDataImporterFactory: (@MainActor () -> any HerdSharingImportApplying)?
     private var resolvedStore: HerdSharingCoreDataStore?
     private var resolvedRepository: CoreDataHerdSharingRepository?
 
@@ -574,7 +577,8 @@ private final class DeferredHerdSharingBridgeBundle {
         journal: HerdSharingBridgeJournal,
         acceptedParticipantReferenceStore: any HerdSharingAcceptedParticipantReferenceRecording,
         acceptedShareImportScopeStore: HerdSharingAcceptedShareImportScopeStore,
-        acceptedParticipantProvenanceRecorder: @escaping @MainActor (UUID) -> Void
+        acceptedParticipantProvenanceRecorder: @escaping @MainActor (UUID) -> Void,
+        swiftDataImporterFactory: (@MainActor () -> any HerdSharingImportApplying)?
     ) {
         self.context = context
         self.shareAdapter = shareAdapter
@@ -582,6 +586,7 @@ private final class DeferredHerdSharingBridgeBundle {
         self.acceptedParticipantReferenceStore = acceptedParticipantReferenceStore
         self.acceptedShareImportScopeStore = acceptedShareImportScopeStore
         self.acceptedParticipantProvenanceRecorder = acceptedParticipantProvenanceRecorder
+        self.swiftDataImporterFactory = swiftDataImporterFactory
     }
 
     func repository() -> any HerdSharingRepository {
@@ -589,6 +594,7 @@ private final class DeferredHerdSharingBridgeBundle {
         let repository = CoreDataHerdSharingRepository(
             context: context,
             store: store(),
+            swiftDataImporter: swiftDataImporterFactory?(),
             shareAdapter: shareAdapter
         )
         resolvedRepository = repository

@@ -150,6 +150,11 @@ enum PublicIDRepairRecoveryError: LocalizedError, Equatable {
     }
 }
 
+/// Nonthrowing post-commit callback for durable local recovery mutations. Recovery can contain
+/// more than one transaction, so workers invoke this after every successful save before any
+/// later verification or forward-recovery work can fail.
+typealias PublicIDRepairDidCommit = @MainActor @Sendable () async -> Void
+
 protocol PublicIDRepairTransactionalRecovering: Sendable {
     func assessIndeterminateRecovery(
         for report: PublicIDRepairReport
@@ -158,13 +163,15 @@ protocol PublicIDRepairTransactionalRecovering: Sendable {
     func recoverIndeterminateRepair(
         report: PublicIDRepairReport,
         action: PublicIDRepairRecoveryChoice,
-        willCommit: PublicIDRepairWillCommit
+        willCommit: PublicIDRepairWillCommit,
+        didCommit: PublicIDRepairDidCommit
     ) async throws -> PublicIDRepairReport
 
     func resolveIndeterminateRecovery(
         report: PublicIDRepairReport,
         resolutions: [PublicIDRepairReferenceResolution],
-        willCommit: PublicIDRepairWillCommit
+        willCommit: PublicIDRepairWillCommit,
+        didCommit: PublicIDRepairDidCommit
     ) async throws -> PublicIDRepairReport
 }
 
@@ -172,7 +179,8 @@ extension PublicIDRepairTransactionalRecovering {
     func resolveIndeterminateRecovery(
         report: PublicIDRepairReport,
         resolutions: [PublicIDRepairReferenceResolution],
-        willCommit: PublicIDRepairWillCommit
+        willCommit: PublicIDRepairWillCommit,
+        didCommit: PublicIDRepairDidCommit
     ) async throws -> PublicIDRepairReport {
         throw PublicIDRepairRecoveryError.unsupported
     }
@@ -193,13 +201,28 @@ extension PublicIDRepairTransactionalService {
         action: PublicIDRepairRecoveryChoice,
         willCommit: PublicIDRepairWillCommit
     ) async throws -> PublicIDRepairReport {
+        try await recoverIndeterminateRepair(
+            report: report,
+            action: action,
+            willCommit: willCommit,
+            didCommit: {}
+        )
+    }
+
+    func recoverIndeterminateRepair(
+        report: PublicIDRepairReport,
+        action: PublicIDRepairRecoveryChoice,
+        willCommit: PublicIDRepairWillCommit,
+        didCommit: PublicIDRepairDidCommit
+    ) async throws -> PublicIDRepairReport {
         guard let recovering = self as? any PublicIDRepairTransactionalRecovering else {
             throw PublicIDRepairRecoveryError.unsupported
         }
         return try await recovering.recoverIndeterminateRepair(
             report: report,
             action: action,
-            willCommit: willCommit
+            willCommit: willCommit,
+            didCommit: didCommit
         )
     }
 
@@ -208,13 +231,28 @@ extension PublicIDRepairTransactionalService {
         resolutions: [PublicIDRepairReferenceResolution],
         willCommit: PublicIDRepairWillCommit
     ) async throws -> PublicIDRepairReport {
+        try await resolveIndeterminateRecovery(
+            report: report,
+            resolutions: resolutions,
+            willCommit: willCommit,
+            didCommit: {}
+        )
+    }
+
+    func resolveIndeterminateRecovery(
+        report: PublicIDRepairReport,
+        resolutions: [PublicIDRepairReferenceResolution],
+        willCommit: PublicIDRepairWillCommit,
+        didCommit: PublicIDRepairDidCommit
+    ) async throws -> PublicIDRepairReport {
         guard let recovering = self as? any PublicIDRepairTransactionalRecovering else {
             throw PublicIDRepairRecoveryError.unsupported
         }
         return try await recovering.resolveIndeterminateRecovery(
             report: report,
             resolutions: resolutions,
-            willCommit: willCommit
+            willCommit: willCommit,
+            didCommit: didCommit
         )
     }
 }

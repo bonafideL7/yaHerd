@@ -335,8 +335,23 @@ private struct RunningAppView: View {
         )
     }
 
+    private var navigationRestorationValidator: RepositoryAppNavigationRestorationValidator {
+        RepositoryAppNavigationRestorationValidator(
+            herdRepository: runtime.dependencies.herdRepository,
+            animalRepository: runtime.dependencies.animalFeatureDependencies.detailRepository,
+            pastureRepository: runtime.dependencies.pastureFeatureDependencies.detailRepository,
+            fieldCheckRepository: runtime.dependencies.fieldCheckFeatureDependencies.sessionDetailRepository,
+            workingRepository: runtime.dependencies.workingSessionFeatureDependencies.sessionDetailRepository
+        )
+    }
+
     var body: some View {
-        RootAppView(storageError: runtime.storageError, dataAccessMode: runtime.dataAccessMode)
+        RootAppView(
+            storageError: runtime.storageError,
+            dataAccessMode: runtime.dataAccessMode,
+            navigationRestorationValidator: navigationRestorationValidator,
+            identityMutationRevision: runtime.dependencies.applicationMutationCenter.identityRevision
+        )
             .environment(applicationSettings)
             .environmentObject(tagColorLibrary)
             .environment(\.appDataAccessMode, runtime.dataAccessMode)
@@ -401,15 +416,24 @@ private struct RunningAppView: View {
 private struct RootAppView: View {
     let storageError: String?
     let dataAccessMode: AppDataAccessMode
+    let navigationRestorationValidator: any AppNavigationRestorationValidating
+    let identityMutationRevision: UInt64
 
     @State private var showsStorageError: Bool
     @State private var navigation = AppNavigationState()
     @State private var hasRestoredNavigation = false
     @SceneStorage("navigation.restoration.v1") private var navigationRestorationPayload = ""
 
-    init(storageError: String?, dataAccessMode: AppDataAccessMode) {
+    init(
+        storageError: String?,
+        dataAccessMode: AppDataAccessMode,
+        navigationRestorationValidator: any AppNavigationRestorationValidating,
+        identityMutationRevision: UInt64
+    ) {
         self.storageError = storageError
         self.dataAccessMode = dataAccessMode
+        self.navigationRestorationValidator = navigationRestorationValidator
+        self.identityMutationRevision = identityMutationRevision
         self._showsStorageError = State(
             initialValue: storageError != nil && !dataAccessMode.isRecoveryMode
         )
@@ -427,7 +451,10 @@ private struct RootAppView: View {
             }
             .task {
                 guard !hasRestoredNavigation else { return }
-                navigation.restore(from: navigationRestorationPayload)
+                navigation.restore(
+                    from: navigationRestorationPayload,
+                    using: navigationRestorationValidator
+                )
                 hasRestoredNavigation = true
                 navigationRestorationPayload = navigation.restorationPayload() ?? ""
             }
@@ -436,6 +463,14 @@ private struct RootAppView: View {
                       let payload = navigation.restorationPayload()
                 else { return }
                 navigationRestorationPayload = payload
+            }
+            .onChange(of: identityMutationRevision) { _, _ in
+                guard hasRestoredNavigation else { return }
+
+                navigation.revalidateIdentityBoundState(
+                    using: navigationRestorationValidator
+                )
+                navigationRestorationPayload = navigation.restorationPayload() ?? ""
             }
             .onOpenURL { url in
                 navigation.handle(url: url)
