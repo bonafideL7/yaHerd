@@ -27,6 +27,7 @@ struct IsolatedFieldCheckAreaView: View {
                 opensMissingRoster: session.opensMissingRoster,
                 focusedFindingID: session.focusedFindingID
             )
+            .id(session.id)
         case .fieldCheckSessions(let mode):
             FieldChecksView(mode: mode, onSessionLaunch: { configuration in
                 navigation.workflowRouter.route = .fieldCheckSession(configuration)
