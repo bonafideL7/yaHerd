@@ -48,7 +48,7 @@ Restoration does not preserve app sheets, confirmation dialogs, temporary menus,
 
 Before restoring a record route, the app queries the corresponding repository. Missing animal and pasture destinations fall back to their existing list context. A full-screen field-check or working workflow is restored only when its session still exists and remains active. Missing, deleted, completed, finished, or cancelled sessions fall back to the relevant session list.
 
-While the app is running, shared-store imports and successful local public-ID repair commits advance a dedicated identity revision. Each scene then refreshes the current herd identifier and revalidates its animal and pasture paths, pasture-ID filter, and active field-check or working-session destination before persisting the updated snapshot. Invalid routes are reduced to their valid prefix, invalid filters are cleared, and invalid active sessions fall back to the relevant list. Valid active workflows keep their current-launch transient presentation details.
+While the app is running, shared-store imports and successful local public-ID repair commits advance a dedicated identity revision. Each scene then refreshes the current herd identifier and revalidates its animal and pasture paths, pasture-ID filter, active field-check or working-session destination, and any focused field-check finding before persisting the updated snapshot. Invalid routes are reduced to their valid prefix, invalid filters are cleared, invalid active sessions fall back to the relevant list, and an invalid focused finding is cleared with a fresh field-check launch identity so any stale finding editor state is discarded. Valid active workflows keep their current-launch transient presentation details.
 
 ## Deep links
 
