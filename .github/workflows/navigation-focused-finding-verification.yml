@@ -1,0 +1,47 @@
+name: Navigation Focused Finding Verification
+
+on:
+  push:
+    branches:
+      - agent/durable-navigation-restoration-review-verification
+
+jobs:
+  verify-navigation-review-fix:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact verification commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Select Xcode 26
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' -print | sort -V | tail -1)"
+          if [[ -z "$XCODE_PATH" ]]; then
+            echo "Xcode 26 is required for verification." >&2
+            exit 1
+          fi
+          sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+
+      - name: Verify diff whitespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check origin/main...HEAD
+
+      - name: Verify architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash Scripts/verify-architecture.sh
+
+      - name: Verify Swift 6 concurrency and production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash Scripts/verify-concurrency.sh
