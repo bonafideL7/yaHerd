@@ -186,7 +186,7 @@ final class MutationPublishingHerdSharingRepository:
     ) async throws -> HerdSharingActionResult {
         try requireNoPendingOwnerStopCleanup(for: herd, storageMode: storageMode)
         let result = try await base.resolveBridgeConflict(herd: herd, keeping: resolution, storageMode: storageMode)
-        mutationCenter.recordSharedStoreImport()
+        mutationCenter.recordCollaborationStateChange()
         return result
     }
 
@@ -205,7 +205,7 @@ final class MutationPublishingHerdSharingRepository:
 
         do {
             let result = try await base.acceptShareInvitation(invitation, storageMode: storageMode)
-            mutationCenter.recordSharedStoreImport()
+            mutationCenter.recordCollaborationStateChange()
             return result
         } catch {
             await refreshWritePolicyAfterFailedSharedBridgeOperation(
@@ -224,9 +224,7 @@ final class MutationPublishingHerdSharingRepository:
             try requireNoPendingOwnerStopCleanupForCurrentHerd(storageMode: storageMode)
         }
         do {
-            let result = try await base.importSharedBridgeData(herd: herd, storageMode: storageMode)
-            mutationCenter.recordSharedStoreImport()
-            return result
+            return try await base.importSharedBridgeData(herd: herd, storageMode: storageMode)
         } catch {
             await refreshWritePolicyAfterFailedSharedBridgeOperation(
                 herd: herd,
@@ -263,9 +261,7 @@ final class MutationPublishingHerdSharingRepository:
             try requireNoPendingOwnerStopCleanupForCurrentHerd(storageMode: storageMode)
         }
         do {
-            let result = try await base.syncSharedBridgeData(herd: herd, storageMode: storageMode)
-            mutationCenter.recordSharedStoreImport()
-            return result
+            return try await base.syncSharedBridgeData(herd: herd, storageMode: storageMode)
         } catch {
             await refreshWritePolicyAfterFailedSharedBridgeOperation(
                 herd: herd,

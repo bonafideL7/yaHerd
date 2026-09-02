@@ -157,15 +157,17 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         guard let animal = queueItem.animal else { return }
 
         let completedAt = dateProvider.now
-        queueItem.status = .done
-        queueItem.completedAt = completedAt
-
         let input = WorkingQueueItemWorkDataInput(
             treatmentEntries: treatmentEntries,
             pregnancyCheck: pregnancyCheck,
             castrationPerformed: markCastrated,
             observationNotes: observationNotes
         )
+        try workDataWriter.validateReferences(in: input)
+
+        queueItem.status = .done
+        queueItem.completedAt = completedAt
+
         try workDataWriter.replaceWorkData(
             session: session,
             animal: animal,
@@ -187,9 +189,12 @@ struct SwiftDataWorkingRepository: WorkingRepository {
 
         let now = dateProvider.now
         let completedAt = input.status == .done ? (input.completedAt ?? now) : nil
+        let destinationPasture = try lookup.fetchPasture(id: input.destinationPastureID)
+        try workDataWriter.validateReferences(in: input.workData)
+
         queueItem.status = input.status
         queueItem.completedAt = completedAt
-        queueItem.destinationPasture = try lookup.fetchPasture(id: input.destinationPastureID)
+        queueItem.destinationPasture = destinationPasture
 
         try workDataWriter.replaceWorkData(
             session: session,

@@ -15,6 +15,7 @@ enum ApplicationMutationSource: Equatable, Sendable {
     case local(SharedDataMutationReason)
     case collaborationStateChange
     case sharedStoreImport
+    case publicIDRepair
 }
 
 struct ApplicationMutationEvent: Equatable, Sendable {
@@ -32,6 +33,7 @@ protocol ApplicationMutationStreaming {
     var fieldCheckRevision: UInt64 { get }
     var workingSessionRevision: UInt64 { get }
     var collaborationRevision: UInt64 { get }
+    var identityRevision: UInt64 { get }
 
     func revision(for area: ApplicationFeatureArea) -> UInt64
     func revisions(
@@ -67,6 +69,7 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
     private(set) var fieldCheckRevision: UInt64 = 0
     private(set) var workingSessionRevision: UInt64 = 0
     private(set) var collaborationRevision: UInt64 = 0
+    private(set) var identityRevision: UInt64 = 0
 
     private var nextSequence: UInt64 = 0
     private var retainedEvents: [ApplicationMutationEvent] = []
@@ -89,6 +92,10 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
 
     func recordSharedStoreImport() {
         publish(source: .sharedStoreImport)
+    }
+
+    func recordPublicIDRepair() {
+        publish(source: .publicIDRepair)
     }
 
     func revision(for area: ApplicationFeatureArea) -> UInt64 {
@@ -150,6 +157,7 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
     private func publish(source: ApplicationMutationSource) {
         let affectedAreas = affectedAreas(for: source)
         incrementRevisions(for: affectedAreas)
+        incrementIdentityRevisionIfNeeded(for: source)
 
         nextSequence &+= 1
         let event = ApplicationMutationEvent(
@@ -194,11 +202,20 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
         }
     }
 
+    private func incrementIdentityRevisionIfNeeded(for source: ApplicationMutationSource) {
+        switch source {
+        case .sharedStoreImport, .publicIDRepair:
+            identityRevision &+= 1
+        case .local, .collaborationStateChange:
+            break
+        }
+    }
+
     private func affectedAreas(for source: ApplicationMutationSource) -> Set<ApplicationFeatureArea> {
         switch source {
         case .collaborationStateChange:
             return [.collaboration]
-        case .sharedStoreImport:
+        case .sharedStoreImport, .publicIDRepair:
             return Set(ApplicationFeatureArea.allCases)
         case .local(let reason):
             switch reason {
@@ -234,6 +251,7 @@ struct InactiveApplicationMutationStream: ApplicationMutationStreaming {
     var fieldCheckRevision: UInt64 { 0 }
     var workingSessionRevision: UInt64 { 0 }
     var collaborationRevision: UInt64 { 0 }
+    var identityRevision: UInt64 { 0 }
 
     func revision(for area: ApplicationFeatureArea) -> UInt64 {
         0
@@ -252,6 +270,84 @@ struct InactiveApplicationMutationStream: ApplicationMutationStreaming {
         AsyncStream { continuation in
             continuation.finish()
         }
+    }
+}
+
+/// Publishes after each transactional SwiftData public-ID repair commit, including intermediate
+/// recovery boundaries, before later verification or bridge convergence can fail.
+actor MutationPublishingPublicIDRepairTransactionalService:
+    PublicIDRepairTransactionalService,
+    PublicIDRepairTransactionalRecovering
+{
+    private let base: any PublicIDRepairTransactionalService
+    private let mutationCenter: ApplicationMutationCenter
+
+    init(
+        base: any PublicIDRepairTransactionalService,
+        mutationCenter: ApplicationMutationCenter
+    ) {
+        self.base = base
+        self.mutationCenter = mutationCenter
+    }
+
+    func scan() async throws -> PublicIDRepairAssessment {
+        try await base.scan()
+    }
+
+    func repair(
+        resolutions: [PublicIDRepairReferenceResolution],
+        willCommit: PublicIDRepairWillCommit
+    ) async throws -> PublicIDRepairReport {
+        let report = try await base.repair(
+            resolutions: resolutions,
+            willCommit: willCommit
+        )
+        await mutationCenter.recordPublicIDRepair()
+        return report
+    }
+
+    func commitState(for report: PublicIDRepairReport) async throws -> PublicIDRepairCommitState {
+        try await base.commitState(for: report)
+    }
+
+    func assessIndeterminateRecovery(
+        for report: PublicIDRepairReport
+    ) async throws -> PublicIDRepairIndeterminateRecoveryAssessment {
+        try await base.assessIndeterminateRecovery(for: report)
+    }
+
+    func recoverIndeterminateRepair(
+        report: PublicIDRepairReport,
+        action: PublicIDRepairRecoveryChoice,
+        willCommit: PublicIDRepairWillCommit,
+        didCommit: PublicIDRepairDidCommit
+    ) async throws -> PublicIDRepairReport {
+        try await base.recoverIndeterminateRepair(
+            report: report,
+            action: action,
+            willCommit: willCommit,
+            didCommit: { [mutationCenter] in
+                mutationCenter.recordPublicIDRepair()
+                await didCommit()
+            }
+        )
+    }
+
+    func resolveIndeterminateRecovery(
+        report: PublicIDRepairReport,
+        resolutions: [PublicIDRepairReferenceResolution],
+        willCommit: PublicIDRepairWillCommit,
+        didCommit: PublicIDRepairDidCommit
+    ) async throws -> PublicIDRepairReport {
+        try await base.resolveIndeterminateRecovery(
+            report: report,
+            resolutions: resolutions,
+            willCommit: willCommit,
+            didCommit: { [mutationCenter] in
+                mutationCenter.recordPublicIDRepair()
+                await didCommit()
+            }
+        )
     }
 }
 
