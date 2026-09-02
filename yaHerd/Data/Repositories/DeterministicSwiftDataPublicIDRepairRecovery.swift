@@ -54,7 +54,8 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
     func recoverIndeterminateRepair(
         report: PublicIDRepairReport,
         action: PublicIDRepairRecoveryChoice,
-        willCommit: PublicIDRepairWillCommit
+        willCommit: PublicIDRepairWillCommit,
+        didCommit: PublicIDRepairDidCommit
     ) async throws -> PublicIDRepairReport {
         let initialPlan = try makeRecoveryPlan(for: report)
         let initialAssessment = initialPlan.assessment
@@ -68,7 +69,8 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
                 from: report,
                 plan: initialPlan,
                 action: action,
-                willCommit: willCommit
+                willCommit: willCommit,
+                didCommit: didCommit
             )
 
         case .restorePreRepairBackup:
@@ -101,9 +103,10 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
             )
             try await willCommit(restorationReport)
 
-            try restoreRepairBoundary(
+            try await restoreRepairBoundary(
                 plan: initialPlan,
-                report: report
+                report: report,
+                didCommit: didCommit
             )
             try verifyBackupBoundary(report: report)
 
@@ -121,7 +124,8 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
                 from: restorationReport,
                 plan: restoredPlan,
                 action: .continueManifestRepair,
-                willCommit: willCommit
+                willCommit: willCommit,
+                didCommit: didCommit
             )
         }
     }
@@ -129,7 +133,8 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
     func resolveIndeterminateRecovery(
         report: PublicIDRepairReport,
         resolutions: [PublicIDRepairReferenceResolution],
-        willCommit: PublicIDRepairWillCommit
+        willCommit: PublicIDRepairWillCommit,
+        didCommit: PublicIDRepairDidCommit
     ) async throws -> PublicIDRepairReport {
         let initialPlan = try makeRecoveryPlan(for: report)
         guard initialPlan.assessment.requiresManualResolution else {
@@ -194,7 +199,8 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
             from: decisionReport,
             plan: reboundPlan,
             action: .continueManifestRepair,
-            willCommit: willCommit
+            willCommit: willCommit,
+            didCommit: didCommit
         )
     }
 
@@ -202,7 +208,8 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
         from report: PublicIDRepairReport,
         plan: RecoveryPlan,
         action: PublicIDRepairRecoveryChoice,
-        willCommit: PublicIDRepairWillCommit
+        willCommit: PublicIDRepairWillCommit,
+        didCommit: PublicIDRepairDidCommit
     ) async throws -> PublicIDRepairReport {
         let missing = plan.mutations.filter { $0.state == .definitelyNotApplied }
         if missing.isEmpty {
@@ -257,6 +264,7 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
                 operation: "DeterministicSwiftDataPublicIDRepairService.recoverIndeterminateRepair"
             )
             registerCurrentRevisionMetadata(repairedLoaded.allAggregates)
+            await didCommit()
 
             let validatedManifest = replacingLatestValidation(
                 in: plannedReport.manifest,
@@ -1161,8 +1169,9 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
 
     private func restoreRepairBoundary(
         plan: RecoveryPlan,
-        report: PublicIDRepairReport
-    ) throws {
+        report: PublicIDRepairReport,
+        didCommit: PublicIDRepairDidCommit
+    ) async throws {
         let assessment = plan.assessment
         guard assessment.requiresBackupRestore else {
             throw PublicIDRepairRecoveryError.invalidChoice
@@ -1180,6 +1189,7 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
             modelContext,
             operation: "DeterministicSwiftDataPublicIDRepairService.restoreRepairBoundary"
         )
+        await didCommit()
     }
 
     private func restoreRevisionBoundary(

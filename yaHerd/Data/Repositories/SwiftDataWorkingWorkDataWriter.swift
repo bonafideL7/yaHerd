@@ -5,6 +5,16 @@ import SwiftData
 struct SwiftDataWorkingWorkDataWriter {
     let context: ModelContext
 
+    func validateReferences(in input: WorkingQueueItemWorkDataInput) throws {
+        guard WorkingWorkDataRules.shouldRecordPregnancyCheck(input.pregnancyCheck),
+              let sireAnimalID = input.pregnancyCheck?.sireAnimalID
+        else {
+            return
+        }
+
+        _ = try fetchAnimal(id: sireAnimalID)
+    }
+
     func replaceWorkData(
         session: WorkingSession,
         animal: Animal,
@@ -73,8 +83,13 @@ struct SwiftDataWorkingWorkDataWriter {
         animal: Animal,
         input: WorkingPregnancyCheckInput?
     ) throws {
+        guard WorkingWorkDataRules.shouldRecordPregnancyCheck(input), let input else {
+            try deletePregnancyChecks(session: session, animal: animal)
+            return
+        }
+
+        let sireAnimal = try fetchAnimal(id: input.sireAnimalID)
         try deletePregnancyChecks(session: session, animal: animal)
-        guard WorkingWorkDataRules.shouldRecordPregnancyCheck(input), let input else { return }
 
         let check = PregnancyCheck(
             date: input.date,
@@ -82,7 +97,7 @@ struct SwiftDataWorkingWorkDataWriter {
             technician: nil,
             estimatedDaysPregnant: input.estimatedDaysPregnant,
             dueDate: input.dueDate,
-            sireAnimal: try fetchAnimal(id: input.sireAnimalID),
+            sireAnimal: sireAnimal,
             workingSession: session,
             animal: animal
         )
@@ -115,7 +130,10 @@ struct SwiftDataWorkingWorkDataWriter {
         let descriptor = FetchDescriptor<Animal>(
             predicate: #Predicate<Animal> { animal in animal.publicID == id }
         )
-        return try context.fetch(descriptor).first
+        guard let animal = try context.fetch(descriptor).first else {
+            throw WorkingRepositoryError.animalNotFound
+        }
+        return animal
     }
 
     private func deleteTreatmentRecords(session: WorkingSession, animal: Animal) throws {

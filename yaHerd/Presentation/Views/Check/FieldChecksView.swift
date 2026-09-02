@@ -423,13 +423,7 @@ struct FieldChecksView: View {
 
     @ViewBuilder
     private func fieldCheckSessionDestination(_ configuration: FieldCheckSessionLaunchConfiguration) -> some View {
-        FieldCheckSessionDetailView(
-            sessionID: configuration.sessionID,
-            opensFindings: configuration.opensFindings,
-            opensFlaggedRoster: configuration.opensFlaggedRoster,
-            opensRemainingRoster: configuration.opensRemainingRoster,
-            opensMissingRoster: configuration.opensMissingRoster
-        )
+        IdentityAwareFieldCheckSessionView(configuration: configuration)
     }
 
     private func openSession(_ configuration: FieldCheckSessionLaunchConfiguration) {

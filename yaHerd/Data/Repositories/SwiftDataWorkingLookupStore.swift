@@ -115,7 +115,10 @@ struct SwiftDataWorkingLookupStore {
             pasture.publicID == id
         })
         descriptor.fetchLimit = 1
-        return try context.fetch(descriptor).first
+        guard let pasture = try context.fetch(descriptor).first else {
+            throw WorkingRepositoryError.pastureNotFound
+        }
+        return pasture
     }
 
     func fetchTreatmentRecords(session: WorkingSession, animal: Animal) throws -> [WorkingTreatmentRecord] {

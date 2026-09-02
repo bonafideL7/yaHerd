@@ -9,6 +9,7 @@ struct WorkingSessionDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(\.workingPresentedQueueIdentityDidChange) private var presentedQueueIdentityDidChange
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     private var repository: any WorkingSessionDetailRepository {
@@ -180,7 +181,15 @@ struct WorkingSessionDetailView: View {
                                 sessionID: session.id,
                                 queueItemID: item.id
                             )
-                            .onDisappear(perform: reload)
+                            .onAppear {
+                                presentedQueueIdentityDidChange(
+                                    WorkingQueueIdentityReference(item: item)
+                                )
+                            }
+                            .onDisappear {
+                                presentedQueueIdentityDidChange(nil)
+                                reload()
+                            }
                         } label: {
                             WorkingSessionAnimalRow(item: item)
                         }
@@ -231,7 +240,15 @@ struct WorkingSessionDetailView: View {
                                 sessionID: session.id,
                                 queueItemID: item.id
                             )
-                            .onDisappear(perform: reload)
+                            .onAppear {
+                                presentedQueueIdentityDidChange(
+                                    WorkingQueueIdentityReference(item: item)
+                                )
+                            }
+                            .onDisappear {
+                                presentedQueueIdentityDidChange(nil)
+                                reload()
+                            }
                         } label: {
                             WorkingSessionAnimalRow(
                                 item: item,
