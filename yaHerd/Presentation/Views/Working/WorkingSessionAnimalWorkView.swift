@@ -14,6 +14,10 @@ struct WorkingSessionAnimalWorkView: View {
         workingDependencies.pastureReferenceReader
     }
 
+    var animalSummaryReader: any AnimalSummaryReading {
+        workingDependencies.animalSummaryReader
+    }
+
     var vaccinationRepository: any WorkingTreatmentTemplateCreating {
         workingDependencies.treatmentTemplateCreator
     }
@@ -22,6 +26,8 @@ struct WorkingSessionAnimalWorkView: View {
     @State var treatmentEntries: [WorkingAnimalTreatmentEntry] = []
     @State var availablePastures: [PastureOption] = []
     @State var selectedDestinationPastureID: UUID?
+    @State var sourcePastureReference: WorkingQueueEditorSourcePastureReference?
+    @State var destinationSelectionRequiresReview = false
     @State var recordPregnancyCheck = false
     @State var pregnancyResult: PregnancyResult = .unknown
     @State var estimatedDaysText = ""
@@ -52,6 +58,13 @@ struct WorkingSessionAnimalWorkView: View {
 
     var snapshot: WorkingQueueItemEditorSnapshot? {
         viewModel.snapshot
+    }
+
+    var sessionSourcePastureDisplayName: String {
+        if let sourcePastureReference {
+            return sourcePastureReference.name ?? "Source Pasture"
+        }
+        return snapshot?.sessionSourcePastureName ?? "Source Pasture"
     }
 
     var isExistingWork: Bool {
@@ -116,13 +129,23 @@ struct WorkingSessionAnimalWorkView: View {
             }
         }
         .task {
+            let mutationStream = workingDependencies.mutationStream
+            let startingSequence = mutationStream.currentSequence
+
             viewModel.configure(repository: repository)
             viewModel.load()
             loadPastures()
             seedStateIfNeeded()
+            seedSessionSourcePastureReferenceIfNeeded()
+
+            await observeReferenceDataMutations(
+                mutationStream: mutationStream,
+                after: startingSequence
+            )
         }
         .onChange(of: viewModel.snapshot?.id) { _, _ in
             seedStateIfNeeded()
+            seedSessionSourcePastureReferenceIfNeeded()
         }
         .sheet(isPresented: $showingTagReplacement) {
             tagReplacementSheet
@@ -178,5 +201,167 @@ struct WorkingSessionAnimalWorkView: View {
             get: { savedVaccinationName != nil },
             set: { if !$0 { savedVaccinationName = nil } }
         )
+    }
+
+    @MainActor
+    private func observeReferenceDataMutations(
+        mutationStream: any ApplicationMutationStreaming,
+        after startingSequence: UInt64
+    ) async {
+        for await event in mutationStream.events(after: startingSequence) {
+            guard !Task.isCancelled else { return }
+
+            switch event.source {
+            case .sharedStoreImport:
+                guard !presentedQueueItemWasInvalidatedBySharedImport() else { return }
+                guard !refreshSessionSourcePastureAfterMutation() else { return }
+                refreshDestinationPasturesAfterMutation()
+                revalidateSelectedSireAfterMutation()
+            case .local(.sampleData):
+                guard !refreshSessionSourcePastureAfterMutation() else { return }
+                refreshDestinationPasturesAfterMutation()
+                revalidateSelectedSireAfterMutation()
+            case .local(.pasture):
+                guard !refreshSessionSourcePastureAfterMutation() else { return }
+                refreshDestinationPasturesAfterMutation()
+            case .local(.animal):
+                revalidateSelectedSireAfterMutation()
+            case .publicIDRepair:
+                // Duplicate-ID repair can preserve a public UUID while replacing the underlying
+                // local queue object. Every presentation of this editor must therefore tear down
+                // its transient draft rather than remaining bound to an indeterminate identity.
+                guard snapshot != nil else { continue }
+                dismiss()
+                return
+            case .collaborationStateChange, .local:
+                break
+            }
+        }
+    }
+
+    @MainActor
+    private func presentedQueueItemWasInvalidatedBySharedImport() -> Bool {
+        guard let presentedSnapshot = snapshot else { return false }
+
+        do {
+            let refreshedSnapshot = try repository.fetchQueueItemEditor(
+                sessionID: presentedSnapshot.sessionID,
+                queueItemID: presentedSnapshot.id
+            )
+
+            guard !WorkingQueueEditorIdentity.invalidates(
+                presented: presentedSnapshot,
+                refreshed: refreshedSnapshot
+            ) else {
+                dismiss()
+                return true
+            }
+
+            return false
+        } catch {
+            // A transient read failure is not evidence that the identity changed. Keep the draft;
+            // persistence still validates explicit references and fails closed on a later save.
+            return false
+        }
+    }
+
+    @MainActor
+    private func seedSessionSourcePastureReferenceIfNeeded() {
+        guard sourcePastureReference == nil, let snapshot else { return }
+
+        do {
+            guard let session = try workingDependencies.sessionDetailRepository.fetchSessionDetail(
+                id: snapshot.sessionID
+            ) else {
+                return
+            }
+            let sourceReference = WorkingQueueEditorSourcePastureReference(session: session)
+            sourcePastureReference = sourceReference
+            selectedDestinationPastureID = WorkingQueueEditorIdentity.destinationPastureSelection(
+                persistedDestinationPastureID: snapshot.destinationPastureID,
+                sourcePasture: sourceReference
+            )
+
+            if selectedDestinationPastureID == nil,
+               !WorkingQueueEditorIdentity.canUseSourcePasture(sourceReference) {
+                destinationSelectionRequiresReview = true
+            }
+        } catch {
+            // The editor snapshot still provides the source-pasture label. If a later mutation
+            // arrives without a durable baseline, source selection is conservatively re-reviewed.
+        }
+    }
+
+    @MainActor
+    private func refreshSessionSourcePastureAfterMutation() -> Bool {
+        guard let snapshot else { return false }
+
+        do {
+            guard let session = try workingDependencies.sessionDetailRepository.fetchSessionDetail(
+                id: snapshot.sessionID
+            ) else {
+                dismiss()
+                return true
+            }
+
+            let refreshedReference = WorkingQueueEditorSourcePastureReference(session: session)
+            let requiresReview = WorkingQueueEditorIdentity.sourcePastureChangeRequiresReview(
+                presented: sourcePastureReference,
+                refreshed: refreshedReference,
+                selectedDestinationPastureID: selectedDestinationPastureID
+            )
+            sourcePastureReference = refreshedReference
+
+            guard requiresReview else { return false }
+
+            destinationSelectionRequiresReview = true
+            errorMessage = "The source pasture changed while you were editing. Confirm the current source pasture or choose another pasture before saving."
+            showingError = true
+            return false
+        } catch {
+            // Preserve the current draft when the session cannot be refreshed transiently. The
+            // next mutation gets another chance to validate the source-pasture reference.
+            return false
+        }
+    }
+
+    @MainActor
+    private func refreshDestinationPasturesAfterMutation() {
+        do {
+            let refreshedPastures = try pastureRepository.fetchPastureOptions()
+            availablePastures = refreshedPastures
+
+            guard let selectedDestinationPastureID,
+                  !refreshedPastures.contains(where: { $0.id == selectedDestinationPastureID })
+            else {
+                return
+            }
+
+            self.selectedDestinationPastureID = nil
+            destinationSelectionRequiresReview = true
+            errorMessage = "The selected destination pasture is no longer available. Choose another pasture or confirm the source pasture before saving."
+            showingError = true
+        } catch {
+            // Preserve the in-progress draft and current selection when reference data cannot be
+            // refreshed. The repository still rejects a missing explicit pasture ID at save time.
+        }
+    }
+
+    @MainActor
+    private func revalidateSelectedSireAfterMutation() {
+        guard let selectedSire else { return }
+
+        do {
+            let animalStillExists = try animalSummaryReader.fetchAnimals()
+                .contains(where: { $0.id == selectedSire.id })
+            guard !animalStillExists else { return }
+
+            self.selectedSire = nil
+            errorMessage = "The selected sire is no longer available. Choose another sire if you want to record one before saving."
+            showingError = true
+        } catch {
+            // Keep the user's current selection when reference data cannot be refreshed. The
+            // repository validates a non-nil sire ID before mutating work data and fails closed.
+        }
     }
 }

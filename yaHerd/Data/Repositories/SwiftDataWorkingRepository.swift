@@ -55,8 +55,14 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         sessionID: UUID,
         queueItemID: UUID
     ) throws -> WorkingQueueItemEditorSnapshot? {
-        let session = try lookup.fetchSession(id: sessionID)
-        let queueItem = try lookup.fetchQueueItem(id: queueItemID, sessionID: sessionID)
+        guard let resolved = try workingQueueItemEditorLookup({
+            let session = try lookup.fetchSession(id: sessionID)
+            let queueItem = try lookup.fetchQueueItem(id: queueItemID, sessionID: sessionID)
+            return (session, queueItem)
+        }) else {
+            return nil
+        }
+        let (session, queueItem) = resolved
         guard let animal = queueItem.animal else { return nil }
 
         let treatmentRecords = try lookup.fetchTreatmentRecords(session: session, animal: animal)
@@ -157,15 +163,17 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         guard let animal = queueItem.animal else { return }
 
         let completedAt = dateProvider.now
-        queueItem.status = .done
-        queueItem.completedAt = completedAt
-
         let input = WorkingQueueItemWorkDataInput(
             treatmentEntries: treatmentEntries,
             pregnancyCheck: pregnancyCheck,
             castrationPerformed: markCastrated,
             observationNotes: observationNotes
         )
+        try workDataWriter.validateReferences(in: input)
+
+        queueItem.status = .done
+        queueItem.completedAt = completedAt
+
         try workDataWriter.replaceWorkData(
             session: session,
             animal: animal,
@@ -187,9 +195,12 @@ struct SwiftDataWorkingRepository: WorkingRepository {
 
         let now = dateProvider.now
         let completedAt = input.status == .done ? (input.completedAt ?? now) : nil
+        let destinationPasture = try lookup.fetchPasture(id: input.destinationPastureID)
+        try workDataWriter.validateReferences(in: input.workData)
+
         queueItem.status = input.status
         queueItem.completedAt = completedAt
-        queueItem.destinationPasture = try lookup.fetchPasture(id: input.destinationPastureID)
+        queueItem.destinationPasture = destinationPasture
 
         try workDataWriter.replaceWorkData(
             session: session,
@@ -253,13 +264,18 @@ struct SwiftDataWorkingRepository: WorkingRepository {
 
         try validateCompletionOwnership(for: session)
 
-        for item in session.queueItems {
-            guard let animal = item.animal else { continue }
-            guard let assignedPastureID = destinationsByQueueItemID[item.publicID] else {
-                throw WorkingRepositoryError.assignmentSetDoesNotMatchSession
+        let completionPlan = try SwiftDataWorkingSessionCompletionPlan.make(
+            session: session,
+            destinationsByQueueItemID: destinationsByQueueItemID,
+            resolvePasture: { pastureID in
+                try lookup.fetchPasture(id: pastureID)
             }
-            let destination = try lookup.fetchPasture(id: assignedPastureID)
-                ?? session.sourcePasture
+        )
+
+        for entry in completionPlan {
+            let item = entry.queueItem
+            guard let animal = item.animal else { continue }
+            let destination = entry.destinationPasture
             item.destinationPasture = destination
 
             let fromPastureName: String?

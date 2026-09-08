@@ -138,6 +138,12 @@ final class AppDependencies {
                 ownershipRegistry: participantOwnershipRegistry,
                 acceptedParticipantReferenceStore: acceptedParticipantReferenceStore,
                 newOwnerShareRemoteVerifier: remoteOwnerShareVerifier,
+                swiftDataImporterFactory: {
+                    MutationPublishingHerdSharingImporter(
+                        base: SwiftDataHerdSharingActor(modelContainer: modelContainer),
+                        mutationCenter: mutationCenter
+                    )
+                },
                 existingOwnerShareReferenceRecorder: { systemShare, herdPublicID in
                     let share = systemShare.share
                     let zoneID = share.recordID.zoneID
@@ -221,6 +227,10 @@ final class AppDependencies {
             let publicIDRepairObservationRepository = PublicIDRepairBridgeObservationRepository(
                 accessReader: publicIDRepairBridgeStore
             )
+            let publicIDRepairImporter = MutationPublishingHerdSharingImporter(
+                base: SwiftDataHerdSharingActor(modelContainer: modelContainer),
+                mutationCenter: mutationCenter
+            )
             bridgeCoordinator = DefaultPublicIDRepairBridgeCoordinator(
                 herdInventory: SwiftDataPublicIDRepairHerdInventory(
                     modelContainer: modelContainer
@@ -230,6 +240,8 @@ final class AppDependencies {
                 storageMode: resolvedStorageMode,
                 exporter: SwiftDataPublicIDRepairBridgeExporter(
                     modelContainer: modelContainer,
+                    exportReader: publicIDRepairImporter,
+                    importer: publicIDRepairImporter,
                     bridgeStore: PublicIDRepairOwnershipSafeBridgeStore(
                         base: publicIDRepairBridgeStore
                     )
@@ -238,8 +250,12 @@ final class AppDependencies {
         } else {
             bridgeCoordinator = LocalOnlyPublicIDRepairBridgeCoordinator()
         }
-        let publicIDRepairWorker = SwiftDataPublicIDRepairService(
+        let basePublicIDRepairWorker = SwiftDataPublicIDRepairService(
             modelContainer: modelContainer
+        )
+        let publicIDRepairWorker = MutationPublishingPublicIDRepairTransactionalService(
+            base: basePublicIDRepairWorker,
+            mutationCenter: mutationCenter
         )
         let publicIDRepairService = CoordinatedPublicIDRepairService(
             worker: publicIDRepairWorker,

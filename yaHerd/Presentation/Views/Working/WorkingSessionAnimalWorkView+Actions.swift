@@ -35,12 +35,20 @@ extension WorkingSessionAnimalWorkView {
                 ToolbarSaveButton {
                     saveWork()
                 }
-                .disabled(snapshot?.animalID == nil || !allowsEditing)
+                .disabled(
+                    snapshot?.animalID == nil
+                        || !allowsEditing
+                        || destinationSelectionRequiresReview
+                )
             } else {
                 ToolbarDoneButton {
                     saveWork()
                 }
-                .disabled(snapshot?.animalID == nil || !allowsEditing)
+                .disabled(
+                    snapshot?.animalID == nil
+                        || !allowsEditing
+                        || destinationSelectionRequiresReview
+                )
             }
         }
     }
@@ -129,6 +137,7 @@ extension WorkingSessionAnimalWorkView {
 
         treatmentEntries = seededEntries
         selectedDestinationPastureID = snapshot.destinationPastureID
+        destinationSelectionRequiresReview = false
         recordPregnancyCheck = snapshot.pregnancyCheck != nil
         pregnancyResult = snapshot.pregnancyCheck?.result ?? .unknown
         let pregnancyDueDateState = WorkingPregnancyDueDateFormState.seeded(
@@ -197,7 +206,10 @@ extension WorkingSessionAnimalWorkView {
         let date = snapshot.sessionDate.formatted(
             .dateTime.year().month(.abbreviated).day()
         )
-        return "\(snapshot.sessionSourcePastureName ?? "Working Session") \(date)"
+        let sourceName = sourcePastureReference?.name
+            ?? snapshot.sessionSourcePastureName
+            ?? "Working Session"
+        return "\(sourceName) \(date)"
     }
 
     var estimatedDaysBinding: Binding<String> {
@@ -234,7 +246,26 @@ extension WorkingSessionAnimalWorkView {
     }
 
     func saveWork() {
-        guard allowsEditing, let snapshot else { return }
+        guard allowsEditing,
+              !destinationSelectionRequiresReview,
+              let snapshot else {
+            return
+        }
+
+        let destinationPastureIDForSave: UUID?
+        if let selectedDestinationPastureID {
+            destinationPastureIDForSave = selectedDestinationPastureID
+        } else {
+            guard ensureSourcePastureReferenceForSave(sessionID: snapshot.sessionID),
+                  let sourcePastureReference,
+                  WorkingQueueEditorIdentity.canUseSourcePasture(sourcePastureReference) else {
+                return
+            }
+            destinationPastureIDForSave = WorkingQueueEditorIdentity.destinationPastureIDForSave(
+                selectedDestinationPastureID: nil,
+                sourcePasture: sourcePastureReference
+            )
+        }
 
         let workDate = WorkingAnimalWorkTimestamp.resolve(
             existingCompletedAt: snapshot.completedAt,
@@ -287,7 +318,7 @@ extension WorkingSessionAnimalWorkView {
         let input = WorkingSessionAnimalEditInput(
             status: .done,
             completedAt: workDate,
-            destinationPastureID: selectedDestinationPastureID,
+            destinationPastureID: destinationPastureIDForSave,
             treatmentEntries: treatmentInputs,
             pregnancyCheck: pregnancyInput,
             castrationPerformed: isMale
@@ -307,6 +338,49 @@ extension WorkingSessionAnimalWorkView {
             errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true
         }
+    }
+
+    private func ensureSourcePastureReferenceForSave(sessionID: UUID) -> Bool {
+        if let sourcePastureReference {
+            guard WorkingQueueEditorIdentity.canUseSourcePasture(sourcePastureReference) else {
+                requireExplicitDestinationAfterUnavailableSource()
+                return false
+            }
+            return true
+        }
+
+        do {
+            guard let session = try workingDependencies.sessionDetailRepository.fetchSessionDetail(
+                id: sessionID
+            ) else {
+                errorMessage = "This working session is no longer available."
+                showingError = true
+                return false
+            }
+
+            let refreshedReference = WorkingQueueEditorSourcePastureReference(session: session)
+            sourcePastureReference = refreshedReference
+            destinationSelectionRequiresReview = true
+
+            if WorkingQueueEditorIdentity.canUseSourcePasture(refreshedReference) {
+                errorMessage = "The source pasture could not be verified when this editor opened. Confirm the current source pasture or choose another pasture before saving."
+            } else {
+                errorMessage = "The source pasture is no longer available. Choose another pasture before saving."
+            }
+            showingError = true
+            return false
+        } catch {
+            errorMessage = "The source pasture could not be verified. Try saving again after the session refreshes."
+            showingError = true
+            return false
+        }
+    }
+
+    private func requireExplicitDestinationAfterUnavailableSource() {
+        selectedDestinationPastureID = nil
+        destinationSelectionRequiresReview = true
+        errorMessage = "The source pasture is no longer available. Choose another pasture before saving."
+        showingError = true
     }
 
     func deleteWorkData() {

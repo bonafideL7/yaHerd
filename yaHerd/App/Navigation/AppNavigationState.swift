@@ -183,43 +183,154 @@ final class HerdRouter {
     }
 }
 
-struct WorkflowRouterSnapshot: Codable, Equatable {
-    var route: WorkflowRoute?
-}
-
 @MainActor
 @Observable
 final class WorkflowRouter {
     var route: WorkflowRoute?
-
-    var snapshot: WorkflowRouterSnapshot {
-        WorkflowRouterSnapshot(route: route)
-    }
-
-    func restore(_ snapshot: WorkflowRouterSnapshot) {
-        route = snapshot.route
-    }
 
     func reset() {
         route = nil
     }
 }
 
+/// Only persisted workflows backed by an existing, active repository record are restorable.
+enum AppRestorableWorkflow: Codable, Equatable {
+    case fieldCheckSession(UUID)
+    case workingSession(UUID)
+}
+
 struct AppNavigationSnapshot: Codable, Equatable {
-    static let currentVersion = 1
+    static let currentVersion = 2
+    static let supportedVersions = 1...currentVersion
 
     var version: Int = currentVersion
     var selectedTab: AppTab
+    var selectedHerdID: UUID?
     var herdRouter: HerdRouterSnapshot
-    var workflowRouter: WorkflowRouterSnapshot
-    var presentedSheet: AppPresentedSheet?
-    var fullScreenWorkflow: AppFullScreenWorkflow?
+    var activeWorkflow: AppRestorableWorkflow?
+
+    private enum CodingKeys: String, CodingKey {
+        case version
+        case selectedTab
+        case selectedHerdID
+        case herdRouter
+        case activeWorkflow
+        case workflowRouter
+        case fullScreenWorkflow
+    }
+
+    init(
+        version: Int = currentVersion,
+        selectedTab: AppTab,
+        selectedHerdID: UUID?,
+        herdRouter: HerdRouterSnapshot,
+        activeWorkflow: AppRestorableWorkflow?
+    ) {
+        self.version = version
+        self.selectedTab = selectedTab
+        self.selectedHerdID = selectedHerdID
+        self.herdRouter = herdRouter
+        self.activeWorkflow = activeWorkflow
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version, forKey: .version)
+        try container.encode(selectedTab, forKey: .selectedTab)
+        try container.encodeIfPresent(selectedHerdID, forKey: .selectedHerdID)
+        try container.encode(herdRouter, forKey: .herdRouter)
+        try container.encodeIfPresent(activeWorkflow, forKey: .activeWorkflow)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        selectedTab = try container.decode(AppTab.self, forKey: .selectedTab)
+        selectedHerdID = try container.decodeIfPresent(UUID.self, forKey: .selectedHerdID)
+        herdRouter = try container.decode(HerdRouterSnapshot.self, forKey: .herdRouter)
+
+        if let workflow = try container.decodeIfPresent(AppRestorableWorkflow.self, forKey: .activeWorkflow) {
+            activeWorkflow = workflow
+        } else if let legacyRouter = try container.decodeIfPresent(
+            LegacyWorkflowRouterSnapshot.self,
+            forKey: .workflowRouter
+        ) {
+            let legacyPresentation = try container.decodeIfPresent(
+                AppFullScreenWorkflow.self,
+                forKey: .fullScreenWorkflow
+            )
+            activeWorkflow = Self.restorableWorkflow(
+                from: legacyRouter.route,
+                presentation: legacyPresentation
+            )
+        } else {
+            activeWorkflow = nil
+        }
+    }
+
+    private static func restorableWorkflow(
+        from route: WorkflowRoute?,
+        presentation: AppFullScreenWorkflow?
+    ) -> AppRestorableWorkflow? {
+        switch (presentation, route) {
+        case (.fieldCheck, .fieldCheckSession(let configuration)):
+            return .fieldCheckSession(configuration.sessionID)
+        case (.workingSession, .workingSession(let sessionID)):
+            return .workingSession(sessionID)
+        default:
+            return nil
+        }
+    }
+}
+
+private struct LegacyWorkflowRouterSnapshot: Codable {
+    var route: WorkflowRoute?
+}
+
+@MainActor
+protocol AppNavigationRestorationValidating {
+    func currentHerdID() throws -> UUID?
+    func animalExists(id: UUID) throws -> Bool
+    func pastureExists(id: UUID) throws -> Bool
+    func isActiveFieldCheckSession(id: UUID) throws -> Bool
+    func isActiveWorkingSession(id: UUID) throws -> Bool
+}
+
+@MainActor
+struct RepositoryAppNavigationRestorationValidator: AppNavigationRestorationValidating {
+    let herdRepository: any HerdRepository
+    let animalRepository: any AnimalDetailReading
+    let pastureRepository: any PastureDetailReader
+    let fieldCheckRepository: any FieldCheckSessionDetailReading
+    let workingRepository: any WorkingSessionDetailReader
+
+    func currentHerdID() throws -> UUID? {
+        try herdRepository.fetchCurrentHerd().id
+    }
+
+    func animalExists(id: UUID) throws -> Bool {
+        try animalRepository.fetchAnimalDetail(id: id) != nil
+    }
+
+    func pastureExists(id: UUID) throws -> Bool {
+        try pastureRepository.fetchPastureDetail(id: id) != nil
+    }
+
+    func isActiveFieldCheckSession(id: UUID) throws -> Bool {
+        guard let session = try fieldCheckRepository.fetchSessionDetail(id: id) else { return false }
+        return !session.isCompleted
+    }
+
+    func isActiveWorkingSession(id: UUID) throws -> Bool {
+        try workingRepository.fetchSessionDetail(id: id)?.status == .active
+    }
 }
 
 @MainActor
 @Observable
 final class AppNavigationState {
     var selectedTab: AppTab = .home
+    var selectedHerdID: UUID?
     let herdRouter = HerdRouter()
     let workflowRouter = WorkflowRouter()
     var presentedSheet: AppPresentedSheet?
@@ -228,25 +339,41 @@ final class AppNavigationState {
     var snapshot: AppNavigationSnapshot {
         AppNavigationSnapshot(
             selectedTab: selectedTab,
+            selectedHerdID: selectedHerdID,
             herdRouter: herdRouter.snapshot,
-            workflowRouter: workflowRouter.snapshot,
-            presentedSheet: presentedSheet,
-            fullScreenWorkflow: fullScreenWorkflow
+            activeWorkflow: restorableWorkflow
         )
     }
 
     func restore(from payload: String) {
-        guard !payload.isEmpty,
-              let data = Data(base64Encoded: payload),
-              let snapshot = try? JSONDecoder().decode(AppNavigationSnapshot.self, from: data),
-              snapshot.version == AppNavigationSnapshot.currentVersion
-        else { return }
+        restoreDurableStateWithoutRepositoryTargets(from: payload)
+    }
+
+    func restore(
+        from payload: String,
+        using validator: any AppNavigationRestorationValidating
+    ) {
+        resetTransientPresentations()
+        selectedHerdID = try? validator.currentHerdID()
+
+        guard let snapshot = decodeSnapshot(from: payload) else { return }
 
         selectedTab = snapshot.selectedTab
         herdRouter.restore(snapshot.herdRouter)
-        workflowRouter.restore(snapshot.workflowRouter)
-        presentedSheet = snapshot.presentedSheet
-        fullScreenWorkflow = snapshot.fullScreenWorkflow
+
+        let targetsCurrentHerd = snapshot.selectedHerdID == nil
+            || snapshot.selectedHerdID == selectedHerdID
+        guard targetsCurrentHerd else {
+            herdRouter.path.removeAll()
+            herdRouter.searchPath.removeAll()
+            clearIdentityBoundPastureFilter()
+            return
+        }
+
+        herdRouter.path = validatedPath(snapshot.herdRouter.path, using: validator)
+        herdRouter.searchPath = validatedPath(snapshot.herdRouter.searchPath ?? [], using: validator)
+        validateRestoredPastureFilter(using: validator)
+        restoreActiveWorkflow(snapshot.activeWorkflow, using: validator)
     }
 
     func restorationPayload() -> String? {
@@ -388,5 +515,121 @@ final class AppNavigationState {
         }
 
         return true
+    }
+
+    private var restorableWorkflow: AppRestorableWorkflow? {
+        switch (fullScreenWorkflow, workflowRouter.route) {
+        case (.fieldCheck, .fieldCheckSession(let configuration)):
+            return .fieldCheckSession(configuration.sessionID)
+        case (.workingSession, .workingSession(let sessionID)):
+            return .workingSession(sessionID)
+        default:
+            return nil
+        }
+    }
+
+    private func decodeSnapshot(from payload: String) -> AppNavigationSnapshot? {
+        guard !payload.isEmpty,
+              let data = Data(base64Encoded: payload),
+              let snapshot = try? JSONDecoder().decode(AppNavigationSnapshot.self, from: data),
+              AppNavigationSnapshot.supportedVersions.contains(snapshot.version)
+        else { return nil }
+        return snapshot
+    }
+
+    private func resetTransientPresentations() {
+        presentedSheet = nil
+        fullScreenWorkflow = nil
+        workflowRouter.reset()
+    }
+
+    private func restoreDurableStateWithoutRepositoryTargets(from payload: String) {
+        resetTransientPresentations()
+        guard let snapshot = decodeSnapshot(from: payload) else { return }
+
+        selectedTab = snapshot.selectedTab
+        herdRouter.restore(snapshot.herdRouter)
+        herdRouter.path = snapshot.herdRouter.path.filter(\.isStableListRoute)
+        herdRouter.searchPath = (snapshot.herdRouter.searchPath ?? []).filter(\.isStableListRoute)
+        clearIdentityBoundPastureFilter()
+    }
+
+    private func validatedPath(
+        _ path: [HerdRoute],
+        using validator: any AppNavigationRestorationValidating
+    ) -> [HerdRoute] {
+        var validatedRoutes: [HerdRoute] = []
+
+        for route in path {
+            let isValid: Bool
+            switch route {
+            case .animal(let animalID):
+                isValid = (try? validator.animalExists(id: animalID)) == true
+            case .pasture(let pastureID):
+                isValid = (try? validator.pastureExists(id: pastureID)) == true
+            case .fieldChecks, .workingSessions:
+                isValid = true
+            }
+
+            guard isValid else { break }
+            validatedRoutes.append(route)
+        }
+
+        return validatedRoutes
+    }
+
+    private func validateRestoredPastureFilter(
+        using validator: any AppNavigationRestorationValidating
+    ) {
+        guard case .pasture(let pastureID) = herdRouter.filter.pasture else { return }
+        guard (try? validator.pastureExists(id: pastureID)) == true else {
+            herdRouter.filter.pasture = .any
+            return
+        }
+    }
+
+    private func clearIdentityBoundPastureFilter() {
+        if case .pasture = herdRouter.filter.pasture {
+            herdRouter.filter.pasture = .any
+        }
+    }
+
+    private func restoreActiveWorkflow(
+        _ workflow: AppRestorableWorkflow?,
+        using validator: any AppNavigationRestorationValidating
+    ) {
+        switch workflow {
+        case .fieldCheckSession(let sessionID):
+            guard (try? validator.isActiveFieldCheckSession(id: sessionID)) == true else {
+                openFieldChecks()
+                return
+            }
+            workflowRouter.route = .fieldCheckSession(
+                FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
+            )
+            fullScreenWorkflow = .fieldCheck
+
+        case .workingSession(let sessionID):
+            guard (try? validator.isActiveWorkingSession(id: sessionID)) == true else {
+                openWorkingSessions()
+                return
+            }
+            workflowRouter.route = .workingSession(sessionID)
+            fullScreenWorkflow = .workingSession
+
+        case .none:
+            break
+        }
+    }
+}
+
+private extension HerdRoute {
+    var isStableListRoute: Bool {
+        switch self {
+        case .fieldChecks, .workingSessions:
+            return true
+        case .animal, .pasture:
+            return false
+        }
     }
 }
