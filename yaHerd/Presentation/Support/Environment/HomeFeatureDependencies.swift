@@ -122,6 +122,7 @@ private struct MissingHomeMutationStream: ApplicationMutationStreaming {
     var fieldCheckRevision: UInt64 { 0 }
     var workingSessionRevision: UInt64 { 0 }
     var collaborationRevision: UInt64 { 0 }
+    var identityRevision: UInt64 { 0 }
 
     func revision(for area: ApplicationFeatureArea) -> UInt64 {
         0

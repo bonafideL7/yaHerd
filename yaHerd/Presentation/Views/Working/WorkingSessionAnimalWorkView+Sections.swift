@@ -94,20 +94,61 @@ extension WorkingSessionAnimalWorkView {
     }
 
     func destinationSection(_ snapshot: WorkingQueueItemEditorSnapshot) -> some View {
-        Section {
-            Picker("Destination After Session", selection: $selectedDestinationPastureID) {
-                Text("Return to \(snapshot.sessionSourcePastureName ?? "Source Pasture")")
-                    .tag(Optional<UUID>.none)
+        let canUseSourcePasture = WorkingQueueEditorIdentity.canUseSourcePasture(
+            sourcePastureReference
+        )
+
+        return Section {
+            Picker("Destination After Session", selection: destinationPastureSelectionBinding) {
+                if canUseSourcePasture {
+                    Text("Return to \(sessionSourcePastureDisplayName)")
+                        .tag(Optional<UUID>.none)
+                }
                 ForEach(availablePastures) { pasture in
                     Text(pasture.name).tag(Optional(pasture.id))
                 }
             }
             .disabled(!allowsEditing)
+
+            if destinationSelectionRequiresReview && allowsEditing && canUseSourcePasture {
+                Button("Use Source Pasture") {
+                    selectedDestinationPastureID = nil
+                    destinationSelectionRequiresReview = false
+                    errorMessage = nil
+                }
+            }
         } header: {
             Text("Pasture")
         } footer: {
-            Text("Choose a different pasture for this animal, or leave the source pasture selected. The move is applied when the session is finished.")
+            if destinationSelectionRequiresReview && !canUseSourcePasture {
+                Text("The source pasture is no longer available. Choose another pasture before saving.")
+            } else if destinationSelectionRequiresReview {
+                Text("The previous pasture selection changed or is no longer available. Choose another pasture or confirm the current source pasture before saving.")
+            } else if canUseSourcePasture {
+                Text("Choose a different pasture for this animal, or leave the source pasture selected. The move is applied when the session is finished.")
+            } else {
+                Text("Choose a destination pasture before saving.")
+            }
         }
+    }
+
+    var destinationPastureSelectionBinding: Binding<UUID?> {
+        Binding(
+            get: { selectedDestinationPastureID },
+            set: { newValue in
+                selectedDestinationPastureID = newValue
+
+                if newValue == nil,
+                   !WorkingQueueEditorIdentity.canUseSourcePasture(sourcePastureReference) {
+                    destinationSelectionRequiresReview = true
+                    errorMessage = "The source pasture is no longer available. Choose another pasture before saving."
+                    return
+                }
+
+                destinationSelectionRequiresReview = false
+                errorMessage = nil
+            }
+        )
     }
 
     var treatmentSection: some View {

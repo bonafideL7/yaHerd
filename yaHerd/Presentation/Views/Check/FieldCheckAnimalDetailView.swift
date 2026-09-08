@@ -7,6 +7,7 @@ struct FieldCheckAnimalDetailView: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(\.fieldCheckPresentedAnimalIDDidChange) private var presentedAnimalIDDidChange
 
     @State private var model = FieldCheckAnimalDetailViewModel()
     @State private var isLineageExpanded = false
@@ -157,6 +158,12 @@ struct FieldCheckAnimalDetailView: View {
                     fieldCheckRepository: fieldCheckRepository
                 )
             }
+        }
+        .onAppear {
+            presentedAnimalIDDidChange(animalID)
+        }
+        .onDisappear {
+            presentedAnimalIDDidChange(nil)
         }
         .alert("Can’t Update Animal", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
