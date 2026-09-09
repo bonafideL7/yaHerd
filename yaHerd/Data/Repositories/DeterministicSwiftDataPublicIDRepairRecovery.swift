@@ -2,11 +2,30 @@ import Foundation
 import SwiftData
 
 extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransactionalRecovering {
+    private enum RecoveryMutationTarget {
+        case none
+        case aggregatePublicID(
+            localIdentifier: String,
+            finalPublicID: UUID,
+            backupPublicID: UUID
+        )
+        case aggregateReference(
+            localIdentifier: String,
+            fieldName: String,
+            finalPublicID: UUID?,
+            backupPublicID: UUID?
+        )
+        case treatmentItem(
+            localIdentifier: String,
+            finalPublicID: UUID,
+            backupPublicID: UUID
+        )
+    }
+
     private struct RecoveryMutation {
         let state: PublicIDRepairRecoveryTransformationState
         let canRestoreFromBackup: Bool
-        let applyFinal: @isolated(any) () -> Void
-        let applyBackup: @isolated(any) () -> Void
+        let target: RecoveryMutationTarget
         let description: String
         let evidence: PublicIDRepairRecoveryEvidence
     }
@@ -244,9 +263,7 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
         try await willCommit(plannedReport)
 
         do {
-            for mutation in missing {
-                await mutation.applyFinal()
-            }
+            try applyRecoveryMutations(missing, restoringBackup: false)
             let repairedLoaded = try loadRecords()
             try synchronizeRevisionRecords(loaded: repairedLoaded)
             let issues = try validationIssues(
@@ -388,8 +405,7 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
                 RecoveryMutation(
                     state: .contradictoryOrAmbiguous,
                     canRestoreFromBackup: false,
-                    applyFinal: {},
-                    applyBackup: {},
+                    target: .none,
                     description: issue.reason,
                     evidence: PublicIDRepairRecoveryEvidence(
                         stableRecordIdentifier: stableID,
@@ -432,8 +448,11 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
                     RecoveryMutation(
                         state: state,
                         canRestoreFromBackup: true,
-                        applyFinal: { node.assignPublicID(mapping.finalPublicID) },
-                        applyBackup: { node.assignPublicID(baseline) },
+                        target: .aggregatePublicID(
+                            localIdentifier: node.localIdentifier,
+                            finalPublicID: mapping.finalPublicID,
+                            backupPublicID: baseline
+                        ),
                         description: description,
                         evidence: PublicIDRepairRecoveryEvidence(
                             stableRecordIdentifier: mapping.portableRecordIdentity,
@@ -463,8 +482,7 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
                     RecoveryMutation(
                         state: .contradictoryOrAmbiguous,
                         canRestoreFromBackup: false,
-                        applyFinal: {},
-                        applyBackup: {},
+                        target: .none,
                         description: description,
                         evidence: PublicIDRepairRecoveryEvidence(
                             stableRecordIdentifier: mapping.portableRecordIdentity,
@@ -497,8 +515,7 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
                     RecoveryMutation(
                         state: .contradictoryOrAmbiguous,
                         canRestoreFromBackup: false,
-                        applyFinal: {},
-                        applyBackup: {},
+                        target: .none,
                         description: description,
                         evidence: PublicIDRepairRecoveryEvidence(
                             stableRecordIdentifier: transformation.sourcePortableRecordIdentity,
@@ -516,8 +533,7 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
                     RecoveryMutation(
                         state: .contradictoryOrAmbiguous,
                         canRestoreFromBackup: false,
-                        applyFinal: {},
-                        applyBackup: {},
+                        target: .none,
                         description: description,
                         evidence: PublicIDRepairRecoveryEvidence(
                             stableRecordIdentifier: transformation.sourcePortableRecordIdentity,
@@ -556,20 +572,12 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
                 RecoveryMutation(
                     state: state,
                     canRestoreFromBackup: true,
-                    applyFinal: {
-                        self.assignRepairReference(
-                            transformation.finalPublicID,
-                            fieldName: transformation.fieldName,
-                            aggregate: node.aggregate
-                        )
-                    },
-                    applyBackup: {
-                        self.assignRepairReference(
-                            baseline,
-                            fieldName: transformation.fieldName,
-                            aggregate: node.aggregate
-                        )
-                    },
+                    target: .aggregateReference(
+                        localIdentifier: node.localIdentifier,
+                        fieldName: transformation.fieldName,
+                        finalPublicID: transformation.finalPublicID,
+                        backupPublicID: baseline
+                    ),
                     description: description,
                     evidence: PublicIDRepairRecoveryEvidence(
                         stableRecordIdentifier: transformation.sourcePortableRecordIdentity,
@@ -897,8 +905,11 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
         return RecoveryMutation(
             state: state,
             canRestoreFromBackup: true,
-            applyFinal: { match.location.assignPublicID(mapping.finalPublicID) },
-            applyBackup: { match.location.assignPublicID(baseline) },
+            target: .treatmentItem(
+                localIdentifier: match.location.localIdentifier,
+                finalPublicID: mapping.finalPublicID,
+                backupPublicID: baseline
+            ),
             description: description,
             evidence: PublicIDRepairRecoveryEvidence(
                 stableRecordIdentifier: mapping.portableRecordIdentity,
@@ -972,6 +983,67 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
         case (let treatment as WorkingTreatmentRecord, "treatmentItemID"):
             if let value { treatment.treatmentItemID = value }
         default: break
+        }
+    }
+
+    private func applyRecoveryMutations(
+        _ mutations: [RecoveryMutation],
+        restoringBackup: Bool
+    ) throws {
+        let loaded = try loadRecords()
+        let nodes = makeAggregateNodes(loaded: loaded)
+        var nodeByLocalIdentifier: [String: AggregateNode] = [:]
+        nodeByLocalIdentifier.reserveCapacity(nodes.count)
+        for node in nodes {
+            nodeByLocalIdentifier[node.localIdentifier] = node
+        }
+
+        let treatmentLocations = makeTreatmentItemLocations(loaded: loaded)
+        var treatmentByLocalIdentifier: [String: TreatmentItemLocation] = [:]
+        treatmentByLocalIdentifier.reserveCapacity(treatmentLocations.count)
+        for location in treatmentLocations {
+            treatmentByLocalIdentifier[location.localIdentifier] = location
+        }
+
+        for mutation in mutations {
+            switch mutation.target {
+            case .none:
+                continue
+
+            case let .aggregatePublicID(localIdentifier, finalPublicID, backupPublicID):
+                guard let node = nodeByLocalIdentifier[localIdentifier] else {
+                    throw PublicIDRepairRecoveryError.restorationVerificationFailed(
+                        "Recovery target \(localIdentifier) is no longer present."
+                    )
+                }
+                node.assignPublicID(restoringBackup ? backupPublicID : finalPublicID)
+
+            case let .aggregateReference(
+                localIdentifier,
+                fieldName,
+                finalPublicID,
+                backupPublicID
+            ):
+                guard let node = nodeByLocalIdentifier[localIdentifier] else {
+                    throw PublicIDRepairRecoveryError.restorationVerificationFailed(
+                        "Recovery target \(localIdentifier) is no longer present."
+                    )
+                }
+                let value = restoringBackup ? backupPublicID : finalPublicID
+                assignRepairReference(
+                    value,
+                    fieldName: fieldName,
+                    aggregate: node.aggregate
+                )
+
+            case let .treatmentItem(localIdentifier, finalPublicID, backupPublicID):
+                guard let location = treatmentByLocalIdentifier[localIdentifier] else {
+                    throw PublicIDRepairRecoveryError.restorationVerificationFailed(
+                        "Recovery treatment target \(localIdentifier) is no longer present."
+                    )
+                }
+                location.assignPublicID(restoringBackup ? backupPublicID : finalPublicID)
+            }
         }
     }
 
@@ -1180,9 +1252,14 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
         // Restore only repair-owned fields to the exact source values stored by the backup bound
         // to this manifest generation. Already-final fields whose baseline was already final stay
         // final; unrelated shared fields were used for unique matching and are never overwritten.
-        for mutation in plan.mutations where mutation.canRestoreFromBackup {
-            await mutation.applyBackup()
+        var restorable: [RecoveryMutation] = []
+        restorable.reserveCapacity(plan.mutations.count)
+        for mutation in plan.mutations {
+            if mutation.canRestoreFromBackup {
+                restorable.append(mutation)
+            }
         }
+        try applyRecoveryMutations(restorable, restoringBackup: true)
 
         try restoreRevisionBoundary(from: plan.backup, report: report)
         try PersistenceLog.save(
