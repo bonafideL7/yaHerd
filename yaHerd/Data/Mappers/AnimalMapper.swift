@@ -69,6 +69,7 @@ struct AnimalMapper {
             activeTags: animal.activeTags.map(makeTagSnapshot),
             inactiveTags: animal.inactiveTags.map(makeTagSnapshot),
             location: animal.location,
+            maternalOffspringCountIncludingArchived: animal.maternalOffspring.count,
             maternalOffspring: animal.maternalOffspring
                 .filter { !$0.isSoftDeleted }
                 .sorted { lhs, rhs in

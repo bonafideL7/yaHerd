@@ -14,6 +14,7 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
     private let cloudStore: any ApplicationSettingsCloudStore
     private let keys: [ApplicationSettingKey]
     private var cloudObservationTask: Task<Void, Never>?
+    private var compatibilityCloudObservationTask: Task<Void, Never>?
     private var isApplyingCloudValues = false
     private var isStarted = false
 
@@ -33,10 +34,22 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
         self.settings = settings
         self.cloudStore = cloudStore
         self.keys = keys
+
+        // Retired cloud aliases must be removed even when this installation is
+        // running Local Only or falls back before preference sync can start.
+        // Canonical compatibility tombstones remain as forced-safe values so
+        // older supported releases cannot restore retired destructive behavior.
+        cloudStore.synchronize()
+        purgeDeprecatedCloudKeys()
+        publishCompatibilityCloudTombstones()
+        cloudStore.synchronize()
+        observeCompatibilityCloudChanges()
     }
 
     isolated deinit {
         stop()
+        compatibilityCloudObservationTask?.cancel()
+        compatibilityCloudObservationTask = nil
     }
 
     func startIfNeeded(syncMode: SyncMode) {
@@ -88,6 +101,9 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
             deletedCount += 1
         }
 
+        // Compatibility tombstones are safety metadata, not user preferences.
+        // Keep them in place while older supported releases may still exist.
+        publishCompatibilityCloudTombstones()
         cloudStore.synchronize()
         return deletedCount
     }
@@ -99,10 +115,21 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
             write: { cloudStore.set($1, forKey: $0) },
             remove: { cloudStore.removeObject(forKey: $0) }
         )
+        purgeDeprecatedCloudKeys()
+        publishCompatibilityCloudTombstones()
+        cloudStore.synchronize()
+    }
+
+    private func purgeDeprecatedCloudKeys() {
         for deprecatedKey in ApplicationSettingsCatalog.deprecatedCloudKeys {
             cloudStore.removeObject(forKey: deprecatedKey)
         }
-        cloudStore.synchronize()
+    }
+
+    private func publishCompatibilityCloudTombstones() {
+        for (key, value) in ApplicationSettingsCatalog.compatibilityCloudBooleanTombstones {
+            cloudStore.set(value, forKey: key)
+        }
     }
 
     private func applyCloudSettingsToApplicationSettings() {
@@ -156,6 +183,37 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
                 self?.handleCloudChange(changedKeys: changedKeys)
             }
         }
+    }
+
+    private func observeCompatibilityCloudChanges() {
+        compatibilityCloudObservationTask = Task<Void, Never> { @MainActor [weak self] in
+            let changes = NotificationCenter.default.notifications(
+                named: NSUbiquitousKeyValueStore.didChangeExternallyNotification
+            )
+            .map { notification -> [String]? in
+                notification.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String]
+            }
+
+            for await changedKeys in changes {
+                guard !Task.isCancelled else { return }
+                self?.handleCompatibilityCloudChange(changedKeys: changedKeys)
+            }
+        }
+    }
+
+    private func handleCompatibilityCloudChange(changedKeys: [String]?) {
+        let safetyKeys = Set(ApplicationSettingsCatalog.compatibilityCloudBooleanTombstones.keys)
+            .union(ApplicationSettingsCatalog.deprecatedCloudKeys)
+
+        if let changedKeys,
+           !changedKeys.contains(where: safetyKeys.contains) {
+            return
+        }
+
+        cloudStore.synchronize()
+        purgeDeprecatedCloudKeys()
+        publishCompatibilityCloudTombstones()
+        cloudStore.synchronize()
     }
 
     private func handleCloudChange(changedKeys: [String]?) {
