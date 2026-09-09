@@ -5,8 +5,8 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
     private struct RecoveryMutation {
         let state: PublicIDRepairRecoveryTransformationState
         let canRestoreFromBackup: Bool
-        let applyFinal: () -> Void
-        let applyBackup: () -> Void
+        let applyFinal: @isolated(any) () -> Void
+        let applyBackup: @isolated(any) () -> Void
         let description: String
         let evidence: PublicIDRepairRecoveryEvidence
     }
@@ -245,7 +245,7 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
 
         do {
             for mutation in missing {
-                mutation.applyFinal()
+                await mutation.applyFinal()
             }
             let repairedLoaded = try loadRecords()
             try synchronizeRevisionRecords(loaded: repairedLoaded)
@@ -1181,7 +1181,7 @@ extension DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransaction
         // to this manifest generation. Already-final fields whose baseline was already final stay
         // final; unrelated shared fields were used for unique matching and are never overwritten.
         for mutation in plan.mutations where mutation.canRestoreFromBackup {
-            mutation.applyBackup()
+            await mutation.applyBackup()
         }
 
         try restoreRevisionBoundary(from: plan.backup, report: report)
