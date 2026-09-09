@@ -5,21 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 PROJECT_FILE="yaHerd.xcodeproj/project.pbxproj"
-
-require_setting() {
-  local pattern="$1"
-  local expected_count="$2"
-  local actual_count
-  actual_count="$(grep -c "$pattern" "$PROJECT_FILE" || true)"
-  if [[ "$actual_count" -lt "$expected_count" ]]; then
-    echo "Missing required concurrency setting: $pattern (found $actual_count, expected at least $expected_count)" >&2
-    exit 1
-  fi
-}
-
-require_setting 'SWIFT_VERSION = 6.0;' 4
-require_setting 'SWIFT_STRICT_CONCURRENCY = complete;' 2
-require_setting 'SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;' 2
+DERIVED_DATA_PATH="$ROOT_DIR/.build/ConcurrencyDerivedData"
 
 if grep -q 'SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;' "$PROJECT_FILE"; then
   echo 'Module-wide MainActor default isolation is prohibited; isolate UI and persistence boundaries explicitly.' >&2
@@ -95,7 +81,7 @@ for path in environment_root.glob('*Dependencies.swift'):
     for match in re.finditer(r'^(?:@MainActor\s*)?struct\s+(\w+Dependencies)\b', text, re.MULTILINE):
         line = text.count('\n', 0, match.start()) + 1
         failures.append(
-            f'{path}:{line}: {match.group(1)} must be declared nonisolated so EnvironmentKey.defaultValue can construct it under MainActor default isolation'
+            f'{path}:{line}: {match.group(1)} must be declared nonisolated so EnvironmentKey.defaultValue can construct it without target-wide MainActor isolation'
         )
 
 for path in environment_root.glob('*.swift'):
@@ -129,35 +115,189 @@ if [[ -n "$unisolated_task_calls" ]]; then
 fi
 
 if ! command -v xcodebuild >/dev/null 2>&1; then
-  echo 'Static concurrency policy checks passed. xcodebuild is unavailable; production compile gate skipped.'
+  echo 'Static concurrency policy checks passed. xcodebuild is unavailable; compile verification skipped.'
   exit 0
 fi
+
+xcodebuild -version
+xcrun swiftc --version
+
+setting_value() {
+  local settings="$1"
+  local key="$2"
+  printf '%s\n' "$settings" | awk -F ' = ' -v key="$key" '
+    {
+      lhs = $1
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", lhs)
+      if (lhs == key) {
+        print $2
+        exit
+      }
+    }
+  '
+}
+
+assert_effective_setting() {
+  local target="$1"
+  local configuration="$2"
+  local key="$3"
+  local expected="$4"
+  local settings="$5"
+  local actual
+  actual="$(setting_value "$settings" "$key")"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "$target $configuration effective $key is '${actual:-<unset>}', expected '$expected'." >&2
+    exit 1
+  fi
+}
+
+verify_target_settings() {
+  local target="$1"
+  local configuration="$2"
+  local settings
+  settings="$(xcodebuild \
+    -project yaHerd.xcodeproj \
+    -target "$target" \
+    -configuration "$configuration" \
+    -sdk iphonesimulator \
+    CODE_SIGNING_ALLOWED=NO \
+    -showBuildSettings)"
+
+  assert_effective_setting "$target" "$configuration" SWIFT_VERSION 6.0 "$settings"
+  assert_effective_setting "$target" "$configuration" SWIFT_STRICT_CONCURRENCY complete "$settings"
+  assert_effective_setting "$target" "$configuration" SWIFT_TREAT_WARNINGS_AS_ERRORS YES "$settings"
+  assert_effective_setting "$target" "$configuration" SWIFT_APPROACHABLE_CONCURRENCY YES "$settings"
+
+  local default_isolation
+  default_isolation="$(setting_value "$settings" SWIFT_DEFAULT_ACTOR_ISOLATION)"
+  if [[ "$default_isolation" == "MainActor" ]]; then
+    echo "$target $configuration resolves SWIFT_DEFAULT_ACTOR_ISOLATION to MainActor; explicit isolation is required." >&2
+    exit 1
+  fi
+}
+
+for configuration in Debug Release; do
+  verify_target_settings yaHerd "$configuration"
+  verify_target_settings yaHerdTests "$configuration"
+done
+
+# Prove that the selected compiler is actually enforcing Swift 6 transfer diagnostics.
+# This is intentionally invalid and must fail type checking.
+SMOKE_DIR="$(mktemp -d)"
+SMOKE_LOG="$SMOKE_DIR/compiler-smoke.log"
+cat >"$SMOKE_DIR/ConcurrencyViolation.swift" <<'SWIFT'
+final class NonSendableReference {
+    var value = 0
+}
+
+actor Holder {
+    private var stored: NonSendableReference?
+
+    func store(_ value: NonSendableReference) {
+        stored = value
+    }
+}
+
+func intentionallyInvalidTransfer(_ value: NonSendableReference, to holder: Holder) async {
+    await holder.store(value)
+    value.value += 1
+}
+SWIFT
+
+set +e
+xcrun swiftc \
+  -swift-version 6 \
+  -strict-concurrency=complete \
+  -warnings-as-errors \
+  -typecheck \
+  "$SMOKE_DIR/ConcurrencyViolation.swift" >"$SMOKE_LOG" 2>&1
+smoke_status=$?
+set -e
+
+if [[ "$smoke_status" -eq 0 ]]; then
+  echo 'Swift compiler concurrency smoke test unexpectedly compiled an intentional data race.' >&2
+  cat "$SMOKE_LOG" >&2
+  rm -rf "$SMOKE_DIR"
+  exit 1
+fi
+if ! grep -Eqi 'sending|data race|Sendable|actor-isolated' "$SMOKE_LOG"; then
+  echo 'Swift compiler rejected the concurrency smoke test, but not with a recognized concurrency diagnostic.' >&2
+  cat "$SMOKE_LOG" >&2
+  rm -rf "$SMOKE_DIR"
+  exit 1
+fi
+rm -rf "$SMOKE_DIR"
+
+echo 'Swift compiler strict-concurrency smoke test passed.'
+
+rm -rf "$DERIVED_DATA_PATH"
+mkdir -p "$(dirname "$DERIVED_DATA_PATH")"
 
 BUILD_LOG="$(mktemp)"
 trap 'rm -f "$BUILD_LOG"' EXIT
 
-set +e
-xcodebuild \
-  -quiet \
-  -project yaHerd.xcodeproj \
-  -scheme yaHerd \
+run_xcodebuild_gate() {
+  local label="$1"
+  shift
+
+  : >"$BUILD_LOG"
+  set +e
+  xcodebuild \
+    -quiet \
+    -project yaHerd.xcodeproj \
+    -scheme yaHerd \
+    -derivedDataPath "$DERIVED_DATA_PATH" \
+    CODE_SIGNING_ALLOWED=NO \
+    SWIFT_VERSION=6.0 \
+    SWIFT_STRICT_CONCURRENCY=complete \
+    SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+    SWIFT_SUPPRESS_WARNINGS=NO \
+    "$@" >"$BUILD_LOG" 2>&1
+  local build_status=$?
+  set -e
+
+  if [[ "$build_status" -ne 0 ]]; then
+    echo "$label failed:" >&2
+    grep -E -i 'error:|warning:|fatal|signal|killed|command .* failed|failed to|unable to|BUILD FAILED|sending .* risks causing data races' "$BUILD_LOG" | tail -n 160 >&2 || true
+    tail -n 80 "$BUILD_LOG" >&2
+    exit "$build_status"
+  fi
+
+  if grep -E -i 'warning:|sending .* risks causing data races' "$BUILD_LOG" >/dev/null; then
+    echo "$label emitted warnings despite SWIFT_TREAT_WARNINGS_AS_ERRORS=YES:" >&2
+    grep -E -i 'warning:|sending .* risks causing data races' "$BUILD_LOG" | tail -n 160 >&2
+    exit 1
+  fi
+
+  echo "$label passed."
+}
+
+run_xcodebuild_gate \
+  'Debug iOS Simulator build' \
   -configuration Debug \
   -sdk iphonesimulator \
   -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath .build/DerivedData \
-  ARCHS=arm64 \
-  ONLY_ACTIVE_ARCH=YES \
-  CODE_SIGNING_ALLOWED=NO \
-  build >"$BUILD_LOG" 2>&1
-build_status=$?
-set -e
+  build
 
-if [[ "$build_status" -ne 0 ]]; then
-  echo 'Swift 6 production build failed:' >&2
-  grep -E -i 'error:|fatal|signal|killed|command .* failed|failed to|unable to|BUILD FAILED' "$BUILD_LOG" | tail -n 120 >&2 || true
-  tail -n 60 "$BUILD_LOG" >&2
-  exit "$build_status"
-fi
+run_xcodebuild_gate \
+  'Release iOS Simulator build' \
+  -configuration Release \
+  -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' \
+  build
 
-cat "$BUILD_LOG"
+run_xcodebuild_gate \
+  'Debug build-for-testing' \
+  -configuration Debug \
+  -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' \
+  build-for-testing
+
+run_xcodebuild_gate \
+  'Release iOS device build' \
+  -configuration Release \
+  -sdk iphoneos \
+  -destination 'generic/platform=iOS' \
+  build
+
 echo 'Swift 6 concurrency verification passed.'
