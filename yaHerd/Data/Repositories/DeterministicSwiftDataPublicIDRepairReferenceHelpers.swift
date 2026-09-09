@@ -29,8 +29,12 @@ extension DeterministicSwiftDataPublicIDRepairService {
         let desiredID: UUID
         if pool.count <= 1 {
             guard let selected = pool.first else { return }
-            desiredID = plan.candidateByLocalIdentifier[localRecordIdentifier(selected)]?.resultingPublicID
-                ?? publicID(selected)
+            let selectedLocalIdentifier = localRecordIdentifier(selected)
+            if let candidate = plan.candidateByLocalIdentifier[selectedLocalIdentifier] {
+                desiredID = candidate.resultingPublicID
+            } else {
+                desiredID = publicID(selected)
+            }
         } else {
             var candidates: [DuplicateCandidate] = []
             candidates.reserveCapacity(pool.count)
@@ -141,19 +145,30 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     reason: "The live relationship is unavailable and the stored snapshot does not identify exactly one \(targetDescription). Choose the intended record.",
                     candidates: resolutionCandidates
                 )
-                guard let selectedIdentifier = resolutions[issue.id],
-                      let resolved = candidates.first(where: {
-                          $0.1.stableRecordIdentifier == selectedIdentifier
-                      })
-                else {
+                guard let selectedIdentifier = resolutions[issue.id] else {
                     throw PublicIDRepairError.invalidResolution(issue.id)
                 }
-                selected = resolved.0
+                var resolvedTarget: Target?
+                for candidate in candidates {
+                    if candidate.1.stableRecordIdentifier == selectedIdentifier {
+                        resolvedTarget = candidate.0
+                        break
+                    }
+                }
+                guard let resolvedTarget else {
+                    throw PublicIDRepairError.invalidResolution(issue.id)
+                }
+                selected = resolvedTarget
             }
         }
 
-        let desiredID = plan.candidateByLocalIdentifier[localRecordIdentifier(selected)]?.resultingPublicID
-            ?? publicID(selected)
+        let selectedLocalIdentifier = localRecordIdentifier(selected)
+        let desiredID: UUID
+        if let candidate = plan.candidateByLocalIdentifier[selectedLocalIdentifier] {
+            desiredID = candidate.resultingPublicID
+        } else {
+            desiredID = publicID(selected)
+        }
         appendOptionalReferenceUpdate(
             entityType: entityType,
             model: model,
@@ -251,18 +266,31 @@ extension DeterministicSwiftDataPublicIDRepairService {
     ) -> [TreatmentItemLocation] {
         guard let session = treatment.session else { return [] }
         let sessionID = localRecordIdentifier(session)
-        let sessionLocations = plan.treatmentLocations.filter {
-            $0.ownerLocalIdentifier == sessionID && $0.entityType == .workingSession
+        var sessionLocations: [TreatmentItemLocation] = []
+        sessionLocations.reserveCapacity(plan.treatmentLocations.count)
+        for location in plan.treatmentLocations {
+            if location.ownerLocalIdentifier == sessionID && location.entityType == .workingSession {
+                sessionLocations.append(location)
+            }
         }
+
         let treatmentItemID = treatment.treatmentItemID
-        let originalMatches = sessionLocations.filter {
-            $0.originalID == treatmentItemID
+        var originalMatches: [TreatmentItemLocation] = []
+        for location in sessionLocations {
+            if location.originalID == treatmentItemID {
+                originalMatches.append(location)
+            }
         }
         if !originalMatches.isEmpty { return originalMatches }
+
         let normalizedName = normalizedTreatmentName(treatment.itemName)
-        return sessionLocations.filter {
-            normalizedTreatmentName($0.item.name) == normalizedName
+        var nameMatches: [TreatmentItemLocation] = []
+        for location in sessionLocations {
+            if normalizedTreatmentName(location.item.name) == normalizedName {
+                nameMatches.append(location)
+            }
         }
+        return nameMatches
     }
 
     func uniquelyMatchedTreatmentLocation(
@@ -273,8 +301,11 @@ extension DeterministicSwiftDataPublicIDRepairService {
         if locations.count == 1 { return locations[0] }
 
         let normalizedName = normalizedTreatmentName(treatment.itemName)
-        let nameMatches = locations.filter {
-            normalizedTreatmentName($0.item.name) == normalizedName
+        var nameMatches: [TreatmentItemLocation] = []
+        for location in locations {
+            if normalizedTreatmentName(location.item.name) == normalizedName {
+                nameMatches.append(location)
+            }
         }
         if nameMatches.count == 1 { return nameMatches[0] }
         let evidencePool = nameMatches.isEmpty ? locations : nameMatches
@@ -286,12 +317,14 @@ extension DeterministicSwiftDataPublicIDRepairService {
             || doseUnit != nil
             || administrationRoute != nil
         guard hasDoseEvidence else { return nil }
-        let doseMatches = evidencePool.filter { location in
+
+        var doseMatches: [TreatmentItemLocation] = []
+        for location in evidencePool {
             let dose = location.item.suggestedDose
-            if let amount = doseAmount, dose.amount != amount { return false }
-            if let unit = doseUnit, dose.unit != unit { return false }
-            if let route = administrationRoute, dose.route != route { return false }
-            return true
+            if let amount = doseAmount, dose.amount != amount { continue }
+            if let unit = doseUnit, dose.unit != unit { continue }
+            if let route = administrationRoute, dose.route != route { continue }
+            doseMatches.append(location)
         }
         return doseMatches.count == 1 ? doseMatches[0] : nil
     }
@@ -329,14 +362,27 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 reason: "Multiple planned treatments match this record.",
                 candidates: resolutionCandidates
             )
-            guard let selectedIdentifier = resolutions[issue.id],
-                  let selectedCandidate = candidates.first(where: {
-                      $0.stableRecordIdentifier == selectedIdentifier
-                  }),
-                  let selectedLocation = locations.first(where: {
-                      $0.localIdentifier == selectedCandidate.localIdentifier
-                  })
-            else {
+            guard let selectedIdentifier = resolutions[issue.id] else {
+                throw PublicIDRepairError.invalidResolution(issue.id)
+            }
+            var selectedCandidate: DuplicateCandidate?
+            for candidate in candidates {
+                if candidate.stableRecordIdentifier == selectedIdentifier {
+                    selectedCandidate = candidate
+                    break
+                }
+            }
+            guard let selectedCandidate else {
+                throw PublicIDRepairError.invalidResolution(issue.id)
+            }
+            var selectedLocation: TreatmentItemLocation?
+            for location in locations {
+                if location.localIdentifier == selectedCandidate.localIdentifier {
+                    selectedLocation = location
+                    break
+                }
+            }
+            guard let selectedLocation else {
                 throw PublicIDRepairError.invalidResolution(issue.id)
             }
             selected = selectedLocation
