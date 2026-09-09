@@ -12,12 +12,14 @@ on:
         type: boolean
         default: true
       run_concurrency:
-        description: Run Swift 6 concurrency checks and production build
+        description: Run Swift 6 concurrency checks and production builds
         required: true
         type: boolean
         default: true
   pull_request:
-    types: [ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
 
 jobs:
   verify:
@@ -60,7 +62,7 @@ jobs:
           fi
 
       - name: Select Xcode 26
-        if: ${{ github.event_name == 'pull_request' || inputs.run_concurrency }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency }}
         shell: bash
         run: |
           set -euo pipefail
@@ -71,16 +73,17 @@ jobs:
           fi
           sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
           xcodebuild -version
+          xcrun swiftc --version
 
       - name: Verify architecture
-        if: ${{ github.event_name == 'pull_request' || inputs.run_architecture }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_architecture }}
         shell: bash
         run: |
           set -euo pipefail
           bash Scripts/verify-architecture.sh
 
-      - name: Verify Swift 6 concurrency and production build
-        if: ${{ github.event_name == 'pull_request' || inputs.run_concurrency }}
+      - name: Verify Swift 6 concurrency and production builds
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency }}
         shell: bash
         run: |
           set -euo pipefail
