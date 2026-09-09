@@ -43,9 +43,15 @@ extension DeterministicSwiftDataPublicIDRepairService {
         }
 
         for tag in loaded.animalTags {
+            let sourceHerd: Herd?
+            if let herd = tag.herd {
+                sourceHerd = herd
+            } else {
+                sourceHerd = tag.animal?.herd
+            }
             appendLookupIssue(
                 currentID: tag.colorID,
-                sourceHerd: tag.herd ?? tag.animal?.herd,
+                sourceHerd: sourceHerd,
                 lookupRecords: loaded.tagColorDefinitions,
                 lookupPublicID: { $0.id },
                 lookupHerd: { $0.herd },
@@ -61,7 +67,12 @@ extension DeterministicSwiftDataPublicIDRepairService {
         }
 
         for record in loaded.statusRecords {
-            let sourceHerd = record.herd ?? record.animal?.herd
+            let sourceHerd: Herd?
+            if let herd = record.herd {
+                sourceHerd = herd
+            } else {
+                sourceHerd = record.animal?.herd
+            }
             appendLookupIssue(
                 currentID: record.oldStatusReferenceID,
                 sourceHerd: sourceHerd,
@@ -118,7 +129,14 @@ extension DeterministicSwiftDataPublicIDRepairService {
         }
 
         for check in loaded.fieldCheckAnimalChecks {
-            let sourceHerd = check.herd ?? check.session?.herd ?? check.animal?.herd
+            let sourceHerd: Herd?
+            if let herd = check.herd {
+                sourceHerd = herd
+            } else if let herd = check.session?.herd {
+                sourceHerd = herd
+            } else {
+                sourceHerd = check.animal?.herd
+            }
             if check.animal == nil {
                 let evidenceMatchingLocalIdentifiers = fieldCheckAnimalEvidenceIdentifiers(
                     for: check,
@@ -174,7 +192,14 @@ extension DeterministicSwiftDataPublicIDRepairService {
         }
 
         for finding in loaded.fieldCheckFindings {
-            let sourceHerd = finding.herd ?? finding.session?.herd ?? finding.animal?.herd
+            let sourceHerd: Herd?
+            if let herd = finding.herd {
+                sourceHerd = herd
+            } else if let herd = finding.session?.herd {
+                sourceHerd = herd
+            } else {
+                sourceHerd = finding.animal?.herd
+            }
             if finding.animal == nil {
                 let evidenceMatchingLocalIdentifiers = fieldCheckFindingAnimalEvidenceIdentifiers(
                     for: finding,
@@ -496,10 +521,35 @@ extension DeterministicSwiftDataPublicIDRepairService {
         publicID: (Model) -> UUID,
         herd: (Model) -> Herd?
     ) -> [Model] where Model: PersistentModel {
-        let candidates = records.filter { publicID($0) == currentID }
+        var candidates: [Model] = []
+        candidates.reserveCapacity(records.count)
+        for record in records {
+            if publicID(record) == currentID {
+                candidates.append(record)
+            }
+        }
         guard candidates.count > 1 else { return candidates }
-        let sourceScope = sourceHerd.map(ObjectIdentifier.init)
-        let scoped = candidates.filter { herd($0).map(ObjectIdentifier.init) == sourceScope }
+
+        let sourceScope: ObjectIdentifier?
+        if let sourceHerd {
+            sourceScope = ObjectIdentifier(sourceHerd)
+        } else {
+            sourceScope = nil
+        }
+
+        var scoped: [Model] = []
+        scoped.reserveCapacity(candidates.count)
+        for candidate in candidates {
+            let candidateScope: ObjectIdentifier?
+            if let candidateHerd = herd(candidate) {
+                candidateScope = ObjectIdentifier(candidateHerd)
+            } else {
+                candidateScope = nil
+            }
+            if candidateScope == sourceScope {
+                scoped.append(candidate)
+            }
+        }
         return scoped.isEmpty ? candidates : scoped
     }
 
