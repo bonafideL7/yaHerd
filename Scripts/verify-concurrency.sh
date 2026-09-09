@@ -97,9 +97,27 @@ for path in environment_root.glob('*.swift'):
                 f'{path}:{line}: {match.group(1)} must provide nonisolated init() for EnvironmentKey default construction'
             )
 
+repair_root = Path('yaHerd/Data/Repositories')
+for path in repair_root.glob('DeterministicSwiftDataPublicIDRepair*.swift'):
+    text = path.read_text()
+    for match in re.finditer(r'\.(?:map|compactMap|filter)\s*\{(?:(?!\n\s*\}).){0,1600}?\bplan\.', text, re.DOTALL):
+        line = text.count('\n', 0, match.start()) + 1
+        failures.append(
+            f'{path}:{line}: RepairPlan must not be captured by map/filter/compactMap closures; iterate on the model actor instead'
+        )
+    for match in re.finditer(
+        r'evidenceMatches\s*:\s*\{(?:(?!\n\s*\}).){0,800}?fieldCheck(?:Pasture|Animal|Finding)\w*Matches\((?:session|check|finding)\b',
+        text,
+        re.DOTALL,
+    ):
+        line = text.count('\n', 0, match.start()) + 1
+        failures.append(
+            f'{path}:{line}: SwiftData field-check models must not be captured by evidence-matching closures'
+        )
+
 if failures:
     print(
-        'Main-actor repository orchestration and environment fallbacks must remain explicitly isolated:',
+        'Swift concurrency architecture checks failed:',
         file=sys.stderr,
     )
     print('\n'.join(failures), file=sys.stderr)
@@ -181,8 +199,9 @@ for configuration in Debug Release; do
   verify_target_settings yaHerdTests "$configuration"
 done
 
-# Prove that the selected compiler is actually enforcing Swift 6 transfer diagnostics.
-# This is intentionally invalid and must fail type checking.
+# Prove that the selected compiler is enforcing an unambiguously unsafe Swift 6
+# actor-boundary access. The actor retains the non-Sendable reference, so the
+# value cannot safely be exposed to another isolation domain.
 SMOKE_DIR="$(mktemp -d)"
 SMOKE_LOG="$SMOKE_DIR/compiler-smoke.log"
 cat >"$SMOKE_DIR/ConcurrencyViolation.swift" <<'SWIFT'
@@ -191,15 +210,11 @@ final class NonSendableReference {
 }
 
 actor Holder {
-    private var stored: NonSendableReference?
-
-    func store(_ value: NonSendableReference) {
-        stored = value
-    }
+    let stored = NonSendableReference()
 }
 
-func intentionallyInvalidTransfer(_ value: NonSendableReference, to holder: Holder) async {
-    await holder.store(value)
+func intentionallyInvalidRead(from holder: Holder) async {
+    let value = await holder.stored
     value.value += 1
 }
 SWIFT
@@ -215,12 +230,12 @@ smoke_status=$?
 set -e
 
 if [[ "$smoke_status" -eq 0 ]]; then
-  echo 'Swift compiler concurrency smoke test unexpectedly compiled an intentional data race.' >&2
+  echo 'Swift compiler concurrency smoke test unexpectedly compiled an actor-retained non-Sendable boundary crossing.' >&2
   cat "$SMOKE_LOG" >&2
   rm -rf "$SMOKE_DIR"
   exit 1
 fi
-if ! grep -Eqi 'sending|data race|Sendable|actor-isolated' "$SMOKE_LOG"; then
+if ! grep -Eqi 'sending|data race|non-Sendable|Sendable|actor boundary|actor-isolated' "$SMOKE_LOG"; then
   echo 'Swift compiler rejected the concurrency smoke test, but not with a recognized concurrency diagnostic.' >&2
   cat "$SMOKE_LOG" >&2
   rm -rf "$SMOKE_DIR"
