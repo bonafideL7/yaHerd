@@ -53,17 +53,18 @@ The script:
 - rejects `@unchecked Sendable`, `NSLock`, `Task.detached`, and unstructured tasks without an explicit executor in application sources;
 - verifies repository-backed use cases and validators remain explicitly isolated;
 - verifies stateless environment fallback repositories have nonisolated initializers and feature dependency containers remain nonisolated;
+- includes focused static checks for the public-ID repair pipeline so `RepairPlan` and SwiftData field-check models cannot be reintroduced into the standard-library closure patterns that escaped the older compiler gate;
 - reads Xcode's effective Debug and Release build settings for both the app and test targets and requires Swift 6, complete strict concurrency, approachable concurrency, and warnings-as-errors;
 - rejects effective module-wide `MainActor` default isolation;
 - prints the selected Xcode and Swift compiler versions so CI/local compiler differences are visible and diagnosable;
-- runs an intentionally invalid Swift 6 transfer fixture and requires the compiler to reject it with a concurrency diagnostic;
+- runs an intentionally invalid actor-retained non-`Sendable` boundary access and requires the compiler to reject it with a concurrency diagnostic;
 - deletes the concurrency verification DerivedData before compilation;
 - builds the app in Debug for iOS Simulator;
 - builds the app in Release for iOS Simulator;
 - runs Debug `build-for-testing` so the test target is compiled under the same strict settings;
 - builds Release for a generic iOS device;
-- forces `SWIFT_VERSION=6.0`, `SWIFT_STRICT_CONCURRENCY=complete`, `SWIFT_TREAT_WARNINGS_AS_ERRORS=YES`, and warning emission on every verification build;
-- fails if a build log still contains warnings or a `Sending ... risks causing data races` diagnostic.
+- uses the verified app/test target settings during builds rather than globally overriding Swift settings, which would incorrectly promote warnings from third-party Swift packages to errors;
+- fails any app or test compilation that emits concurrency warnings because those targets have warnings-as-errors enabled.
 
 The compile gate intentionally does not force `ARCHS` or `ONLY_ACTIVE_ARCH`; it should exercise Xcode's normal build behavior instead of a narrower CI-only architecture override.
 
