@@ -7,9 +7,11 @@ extension DeterministicSwiftDataPublicIDRepairService {
         loaded: LoadedRecords,
         nodes: [AggregateNode]
     ) -> [String: String] {
-        let nodeByObject = Dictionary(uniqueKeysWithValues: nodes.map {
-            (ObjectIdentifier($0.aggregate), $0)
-        })
+        var nodeByObject: [ObjectIdentifier: AggregateNode] = [:]
+        nodeByObject.reserveCapacity(nodes.count)
+        for node in nodes {
+            nodeByObject[ObjectIdentifier(node.aggregate)] = node
+        }
         var descriptors: [String: [String]] = [:]
 
         func addEdge(
@@ -99,13 +101,16 @@ extension DeterministicSwiftDataPublicIDRepairService {
             addEdge(record, record.animal, "animal")
         }
 
-        return Dictionary(uniqueKeysWithValues: nodes.map { node in
+        var result: [String: String] = [:]
+        result.reserveCapacity(nodes.count)
+        for node in nodes {
             let values = Array(Set(descriptors[node.localIdentifier, default: []]))
                 .sorted()
             let visible = values.prefix(4).joined(separator: "; ")
             let suffix = values.count > 4 ? "; +\(values.count - 4) more" : ""
-            return (node.localIdentifier, visible.isEmpty ? "none" : visible + suffix)
-        })
+            result[node.localIdentifier] = visible.isEmpty ? "none" : visible + suffix
+        }
+        return result
     }
 
     func semanticCandidateDetail(
