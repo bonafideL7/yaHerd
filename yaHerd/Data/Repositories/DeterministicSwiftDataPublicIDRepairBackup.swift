@@ -54,33 +54,204 @@ extension DeterministicSwiftDataPublicIDRepairService {
         referenceUpdates: [PublicIDRepairReferenceUpdate],
         resolutions: [PublicIDRepairReferenceResolution]
     ) throws -> URL {
-        var aggregateBackups: [BackupAggregate] = []
-        aggregateBackups.reserveCapacity(loaded.allAggregates.count)
-        for aggregate in loaded.allAggregates {
-            let entityType = publicIDRepairEntityType(for: aggregate)
-            let localID = localRecordIdentifier(aggregate)
-            let stableID = plan.candidateByLocalIdentifier[localID]?.stableRecordIdentifier
-                ?? [
-                    entityType.rawValue,
-                    aggregate.collaborationKey.publicID.uuidString.lowercased(),
-                    deterministicDigest(
-                        stableSnapshotKey(
-                            CollaborationFieldSnapshotProvider.snapshot(for: aggregate)
-                        )
-                    ),
-                    plan.graphFingerprintByLocalIdentifier[localID] ?? "",
-                ].joined(separator: "|")
-            aggregateBackups.append(
-                BackupAggregate(
-                    entityType: entityType,
-                    stableRecordIdentifier: stableID,
-                    recordDescription: recordDescription(for: aggregate),
-                    publicID: aggregate.collaborationKey.publicID,
-                    herdPublicID: aggregate.collaborationHerdPublicID,
-                    sharedFields: CollaborationFieldSnapshotProvider.snapshot(for: aggregate)
-                )
-            )
+        var candidateByLocalIdentifier: [String: DuplicateCandidate] = [:]
+        candidateByLocalIdentifier.reserveCapacity(plan.candidates.count)
+        for candidate in plan.candidates {
+            candidateByLocalIdentifier[candidate.localIdentifier] = candidate
         }
+        let graphFingerprintByLocalIdentifier = plan.graphFingerprintByLocalIdentifier
+
+        var reportReplacements: [PublicIDRepairReplacement] = []
+        reportReplacements.reserveCapacity(plan.replacements.count)
+        for replacement in plan.replacements {
+            reportReplacements.append(replacement.report)
+        }
+
+        var aggregateBackups: [BackupAggregate] = []
+        appendBackupAggregates(
+            loaded.herds,
+            entityType: .herd,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.publicID },
+            description: { $0.name.isEmpty ? "Unnamed herd" : $0.name },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.tagColorDefinitions,
+            entityType: .tagColorDefinition,
+            publicID: { $0.id },
+            herdPublicID: { $0.herd?.publicID },
+            description: { $0.name.isEmpty ? "Unnamed tag color" : $0.name },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.animalStatusReferences,
+            entityType: .animalStatusReference,
+            publicID: { $0.id },
+            herdPublicID: { $0.herd?.publicID },
+            description: { $0.name.isEmpty ? "Unnamed status" : $0.name },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.pastureGroups,
+            entityType: .pastureGroup,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID },
+            description: { $0.name.isEmpty ? "Unnamed pasture group" : $0.name },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.pastures,
+            entityType: .pasture,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID },
+            description: { $0.name.isEmpty ? "Unnamed pasture" : $0.name },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.animals,
+            entityType: .animal,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID },
+            description: { self.animalDescription($0) },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.animalTags,
+            entityType: .animalTag,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID ?? $0.animal?.herd?.publicID },
+            description: {
+                $0.normalizedNumber.isEmpty ? "Untagged animal tag" : "Tag \($0.normalizedNumber)"
+            },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.movements,
+            entityType: .movement,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID ?? $0.animal?.herd?.publicID },
+            description: { "Movement on \($0.date.formatted(date: .abbreviated, time: .omitted))" },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.statusRecords,
+            entityType: .statusRecord,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID ?? $0.animal?.herd?.publicID },
+            description: { "Status change on \($0.date.formatted(date: .abbreviated, time: .omitted))" },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.workingProtocolTemplates,
+            entityType: .workingProtocolTemplate,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID },
+            description: { $0.name.isEmpty ? "Unnamed working protocol" : $0.name },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.workingSessions,
+            entityType: .workingSession,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID },
+            description: { "Working session on \($0.date.formatted(date: .abbreviated, time: .omitted))" },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.workingQueueItems,
+            entityType: .workingQueueItem,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID ?? $0.session?.herd?.publicID ?? $0.animal?.herd?.publicID },
+            description: { "Working item for \(self.animalDescription($0.animal))" },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.workingTreatmentRecords,
+            entityType: .workingTreatmentRecord,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID ?? $0.session?.herd?.publicID ?? $0.animal?.herd?.publicID },
+            description: { $0.itemName.isEmpty ? "Unnamed treatment" : $0.itemName },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.healthRecords,
+            entityType: .healthRecord,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID ?? $0.animal?.herd?.publicID },
+            description: { $0.treatment.isEmpty ? "Health record" : $0.treatment },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.pregnancyChecks,
+            entityType: .pregnancyCheck,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID ?? $0.animal?.herd?.publicID },
+            description: { "Pregnancy check on \($0.date.formatted(date: .abbreviated, time: .omitted))" },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.fieldCheckSessions,
+            entityType: .fieldCheckSession,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID },
+            description: {
+                "Field check for \($0.pastureNameSnapshot.isEmpty ? "unknown pasture" : $0.pastureNameSnapshot)"
+            },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.fieldCheckAnimalChecks,
+            entityType: .fieldCheckAnimalCheck,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID ?? $0.session?.herd?.publicID ?? $0.animal?.herd?.publicID },
+            description: { "Animal check \($0.displayTagNumber)" },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
+        appendBackupAggregates(
+            loaded.fieldCheckFindings,
+            entityType: .fieldCheckFinding,
+            publicID: { $0.publicID },
+            herdPublicID: { $0.herd?.publicID ?? $0.session?.herd?.publicID ?? $0.animal?.herd?.publicID },
+            description: { $0.note.isEmpty ? "Field check finding" : $0.note },
+            candidateByLocalIdentifier: candidateByLocalIdentifier,
+            graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier,
+            to: &aggregateBackups
+        )
         aggregateBackups.sort {
             if $0.entityType != $1.entityType {
                 return $0.entityType.rawValue < $1.entityType.rawValue
@@ -94,7 +265,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
             treatmentItemBackups.append(
                 BackupTreatmentItem(
                     entityType: location.entityType,
-                    ownerStableRecordIdentifier: plan.candidateByLocalIdentifier[location.ownerLocalIdentifier]?.stableRecordIdentifier
+                    ownerStableRecordIdentifier: candidateByLocalIdentifier[location.ownerLocalIdentifier]?.stableRecordIdentifier
                         ?? location.ownerLocalIdentifier,
                     itemIndex: location.itemIndex,
                     item: location.item
@@ -122,7 +293,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
             formatVersion: 4,
             createdAt: .now,
             assessment: assessment,
-            replacements: plan.reportReplacements,
+            replacements: reportReplacements,
             referenceUpdates: referenceUpdates,
             resolutions: resolutions.sorted { $0.id < $1.id },
             aggregates: aggregateBackups,
@@ -142,6 +313,41 @@ extension DeterministicSwiftDataPublicIDRepairService {
         let url = directoryURL.appendingPathComponent(filename, isDirectory: false)
         try PublicIDRepairDurableFile.persist(data, to: url)
         return url
+    }
+
+    func appendBackupAggregates<Model>(
+        _ records: [Model],
+        entityType: PublicIDRepairEntityType,
+        publicID: (Model) -> UUID,
+        herdPublicID: (Model) -> UUID?,
+        description: (Model) -> String,
+        candidateByLocalIdentifier: [String: DuplicateCandidate],
+        graphFingerprintByLocalIdentifier: [String: String],
+        to backups: inout [BackupAggregate]
+    ) where Model: PersistentModel, Model: CollaborativelyMutableAggregate {
+        backups.reserveCapacity(backups.count + records.count)
+        for record in records {
+            let localID = localRecordIdentifier(record)
+            let recordPublicID = publicID(record)
+            let sharedFields = CollaborationFieldSnapshotProvider.snapshot(for: record)
+            let stableID = candidateByLocalIdentifier[localID]?.stableRecordIdentifier
+                ?? [
+                    entityType.rawValue,
+                    recordPublicID.uuidString.lowercased(),
+                    deterministicDigest(stableSnapshotKey(sharedFields)),
+                    graphFingerprintByLocalIdentifier[localID] ?? "",
+                ].joined(separator: "|")
+            backups.append(
+                BackupAggregate(
+                    entityType: entityType,
+                    stableRecordIdentifier: stableID,
+                    recordDescription: description(record),
+                    publicID: recordPublicID,
+                    herdPublicID: herdPublicID(record),
+                    sharedFields: sharedFields
+                )
+            )
+        }
     }
 
     func backupDirectoryURL() throws -> URL {
