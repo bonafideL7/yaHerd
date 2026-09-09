@@ -170,7 +170,6 @@ setting_value() {
     }
   '
 }
-}
 
 assert_effective_setting() {
   local target="$1"
