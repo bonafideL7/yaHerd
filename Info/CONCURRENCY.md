@@ -55,7 +55,7 @@ The script:
 - verifies stateless environment fallback repositories have nonisolated initializers and feature dependency containers remain nonisolated;
 - reads Xcode's effective Debug and Release build settings for both the app and test targets and requires Swift 6, complete strict concurrency, approachable concurrency, and warnings-as-errors;
 - rejects effective module-wide `MainActor` default isolation;
-- prints the selected Xcode and Swift compiler versions so CI/local compiler differences are visible;
+- prints the selected Xcode and Swift compiler versions so CI/local compiler differences are visible and diagnosable;
 - runs an intentionally invalid Swift 6 transfer fixture and requires the compiler to reject it with a concurrency diagnostic;
 - deletes the concurrency verification DerivedData before compilation;
 - builds the app in Debug for iOS Simulator;
@@ -66,6 +66,8 @@ The script:
 - fails if a build log still contains warnings or a `Sending ... risks causing data races` diagnostic.
 
 The compile gate intentionally does not force `ARCHS` or `ONLY_ACTIVE_ARCH`; it should exercise Xcode's normal build behavior instead of a narrower CI-only architecture override.
+
+CI can only diagnose errors supported by the Xcode/Swift toolchain installed on the runner. The workflow therefore prints both toolchain versions on every run. If local Xcode reports stricter diagnostics than CI, the CI image/toolchain must be upgraded rather than treating the older CI result as authoritative.
 
 ## Review checklist for new asynchronous code
 
