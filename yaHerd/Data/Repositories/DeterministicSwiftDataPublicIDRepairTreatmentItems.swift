@@ -78,29 +78,46 @@ extension DeterministicSwiftDataPublicIDRepairService {
         entityType: PublicIDRepairEntityType,
         graphFingerprintByLocalIdentifier: [String: String]
     ) -> EntityPlan {
-        let groupsByOwner = Dictionary(grouping: locations, by: \.ownerLocalIdentifier)
+        var groupsByOwner: [String: [TreatmentItemLocation]] = [:]
+        for location in locations {
+            groupsByOwner[location.ownerLocalIdentifier, default: []].append(location)
+        }
+
         var duplicateGroupCount = 0
         var replacements: [PlannedReplacement] = []
         var candidates: [DuplicateCandidate] = []
 
         for ownerLocations in groupsByOwner.values {
-            let groups = Dictionary(grouping: ownerLocations, by: \.originalID)
-                .filter { $0.value.count > 1 }
-                .sorted { $0.key.uuidString < $1.key.uuidString }
-            duplicateGroupCount += groups.count
-            var usedIDs = Set(ownerLocations.map(\.originalID))
+            var groupsByOriginalID: [UUID: [TreatmentItemLocation]] = [:]
+            var usedIDs = Set<UUID>()
+            for location in ownerLocations {
+                groupsByOriginalID[location.originalID, default: []].append(location)
+                usedIDs.insert(location.originalID)
+            }
 
-            for (retainedID, duplicateLocations) in groups {
-                let ordered = duplicateLocations.sorted { lhs, rhs in
-                    treatmentItemSortKey(
-                        lhs,
-                        graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier
-                    ) < treatmentItemSortKey(
-                        rhs,
+            var duplicateIDs: [UUID] = []
+            for (originalID, groupedLocations) in groupsByOriginalID {
+                if groupedLocations.count > 1 {
+                    duplicateIDs.append(originalID)
+                }
+            }
+            duplicateIDs.sort { $0.uuidString < $1.uuidString }
+            duplicateGroupCount += duplicateIDs.count
+
+            for retainedID in duplicateIDs {
+                guard let duplicateLocations = groupsByOriginalID[retainedID] else { continue }
+                var locationBySortKey: [String: TreatmentItemLocation] = [:]
+                for location in duplicateLocations {
+                    let sortKey = treatmentItemSortKey(
+                        location,
                         graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier
                     )
+                    locationBySortKey[sortKey] = location
                 }
-                for (ordinal, location) in ordered.enumerated() {
+                let orderedKeys = locationBySortKey.keys.sorted()
+
+                for (ordinal, sortKey) in orderedKeys.enumerated() {
+                    guard let location = locationBySortKey[sortKey] else { continue }
                     let stableIdentifier = treatmentItemCandidateIdentifier(
                         location,
                         entityType: entityType,
@@ -154,7 +171,10 @@ extension DeterministicSwiftDataPublicIDRepairService {
             // Stale treatment references can point to an ID that is no longer present in the
             // session. Keep every current item addressable as a portable manual-repair
             // candidate, even when that item's own ID is already unique.
-            let plannedLocalIdentifiers = Set(candidates.map(\.localIdentifier))
+            var plannedLocalIdentifiers = Set<String>()
+            for candidate in candidates {
+                plannedLocalIdentifiers.insert(candidate.localIdentifier)
+            }
             for location in ownerLocations where !plannedLocalIdentifiers.contains(location.localIdentifier) {
                 candidates.append(
                     DuplicateCandidate(
@@ -197,9 +217,14 @@ extension DeterministicSwiftDataPublicIDRepairService {
         into plans: inout [EntityPlan],
         entityType: PublicIDRepairEntityType
     ) {
-        guard let index = plans.firstIndex(where: { $0.assessment.entityType == entityType }) else {
-            return
+        var matchingIndex: Int?
+        for index in plans.indices {
+            if plans[index].assessment.entityType == entityType {
+                matchingIndex = index
+                break
+            }
         }
+        guard let index = matchingIndex else { return }
         let base = plans[index]
         plans[index] = EntityPlan(
             assessment: PublicIDRepairEntityAssessment(
