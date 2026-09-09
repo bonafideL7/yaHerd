@@ -95,6 +95,10 @@ extension DeterministicSwiftDataPublicIDRepairService {
         }
 
         for session in loaded.fieldCheckSessions where session.pasture == nil {
+            let evidenceMatchingLocalIdentifiers = fieldCheckPastureEvidenceIdentifiers(
+                for: session,
+                records: loaded.pastures
+            )
             appendSnapshotReferenceIssue(
                 currentID: session.pastureID,
                 sourceHerd: session.herd,
@@ -106,7 +110,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 recordDescription: "Field check for \(session.pastureNameSnapshot.isEmpty ? "unknown pasture" : session.pastureNameSnapshot)",
                 fieldName: "pastureID",
                 targetDescription: "pasture",
-                evidenceMatches: { self.fieldCheckPastureSnapshotMatches(session, $0) },
+                evidenceMatchingLocalIdentifiers: evidenceMatchingLocalIdentifiers,
                 plan: plan,
                 resolutions: resolutions,
                 to: &issues
@@ -116,6 +120,10 @@ extension DeterministicSwiftDataPublicIDRepairService {
         for check in loaded.fieldCheckAnimalChecks {
             let sourceHerd = check.herd ?? check.session?.herd ?? check.animal?.herd
             if check.animal == nil {
+                let evidenceMatchingLocalIdentifiers = fieldCheckAnimalEvidenceIdentifiers(
+                    for: check,
+                    records: loaded.animals
+                )
                 appendSnapshotReferenceIssue(
                     currentID: check.animalIDSnapshot,
                     sourceHerd: sourceHerd,
@@ -127,7 +135,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     recordDescription: "Animal check \(check.displayTagNumber)",
                     fieldName: "animalIDSnapshot",
                     targetDescription: "animal",
-                    evidenceMatches: { self.fieldCheckAnimalSnapshotMatches(check, $0) },
+                    evidenceMatchingLocalIdentifiers: evidenceMatchingLocalIdentifiers,
                     plan: plan,
                     resolutions: resolutions,
                     to: &issues
@@ -168,6 +176,10 @@ extension DeterministicSwiftDataPublicIDRepairService {
         for finding in loaded.fieldCheckFindings {
             let sourceHerd = finding.herd ?? finding.session?.herd ?? finding.animal?.herd
             if finding.animal == nil {
+                let evidenceMatchingLocalIdentifiers = fieldCheckFindingAnimalEvidenceIdentifiers(
+                    for: finding,
+                    records: loaded.animals
+                )
                 appendSnapshotReferenceIssue(
                     currentID: finding.animalIDSnapshot,
                     sourceHerd: sourceHerd,
@@ -179,13 +191,17 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     recordDescription: finding.note.isEmpty ? "Field check finding" : finding.note,
                     fieldName: "animalIDSnapshot",
                     targetDescription: "animal",
-                    evidenceMatches: { self.fieldCheckFindingAnimalSnapshotMatches(finding, $0) },
+                    evidenceMatchingLocalIdentifiers: evidenceMatchingLocalIdentifiers,
                     plan: plan,
                     resolutions: resolutions,
                     to: &issues
                 )
             }
             if finding.session == nil {
+                let evidenceMatchingLocalIdentifiers = fieldCheckFindingSessionEvidenceIdentifiers(
+                    for: finding,
+                    records: loaded.fieldCheckSessions
+                )
                 appendSnapshotReferenceIssue(
                     currentID: finding.sessionIDSnapshot,
                     sourceHerd: sourceHerd,
@@ -197,7 +213,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     recordDescription: finding.note.isEmpty ? "Field check finding" : finding.note,
                     fieldName: "sessionIDSnapshot",
                     targetDescription: "field check session",
-                    evidenceMatches: { self.fieldCheckFindingSessionSnapshotMatches(finding, $0) },
+                    evidenceMatchingLocalIdentifiers: evidenceMatchingLocalIdentifiers,
                     plan: plan,
                     resolutions: resolutions,
                     to: &issues
@@ -241,6 +257,50 @@ extension DeterministicSwiftDataPublicIDRepairService {
         }
     }
 
+    func fieldCheckPastureEvidenceIdentifiers(
+        for session: FieldCheckSession,
+        records: [Pasture]
+    ) -> Set<String> {
+        var result = Set<String>()
+        for pasture in records where fieldCheckPastureSnapshotMatches(session, pasture) {
+            result.insert(localRecordIdentifier(pasture))
+        }
+        return result
+    }
+
+    func fieldCheckAnimalEvidenceIdentifiers(
+        for check: FieldCheckAnimalCheck,
+        records: [Animal]
+    ) -> Set<String> {
+        var result = Set<String>()
+        for animal in records where fieldCheckAnimalSnapshotMatches(check, animal) {
+            result.insert(localRecordIdentifier(animal))
+        }
+        return result
+    }
+
+    func fieldCheckFindingAnimalEvidenceIdentifiers(
+        for finding: FieldCheckFinding,
+        records: [Animal]
+    ) -> Set<String> {
+        var result = Set<String>()
+        for animal in records where fieldCheckFindingAnimalSnapshotMatches(finding, animal) {
+            result.insert(localRecordIdentifier(animal))
+        }
+        return result
+    }
+
+    func fieldCheckFindingSessionEvidenceIdentifiers(
+        for finding: FieldCheckFinding,
+        records: [FieldCheckSession]
+    ) -> Set<String> {
+        var result = Set<String>()
+        for session in records where fieldCheckFindingSessionSnapshotMatches(finding, session) {
+            result.insert(localRecordIdentifier(session))
+        }
+        return result
+    }
+
     func appendLookupIssue<Lookup, Source>(
         currentID: UUID?,
         sourceHerd: Herd?,
@@ -267,11 +327,14 @@ extension DeterministicSwiftDataPublicIDRepairService {
         )
         guard pool.count > 1 else { return }
 
-        let candidates = makeResolutionCandidates(
-            pool.compactMap {
-                plan.candidateByLocalIdentifier[localRecordIdentifier($0)]
+        var duplicateCandidates: [DuplicateCandidate] = []
+        duplicateCandidates.reserveCapacity(pool.count)
+        for record in pool {
+            if let candidate = plan.candidateByLocalIdentifier[localRecordIdentifier(record)] {
+                duplicateCandidates.append(candidate)
             }
-        )
+        }
+        let candidates = makeResolutionCandidates(duplicateCandidates)
         guard !candidates.isEmpty else { return }
         let sourceIdentifier = stableSourceIdentifier(sourceModel, plan: plan)
         let issue = PublicIDRepairUnresolvedReference(
@@ -303,7 +366,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
         recordDescription: String,
         fieldName: String,
         targetDescription: String,
-        evidenceMatches: (Target) -> Bool,
+        evidenceMatchingLocalIdentifiers: Set<String>,
         plan: RepairPlan,
         resolutions: [String: String],
         to issues: inout [PublicIDRepairUnresolvedReference]
@@ -318,13 +381,24 @@ extension DeterministicSwiftDataPublicIDRepairService {
             herd: herd
         )
         guard pool.count > 1 else { return }
-        if pool.filter(evidenceMatches).count == 1 { return }
 
-        let candidates = makeResolutionCandidates(
-            pool.compactMap {
-                plan.candidateByLocalIdentifier[localRecordIdentifier($0)]
+        var evidenceMatchCount = 0
+        for record in pool {
+            if evidenceMatchingLocalIdentifiers.contains(localRecordIdentifier(record)) {
+                evidenceMatchCount += 1
+                if evidenceMatchCount > 1 { break }
             }
-        )
+        }
+        if evidenceMatchCount == 1 { return }
+
+        var duplicateCandidates: [DuplicateCandidate] = []
+        duplicateCandidates.reserveCapacity(pool.count)
+        for record in pool {
+            if let candidate = plan.candidateByLocalIdentifier[localRecordIdentifier(record)] {
+                duplicateCandidates.append(candidate)
+            }
+        }
+        let candidates = makeResolutionCandidates(duplicateCandidates)
         guard !candidates.isEmpty else { return }
         let issue = PublicIDRepairUnresolvedReference(
             kind: .lookupReference,
@@ -355,11 +429,14 @@ extension DeterministicSwiftDataPublicIDRepairService {
             return nil
         }
 
-        let candidates = makeResolutionCandidates(
-            locations.compactMap {
-                plan.candidateByLocalIdentifier[$0.localIdentifier]
+        var duplicateCandidates: [DuplicateCandidate] = []
+        duplicateCandidates.reserveCapacity(locations.count)
+        for location in locations {
+            if let candidate = plan.candidateByLocalIdentifier[location.localIdentifier] {
+                duplicateCandidates.append(candidate)
             }
-        )
+        }
+        let candidates = makeResolutionCandidates(duplicateCandidates)
         let issue = PublicIDRepairUnresolvedReference(
             kind: .treatmentReference,
             entityType: .workingTreatmentRecord,
