@@ -39,6 +39,11 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     candidates.append(candidate)
                 }
             }
+            var resolutionCandidates: [PublicIDRepairResolutionCandidate] = []
+            resolutionCandidates.reserveCapacity(candidates.count)
+            for candidate in candidates {
+                resolutionCandidates.append(makeResolutionCandidate(candidate))
+            }
             let issue = PublicIDRepairUnresolvedReference(
                 kind: .lookupReference,
                 entityType: entityType,
@@ -47,7 +52,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 fieldName: fieldName,
                 referencedPublicID: current,
                 reason: "Multiple lookup records share this public ID. Choose the intended record.",
-                candidates: makeResolutionCandidates(candidates)
+                candidates: resolutionCandidates
             )
             guard let selectedIdentifier = resolutions[issue.id],
                   let selected = candidates.first(where: {
@@ -121,6 +126,11 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     }
                     candidates.append((target, candidate))
                 }
+                var resolutionCandidates: [PublicIDRepairResolutionCandidate] = []
+                resolutionCandidates.reserveCapacity(candidates.count)
+                for candidate in candidates {
+                    resolutionCandidates.append(makeResolutionCandidate(candidate.1))
+                }
                 let issue = PublicIDRepairUnresolvedReference(
                     kind: .lookupReference,
                     entityType: entityType,
@@ -129,7 +139,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     fieldName: fieldName,
                     referencedPublicID: current,
                     reason: "The live relationship is unavailable and the stored snapshot does not identify exactly one \(targetDescription). Choose the intended record.",
-                    candidates: makeResolutionCandidates(candidates.map { $0.1 })
+                    candidates: resolutionCandidates
                 )
                 guard let selectedIdentifier = resolutions[issue.id],
                       let resolved = candidates.first(where: {
@@ -304,6 +314,11 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     candidates.append(candidate)
                 }
             }
+            var resolutionCandidates: [PublicIDRepairResolutionCandidate] = []
+            resolutionCandidates.reserveCapacity(candidates.count)
+            for candidate in candidates {
+                resolutionCandidates.append(makeResolutionCandidate(candidate))
+            }
             let issue = PublicIDRepairUnresolvedReference(
                 kind: .treatmentReference,
                 entityType: .workingTreatmentRecord,
@@ -312,7 +327,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 fieldName: "treatmentItemID",
                 referencedPublicID: treatment.treatmentItemID,
                 reason: "Multiple planned treatments match this record.",
-                candidates: makeResolutionCandidates(candidates)
+                candidates: resolutionCandidates
             )
             guard let selectedIdentifier = resolutions[issue.id],
                   let selectedCandidate = candidates.first(where: {
