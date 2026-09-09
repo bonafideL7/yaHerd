@@ -43,13 +43,19 @@ extension DeterministicSwiftDataPublicIDRepairService {
         }
 
         for tag in loaded.animalTags {
+            let sourceHerd: Herd?
+            if let herd = tag.herd {
+                sourceHerd = herd
+            } else {
+                sourceHerd = tag.animal?.herd
+            }
             try appendLookupReferenceUpdate(
                 entityType: .animalTag,
                 model: tag,
                 recordDescription: tag.normalizedNumber.isEmpty ? "Untagged animal tag" : "Tag \(tag.normalizedNumber)",
                 fieldName: "colorID",
                 currentID: { tag.colorID },
-                sourceHerd: tag.herd ?? tag.animal?.herd,
+                sourceHerd: sourceHerd,
                 records: loaded.tagColorDefinitions,
                 publicID: { $0.id },
                 herd: { $0.herd },
@@ -61,7 +67,12 @@ extension DeterministicSwiftDataPublicIDRepairService {
         }
 
         for record in loaded.statusRecords {
-            let sourceHerd = record.herd ?? record.animal?.herd
+            let sourceHerd: Herd?
+            if let herd = record.herd {
+                sourceHerd = herd
+            } else {
+                sourceHerd = record.animal?.herd
+            }
             try appendLookupReferenceUpdate(
                 entityType: .statusRecord,
                 model: record,
@@ -97,14 +108,20 @@ extension DeterministicSwiftDataPublicIDRepairService {
         for session in loaded.fieldCheckSessions {
             let description = "Field check for \(session.pastureNameSnapshot.isEmpty ? "unknown pasture" : session.pastureNameSnapshot)"
             if let pasture = session.pasture {
+                let pastureLocalIdentifier = localRecordIdentifier(pasture)
+                let desiredID: UUID
+                if let candidate = plan.candidateByLocalIdentifier[pastureLocalIdentifier] {
+                    desiredID = candidate.resultingPublicID
+                } else {
+                    desiredID = pasture.publicID
+                }
                 appendOptionalReferenceUpdate(
                     entityType: .fieldCheckSession,
                     model: session,
                     recordDescription: description,
                     fieldName: "pastureID",
                     currentID: { session.pastureID },
-                    desiredID: plan.candidateByLocalIdentifier[localRecordIdentifier(pasture)]?.resultingPublicID
-                        ?? pasture.publicID,
+                    desiredID: desiredID,
                     assign: { session.pastureID = $0 },
                     plan: plan,
                     to: &updates
@@ -135,16 +152,29 @@ extension DeterministicSwiftDataPublicIDRepairService {
         }
 
         for check in loaded.fieldCheckAnimalChecks {
-            let sourceHerd = check.herd ?? check.session?.herd ?? check.animal?.herd
+            let sourceHerd: Herd?
+            if let herd = check.herd {
+                sourceHerd = herd
+            } else if let herd = check.session?.herd {
+                sourceHerd = herd
+            } else {
+                sourceHerd = check.animal?.herd
+            }
             if let animal = check.animal {
+                let animalLocalIdentifier = localRecordIdentifier(animal)
+                let desiredID: UUID
+                if let candidate = plan.candidateByLocalIdentifier[animalLocalIdentifier] {
+                    desiredID = candidate.resultingPublicID
+                } else {
+                    desiredID = animal.publicID
+                }
                 appendOptionalReferenceUpdate(
                     entityType: .fieldCheckAnimalCheck,
                     model: check,
                     recordDescription: "Animal check \(check.displayTagNumber)",
                     fieldName: "animalIDSnapshot",
                     currentID: { check.animalIDSnapshot },
-                    desiredID: plan.candidateByLocalIdentifier[localRecordIdentifier(animal)]?.resultingPublicID
-                        ?? animal.publicID,
+                    desiredID: desiredID,
                     assign: { check.animalIDSnapshot = $0 },
                     plan: plan,
                     to: &updates
@@ -205,16 +235,29 @@ extension DeterministicSwiftDataPublicIDRepairService {
         }
 
         for finding in loaded.fieldCheckFindings {
-            let sourceHerd = finding.herd ?? finding.session?.herd ?? finding.animal?.herd
+            let sourceHerd: Herd?
+            if let herd = finding.herd {
+                sourceHerd = herd
+            } else if let herd = finding.session?.herd {
+                sourceHerd = herd
+            } else {
+                sourceHerd = finding.animal?.herd
+            }
             if let animal = finding.animal {
+                let animalLocalIdentifier = localRecordIdentifier(animal)
+                let desiredID: UUID
+                if let candidate = plan.candidateByLocalIdentifier[animalLocalIdentifier] {
+                    desiredID = candidate.resultingPublicID
+                } else {
+                    desiredID = animal.publicID
+                }
                 appendOptionalReferenceUpdate(
                     entityType: .fieldCheckFinding,
                     model: finding,
                     recordDescription: finding.note.isEmpty ? "Field check finding" : finding.note,
                     fieldName: "animalIDSnapshot",
                     currentID: { finding.animalIDSnapshot },
-                    desiredID: plan.candidateByLocalIdentifier[localRecordIdentifier(animal)]?.resultingPublicID
-                        ?? animal.publicID,
+                    desiredID: desiredID,
                     assign: { finding.animalIDSnapshot = $0 },
                     plan: plan,
                     to: &updates
@@ -243,14 +286,20 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 )
             }
             if let session = finding.session {
+                let sessionLocalIdentifier = localRecordIdentifier(session)
+                let desiredID: UUID
+                if let candidate = plan.candidateByLocalIdentifier[sessionLocalIdentifier] {
+                    desiredID = candidate.resultingPublicID
+                } else {
+                    desiredID = session.publicID
+                }
                 appendOptionalReferenceUpdate(
                     entityType: .fieldCheckFinding,
                     model: finding,
                     recordDescription: finding.note.isEmpty ? "Field check finding" : finding.note,
                     fieldName: "sessionIDSnapshot",
                     currentID: { finding.sessionIDSnapshot },
-                    desiredID: plan.candidateByLocalIdentifier[localRecordIdentifier(session)]?.resultingPublicID
-                        ?? session.publicID,
+                    desiredID: desiredID,
                     assign: { finding.sessionIDSnapshot = $0 },
                     plan: plan,
                     to: &updates
@@ -314,15 +363,26 @@ extension DeterministicSwiftDataPublicIDRepairService {
             )
         }
 
-        return updates.sorted {
-            if $0.report.entityType != $1.report.entityType {
-                return $0.report.entityType.rawValue < $1.report.entityType.rawValue
-            }
-            if $0.report.stableRecordIdentifier != $1.report.stableRecordIdentifier {
-                return $0.report.stableRecordIdentifier < $1.report.stableRecordIdentifier
-            }
-            return $0.report.fieldName < $1.report.fieldName
+        var ordering: [(key: String, index: Int)] = []
+        ordering.reserveCapacity(updates.count)
+        for index in updates.indices {
+            let report = updates[index].report
+            let key = [
+                report.entityType.rawValue,
+                report.stableRecordIdentifier,
+                report.fieldName,
+                String(format: "%08d", index),
+            ].joined(separator: "|")
+            ordering.append((key: key, index: index))
         }
+        ordering.sort { $0.key < $1.key }
+
+        var sortedUpdates: [PlannedReferenceUpdate] = []
+        sortedUpdates.reserveCapacity(updates.count)
+        for item in ordering {
+            sortedUpdates.append(updates[item.index])
+        }
+        return sortedUpdates
     }
 
 }
