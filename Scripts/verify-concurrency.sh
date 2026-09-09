@@ -99,6 +99,41 @@ for path in environment_root.glob('*.swift'):
                 f'{path}:{line}: {match.group(1)} must provide nonisolated init() for EnvironmentKey default construction'
             )
 
+# Recovery mutations deliberately store only scalar/value mutation coordinates. Keeping a
+# SwiftData-backed AggregateNode or TreatmentItemLocation inside an escaping stored closure lets
+# newer Swift compilers diagnose a transfer that older CI toolchains can miss entirely.
+recovery_path = Path(
+    'yaHerd/Data/Repositories/DeterministicSwiftDataPublicIDRepairRecovery.swift'
+)
+recovery_text = recovery_path.read_text()
+if 'private enum RecoveryMutationTarget' not in recovery_text:
+    failures.append(
+        f'{recovery_path}: recovery mutations must use value-only RecoveryMutationTarget coordinates'
+    )
+for forbidden in ('applyFinal:', 'applyBackup:', 'let applyFinal:', 'let applyBackup:'):
+    if forbidden in recovery_text:
+        failures.append(
+            f'{recovery_path}: RecoveryMutation must not store escaping mutation closures ({forbidden})'
+        )
+
+mutation_struct = re.search(
+    r'private struct RecoveryMutation\s*\{(?P<body>.*?)^\s*\}',
+    recovery_text,
+    re.DOTALL | re.MULTILINE,
+)
+if mutation_struct is None:
+    failures.append(f'{recovery_path}: RecoveryMutation declaration was not found')
+else:
+    mutation_body = mutation_struct.group('body')
+    if 'target: RecoveryMutationTarget' not in mutation_body:
+        failures.append(
+            f'{recovery_path}: RecoveryMutation must store a RecoveryMutationTarget rather than an escaping closure'
+        )
+    if '-> Void' in mutation_body or '@isolated(any)' in mutation_body:
+        failures.append(
+            f'{recovery_path}: RecoveryMutation stored properties must not erase model-actor ownership into closures'
+        )
+
 if failures:
     print('Swift concurrency architecture checks failed:', file=sys.stderr)
     print('\n'.join(failures), file=sys.stderr)
@@ -134,6 +169,7 @@ setting_value() {
       }
     }
   '
+}
 }
 
 assert_effective_setting() {
