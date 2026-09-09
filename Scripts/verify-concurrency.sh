@@ -116,10 +116,7 @@ for path in repair_root.glob('DeterministicSwiftDataPublicIDRepair*.swift'):
         )
 
 if failures:
-    print(
-        'Swift concurrency architecture checks failed:',
-        file=sys.stderr,
-    )
+    print('Swift concurrency architecture checks failed:', file=sys.stderr)
     print('\n'.join(failures), file=sys.stderr)
     raise SystemExit(1)
 PYTHON
@@ -263,10 +260,6 @@ run_xcodebuild_gate() {
     -scheme yaHerd \
     -derivedDataPath "$DERIVED_DATA_PATH" \
     CODE_SIGNING_ALLOWED=NO \
-    SWIFT_VERSION=6.0 \
-    SWIFT_STRICT_CONCURRENCY=complete \
-    SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
-    SWIFT_SUPPRESS_WARNINGS=NO \
     "$@" >"$BUILD_LOG" 2>&1
   local build_status=$?
   set -e
@@ -278,9 +271,11 @@ run_xcodebuild_gate() {
     exit "$build_status"
   fi
 
-  if grep -E -i 'warning:|sending .* risks causing data races' "$BUILD_LOG" >/dev/null; then
-    echo "$label emitted warnings despite SWIFT_TREAT_WARNINGS_AS_ERRORS=YES:" >&2
-    grep -E -i 'warning:|sending .* risks causing data races' "$BUILD_LOG" | tail -n 160 >&2
+  # App/test warnings are already errors because their effective target settings are
+  # asserted above. Do not promote warnings from third-party Swift packages globally.
+  if grep -E -i 'sending .* risks causing data races' "$BUILD_LOG" >/dev/null; then
+    echo "$label emitted a Swift concurrency transfer diagnostic:" >&2
+    grep -E -i 'sending .* risks causing data races' "$BUILD_LOG" | tail -n 160 >&2
     exit 1
   fi
 
