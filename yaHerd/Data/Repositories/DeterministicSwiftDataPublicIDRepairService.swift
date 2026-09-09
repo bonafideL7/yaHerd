@@ -126,21 +126,39 @@ actor DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransactionalSe
         let bridgeCollisionResolutions: [PublicIDRepairBridgeCollisionResolution]
 
         var reportReplacements: [PublicIDRepairReplacement] {
-            replacements.map(\.report)
+            var result: [PublicIDRepairReplacement] = []
+            result.reserveCapacity(replacements.count)
+            for replacement in replacements {
+                result.append(replacement.report)
+            }
+            return result
         }
 
         var replacementIDByLocalRecordIdentifier: [String: UUID] {
-            Dictionary(uniqueKeysWithValues: replacements.map {
-                ($0.localRecordIdentifier, $0.report.replacementPublicID)
-            })
+            var result: [String: UUID] = [:]
+            result.reserveCapacity(replacements.count)
+            for replacement in replacements {
+                result[replacement.localRecordIdentifier] = replacement.report.replacementPublicID
+            }
+            return result
         }
 
         var candidateByLocalIdentifier: [String: DuplicateCandidate] {
-            Dictionary(uniqueKeysWithValues: candidates.map { ($0.localIdentifier, $0) })
+            var result: [String: DuplicateCandidate] = [:]
+            result.reserveCapacity(candidates.count)
+            for candidate in candidates {
+                result[candidate.localIdentifier] = candidate
+            }
+            return result
         }
 
         var candidateByStableIdentifier: [String: DuplicateCandidate] {
-            Dictionary(uniqueKeysWithValues: candidates.map { ($0.stableRecordIdentifier, $0) })
+            var result: [String: DuplicateCandidate] = [:]
+            result.reserveCapacity(candidates.count)
+            for candidate in candidates {
+                result[candidate.stableRecordIdentifier] = candidate
+            }
+            return result
         }
     }
 
@@ -192,7 +210,11 @@ actor DeterministicSwiftDataPublicIDRepairService: PublicIDRepairTransactionalSe
             plan: plan,
             resolutions: resolutionMap
         )
-        let reportReferenceUpdates = referenceUpdates.map(\.report)
+        var reportReferenceUpdates: [PublicIDRepairReferenceUpdate] = []
+        reportReferenceUpdates.reserveCapacity(referenceUpdates.count)
+        for update in referenceUpdates {
+            reportReferenceUpdates.append(update.report)
+        }
         let backupURL = try createBackup(
             loaded: loaded,
             plan: plan,
