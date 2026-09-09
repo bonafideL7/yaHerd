@@ -262,8 +262,10 @@ extension DeterministicSwiftDataPublicIDRepairService {
         records: [Pasture]
     ) -> Set<String> {
         var result = Set<String>()
-        for pasture in records where fieldCheckPastureSnapshotMatches(session, pasture) {
-            result.insert(localRecordIdentifier(pasture))
+        for pasture in records {
+            if fieldCheckPastureSnapshotMatches(session, pasture) {
+                result.insert(localRecordIdentifier(pasture))
+            }
         }
         return result
     }
@@ -273,8 +275,10 @@ extension DeterministicSwiftDataPublicIDRepairService {
         records: [Animal]
     ) -> Set<String> {
         var result = Set<String>()
-        for animal in records where fieldCheckAnimalSnapshotMatches(check, animal) {
-            result.insert(localRecordIdentifier(animal))
+        for animal in records {
+            if fieldCheckAnimalSnapshotMatches(check, animal) {
+                result.insert(localRecordIdentifier(animal))
+            }
         }
         return result
     }
@@ -284,8 +288,10 @@ extension DeterministicSwiftDataPublicIDRepairService {
         records: [Animal]
     ) -> Set<String> {
         var result = Set<String>()
-        for animal in records where fieldCheckFindingAnimalSnapshotMatches(finding, animal) {
-            result.insert(localRecordIdentifier(animal))
+        for animal in records {
+            if fieldCheckFindingAnimalSnapshotMatches(finding, animal) {
+                result.insert(localRecordIdentifier(animal))
+            }
         }
         return result
     }
@@ -295,8 +301,10 @@ extension DeterministicSwiftDataPublicIDRepairService {
         records: [FieldCheckSession]
     ) -> Set<String> {
         var result = Set<String>()
-        for session in records where fieldCheckFindingSessionSnapshotMatches(finding, session) {
-            result.insert(localRecordIdentifier(session))
+        for session in records {
+            if fieldCheckFindingSessionSnapshotMatches(finding, session) {
+                result.insert(localRecordIdentifier(session))
+            }
         }
         return result
     }
