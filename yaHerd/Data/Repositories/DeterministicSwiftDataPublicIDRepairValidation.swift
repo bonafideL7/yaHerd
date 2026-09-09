@@ -51,7 +51,10 @@ extension DeterministicSwiftDataPublicIDRepairService {
         }
 
         let revisionRecords = try fetchAll(CollaborationRevisionRecord.self)
-        let groupedRevisionRecords = Dictionary(grouping: revisionRecords, by: \.key)
+        var groupedRevisionRecords: [CollaborationAggregateKey: [CollaborationRevisionRecord]] = [:]
+        for record in revisionRecords {
+            groupedRevisionRecords[record.key, default: []].append(record)
+        }
         for aggregate in loaded.allAggregates {
             let key = aggregate.collaborationKey
             let matching = groupedRevisionRecords[key] ?? []
@@ -103,7 +106,12 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 }
                 continue
             }
-            let sourceHerd = check.herd ?? check.session?.herd
+            let sourceHerd: Herd?
+            if let herd = check.herd {
+                sourceHerd = herd
+            } else {
+                sourceHerd = check.session?.herd
+            }
             var candidates: [Animal] = []
             for animal in validationScope(
                 records: loaded.animals,
@@ -120,7 +128,14 @@ extension DeterministicSwiftDataPublicIDRepairService {
         }
 
         for finding in loaded.fieldCheckFindings {
-            let sourceHerd = finding.herd ?? finding.session?.herd ?? finding.animal?.herd
+            let sourceHerd: Herd?
+            if let herd = finding.herd {
+                sourceHerd = herd
+            } else if let herd = finding.session?.herd {
+                sourceHerd = herd
+            } else {
+                sourceHerd = finding.animal?.herd
+            }
             if let animal = finding.animal {
                 if finding.animalIDSnapshot != animal.publicID {
                     issues.append("A field check finding animalIDSnapshot does not match its live animal relationship.")
@@ -168,8 +183,26 @@ extension DeterministicSwiftDataPublicIDRepairService {
         sourceHerd: Herd?,
         herd: (Model) -> Herd?
     ) -> [Model] {
-        let sourceScope = sourceHerd.map(ObjectIdentifier.init)
-        let scoped = records.filter { herd($0).map(ObjectIdentifier.init) == sourceScope }
+        let sourceScope: ObjectIdentifier?
+        if let sourceHerd {
+            sourceScope = ObjectIdentifier(sourceHerd)
+        } else {
+            sourceScope = nil
+        }
+
+        var scoped: [Model] = []
+        scoped.reserveCapacity(records.count)
+        for record in records {
+            let recordScope: ObjectIdentifier?
+            if let recordHerd = herd(record) {
+                recordScope = ObjectIdentifier(recordHerd)
+            } else {
+                recordScope = nil
+            }
+            if recordScope == sourceScope {
+                scoped.append(record)
+            }
+        }
         return scoped.isEmpty ? records : scoped
     }
 
@@ -179,9 +212,16 @@ extension DeterministicSwiftDataPublicIDRepairService {
         publicID: (Model) -> UUID,
         to issues: inout [String]
     ) {
-        let duplicates = Dictionary(grouping: records, by: publicID).filter { $0.value.count > 1 }
-        if !duplicates.isEmpty {
-            issues.append("\(entityType.displayName) still contain \(duplicates.count) duplicate public-ID groups.")
+        var counts: [UUID: Int] = [:]
+        for record in records {
+            counts[publicID(record), default: 0] += 1
+        }
+        var duplicateGroupCount = 0
+        for count in counts.values where count > 1 {
+            duplicateGroupCount += 1
+        }
+        if duplicateGroupCount > 0 {
+            issues.append("\(entityType.displayName) still contain \(duplicateGroupCount) duplicate public-ID groups.")
         }
     }
 
