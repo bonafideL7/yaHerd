@@ -54,28 +54,24 @@ extension DeterministicSwiftDataPublicIDRepairService {
         referenceUpdates: [PublicIDRepairReferenceUpdate],
         resolutions: [PublicIDRepairReferenceResolution]
     ) throws -> URL {
-        let backup = PublicIDRepairBackup(
-            formatVersion: 4,
-            createdAt: .now,
-            assessment: assessment,
-            replacements: plan.reportReplacements,
-            referenceUpdates: referenceUpdates,
-            resolutions: resolutions.sorted { $0.id < $1.id },
-            aggregates: loaded.allAggregates.map { aggregate in
-                let entityType = publicIDRepairEntityType(for: aggregate)
-                let localID = localRecordIdentifier(aggregate)
-                let stableID = plan.candidateByLocalIdentifier[localID]?.stableRecordIdentifier
-                    ?? [
-                        entityType.rawValue,
-                        aggregate.collaborationKey.publicID.uuidString.lowercased(),
-                        deterministicDigest(
-                            stableSnapshotKey(
-                                CollaborationFieldSnapshotProvider.snapshot(for: aggregate)
-                            )
-                        ),
-                        plan.graphFingerprintByLocalIdentifier[localID] ?? "",
-                    ].joined(separator: "|")
-                return BackupAggregate(
+        var aggregateBackups: [BackupAggregate] = []
+        aggregateBackups.reserveCapacity(loaded.allAggregates.count)
+        for aggregate in loaded.allAggregates {
+            let entityType = publicIDRepairEntityType(for: aggregate)
+            let localID = localRecordIdentifier(aggregate)
+            let stableID = plan.candidateByLocalIdentifier[localID]?.stableRecordIdentifier
+                ?? [
+                    entityType.rawValue,
+                    aggregate.collaborationKey.publicID.uuidString.lowercased(),
+                    deterministicDigest(
+                        stableSnapshotKey(
+                            CollaborationFieldSnapshotProvider.snapshot(for: aggregate)
+                        )
+                    ),
+                    plan.graphFingerprintByLocalIdentifier[localID] ?? "",
+                ].joined(separator: "|")
+            aggregateBackups.append(
+                BackupAggregate(
                     entityType: entityType,
                     stableRecordIdentifier: stableID,
                     recordDescription: recordDescription(for: aggregate),
@@ -83,13 +79,19 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     herdPublicID: aggregate.collaborationHerdPublicID,
                     sharedFields: CollaborationFieldSnapshotProvider.snapshot(for: aggregate)
                 )
-            }.sorted {
-                if $0.entityType != $1.entityType {
-                    return $0.entityType.rawValue < $1.entityType.rawValue
-                }
-                return $0.stableRecordIdentifier < $1.stableRecordIdentifier
-            },
-            treatmentItems: plan.treatmentLocations.map { location in
+            )
+        }
+        aggregateBackups.sort {
+            if $0.entityType != $1.entityType {
+                return $0.entityType.rawValue < $1.entityType.rawValue
+            }
+            return $0.stableRecordIdentifier < $1.stableRecordIdentifier
+        }
+
+        var treatmentItemBackups: [BackupTreatmentItem] = []
+        treatmentItemBackups.reserveCapacity(plan.treatmentLocations.count)
+        for location in plan.treatmentLocations {
+            treatmentItemBackups.append(
                 BackupTreatmentItem(
                     entityType: location.entityType,
                     ownerStableRecordIdentifier: plan.candidateByLocalIdentifier[location.ownerLocalIdentifier]?.stableRecordIdentifier
@@ -97,17 +99,35 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     itemIndex: location.itemIndex,
                     item: location.item
                 )
-            }.sorted {
-                if $0.entityType != $1.entityType {
-                    return $0.entityType.rawValue < $1.entityType.rawValue
-                }
-                if $0.ownerStableRecordIdentifier != $1.ownerStableRecordIdentifier {
-                    return $0.ownerStableRecordIdentifier < $1.ownerStableRecordIdentifier
-                }
-                return $0.itemIndex < $1.itemIndex
-            },
-            revisionRecords: loaded.revisionRecords.map(makeBackupRevisionRecord)
-                .sorted { $0.stableRecordIdentifier < $1.stableRecordIdentifier }
+            )
+        }
+        treatmentItemBackups.sort {
+            if $0.entityType != $1.entityType {
+                return $0.entityType.rawValue < $1.entityType.rawValue
+            }
+            if $0.ownerStableRecordIdentifier != $1.ownerStableRecordIdentifier {
+                return $0.ownerStableRecordIdentifier < $1.ownerStableRecordIdentifier
+            }
+            return $0.itemIndex < $1.itemIndex
+        }
+
+        var revisionRecordBackups: [BackupRevisionRecord] = []
+        revisionRecordBackups.reserveCapacity(loaded.revisionRecords.count)
+        for record in loaded.revisionRecords {
+            revisionRecordBackups.append(makeBackupRevisionRecord(record))
+        }
+        revisionRecordBackups.sort { $0.stableRecordIdentifier < $1.stableRecordIdentifier }
+
+        let backup = PublicIDRepairBackup(
+            formatVersion: 4,
+            createdAt: .now,
+            assessment: assessment,
+            replacements: plan.reportReplacements,
+            referenceUpdates: referenceUpdates,
+            resolutions: resolutions.sorted { $0.id < $1.id },
+            aggregates: aggregateBackups,
+            treatmentItems: treatmentItemBackups,
+            revisionRecords: revisionRecordBackups
         )
 
         let encoder = JSONEncoder()
