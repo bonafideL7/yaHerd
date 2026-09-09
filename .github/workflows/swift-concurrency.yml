@@ -12,19 +12,28 @@ on:
         type: boolean
         default: true
       run_concurrency:
-        description: Run Swift 6 concurrency checks and production builds
+        description: Run Swift 6 concurrency checks
         required: true
         type: boolean
         default: true
+      full_verification:
+        description: Also run Release, build-for-testing, and device builds
+        required: true
+        type: boolean
+        default: false
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
 
+concurrency:
+  group: yaherd-verification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - name: Validate verification selection
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -82,9 +91,11 @@ jobs:
           set -euo pipefail
           bash Scripts/verify-architecture.sh
 
-      - name: Verify Swift 6 concurrency and production builds
+      - name: Verify Swift 6 concurrency
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency }}
         shell: bash
+        env:
+          YAHERD_FULL_VERIFY: ${{ github.event_name == 'push' && '1' || (github.event_name == 'workflow_dispatch' && inputs.full_verification && '1' || '0') }}
         run: |
           set -euo pipefail
           bash Scripts/verify-concurrency.sh
