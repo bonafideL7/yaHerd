@@ -6,9 +6,11 @@ extension DeterministicSwiftDataPublicIDRepairService {
         loaded: LoadedRecords,
         nodes: [AggregateNode]
     ) -> [String: String] {
-        let nodeByObject = Dictionary(uniqueKeysWithValues: nodes.map {
-            (ObjectIdentifier($0.aggregate), $0)
-        })
+        var nodeByObject: [ObjectIdentifier: AggregateNode] = [:]
+        nodeByObject.reserveCapacity(nodes.count)
+        for node in nodes {
+            nodeByObject[ObjectIdentifier(node.aggregate)] = node
+        }
         var descriptors: [String: [String]] = [:]
 
         func portableSemantic(_ node: AggregateNode) -> String {
@@ -107,12 +109,15 @@ extension DeterministicSwiftDataPublicIDRepairService {
             addEdge(record, record.animal, "animal")
         }
 
-        return Dictionary(uniqueKeysWithValues: nodes.map { node in
+        var result: [String: String] = [:]
+        result.reserveCapacity(nodes.count)
+        for node in nodes {
             let key = descriptors[node.localIdentifier, default: []]
                 .sorted()
                 .joined(separator: "|")
-            return (node.localIdentifier, deterministicDigest(key))
-        })
+            result[node.localIdentifier] = deterministicDigest(key)
+        }
+        return result
     }
 
 }
