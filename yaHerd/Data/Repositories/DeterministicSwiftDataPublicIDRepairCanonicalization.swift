@@ -437,19 +437,29 @@ extension DeterministicSwiftDataPublicIDRepairService {
         var result: [CollaborationAggregateKey: CollaborationRevisionMetadata] = [:]
         for record in records {
             let key = record.key
+            let metadata = record.metadata
             guard let existing = result[key] else {
-                result[key] = record.metadata
+                result[key] = metadata
                 continue
             }
-            if record.revision > existing.revision
-                || (record.revision == existing.revision && record.modifiedAt > existing.modifiedAt)
-                || (
-                    record.revision == existing.revision
-                        && record.modifiedAt == existing.modifiedAt
-                        && stableSnapshotKey(record.metadata.currentFieldValues)
-                            < stableSnapshotKey(existing.currentFieldValues)
-                ) {
-                result[key] = record.metadata
+
+            let shouldReplace: Bool
+            if metadata.revision > existing.revision {
+                shouldReplace = true
+            } else if metadata.revision < existing.revision {
+                shouldReplace = false
+            } else if metadata.modifiedAt > existing.modifiedAt {
+                shouldReplace = true
+            } else if metadata.modifiedAt < existing.modifiedAt {
+                shouldReplace = false
+            } else {
+                let currentSnapshotKey = stableSnapshotKey(metadata.currentFieldValues)
+                let existingSnapshotKey = stableSnapshotKey(existing.currentFieldValues)
+                shouldReplace = currentSnapshotKey < existingSnapshotKey
+            }
+
+            if shouldReplace {
+                result[key] = metadata
             }
         }
         return result
