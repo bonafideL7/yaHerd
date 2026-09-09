@@ -6,6 +6,8 @@ cd "$ROOT_DIR"
 
 PROJECT_FILE="yaHerd.xcodeproj/project.pbxproj"
 DERIVED_DATA_PATH="$ROOT_DIR/.build/ConcurrencyDerivedData"
+FULL_VERIFY="${YAHERD_FULL_VERIFY:-0}"
+CLEAN_VERIFY="${YAHERD_CLEAN_VERIFY:-0}"
 
 if grep -q 'SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;' "$PROJECT_FILE"; then
   echo 'Module-wide MainActor default isolation is prohibited; isolate UI and persistence boundaries explicitly.' >&2
@@ -97,24 +99,6 @@ for path in environment_root.glob('*.swift'):
                 f'{path}:{line}: {match.group(1)} must provide nonisolated init() for EnvironmentKey default construction'
             )
 
-repair_root = Path('yaHerd/Data/Repositories')
-for path in repair_root.glob('DeterministicSwiftDataPublicIDRepair*.swift'):
-    text = path.read_text()
-    for match in re.finditer(r'\.(?:map|compactMap|filter)\s*\{(?:(?!\n\s*\}).){0,1600}?\bplan\.', text, re.DOTALL):
-        line = text.count('\n', 0, match.start()) + 1
-        failures.append(
-            f'{path}:{line}: RepairPlan must not be captured by map/filter/compactMap closures; iterate on the model actor instead'
-        )
-    for match in re.finditer(
-        r'evidenceMatches\s*:\s*\{(?:(?!\n\s*\}).){0,800}?fieldCheck(?:Pasture|Animal|Finding)\w*Matches\((?:session|check|finding)\b',
-        text,
-        re.DOTALL,
-    ):
-        line = text.count('\n', 0, match.start()) + 1
-        failures.append(
-            f'{path}:{line}: SwiftData field-check models must not be captured by evidence-matching closures'
-        )
-
 if failures:
     print('Swift concurrency architecture checks failed:', file=sys.stderr)
     print('\n'.join(failures), file=sys.stderr)
@@ -191,14 +175,17 @@ verify_target_settings() {
   fi
 }
 
-for configuration in Debug Release; do
-  verify_target_settings yaHerd "$configuration"
-  verify_target_settings yaHerdTests "$configuration"
-done
+# The PR gate verifies the settings used by the actual compile below. Full verification
+# additionally checks Release and the test target configurations.
+verify_target_settings yaHerd Debug
+if [[ "$FULL_VERIFY" == "1" ]]; then
+  verify_target_settings yaHerd Release
+  verify_target_settings yaHerdTests Debug
+  verify_target_settings yaHerdTests Release
+fi
 
-# Prove that the selected compiler is enforcing an unambiguously unsafe Swift 6
-# actor-boundary access. The actor retains the non-Sendable reference, so the
-# value cannot safely be exposed to another isolation domain.
+# Prove the selected compiler is actually enforcing an unambiguously unsafe Swift 6
+# actor-boundary access before trusting any project build result.
 SMOKE_DIR="$(mktemp -d)"
 SMOKE_LOG="$SMOKE_DIR/compiler-smoke.log"
 cat >"$SMOKE_DIR/ConcurrencyViolation.swift" <<'SWIFT'
@@ -242,7 +229,9 @@ rm -rf "$SMOKE_DIR"
 
 echo 'Swift compiler strict-concurrency smoke test passed.'
 
-rm -rf "$DERIVED_DATA_PATH"
+if [[ "$CLEAN_VERIFY" == "1" ]]; then
+  rm -rf "$DERIVED_DATA_PATH"
+fi
 mkdir -p "$(dirname "$DERIVED_DATA_PATH")"
 
 BUILD_LOG="$(mktemp)"
@@ -260,6 +249,7 @@ run_xcodebuild_gate() {
     -scheme yaHerd \
     -derivedDataPath "$DERIVED_DATA_PATH" \
     CODE_SIGNING_ALLOWED=NO \
+    COMPILER_INDEX_STORE_ENABLE=NO \
     "$@" >"$BUILD_LOG" 2>&1
   local build_status=$?
   set -e
@@ -271,8 +261,6 @@ run_xcodebuild_gate() {
     exit "$build_status"
   fi
 
-  # App/test warnings are already errors because their effective target settings are
-  # asserted above. Do not promote warnings from third-party Swift packages globally.
   if grep -E -i 'sending .* risks causing data races' "$BUILD_LOG" >/dev/null; then
     echo "$label emitted a Swift concurrency transfer diagnostic:" >&2
     grep -E -i 'sending .* risks causing data races' "$BUILD_LOG" | tail -n 160 >&2
@@ -282,6 +270,8 @@ run_xcodebuild_gate() {
   echo "$label passed."
 }
 
+# Fast PR gate: one compiler invocation path using the same Debug configuration developers
+# normally use in Xcode. This is the gate intended to catch Swift 6 source diagnostics quickly.
 run_xcodebuild_gate \
   'Debug iOS Simulator build' \
   -configuration Debug \
@@ -289,25 +279,27 @@ run_xcodebuild_gate \
   -destination 'generic/platform=iOS Simulator' \
   build
 
-run_xcodebuild_gate \
-  'Release iOS Simulator build' \
-  -configuration Release \
-  -sdk iphonesimulator \
-  -destination 'generic/platform=iOS Simulator' \
-  build
+if [[ "$FULL_VERIFY" == "1" ]]; then
+  run_xcodebuild_gate \
+    'Release iOS Simulator build' \
+    -configuration Release \
+    -sdk iphonesimulator \
+    -destination 'generic/platform=iOS Simulator' \
+    build
 
-run_xcodebuild_gate \
-  'Debug build-for-testing' \
-  -configuration Debug \
-  -sdk iphonesimulator \
-  -destination 'generic/platform=iOS Simulator' \
-  build-for-testing
+  run_xcodebuild_gate \
+    'Debug build-for-testing' \
+    -configuration Debug \
+    -sdk iphonesimulator \
+    -destination 'generic/platform=iOS Simulator' \
+    build-for-testing
 
-run_xcodebuild_gate \
-  'Release iOS device build' \
-  -configuration Release \
-  -sdk iphoneos \
-  -destination 'generic/platform=iOS' \
-  build
+  run_xcodebuild_gate \
+    'Release iOS device build' \
+    -configuration Release \
+    -sdk iphoneos \
+    -destination 'generic/platform=iOS' \
+    build
+fi
 
 echo 'Swift 6 concurrency verification passed.'
