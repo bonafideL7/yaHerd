@@ -110,6 +110,10 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     to: &updates
                 )
             } else {
+                let evidenceMatchingLocalIdentifiers = fieldCheckPastureEvidenceIdentifiers(
+                    for: session,
+                    records: loaded.pastures
+                )
                 try appendSnapshotReferenceUpdate(
                     entityType: .fieldCheckSession,
                     model: session,
@@ -121,7 +125,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     publicID: { $0.publicID },
                     herd: { $0.herd },
                     targetDescription: "pasture",
-                    evidenceMatches: { self.fieldCheckPastureSnapshotMatches(session, $0) },
+                    evidenceMatchingLocalIdentifiers: evidenceMatchingLocalIdentifiers,
                     plan: plan,
                     resolutions: resolutions,
                     assign: { session.pastureID = $0 },
@@ -146,6 +150,10 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     to: &updates
                 )
             } else {
+                let evidenceMatchingLocalIdentifiers = fieldCheckAnimalEvidenceIdentifiers(
+                    for: check,
+                    records: loaded.animals
+                )
                 try appendSnapshotReferenceUpdate(
                     entityType: .fieldCheckAnimalCheck,
                     model: check,
@@ -157,7 +165,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     publicID: { $0.publicID },
                     herd: { $0.herd },
                     targetDescription: "animal",
-                    evidenceMatches: { self.fieldCheckAnimalSnapshotMatches(check, $0) },
+                    evidenceMatchingLocalIdentifiers: evidenceMatchingLocalIdentifiers,
                     plan: plan,
                     resolutions: resolutions,
                     assign: { check.animalIDSnapshot = $0 },
@@ -212,6 +220,10 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     to: &updates
                 )
             } else {
+                let evidenceMatchingLocalIdentifiers = fieldCheckFindingAnimalEvidenceIdentifiers(
+                    for: finding,
+                    records: loaded.animals
+                )
                 try appendSnapshotReferenceUpdate(
                     entityType: .fieldCheckFinding,
                     model: finding,
@@ -223,7 +235,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     publicID: { $0.publicID },
                     herd: { $0.herd },
                     targetDescription: "animal",
-                    evidenceMatches: { self.fieldCheckFindingAnimalSnapshotMatches(finding, $0) },
+                    evidenceMatchingLocalIdentifiers: evidenceMatchingLocalIdentifiers,
                     plan: plan,
                     resolutions: resolutions,
                     assign: { finding.animalIDSnapshot = $0 },
@@ -244,6 +256,10 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     to: &updates
                 )
             } else {
+                let evidenceMatchingLocalIdentifiers = fieldCheckFindingSessionEvidenceIdentifiers(
+                    for: finding,
+                    records: loaded.fieldCheckSessions
+                )
                 try appendSnapshotReferenceUpdate(
                     entityType: .fieldCheckFinding,
                     model: finding,
@@ -255,7 +271,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     publicID: { $0.publicID },
                     herd: { $0.herd },
                     targetDescription: "field check session",
-                    evidenceMatches: { self.fieldCheckFindingSessionSnapshotMatches(finding, $0) },
+                    evidenceMatchingLocalIdentifiers: evidenceMatchingLocalIdentifiers,
                     plan: plan,
                     resolutions: resolutions,
                     assign: { finding.sessionIDSnapshot = $0 },
