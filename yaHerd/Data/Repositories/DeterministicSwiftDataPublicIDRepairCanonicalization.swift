@@ -38,50 +38,78 @@ extension DeterministicSwiftDataPublicIDRepairService {
         revisionMetadata: [CollaborationAggregateKey: CollaborationRevisionMetadata],
         resolutions: [String: String] = [:]
     ) -> EntityPlan {
-        let grouped = Dictionary(grouping: nodes, by: { $0.readPublicID() })
-        let duplicateGroups = grouped
-            .filter { $0.value.count > 1 }
-            .sorted { $0.key.uuidString < $1.key.uuidString }
-        let repairGroups = grouped
-            .filter { retainedID, groupedNodes in
-                groupedNodes.count > 1
-                    || groupedNodes.contains { node in
-                        forcedCrossHerdReplacementID(
-                            entityType: entityType,
-                            retainedID: retainedID,
-                            node: node,
-                            resolutions: resolutions
-                        ) != nil
-                    }
-            }
-            .sorted { $0.key.uuidString < $1.key.uuidString }
-        let duplicateRecordCount = duplicateGroups.reduce(0) { partial, group in
-            partial + group.value.count - 1
+        var grouped: [UUID: [AggregateNode]] = [:]
+        for node in nodes {
+            grouped[node.readPublicID(), default: []].append(node)
         }
+
+        var duplicateGroupIDs: [UUID] = []
+        var repairGroupIDs: [UUID] = []
+        var duplicateRecordCount = 0
+        for (retainedID, groupedNodes) in grouped {
+            if groupedNodes.count > 1 {
+                duplicateGroupIDs.append(retainedID)
+                duplicateRecordCount += groupedNodes.count - 1
+            }
+
+            var requiresRepair = groupedNodes.count > 1
+            if !requiresRepair {
+                for node in groupedNodes {
+                    if forcedCrossHerdReplacementID(
+                        entityType: entityType,
+                        retainedID: retainedID,
+                        node: node,
+                        resolutions: resolutions
+                    ) != nil {
+                        requiresRepair = true
+                        break
+                    }
+                }
+            }
+            if requiresRepair {
+                repairGroupIDs.append(retainedID)
+            }
+        }
+        duplicateGroupIDs.sort { $0.uuidString < $1.uuidString }
+        repairGroupIDs.sort { $0.uuidString < $1.uuidString }
+
         var replacements: [PlannedReplacement] = []
         var candidates: [DuplicateCandidate] = []
         var unresolvedIssues: [PublicIDRepairUnresolvedReference] = []
-        var usedIDs = Set(nodes.map { $0.readPublicID() })
+        var usedIDs = Set<UUID>()
+        usedIDs.reserveCapacity(nodes.count)
+        for node in nodes {
+            usedIDs.insert(node.readPublicID())
+        }
 
-        for (retainedID, duplicateNodes) in repairGroups {
-            let metadata = duplicateNodes.first.map {
-                revisionMetadata[
-                    CollaborationAggregateKey(type: $0.collaborationType, publicID: retainedID)
-                ]
-            } ?? nil
-            let keyedNodes = duplicateNodes.map { node in
-                (
-                    node,
-                    canonicalSortKey(
-                        node: node,
-                        metadata: metadata,
-                        graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier
+        for retainedID in repairGroupIDs {
+            guard let duplicateNodes = grouped[retainedID] else { continue }
+
+            var metadata: CollaborationRevisionMetadata?
+            if let firstNode = duplicateNodes.first {
+                metadata = revisionMetadata[
+                    CollaborationAggregateKey(
+                        type: firstNode.collaborationType,
+                        publicID: retainedID
                     )
-                )
+                ]
             }
-            let tiedKeys = Dictionary(grouping: keyedNodes, by: { $0.1 })
-                .filter { $0.value.count > 1 }
-            guard tiedKeys.isEmpty else {
+
+            var nodeByCanonicalKey: [String: AggregateNode] = [:]
+            var canonicalKeyCollision = false
+            for node in duplicateNodes {
+                let key = canonicalSortKey(
+                    node: node,
+                    metadata: metadata,
+                    graphFingerprintByLocalIdentifier: graphFingerprintByLocalIdentifier
+                )
+                if nodeByCanonicalKey[key] != nil {
+                    canonicalKeyCollision = true
+                } else {
+                    nodeByCanonicalKey[key] = node
+                }
+            }
+            guard !canonicalKeyCollision else {
                 unresolvedIssues.append(
                     PublicIDRepairUnresolvedReference(
                         kind: .canonicalRecord,
@@ -100,8 +128,11 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 continue
             }
 
-            let portableOrder = keyedNodes.sorted { $0.1 < $1.1 }.map { $0.0 }
-            let entries = portableOrder.enumerated().map { ordinal, node in
+            let orderedCanonicalKeys = nodeByCanonicalKey.keys.sorted()
+            var entries: [(node: AggregateNode, graphFingerprint: String, stableIdentifier: String)] = []
+            entries.reserveCapacity(orderedCanonicalKeys.count)
+            for (ordinal, canonicalKey) in orderedCanonicalKeys.enumerated() {
+                guard let node = nodeByCanonicalKey[canonicalKey] else { continue }
                 let graphFingerprint = graphFingerprintByLocalIdentifier[node.localIdentifier] ?? ""
                 let stableIdentifier = duplicateCandidateIdentifier(
                     entityType: entityType,
@@ -110,10 +141,12 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     graphFingerprint: graphFingerprint,
                     ordinal: ordinal
                 )
-                return (
-                    node: node,
-                    graphFingerprint: graphFingerprint,
-                    stableIdentifier: stableIdentifier
+                entries.append(
+                    (
+                        node: node,
+                        graphFingerprint: graphFingerprint,
+                        stableIdentifier: stableIdentifier
+                    )
                 )
             }
 
@@ -129,18 +162,24 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     entries: entries,
                     relationshipContextByLocalIdentifier: relationshipContextByLocalIdentifier
                 )
-                if let selectedStableIdentifier = resolutions[issue.id],
-                   let selected = entries.first(where: {
-                       $0.stableIdentifier == selectedStableIdentifier
-                   }) {
-                    selectedCanonicalLocalIdentifier = selected.node.localIdentifier
-                } else {
+                if let selectedStableIdentifier = resolutions[issue.id] {
+                    for entry in entries {
+                        if entry.stableIdentifier == selectedStableIdentifier {
+                            selectedCanonicalLocalIdentifier = entry.node.localIdentifier
+                            break
+                        }
+                    }
+                }
+                if selectedCanonicalLocalIdentifier == nil {
                     unresolvedIssues.append(issue)
                 }
             } else if let establishedOwnerHerdID {
-                selectedCanonicalLocalIdentifier = entries.first {
-                    $0.node.herdPublicID == establishedOwnerHerdID
-                }?.node.localIdentifier
+                for entry in entries {
+                    if entry.node.herdPublicID == establishedOwnerHerdID {
+                        selectedCanonicalLocalIdentifier = entry.node.localIdentifier
+                        break
+                    }
+                }
             }
 
             let defaultCanonicalLocalIdentifier = entries.first?.node.localIdentifier
@@ -155,18 +194,26 @@ extension DeterministicSwiftDataPublicIDRepairService {
             } else {
                 canonicalLocalIdentifier = defaultCanonicalLocalIdentifier
             }
-            let canonicalEntry = canonicalLocalIdentifier.flatMap { localIdentifier in
-                entries.first { $0.node.localIdentifier == localIdentifier }
+
+            var canonicalEntry: (node: AggregateNode, graphFingerprint: String, stableIdentifier: String)?
+            if let canonicalLocalIdentifier {
+                for entry in entries {
+                    if entry.node.localIdentifier == canonicalLocalIdentifier {
+                        canonicalEntry = entry
+                        break
+                    }
+                }
             }
 
-            let herdGroups = Dictionary(grouping: entries.compactMap { entry -> (UUID, String)? in
-                guard let herdPublicID = entry.node.herdPublicID else { return nil }
-                return (herdPublicID, entry.node.localIdentifier)
-            }, by: { $0.0 })
-            let bridgeMappingLocalIdentifierByHerd = herdGroups.mapValues { values in
-                values.first?.1
+            var bridgeMappingLocalIdentifierByHerd: [UUID: String] = [:]
+            var visibleHerdIDs = Set<UUID>()
+            for entry in entries {
+                guard let herdPublicID = entry.node.herdPublicID else { continue }
+                visibleHerdIDs.insert(herdPublicID)
+                if bridgeMappingLocalIdentifierByHerd[herdPublicID] == nil {
+                    bridgeMappingLocalIdentifierByHerd[herdPublicID] = entry.node.localIdentifier
+                }
             }
-            let visibleHerdIDs = Set(entries.compactMap { $0.node.herdPublicID })
             let canonicalHerdID = canonicalEntry?.node.herdPublicID
             let crossHerdOwnerID = establishedOwnerHerdID
                 ?? (visibleHerdIDs.count > 1 ? canonicalHerdID : nil)
@@ -176,6 +223,15 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 let resultingID: UUID
                 var canApplyReplacement = true
 
+                let entryHerdPublicID = entry.node.herdPublicID
+                let isBridgeMappingForEntry: Bool
+                if let entryHerdPublicID {
+                    isBridgeMappingForEntry = bridgeMappingLocalIdentifierByHerd[entryHerdPublicID]
+                        == entry.node.localIdentifier
+                } else {
+                    isBridgeMappingForEntry = false
+                }
+
                 if retainsOriginalID {
                     resultingID = retainedID
                 } else if let forcedID = forcedCrossHerdReplacementID(
@@ -183,10 +239,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     retainedID: retainedID,
                     node: entry.node,
                     resolutions: resolutions
-                ),
-                    entry.node.herdPublicID.flatMap({
-                        bridgeMappingLocalIdentifierByHerd[$0] ?? nil
-                    }) == entry.node.localIdentifier {
+                ), isBridgeMappingForEntry {
                     resultingID = forcedID
                     canApplyReplacement = reserveCrossHerdReplacementID(
                         forcedID,
@@ -197,10 +250,10 @@ extension DeterministicSwiftDataPublicIDRepairService {
                         usedIDs: &usedIDs,
                         unresolvedIssues: &unresolvedIssues
                     )
-                } else if let herdPublicID = entry.node.herdPublicID,
+                } else if let herdPublicID = entryHerdPublicID,
                           let crossHerdOwnerID,
                           herdPublicID != crossHerdOwnerID,
-                          bridgeMappingLocalIdentifierByHerd[herdPublicID] == entry.node.localIdentifier {
+                          isBridgeMappingForEntry {
                     let mappedID = publicIDRepairCrossHerdReplacementID(
                         entityType: entityType,
                         retainedPublicID: retainedID,
@@ -271,7 +324,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
             assessment: PublicIDRepairEntityAssessment(
                 entityType: entityType,
                 scannedRecordCount: nodes.count,
-                duplicateGroupCount: duplicateGroups.count,
+                duplicateGroupCount: duplicateGroupIDs.count,
                 duplicateRecordCount: duplicateRecordCount
             ),
             replacements: replacements,
@@ -340,9 +393,36 @@ extension DeterministicSwiftDataPublicIDRepairService {
         entries: [(node: AggregateNode, graphFingerprint: String, stableIdentifier: String)],
         relationshipContextByLocalIdentifier: [String: String]
     ) -> PublicIDRepairUnresolvedReference {
-        let descriptionCounts = Dictionary(grouping: entries, by: {
-            $0.node.recordDescription
-        }).mapValues(\.count)
+        var descriptionCounts: [String: Int] = [:]
+        for entry in entries {
+            descriptionCounts[entry.node.recordDescription, default: 0] += 1
+        }
+
+        var resolutionCandidates: [PublicIDRepairResolutionCandidate] = []
+        resolutionCandidates.reserveCapacity(entries.count)
+        for entry in entries {
+            let relationshipContext = relationshipContextByLocalIdentifier[
+                entry.node.localIdentifier
+            ]
+            let semanticContext = semanticCandidateChoiceContext(
+                node: entry.node,
+                relationshipContext: relationshipContext
+            )
+            let recordDescription: String
+            if descriptionCounts[entry.node.recordDescription, default: 0] > 1 {
+                recordDescription = "\(entry.node.recordDescription) — \(semanticContext)"
+            } else {
+                recordDescription = entry.node.recordDescription
+            }
+            resolutionCandidates.append(
+                PublicIDRepairResolutionCandidate(
+                    stableRecordIdentifier: entry.stableIdentifier,
+                    recordDescription: recordDescription,
+                    detail: "If selected, this Herd remains attached to the existing shared bridge. \(semanticCandidateDetail(node: entry.node, relationshipContext: relationshipContext, retainsOriginalID: true))",
+                    resultingPublicID: retainedID
+                )
+            )
+        }
 
         return PublicIDRepairUnresolvedReference(
             kind: .canonicalRecord,
@@ -356,27 +436,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
             fieldName: "sharedBridgeOwner",
             referencedPublicID: retainedID,
             reason: "Choose which Herd is the one already represented by the existing iCloud sharing bridge. That Herd keeps the current public ID and share. Every other duplicate Herd receives a deterministic replacement ID and becomes a separate locally owned herd before shared-data convergence resumes.",
-            candidates: entries.map { entry in
-                let relationshipContext = relationshipContextByLocalIdentifier[
-                    entry.node.localIdentifier
-                ]
-                let semanticContext = semanticCandidateChoiceContext(
-                    node: entry.node,
-                    relationshipContext: relationshipContext
-                )
-                let recordDescription: String
-                if descriptionCounts[entry.node.recordDescription, default: 0] > 1 {
-                    recordDescription = "\(entry.node.recordDescription) — \(semanticContext)"
-                } else {
-                    recordDescription = entry.node.recordDescription
-                }
-                return PublicIDRepairResolutionCandidate(
-                    stableRecordIdentifier: entry.stableIdentifier,
-                    recordDescription: recordDescription,
-                    detail: "If selected, this Herd remains attached to the existing shared bridge. \(semanticCandidateDetail(node: entry.node, relationshipContext: relationshipContext, retainsOriginalID: true))",
-                    resultingPublicID: retainedID
-                )
-            }
+            candidates: resolutionCandidates
         )
     }
 
