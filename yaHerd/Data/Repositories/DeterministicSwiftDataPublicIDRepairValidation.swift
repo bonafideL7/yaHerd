@@ -81,11 +81,16 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 }
                 continue
             }
-            let candidates = validationScope(
+            var candidates: [Pasture] = []
+            for pasture in validationScope(
                 records: loaded.pastures,
                 sourceHerd: session.herd,
                 herd: { $0.herd }
-            ).filter { fieldCheckPastureSnapshotMatches(session, $0) }
+            ) {
+                if fieldCheckPastureSnapshotMatches(session, pasture) {
+                    candidates.append(pasture)
+                }
+            }
             if candidates.count == 1, session.pastureID != candidates[0].publicID {
                 issues.append("A field check pastureID does not match the uniquely identified pasture snapshot.")
             }
@@ -99,11 +104,16 @@ extension DeterministicSwiftDataPublicIDRepairService {
                 continue
             }
             let sourceHerd = check.herd ?? check.session?.herd
-            let candidates = validationScope(
+            var candidates: [Animal] = []
+            for animal in validationScope(
                 records: loaded.animals,
                 sourceHerd: sourceHerd,
                 herd: { $0.herd }
-            ).filter { fieldCheckAnimalSnapshotMatches(check, $0) }
+            ) {
+                if fieldCheckAnimalSnapshotMatches(check, animal) {
+                    candidates.append(animal)
+                }
+            }
             if candidates.count == 1, check.animalIDSnapshot != candidates[0].publicID {
                 issues.append("A field check animalIDSnapshot does not match the uniquely identified animal snapshot.")
             }
@@ -116,11 +126,16 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     issues.append("A field check finding animalIDSnapshot does not match its live animal relationship.")
                 }
             } else {
-                let candidates = validationScope(
+                var candidates: [Animal] = []
+                for animal in validationScope(
                     records: loaded.animals,
                     sourceHerd: sourceHerd,
                     herd: { $0.herd }
-                ).filter { fieldCheckFindingAnimalSnapshotMatches(finding, $0) }
+                ) {
+                    if fieldCheckFindingAnimalSnapshotMatches(finding, animal) {
+                        candidates.append(animal)
+                    }
+                }
                 if candidates.count == 1, finding.animalIDSnapshot != candidates[0].publicID {
                     issues.append("A field check finding animalIDSnapshot does not match the uniquely identified animal snapshot.")
                 }
@@ -131,11 +146,16 @@ extension DeterministicSwiftDataPublicIDRepairService {
                     issues.append("A field check finding sessionIDSnapshot does not match its live session relationship.")
                 }
             } else {
-                let candidates = validationScope(
+                var candidates: [FieldCheckSession] = []
+                for session in validationScope(
                     records: loaded.fieldCheckSessions,
                     sourceHerd: sourceHerd,
                     herd: { $0.herd }
-                ).filter { fieldCheckFindingSessionSnapshotMatches(finding, $0) }
+                ) {
+                    if fieldCheckFindingSessionSnapshotMatches(finding, session) {
+                        candidates.append(session)
+                    }
+                }
                 if candidates.count == 1, finding.sessionIDSnapshot != candidates[0].publicID {
                     issues.append("A field check finding sessionIDSnapshot does not match the uniquely identified session snapshot.")
                 }
