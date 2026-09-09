@@ -1,34 +1,3 @@
-# Swift 6 concurrency policy
-
-yaHerd builds in Swift 6 language mode with complete strict-concurrency checking. Concurrency warnings are build failures in both local Xcode builds and CI.
-
-## Build settings
-
-The project-level Debug and Release configurations set:
-
-- `SWIFT_VERSION = 6.0` on the app and test targets.
-- `SWIFT_STRICT_CONCURRENCY = complete`.
-- `SWIFT_TREAT_WARNINGS_AS_ERRORS = YES`.
-- `SWIFT_APPROACHABLE_CONCURRENCY = YES`.
-
-Module-wide `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` is intentionally prohibited. Actor ownership should be explicit at persistence, UI, and asynchronous boundaries so code does not silently become valid only because of a target-wide default.
-
-## Isolation rules
-
-1. SwiftData models and repositories that use the main `ModelContext` stay on `MainActor` or the explicit model actor that owns their context.
-2. UI coordinators, observable state, collaboration write policy, and mutation-sync scheduling stay on `MainActor`.
-3. Synchronous use cases that orchestrate repository calls are explicitly `@MainActor`. Do not rely only on a target default actor-isolation setting.
-4. Repository-backed validators are `@MainActor` because their duplicate checks call main-context repositories. Pure validation helpers may be `nonisolated` only when they do not capture repository state.
-5. SwiftUI `EnvironmentKey.defaultValue` is a synchronous nonisolated requirement. Stateless fallback implementations of main-actor repository protocols must expose a nonisolated fallback initializer. Feature dependency containers remain nonisolated so environment defaults can construct them without weakening repository method isolation.
-6. A type must not use `@unchecked Sendable` to silence a compiler error. Redesign ownership or isolate it to an actor.
-7. Do not move `ModelContext`, managed SwiftData models, `NSManagedObject`, or CloudKit sharing metadata across actors.
-8. Background work must operate on immutable `Sendable` snapshots and return immutable results to the owning actor for persistence.
-9. Tasks launched from views or UI coordinators must declare `@MainActor` when they mutate UI or repository state.
-10. Long-lived tasks must be stored, canceled when superseded, and avoid strongly retaining their owner.
-11. Do not introduce lock-backed mutable state managers. Use an actor or an appropriate global actor.
-12. Stored closures that intentionally retain actor-isolated state must preserve that isolation, for example with `@isolated(any)`, rather than erasing isolation to plain `() -> Void`.
-
-## Collaboration subsystem
 
 `HerdSharingMutationSyncScheduler` and `HerdCollaborationWritePolicy` are main-actor-isolated state machines. This matches the actor that owns the main SwiftData context and sharing sync coordinator.
 
@@ -45,45 +14,32 @@ The Core Data sharing bridge remains main-actor isolated because its import/expo
 - every push to `main`;
 - manual workflow dispatches.
 
-Runs for the same PR or branch share a concurrency group and `cancel-in-progress: true`, so a new commit cancels stale verification instead of spending runner time compiling obsolete heads.
+The script:
 
-### Fast pull-request gate
-
-Normal pull requests use the shortest compiler path that still exercises the yaHerd app sources under the same Debug settings developers normally use in Xcode. The gate:
-
-- rejects prohibited concurrency escape hatches such as `@unchecked Sendable`, `NSLock`, and `Task.detached`;
-- verifies repository-backed use cases, validators, task executors, and environment fallback isolation rules;
-- reads Xcode's effective **yaHerd Debug** build settings and requires Swift 6, complete strict concurrency, approachable concurrency, and warnings-as-errors;
+- rejects `@unchecked Sendable`, `NSLock`, `Task.detached`, and unstructured tasks without an explicit executor in application sources;
+- verifies repository-backed use cases and validators remain explicitly isolated;
+- verifies stateless environment fallback repositories have nonisolated initializers and feature dependency containers remain nonisolated;
+- enforces the public-ID recovery invariant that `RecoveryMutation` stores value-only mutation coordinates and may not reintroduce escaping `applyFinal`/`applyBackup` closures that capture SwiftData-backed nodes;
+- reads Xcode's effective build settings and requires Swift 6, complete strict concurrency, approachable concurrency, and warnings-as-errors for the configurations being compiled;
 - rejects effective module-wide `MainActor` default isolation;
-- prints the selected Xcode and Swift compiler versions;
-- runs an intentionally invalid actor-retained non-`Sendable` boundary access and requires `swiftc` to reject it with a concurrency diagnostic;
-- performs one Debug iOS Simulator build with indexing disabled.
+- prints the selected Xcode and Swift compiler versions so CI/local compiler differences are visible and diagnosable;
+- runs an intentionally invalid actor-retained non-`Sendable` boundary access and requires the compiler to reject it with a concurrency diagnostic;
+- builds the app in Debug for iOS Simulator on ordinary pull-request verification;
+- runs the broader Release simulator, Debug build-for-testing, and Release generic-device builds only during full verification, such as `main` or an explicit manual full run;
+- disables the compiler index store during verification builds;
+- preserves DerivedData by default so routine verification does not pay for an unnecessary clean build; clean verification remains available explicitly;
+- uses the verified app/test target settings during builds rather than globally overriding Swift settings, which would incorrectly promote warnings from third-party Swift packages to errors;
+- fails any app or test compilation that emits concurrency warnings because those targets have warnings-as-errors enabled.
 
-The PR gate deliberately relies on the compiler instead of source-pattern heuristics for Swift sendability. Regex checks cannot model Swift's isolation rules and are not treated as a substitute for compilation.
+The compile gate intentionally does not force `ARCHS` or `ONLY_ACTIVE_ARCH`; it should exercise Xcode's normal build behavior instead of a narrower CI-only architecture override.
 
-DerivedData is not deleted on every invocation. This allows local or persistent-runner invocations to reuse compiler artifacts. Set `YAHERD_CLEAN_VERIFY=1` when a clean build is specifically required.
-
-### Full verification
-
-Pushes to `main` run full verification automatically. A manual workflow dispatch can also request it. Full mode sets `YAHERD_FULL_VERIFY=1` and additionally:
-
-- verifies Debug and Release effective settings for `yaHerd` and `yaHerdTests`;
-- builds Release for iOS Simulator;
-- runs Debug `build-for-testing` so the test target is compiled;
-- builds Release for a generic iOS device.
-
-This keeps the frequent PR feedback loop focused and fast while retaining broader configuration coverage at the integration boundary.
-
-The build commands do not force `ARCHS` or `ONLY_ACTIVE_ARCH`. They also do not globally override warnings-as-errors for Swift-package dependencies; the yaHerd app/test target settings are verified directly so third-party package warnings do not obscure yaHerd diagnostics.
-
-CI can only diagnose errors supported by the Xcode/Swift toolchain installed on the runner. The workflow prints both toolchain versions on every run. If local Xcode reports stricter diagnostics than CI, the CI image/toolchain must be upgraded rather than treating an older CI result as authoritative.
+CI can only diagnose errors supported by the Xcode/Swift toolchain installed on the runner. The workflow therefore prints both toolchain versions on every run. Where a known safety invariant can be expressed structurally, such as the value-only recovery mutation representation, the script enforces that invariant independently of compiler version rather than assuming an older compiler understands a newer isolation diagnostic.
 
 ## Review checklist for new asynchronous code
 
 - Identify the actor that owns every mutable value.
 - Confirm all values crossing an actor boundary conform to `Sendable` without an unsafe escape hatch.
-- Confirm non-`Sendable` persistence models are not captured by closures that erase or leave their actor isolation.
-- Preserve closure isolation when storing actor-bound operations for later execution.
+- Confirm non-`Sendable` persistence models are not captured by closures that can leave their actor isolation.
 - Confirm cancellation behavior and whether a task can outlive its screen or coordinator.
 - Confirm persistence operations execute on the actor that owns their context.
 - Add a focused test for ordering, cancellation, or repeated execution when those behaviors matter.
@@ -91,7 +47,3 @@ CI can only diagnose errors supported by the Xcode/Swift toolchain installed on 
 Main-actor dependencies such as `ApplicationSettings` and `CloudKitSchemaChecker` must not be created in default argument expressions. Use explicit main-actor convenience initializers; class initializers that delegate with `self.init` must be declared `convenience`.
 
 `ApplicationSettings` is injected once at the app root and observed through SwiftUI's type-based environment. Views must not create replacement settings services during rendering.
-
-### Foundation notification sources
-
-`NotificationCenter.notifications(named:object:)` requires the source object to be `Sendable`. `NSUbiquitousKeyValueStore` is explicitly non-Sendable on iOS, so iCloud key-value notifications are observed without an object filter and mapped to sendable changed-key arrays before iteration. Do not capture the store in an unstructured task or pass it as the async notification source.
