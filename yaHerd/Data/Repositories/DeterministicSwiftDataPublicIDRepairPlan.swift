@@ -11,23 +11,40 @@ extension DeterministicSwiftDataPublicIDRepairService {
         let relationshipContext = relationshipContexts(loaded: loaded, nodes: nodes)
         let revisionMetadata = preferredRevisionMetadata(loaded.revisionRecords)
 
-        var plans = PublicIDRepairEntityType.allCases.map { entityType in
-            makeEntityPlan(
-                nodes: nodes.filter { $0.entityType == entityType },
-                entityType: entityType,
-                graphFingerprintByLocalIdentifier: graphFingerprints,
-                relationshipContextByLocalIdentifier: relationshipContext,
-                revisionMetadata: revisionMetadata,
-                resolutions: resolutions
+        var plans: [EntityPlan] = []
+        plans.reserveCapacity(PublicIDRepairEntityType.allCases.count)
+        for entityType in PublicIDRepairEntityType.allCases {
+            var entityNodes: [AggregateNode] = []
+            for node in nodes {
+                if node.entityType == entityType {
+                    entityNodes.append(node)
+                }
+            }
+            plans.append(
+                makeEntityPlan(
+                    nodes: entityNodes,
+                    entityType: entityType,
+                    graphFingerprintByLocalIdentifier: graphFingerprints,
+                    relationshipContextByLocalIdentifier: relationshipContext,
+                    revisionMetadata: revisionMetadata,
+                    resolutions: resolutions
+                )
             )
         }
 
         let treatmentLocations = makeTreatmentItemLocations(loaded: loaded)
+        var templateTreatmentLocations: [TreatmentItemLocation] = []
+        var sessionTreatmentLocations: [TreatmentItemLocation] = []
+        for location in treatmentLocations {
+            if location.entityType == .workingProtocolTemplate {
+                templateTreatmentLocations.append(location)
+            } else if location.entityType == .workingSession {
+                sessionTreatmentLocations.append(location)
+            }
+        }
         mergeTreatmentItemPlan(
             makeTreatmentItemPlan(
-                locations: treatmentLocations.filter {
-                    $0.entityType == .workingProtocolTemplate
-                },
+                locations: templateTreatmentLocations,
                 entityType: .workingProtocolTemplate,
                 graphFingerprintByLocalIdentifier: graphFingerprints
             ),
@@ -36,9 +53,7 @@ extension DeterministicSwiftDataPublicIDRepairService {
         )
         mergeTreatmentItemPlan(
             makeTreatmentItemPlan(
-                locations: treatmentLocations.filter {
-                    $0.entityType == .workingSession
-                },
+                locations: sessionTreatmentLocations,
                 entityType: .workingSession,
                 graphFingerprintByLocalIdentifier: graphFingerprints
             ),
@@ -46,15 +61,26 @@ extension DeterministicSwiftDataPublicIDRepairService {
             entityType: .workingSession
         )
 
-        let allCandidates = plans.flatMap(\.candidates)
+        var assessments: [PublicIDRepairEntityAssessment] = []
+        var allReplacements: [PlannedReplacement] = []
+        var allCandidates: [DuplicateCandidate] = []
+        var allUnresolvedIssues: [PublicIDRepairUnresolvedReference] = []
+        assessments.reserveCapacity(plans.count)
+        for entityPlan in plans {
+            assessments.append(entityPlan.assessment)
+            allReplacements.append(contentsOf: entityPlan.replacements)
+            allCandidates.append(contentsOf: entityPlan.candidates)
+            allUnresolvedIssues.append(contentsOf: entityPlan.unresolvedIssues)
+        }
+
         return RepairPlan(
             assessment: PublicIDRepairAssessment(
                 scannedAt: .now,
-                entities: plans.map(\.assessment)
+                entities: assessments
             ),
-            replacements: plans.flatMap(\.replacements),
+            replacements: allReplacements,
             candidates: allCandidates,
-            unresolvedIssues: plans.flatMap(\.unresolvedIssues),
+            unresolvedIssues: allUnresolvedIssues,
             graphFingerprintByLocalIdentifier: graphFingerprints,
             treatmentLocations: treatmentLocations,
             bridgeCollisionResolutions: bridgeCollisionResolutions(from: allCandidates)
