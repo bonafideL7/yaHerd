@@ -130,7 +130,6 @@ final class AnimalDetailViewModel {
         }
     }
 
-
     func addDraftTag(number: String, colorID: UUID?, isPrimary: Bool) {
         draftTags = AnimalTagDraftEditor.addTag(
             to: draftTags,
@@ -235,13 +234,42 @@ final class AnimalDetailViewModel {
         }
     }
 
+    func preparePermanentDeleteReview(
+        animalID: UUID,
+        using repository: any AnimalDetailRepository
+    ) -> AnimalDetailSnapshot? {
+        do {
+            let currentDetail = try fetchArchivedDetail(animalID: animalID, using: repository)
+            detail = currentDetail
+            errorMessage = nil
+            return currentDetail
+        } catch {
+            errorMessage = UserVisibleErrorMessage.make(error)
+            return nil
+        }
+    }
+
     func delete(animalID: UUID, using repository: any AnimalDetailRepository) {
         do {
+            _ = try fetchArchivedDetail(animalID: animalID, using: repository)
             try repository.delete(ids: [animalID])
             didDelete = true
+            errorMessage = nil
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
+    private func fetchArchivedDetail(
+        animalID: UUID,
+        using repository: any AnimalDetailRepository
+    ) throws -> AnimalDetailSnapshot {
+        guard let currentDetail = try repository.fetchAnimalDetail(id: animalID) else {
+            throw AnimalValidationError.animalNotFound
+        }
+        guard currentDetail.isArchived else {
+            throw AnimalValidationError.permanentDeleteRequiresArchive
+        }
+        return currentDetail
+    }
 }

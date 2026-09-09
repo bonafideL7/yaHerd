@@ -116,20 +116,14 @@ final class AnimalListViewModel {
 
     func performPrimarySwipeAction(
         animalID: UUID,
-        hardDelete: Bool,
+        hardDelete _: Bool,
         using repository: any AnimalListRepository,
         pastureRepository _: any PastureReferenceDataReader
     ) {
         do {
-            if hardDelete {
-                try repository.delete(ids: [animalID])
-                invalidateCurrentLoad()
-                removeItems(ids: [animalID])
-            } else {
-                try repository.archive(ids: [animalID])
-                invalidateCurrentLoad()
-                updateArchiveState(ids: [animalID], isArchived: true)
-            }
+            try repository.archive(ids: [animalID])
+            invalidateCurrentLoad()
+            updateArchiveState(ids: [animalID], isArchived: true)
             errorMessage = nil
             hasLoaded = true
         } catch {

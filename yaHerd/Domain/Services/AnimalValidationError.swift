@@ -9,6 +9,7 @@ enum AnimalValidationError: LocalizedError, Equatable {
     case duplicateParentSelection
     case invalidStatusDate
     case missingStatusDate
+    case permanentDeleteRequiresArchive
 
     var errorDescription: String? {
         switch self {
@@ -28,6 +29,8 @@ enum AnimalValidationError: LocalizedError, Equatable {
             return "Status dates cannot be earlier than the animal's birth date."
         case .missingStatusDate:
             return "A sold or dead animal must have the corresponding status date."
+        case .permanentDeleteRequiresArchive:
+            return "Archive this animal before permanently deleting it."
         }
     }
 }

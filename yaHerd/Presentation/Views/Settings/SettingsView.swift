@@ -28,7 +28,7 @@ struct SettingsView: View {
                         .foregroundStyle(.red)
                 }
             }
-            Section("Setup") {                    
+            Section("Setup") {
                 NavigationLink {
                     DashboardRulesView()
                 } label: {
@@ -38,7 +38,7 @@ struct SettingsView: View {
                         systemImage: "gauge.with.dots.needle.67percent"
                     )
                 }
-                
+
                 NavigationLink {
                     HerdSetupView()
                 } label: {
@@ -59,7 +59,7 @@ struct SettingsView: View {
                     )
                 }
             }
-            
+
             Section("Sharing") {
                 NavigationLink {
                     SyncSettingsView()
@@ -81,7 +81,7 @@ struct SettingsView: View {
                     )
                 }
             }
-            
+
             Section("About") {
                 NavigationLink {
                     AboutYaHerdView()
@@ -124,11 +124,7 @@ private struct SettingsRow: View {
 }
 
 private struct HerdSetupView: View {
-    @Environment(\.appDataAccessMode) private var dataAccessMode
-    @Environment(ApplicationSettings.self) private var applicationSettings
-    
     var body: some View {
-        @Bindable var applicationSettings = applicationSettings
         List {
             Section("Tags") {
                 NavigationLink {
@@ -138,16 +134,6 @@ private struct HerdSetupView: View {
                 }
 
                 Text("Control the color library used when assigning and displaying animal tags.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            
-            Section("Animal List Swipe") {
-                Toggle("Use hard delete for swipe actions", isOn: $applicationSettings.allowHardDelete)
-                    .tint(.red)
-                    .disabled(dataAccessMode.isRecoveryMode)
-                
-                Text("When off, swiping an animal archives the record. When on, swiping asks for confirmation before permanently deleting it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -166,7 +152,7 @@ struct DashboardRulesView: View {
             Section("Navigation") {
                 Toggle("Show Dashboard", isOn: $applicationSettings.isDashboardEnabled)
                     .disabled(dataAccessMode.isRecoveryMode)
-                
+
                 Text("When off, the Dashboard tab is hidden.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
