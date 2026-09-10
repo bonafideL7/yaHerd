@@ -21,6 +21,7 @@ struct HomeSnapshot: Equatable {
     let hasPastures: Bool
     let hasActiveAnimals: Bool
     let hasFieldCheckHistory: Bool
+    let hasWorkingSessionHistory: Bool
     let hasWorkingTreatmentTemplates: Bool
 
     var flaggedCheckAnimalCount: Int {
@@ -56,6 +57,10 @@ struct HomeSnapshot: Equatable {
             || shouldShowOpenFindingsRow
             || flaggedCheckAnimalCount > 0
             || missingCheckAnimalCount > 0
+    }
+
+    var hasWorkingPenRows: Bool {
+        shouldShowWorkingPenAnimalsRow || activeSession != nil || hasWorkingSessionHistory
     }
 
     var hasPastureOperationRows: Bool {

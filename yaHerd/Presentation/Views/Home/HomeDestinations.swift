@@ -154,9 +154,14 @@ struct WorkingSessionPastureStartListView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
 
+    let hasActiveAnimals: Bool
     let onSessionCreated: (UUID) -> Void
 
-    init(onSessionCreated: @escaping (UUID) -> Void = { _ in }) {
+    init(
+        hasActiveAnimals: Bool,
+        onSessionCreated: @escaping (UUID) -> Void = { _ in }
+    ) {
+        self.hasActiveAnimals = hasActiveAnimals
         self.onSessionCreated = onSessionCreated
     }
 
@@ -166,11 +171,18 @@ struct WorkingSessionPastureStartListView: View {
                 ProgressView("Loading pastures…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(.systemGroupedBackground))
+            } else if !hasActiveAnimals {
+                ContentUnavailableView(
+                    "No Animals",
+                    systemImage: "tag",
+                    description: Text("Add an animal before starting a working session.")
+                )
+                .background(Color(.systemGroupedBackground))
             } else if pastures.isEmpty {
                 ContentUnavailableView(
                     "No Pastures",
                     systemImage: "leaf",
-                    description: Text("Add a pasture before starting work animals.")
+                    description: Text("Add a pasture before starting a working session.")
                 )
                 .background(Color(.systemGroupedBackground))
             } else {
@@ -191,7 +203,7 @@ struct WorkingSessionPastureStartListView: View {
                 }
             }
         }
-        .navigationTitle("Start Work")
+        .navigationTitle("Work Animals")
         .task {
             loadPasturesIfNeeded()
         }

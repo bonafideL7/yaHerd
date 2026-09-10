@@ -33,6 +33,10 @@ extension HomeView {
         snapshot?.activeAnimalRecords ?? []
     }
 
+    var hasActiveAnimals: Bool {
+        snapshot?.hasActiveAnimals ?? false
+    }
+
     var pastureAssignedAnimalCount: Int {
         snapshot?.pastureAssignedAnimalCount ?? 0
     }
@@ -56,6 +60,13 @@ extension HomeView {
     var pastureCheckActionTitle: String {
         guard snapshot != nil else { return "Loading pastures" }
         return pastureCheckStartPastures.isEmpty ? "Add pasture first" : "Choose pasture"
+    }
+
+    var workAnimalsActionTitle: String {
+        guard snapshot != nil else { return "Loading animals" }
+        if !hasActiveAnimals { return "Add animals first" }
+        if pastureCheckStartPastures.isEmpty { return "Add pasture first" }
+        return "Choose pasture"
     }
 
     var workingPenCount: Int {
@@ -128,6 +139,10 @@ extension HomeView {
 
     var shouldShowWorkingPenAnimalsRow: Bool {
         snapshot?.shouldShowWorkingPenAnimalsRow ?? false
+    }
+
+    var hasWorkingPenRows: Bool {
+        snapshot?.hasWorkingPenRows ?? false
     }
 
     var shouldShowOpenFindingsRow: Bool {

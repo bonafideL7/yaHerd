@@ -26,24 +26,26 @@ extension HomeView {
             )
         }
         .buttonStyle(.plain)
-        .disabled(snapshot == nil)
+        .disabled(snapshot == nil || pastureCheckStartPastures.isEmpty)
     }
 
     @ViewBuilder
     var startWorkingSessionActionCard: some View {
-        Button {
-            presentWorkingSessionStart()
+        NavigationLink {
+            WorkingSessionPastureStartListView(hasActiveAnimals: hasActiveAnimals) { sessionID in
+                openWorkArea(.session(sessionID))
+            }
         } label: {
             HomeActionCardView(
                 title: "Work animals",
                 subtitle: "Collect animals and track work",
                 systemImage: "plus.circle.fill",
                 tint: .blue,
-                actionTitle: "Start"
+                actionTitle: workAnimalsActionTitle
             )
         }
         .buttonStyle(.plain)
-        .disabled(snapshot == nil)
+        .disabled(snapshot == nil || !hasActiveAnimals)
     }
 
     @ViewBuilder
