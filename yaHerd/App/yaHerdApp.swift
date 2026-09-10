@@ -55,7 +55,7 @@ struct yaHerdApp: App {
             let container = try ModelContainerFactory.makeContainer(
                 syncMode: syncMode
             )
-            try Self.runStartupDataMigrations(in: container.mainContext, storageScope: syncMode.rawValue)
+            try Self.runStartupDataMigrations(in: container.mainContext, syncMode: syncMode)
 
             AppLaunchDiagnostics.record(
                 requestedSyncMode: syncMode,
@@ -89,7 +89,7 @@ struct yaHerdApp: App {
                     let localContainer = try ModelContainerFactory.makeContainer(
                         syncMode: .localOnly
                     )
-                    try Self.runStartupDataMigrations(in: localContainer.mainContext, storageScope: SyncMode.localOnly.rawValue)
+                    try Self.runStartupDataMigrations(in: localContainer.mainContext, syncMode: .localOnly)
 
                     let startupMessage = """
                     iCloud Sync could not be enabled, so yaHerd returned to Local Only mode. Your local data is still on this device. Original error: \(primaryError.localizedDescription)
@@ -226,15 +226,20 @@ struct yaHerdApp: App {
         }
     }
 
-    private static func runStartupDataMigrations(in context: ModelContext, storageScope: String) throws {
+    private static func runStartupDataMigrations(in context: ModelContext, syncMode: SyncMode) throws {
         try DefaultHerdBootstrapper.ensureDefaultHerdForAppLaunch(
             in: context,
-            storageScope: storageScope
+            storageScope: syncMode.rawValue
         )
         try FieldCheckHistoricalSnapshotMigrator.runIfNeeded(
             in: context,
-            storageScope: storageScope
+            storageScope: syncMode.rawValue
         )
+
+        try SwiftDataTagColorRepository(
+            context: context,
+            duplicateResolutionPolicy: syncMode.tagColorDuplicateResolutionPolicy
+        ).prepareLibraryForWritableUse()
     }
 
     static func makeSchema() -> Schema {
@@ -299,7 +304,7 @@ private struct RunningAppView: View {
                     startupError: "Recovery mode is not active."
                 ),
                 diagnosticsRepository: runtime.dependencies.syncDiagnosticsRepository,
-                automaticallyRefreshDiagnostics: runtime.dataAccessMode.isRecoveryMode
+                automaticallyRefreshDiagnostics: false
             )
         )
         let sharingSyncCoordinator = HerdSharingSyncCoordinator(
@@ -363,20 +368,11 @@ private struct RunningAppView: View {
             .environment(\.workingSessionFeatureDependencies, runtime.dependencies.workingSessionFeatureDependencies)
             .environment(\.collaborationDependencies, collaborationDependencies)
             .modelContainer(runtime.modelContainer)
-            .task {
-                guard runtime.dataAccessMode.allowsDataMutations else { return }
-                await herdSharingSyncCoordinator.refreshSharingAccessNow(trigger: .appLaunch)
-                herdSharingSyncCoordinator.requestAutomaticSync(trigger: .appLaunch)
-            }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     guard runtime.dataAccessMode.allowsDataMutations else { return }
                     appSettingsSynchronizer.refreshFromICloudIfStarted()
                     tagColorLibrary.refresh()
-                    Task { @MainActor in
-                        await herdSharingSyncCoordinator.refreshSharingAccessNow(trigger: .appForeground)
-                        herdSharingSyncCoordinator.requestAutomaticSync(trigger: .appForeground)
-                    }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .yaHerdCloudKitShareAccepted)) { notification in

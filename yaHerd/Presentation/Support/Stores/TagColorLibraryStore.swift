@@ -117,7 +117,6 @@ final class TagColorLibraryStore: ObservableObject {
             lastErrorMessage = nil
         } catch {
             lastErrorMessage = UserVisibleErrorMessage.make(error)
-            assertionFailure("Failed to load tag colors: \(error)")
         }
     }
 
@@ -127,8 +126,7 @@ final class TagColorLibraryStore: ObservableObject {
             colors = try repository.fetchColors()
             lastErrorMessage = nil
         } catch {
-            lastErrorMessage = UserVisibleErrorMessage.make(error)
-            assertionFailure("\(failureMessage): \(error)")
+            lastErrorMessage = "\(failureMessage): \(UserVisibleErrorMessage.make(error))"
         }
     }
 
