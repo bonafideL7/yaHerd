@@ -2,16 +2,26 @@ import SwiftUI
 
 private struct AppNavigationPresentationModifier: ViewModifier {
     @Environment(AppNavigationState.self) private var navigation
+    @Environment(\.recoveryModeController) private var recoveryModeController
 
     func body(content: Content) -> some View {
         @Bindable var navigation = navigation
 
         content
+            .recoveryModeScenePresentation(
+                controller: recoveryModeController,
+                presentsDetails: navigation.presentedSheet == nil && navigation.fullScreenWorkflow == nil
+            )
             .sheet(item: $navigation.presentedSheet) { sheet in
                 sheetContent(sheet)
+                    .recoveryModeScenePresentation(
+                        controller: recoveryModeController,
+                        presentsDetails: navigation.fullScreenWorkflow == nil
+                    )
             }
             .fullScreenCover(item: $navigation.fullScreenWorkflow) { workflow in
                 fullScreenContent(workflow)
+                    .recoveryModeScenePresentation(controller: recoveryModeController)
             }
     }
 
