@@ -8,6 +8,13 @@ struct WorkingTreatmentPlanItem: Codable, Hashable, Identifiable {
     var name: String = ""
     var suggestedDose: WorkingTreatmentDose = WorkingTreatmentDose()
 
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case suggestedDose
+        case defaultQuantity
+    }
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -16,6 +23,29 @@ struct WorkingTreatmentPlanItem: Codable, Hashable, Identifiable {
         self.id = id
         self.name = name
         self.suggestedDose = suggestedDose
+    }
+
+    /// Decodes both the current treatment-plan payload and the pre-structured-dose
+    /// payload that stored an optional `defaultQuantity` directly on the item.
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+
+        if let dose = try container.decodeIfPresent(WorkingTreatmentDose.self, forKey: .suggestedDose) {
+            suggestedDose = dose
+        } else {
+            let legacyQuantity = try container.decodeIfPresent(Double.self, forKey: .defaultQuantity)
+            suggestedDose = WorkingTreatmentDose(amount: legacyQuantity)
+        }
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(suggestedDose, forKey: .suggestedDose)
     }
 
     /// Transitional V1 source compatibility. New code uses `suggestedDose`.

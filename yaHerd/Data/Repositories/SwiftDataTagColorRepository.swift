@@ -21,8 +21,14 @@ final class SwiftDataTagColorRepository: TagColorRepository {
     }
 
     func fetchColors() throws -> [TagColorSnapshot] {
+        try fetchPersistedColors().map(\.snapshot)
+    }
+
+    /// Performs tag-color seeding and normalization only when the caller has
+    /// explicitly entered a writable startup/maintenance path. Reads must stay
+    /// read-only so recovery mode can inspect a container with `allowsSave == false`.
+    func prepareLibraryForWritableUse() throws {
         try prepareLibraryIfNeeded()
-        return try fetchPersistedColors().map(\.snapshot)
     }
 
     func upsert(_ color: TagColorSnapshot) throws {
