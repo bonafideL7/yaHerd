@@ -39,6 +39,7 @@ struct AnimalFilterView: View {
     }
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.recoveryModeController) private var recoveryModeController
 
     @Binding var filter: AnimalFilter
     @Binding var showRemovedStatuses: Bool
@@ -178,5 +179,9 @@ struct AnimalFilterView: View {
                 }
             }
         }
+        .recoveryModeScenePresentation(
+            controller: recoveryModeController,
+            presentsDetails: false
+        )
     }
 }
