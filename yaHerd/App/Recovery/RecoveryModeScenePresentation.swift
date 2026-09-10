@@ -8,14 +8,17 @@ import SwiftUI
 private struct RecoveryModeScenePresentationModifier: ViewModifier {
   @ObservedObject var controller: RecoveryModeController
   let presentsDetails: Bool
+  @State private var isPresentingLocalDetails = false
 
   private var isPresentingDetails: Binding<Bool> {
     Binding(
       get: {
-        presentsDetails && controller.isPresentingCenter
+        isPresentingLocalDetails || (presentsDetails && controller.isPresentingCenter)
       },
       set: { isPresented in
-        if !isPresented {
+        guard !isPresented else { return }
+        isPresentingLocalDetails = false
+        if presentsDetails {
           controller.isPresentingCenter = false
         }
       }
@@ -26,7 +29,7 @@ private struct RecoveryModeScenePresentationModifier: ViewModifier {
     content
       .safeAreaInset(edge: .top, spacing: 0) {
         RecoveryModePersistentBanner {
-          controller.isPresentingCenter = true
+          isPresentingLocalDetails = true
         }
       }
       .sheet(isPresented: isPresentingDetails) {
@@ -35,6 +38,7 @@ private struct RecoveryModeScenePresentationModifier: ViewModifier {
             .toolbar {
               ToolbarItem(placement: .confirmationAction) {
                 ToolbarDoneButton {
+                  isPresentingLocalDetails = false
                   controller.isPresentingCenter = false
                 }
               }
