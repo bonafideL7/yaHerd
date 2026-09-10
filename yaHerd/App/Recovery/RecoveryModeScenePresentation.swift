@@ -7,6 +7,20 @@ import SwiftUI
 
 private struct RecoveryModeScenePresentationModifier: ViewModifier {
   @ObservedObject var controller: RecoveryModeController
+  let presentsDetails: Bool
+
+  private var isPresentingDetails: Binding<Bool> {
+    Binding(
+      get: {
+        presentsDetails && controller.isPresentingCenter
+      },
+      set: { isPresented in
+        if !isPresented {
+          controller.isPresentingCenter = false
+        }
+      }
+    )
+  }
 
   func body(content: Content) -> some View {
     content
@@ -15,7 +29,7 @@ private struct RecoveryModeScenePresentationModifier: ViewModifier {
           controller.isPresentingCenter = true
         }
       }
-      .sheet(isPresented: $controller.isPresentingCenter) {
+      .sheet(isPresented: isPresentingDetails) {
         NavigationStack {
           RecoveryModeView(controller: controller)
             .toolbar {
@@ -38,10 +52,16 @@ private struct RecoveryModeScenePresentationModifier: ViewModifier {
 extension View {
   @ViewBuilder
   func recoveryModeScenePresentation(
-    controller: RecoveryModeController?
+    controller: RecoveryModeController?,
+    presentsDetails: Bool = true
   ) -> some View {
     if let controller {
-      modifier(RecoveryModeScenePresentationModifier(controller: controller))
+      modifier(
+        RecoveryModeScenePresentationModifier(
+          controller: controller,
+          presentsDetails: presentsDetails
+        )
+      )
     } else {
       self
     }
