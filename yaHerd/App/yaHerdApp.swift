@@ -352,9 +352,6 @@ private struct RunningAppView: View {
             navigationRestorationValidator: navigationRestorationValidator,
             identityMutationRevision: runtime.dependencies.applicationMutationCenter.identityRevision
         )
-            .recoveryModeScenePresentation(
-                controller: runtime.dataAccessMode.isRecoveryMode ? recoveryModeController : nil
-            )
             .environment(applicationSettings)
             .environmentObject(tagColorLibrary)
             .environment(\.appDataAccessMode, runtime.dataAccessMode)
@@ -383,10 +380,7 @@ private struct RunningAppView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .yaHerdCloudKitShareAccepted)) { notification in
-                guard runtime.dataAccessMode.allowsDataMutations else {
-                    recoveryModeController.isPresentingCenter = true
-                    return
-                }
+                guard runtime.dataAccessMode.allowsDataMutations else { return }
                 if let metadata = notification.userInfo?[CloudKitShareNotificationUserInfoKey.metadata] as? CKShare.Metadata {
                     cloudKitShareInvitationCoordinator.recordAcceptedShare(metadata: metadata)
                 }
