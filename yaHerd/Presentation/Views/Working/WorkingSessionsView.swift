@@ -86,7 +86,7 @@ struct WorkingSessionsView: View {
                 } label: {
                     Image(systemName: "syringe")
                 }
-                .accessibilityLabel("Vaccinations")
+                .accessibilityLabel("Treatments")
             }
         }
         .task {

@@ -48,6 +48,7 @@ struct HomeService {
             hasPastures: !dashboardRecords.pastures.isEmpty,
             hasActiveAnimals: dashboardRecords.animals.contains { $0.isActiveInHerd },
             hasFieldCheckHistory: hasFieldCheckHistory ?? !fieldCheckSessions.isEmpty,
+            hasWorkingSessionHistory: !dashboardRecords.workingSessions.isEmpty,
             hasWorkingTreatmentTemplates: !treatmentTemplates.isEmpty
         )
     }

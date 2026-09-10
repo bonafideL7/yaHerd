@@ -120,8 +120,8 @@ extension HomeView {
             )
         case .createWorkingTreatmentTemplate:
             HomeSuggestionNavigationRow(
-                title: "Save common vaccinations",
-                subtitle: "Optional shortcuts for vaccinations and treatments you use often. You can also add them during a session.",
+                title: "Save common treatments",
+                subtitle: "Create reusable treatment sets you can apply during working sessions.",
                 systemImage: "syringe.fill",
                 tint: .orange,
                 actionTitle: "Open",

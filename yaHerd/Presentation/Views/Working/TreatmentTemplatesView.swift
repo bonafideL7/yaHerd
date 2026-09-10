@@ -23,9 +23,9 @@ struct TreatmentTemplatesView: View {
         List {
             if viewModel.templates.isEmpty {
                 ContentUnavailableView(
-                    "No Vaccinations",
+                    "No Treatments",
                     systemImage: "syringe",
-                    description: Text("Save commonly used vaccinations and treatment sets for future working sessions.")
+                    description: Text("Save commonly used treatment sets for future working sessions.")
                 )
             } else {
                 ForEach(viewModel.templates) { template in
@@ -45,7 +45,7 @@ struct TreatmentTemplatesView: View {
                 .onDelete(perform: delete)
             }
         }
-        .navigationTitle("Vaccinations")
+        .navigationTitle("Treatments")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -107,10 +107,10 @@ private struct TreatmentTemplateAddView: View {
         NavigationStack {
             Form {
                 Section("Name") {
-                    TextField("Vaccination name", text: $name)
+                    TextField("Treatment set name", text: $name)
                 }
 
-                Section("Vaccinations & Treatments") {
+                Section("Treatments") {
                     ForEach($plannedTreatments) { $treatment in
                         VStack(alignment: .leading, spacing: 10) {
                             TextField("Vaccination, medication, or treatment", text: $treatment.name)
@@ -122,11 +122,11 @@ private struct TreatmentTemplateAddView: View {
                     Button {
                         plannedTreatments.append(WorkingTreatmentPlanItem(name: ""))
                     } label: {
-                        Label("Add Vaccination or Treatment", systemImage: "plus")
+                        Label("Add Treatment", systemImage: "plus")
                     }
                 }
             }
-            .navigationTitle("New Vaccination")
+            .navigationTitle("New Treatment Set")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -193,12 +193,12 @@ private struct TreatmentTemplateDetailView: View {
     var body: some View {
         Form {
             Section("Name") {
-                TextField("Vaccination name", text: $nameDraft)
+                TextField("Treatment set name", text: $nameDraft)
             }
 
-            Section("Vaccinations & Treatments") {
+            Section("Treatments") {
                 if plannedTreatments.isEmpty {
-                    Text("No vaccinations or treatments")
+                    Text("No treatments")
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach($plannedTreatments) { $treatment in
@@ -213,11 +213,11 @@ private struct TreatmentTemplateDetailView: View {
                 Button {
                     plannedTreatments.append(WorkingTreatmentPlanItem(name: ""))
                 } label: {
-                    Label("Add Vaccination or Treatment", systemImage: "plus")
+                    Label("Add Treatment", systemImage: "plus")
                 }
             }
         }
-        .navigationTitle(nameDraft.isEmpty ? "Vaccination" : nameDraft)
+        .navigationTitle(nameDraft.isEmpty ? "Treatment Set" : nameDraft)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
