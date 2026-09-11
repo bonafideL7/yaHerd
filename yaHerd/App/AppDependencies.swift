@@ -161,6 +161,7 @@ final class AppDependencies {
                             shareRecordZoneName: zoneID.zoneName,
                             shareRecordOwnerName: zoneID.ownerName,
                             shareOwnerAccountRecordName: share.currentUserParticipant?.userIdentity.userRecordID?.recordName
+                                ?? share.owner.userIdentity.userRecordID?.recordName
                         ),
                         for: herdPublicID
                     )
