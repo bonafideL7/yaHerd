@@ -31,8 +31,6 @@ extension EnvironmentValues {
 
 struct IsolatedFieldCheckAreaView: View {
     @Environment(AppNavigationState.self) private var navigation
-    @Environment(\.collaborationDependencies) private var collaborationDependencies
-    @Environment(\.appDataAccessMode) private var dataAccessMode
     let onReturnHome: () -> Void
 
     var body: some View {
@@ -43,16 +41,6 @@ struct IsolatedFieldCheckAreaView: View {
                         IsolatedFlowHomeButton(action: onReturnHome)
                     }
                 }
-        }
-        .task {
-            guard dataAccessMode.allowsDataMutations,
-                  let coordinator = collaborationDependencies.syncCoordinator
-            else { return }
-
-            await coordinator.refreshSharingAccessNow(
-                trigger: .screenOpened("Field Check"),
-                minimumInterval: 0
-            )
         }
     }
 
