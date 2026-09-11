@@ -14,7 +14,58 @@ fail() {
 
 plutil -lint "$MANIFEST" >/dev/null || fail "PrivacyInfo.xcprivacy is not a valid property list"
 
-manifest_dump="$(plutil -p "$MANIFEST")"
+manifest_declares_category() {
+  local category="$1"
+
+  python3 - "$MANIFEST" "$category" <<'PYTHON'
+import plistlib
+import sys
+
+manifest_path, expected_category = sys.argv[1:]
+with open(manifest_path, "rb") as stream:
+    manifest = plistlib.load(stream)
+
+entries = manifest.get("NSPrivacyAccessedAPITypes", [])
+if not isinstance(entries, list):
+    raise SystemExit(1)
+
+for entry in entries:
+    if isinstance(entry, dict) and entry.get("NSPrivacyAccessedAPIType") == expected_category:
+        raise SystemExit(0)
+
+raise SystemExit(1)
+PYTHON
+}
+
+manifest_declares_reason_for_category() {
+  local category="$1"
+  local reason="$2"
+
+  python3 - "$MANIFEST" "$category" "$reason" <<'PYTHON'
+import plistlib
+import sys
+
+manifest_path, expected_category, expected_reason = sys.argv[1:]
+with open(manifest_path, "rb") as stream:
+    manifest = plistlib.load(stream)
+
+entries = manifest.get("NSPrivacyAccessedAPITypes", [])
+if not isinstance(entries, list):
+    raise SystemExit(1)
+
+for entry in entries:
+    if not isinstance(entry, dict):
+        continue
+    if entry.get("NSPrivacyAccessedAPIType") != expected_category:
+        continue
+
+    reasons = entry.get("NSPrivacyAccessedAPITypeReasons", [])
+    if isinstance(reasons, list) and expected_reason in reasons:
+        raise SystemExit(0)
+
+raise SystemExit(1)
+PYTHON
+}
 
 require_manifest_entry() {
   local category="$1"
@@ -23,10 +74,10 @@ require_manifest_entry() {
   local pattern="$4"
 
   if grep -R -E -q --include='*.swift' "$pattern" "$SOURCE_ROOT"; then
-    grep -F -q "$category" <<<"$manifest_dump" \
+    manifest_declares_category "$category" \
       || fail "$description is used but $category is not declared"
-    grep -F -q "$reason" <<<"$manifest_dump" \
-      || fail "$description is used but approved reason $reason is not declared"
+    manifest_declares_reason_for_category "$category" "$reason" \
+      || fail "$description is used but approved reason $reason is not declared for $category"
   fi
 }
 
@@ -47,18 +98,18 @@ require_manifest_entry \
 # introduced without an explicit privacy-manifest decision.
 if grep -R -E -q --include='*.swift' \
   'systemUptime|mach_absolute_time' "$SOURCE_ROOT"; then
-  grep -F -q "NSPrivacyAccessedAPICategorySystemBootTime" <<<"$manifest_dump" \
+  manifest_declares_category "NSPrivacyAccessedAPICategorySystemBootTime" \
     || fail "system boot-time API usage requires a declared approved reason"
 fi
 
 if grep -R -E -q --include='*.swift' \
   'volumeAvailableCapacityKey|volumeAvailableCapacityForImportantUsageKey|volumeAvailableCapacityForOpportunisticUsageKey|volumeTotalCapacityKey|systemFreeSize|systemSize|statfs\(|statvfs\(|fstatfs\(|fstatvfs\(' "$SOURCE_ROOT"; then
-  grep -F -q "NSPrivacyAccessedAPICategoryDiskSpace" <<<"$manifest_dump" \
+  manifest_declares_category "NSPrivacyAccessedAPICategoryDiskSpace" \
     || fail "disk-space API usage requires a declared approved reason"
 fi
 
 if grep -R -E -q --include='*.swift' 'activeInputModes' "$SOURCE_ROOT"; then
-  grep -F -q "NSPrivacyAccessedAPICategoryActiveKeyboards" <<<"$manifest_dump" \
+  manifest_declares_category "NSPrivacyAccessedAPICategoryActiveKeyboards" \
     || fail "active-keyboard API usage requires a declared approved reason"
 fi
 
