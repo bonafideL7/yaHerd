@@ -47,6 +47,7 @@ private enum PublicIDRepairReferenceTarget {
 }
 
 private let publicIDRepairStaleBridgeRemovalCandidatePrefix = "bridge-canonical-remove|"
+private let publicIDRepairSharedRecordRestoreCandidatePrefix = "bridge-canonical-restore|"
 
 extension HerdSharingBridgeStoreSnapshot {
     func preparingForPublicIDRepairImport(
@@ -394,21 +395,39 @@ extension HerdSharingBridgeStoreSnapshot {
                     )
                     var candidates = localCandidatesForChoice
                     if entityType == .movement {
-                        let removalMarkerID = publicIDRepairDeterministicReplacementID(
+                        let localPublicIDs = Set(localRecords.compactMap(\.parsedPublicID))
+                        let restoreID = publicIDRepairSyntheticCandidateID(
                             entityType: entityType,
                             originalPublicID: repairGroup.key.retainedPublicID,
-                            portableRecordIdentity: "stale-shared-record|\(bridgeRecord.entityName)|\(bridgeRecord.sourceObjectURI)"
+                            portableRecordIdentity: "restore-shared-record|\(bridgeRecord.entityName)|\(bridgeRecord.sourceObjectURI)",
+                            disallowed: localPublicIDs.union([repairGroup.key.retainedPublicID])
                         )
-                        if !selectionPool.contains(where: { $0.parsedPublicID == removalMarkerID }) {
-                            candidates.append(
-                                PublicIDRepairResolutionCandidate(
-                                    stableRecordIdentifier: "\(publicIDRepairStaleBridgeRemovalCandidatePrefix)\(bridgeRecord.sourceObjectURI)",
-                                    recordDescription: "No matching local record — remove stale shared movement",
-                                    detail: "Remove \(sharedRecordDescription) from the shared bridge during convergence. Local movement data is not deleted.",
-                                    resultingPublicID: removalMarkerID
-                                )
+                        candidates.append(
+                            PublicIDRepairResolutionCandidate(
+                                stableRecordIdentifier: "\(publicIDRepairSharedRecordRestoreCandidatePrefix)\(bridgeRecord.sourceObjectURI)",
+                                recordDescription: "Restore missing local movement from shared record",
+                                detail: "Create \(sharedRecordDescription) in local data with a new unique public ID, then continue convergence.",
+                                resultingPublicID: restoreID
                             )
-                        }
+                        )
+
+                        let removalMarkerID = publicIDRepairSyntheticCandidateID(
+                            entityType: entityType,
+                            originalPublicID: repairGroup.key.retainedPublicID,
+                            portableRecordIdentity: "stale-shared-record|\(bridgeRecord.entityName)|\(bridgeRecord.sourceObjectURI)",
+                            disallowed: localPublicIDs.union([
+                                repairGroup.key.retainedPublicID,
+                                restoreID,
+                            ])
+                        )
+                        candidates.append(
+                            PublicIDRepairResolutionCandidate(
+                                stableRecordIdentifier: "\(publicIDRepairStaleBridgeRemovalCandidatePrefix)\(bridgeRecord.sourceObjectURI)",
+                                recordDescription: "No matching local record — remove stale shared movement",
+                                detail: "Remove \(sharedRecordDescription) from the shared bridge during convergence. Local movement data is not deleted.",
+                                resultingPublicID: removalMarkerID
+                            )
+                        )
                     }
 
                     let issue = PublicIDRepairUnresolvedReference(
@@ -418,7 +437,7 @@ extension HerdSharingBridgeStoreSnapshot {
                         stableRecordIdentifier: "bridge-canonical|\(bridgeRecord.entityName)|\(bridgeRecord.sourceObjectURI)",
                         fieldName: "publicID",
                         referencedPublicID: repairGroup.key.retainedPublicID,
-                        reason: "Match this old shared \(entityType.displayName.lowercased()) to the repaired local record representing the same event. If no repaired local movement represents this shared event, choose the explicit stale-shared-record removal option instead of mapping it to an unrelated movement. Shared record: \(sharedRecordDescription). It still uses historical public ID \(repairGroup.key.retainedPublicID.uuidString).",
+                        reason: "Match this old shared \(entityType.displayName.lowercased()) to the repaired local record representing the same event. For a missing shared movement that should still exist, choose the explicit restore option; choose removal only if the shared event is genuinely stale. Shared record: \(sharedRecordDescription). It still uses historical public ID \(repairGroup.key.retainedPublicID.uuidString).",
                         candidates: candidates
                     )
                     guard let selected = report.publicIDRepairSelectedBridgeCandidate(
@@ -426,6 +445,23 @@ extension HerdSharingBridgeStoreSnapshot {
                         candidates: candidates
                     ) else {
                         throw PublicIDRepairBridgeResolutionRequired(issues: [issue])
+                    }
+
+                    if selected.stableRecordIdentifier.hasPrefix(
+                        publicIDRepairSharedRecordRestoreCandidatePrefix
+                    ) {
+                        guard !localRecords.contains(where: {
+                            $0.parsedPublicID == selected.resultingPublicID
+                        }),
+                        usedLocalPublicIDs.insert(selected.resultingPublicID).inserted else {
+                            throw HerdSharingActionError.bridgeConsistencyFailed(
+                                "The selected restored shared movement public ID already exists locally. Public-ID repair stopped rather than create a duplicate identity."
+                            )
+                        }
+                        translatedBySourceURI[bridgeRecord.sourceObjectURI] = bridgeRecord
+                            .applyingBridgeRepairSelections(selectedReferences)
+                            .replacingPublicID(selected.resultingPublicID)
+                        continue
                     }
 
                     if selected.stableRecordIdentifier.hasPrefix(
@@ -478,6 +514,27 @@ extension HerdSharingBridgeStoreSnapshot {
                 localMatch: localMatch,
                 referenceGroups: referenceGroups
             )
+        }
+    }
+
+    private func publicIDRepairSyntheticCandidateID(
+        entityType: PublicIDRepairEntityType,
+        originalPublicID: UUID,
+        portableRecordIdentity: String,
+        disallowed: Set<UUID>
+    ) -> UUID {
+        var attempt = 0
+        while true {
+            let candidate = publicIDRepairDeterministicReplacementID(
+                entityType: entityType,
+                originalPublicID: originalPublicID,
+                portableRecordIdentity: portableRecordIdentity,
+                attempt: attempt
+            )
+            if !disallowed.contains(candidate) {
+                return candidate
+            }
+            attempt += 1
         }
     }
 
