@@ -215,6 +215,21 @@ struct SyncDiagnosticsView: View {
                                 || dataAccessMode.isRecoveryMode
                                 || !hasCompleteReferenceSelections(for: assessment)
                         )
+                        .confirmationDialog(
+                            publicIDRepairConfirmationTitle,
+                            isPresented: $isShowingPublicIDRepairConfirmation,
+                            titleVisibility: .visible
+                        ) {
+                            Button(
+                                publicIDRepairConfirmationButtonTitle,
+                                role: .destructive
+                            ) {
+                                repairPublicIDs()
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text(publicIDRepairConfirmationMessage)
+                        }
 
                         Text("Creates a JSON backup before changing IDs, applies your repair choices in the same transaction, then imports the current bound shared-data bridge after IDs are unique and exports the converged repaired graph before unblocking edits.")
                             .font(.caption)
@@ -305,21 +320,6 @@ struct SyncDiagnosticsView: View {
         .navigationTitle("Sync Diagnostics")
         .task {
             await refreshDiagnostics()
-        }
-        .confirmationDialog(
-            publicIDRepairConfirmationTitle,
-            isPresented: $isShowingPublicIDRepairConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(
-                publicIDRepairConfirmationButtonTitle,
-                role: .destructive
-            ) {
-                repairPublicIDs()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(publicIDRepairConfirmationMessage)
         }
         .confirmationDialog(
             "Delete iCloud Sync Data?",
