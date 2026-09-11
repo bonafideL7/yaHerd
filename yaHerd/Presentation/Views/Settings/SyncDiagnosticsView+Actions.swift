@@ -19,6 +19,18 @@ extension SyncDiagnosticsView {
         for assessment: PublicIDRepairAssessment
     ) -> Bool {
         assessment.unresolvedReferences.allSatisfy { issue in
+            // Older pending convergence journals stored bridge-canonical blockers before the
+            // shared source record had a human-readable description. Allow exactly that stale
+            // blocker to run once without a user selection so convergence can re-observe the
+            // bridge and persist the richer source-side details. The regenerated blocker starts
+            // with "Shared movement:" and again requires an explicit matching record choice.
+            if issue.kind == .canonicalRecord,
+               issue.entityType == .movement,
+               issue.stableRecordIdentifier.hasPrefix("bridge-canonical|"),
+               !issue.recordDescription.hasPrefix("Shared movement:") {
+                return true
+            }
+
             guard let selected = publicIDResolutionSelections[issue.id] else { return false }
             return issue.candidates.contains { $0.stableRecordIdentifier == selected }
         }
