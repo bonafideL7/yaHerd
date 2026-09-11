@@ -122,14 +122,13 @@ final class HerdCollaborationWritePolicy {
     if access.hasConflictingBridgeRecords { return true }
     if access.bridgeLocation == .acceptedSharedStore { return true }
     switch access.creationState {
-    case .pendingBridgeOperation, .ownerStopCleanupPending, .notOwnedByCurrentDevice:
+    case .pendingBridgeOperation, .ownerStopCleanupPending, .notOwnedByCurrentDevice,
+         .conflictingBridgeRecords:
       return true
     case .unknown, .ready, .existingOwnerShare, .acceptedParticipantShare,
          .unresolvedBridgeRecord, .ownershipConfirmationRequired,
          .ownerBridgeVerificationRequired:
       return false
-    case .conflictingBridgeRecords:
-        <#code#>
     }
   }
 
