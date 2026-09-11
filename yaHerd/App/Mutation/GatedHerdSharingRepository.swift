@@ -79,6 +79,18 @@ final class GatedHerdSharingRepository: HerdSharingRepository,
         case .present:
             pendingNewOwnerShareReferences.removeValue(forKey: herd.publicID)
             recordVerifiedOwnerShareEstablished(herdPublicID: herd.publicID)
+            if mutationGate.isPublicIDRepairInProgress,
+               access.creationState == .pendingBridgeOperation
+            {
+                // A duplicate-ID sync/import failure leaves a durable pending bridge operation.
+                // Public-ID repair is the recovery for that cycle: it has already entered the
+                // exclusive repair gate, and the repair coordinator independently verifies write
+                // permission, bridge location/fingerprint, imports the current bridge graph, then
+                // exports and reconciles the repaired graph before releasing normal mutations.
+                // Keep the pending state for every non-repair caller; only the active repair
+                // transaction may treat this verified owner share as mutation-authorized.
+                return access.applyingCreationState(.existingOwnerShare)
+            }
             return access
         case .absent:
             if reference.shareURL == nil,
