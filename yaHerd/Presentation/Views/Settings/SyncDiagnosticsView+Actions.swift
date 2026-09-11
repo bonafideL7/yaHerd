@@ -57,7 +57,21 @@ extension SyncDiagnosticsView {
         }
     }
 
+    var selectedStaleSharedMovementRemoval: PublicIDRepairUnresolvedReference? {
+        (publicIDAssessment?.unresolvedReferences ?? []).first { issue in
+            guard issue.kind == .canonicalRecord,
+                  issue.entityType == .movement,
+                  let selectedID = publicIDResolutionSelections[issue.id] else {
+                return false
+            }
+            return selectedID.hasPrefix("bridge-canonical-remove|")
+        }
+    }
+
     var publicIDRepairConfirmationTitle: String {
+        if selectedStaleSharedMovementRemoval != nil {
+            return "Remove Stale Shared Movement?"
+        }
         if selectedPreparedHerdRetirement != nil {
             return "Permanently Retire Prepared Shared Herd?"
         }
@@ -69,6 +83,9 @@ extension SyncDiagnosticsView {
     }
 
     var publicIDRepairConfirmationButtonTitle: String {
+        if selectedStaleSharedMovementRemoval != nil {
+            return "Remove Stale Shared Movement"
+        }
         if selectedPreparedHerdRetirement != nil {
             return "Retire Exact Shared Herd"
         }
@@ -80,6 +97,9 @@ extension SyncDiagnosticsView {
     }
 
     var publicIDRepairConfirmationMessage: String {
+        if let staleMovement = selectedStaleSharedMovementRemoval {
+            return "The shared bridge contains \(staleMovement.recordDescription), but none of the repaired local Movement records represents that event. This removes only that stale shared bridge record during convergence; it does not delete local movement data. yaHerd will then export the repaired local graph and verify reconciliation before clearing the repair gate."
+        }
         if let retirement = selectedPreparedHerdRetirement {
             return "You chose intentional deletion for Herd \(retirement.referencedPublicID.uuidString). yaHerd will first persist that decision in the existing repair manifest, then verify the exact journaled bridge location, fingerprint, and write authority before deleting only that Herd's prepared shared graph and tombstones. It will verify the target is retired before removing the convergence obligation. This cannot be inferred or performed automatically."
         }
