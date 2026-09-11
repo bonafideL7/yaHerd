@@ -3,6 +3,7 @@
 //  yaHerd
 //
 
+import Foundation
 import SwiftUI
 
 @MainActor
@@ -164,19 +165,15 @@ struct SyncDiagnosticsView: View {
                                     ) {
                                         Text("Choose a record").tag("")
                                         ForEach(issue.candidates) { candidate in
-                                            Text(
-                                                candidate.detail.isEmpty
-                                                    ? candidate.recordDescription
-                                                    : "\(candidate.recordDescription) — \(candidate.detail)"
-                                            )
-                                            .tag(candidate.stableRecordIdentifier)
+                                            Text(publicIDCandidateLabel(candidate))
+                                                .tag(candidate.stableRecordIdentifier)
                                         }
                                     }
                                     .pickerStyle(.menu)
                                     .accessibilityLabel("Intended record for \(issue.recordDescription) \(issue.fieldName)")
 
                                     if let selectedCandidate = selectedCandidate(for: issue) {
-                                        Text(selectedCandidate.detail)
+                                        Text(publicIDCandidateLabel(selectedCandidate))
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                         if issue.kind == .indeterminateLocalRepairRecovery,
@@ -340,4 +337,21 @@ struct SyncDiagnosticsView: View {
         }
     }
 
+    func publicIDCandidateLabel(_ candidate: PublicIDRepairResolutionCandidate) -> String {
+        let readableParts = candidate.detail
+            .components(separatedBy: " • ")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { part in
+                !part.lowercased().contains("publicid:")
+            }
+            .map { part in
+                part
+                    .replacingOccurrences(of: "date:", with: "Date:")
+                    .replacingOccurrences(of: "fromPasture:", with: "From:")
+                    .replacingOccurrences(of: "toPasture:", with: "To:")
+            }
+
+        let readableDetail = readableParts.joined(separator: " • ")
+        return readableDetail.isEmpty ? candidate.recordDescription : readableDetail
+    }
 }
