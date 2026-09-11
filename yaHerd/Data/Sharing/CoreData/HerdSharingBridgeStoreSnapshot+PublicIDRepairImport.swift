@@ -46,6 +46,8 @@ private enum PublicIDRepairReferenceTarget {
     case embeddedTreatmentItem
 }
 
+private let publicIDRepairStaleBridgeRemovalCandidatePrefix = "bridge-canonical-remove|"
+
 extension HerdSharingBridgeStoreSnapshot {
     func preparingForPublicIDRepairImport(
         report: PublicIDRepairReport,
@@ -313,6 +315,7 @@ extension HerdSharingBridgeStoreSnapshot {
         }
 
         var translatedBySourceURI: [String: HerdSharingBridgeRecordSnapshot] = [:]
+        var retiredSourceURIs = Set<String>()
         for repairGroup in groupsForEntity.sorted(by: {
             $0.key.retainedPublicID.uuidString < $1.key.retainedPublicID.uuidString
         }) {
@@ -361,7 +364,7 @@ extension HerdSharingBridgeStoreSnapshot {
                     let selectionPool = unusedFingerprintMatches.isEmpty
                         ? availableCandidates
                         : unusedFingerprintMatches
-                    let candidates = selectionPool.compactMap { record
+                    let localCandidatesForChoice = selectionPool.compactMap { record
                         -> PublicIDRepairResolutionCandidate? in
                         guard let id = record.parsedPublicID else { return nil }
                         return PublicIDRepairResolutionCandidate(
@@ -379,7 +382,7 @@ extension HerdSharingBridgeStoreSnapshot {
                         return lhs.resultingPublicID.uuidString < rhs.resultingPublicID.uuidString
                     }
 
-                    guard !candidates.isEmpty else {
+                    guard !localCandidatesForChoice.isEmpty else {
                         throw HerdSharingActionError.bridgeConsistencyFailed(
                             "Shared \(repairGroup.key.entityName) data still uses duplicate public ID \(repairGroup.key.retainedPublicID.uuidString), but no unused repaired local record remains for this shared record. Public-ID repair stopped rather than reuse an identity."
                         )
@@ -389,6 +392,25 @@ extension HerdSharingBridgeStoreSnapshot {
                         bridgeRecord,
                         entityType: entityType
                     )
+                    var candidates = localCandidatesForChoice
+                    if entityType == .movement {
+                        let removalMarkerID = publicIDRepairDeterministicReplacementID(
+                            entityType: entityType,
+                            originalPublicID: repairGroup.key.retainedPublicID,
+                            portableRecordIdentity: "stale-shared-record|\(bridgeRecord.entityName)|\(bridgeRecord.sourceObjectURI)"
+                        )
+                        if !selectionPool.contains(where: { $0.parsedPublicID == removalMarkerID }) {
+                            candidates.append(
+                                PublicIDRepairResolutionCandidate(
+                                    stableRecordIdentifier: "\(publicIDRepairStaleBridgeRemovalCandidatePrefix)\(bridgeRecord.sourceObjectURI)",
+                                    recordDescription: "No matching local record — remove stale shared movement",
+                                    detail: "Remove \(sharedRecordDescription) from the shared bridge during convergence. Local movement data is not deleted.",
+                                    resultingPublicID: removalMarkerID
+                                )
+                            )
+                        }
+                    }
+
                     let issue = PublicIDRepairUnresolvedReference(
                         kind: .canonicalRecord,
                         entityType: entityType,
@@ -396,14 +418,24 @@ extension HerdSharingBridgeStoreSnapshot {
                         stableRecordIdentifier: "bridge-canonical|\(bridgeRecord.entityName)|\(bridgeRecord.sourceObjectURI)",
                         fieldName: "publicID",
                         referencedPublicID: repairGroup.key.retainedPublicID,
-                        reason: "Match this old shared \(entityType.displayName.lowercased()) to the repaired local record representing the same event. Shared record: \(sharedRecordDescription). It still uses historical public ID \(repairGroup.key.retainedPublicID.uuidString).",
+                        reason: "Match this old shared \(entityType.displayName.lowercased()) to the repaired local record representing the same event. If no repaired local movement represents this shared event, choose the explicit stale-shared-record removal option instead of mapping it to an unrelated movement. Shared record: \(sharedRecordDescription). It still uses historical public ID \(repairGroup.key.retainedPublicID.uuidString).",
                         candidates: candidates
                     )
                     guard let selected = report.publicIDRepairSelectedBridgeCandidate(
                         for: issue,
                         candidates: candidates
-                    ),
-                    let match = selectionPool.first(where: {
+                    ) else {
+                        throw PublicIDRepairBridgeResolutionRequired(issues: [issue])
+                    }
+
+                    if selected.stableRecordIdentifier.hasPrefix(
+                        publicIDRepairStaleBridgeRemovalCandidatePrefix
+                    ) {
+                        retiredSourceURIs.insert(bridgeRecord.sourceObjectURI)
+                        continue
+                    }
+
+                    guard let match = selectionPool.first(where: {
                         $0.parsedPublicID == selected.resultingPublicID
                     }) else {
                         throw PublicIDRepairBridgeResolutionRequired(issues: [issue])
@@ -428,7 +460,10 @@ extension HerdSharingBridgeStoreSnapshot {
         }
 
         let localByPublicID = Dictionary(grouping: localRecords) { $0.publicID.lowercased() }
-        return try bridgeRecords.map { record in
+        return try bridgeRecords.compactMap { record -> HerdSharingBridgeRecordSnapshot? in
+            if retiredSourceURIs.contains(record.sourceObjectURI) {
+                return nil
+            }
             if let translated = translatedBySourceURI[record.sourceObjectURI] {
                 return translated
             }
