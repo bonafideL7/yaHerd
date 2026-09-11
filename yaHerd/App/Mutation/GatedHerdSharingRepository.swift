@@ -256,39 +256,43 @@ final class GatedHerdSharingRepository: HerdSharingRepository,
         herdPublicID: UUID
     ) async throws -> (HerdSharingRemoteOwnerShareReference, HerdSharingRemoteOwnerShareStatus) {
         if let observedReference = observedOwnerShareReferenceProvider(herdPublicID) {
-            guard observedReference.hasVerifiableLocator else {
+            let candidateReference: HerdSharingRemoteOwnerShareReference
+            if observedReference.shareOwnerAccountRecordName == nil {
+                let currentAccountRecordName = try await remoteOwnerShareVerifier.currentAccountRecordName()
+                candidateReference = HerdSharingRemoteOwnerShareReference(
+                    shareURL: observedReference.shareURL,
+                    shareIdentifier: observedReference.shareIdentifier,
+                    shareRecordZoneName: observedReference.shareRecordZoneName,
+                    shareRecordOwnerName: observedReference.shareRecordOwnerName,
+                    shareOwnerAccountRecordName: currentAccountRecordName
+                )
+            } else {
+                candidateReference = observedReference
+            }
+
+            guard candidateReference.hasVerifiableLocator else {
                 throw HerdSharingActionError.ownerBridgeVerificationRequired
             }
 
             // The Deferred layer observes Core Data's local CKShare before this outer repository
             // verifies the currently signed-in account. Treat that observation as ephemeral only:
-            // verify it first, then require it to remain unchanged across the await, and only then
-            // persist it as durable provenance. A saved share URL can be verified as an owner share
-            // even when an older bridge did not retain the account record name; absence still remains
-            // fail-closed because the verifier will not retire a URL-only reference without account identity.
-            let remoteStatus = try await remoteOwnerShareVerifier.status(for: observedReference)
+            // augment missing legacy account provenance with the currently signed-in account, verify
+            // the exact share URL or private CKShare record/zone, then require the observation to
+            // remain unchanged before persisting the verified reference.
+            let remoteStatus = try await remoteOwnerShareVerifier.status(for: candidateReference)
             guard observedOwnerShareReferenceProvider(herdPublicID) == observedReference else {
                 throw HerdSharingActionError.ownerBridgeVerificationRequired
             }
-
-            if observedReference.shareOwnerAccountRecordName == nil {
-                guard observedReference.shareURL != nil, remoteStatus == .present else {
-                    throw HerdSharingActionError.ownerBridgeVerificationRequired
-                }
-                try ownerShareReferenceStore.recordRecoverably(observedReference, for: herdPublicID)
-            } else {
-                try HerdSharingExistingOwnerShareBackfill.recordObservedReference(
-                    observedReference,
-                    for: herdPublicID,
-                    referenceStore: ownerShareReferenceStore
-                )
-            }
-
+            try HerdSharingExistingOwnerShareBackfill.recordObservedReference(
+                candidateReference,
+                for: herdPublicID,
+                referenceStore: ownerShareReferenceStore
+            )
             guard let durableReference = try ownerShareReferenceStore.recoverableReference(
                 for: herdPublicID
             ), HerdSharingExistingOwnerShareBackfill.sameExactIdentity(
                 durableReference,
-                observedReference
+                candidateReference
             ) else {
                 throw HerdSharingActionError.ownerBridgeVerificationRequired
             }
