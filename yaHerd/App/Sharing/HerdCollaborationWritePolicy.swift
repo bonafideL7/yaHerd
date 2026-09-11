@@ -144,9 +144,6 @@ final class HerdCollaborationWritePolicy {
     if currentAccess.creationState == .ownerStopCleanupPending {
       throw HerdCollaborationWritePolicyError.ownerSharingStateUnverified(reason: reason)
     }
-    if currentAccess.creationState == .ownerBridgeVerificationRequired {
-      throw HerdCollaborationWritePolicyError.ownerSharingStateUnverified(reason: reason)
-    }
     if currentAccess.creationState == .notOwnedByCurrentDevice {
       throw HerdCollaborationWritePolicyError.participantBridgeUnavailable(reason: reason)
     }
@@ -216,7 +213,7 @@ struct HerdCollaborationWritePolicySnapshot: Equatable {
       return "Local edits are blocked because Stop Sharing finished remotely but the local owner bridge still requires cleanup."
     }
     if access.creationState == .ownerBridgeVerificationRequired {
-      return "Local edits are blocked because this iCloud account previously established owner sharing but the owner bridge is not currently available."
+      return "Local edits are allowed, but CloudKit export and owner-share management remain blocked until the prior owner-sharing state is verified or deliberately reset."
     }
     if access.creationState == .notOwnedByCurrentDevice {
       return "Local edits are blocked because this Herd is known to be an accepted participant copy but its shared bridge is not currently available."
@@ -233,7 +230,6 @@ extension HerdSharingAccess {
     guard !hasConflictingBridgeRecords,
       creationState != .pendingBridgeOperation,
       creationState != .ownerStopCleanupPending,
-      creationState != .ownerBridgeVerificationRequired,
       creationState != .notOwnedByCurrentDevice
     else { return false }
     return switch bridgeLocation {
