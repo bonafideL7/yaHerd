@@ -17,7 +17,7 @@ on:
         type: boolean
         default: true
       full_verification:
-        description: Also run Release, build-for-testing, and device builds
+        description: Also run unit tests, Release, build-for-testing, and device builds
         required: true
         type: boolean
         default: false
@@ -75,7 +75,7 @@ jobs:
           bash Scripts/verify-privacy.sh
 
       - name: Select Xcode 26
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency || inputs.full_verification }}
         shell: bash
         run: |
           set -euo pipefail
@@ -103,3 +103,10 @@ jobs:
         run: |
           set -euo pipefail
           bash Scripts/verify-concurrency.sh
+
+      - name: Run unit tests
+        if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.full_verification) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash Scripts/run-tests.sh
