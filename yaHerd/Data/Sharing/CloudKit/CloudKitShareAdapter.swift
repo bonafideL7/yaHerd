@@ -57,6 +57,7 @@ final class CloudKitShareAdapter {
       shareRecordZoneName: zoneID.zoneName,
       shareRecordOwnerName: zoneID.ownerName,
       shareOwnerAccountRecordName: systemShare.share.currentUserParticipant?.userIdentity.userRecordID?.recordName
+        ?? systemShare.share.owner.userIdentity.userRecordID?.recordName
     )
   }
 
