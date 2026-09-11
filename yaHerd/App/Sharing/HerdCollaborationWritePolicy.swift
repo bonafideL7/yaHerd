@@ -89,9 +89,8 @@ final class HerdCollaborationWritePolicy {
     clearAccess(requiresVerificationBeforeWrite: requiresVerifiedAccessBeforeWrite)
   }
 
-  /// Used when synchronization or another authoritative access read fails after sharing state may
-  /// have changed. Losing the cached access must never turn an unknown recovery state into an
-  /// implicit write allow.
+  /// Explicit sharing transitions (invitation acceptance, Stop Sharing, bridge replacement) must
+  /// remain fail-closed until the new relationship has been observed authoritatively.
   func clearAccessAfterFailedSynchronization() {
     clearAccess(requiresVerificationBeforeWrite: true)
   }
@@ -99,6 +98,34 @@ final class HerdCollaborationWritePolicy {
   func clearAccessAfterFailedSynchronization(ifGenerationIsStill generation: UInt64) {
     guard sharingStateGeneration == generation else { return }
     clearAccessAfterFailedSynchronization()
+  }
+
+  /// A failed read/refresh is different from an explicit sharing transition. Preserve fail-closed
+  /// behavior only when durable or previously observed state proves this Herd depends on participant,
+  /// conflict, or recovery access. An owner/local Herd must not lose ordinary field-write authority
+  /// just because CloudKit access is temporarily unavailable.
+  func clearAccessAfterFailedRefresh() {
+    clearAccess(requiresVerificationBeforeWrite: shouldRequireVerificationAfterLosingAccess())
+  }
+
+  func clearAccessAfterFailedRefresh(ifGenerationIsStill generation: UInt64) {
+    guard sharingStateGeneration == generation else { return }
+    clearAccessAfterFailedRefresh()
+  }
+
+  private func shouldRequireVerificationAfterLosingAccess() -> Bool {
+    if requiresVerifiedAccessBeforeWrite { return true }
+    guard let access else { return false }
+    if access.hasConflictingBridgeRecords { return true }
+    if access.bridgeLocation == .acceptedSharedStore { return true }
+    switch access.creationState {
+    case .pendingBridgeOperation, .ownerStopCleanupPending, .notOwnedByCurrentDevice:
+      return true
+    case .unknown, .ready, .existingOwnerShare, .acceptedParticipantShare,
+         .unresolvedBridgeRecord, .ownershipConfirmationRequired,
+         .ownerBridgeVerificationRequired:
+      return false
+    }
   }
 
   private func clearAccess(requiresVerificationBeforeWrite: Bool) {
