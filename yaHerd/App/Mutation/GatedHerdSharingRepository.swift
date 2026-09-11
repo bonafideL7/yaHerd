@@ -315,7 +315,7 @@ final class GatedHerdSharingRepository: HerdSharingRepository,
         herdPublicID: UUID
     ) {
         guard let presentation = result.sharePresentation else {
-            ownerShareReferenceStore.clearReference(forKey: herdPublicID)
+            ownerShareReferenceStore.clearReference(for: herdPublicID)
             return
         }
 
