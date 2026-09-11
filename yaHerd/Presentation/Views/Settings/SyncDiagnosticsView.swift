@@ -320,6 +320,11 @@ struct SyncDiagnosticsView: View {
         .navigationTitle("Sync Diagnostics")
         .task {
             await refreshDiagnostics()
+            if publicIDAssessment == nil,
+               publicIDRepairService != nil,
+               !dataAccessMode.isRecoveryMode {
+                scanPublicIDs()
+            }
         }
         .confirmationDialog(
             "Delete iCloud Sync Data?",
