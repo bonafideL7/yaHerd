@@ -7,8 +7,8 @@ Recovery mode is entered only when yaHerd cannot open the requested persistent S
 While recovery mode is active:
 
 - A persistent red `RECOVERY MODE — READ ONLY` banner remains above every app screen and presentation.
-- The SwiftData recovery configuration is in memory and has `allowsSave` disabled.
-- All application repositories validate `AppDataAccessMode` before a mutation and reject writes.
+- The SwiftData recovery configuration is in memory and has `allowsSave` disabled as a storage-level read-only defense.
+- All application repositories validate `AppDataAccessMode` through the collaboration write policy before a mutation and reject writes before delegating to SwiftData.
 - Create, edit, archive, delete, status, field-check, working-session, and settings mutation controls are disabled or removed.
 - The Core Data CloudKit sharing repository is not created.
 - Sharing readiness is reported as unavailable.
@@ -16,7 +16,7 @@ While recovery mode is active:
 - Startup bootstrap and historical data-repair routines do not run against the in-memory container.
 - Recovery mode remains active for the entire launch. A successful store-open test does not switch the live app back to writable storage.
 
-Do not add a code path that bypasses the repository write policy or writes directly to the recovery `ModelContext`.
+Do not add a code path that bypasses the repository write policy or writes directly to the recovery `ModelContext`. The application write policy is the enforceable mutation boundary; `ModelConfiguration.allowsSave` is retained as an additional storage-level safeguard rather than treated as a guarantee that a direct `ModelContext.save()` call will throw.
 
 ## Diagnostics and export
 
@@ -51,8 +51,8 @@ The repair action attempts to open the original persistent store through `ModelC
 
 - Force both iCloud and local SwiftData container creation to fail and verify recovery mode starts.
 - Verify the banner remains visible over every tab, pushed navigation destination, sheet, full-screen cover, alert, and CloudKit invitation callback.
-- Verify every repository mutation fails before touching SwiftData or the sharing bridge.
-- Verify `ModelContainerFactory.makeRecoveryContainer()` rejects `ModelContext.save()`.
+- Verify every repository mutation fails through the application write policy before touching SwiftData or the sharing bridge.
+- Verify `ModelContainerFactory.makeRecoveryContainer()` is in-memory and every recovery `ModelConfiguration` has `allowsSave == false`.
 - Verify automatic and manual sharing/sync entry points are never invoked.
 - Verify editing, archive, delete, status, field-check, working-session, and setup controls are disabled or absent.
 - Verify diagnostics refresh and the TAR export contains the expected inventory and terminal blocks.
