@@ -59,9 +59,21 @@ final class GatedHerdSharingRepository: HerdSharingRepository,
             return access
         }
 
-        let (reference, remoteStatus) = try await verifiedActiveOwnerShareReference(
-            herdPublicID: herd.publicID
-        )
+        let verification: (HerdSharingRemoteOwnerShareReference, HerdSharingRemoteOwnerShareStatus)
+        do {
+            verification = try await verifiedActiveOwnerShareReference(
+                herdPublicID: herd.publicID
+            )
+        } catch let error as HerdSharingActionError {
+            guard error == .ownerBridgeVerificationRequired else { throw error }
+            pendingNewOwnerShareReferences.removeValue(forKey: herd.publicID)
+            // The physical owner bridge was observed successfully. Missing or unverifiable
+            // provenance is a recoverable sharing state, not an unknown access result. Preserve the
+            // observed bridge and surface the explicit recovery action instead of leaving the UI at
+            // "Checking Sharing State" indefinitely.
+            return access.applyingCreationState(.ownerBridgeVerificationRequired)
+        }
+        let (reference, remoteStatus) = verification
 
         switch remoteStatus {
         case .present:
