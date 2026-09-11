@@ -79,9 +79,6 @@ final class AppDependencies {
         let observedOwnerShareReferenceStore = HerdSharingObservedOwnerShareReferenceStore()
         let remoteOwnerShareVerifier = CloudKitHerdSharingRemoteOwnerShareVerifier()
 
-        // Each read model actor owns its own ModelContext. Separate actors allow
-        // independent home queries to run concurrently instead of serializing on
-        // the main context or on one shared actor executor.
         let dashboardQueryReader = SwiftDataReadModelActor(modelContainer: modelContainer)
         let homeFieldCheckQueryReader = SwiftDataReadModelActor(modelContainer: modelContainer)
         let homeWorkingQueryReader = SwiftDataReadModelActor(modelContainer: modelContainer)
@@ -225,11 +222,6 @@ final class AppDependencies {
 
         let bridgeCoordinator: any PublicIDRepairBridgeCoordinating
         if resolvedStorageMode == .iCloud && dataAccessMode.allowsDataMutations {
-            // Repair preparation must observe the physical Core Data bridge without requiring a
-            // unique/healthy SwiftData Herd graph first. Reuse this repair-specific store for both
-            // read-only access observation and ownership-safe convergence so both phases inspect
-            // the same bridge state. Mutation authority is fetched independently through the
-            // normal guarded sharing repository immediately before repair can change either graph.
             let publicIDRepairBridgeStore = HerdSharingCoreDataStore()
             let publicIDRepairObservationRepository = PublicIDRepairBridgeObservationRepository(
                 accessReader: publicIDRepairBridgeStore
@@ -346,15 +338,17 @@ final class AppDependencies {
             return true
         }
 
-        // Owner-account history is the same precedence used by HerdSharingCreationStateGuard for a
-        // missing bridge. It is an owner-recovery problem: sharing/export remains guarded, but an
-        // older mirrored participant marker must not convert ordinary local field work into a
-        // launch-wide CloudKit dependency.
-        if accountOwnershipRegistry.hasEstablishedOwnerShare(for: herd.publicID) {
+        let localOwnerHistoryKey = "LocalHerdSharingOwnerShareEstablished.\(herd.publicID.uuidString.lowercased())"
+        let hasMirroredOwnerHistory = accountOwnershipRegistry.hasEstablishedOwnerShare(for: herd.publicID)
+            || UserDefaults.standard.bool(forKey: localOwnerHistoryKey)
+
+        // Use the same owner-history precedence as the sharing creation guard. A restored/local
+        // owner-recovery state must not be mistaken for a participant-only Herd just because stale
+        // participant provenance is also mirrored on this device.
+        if hasMirroredOwnerHistory {
             return false
         }
 
-        // Without owner history, durable participant/detachment provenance remains fail-closed.
         switch ownershipRegistry.ownership(for: herd.publicID) {
         case .participant?, .detachedParticipant?:
             return true
@@ -434,8 +428,6 @@ enum HerdSharingExistingOwnerShareBackfill {
            existing.shareURL != nil,
            observed.shareURL == nil
         {
-            // The saved URL is a stronger locator than a provisional observation of the same exact
-            // CKShare. Preserve it rather than downgrading provenance during an access refresh.
             return
         }
 
