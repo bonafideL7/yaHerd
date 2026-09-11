@@ -25,6 +25,9 @@ extension SyncDiagnosticsView {
         }
         return !issue.recordDescription.hasPrefix("Shared movement:")
             || !issue.candidates.contains {
+                $0.stableRecordIdentifier.hasPrefix("bridge-canonical-restore|")
+            }
+            || !issue.candidates.contains {
                 $0.stableRecordIdentifier.hasPrefix("bridge-canonical-remove|")
             }
     }
@@ -34,9 +37,9 @@ extension SyncDiagnosticsView {
     ) -> Bool {
         assessment.unresolvedReferences.allSatisfy { issue in
             // Older pending convergence journals can contain a bridge-canonical Movement blocker
-            // that predates source-side context or the explicit stale-record removal choice. Allow
-            // exactly that stale blocker to run once without a user selection so convergence can
-            // re-observe the bridge and persist the current deliberate choices. The regenerated
+            // that predates source-side context or the explicit restore/remove recovery choices.
+            // Allow exactly that stale blocker to run once without a user selection so convergence
+            // can re-observe the bridge and persist the current deliberate choices. The regenerated
             // blocker again requires an explicit selection before any bridge mutation continues.
             if requiresBridgeCanonicalMovementIssueRefresh(issue) {
                 return true
@@ -57,6 +60,17 @@ extension SyncDiagnosticsView {
         }
     }
 
+    var selectedSharedMovementRestoration: PublicIDRepairUnresolvedReference? {
+        (publicIDAssessment?.unresolvedReferences ?? []).first { issue in
+            guard issue.kind == .canonicalRecord,
+                  issue.entityType == .movement,
+                  let selectedID = publicIDResolutionSelections[issue.id] else {
+                return false
+            }
+            return selectedID.hasPrefix("bridge-canonical-restore|")
+        }
+    }
+
     var selectedStaleSharedMovementRemoval: PublicIDRepairUnresolvedReference? {
         (publicIDAssessment?.unresolvedReferences ?? []).first { issue in
             guard issue.kind == .canonicalRecord,
@@ -69,6 +83,9 @@ extension SyncDiagnosticsView {
     }
 
     var publicIDRepairConfirmationTitle: String {
+        if selectedSharedMovementRestoration != nil {
+            return "Restore Shared Movement?"
+        }
         if selectedStaleSharedMovementRemoval != nil {
             return "Remove Stale Shared Movement?"
         }
@@ -83,6 +100,9 @@ extension SyncDiagnosticsView {
     }
 
     var publicIDRepairConfirmationButtonTitle: String {
+        if selectedSharedMovementRestoration != nil {
+            return "Restore Movement"
+        }
         if selectedStaleSharedMovementRemoval != nil {
             return "Remove Stale Shared Movement"
         }
@@ -97,6 +117,9 @@ extension SyncDiagnosticsView {
     }
 
     var publicIDRepairConfirmationMessage: String {
+        if let restoredMovement = selectedSharedMovementRestoration {
+            return "The verified shared bridge contains \(restoredMovement.recordDescription), but that Movement is missing from local data. yaHerd will restore that exact shared Movement into local data with a new unique public ID, then continue shared-data convergence. Existing local Movement records are not replaced or deleted."
+        }
         if let staleMovement = selectedStaleSharedMovementRemoval {
             return "The shared bridge contains \(staleMovement.recordDescription), but none of the repaired local Movement records represents that event. This removes only that stale shared bridge record during convergence; it does not delete local movement data. yaHerd will then export the repaired local graph and verify reconciliation before clearing the repair gate."
         }
@@ -166,10 +189,10 @@ extension SyncDiagnosticsView {
         Task { @MainActor in
             do {
                 // A single bridge-canonical Movement blocker created by an older build can lack
-                // either source-side context or the explicit "no matching local record" choice.
-                // Remove only that stale persisted blocker and let convergence re-observe the same
-                // bridge record. It immediately stops again with the current deliberate choices;
-                // no import/export proceeds until the regenerated issue is explicitly resolved.
+                // source-side context or the current explicit restore/remove choices. Remove only
+                // that stale persisted blocker and let convergence re-observe the same bridge
+                // record. It immediately stops again with current deliberate choices; no
+                // import/export proceeds until the regenerated issue is explicitly resolved.
                 if issues.count == 1,
                    let issue = issues.first,
                    requiresBridgeCanonicalMovementIssueRefresh(issue) {
