@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import SwiftData
 import SwiftUI
 
 @MainActor
@@ -13,6 +14,7 @@ struct SyncDiagnosticsView: View {
     var publicIDRepairService: (any PublicIDRepairService)? { collaborationDependencies.publicIDRepairService }
     @Environment(\.appDataAccessMode) var dataAccessMode
     @Environment(\.recoveryModeController) var recoveryModeController
+    @Environment(\.modelContext) var modelContext
     @Environment(ApplicationSettings.self) var applicationSettings
 
     let checker: ICloudAvailabilityChecking
@@ -165,7 +167,7 @@ struct SyncDiagnosticsView: View {
                                     ) {
                                         Text("Choose a record").tag("")
                                         ForEach(issue.candidates) { candidate in
-                                            Text(publicIDCandidateLabel(candidate))
+                                            Text(publicIDCandidateLabel(candidate, for: issue))
                                                 .tag(candidate.stableRecordIdentifier)
                                         }
                                     }
@@ -173,7 +175,7 @@ struct SyncDiagnosticsView: View {
                                     .accessibilityLabel("Intended record for \(issue.recordDescription) \(issue.fieldName)")
 
                                     if let selectedCandidate = selectedCandidate(for: issue) {
-                                        Text(publicIDCandidateLabel(selectedCandidate))
+                                        Text(publicIDCandidateLabel(selectedCandidate, for: issue))
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                         if issue.kind == .indeterminateLocalRepairRecovery,
@@ -337,7 +339,39 @@ struct SyncDiagnosticsView: View {
         }
     }
 
-    func publicIDCandidateLabel(_ candidate: PublicIDRepairResolutionCandidate) -> String {
+    func publicIDCandidateLabel(
+        _ candidate: PublicIDRepairResolutionCandidate,
+        for issue: PublicIDRepairUnresolvedReference
+    ) -> String {
+        if issue.entityType == .movement {
+            let descriptor = FetchDescriptor<MovementRecord>()
+            if let movements = try? modelContext.fetch(descriptor),
+               let movement = movements.first(where: { $0.publicID == candidate.resultingPublicID }) {
+                let animalLabel: String
+                if let animal = movement.animal {
+                    let tag = animal.tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let name = animal.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !tag.isEmpty && !name.isEmpty {
+                        animalLabel = "Tag \(tag) — \(name)"
+                    } else if !tag.isEmpty {
+                        animalLabel = "Tag \(tag)"
+                    } else if !name.isEmpty {
+                        animalLabel = name
+                    } else {
+                        animalLabel = "Untagged animal"
+                    }
+                } else {
+                    animalLabel = "Unknown animal"
+                }
+
+                let fromPasture = movement.fromPasture?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let toPasture = movement.toPasture?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let from = (fromPasture?.isEmpty == false) ? fromPasture! : "Unknown pasture"
+                let to = (toPasture?.isEmpty == false) ? toPasture! : "Unknown pasture"
+                return "\(animalLabel) • \(movement.date.formatted(date: .abbreviated, time: .omitted)) • \(from) → \(to)"
+            }
+        }
+
         let readableParts = candidate.detail
             .components(separatedBy: " • ")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
