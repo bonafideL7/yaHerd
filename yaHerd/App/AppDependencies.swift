@@ -58,19 +58,24 @@ final class AppDependencies {
             sharingScheduler: mutationSyncScheduler
         )
         let mutationGate = HerdDataMutationGate()
+        let participantOwnershipRegistry = MirroredHerdSharingOwnershipRegistry()
+        let acceptedParticipantReferenceStore = MirroredHerdSharingAcceptedParticipantReferenceStore()
         let writePolicy = HerdCollaborationWritePolicy(
             dataAccessMode: dataAccessMode,
             mutationGate: mutationGate,
-            requiresInitialAccessVerification: resolvedStorageMode == .iCloud
-                && dataAccessMode.allowsDataMutations
+            requiresInitialAccessVerification: Self.requiresInitialSharingAccessVerification(
+                context: context,
+                storageMode: resolvedStorageMode,
+                dataAccessMode: dataAccessMode,
+                ownershipRegistry: participantOwnershipRegistry,
+                acceptedParticipantReferenceStore: acceptedParticipantReferenceStore
+            )
         )
         let conflictReviewStore = HerdSharingConflictReviewStore()
         let cloudKitShareAdapter = CloudKitShareAdapter()
         let ownerShareReferenceStore = MirroredHerdSharingOwnerShareReferenceStore()
         let observedOwnerShareReferenceStore = HerdSharingObservedOwnerShareReferenceStore()
         let remoteOwnerShareVerifier = CloudKitHerdSharingRemoteOwnerShareVerifier()
-        let participantOwnershipRegistry = MirroredHerdSharingOwnershipRegistry()
-        let acceptedParticipantReferenceStore = MirroredHerdSharingAcceptedParticipantReferenceStore()
 
         // Each read model actor owns its own ModelContext. Separate actors allow
         // independent home queries to run concurrently instead of serializing on
@@ -323,6 +328,33 @@ final class AppDependencies {
     func seedDefaultsIfNeeded() {
         guard dataAccessMode.allowsDataMutations else { return }
         SampleDataService.seedDefaultsIfNeeded(context: context)
+    }
+
+    private static func requiresInitialSharingAccessVerification(
+        context: ModelContext,
+        storageMode: HerdStorageMode,
+        dataAccessMode: AppDataAccessMode,
+        ownershipRegistry: any HerdSharingOwnershipRecording,
+        acceptedParticipantReferenceStore: any HerdSharingAcceptedParticipantReferenceRecording
+    ) -> Bool {
+        guard storageMode == .iCloud, dataAccessMode.allowsDataMutations else { return false }
+
+        guard let herd = try? SwiftDataHerdRepository(context: context).fetchCurrentHerd() else {
+            return true
+        }
+
+        if acceptedParticipantReferenceStore.hasConflictingReference(for: herd.publicID)
+            || acceptedParticipantReferenceStore.reference(for: herd.publicID) != nil
+        {
+            return true
+        }
+
+        switch ownershipRegistry.ownership(for: herd.publicID) {
+        case .participant?, .detachedParticipant?:
+            return true
+        case .owner?, nil:
+            return false
+        }
     }
 
     private static func inferredStorageMode(
