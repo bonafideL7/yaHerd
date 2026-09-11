@@ -95,9 +95,12 @@ final class HerdCollaborationWritePolicy {
     clearAccess(requiresVerificationBeforeWrite: true)
   }
 
+  /// Generation-scoped invalidation is used after an access read or sync attempt. It must not turn
+  /// an owner/local CloudKit outage into a local-write outage; participant/conflict/recovery state
+  /// remains fail-closed through clearAccessAfterFailedRefresh().
   func clearAccessAfterFailedSynchronization(ifGenerationIsStill generation: UInt64) {
     guard sharingStateGeneration == generation else { return }
-    clearAccessAfterFailedSynchronization()
+    clearAccessAfterFailedRefresh()
   }
 
   /// A failed read/refresh is different from an explicit sharing transition. Preserve fail-closed
