@@ -346,20 +346,20 @@ final class AppDependencies {
             return true
         }
 
-        // A durable participant/detachment marker is authoritative and must remain fail-closed.
+        // Owner-account history is the same precedence used by HerdSharingCreationStateGuard for a
+        // missing bridge. It is an owner-recovery problem: sharing/export remains guarded, but an
+        // older mirrored participant marker must not convert ordinary local field work into a
+        // launch-wide CloudKit dependency.
+        if accountOwnershipRegistry.hasEstablishedOwnerShare(for: herd.publicID) {
+            return false
+        }
+
+        // Without owner history, durable participant/detachment provenance remains fail-closed.
         switch ownershipRegistry.ownership(for: herd.publicID) {
         case .participant?, .detachedParticipant?:
             return true
         case .owner?, nil:
             break
-        }
-
-        // Owner-account history means the missing bridge is an owner-recovery problem, not evidence
-        // that ordinary local field work is a read-only participant edit. Sharing/export stays
-        // guarded by the repository, but local edits do not wait on CloudKit just because an older
-        // accepted-share reference is still mirrored in KVS.
-        if accountOwnershipRegistry.hasEstablishedOwnerShare(for: herd.publicID) {
-            return false
         }
 
         if acceptedParticipantReferenceStore.hasConflictingReference(for: herd.publicID)
