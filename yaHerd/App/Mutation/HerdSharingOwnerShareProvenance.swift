@@ -37,6 +37,8 @@ nonisolated enum HerdSharingRemoteOwnerShareStatus: Equatable, Sendable {
 
 @MainActor
 protocol HerdSharingRemoteOwnerShareVerifying: AnyObject {
+    func currentAccountRecordName() async throws -> String
+
     func status(
         for reference: HerdSharingRemoteOwnerShareReference
     ) async throws -> HerdSharingRemoteOwnerShareStatus
@@ -49,6 +51,10 @@ protocol HerdSharingRemoteOwnerShareVerifying: AnyObject {
 }
 
 extension HerdSharingRemoteOwnerShareVerifying {
+    func currentAccountRecordName() async throws -> String {
+        throw HerdSharingActionError.ownerBridgeVerificationRequired
+    }
+
     func hasAnyOwnerShare(
         forAccountRecordName expectedAccountRecordName: String
     ) async throws -> Bool {
@@ -88,6 +94,18 @@ final class CloudKitHerdSharingRemoteOwnerShareVerifier: HerdSharingRemoteOwnerS
         self.recordZonesProvider = recordZonesProvider ?? {
             try await CKContainer(identifier: containerIdentifier).privateCloudDatabase
                 .allRecordZones()
+        }
+    }
+
+    func currentAccountRecordName() async throws -> String {
+        do {
+            return try await currentAccountRecordNameProvider()
+        } catch let error as HerdSharingActionError {
+            throw error
+        } catch {
+            throw HerdSharingActionError.cloudKitSharingFailed(
+                "Could not verify the currently signed-in iCloud account: \(error.localizedDescription)"
+            )
         }
     }
 
