@@ -15,6 +15,15 @@ extension SyncDiagnosticsView {
         return issue.candidates.first { $0.stableRecordIdentifier == selectedID }
     }
 
+    func isLegacyBridgeCanonicalMovementIssue(
+        _ issue: PublicIDRepairUnresolvedReference
+    ) -> Bool {
+        issue.kind == .canonicalRecord
+            && issue.entityType == .movement
+            && issue.stableRecordIdentifier.hasPrefix("bridge-canonical|")
+            && !issue.recordDescription.hasPrefix("Shared movement:")
+    }
+
     func hasCompleteReferenceSelections(
         for assessment: PublicIDRepairAssessment
     ) -> Bool {
@@ -24,10 +33,7 @@ extension SyncDiagnosticsView {
             // blocker to run once without a user selection so convergence can re-observe the
             // bridge and persist the richer source-side details. The regenerated blocker starts
             // with "Shared movement:" and again requires an explicit matching record choice.
-            if issue.kind == .canonicalRecord,
-               issue.entityType == .movement,
-               issue.stableRecordIdentifier.hasPrefix("bridge-canonical|"),
-               !issue.recordDescription.hasPrefix("Shared movement:") {
+            if isLegacyBridgeCanonicalMovementIssue(issue) {
                 return true
             }
 
@@ -134,6 +140,21 @@ extension SyncDiagnosticsView {
 
         Task { @MainActor in
             do {
+                // A single bridge-canonical Movement blocker created by an older build has no
+                // source-side context, so the user cannot make an informed selection. Remove only
+                // that stale persisted blocker and let the convergence preflight re-observe the
+                // same bridge record. The bridge layer will immediately stop again and persist a
+                // replacement issue containing the shared animal/date/pasture details; no bridge
+                // import/export is allowed to proceed without the regenerated explicit choice.
+                if issues.count == 1,
+                   let issue = issues.first,
+                   isLegacyBridgeCanonicalMovementIssue(issue) {
+                    guard let writePolicy = collaborationDependencies.writePolicy else {
+                        throw SyncDiagnosticsSettingsError.writePolicyUnavailable
+                    }
+                    try writePolicy.dataMutationGate.recordBridgeResolutionIssues([])
+                }
+
                 let report: PublicIDRepairReport
                 if let indeterminateRecoveryChoice {
                     report = try await publicIDRepairService.recoverIndeterminateRepair(
