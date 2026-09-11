@@ -5,18 +5,59 @@ import Testing
 
 @Suite("Recovery mode release invariants")
 struct RecoveryModeReleaseTests {
-    @Test("Recovery container rejects persistent saves")
+    @Test("Recovery container is ephemeral and configured read-only")
     @MainActor
-    func recoveryContainerRejectsPersistentSave() throws {
+    func recoveryContainerIsEphemeralAndReadOnly() throws {
         let container = try ModelContainerFactory.makeRecoveryContainer()
-        let context = container.mainContext
-        context.insert(Herd(name: "Recovery Test Herd"))
+        let configuration = try #require(container.configurations.first)
 
-        do {
-            try context.save()
-            Issue.record("Recovery ModelContext.save() unexpectedly succeeded")
-        } catch {
-            // Expected: recovery storage is configured with allowsSave = false.
+        #expect(container.configurations.count == 1)
+        #expect(configuration.isStoredInMemoryOnly)
+        #expect(!configuration.allowsSave)
+    }
+
+    @Test("Recovery write policy rejects every application mutation category")
+    @MainActor
+    func recoveryWritePolicyRejectsEveryMutationCategory() throws {
+        let suiteName = "RecoveryModeReleaseTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let journalURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(suiteName).journal.json")
+        defer {
+            try? FileManager.default.removeItem(at: journalURL)
+            try? FileManager.default.removeItem(at: journalURL.appendingPathExtension("recovery"))
+            try? FileManager.default.removeItem(at: journalURL.appendingPathExtension("verified-recovery"))
+        }
+
+        let policy = HerdCollaborationWritePolicy(
+            dataAccessMode: .recoveryReadOnly,
+            mutationGate: HerdDataMutationGate(
+                defaults: defaults,
+                journalFileURL: journalURL
+            )
+        )
+        let reasons: [SharedDataMutationReason] = [
+            .herd,
+            .animal,
+            .pasture,
+            .dashboard,
+            .fieldCheck,
+            .working,
+            .tagColor,
+            .sampleData,
+        ]
+
+        for reason in reasons {
+            do {
+                try policy.validateCanWrite(reason: reason)
+                Issue.record("Recovery mode unexpectedly allowed \(reason.displayName) mutation")
+            } catch let error as HerdCollaborationWritePolicyError {
+                #expect(error == .recoveryModeReadOnly(reason: reason))
+            } catch {
+                Issue.record("Unexpected recovery write-policy error for \(reason.displayName): \(error)")
+            }
         }
     }
 
