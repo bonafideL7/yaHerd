@@ -3,6 +3,7 @@
 //  yaHerd
 //
 
+import Foundation
 import SwiftUI
 
 struct SettingsView: View {
@@ -88,7 +89,7 @@ struct SettingsView: View {
                 } label: {
                     SettingsRow(
                         title: "About yaHerd",
-                        subtitle: "App information and platform details.",
+                        subtitle: "Version, privacy, and acknowledgements.",
                         systemImage: "info.circle"
                     )
                 }
@@ -195,10 +196,22 @@ struct PastureDefaultsView: View {
 }
 
 private struct AboutYaHerdView: View {
+    private var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+    }
+
+    private var build: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+    }
+
+    private var lucideProjectURL: URL? {
+        URL(string: "https://github.com/JakubMazur/lucide-icons-swift")
+    }
+
     var body: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("yaHerd")
                         .font(.title2)
                         .bold()
@@ -207,11 +220,48 @@ private struct AboutYaHerdView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
-                    Text("iOS 26+ • Swift 6 • SwiftUI • SwiftData")
-                        .font(.caption)
+                    Text("Keep herd records, pasture checks, working sessions, and health history together in one place.")
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 8)
+            }
+
+            Section("Installed Version") {
+                LabeledContent("Version", value: version)
+                LabeledContent("Build", value: build)
+
+                Text("Version \(version) (\(build))")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+
+                Text("Press and hold the version line to copy it when reporting an issue.")
+                    .foregroundStyle(HierarchicalShapeStyle.tertiary)
+                    .font(.caption)
+            }
+
+            Section("Data & Privacy") {
+                Text("Herd records are stored in yaHerd app data and may be synchronized through your iCloud account when iCloud storage is enabled.")
+
+                Text("This build does not include advertising or third-party analytics tracking.")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Open Source") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Lucide Icons")
+                        .font(.headline)
+
+                    Text("Interface icons provided by Lucide Icons under the ISC License.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+
+                    if let lucideProjectURL {
+                        Link("View project and license", destination: lucideProjectURL)
+                    }
+                }
+                .padding(.vertical, 4)
             }
         }
         .navigationTitle("About")
