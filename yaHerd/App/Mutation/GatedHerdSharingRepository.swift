@@ -256,25 +256,34 @@ final class GatedHerdSharingRepository: HerdSharingRepository,
         herdPublicID: UUID
     ) async throws -> (HerdSharingRemoteOwnerShareReference, HerdSharingRemoteOwnerShareStatus) {
         if let observedReference = observedOwnerShareReferenceProvider(herdPublicID) {
-            guard observedReference.hasVerifiableLocator,
-                  observedReference.shareOwnerAccountRecordName != nil
-            else {
+            guard observedReference.hasVerifiableLocator else {
                 throw HerdSharingActionError.ownerBridgeVerificationRequired
             }
 
             // The Deferred layer observes Core Data's local CKShare before this outer repository
             // verifies the currently signed-in account. Treat that observation as ephemeral only:
             // verify it first, then require it to remain unchanged across the await, and only then
-            // backfill durable UserDefaults/KVS provenance.
+            // persist it as durable provenance. A saved share URL can be verified as an owner share
+            // even when an older bridge did not retain the account record name; absence still remains
+            // fail-closed because the verifier will not retire a URL-only reference without account identity.
             let remoteStatus = try await remoteOwnerShareVerifier.status(for: observedReference)
             guard observedOwnerShareReferenceProvider(herdPublicID) == observedReference else {
                 throw HerdSharingActionError.ownerBridgeVerificationRequired
             }
-            try HerdSharingExistingOwnerShareBackfill.recordObservedReference(
-                observedReference,
-                for: herdPublicID,
-                referenceStore: ownerShareReferenceStore
-            )
+
+            if observedReference.shareOwnerAccountRecordName == nil {
+                guard observedReference.shareURL != nil, remoteStatus == .present else {
+                    throw HerdSharingActionError.ownerBridgeVerificationRequired
+                }
+                try ownerShareReferenceStore.recordRecoverably(observedReference, for: herdPublicID)
+            } else {
+                try HerdSharingExistingOwnerShareBackfill.recordObservedReference(
+                    observedReference,
+                    for: herdPublicID,
+                    referenceStore: ownerShareReferenceStore
+                )
+            }
+
             guard let durableReference = try ownerShareReferenceStore.recoverableReference(
                 for: herdPublicID
             ), HerdSharingExistingOwnerShareBackfill.sameExactIdentity(
@@ -306,7 +315,7 @@ final class GatedHerdSharingRepository: HerdSharingRepository,
         herdPublicID: UUID
     ) {
         guard let presentation = result.sharePresentation else {
-            ownerShareReferenceStore.clearReference(for: herdPublicID)
+            ownerShareReferenceStore.clearReference(forKey: herdPublicID)
             return
         }
 
