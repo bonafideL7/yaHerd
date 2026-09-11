@@ -432,6 +432,7 @@ final class HerdSharingSyncCoordinator {
     }
 
     var writePolicyGenerationForFailure = writePolicy?.sharingStateGeneration
+    var shouldClearWritePolicyOnFailure = true
     do {
       let herd = try herdRepository.fetchCurrentHerd()
       let access = try await sharingAccessForUnchangedCurrentHerd(
@@ -440,6 +441,8 @@ final class HerdSharingSyncCoordinator {
       )
       writePolicy?.update(access: access)
       writePolicyGenerationForFailure = writePolicy?.sharingStateGeneration
+      shouldClearWritePolicyOnFailure = false
+
       let result = try await SyncSharedHerdDataUseCase(repository: sharingRepository).execute(
         herd: herd,
         storageMode: storageMode
@@ -451,6 +454,7 @@ final class HerdSharingSyncCoordinator {
         // A pending accepted invitation can replace the current SwiftData Herd during import.
         // Re-read the durable current Herd after sync before verifying access so a read-only
         // participant relationship can never inherit the pre-import Herd's writable snapshot.
+        shouldClearWritePolicyOnFailure = true
         let refreshedHerd = try herdRepository.fetchCurrentHerd()
         let postSyncGeneration = writePolicy.sharingStateGeneration
         writePolicyGenerationForFailure = postSyncGeneration
@@ -459,6 +463,7 @@ final class HerdSharingSyncCoordinator {
           sharingStateGeneration: postSyncGeneration
         )
         writePolicy.update(access: refreshedAccess)
+        shouldClearWritePolicyOnFailure = false
       }
 
       lastSuccessMessage = "\(result.title): \(result.message)"
@@ -466,7 +471,9 @@ final class HerdSharingSyncCoordinator {
       lastErrorMessage = nil
       return true
     } catch {
-      clearWritePolicyIfGenerationIsStill(writePolicyGenerationForFailure)
+      if shouldClearWritePolicyOnFailure {
+        clearWritePolicyIfGenerationIsStill(writePolicyGenerationForFailure)
+      }
       ReliabilityLog.syncFailure("HerdSharingSyncCoordinator.performSync", trigger: trigger.displayName, error: error)
       lastErrorMessage = UserVisibleErrorMessage.syncFailed(error)
       lastSuccessMessage = nil
