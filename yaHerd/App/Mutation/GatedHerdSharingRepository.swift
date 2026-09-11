@@ -256,29 +256,23 @@ final class GatedHerdSharingRepository: HerdSharingRepository,
         herdPublicID: UUID
     ) async throws -> (HerdSharingRemoteOwnerShareReference, HerdSharingRemoteOwnerShareStatus) {
         if let observedReference = observedOwnerShareReferenceProvider(herdPublicID) {
-            let candidateReference: HerdSharingRemoteOwnerShareReference
-            if observedReference.shareOwnerAccountRecordName == nil {
-                let currentAccountRecordName = try await remoteOwnerShareVerifier.currentAccountRecordName()
-                candidateReference = HerdSharingRemoteOwnerShareReference(
-                    shareURL: observedReference.shareURL,
-                    shareIdentifier: observedReference.shareIdentifier,
-                    shareRecordZoneName: observedReference.shareRecordZoneName,
-                    shareRecordOwnerName: observedReference.shareRecordOwnerName,
-                    shareOwnerAccountRecordName: currentAccountRecordName
-                )
-            } else {
-                candidateReference = observedReference
-            }
+            let currentAccountRecordName = try await remoteOwnerShareVerifier.currentAccountRecordName()
+            let candidateReference = HerdSharingRemoteOwnerShareReference(
+                shareURL: observedReference.shareURL,
+                shareIdentifier: observedReference.shareIdentifier,
+                shareRecordZoneName: observedReference.shareRecordZoneName,
+                shareRecordOwnerName: observedReference.shareRecordOwnerName,
+                shareOwnerAccountRecordName: currentAccountRecordName
+            )
 
             guard candidateReference.hasVerifiableLocator else {
                 throw HerdSharingActionError.ownerBridgeVerificationRequired
             }
 
-            // The Deferred layer observes Core Data's local CKShare before this outer repository
-            // verifies the currently signed-in account. Treat that observation as ephemeral only:
-            // augment missing legacy account provenance with the currently signed-in account, verify
-            // the exact share URL or private CKShare record/zone, then require the observation to
-            // remain unchanged before persisting the verified reference.
+            // This share was observed in the owner-private Core Data bridge. Historical owner-account
+            // provenance can be stale or absent, so derive the candidate account from the currently
+            // signed-in CKContainer and then verify the exact CKShare URL or private record/zone in
+            // that account before persisting repaired provenance.
             let remoteStatus = try await remoteOwnerShareVerifier.status(for: candidateReference)
             guard observedOwnerShareReferenceProvider(herdPublicID) == observedReference else {
                 throw HerdSharingActionError.ownerBridgeVerificationRequired
