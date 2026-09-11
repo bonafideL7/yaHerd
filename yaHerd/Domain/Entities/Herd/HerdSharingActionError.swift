@@ -65,7 +65,12 @@ enum HerdSharingActionError: LocalizedError, Equatable {
     case .bridgeImportRequiresAccessVerification(let message):
       "Shared herd import failed after sharing access may have changed. Verify CloudKit sharing access before making more local edits. \(message)"
     case .bridgeConsistencyFailed(let message):
-      "The sharing bridge is inconsistent. \(message)"
+      if message.localizedCaseInsensitiveContains("duplicate"),
+         message.localizedCaseInsensitiveContains("public id")
+      {
+        return "The sharing bridge is inconsistent. \(message) Open Settings > Sync Diagnostics > Public ID Integrity, scan for duplicate public IDs, and complete the backed-up repair before importing or synchronizing shared data."
+      }
+      return "The sharing bridge is inconsistent. \(message)"
     }
   }
 }
