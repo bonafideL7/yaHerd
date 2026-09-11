@@ -128,6 +128,8 @@ final class HerdCollaborationWritePolicy {
          .unresolvedBridgeRecord, .ownershipConfirmationRequired,
          .ownerBridgeVerificationRequired:
       return false
+    case .conflictingBridgeRecords:
+        <#code#>
     }
   }
 
