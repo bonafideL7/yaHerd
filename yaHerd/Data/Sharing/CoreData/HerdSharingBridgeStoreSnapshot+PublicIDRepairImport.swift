@@ -329,9 +329,9 @@ extension HerdSharingBridgeStoreSnapshot {
                 guard let publicID = record.parsedPublicID else { return false }
                 return repairGroup.resultingPublicIDs.contains(publicID)
             }
-            guard localCandidates.count >= sourceRecords.count else {
+            if step == .herd, localCandidates.count < sourceRecords.count {
                 throw HerdSharingActionError.bridgeConsistencyFailed(
-                    "The shared bridge contains more \(repairGroup.key.entityName) records for duplicate public ID \(repairGroup.key.retainedPublicID.uuidString) than the repaired local graph can identify. Public-ID repair stopped rather than merge records together."
+                    "The shared bridge contains more \(repairGroup.key.entityName) records for duplicate public ID \(repairGroup.key.retainedPublicID.uuidString) than the repaired local graph can identify. Public-ID repair stopped rather than synthesize a Herd identity."
                 )
             }
 
@@ -357,9 +357,6 @@ extension HerdSharingBridgeStoreSnapshot {
                 if unusedFingerprintMatches.count == 1,
                    let match = unusedFingerprintMatches.first {
                     localMatch = match
-                } else if availableCandidates.count == 1,
-                          let match = availableCandidates.first {
-                    localMatch = match
                 } else {
                     let entityType = step.publicIDRepairEntityType
                     let selectionPool = unusedFingerprintMatches.isEmpty
@@ -383,18 +380,12 @@ extension HerdSharingBridgeStoreSnapshot {
                         return lhs.resultingPublicID.uuidString < rhs.resultingPublicID.uuidString
                     }
 
-                    guard !localCandidatesForChoice.isEmpty else {
-                        throw HerdSharingActionError.bridgeConsistencyFailed(
-                            "Shared \(repairGroup.key.entityName) data still uses duplicate public ID \(repairGroup.key.retainedPublicID.uuidString), but no unused repaired local record remains for this shared record. Public-ID repair stopped rather than reuse an identity."
-                        )
-                    }
-
                     let sharedRecordDescription = publicIDRepairSharedRecordDescription(
                         bridgeRecord,
                         entityType: entityType
                     )
                     var candidates = localCandidatesForChoice
-                    if entityType == .movement {
+                    if entityType != .herd {
                         let localPublicIDs = Set(localRecords.compactMap(\.parsedPublicID))
                         let restoreID = publicIDRepairSyntheticCandidateID(
                             entityType: entityType,
@@ -405,7 +396,7 @@ extension HerdSharingBridgeStoreSnapshot {
                         candidates.append(
                             PublicIDRepairResolutionCandidate(
                                 stableRecordIdentifier: "\(publicIDRepairSharedRecordRestoreCandidatePrefix)\(bridgeRecord.sourceObjectURI)",
-                                recordDescription: "Restore missing local movement from shared record",
+                                recordDescription: "Restore missing local record from shared data",
                                 detail: "Create \(sharedRecordDescription) in local data with a new unique public ID, then continue convergence.",
                                 resultingPublicID: restoreID
                             )
@@ -423,10 +414,16 @@ extension HerdSharingBridgeStoreSnapshot {
                         candidates.append(
                             PublicIDRepairResolutionCandidate(
                                 stableRecordIdentifier: "\(publicIDRepairStaleBridgeRemovalCandidatePrefix)\(bridgeRecord.sourceObjectURI)",
-                                recordDescription: "No matching local record — remove stale shared movement",
-                                detail: "Remove \(sharedRecordDescription) from the shared bridge during convergence. Local movement data is not deleted.",
+                                recordDescription: "No matching local record — remove stale shared record",
+                                detail: "Remove \(sharedRecordDescription) from the shared bridge during convergence. Local data is not deleted.",
                                 resultingPublicID: removalMarkerID
                             )
+                        )
+                    }
+
+                    guard !candidates.isEmpty else {
+                        throw HerdSharingActionError.bridgeConsistencyFailed(
+                            "Shared \(repairGroup.key.entityName) data still uses duplicate public ID \(repairGroup.key.retainedPublicID.uuidString), but no unused repaired local record remains for this shared record. Public-ID repair stopped rather than reuse an identity."
                         )
                     }
 
@@ -437,7 +434,7 @@ extension HerdSharingBridgeStoreSnapshot {
                         stableRecordIdentifier: "bridge-canonical|\(bridgeRecord.entityName)|\(bridgeRecord.sourceObjectURI)",
                         fieldName: "publicID",
                         referencedPublicID: repairGroup.key.retainedPublicID,
-                        reason: "Match this old shared \(entityType.displayName.lowercased()) to the repaired local record representing the same event. For a missing shared movement that should still exist, choose the explicit restore option; choose removal only if the shared event is genuinely stale. Shared record: \(sharedRecordDescription). It still uses historical public ID \(repairGroup.key.retainedPublicID.uuidString).",
+                        reason: "Match this old shared \(entityType.displayName.lowercased()) record to the repaired local record representing the same event or object. If the shared record should still exist but is missing locally, choose the explicit restore option; choose removal only if the shared record is genuinely stale. Shared record: \(sharedRecordDescription). It still uses historical public ID \(repairGroup.key.retainedPublicID.uuidString).",
                         candidates: candidates
                     )
                     guard let selected = report.publicIDRepairSelectedBridgeCandidate(
@@ -455,7 +452,7 @@ extension HerdSharingBridgeStoreSnapshot {
                         }),
                         usedLocalPublicIDs.insert(selected.resultingPublicID).inserted else {
                             throw HerdSharingActionError.bridgeConsistencyFailed(
-                                "The selected restored shared movement public ID already exists locally. Public-ID repair stopped rather than create a duplicate identity."
+                                "The selected restored shared record public ID already exists locally. Public-ID repair stopped rather than create a duplicate identity."
                             )
                         }
                         translatedBySourceURI[bridgeRecord.sourceObjectURI] = bridgeRecord
@@ -542,24 +539,47 @@ extension HerdSharingBridgeStoreSnapshot {
         _ record: HerdSharingBridgeRecordSnapshot,
         entityType: PublicIDRepairEntityType
     ) -> String {
-        guard entityType == .movement else {
-            return record.publicIDRepairDiagnosticDescription(
-                fallback: "Shared \(entityType.displayName.lowercased())"
-            )
+        if entityType == .movement {
+            let animal = publicIDRepairSharedAnimalLabel(for: record)
+            let date: String
+            if case .date(let value) = record.attributes["date"] {
+                date = value.formatted(date: .abbreviated, time: .omitted)
+            } else {
+                date = "Unknown date"
+            }
+            let from = publicIDRepairSharedString(record.attributes["fromPasture"])
+                ?? "Unknown pasture"
+            let to = publicIDRepairSharedString(record.attributes["toPasture"])
+                ?? "Unknown pasture"
+            return "Shared movement: \(animal) • \(date) • \(from) → \(to)"
         }
 
-        let animal = publicIDRepairSharedAnimalLabel(for: record)
-        let date: String
-        if case .date(let value) = record.attributes["date"] {
-            date = value.formatted(date: .abbreviated, time: .omitted)
-        } else {
-            date = "Unknown date"
+        if entityType == .pregnancyCheck {
+            let animal = publicIDRepairSharedAnimalLabel(for: record)
+            let date: String
+            if case .date(let value) = record.attributes["date"] {
+                date = value.formatted(date: .abbreviated, time: .omitted)
+            } else {
+                date = "Unknown date"
+            }
+            let result = publicIDRepairSharedString(record.attributes["resultRawValue"])
+                .map {
+                    $0.replacingOccurrences(of: "_", with: " ").capitalized
+                } ?? "Unknown result"
+            var parts = [animal, date, result]
+            if case .integer(let days) = record.attributes["estimatedDaysPregnant"] {
+                parts.append("\(days) days pregnant")
+            }
+            return "Shared pregnancy check: \(parts.joined(separator: " • "))"
         }
-        let from = publicIDRepairSharedString(record.attributes["fromPasture"])
-            ?? "Unknown pasture"
-        let to = publicIDRepairSharedString(record.attributes["toPasture"])
-            ?? "Unknown pasture"
-        return "Shared movement: \(animal) • \(date) • \(from) → \(to)"
+
+        let detail = record.publicIDRepairDiagnosticDetail
+        if !detail.isEmpty {
+            return "Shared \(entityType.displayName.lowercased()): \(detail)"
+        }
+        return record.publicIDRepairDiagnosticDescription(
+            fallback: "Shared \(entityType.displayName.lowercased())"
+        )
     }
 
     private func publicIDRepairSharedAnimalLabel(
