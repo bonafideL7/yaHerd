@@ -15,25 +15,30 @@ extension SyncDiagnosticsView {
         return issue.candidates.first { $0.stableRecordIdentifier == selectedID }
     }
 
-    func isLegacyBridgeCanonicalMovementIssue(
+    func requiresBridgeCanonicalMovementIssueRefresh(
         _ issue: PublicIDRepairUnresolvedReference
     ) -> Bool {
-        issue.kind == .canonicalRecord
-            && issue.entityType == .movement
-            && issue.stableRecordIdentifier.hasPrefix("bridge-canonical|")
-            && !issue.recordDescription.hasPrefix("Shared movement:")
+        guard issue.kind == .canonicalRecord,
+              issue.entityType == .movement,
+              issue.stableRecordIdentifier.hasPrefix("bridge-canonical|") else {
+            return false
+        }
+        return !issue.recordDescription.hasPrefix("Shared movement:")
+            || !issue.candidates.contains {
+                $0.stableRecordIdentifier.hasPrefix("bridge-canonical-remove|")
+            }
     }
 
     func hasCompleteReferenceSelections(
         for assessment: PublicIDRepairAssessment
     ) -> Bool {
         assessment.unresolvedReferences.allSatisfy { issue in
-            // Older pending convergence journals stored bridge-canonical blockers before the
-            // shared source record had a human-readable description. Allow exactly that stale
-            // blocker to run once without a user selection so convergence can re-observe the
-            // bridge and persist the richer source-side details. The regenerated blocker starts
-            // with "Shared movement:" and again requires an explicit matching record choice.
-            if isLegacyBridgeCanonicalMovementIssue(issue) {
+            // Older pending convergence journals can contain a bridge-canonical Movement blocker
+            // that predates source-side context or the explicit stale-record removal choice. Allow
+            // exactly that stale blocker to run once without a user selection so convergence can
+            // re-observe the bridge and persist the current deliberate choices. The regenerated
+            // blocker again requires an explicit selection before any bridge mutation continues.
+            if requiresBridgeCanonicalMovementIssueRefresh(issue) {
                 return true
             }
 
@@ -140,15 +145,14 @@ extension SyncDiagnosticsView {
 
         Task { @MainActor in
             do {
-                // A single bridge-canonical Movement blocker created by an older build has no
-                // source-side context, so the user cannot make an informed selection. Remove only
-                // that stale persisted blocker and let the convergence preflight re-observe the
-                // same bridge record. The bridge layer will immediately stop again and persist a
-                // replacement issue containing the shared animal/date/pasture details; no bridge
-                // import/export is allowed to proceed without the regenerated explicit choice.
+                // A single bridge-canonical Movement blocker created by an older build can lack
+                // either source-side context or the explicit "no matching local record" choice.
+                // Remove only that stale persisted blocker and let convergence re-observe the same
+                // bridge record. It immediately stops again with the current deliberate choices;
+                // no import/export proceeds until the regenerated issue is explicitly resolved.
                 if issues.count == 1,
                    let issue = issues.first,
-                   isLegacyBridgeCanonicalMovementIssue(issue) {
+                   requiresBridgeCanonicalMovementIssueRefresh(issue) {
                     guard let writePolicy = collaborationDependencies.writePolicy else {
                         throw SyncDiagnosticsSettingsError.writePolicyUnavailable
                     }
