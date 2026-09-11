@@ -66,7 +66,6 @@ trap 'rm -f "$TEST_LOG"' EXIT
 
 set +e
 xcodebuild \
-  -quiet \
   -project yaHerd.xcodeproj \
   -scheme yaHerd \
   -configuration Debug \
@@ -92,4 +91,5 @@ if ! grep -E -q 'Test Suite|Test run|✔|passed' "$TEST_LOG"; then
   exit 1
 fi
 
+grep -E 'Test Suite|Test run|✔|passed' "$TEST_LOG" | tail -n 40 || true
 echo 'yaHerd unit tests passed.'
