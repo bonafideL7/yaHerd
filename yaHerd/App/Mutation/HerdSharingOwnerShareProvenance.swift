@@ -126,6 +126,36 @@ final class CloudKitHerdSharingRemoteOwnerShareVerifier: HerdSharingRemoteOwnerS
                 )
             }
 
+            // Owner-private bridge recovery should verify the exact CKShare record in the current
+            // account's private database whenever record-zone identity is available. Share URL
+            // metadata is primarily an invitation/participant lookup and can report an unusable
+            // participant role for an owner even while the owner's CKShare record is present.
+            if let zoneName = reference.shareRecordZoneName,
+               let zoneOwnerName = reference.shareRecordOwnerName,
+               reference.shareOwnerAccountRecordName != nil
+            {
+                let recordID = CKRecord.ID(
+                    recordName: reference.shareIdentifier,
+                    zoneID: CKRecordZone.ID(zoneName: zoneName, ownerName: zoneOwnerName)
+                )
+                let record: CKRecord
+                do {
+                    record = try await privateRecordProvider(recordID)
+                } catch let error as CKError
+                    where error.code == .unknownItem || error.code == .zoneNotFound
+                {
+                    try await validateAccountUnchanged(since: accountBeforeLookup)
+                    return .absent
+                }
+                guard record is CKShare else {
+                    throw HerdSharingActionError.bridgeConsistencyFailed(
+                        "The stored owner-share record identity resolved to a non-share CloudKit record. No stale owner state was reset."
+                    )
+                }
+                try await validateAccountUnchanged(since: accountBeforeLookup)
+                return .present
+            }
+
             if let shareURL = reference.shareURL {
                 let metadata: CKShare.Metadata
                 do {
@@ -165,35 +195,9 @@ final class CloudKitHerdSharingRemoteOwnerShareVerifier: HerdSharingRemoteOwnerS
                 return .present
             }
 
-            guard let zoneName = reference.shareRecordZoneName,
-                  let zoneOwnerName = reference.shareRecordOwnerName,
-                  reference.shareOwnerAccountRecordName != nil
-            else {
-                throw HerdSharingActionError.bridgeConsistencyFailed(
-                    "The stored owner-share provenance has neither a share URL nor a complete CloudKit account and record-zone identity. No stale owner state was reset."
-                )
-            }
-
-            let recordID = CKRecord.ID(
-                recordName: reference.shareIdentifier,
-                zoneID: CKRecordZone.ID(zoneName: zoneName, ownerName: zoneOwnerName)
+            throw HerdSharingActionError.bridgeConsistencyFailed(
+                "The stored owner-share provenance has neither a share URL nor a complete CloudKit account and record-zone identity. No stale owner state was reset."
             )
-            let record: CKRecord
-            do {
-                record = try await privateRecordProvider(recordID)
-            } catch let error as CKError
-                where error.code == .unknownItem || error.code == .zoneNotFound
-            {
-                try await validateAccountUnchanged(since: accountBeforeLookup)
-                return .absent
-            }
-            guard record is CKShare else {
-                throw HerdSharingActionError.bridgeConsistencyFailed(
-                    "The stored owner-share record identity resolved to a non-share CloudKit record. No stale owner state was reset."
-                )
-            }
-            try await validateAccountUnchanged(since: accountBeforeLookup)
-            return .present
         } catch let error as HerdSharingActionError {
             throw error
         } catch {
