@@ -60,6 +60,7 @@ final class AppDependencies {
         let mutationGate = HerdDataMutationGate()
         let participantOwnershipRegistry = MirroredHerdSharingOwnershipRegistry()
         let acceptedParticipantReferenceStore = MirroredHerdSharingAcceptedParticipantReferenceStore()
+        let accountOwnershipRegistry = UbiquitousHerdSharingAccountOwnershipRegistry()
         let writePolicy = HerdCollaborationWritePolicy(
             dataAccessMode: dataAccessMode,
             mutationGate: mutationGate,
@@ -68,7 +69,8 @@ final class AppDependencies {
                 storageMode: resolvedStorageMode,
                 dataAccessMode: dataAccessMode,
                 ownershipRegistry: participantOwnershipRegistry,
-                acceptedParticipantReferenceStore: acceptedParticipantReferenceStore
+                acceptedParticipantReferenceStore: acceptedParticipantReferenceStore,
+                accountOwnershipRegistry: accountOwnershipRegistry
             )
         )
         let conflictReviewStore = HerdSharingConflictReviewStore()
@@ -335,12 +337,29 @@ final class AppDependencies {
         storageMode: HerdStorageMode,
         dataAccessMode: AppDataAccessMode,
         ownershipRegistry: any HerdSharingOwnershipRecording,
-        acceptedParticipantReferenceStore: any HerdSharingAcceptedParticipantReferenceRecording
+        acceptedParticipantReferenceStore: any HerdSharingAcceptedParticipantReferenceRecording,
+        accountOwnershipRegistry: any HerdSharingAccountOwnershipRecording
     ) -> Bool {
         guard storageMode == .iCloud, dataAccessMode.allowsDataMutations else { return false }
 
         guard let herd = try? SwiftDataHerdRepository(context: context).fetchCurrentHerd() else {
             return true
+        }
+
+        // A durable participant/detachment marker is authoritative and must remain fail-closed.
+        switch ownershipRegistry.ownership(for: herd.publicID) {
+        case .participant?, .detachedParticipant?:
+            return true
+        case .owner?, nil:
+            break
+        }
+
+        // Owner-account history means the missing bridge is an owner-recovery problem, not evidence
+        // that ordinary local field work is a read-only participant edit. Sharing/export stays
+        // guarded by the repository, but local edits do not wait on CloudKit just because an older
+        // accepted-share reference is still mirrored in KVS.
+        if accountOwnershipRegistry.hasEstablishedOwnerShare(for: herd.publicID) {
+            return false
         }
 
         if acceptedParticipantReferenceStore.hasConflictingReference(for: herd.publicID)
@@ -349,12 +368,7 @@ final class AppDependencies {
             return true
         }
 
-        switch ownershipRegistry.ownership(for: herd.publicID) {
-        case .participant?, .detachedParticipant?:
-            return true
-        case .owner?, nil:
-            return false
-        }
+        return false
     }
 
     private static func inferredStorageMode(
