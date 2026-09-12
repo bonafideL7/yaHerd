@@ -751,18 +751,66 @@ struct SyncDiagnosticsView: View {
     }
 
     func publicIDPreparedAnimalDisplay(for issue: PublicIDRepairUnresolvedReference) -> AnimalSummary? {
-        guard let rawID = publicIDRawField("animalPublicID", in: issue.recordDescription),
-              let id = UUID(uuidString: rawID) else {
-            return nil
+        if let rawID = publicIDRawField("animalPublicID", in: issue.recordDescription),
+           let id = UUID(uuidString: rawID),
+           let animal = publicIDAnimal(publicID: id) {
+            return AnimalMapper.makeSummary(from: animal)
         }
-        var descriptor = FetchDescriptor<Animal>(
-            predicate: #Predicate { $0.publicID == id }
-        )
-        descriptor.fetchLimit = 1
-        guard let animal = try? modelContext.fetch(descriptor).first else {
+
+        // Newer bridge blockers often carry a human-readable source description instead of raw
+        // fields. Resolve that display tag only when it identifies exactly one local animal. This
+        // keeps older persisted blockers useful without ever guessing between duplicate tag values.
+        guard let tagNumber = publicIDSharedAnimalTagNumber(in: issue.recordDescription),
+              let animal = publicIDUniqueAnimal(tagNumber: tagNumber) else {
             return nil
         }
         return AnimalMapper.makeSummary(from: animal)
+    }
+
+    func publicIDAnimal(publicID: UUID) -> Animal? {
+        var descriptor = FetchDescriptor<Animal>(
+            predicate: #Predicate { $0.publicID == publicID }
+        )
+        descriptor.fetchLimit = 1
+        return try? modelContext.fetch(descriptor).first
+    }
+
+    func publicIDSharedAnimalTagNumber(in text: String) -> String? {
+        guard text.hasPrefix("Shared "),
+              let markerRange = text.range(of: ": Tag ") else {
+            return nil
+        }
+        let remainder = text[markerRange.upperBound...]
+        let end = remainder.range(of: " • ")?.lowerBound ?? remainder.endIndex
+        let tag = String(remainder[..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return tag.isEmpty ? nil : tag
+    }
+
+    func publicIDUniqueAnimal(tagNumber: String) -> Animal? {
+        var animalDescriptor = FetchDescriptor<Animal>(
+            predicate: #Predicate { $0.tagNumber == tagNumber }
+        )
+        animalDescriptor.fetchLimit = 2
+        if let matches = try? modelContext.fetch(animalDescriptor),
+           matches.count == 1 {
+            return matches[0]
+        }
+
+        var tagDescriptor = FetchDescriptor<AnimalTag>(
+            predicate: #Predicate { $0.number == tagNumber }
+        )
+        tagDescriptor.fetchLimit = 8
+        guard let tagMatches = try? modelContext.fetch(tagDescriptor) else {
+            return nil
+        }
+        let activePrimaryAnimals = tagMatches
+            .filter { $0.isPrimary && $0.isActive }
+            .compactMap(\.animal)
+        let uniqueByPublicID = Dictionary(grouping: activePrimaryAnimals, by: \.publicID)
+        guard uniqueByPublicID.count == 1 else {
+            return nil
+        }
+        return uniqueByPublicID.values.first?.first
     }
 
     @ViewBuilder
@@ -791,17 +839,11 @@ struct SyncDiagnosticsView: View {
     }
 
     func publicIDAnimalLabel(publicID rawID: String) -> String {
-        guard let id = UUID(uuidString: rawID) else {
+        guard let id = UUID(uuidString: rawID),
+              let animal = publicIDAnimal(publicID: id) else {
             return "Unknown animal"
         }
-        var descriptor = FetchDescriptor<Animal>(
-            predicate: #Predicate { $0.publicID == id }
-        )
-        descriptor.fetchLimit = 1
-        if let animal = try? modelContext.fetch(descriptor).first {
-            return publicIDAnimalLabel(animal)
-        }
-        return "Unknown animal"
+        return publicIDAnimalLabel(animal)
     }
 
     func publicIDAnimalLabel(_ animal: Animal?) -> String {
