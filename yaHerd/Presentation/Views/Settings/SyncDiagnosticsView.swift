@@ -36,6 +36,7 @@ struct SyncDiagnosticsView: View {
     @State var publicIDIssueSummaries: [String: String] = [:]
     @State var publicIDAnimalDisplays: [String: AnimalSummary] = [:]
     @State var publicIDCandidateLabels: [String: String] = [:]
+    @State var publicIDCandidateAnimalDisplays: [String: AnimalSummary] = [:]
     @State var isScanningPublicIDs = false
     @State var isRepairingPublicIDs = false
     @State var isShowingPublicIDRepairConfirmation = false
@@ -172,24 +173,16 @@ struct SyncDiagnosticsView: View {
                                             .foregroundStyle(.secondary)
                                     }
                                 } else {
-                                    Picker(
-                                        publicIDPickerTitle(issue),
-                                        selection: resolutionBinding(for: issue.id)
-                                    ) {
-                                        Text("Choose an action or matching record").tag("")
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text(publicIDPickerTitle(issue))
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.secondary)
+
                                         ForEach(issue.candidates) { candidate in
-                                            Text(publicIDCandidateLabel(candidate, for: issue))
-                                                .tag(candidate.stableRecordIdentifier)
+                                            publicIDCandidateSelectionRow(candidate, for: issue)
                                         }
                                     }
-                                    .pickerStyle(.menu)
-                                    .accessibilityLabel("Repair choice for \(publicIDIssueSummary(issue))")
-
-                                    if let selectedCandidate = selectedCandidate(for: issue) {
-                                        Text("Selected: \(publicIDCandidateLabel(selectedCandidate, for: issue))")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                    }
+                                    .accessibilityElement(children: .contain)
                                 }
 
                                 DisclosureGroup("Technical details") {
@@ -260,15 +253,6 @@ struct SyncDiagnosticsView: View {
                             Button("Cancel", role: .cancel) {}
                         } message: {
                             Text(publicIDRepairConfirmationMessage)
-                        }
-
-                        if !hasCompleteSelections && !isRepairingPublicIDs && !isScanningPublicIDs {
-                            Label(
-                                "Select a resolution for every blocker above to enable this action.",
-                                systemImage: "lock.fill"
-                            )
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
                         }
                     } else {
                         Label("No duplicate public IDs found", systemImage: "checkmark.circle")
@@ -452,10 +436,61 @@ struct SyncDiagnosticsView: View {
             ?? publicIDReadableRawDescription(candidate.recordDescription)
     }
 
+    @ViewBuilder
+    func publicIDCandidateSelectionRow(
+        _ candidate: PublicIDRepairResolutionCandidate,
+        for issue: PublicIDRepairUnresolvedReference
+    ) -> some View {
+        let cacheKey = publicIDCandidateCacheKey(issue: issue, candidate: candidate)
+        let isSelected = publicIDResolutionSelections[issue.id] == candidate.stableRecordIdentifier
+
+        Button {
+            publicIDResolutionSelections[issue.id] = candidate.stableRecordIdentifier
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                    .padding(.top, 4)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    if let animal = publicIDCandidateAnimalDisplays[cacheKey] {
+                        AnimalListRowContent(animal: animal)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Text(publicIDCandidateLabel(candidate, for: issue))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(publicIDCandidateLabel(candidate, for: issue))
+                            .font(.body)
+                            .foregroundStyle(.primary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isSelected ? Color.accentColor.opacity(0.10) : Color.secondary.opacity(0.07))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(isSelected ? Color.accentColor.opacity(0.45) : Color.secondary.opacity(0.16), lineWidth: 1)
+            )
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(publicIDCandidateLabel(candidate, for: issue))
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+    }
+
     func rebuildPublicIDDisplayCache(for assessment: PublicIDRepairAssessment) {
         var summaries: [String: String] = [:]
         var animals: [String: AnimalSummary] = [:]
         var candidateLabels: [String: String] = [:]
+        var candidateAnimals: [String: AnimalSummary] = [:]
 
         for issue in assessment.unresolvedReferences {
             let animalDisplay = publicIDPreparedAnimalDisplay(for: issue)
@@ -468,20 +503,25 @@ struct SyncDiagnosticsView: View {
             )
 
             for candidate in issue.candidates {
-                candidateLabels[publicIDCandidateCacheKey(issue: issue, candidate: candidate)] =
-                    publicIDPreparedCandidateLabel(candidate, for: issue)
+                let cacheKey = publicIDCandidateCacheKey(issue: issue, candidate: candidate)
+                candidateLabels[cacheKey] = publicIDPreparedCandidateLabel(candidate, for: issue)
+                if let animal = publicIDPreparedCandidateAnimal(candidate, for: issue) {
+                    candidateAnimals[cacheKey] = animal
+                }
             }
         }
 
         publicIDIssueSummaries = summaries
         publicIDAnimalDisplays = animals
         publicIDCandidateLabels = candidateLabels
+        publicIDCandidateAnimalDisplays = candidateAnimals
     }
 
     func clearPublicIDDisplayCache() {
         publicIDIssueSummaries = [:]
         publicIDAnimalDisplays = [:]
         publicIDCandidateLabels = [:]
+        publicIDCandidateAnimalDisplays = [:]
     }
 
     func publicIDCandidateCacheKey(
@@ -514,6 +554,43 @@ struct SyncDiagnosticsView: View {
         default:
             return publicIDReadableRawDescription(issue.recordDescription)
         }
+    }
+
+    func publicIDPreparedCandidateAnimal(
+        _ candidate: PublicIDRepairResolutionCandidate,
+        for issue: PublicIDRepairUnresolvedReference
+    ) -> AnimalSummary? {
+        let targetID = candidate.resultingPublicID
+        let animal: Animal?
+
+        switch issue.entityType {
+        case .movement:
+            var descriptor = FetchDescriptor<MovementRecord>(
+                predicate: #Predicate { $0.publicID == targetID }
+            )
+            descriptor.fetchLimit = 1
+            animal = (try? modelContext.fetch(descriptor).first)?.animal
+
+        case .pregnancyCheck:
+            var descriptor = FetchDescriptor<PregnancyCheck>(
+                predicate: #Predicate { $0.publicID == targetID }
+            )
+            descriptor.fetchLimit = 1
+            animal = (try? modelContext.fetch(descriptor).first)?.animal
+
+        case .statusRecord:
+            var descriptor = FetchDescriptor<StatusRecord>(
+                predicate: #Predicate { $0.publicID == targetID }
+            )
+            descriptor.fetchLimit = 1
+            animal = (try? modelContext.fetch(descriptor).first)?.animal
+
+        default:
+            animal = nil
+        }
+
+        guard let animal else { return nil }
+        return AnimalMapper.makeSummary(from: animal)
     }
 
     func publicIDPreparedCandidateLabel(
