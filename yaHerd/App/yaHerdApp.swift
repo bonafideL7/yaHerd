@@ -13,48 +13,31 @@ import SwiftData
 struct yaHerdApp: App {
     @UIApplicationDelegateAdaptor(CloudKitShareAppDelegate.self) private var cloudKitShareAppDelegate
 
-    private let bootstrapState: AppBootstrapState
-    private let applicationSettings: ApplicationSettings
-    private let appSettingsSynchronizer: AppSettingsSynchronizer
-
-    init() {
-        let applicationSettings = ApplicationSettings()
-        let appSettingsSynchronizer = AppSettingsSynchronizer(settings: applicationSettings)
-
-        self.applicationSettings = applicationSettings
-        self.appSettingsSynchronizer = appSettingsSynchronizer
-        self.bootstrapState = Self.bootstrap(
-            applicationSettings: applicationSettings,
-            appSettingsSynchronizer: appSettingsSynchronizer
-        )
-    }
-
     var body: some Scene {
         WindowGroup {
-            switch bootstrapState {
-            case .ready(let runtime):
-                RunningAppView(
-                    runtime: runtime,
-                    applicationSettings: applicationSettings,
-                    appSettingsSynchronizer: appSettingsSynchronizer
-                )
-
-            case .storageUnavailable(let message):
-                StartupStorageFailureView(message: message)
-            }
+            AppStartupView()
         }
     }
 
-    private static func bootstrap(
-        applicationSettings: ApplicationSettings,
-        appSettingsSynchronizer: AppSettingsSynchronizer
-    ) -> AppBootstrapState {
+    @MainActor
+    fileprivate static func bootstrap() async -> AppBootstrapState {
+        let applicationSettings = ApplicationSettings()
+        let appSettingsSynchronizer = AppSettingsSynchronizer(settings: applicationSettings)
         let syncMode = applicationSettings.syncMode
 
         do {
-            let container = try ModelContainerFactory.makeContainer(
-                syncMode: syncMode
+            ReliabilityLog.persistenceEvent(
+                "AppStartup.openContainer.begin",
+                detail: syncMode.rawValue
             )
+            let container = try await Task { @concurrent in
+                try ModelContainerFactory.makeContainer(syncMode: syncMode)
+            }.value
+            ReliabilityLog.persistenceEvent(
+                "AppStartup.openContainer.complete",
+                detail: syncMode.rawValue
+            )
+
             try Self.runStartupDataMigrations(in: container.mainContext, syncMode: syncMode)
 
             AppLaunchDiagnostics.record(
@@ -62,8 +45,6 @@ struct yaHerdApp: App {
                 actualStorageMode: syncMode == .iCloud ? .iCloud : .localOnly,
                 cloudKitOpened: syncMode == .iCloud
             )
-
-            appSettingsSynchronizer.startIfNeeded(syncMode: syncMode)
 
             return .ready(
                 AppRuntime(
@@ -76,20 +57,35 @@ struct yaHerdApp: App {
                     dataAccessMode: .readWrite,
                     recoveryContext: nil,
                     storageError: nil
-                )
+                ),
+                applicationSettings,
+                appSettingsSynchronizer
             )
         } catch {
             let primaryError = error
+            ReliabilityLog.persistenceFailure("AppStartup.openPrimaryContainer", error: error)
 
             if syncMode == .iCloud {
                 applicationSettings.syncMode = .localOnly
                 appSettingsSynchronizer.stop()
 
                 do {
-                    let localContainer = try ModelContainerFactory.makeContainer(
+                    ReliabilityLog.persistenceEvent(
+                        "AppStartup.openContainer.begin",
+                        detail: SyncMode.localOnly.rawValue
+                    )
+                    let localContainer = try await Task { @concurrent in
+                        try ModelContainerFactory.makeContainer(syncMode: .localOnly)
+                    }.value
+                    ReliabilityLog.persistenceEvent(
+                        "AppStartup.openContainer.complete",
+                        detail: SyncMode.localOnly.rawValue
+                    )
+
+                    try Self.runStartupDataMigrations(
+                        in: localContainer.mainContext,
                         syncMode: .localOnly
                     )
-                    try Self.runStartupDataMigrations(in: localContainer.mainContext, syncMode: .localOnly)
 
                     let startupMessage = """
                     iCloud Sync could not be enabled, so yaHerd returned to Local Only mode. Your local data is still on this device. Original error: \(primaryError.localizedDescription)
@@ -113,13 +109,18 @@ struct yaHerdApp: App {
                             dataAccessMode: .readWrite,
                             recoveryContext: nil,
                             storageError: startupMessage
-                        )
+                        ),
+                        applicationSettings,
+                        appSettingsSynchronizer
                     )
                 } catch {
                     let localRecoveryError = error
+                    ReliabilityLog.persistenceFailure("AppStartup.openLocalFallbackContainer", error: error)
 
                     do {
-                        let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer()
+                        let fallbackContainer = try await Task { @concurrent in
+                            try ModelContainerFactory.makeRecoveryContainer()
+                        }.value
 
                         let startupMessage = """
                         Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved.
@@ -150,7 +151,9 @@ struct yaHerdApp: App {
                                     startupError: startupMessage
                                 ),
                                 storageError: startupMessage
-                            )
+                            ),
+                            applicationSettings,
+                            appSettingsSynchronizer
                         )
                     } catch {
                         let startupMessage = """
@@ -176,7 +179,9 @@ struct yaHerdApp: App {
             appSettingsSynchronizer.stop()
 
             do {
-                let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer()
+                let fallbackContainer = try await Task { @concurrent in
+                    try ModelContainerFactory.makeRecoveryContainer()
+                }.value
 
                 let startupMessage = """
                 Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved. Original error: \(primaryError.localizedDescription)
@@ -204,7 +209,9 @@ struct yaHerdApp: App {
                             startupError: startupMessage
                         ),
                         storageError: startupMessage
-                    )
+                    ),
+                    applicationSettings,
+                    appSettingsSynchronizer
                 )
             } catch {
                 let startupMessage = """
@@ -231,15 +238,25 @@ struct yaHerdApp: App {
             in: context,
             storageScope: syncMode.rawValue
         )
-        try FieldCheckHistoricalSnapshotMigrator.runIfNeeded(
-            in: context,
-            storageScope: syncMode.rawValue
-        )
+        try Self.ensureTagColorLibraryExistsForAppLaunch(in: context)
+    }
 
-        try SwiftDataTagColorRepository(
-            context: context,
-            duplicateResolutionPolicy: syncMode.tagColorDuplicateResolutionPolicy
-        ).prepareLibraryForWritableUse()
+    private static func ensureTagColorLibraryExistsForAppLaunch(in context: ModelContext) throws {
+        var descriptor = FetchDescriptor<TagColorDefinition>()
+        descriptor.fetchLimit = 1
+        guard try context.fetch(descriptor).isEmpty else { return }
+
+        // Do not create or normalize records while duplicate-ID repair is waiting for bridge
+        // convergence. Startup should be able to display the existing graph without entering the
+        // normal collaboration save pipeline.
+        guard !HerdDataMutationGate().requiresBridgeConvergence else { return }
+
+        for defaultColor in TagColorDefaults.seedDefaultColors() {
+            try context.insertIntoDefaultHerd(TagColorDefinition(snapshot: defaultColor))
+        }
+        if context.hasChanges {
+            try PersistenceLog.save(context, operation: "AppStartup.seedTagColors")
+        }
     }
 
     static func makeSchema() -> Schema {
@@ -253,18 +270,73 @@ private extension SyncMode {
     }
 }
 
-private enum AppBootstrapState {
-    case ready(AppRuntime)
+fileprivate enum AppBootstrapState {
+    case ready(AppRuntime, ApplicationSettings, AppSettingsSynchronizer)
     case storageUnavailable(String)
 }
 
-private struct AppRuntime {
+fileprivate struct AppRuntime {
     let modelContainer: ModelContainer
     let dependencies: AppDependencies
     let syncMode: SyncMode
     let dataAccessMode: AppDataAccessMode
     let recoveryContext: RecoveryModeContext?
     let storageError: String?
+}
+
+private struct AppStartupView: View {
+    @State private var bootstrapState: AppBootstrapState?
+
+    var body: some View {
+        Group {
+            if let bootstrapState {
+                switch bootstrapState {
+                case .ready(let runtime, let applicationSettings, let appSettingsSynchronizer):
+                    RunningAppView(
+                        runtime: runtime,
+                        applicationSettings: applicationSettings,
+                        appSettingsSynchronizer: appSettingsSynchronizer
+                    )
+
+                case .storageUnavailable(let message):
+                    StartupStorageFailureView(message: message)
+                }
+            } else {
+                StartupLoadingView()
+            }
+        }
+        .task {
+            guard bootstrapState == nil else { return }
+
+            // Yield twice so the startup placeholder is committed to a frame before any app
+            // services are constructed. Persistent store construction itself then runs on an
+            // explicitly concurrent executor so SQLite/CloudKit initialization cannot block the
+            // main actor.
+            await Task.yield()
+            await Task.yield()
+            bootstrapState = await yaHerdApp.bootstrap()
+        }
+    }
+}
+
+private struct StartupLoadingView: View {
+    var body: some View {
+        ZStack {
+            Color(uiColor: .systemBackground)
+                .ignoresSafeArea()
+
+            VStack(spacing: 14) {
+                ProgressView()
+                    .controlSize(.large)
+                Text("Opening yaHerd…")
+                    .font(.headline)
+                Text("Loading local herd data")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+        }
+    }
 }
 
 private struct RunningAppView: View {
@@ -274,6 +346,7 @@ private struct RunningAppView: View {
     @State private var cloudKitShareInvitationCoordinator: CloudKitShareInvitationCoordinator
     @State private var herdSharingSyncCoordinator: HerdSharingSyncCoordinator
     @State private var showsPendingCloudKitShareInvitation = false
+    @State private var hasRunPostLaunchSetup = false
 
     private let runtime: AppRuntime
     private let applicationSettings: ApplicationSettings
@@ -368,6 +441,29 @@ private struct RunningAppView: View {
             .environment(\.workingSessionFeatureDependencies, runtime.dependencies.workingSessionFeatureDependencies)
             .environment(\.collaborationDependencies, collaborationDependencies)
             .modelContainer(runtime.modelContainer)
+            .task {
+                guard !hasRunPostLaunchSetup else { return }
+                hasRunPostLaunchSetup = true
+                guard runtime.dataAccessMode.allowsDataMutations else { return }
+
+                appSettingsSynchronizer.startIfNeeded(syncMode: runtime.syncMode)
+
+                // Historical Field Check snapshot repair is maintenance, not a prerequisite for
+                // rendering the app. Run it only after the root UI exists so an older data set
+                // cannot turn launch into a black screen.
+                await Task.yield()
+                do {
+                    try FieldCheckHistoricalSnapshotMigrator.runIfNeeded(
+                        in: runtime.modelContainer.mainContext,
+                        storageScope: runtime.syncMode.rawValue
+                    )
+                } catch {
+                    ReliabilityLog.persistenceFailure(
+                        "AppStartup.fieldCheckHistoricalSnapshotMigration",
+                        error: error
+                    )
+                }
+            }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     guard runtime.dataAccessMode.allowsDataMutations else { return }

@@ -60,17 +60,13 @@ final class AppDependencies {
         let mutationGate = HerdDataMutationGate()
         let participantOwnershipRegistry = MirroredHerdSharingOwnershipRegistry()
         let acceptedParticipantReferenceStore = MirroredHerdSharingAcceptedParticipantReferenceStore()
-        let accountOwnershipRegistry = UbiquitousHerdSharingAccountOwnershipRegistry()
         let writePolicy = HerdCollaborationWritePolicy(
             dataAccessMode: dataAccessMode,
             mutationGate: mutationGate,
             requiresInitialAccessVerification: Self.requiresInitialSharingAccessVerification(
                 context: context,
                 storageMode: resolvedStorageMode,
-                dataAccessMode: dataAccessMode,
-                ownershipRegistry: participantOwnershipRegistry,
-                acceptedParticipantReferenceStore: acceptedParticipantReferenceStore,
-                accountOwnershipRegistry: accountOwnershipRegistry
+                dataAccessMode: dataAccessMode
             )
         )
         let conflictReviewStore = HerdSharingConflictReviewStore()
@@ -336,10 +332,7 @@ final class AppDependencies {
     private static func requiresInitialSharingAccessVerification(
         context: ModelContext,
         storageMode: HerdStorageMode,
-        dataAccessMode: AppDataAccessMode,
-        ownershipRegistry: any HerdSharingOwnershipRecording,
-        acceptedParticipantReferenceStore: any HerdSharingAcceptedParticipantReferenceRecording,
-        accountOwnershipRegistry: any HerdSharingAccountOwnershipRecording
+        dataAccessMode: AppDataAccessMode
     ) -> Bool {
         guard storageMode == .iCloud, dataAccessMode.allowsDataMutations else { return false }
 
@@ -347,28 +340,24 @@ final class AppDependencies {
             return true
         }
 
+        // Launch-time provenance checks are local-only. Authoritative CloudKit verification still
+        // occurs at mutation/collaboration preflight, while the first frame no longer depends on KVS.
         let localOwnerHistoryKey = "LocalHerdSharingOwnerShareEstablished.\(herd.publicID.uuidString.lowercased())"
-        let hasMirroredOwnerHistory = accountOwnershipRegistry.hasEstablishedOwnerShare(for: herd.publicID)
-            || UserDefaults.standard.bool(forKey: localOwnerHistoryKey)
-
-        // Owner-account history is the same precedence used by HerdSharingCreationStateGuard for a
-        // missing bridge. It is an owner-recovery problem: sharing/export remains guarded, but an
-        // older mirrored participant marker must not convert ordinary local field work into a
-        // launch-wide CloudKit dependency.
-        if hasMirroredOwnerHistory {
+        if UserDefaults.standard.bool(forKey: localOwnerHistoryKey) {
             return false
         }
 
-        // Without owner history, durable participant/detachment provenance remains fail-closed.
-        switch ownershipRegistry.ownership(for: herd.publicID) {
+        let localOwnershipRegistry = UserDefaultsHerdSharingOwnershipRegistry()
+        switch localOwnershipRegistry.ownership(for: herd.publicID) {
         case .participant?, .detachedParticipant?:
             return true
         case .owner?, nil:
             break
         }
 
-        if acceptedParticipantReferenceStore.hasConflictingReference(for: herd.publicID)
-            || acceptedParticipantReferenceStore.reference(for: herd.publicID) != nil
+        let localAcceptedReferenceStore = UserDefaultsHerdSharingAcceptedParticipantReferenceStore()
+        if localAcceptedReferenceStore.hasConflictingReference(for: herd.publicID)
+            || localAcceptedReferenceStore.reference(for: herd.publicID) != nil
         {
             return true
         }

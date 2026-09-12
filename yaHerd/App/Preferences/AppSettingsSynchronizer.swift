@@ -35,21 +35,13 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
         self.cloudStore = cloudStore
         self.keys = keys
 
-        // Retired cloud aliases must be removed even when this installation is
-        // running Local Only or falls back before preference sync can start.
-        // Canonical compatibility tombstones remain as forced-safe values so
-        // older supported releases cannot restore retired destructive behavior.
-        cloudStore.synchronize()
-        purgeDeprecatedCloudKeys()
-        publishCompatibilityCloudTombstones()
-        cloudStore.synchronize()
-        observeCompatibilityCloudChanges()
+        // Intentionally do not touch NSUbiquitousKeyValueStore or start observation here.
+        // AppSettingsSynchronizer is created before SwiftUI's first frame, so all iCloud work
+        // must remain deferred until startIfNeeded() runs from RunningAppView post-launch setup.
     }
 
     isolated deinit {
         stop()
-        compatibilityCloudObservationTask?.cancel()
-        compatibilityCloudObservationTask = nil
     }
 
     func startIfNeeded(syncMode: SyncMode) {
@@ -58,7 +50,6 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
             return
         }
 
-        cloudStore.synchronize()
         migrateCloudKeys()
         applyCloudSettingsToApplicationSettings()
         seedMissingCloudSettingsFromLocalSettings()
@@ -69,12 +60,14 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
             self?.saveLocalSettingToICloud(key)
         }
         observeCloudChanges()
+        observeCompatibilityCloudChanges()
     }
 
     func stop() {
-        guard isStarted || cloudObservationTask != nil else { return }
         cloudObservationTask?.cancel()
         cloudObservationTask = nil
+        compatibilityCloudObservationTask?.cancel()
+        compatibilityCloudObservationTask = nil
         settings.setPersistedChangeHandler(nil)
         isStarted = false
         isApplyingCloudValues = false
@@ -82,7 +75,6 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
 
     func refreshFromICloudIfStarted() {
         guard isStarted else { return }
-        cloudStore.synchronize()
         migrateCloudKeys()
         applyCloudSettingsToApplicationSettings()
     }
@@ -117,7 +109,6 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
         )
         purgeDeprecatedCloudKeys()
         publishCompatibilityCloudTombstones()
-        cloudStore.synchronize()
     }
 
     private func purgeDeprecatedCloudKeys() {
@@ -143,7 +134,6 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
                 cloudStore.set(normalizedValue, forKey: key.rawValue)
             }
         }
-        cloudStore.synchronize()
     }
 
     private func seedMissingCloudSettingsFromLocalSettings() {
@@ -154,7 +144,6 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
             }
             cloudStore.set(value, forKey: key.rawValue)
         }
-        cloudStore.synchronize()
     }
 
     private func saveLocalSettingToICloud(_ key: ApplicationSettingKey) {
@@ -166,7 +155,6 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
         }
 
         cloudStore.set(value, forKey: key.rawValue)
-        cloudStore.synchronize()
     }
 
     private func observeCloudChanges() {
@@ -186,6 +174,7 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
     }
 
     private func observeCompatibilityCloudChanges() {
+        guard compatibilityCloudObservationTask == nil else { return }
         compatibilityCloudObservationTask = Task<Void, Never> { @MainActor [weak self] in
             let changes = NotificationCenter.default.notifications(
                 named: NSUbiquitousKeyValueStore.didChangeExternallyNotification
@@ -210,10 +199,8 @@ final class AppSettingsSynchronizer: AppSettingsSyncing {
             return
         }
 
-        cloudStore.synchronize()
         purgeDeprecatedCloudKeys()
         publishCompatibilityCloudTombstones()
-        cloudStore.synchronize()
     }
 
     private func handleCloudChange(changedKeys: [String]?) {
