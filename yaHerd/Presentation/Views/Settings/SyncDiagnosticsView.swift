@@ -142,13 +142,17 @@ struct SyncDiagnosticsView: View {
                             .foregroundStyle(.orange)
 
                         ForEach(assessment.unresolvedReferences) { issue in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("\(issue.recordDescription) — \(issue.fieldName)")
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(publicIDIssueHeading(issue))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+
+                                Text(publicIDIssueSummary(issue))
                                     .font(.subheadline.weight(.semibold))
-                                Text(issue.reason)
+
+                                Text(publicIDIssueGuidance(issue))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
 
                                 if issue.candidates.isEmpty {
                                     if issue.kind == .indeterminateLocalRepairRecovery {
@@ -156,43 +160,59 @@ struct SyncDiagnosticsView: View {
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                     } else {
-                                        Text("Make these duplicate records distinguishable, then scan again. yaHerd will not use a device-local record identity to guess which record keeps the public ID.")
+                                        Text("There is not enough information to make a safe choice yet. yaHerd will not guess which record should receive an identity.")
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                     }
                                 } else {
                                     Picker(
-                                        "Intended record",
+                                        publicIDPickerTitle(issue),
                                         selection: resolutionBinding(for: issue.id)
                                     ) {
-                                        Text("Choose a record").tag("")
+                                        Text("Choose an action or matching record").tag("")
                                         ForEach(issue.candidates) { candidate in
                                             Text(publicIDCandidateLabel(candidate, for: issue))
                                                 .tag(candidate.stableRecordIdentifier)
                                         }
                                     }
                                     .pickerStyle(.menu)
-                                    .accessibilityLabel("Intended record for \(issue.recordDescription) \(issue.fieldName)")
+                                    .accessibilityLabel("Repair choice for \(publicIDIssueSummary(issue))")
 
                                     if let selectedCandidate = selectedCandidate(for: issue) {
-                                        Text(publicIDCandidateLabel(selectedCandidate, for: issue))
+                                        Text("Selected: \(publicIDCandidateLabel(selectedCandidate, for: issue))")
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
-                                        if issue.kind == .indeterminateLocalRepairRecovery,
-                                           issue.fieldName == "manifestIdentityBinding" {
-                                            Text("The existing manifest final public ID remains authoritative and will be replayed after this identity binding.")
-                                                .font(.caption2)
+                                    }
+                                }
+
+                                DisclosureGroup("Technical details") {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        LabeledContent("Record type", value: issue.entityType.displayName)
+                                        LabeledContent("Conflict field", value: publicIDHumanFieldName(issue.fieldName))
+                                        Text("Historical public ID")
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundStyle(.secondary)
+                                        Text(issue.referencedPublicID.uuidString)
+                                            .font(.caption2.monospaced())
+                                            .textSelection(.enabled)
+                                        Text(issue.reason)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .textSelection(.enabled)
+                                        if let selectedCandidate = selectedCandidate(for: issue) {
+                                            Text("Selected resulting public ID")
+                                                .font(.caption2.weight(.semibold))
                                                 .foregroundStyle(.secondary)
-                                        } else {
-                                            Text("Resulting public ID: \(selectedCandidate.resultingPublicID.uuidString)")
+                                            Text(selectedCandidate.resultingPublicID.uuidString)
                                                 .font(.caption2.monospaced())
-                                                .foregroundStyle(.secondary)
                                                 .textSelection(.enabled)
                                         }
                                     }
+                                    .padding(.top, 4)
                                 }
+                                .font(.caption)
                             }
-                            .padding(.vertical, 4)
+                            .padding(.vertical, 6)
                         }
                     }
 
@@ -339,53 +359,313 @@ struct SyncDiagnosticsView: View {
         }
     }
 
+    func publicIDIssueHeading(_ issue: PublicIDRepairUnresolvedReference) -> String {
+        switch issue.kind {
+        case .canonicalRecord:
+            issue.fieldName == "deletionTargetPublicID" ? "Shared deletion to resolve" : "Shared record to resolve"
+        case .lookupReference, .treatmentReference, .bridgeRecordOwner:
+            "Shared reference to resolve"
+        case .preparedHerdRecovery:
+            "Shared Herd recovery decision"
+        case .indeterminateLocalRepairRecovery:
+            "Repair recovery decision"
+        }
+    }
+
+    func publicIDPickerTitle(_ issue: PublicIDRepairUnresolvedReference) -> String {
+        switch issue.kind {
+        case .canonicalRecord:
+            "Matching local record"
+        case .lookupReference, .treatmentReference, .bridgeRecordOwner:
+            "Referenced local record"
+        case .preparedHerdRecovery, .indeterminateLocalRepairRecovery:
+            "Recovery action"
+        }
+    }
+
+    func publicIDIssueGuidance(_ issue: PublicIDRepairUnresolvedReference) -> String {
+        switch issue.kind {
+        case .canonicalRecord:
+            if issue.fieldName == "deletionTargetPublicID" {
+                return "This deletion was created while more than one physical record used the same old identity. Choose the local record that the deletion was intended to remove."
+            }
+            return "This shared record still uses an old public ID that belonged to multiple local records. Compare the shared record above with the local choices below. Choose the matching local record, restore the shared record if it is missing locally, or remove only the shared copy if it is genuinely obsolete."
+        case .lookupReference, .treatmentReference:
+            return "This shared record points to an identity that was duplicated locally. Choose the local record that this reference actually belongs to."
+        case .bridgeRecordOwner:
+            return "Choose the record that actually owns this shared bridge reference. yaHerd will not infer ownership from a duplicated identity."
+        case .preparedHerdRecovery:
+            return "Choose how to resolve this prepared shared Herd using the verified bridge state shown here."
+        case .indeterminateLocalRepairRecovery:
+            return "The previous repair stopped after a durable write boundary. Choose the recovery action that matches the evidence shown here."
+        }
+    }
+
+    func publicIDIssueSummary(_ issue: PublicIDRepairUnresolvedReference) -> String {
+        switch issue.entityType {
+        case .movement:
+            if issue.recordDescription.hasPrefix("Shared movement:") {
+                return issue.recordDescription
+            }
+            return publicIDParsedMovementSummary(issue.recordDescription) ?? publicIDReadableRawDescription(issue.recordDescription)
+        case .pregnancyCheck:
+            if issue.recordDescription.hasPrefix("Shared pregnancy check:") {
+                return issue.recordDescription
+            }
+            return publicIDParsedPregnancySummary(issue.recordDescription) ?? publicIDReadableRawDescription(issue.recordDescription)
+        case .statusRecord:
+            return publicIDParsedStatusSummary(issue.recordDescription) ?? publicIDReadableRawDescription(issue.recordDescription)
+        default:
+            return publicIDReadableRawDescription(issue.recordDescription)
+        }
+    }
+
     func publicIDCandidateLabel(
         _ candidate: PublicIDRepairResolutionCandidate,
         for issue: PublicIDRepairUnresolvedReference
     ) -> String {
-        if issue.entityType == .movement {
-            let descriptor = FetchDescriptor<MovementRecord>()
-            if let movements = try? modelContext.fetch(descriptor),
-               let movement = movements.first(where: { $0.publicID == candidate.resultingPublicID }) {
-                let animalLabel: String
-                if let animal = movement.animal {
-                    let tag = animal.tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let name = animal.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !tag.isEmpty && !name.isEmpty {
-                        animalLabel = "Tag \(tag) — \(name)"
-                    } else if !tag.isEmpty {
-                        animalLabel = "Tag \(tag)"
-                    } else if !name.isEmpty {
-                        animalLabel = name
-                    } else {
-                        animalLabel = "Untagged animal"
-                    }
-                } else {
-                    animalLabel = "Unknown animal"
-                }
-
-                let fromPasture = movement.fromPasture?.trimmingCharacters(in: .whitespacesAndNewlines)
-                let toPasture = movement.toPasture?.trimmingCharacters(in: .whitespacesAndNewlines)
-                let from = (fromPasture?.isEmpty == false) ? fromPasture! : "Unknown pasture"
-                let to = (toPasture?.isEmpty == false) ? toPasture! : "Unknown pasture"
-                return "\(animalLabel) • \(movement.date.formatted(date: .abbreviated, time: .omitted)) • \(from) → \(to)"
-            }
+        if candidate.stableRecordIdentifier.hasPrefix("bridge-canonical-restore|")
+            || candidate.stableRecordIdentifier.hasPrefix("bridge-canonical-remove|") {
+            return candidate.recordDescription
         }
 
-        let readableParts = candidate.detail
-            .components(separatedBy: " • ")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { part in
-                !part.lowercased().contains("publicid:")
-            }
-            .map { part in
-                part
-                    .replacingOccurrences(of: "date:", with: "Date:")
-                    .replacingOccurrences(of: "fromPasture:", with: "From:")
-                    .replacingOccurrences(of: "toPasture:", with: "To:")
+        switch issue.entityType {
+        case .movement:
+            let descriptor = FetchDescriptor<MovementRecord>()
+            if let records = try? modelContext.fetch(descriptor),
+               let movement = records.first(where: { $0.publicID == candidate.resultingPublicID }) {
+                let from = publicIDNonempty(movement.fromPasture) ?? "Unknown pasture"
+                let to = publicIDNonempty(movement.toPasture) ?? "Unknown pasture"
+                return "\(publicIDAnimalLabel(movement.animal)) • \(publicIDDate(movement.date)) • \(from) → \(to)"
             }
 
-        let readableDetail = readableParts.joined(separator: " • ")
-        return readableDetail.isEmpty ? candidate.recordDescription : readableDetail
+        case .pregnancyCheck:
+            let descriptor = FetchDescriptor<PregnancyCheck>()
+            if let records = try? modelContext.fetch(descriptor),
+               let check = records.first(where: { $0.publicID == candidate.resultingPublicID }) {
+                var parts = [
+                    publicIDAnimalLabel(check.animal),
+                    publicIDDate(check.date),
+                    publicIDHumanEnumValue(check.result.rawValue),
+                ]
+                if let days = check.estimatedDaysPregnant {
+                    parts.append("\(days) days pregnant")
+                }
+                if let dueDate = check.dueDate {
+                    parts.append("Due \(publicIDDate(dueDate))")
+                }
+                if let technician = publicIDNonempty(check.technician) {
+                    parts.append("Technician: \(technician)")
+                }
+                return parts.joined(separator: " • ")
+            }
+
+        case .statusRecord:
+            let descriptor = FetchDescriptor<StatusRecord>()
+            if let records = try? modelContext.fetch(descriptor),
+               let status = records.first(where: { $0.publicID == candidate.resultingPublicID }) {
+                return "\(publicIDAnimalLabel(status.animal)) • \(publicIDDate(status.date)) • \(publicIDHumanEnumValue(status.oldStatus.rawValue)) → \(publicIDHumanEnumValue(status.newStatus.rawValue))"
+            }
+
+        default:
+            break
+        }
+
+        let readableDetail = publicIDReadableTechnicalDetail(candidate.detail)
+        if !readableDetail.isEmpty {
+            return readableDetail
+        }
+        return publicIDReadableRawDescription(candidate.recordDescription)
+    }
+
+    func publicIDParsedMovementSummary(_ text: String) -> String? {
+        guard let animalID = publicIDRawField("animalPublicID", in: text),
+              let date = publicIDRawField("date", in: text) else {
+            return nil
+        }
+        let animal = publicIDAnimalLabel(publicID: animalID)
+        let from = publicIDRawField("fromPasture", in: text) ?? "Unknown pasture"
+        let to = publicIDRawField("toPasture", in: text) ?? "Unknown pasture"
+        return "Shared movement: \(animal) • \(publicIDCleanDateText(date)) • \(from) → \(to)"
+    }
+
+    func publicIDParsedPregnancySummary(_ text: String) -> String? {
+        guard let animalID = publicIDRawField("animalPublicID", in: text),
+              let date = publicIDRawField("date", in: text) else {
+            return nil
+        }
+        let result = publicIDRawField("resultRawValue", in: text)
+            ?? publicIDRawField("result", in: text)
+            ?? "unknown"
+        var parts = [
+            publicIDAnimalLabel(publicID: animalID),
+            publicIDCleanDateText(date),
+            publicIDHumanEnumValue(result),
+        ]
+        if let days = publicIDRawField("estimatedDaysPregnant", in: text) {
+            parts.append("\(days) days pregnant")
+        }
+        if let dueDate = publicIDRawField("dueDate", in: text) {
+            parts.append("Due \(publicIDCleanDateText(dueDate))")
+        }
+        return "Shared pregnancy check: \(parts.joined(separator: " • "))"
+    }
+
+    func publicIDParsedStatusSummary(_ text: String) -> String? {
+        guard let animalID = publicIDRawField("animalPublicID", in: text),
+              let date = publicIDRawField("date", in: text) else {
+            return nil
+        }
+        let oldStatus = publicIDRawField("oldStatusRawValue", in: text)
+            ?? publicIDRawField("oldStatus", in: text)
+            ?? "unknown"
+        let newStatus = publicIDRawField("newStatusRawValue", in: text)
+            ?? publicIDRawField("newStatus", in: text)
+            ?? "unknown"
+        return "Shared status change: \(publicIDAnimalLabel(publicID: animalID)) • \(publicIDCleanDateText(date)) • \(publicIDHumanEnumValue(oldStatus)) → \(publicIDHumanEnumValue(newStatus))"
+    }
+
+    func publicIDRawField(_ key: String, in text: String) -> String? {
+        guard let keyRange = text.range(of: "\(key):") else { return nil }
+        let remainder = text[keyRange.upperBound...]
+        let end = remainder.range(of: " • ")?.lowerBound ?? remainder.endIndex
+        let value = String(remainder[..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+
+    func publicIDReadableRawDescription(_ text: String) -> String {
+        var output = text
+        let replacements: [(String, String)] = [
+            ("animalPublicID:", "Animal:"),
+            ("date:", "Date:"),
+            ("newStatusRawValue:", "New status:"),
+            ("oldStatusRawValue:", "Previous status:"),
+            ("resultRawValue:", "Result:"),
+            ("estimatedDaysPregnant:", "Estimated days pregnant:"),
+            ("dueDate:", "Due date:"),
+            ("fromPasture:", "From:"),
+            ("toPasture:", "To:"),
+        ]
+        for (raw, readable) in replacements {
+            output = output.replacingOccurrences(of: raw, with: readable)
+        }
+        return output
+    }
+
+    func publicIDReadableTechnicalDetail(_ detail: String) -> String {
+        let parts = detail
+            .components(separatedBy: " • ")
+            .compactMap { rawPart -> String? in
+                let part = rawPart.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !part.isEmpty else { return nil }
+                guard let separator = part.firstIndex(of: ":") else {
+                    return publicIDCleanDateText(part)
+                }
+                let rawKey = String(part[..<separator])
+                let rawValue = String(part[part.index(after: separator)...])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                if rawKey.lowercased().contains("publicid") {
+                    if rawKey.lowercased().contains("animal") {
+                        return "Animal: \(publicIDAnimalLabel(publicID: rawValue))"
+                    }
+                    return nil
+                }
+
+                let value = rawKey.hasSuffix("RawValue")
+                    ? publicIDHumanEnumValue(rawValue)
+                    : publicIDCleanDateText(rawValue)
+                return "\(publicIDHumanFieldName(rawKey)): \(value)"
+            }
+        return parts.joined(separator: " • ")
+    }
+
+    func publicIDHumanFieldName(_ raw: String) -> String {
+        let explicit: [String: String] = [
+            "publicID": "Public ID",
+            "deletionTargetPublicID": "Deleted record",
+            "animalPublicID": "Animal",
+            "sireAnimalPublicID": "Sire",
+            "workingSessionPublicID": "Working session",
+            "sessionPublicID": "Session",
+            "pasturePublicID": "Pasture",
+            "sourcePasturePublicID": "Source pasture",
+            "fromPasture": "From",
+            "toPasture": "To",
+            "oldStatusRawValue": "Previous status",
+            "newStatusRawValue": "New status",
+            "resultRawValue": "Result",
+            "estimatedDaysPregnant": "Estimated days pregnant",
+            "dueDate": "Due date",
+        ]
+        if let explicitName = explicit[raw] {
+            return explicitName
+        }
+
+        var words = ""
+        for scalar in raw.unicodeScalars {
+            let character = Character(String(scalar))
+            if character.isUppercase, !words.isEmpty {
+                words.append(" ")
+            }
+            words.append(character)
+        }
+        words = words
+            .replacingOccurrences(of: "Raw Value", with: "")
+            .replacingOccurrences(of: "Public ID", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !words.isEmpty else { return raw }
+        return words.prefix(1).uppercased() + words.dropFirst()
+    }
+
+    func publicIDHumanEnumValue(_ raw: String) -> String {
+        raw
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+            .capitalized
+    }
+
+    func publicIDCleanDateText(_ raw: String) -> String {
+        raw
+            .replacingOccurrences(of: ", 00:00", with: "")
+            .replacingOccurrences(of: ", 12:00 AM", with: "")
+    }
+
+    func publicIDDate(_ date: Date) -> String {
+        date.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    func publicIDNonempty(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    func publicIDAnimalLabel(publicID rawID: String) -> String {
+        guard let id = UUID(uuidString: rawID) else {
+            return "Unknown animal"
+        }
+        let descriptor = FetchDescriptor<Animal>()
+        if let animals = try? modelContext.fetch(descriptor),
+           let animal = animals.first(where: { $0.publicID == id }) {
+            return publicIDAnimalLabel(animal)
+        }
+        return "Unknown animal"
+    }
+
+    func publicIDAnimalLabel(_ animal: Animal?) -> String {
+        guard let animal else { return "Unknown animal" }
+        let tag = animal.tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = animal.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tag.isEmpty && !name.isEmpty {
+            return "Tag \(tag) — \(name)"
+        }
+        if !tag.isEmpty {
+            return "Tag \(tag)"
+        }
+        if !name.isEmpty {
+            return name
+        }
+        return "Untagged animal"
     }
 }
