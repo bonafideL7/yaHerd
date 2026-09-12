@@ -1,3 +1,4 @@
+import CoreData
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -6,6 +7,8 @@ import UIKit
 struct MainTabView: View {
     @Environment(AppNavigationState.self) private var navigation
     @Environment(ApplicationSettings.self) private var applicationSettings
+    @Environment(\.homeFeatureDependencies) private var homeDependencies
+    @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -41,6 +44,16 @@ struct MainTabView: View {
         }
         .appNavigationPresentations()
         .sharingAccessRefreshesForNavigation()
+        .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)) { _ in
+            guard applicationSettings.syncMode == .iCloud else { return }
+
+            // SwiftData's CloudKit import updates the persistent store asynchronously. The app's
+            // snapshot-based screens do not automatically rerun their repository queries when that
+            // happens, so bridge the Core Data remote-change notification into the existing app-wide
+            // mutation stream. Every feature then reloads through its normal invalidation path.
+            tagColorLibrary.refresh()
+            (homeDependencies.mutationStream as? ApplicationMutationCenter)?.recordSharedStoreImport()
+        }
         .onChange(of: applicationSettings.isDashboardEnabled) { _, isEnabled in
             if !isEnabled && navigation.selectedTab == .dashboard {
                 navigation.selectedTab = .home
