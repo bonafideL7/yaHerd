@@ -17,7 +17,14 @@ final class SwiftDataSyncDiagnosticsRepository: SyncDiagnosticsRepository {
         publicIDRepairService: (any PublicIDRepairService)? = nil
     ) {
         self.context = context
-        self.publicIDRepairService = publicIDRepairService
+        if let publicIDRepairService {
+            self.publicIDRepairService = BootstrapArtifactCleaningPublicIDRepairService(
+                context: context,
+                base: publicIDRepairService
+            )
+        } else {
+            self.publicIDRepairService = nil
+        }
     }
 
     func fetchCounts() throws -> SyncDiagnosticsCounts {
@@ -41,5 +48,124 @@ final class SwiftDataSyncDiagnosticsRepository: SyncDiagnosticsRepository {
 
     private func count<T: PersistentModel>(_ modelType: T.Type) throws -> Int {
         try context.fetchCount(FetchDescriptor<T>())
+    }
+}
+
+/// Reinstalling while iCloud already contained data used to persist a fresh copy of every built-in
+/// tag color before CloudKit imported the existing copies. SwiftData gives those copies different
+/// physical CloudKit identities even though yaHerd's stable color UUID is the same. Public-ID
+/// diagnostics then saw every animal/tag reference as ambiguous and asked the user to resolve the
+/// same color hundreds of times.
+///
+/// A diagnostics scan is a safe place to collapse only that exact bootstrap artifact. A pending
+/// durable repair transaction is never touched: the first scan is returned unchanged whenever
+/// shared-data convergence is already in progress.
+@MainActor
+private final class BootstrapArtifactCleaningPublicIDRepairService: PublicIDRepairService {
+    private let context: ModelContext
+    private let base: any PublicIDRepairService
+
+    init(
+        context: ModelContext,
+        base: any PublicIDRepairService
+    ) {
+        self.context = context
+        self.base = base
+    }
+
+    func scan() async throws -> PublicIDRepairAssessment {
+        let initialAssessment = try await base.scan()
+        guard !initialAssessment.requiresBridgeConvergence else {
+            return initialAssessment
+        }
+
+        let removedCount = try BuiltInTagColorDuplicateCleaner.removeSafeDuplicates(
+            in: context
+        )
+        guard removedCount > 0 else {
+            return initialAssessment
+        }
+
+        return try await base.scan()
+    }
+
+    func repair(
+        resolutions: [PublicIDRepairReferenceResolution]
+    ) async throws -> PublicIDRepairReport {
+        try await base.repair(resolutions: resolutions)
+    }
+}
+
+@MainActor
+private enum BuiltInTagColorDuplicateCleaner {
+    static func removeSafeDuplicates(in context: ModelContext) throws -> Int {
+        let persisted = try context.fetch(FetchDescriptor<TagColorDefinition>())
+        guard persisted.count > 1 else { return 0 }
+
+        let builtInsByID = Dictionary(
+            uniqueKeysWithValues: TagColorDefaults.seedDefaultColors().map { ($0.id, $0) }
+        )
+        let groups = Dictionary(grouping: persisted, by: \.id)
+        var removedCount = 0
+
+        for (id, group) in groups where group.count > 1 {
+            guard let builtIn = builtInsByID[id] else { continue }
+
+            let customized = group.filter { !matchesBuiltIn($0, builtIn) }
+            // If more than one divergent customization exists, identity is genuinely ambiguous.
+            // Leave that group to the normal backed-up public-ID repair workflow rather than guess.
+            guard customized.count <= 1 else { continue }
+
+            let keeper: TagColorDefinition
+            if let customizedKeeper = customized.first {
+                // Preserve an explicit user customization over any reinstall-created seed copies.
+                keeper = customizedKeeper
+            } else {
+                // All copies are the same built-in value. Retain the oldest physical row because it
+                // is the one most likely to belong to the original synchronized store.
+                keeper = group.min(by: oldestFirst) ?? group[0]
+            }
+
+            for duplicate in group where duplicate !== keeper {
+                context.delete(duplicate)
+                removedCount += 1
+            }
+        }
+
+        guard removedCount > 0 else { return 0 }
+        try PersistenceLog.save(
+            context,
+            operation: "SwiftDataSyncDiagnosticsRepository.removeBootstrapTagColorDuplicates"
+        )
+        return removedCount
+    }
+
+    private static func matchesBuiltIn(
+        _ persisted: TagColorDefinition,
+        _ builtIn: TagColorSnapshot
+    ) -> Bool {
+        TagColorLibraryRules.normalizedNameKey(persisted.name)
+            == TagColorLibraryRules.normalizedNameKey(builtIn.name)
+            && persisted.prefix == TagColorLibraryRules.normalizedPrefix(
+                builtIn.prefix,
+                fallbackName: builtIn.name
+            )
+            && persisted.red == builtIn.rgba.r
+            && persisted.green == builtIn.rgba.g
+            && persisted.blue == builtIn.rgba.b
+            && persisted.alpha == builtIn.rgba.a
+            && persisted.sortOrder == builtIn.sortOrder
+            && !persisted.isHidden
+            && persisted.isDefault == builtIn.isDefault
+    }
+
+    private static func oldestFirst(
+        _ lhs: TagColorDefinition,
+        _ rhs: TagColorDefinition
+    ) -> Bool {
+        if lhs.createdAt != rhs.createdAt {
+            return lhs.createdAt < rhs.createdAt
+        }
+        return lhs.updatedAt < rhs.updatedAt
     }
 }
