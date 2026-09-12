@@ -13,11 +13,14 @@ protocol HerdRepository: AnyObject {
 
 enum HerdRepositoryError: LocalizedError, Equatable {
     case emptyName
+    case missingHerd
 
     var errorDescription: String? {
         switch self {
         case .emptyName:
             "Herd name cannot be empty."
+        case .missingHerd:
+            "No herd exists yet. Add herd data before using herd-specific actions."
         }
     }
 }
