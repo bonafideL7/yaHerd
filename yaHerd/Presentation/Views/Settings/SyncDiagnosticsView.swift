@@ -431,18 +431,24 @@ struct SyncDiagnosticsView: View {
 
         switch issue.entityType {
         case .movement:
-            let descriptor = FetchDescriptor<MovementRecord>()
-            if let records = try? modelContext.fetch(descriptor),
-               let movement = records.first(where: { $0.publicID == candidate.resultingPublicID }) {
+            let targetID = candidate.resultingPublicID
+            var descriptor = FetchDescriptor<MovementRecord>(
+                predicate: #Predicate { $0.publicID == targetID }
+            )
+            descriptor.fetchLimit = 1
+            if let movement = try? modelContext.fetch(descriptor).first {
                 let from = publicIDNonempty(movement.fromPasture) ?? "Unknown pasture"
                 let to = publicIDNonempty(movement.toPasture) ?? "Unknown pasture"
                 return "\(publicIDAnimalLabel(movement.animal)) • \(publicIDDate(movement.date)) • \(from) → \(to)"
             }
 
         case .pregnancyCheck:
-            let descriptor = FetchDescriptor<PregnancyCheck>()
-            if let records = try? modelContext.fetch(descriptor),
-               let check = records.first(where: { $0.publicID == candidate.resultingPublicID }) {
+            let targetID = candidate.resultingPublicID
+            var descriptor = FetchDescriptor<PregnancyCheck>(
+                predicate: #Predicate { $0.publicID == targetID }
+            )
+            descriptor.fetchLimit = 1
+            if let check = try? modelContext.fetch(descriptor).first {
                 var parts = [
                     publicIDAnimalLabel(check.animal),
                     publicIDDate(check.date),
@@ -461,9 +467,12 @@ struct SyncDiagnosticsView: View {
             }
 
         case .statusRecord:
-            let descriptor = FetchDescriptor<StatusRecord>()
-            if let records = try? modelContext.fetch(descriptor),
-               let status = records.first(where: { $0.publicID == candidate.resultingPublicID }) {
+            let targetID = candidate.resultingPublicID
+            var descriptor = FetchDescriptor<StatusRecord>(
+                predicate: #Predicate { $0.publicID == targetID }
+            )
+            descriptor.fetchLimit = 1
+            if let status = try? modelContext.fetch(descriptor).first {
                 return "\(publicIDAnimalLabel(status.animal)) • \(publicIDDate(status.date)) • \(publicIDHumanEnumValue(status.oldStatus.rawValue)) → \(publicIDHumanEnumValue(status.newStatus.rawValue))"
             }
 
@@ -645,9 +654,11 @@ struct SyncDiagnosticsView: View {
         guard let id = UUID(uuidString: rawID) else {
             return "Unknown animal"
         }
-        let descriptor = FetchDescriptor<Animal>()
-        if let animals = try? modelContext.fetch(descriptor),
-           let animal = animals.first(where: { $0.publicID == id }) {
+        var descriptor = FetchDescriptor<Animal>(
+            predicate: #Predicate { $0.publicID == id }
+        )
+        descriptor.fetchLimit = 1
+        if let animal = try? modelContext.fetch(descriptor).first {
             return publicIDAnimalLabel(animal)
         }
         return "Unknown animal"
