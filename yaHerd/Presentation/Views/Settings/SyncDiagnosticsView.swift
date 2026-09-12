@@ -15,6 +15,7 @@ struct SyncDiagnosticsView: View {
     @Environment(\.appDataAccessMode) var dataAccessMode
     @Environment(\.recoveryModeController) var recoveryModeController
     @Environment(\.modelContext) var modelContext
+    @EnvironmentObject var tagColorLibrary: TagColorLibraryStore
     @Environment(ApplicationSettings.self) var applicationSettings
 
     let checker: ICloudAvailabilityChecking
@@ -965,11 +966,13 @@ struct SyncDiagnosticsView: View {
     func publicIDAnimalLabel(_ animal: AnimalSummary) -> String {
         let tag = animal.displayTagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
         let name = animal.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let colorName = tagColorLibrary.resolvedDefinition(tagColorID: animal.displayTagColorID).name
+
         if !tag.isEmpty && tag != "UT" && !name.isEmpty {
-            return "Tag \(tag) — \(name)"
+            return "\(colorName) tag \(tag) — \(name)"
         }
         if !tag.isEmpty && tag != "UT" {
-            return "Tag \(tag)"
+            return "\(colorName) tag \(tag)"
         }
         if !name.isEmpty {
             return name
@@ -987,17 +990,6 @@ struct SyncDiagnosticsView: View {
 
     func publicIDAnimalLabel(_ animal: Animal?) -> String {
         guard let animal else { return "Unknown animal" }
-        let tag = animal.tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-        let name = animal.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !tag.isEmpty && !name.isEmpty {
-            return "Tag \(tag) — \(name)"
-        }
-        if !tag.isEmpty {
-            return "Tag \(tag)"
-        }
-        if !name.isEmpty {
-            return name
-        }
-        return "Untagged animal"
+        return publicIDAnimalLabel(AnimalMapper.makeSummary(from: animal))
     }
 }
