@@ -117,10 +117,12 @@ extension SyncDiagnosticsView {
 
     var publicIDRepairConfirmationMessage: String {
         if let restoredRecord = selectedSharedRecordRestoration {
-            return "The verified shared bridge contains \(restoredRecord.recordDescription), but that record is missing from local data. yaHerd will restore that exact shared record into local data with a new unique public ID, then continue shared-data convergence. Existing local records are not replaced or deleted."
+            let summary = publicIDIssueSummary(restoredRecord)
+            return "The verified shared bridge contains \(summary), but that record is missing from local data. yaHerd will restore that exact shared record into local data with a new unique public ID, then continue shared-data convergence. Existing local records are not replaced or deleted."
         }
         if let staleRecord = selectedStaleSharedRecordRemoval {
-            return "The shared bridge contains \(staleRecord.recordDescription), but none of the repaired local records represents that event or object. This removes only that stale shared bridge record during convergence; it does not delete local data. yaHerd will then export the repaired local graph and verify reconciliation before clearing the repair gate."
+            let summary = publicIDIssueSummary(staleRecord)
+            return "The shared bridge contains \(summary), but none of the repaired local records represents that event or object. This removes only that stale shared bridge record during convergence; it does not delete local data. yaHerd will then export the repaired local graph and verify reconciliation before clearing the repair gate."
         }
         if let retirement = selectedPreparedHerdRetirement {
             return "You chose intentional deletion for Herd \(retirement.referencedPublicID.uuidString). yaHerd will first persist that decision in the existing repair manifest, then verify the exact journaled bridge location, fingerprint, and write authority before deleting only that Herd's prepared shared graph and tombstones. It will verify the target is retired before removing the convergence obligation. This cannot be inferred or performed automatically."
