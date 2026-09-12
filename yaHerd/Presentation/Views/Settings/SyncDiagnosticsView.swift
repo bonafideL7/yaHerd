@@ -270,10 +270,6 @@ struct SyncDiagnosticsView: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                         }
-
-                        Text("Creates a JSON backup before changing IDs, applies your repair choices in the same transaction, then imports the current bound shared-data bridge after IDs are unique and exports the converged repaired graph before unblocking edits.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     } else {
                         Label("No duplicate public IDs found", systemImage: "checkmark.circle")
                             .foregroundStyle(.secondary)
@@ -757,9 +753,10 @@ struct SyncDiagnosticsView: View {
             return AnimalMapper.makeSummary(from: animal)
         }
 
-        // Newer bridge blockers often carry a human-readable source description instead of raw
-        // fields. Resolve that display tag only when it identifies exactly one local animal. This
-        // keeps older persisted blockers useful without ever guessing between duplicate tag values.
+        if let animal = publicIDAnimalFromRepairCandidates(for: issue) {
+            return AnimalMapper.makeSummary(from: animal)
+        }
+
         guard let tagNumber = publicIDSharedAnimalTagNumber(in: issue.recordDescription),
               let animal = publicIDUniqueAnimal(tagNumber: tagNumber) else {
             return nil
@@ -784,6 +781,71 @@ struct SyncDiagnosticsView: View {
         let end = remainder.range(of: " • ")?.lowerBound ?? remainder.endIndex
         let tag = String(remainder[..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
         return tag.isEmpty ? nil : tag
+    }
+
+    func publicIDAnimalFromRepairCandidates(for issue: PublicIDRepairUnresolvedReference) -> Animal? {
+        var animalsByPublicID: [UUID: Animal] = [:]
+
+        for candidate in issue.candidates {
+            let candidateID = candidate.resultingPublicID
+            let animal: Animal?
+
+            switch issue.entityType {
+            case .movement:
+                var descriptor = FetchDescriptor<MovementRecord>(
+                    predicate: #Predicate { $0.publicID == candidateID }
+                )
+                descriptor.fetchLimit = 1
+                animal = (try? modelContext.fetch(descriptor).first)?.animal
+
+            case .pregnancyCheck:
+                var descriptor = FetchDescriptor<PregnancyCheck>(
+                    predicate: #Predicate { $0.publicID == candidateID }
+                )
+                descriptor.fetchLimit = 1
+                animal = (try? modelContext.fetch(descriptor).first)?.animal
+
+            case .statusRecord:
+                var descriptor = FetchDescriptor<StatusRecord>(
+                    predicate: #Predicate { $0.publicID == candidateID }
+                )
+                descriptor.fetchLimit = 1
+                animal = (try? modelContext.fetch(descriptor).first)?.animal
+
+            default:
+                animal = nil
+            }
+
+            if let animal {
+                animalsByPublicID[animal.publicID] = animal
+            }
+        }
+
+        guard !animalsByPublicID.isEmpty else { return nil }
+
+        if let tagNumber = publicIDSharedAnimalTagNumber(in: issue.recordDescription) {
+            let taggedAnimals = animalsByPublicID.values.filter {
+                publicIDAnimal($0, hasTagNumber: tagNumber)
+            }
+            if taggedAnimals.count == 1 {
+                return taggedAnimals[0]
+            }
+        }
+
+        guard animalsByPublicID.count == 1 else { return nil }
+        return animalsByPublicID.values.first
+    }
+
+    func publicIDAnimal(_ animal: Animal, hasTagNumber tagNumber: String) -> Bool {
+        let normalizedTag = tagNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedTag.isEmpty else { return false }
+
+        if animal.tagNumber.trimmingCharacters(in: .whitespacesAndNewlines) == normalizedTag {
+            return true
+        }
+        return animal.tags.contains { tag in
+            tag.normalizedNumber == normalizedTag
+        }
     }
 
     func publicIDUniqueAnimal(tagNumber: String) -> Animal? {
