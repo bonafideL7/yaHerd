@@ -21,12 +21,54 @@ final class SwiftDataTagColorRepository: TagColorRepository {
     }
 
     func fetchColors() throws -> [TagColorSnapshot] {
-        try fetchPersistedColors().map(\.snapshot)
+        let persistedColors = try fetchPersistedColors()
+        let persistedGroups = Dictionary(grouping: persistedColors) {
+            TagColorLibraryRules.normalizedNameKey($0.name)
+        }
+
+        // Built-in colors are application constants, not installation-owned data. Keeping them
+        // virtual prevents a pristine reinstall from creating fresh CloudKit rows before the
+        // existing iCloud store has imported. Persisted customizations override the matching
+        // built-in definition by normalized name.
+        var snapshotsByName: [String: TagColorSnapshot] = [:]
+        for defaultColor in TagColorDefaults.seedDefaultColors() {
+            snapshotsByName[TagColorLibraryRules.normalizedNameKey(defaultColor.name)] = defaultColor
+        }
+        for (key, group) in persistedGroups where !group.isEmpty {
+            snapshotsByName[key] = canonicalColor(from: group).snapshot
+        }
+
+        if let persistedDefaultID = persistedColors
+            .filter(\.isDefault)
+            .sorted(by: Self.defaultSort)
+            .first?.id {
+            for key in Array(snapshotsByName.keys) {
+                guard var snapshot = snapshotsByName[key] else { continue }
+                snapshot.isDefault = snapshot.id == persistedDefaultID
+                snapshotsByName[key] = snapshot
+            }
+        }
+
+        var snapshots = snapshotsByName.values.sorted {
+            if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
+            return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        }
+
+        if !snapshots.contains(where: \.isDefault),
+           let whiteIndex = snapshots.firstIndex(where: {
+               TagColorLibraryRules.normalizedNameKey($0.name)
+                   == TagColorLibraryRules.normalizedNameKey("White")
+           }) {
+            snapshots[whiteIndex].isDefault = true
+        }
+
+        return snapshots
     }
 
-    /// Performs tag-color seeding and normalization only when the caller has
-    /// explicitly entered a writable startup/maintenance path. Reads must stay
-    /// read-only so recovery mode can inspect a container with `allowsSave == false`.
+    /// Performs persisted tag-color migration/normalization only when the caller has
+    /// explicitly entered a writable startup/maintenance path. Built-in colors are no longer
+    /// seeded into an empty store because that created a new physical CloudKit row on every
+    /// reinstall before the previous rows could import.
     func prepareLibraryForWritableUse() throws {
         try prepareLibraryIfNeeded()
     }
@@ -71,7 +113,18 @@ final class SwiftDataTagColorRepository: TagColorRepository {
     }
 
     func setDefaultColor(id: UUID) throws {
-        let persistedColors = try fetchPersistedColors()
+        var persistedColors = try fetchPersistedColors()
+
+        if !persistedColors.contains(where: { $0.id == id }),
+           var builtIn = TagColorDefaults.seedDefaultColors().first(where: { $0.id == id }) {
+            // Materialize a built-in definition only because the user explicitly changed a
+            // persisted preference. Merely displaying the built-in library remains read-only.
+            builtIn.isDefault = true
+            try context.insertIntoDefaultHerd(TagColorDefinition(snapshot: builtIn))
+            try PersistenceLog.save(context, operation: "SwiftDataTagColorRepository")
+            persistedColors = try fetchPersistedColors()
+        }
+
         guard persistedColors.contains(where: { $0.id == id }) else { return }
 
         for color in persistedColors {
@@ -134,8 +187,13 @@ final class SwiftDataTagColorRepository: TagColorRepository {
         let persistedColors = try fetchPersistedColors()
 
         if persistedColors.isEmpty {
-            let colorsToSeed = legacyColorsFromUserDefaults() ?? TagColorDefaults.seedDefaultColors()
-            try seed(colorsToSeed)
+            guard let legacyColors = legacyColorsFromUserDefaults() else {
+                // Do not seed built-in definitions into a pristine persistent store. SwiftData's
+                // CloudKit record identity is not the app-level UUID, so each reinstall previously
+                // uploaded another physical copy with the same stable color ID.
+                return
+            }
+            try seed(legacyColors)
             try PersistenceLog.save(context, operation: "SwiftDataTagColorRepository")
             UserDefaults.standard.removeObject(forKey: legacyStorageKey)
         }
@@ -213,8 +271,15 @@ final class SwiftDataTagColorRepository: TagColorRepository {
 
         let currentDefaults = persistedColors.filter(\.isDefault)
         let selectedDefault = currentDefaults.sorted(by: Self.defaultSort).first
-            ?? persistedColors.first { TagColorLibraryRules.normalizedNameKey($0.name) == TagColorLibraryRules.normalizedNameKey("White") }
-            ?? persistedColors[0]
+            ?? persistedColors.first {
+                TagColorLibraryRules.normalizedNameKey($0.name)
+                    == TagColorLibraryRules.normalizedNameKey("White")
+            }
+
+        // If only custom colors are persisted, the virtual built-in White definition remains the
+        // default until the user explicitly chooses another color. Do not silently promote the
+        // first custom color merely because built-ins are no longer stored as bootstrap rows.
+        guard let selectedDefault else { return }
 
         var didChange = false
         for color in persistedColors {
@@ -300,8 +365,11 @@ final class SwiftDataTagColorRepository: TagColorRepository {
     private func currentDefaultColorID() throws -> UUID? {
         let persistedColors = try fetchPersistedColors()
         return persistedColors.first(where: { $0.isDefault })?.id
-            ?? persistedColors.first { TagColorLibraryRules.normalizedNameKey($0.name) == TagColorLibraryRules.normalizedNameKey("White") }?.id
-            ?? persistedColors.first?.id
+            ?? persistedColors.first {
+                TagColorLibraryRules.normalizedNameKey($0.name)
+                    == TagColorLibraryRules.normalizedNameKey("White")
+            }?.id
+            ?? TagColorDefaults.seedDefaultColors().first(where: { $0.isDefault })?.id
     }
 
     private static func defaultSort(_ lhs: TagColorDefinition, _ rhs: TagColorDefinition) -> Bool {
