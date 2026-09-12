@@ -15,10 +15,35 @@ extension SyncDiagnosticsView {
         return issue.candidates.first { $0.stableRecordIdentifier == selectedID }
     }
 
+    func requiresBridgeCanonicalIssueRefresh(
+        _ issue: PublicIDRepairUnresolvedReference
+    ) -> Bool {
+        guard issue.kind == .canonicalRecord,
+              issue.entityType != .herd,
+              issue.stableRecordIdentifier.hasPrefix("bridge-canonical|") else {
+            return false
+        }
+        return !issue.candidates.contains {
+            $0.stableRecordIdentifier.hasPrefix("bridge-canonical-restore|")
+        }
+            || !issue.candidates.contains {
+                $0.stableRecordIdentifier.hasPrefix("bridge-canonical-remove|")
+            }
+    }
+
     func hasCompleteReferenceSelections(
         for assessment: PublicIDRepairAssessment
     ) -> Bool {
         assessment.unresolvedReferences.allSatisfy { issue in
+            // Older pending convergence journals can contain canonical bridge blockers that
+            // predate the explicit restore/remove recovery choices. Allow exactly that stale
+            // blocker to run once without a user selection so convergence can re-observe the
+            // bridge and persist the current deliberate choices. The regenerated blocker again
+            // requires an explicit selection before any bridge mutation continues.
+            if requiresBridgeCanonicalIssueRefresh(issue) {
+                return true
+            }
+
             guard let selected = publicIDResolutionSelections[issue.id] else { return false }
             return issue.candidates.contains { $0.stableRecordIdentifier == selected }
         }
@@ -34,7 +59,35 @@ extension SyncDiagnosticsView {
         }
     }
 
+    var selectedSharedRecordRestoration: PublicIDRepairUnresolvedReference? {
+        (publicIDAssessment?.unresolvedReferences ?? []).first { issue in
+            guard issue.kind == .canonicalRecord,
+                  issue.entityType != .herd,
+                  let selectedID = publicIDResolutionSelections[issue.id] else {
+                return false
+            }
+            return selectedID.hasPrefix("bridge-canonical-restore|")
+        }
+    }
+
+    var selectedStaleSharedRecordRemoval: PublicIDRepairUnresolvedReference? {
+        (publicIDAssessment?.unresolvedReferences ?? []).first { issue in
+            guard issue.kind == .canonicalRecord,
+                  issue.entityType != .herd,
+                  let selectedID = publicIDResolutionSelections[issue.id] else {
+                return false
+            }
+            return selectedID.hasPrefix("bridge-canonical-remove|")
+        }
+    }
+
     var publicIDRepairConfirmationTitle: String {
+        if selectedSharedRecordRestoration != nil {
+            return "Restore Shared Record?"
+        }
+        if selectedStaleSharedRecordRemoval != nil {
+            return "Remove Stale Shared Record?"
+        }
         if selectedPreparedHerdRetirement != nil {
             return "Permanently Retire Prepared Shared Herd?"
         }
@@ -46,6 +99,12 @@ extension SyncDiagnosticsView {
     }
 
     var publicIDRepairConfirmationButtonTitle: String {
+        if selectedSharedRecordRestoration != nil {
+            return "Restore Record"
+        }
+        if selectedStaleSharedRecordRemoval != nil {
+            return "Remove Stale Shared Record"
+        }
         if selectedPreparedHerdRetirement != nil {
             return "Retire Exact Shared Herd"
         }
@@ -57,6 +116,12 @@ extension SyncDiagnosticsView {
     }
 
     var publicIDRepairConfirmationMessage: String {
+        if let restoredRecord = selectedSharedRecordRestoration {
+            return "The verified shared bridge contains \(restoredRecord.recordDescription), but that record is missing from local data. yaHerd will restore that exact shared record into local data with a new unique public ID, then continue shared-data convergence. Existing local records are not replaced or deleted."
+        }
+        if let staleRecord = selectedStaleSharedRecordRemoval {
+            return "The shared bridge contains \(staleRecord.recordDescription), but none of the repaired local records represents that event or object. This removes only that stale shared bridge record during convergence; it does not delete local data. yaHerd will then export the repaired local graph and verify reconciliation before clearing the repair gate."
+        }
         if let retirement = selectedPreparedHerdRetirement {
             return "You chose intentional deletion for Herd \(retirement.referencedPublicID.uuidString). yaHerd will first persist that decision in the existing repair manifest, then verify the exact journaled bridge location, fingerprint, and write authority before deleting only that Herd's prepared shared graph and tombstones. It will verify the target is retired before removing the convergence obligation. This cannot be inferred or performed automatically."
         }
@@ -122,6 +187,20 @@ extension SyncDiagnosticsView {
 
         Task { @MainActor in
             do {
+                // A single canonical bridge blocker created by an older build can lack the current
+                // explicit restore/remove choices. Remove only that stale persisted blocker and let
+                // convergence re-observe the same bridge record. It immediately stops again with
+                // current deliberate choices; no import/export proceeds until the regenerated issue
+                // is explicitly resolved.
+                if issues.count == 1,
+                   let issue = issues.first,
+                   requiresBridgeCanonicalIssueRefresh(issue) {
+                    guard let writePolicy = collaborationDependencies.writePolicy else {
+                        throw SyncDiagnosticsSettingsError.writePolicyUnavailable
+                    }
+                    try writePolicy.dataMutationGate.recordBridgeResolutionIssues([])
+                }
+
                 let report: PublicIDRepairReport
                 if let indeterminateRecoveryChoice {
                     report = try await publicIDRepairService.recoverIndeterminateRepair(
