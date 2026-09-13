@@ -102,6 +102,34 @@ An owned herd and all of its records live in the private store. A herd accepted 
 
 Sharing starts from the `Herd` managed object. `NSPersistentCloudKitContainer` moves the connected object graph into the share's record zone. No business relationship may connect two different herd/share graphs.
 
+### Selected herd and repository scope
+
+A user may have more than one accessible Herd root at the same time. For example, the private store may contain a herd the user owns while the shared store contains one or more herds accepted from other owners. The app must never treat all accessible herds as one implicit data set.
+
+The application operates on **exactly one selected Herd workspace at a time**:
+
+- the selected Herd is identified by its application UUID;
+- selection is local application state and is not a `CloudData` entity or synchronized business field;
+- the persistence assembly resolves the selected Herd UUID to one concrete Herd and persistent store before constructing feature repositories;
+- feature repository and transaction instances are scoped to that selected Herd for their lifetime;
+- every herd-owned read includes the selected Herd scope, even when the Domain method does not carry a `herdID` parameter;
+- every herd-owned write assigns the selected Herd relationship and routes the object to that Herd's store/share;
+- a repository must never combine private and shared Herd graphs merely because both stores are attached to the same persistent container.
+
+`HerdRepository.fetchCurrentHerd()` therefore means **fetch the selected Herd**, not "fetch the first Herd," "fetch the private Herd," or "fetch any default Herd." Existing feature contracts such as `CreateAnimalAggregateTransaction` do not need a Herd argument because the repository/transaction instance itself owns an immutable Herd scope. If a future feature intentionally needs to operate across multiple herds, it must use an explicit cross-workspace contract rather than weakening ordinary repository scoping.
+
+Selection behavior is deterministic:
+
+1. On first use with no Herd, create the user's owned Herd and select it.
+2. On launch, restore the locally remembered selected Herd UUID when that Herd is still accessible.
+3. If no remembered selection is valid and exactly one Herd is accessible, select that Herd.
+4. If multiple Herds are accessible and there is no valid remembered selection, require an explicit workspace selection rather than guessing based on store order.
+5. Successfully accepting another owner's share does **not** replace or delete an owned Herd. The accepted Herd becomes the selected workspace after acceptance so the user enters the graph they just accepted; the prior Herd remains available for later selection.
+6. Switching Herds invalidates/rebuilds Herd-scoped feature dependencies, read state, and navigation state so IDs from one workspace cannot be resolved through another workspace's repositories.
+7. If access to the selected shared Herd is revoked or removed, invalidate that selection. Select the sole remaining accessible Herd when exactly one remains; otherwise require a new explicit selection.
+
+The selected-Herd preference may be stored using ordinary local app settings. It must not create a relationship between Herd graphs, influence CloudKit record identity, or become a second persistence source for business data.
+
 ### Application identity
 
 Every independently persisted entity listed in this document has:
@@ -130,13 +158,33 @@ The production model follows these rules from the beginning:
 - no `Deny` delete rules;
 - every relationship is optional in the physical model;
 - every relationship has an inverse;
+- every nonoptional attribute has an explicit static model default;
 - no cross-configuration relationships;
 - no ordered Core Data relationships; use explicit `sortOrder` fields or ordered encoded value payloads;
 - no `Undefined` or object-ID attributes;
 - Domain enums persist as stable raw strings through Data mapping rather than framework-dependent transformables;
 - small Domain value collections persist as explicit `Data` payloads with a stable Data-layer codec when they are not independently managed entities.
 
-Required application invariants are enforced by repository/transaction code before save even when CloudKit requires a physically optional relationship.
+Required application invariants are enforced by repository/transaction code before save even when CloudKit requires a physically optional relationship or attribute.
+
+### Physical attribute optionality and defaults
+
+The attribute declarations in the entity inventory describe **application semantics**. For example, `id: UUID` means a valid persisted Domain entity must have an application UUID; it does not mean the physical Core Data attribute should be marked nonoptional without a model default.
+
+For every attribute in the `CloudData` configuration, the `.xcdatamodeld` must satisfy the CloudKit rule: the attribute is either physically optional **or** has an explicit static default value.
+
+Use these rules when translating this blueprint into the physical model:
+
+- application identity UUIDs such as `id` are physically optional and have no static default; factories assign them before the first save and repository mapping rejects a missing UUID;
+- `Animal.editorRevision` is likewise physically optional with no static default; the animal aggregate transaction generates it on create and rotates it atomically on qualifying updates;
+- required dates that do not have a semantically valid static default are physically optional and must be assigned before save;
+- required encoded `Data` payloads are physically optional unless the model default is a valid encoded payload for the Data-layer codec; never use arbitrary empty bytes as a fake valid payload;
+- enum raw strings, display strings, booleans, counts, and numeric values may be physically nonoptional only when they have an explicit static default that is also a valid creation-state value for that entity;
+- optional Domain values remain physically optional unless there is a specific reason to model them otherwise;
+- managed-object factories and transaction writers must assign every application-required value before save even when the physical model permits `nil`;
+- mappers treat missing application-required attributes as incomplete/invalid imported state and omit or explicitly fail the aggregate according to repository policy; they do not invent UUIDs, dates, enum states, or encoded payloads to make an incomplete CloudKit import appear valid.
+
+This distinction lets CloudKit import records in stages without weakening Domain invariants or introducing dangerous static UUID/revision defaults.
 
 ## Final entity inventory
 
@@ -574,6 +622,9 @@ Attributes:
 - `animalTagNumberSnapshot: String`
 - `animalTagColorIDSnapshot: UUID?`
 - `animalNameSnapshot: String`
+- `animalSexRawValueSnapshot: String`
+- `animalDamDisplayTagNumberSnapshot: String?`
+- `animalDamDisplayTagColorIDSnapshot: UUID?`
 - `collectedFromPastureIDSnapshot: UUID?`
 - `collectedFromPastureNameSnapshot: String?`
 - `destinationPastureIDSnapshot: UUID?`
@@ -590,7 +641,9 @@ Relationships:
 Important differences from SwiftData:
 
 - do not persist deprecated `queueOrder`; presentation sorting is based on the product's animal/tag rules;
-- snapshots preserve session history if an animal or pasture later disappears.
+- the animal identity/display snapshots are captured when the queue item is created and remain the historical source for the Working session;
+- specifically preserve animal sex and dam tag number/color in addition to the animal's own tag so completed-session history still satisfies `WorkingQueueItemSnapshot` after the live Animal relationship is nullified;
+- snapshots preserve session history if an animal or pasture later disappears or its current display relationships change.
 
 ### WorkingTreatmentRecord
 
@@ -654,7 +707,7 @@ Required snapshot cases:
 - field-check animal/tag/name/sex/type;
 - field-check finding animal/session/pasture display state;
 - working-session source pasture UUID/name;
-- working queue animal identity/display and source/destination pasture identity/display;
+- working queue animal UUID/name/tag/color/sex/dam-tag identity plus source/destination pasture identity/display;
 - working treatment item name/ID and animal UUID.
 
 Do not add snapshot copies to ordinary current-state entities merely to avoid following a relationship.
@@ -749,24 +802,27 @@ Do not add model-level uniqueness constraints. Add further indexes only when act
 
 ## Store assignment rules
 
-Repository/transaction code must use the herd to select the target store.
+Repository/transaction code must use the selected Herd scope to select the target store.
 
 For new records:
 
-1. resolve the owning Herd by application UUID;
-2. verify every relationship target belongs to the same Herd;
+1. resolve the selected Herd by application UUID;
+2. verify every relationship target belongs to that same Herd;
 3. determine the Herd's persistent store/share;
 4. insert/assign all new managed objects to that same store before save;
 5. reject cross-herd/cross-store relationships as integrity errors.
+
+Ordinary feature repositories must also scope every fetch to the selected Herd UUID. An attached private store and shared store may each contain valid records with unrelated application graphs; a fetch that does not constrain Herd ownership is an integrity bug even if IDs would usually make the result appear unambiguous.
 
 Never default a new collaboratively scoped record to the private store merely because that store was loaded first. A participant editing an accepted herd must write into the shared store/share that owns that Herd.
 
 ## Remote import and mapping rules
 
-CloudKit may import related records in separate operations. Therefore:
+CloudKit may import related records and required attributes in separate operations. Therefore:
 
 - physical relationships remain optional;
-- mappers must not invent Domain entities to fill missing relationships;
+- application-required attributes without meaningful static defaults may be physically optional;
+- mappers must not invent Domain entities or required scalar values to fill incomplete imported state;
 - repository reads should omit or explicitly fail invalid/incomplete aggregates rather than exposing contradictory Domain state;
 - persistent-history/remote-change handling triggers application invalidation and a later read;
 - imported `Animal.editorRevision` is authoritative for stale-editor detection;
@@ -788,25 +844,49 @@ The Core Data model must **not** reproduce these current implementation artifact
 - SwiftData/Core Data bridge entities and `Shared*Record` mirrors;
 - duplicated relationship IDs unless the value is explicitly a historical snapshot.
 
+## Behavioral contracts before the physical model
+
+Before creating `yaHerdModel.xcdatamodeld`, establish the permanent persistence behavior contract suite described by the Core Data cutover plan. These tests define product behavior through Domain repository/transaction protocols rather than SwiftData types.
+
+The existing SwiftData implementation may be used as the first runner for those contracts so the tests characterize intended current behavior before persistence changes. That runner is temporary; the contract definitions are permanent and later run unchanged against Core Data.
+
+At minimum the pre-model contract milestone should lock down:
+
+- application UUID identity and duplicate-ID failure behavior;
+- selected-Herd scoping so owned and accepted Herd graphs cannot be combined by ordinary repositories;
+- animal aggregate create/update/tag/revision behavior;
+- movement and historical preservation behavior;
+- pasture deletion transaction semantics;
+- Field Check historical behavior;
+- Working queue/session history, including animal sex and dam-tag snapshots after animal deletion;
+- rollback/no-partial-commit semantics for important multi-record operations.
+
+Do not postpone these behavior contracts until after Core Data repositories exist. They are the executable specification the Core Data implementation must satisfy.
+
 ## Model validation required when implemented
 
-The Core Data foundation PR that creates `yaHerdModel.xcdatamodeld` should add focused model-level tests/validation for the production implementation, including:
+After the behavioral contract milestone, the Core Data foundation PR that creates `yaHerdModel.xcdatamodeld` should add focused model-level tests/validation for the production implementation, including:
 
 - the model loads successfully;
 - every durable entity has an `id` UUID attribute;
 - every relationship is optional and has an inverse;
+- every nonoptional attribute in `CloudData` has an explicit model default;
+- UUID identity/revision attributes and other application-required values that lack meaningful static defaults follow the documented physical optionality policy;
 - no entity declares a unique constraint;
 - no relationship uses `Deny`;
 - every herd-owned entity has a Herd relationship;
 - private and shared store descriptions use the same model/configuration;
 - a new private Herd graph is inserted into the private store;
 - a record created for a shared Herd is assigned to the shared store;
+- simultaneous private and shared Herd roots remain isolated by selected-Herd repository scope;
+- accepting a shared Herd preserves the owned Herd and selects the accepted Herd deterministically;
 - cross-store/cross-herd relationship attempts are rejected by persistence code;
 - an animal aggregate create/update preserves UUIDs and rotates `editorRevision` correctly;
 - pasture deletion preserves Movement and Field Check history as specified;
+- Working queue history retains animal tag/color, sex, and dam tag/color after the live animal relationship disappears;
 - model/schema validation can be run with `initializeCloudKitSchema(options: [.dryRun])` in a development/test-only path before any production schema promotion.
 
-Repository behavior contract tests should then be added feature by feature against in-memory/local Core Data as the real repositories are implemented.
+As Core Data repositories are implemented, point the same permanent behavior contract suite at the Core Data harness feature by feature. Do not rewrite the contracts to accommodate persistence-specific behavior.
 
 ## CloudKit schema promotion rule
 
@@ -825,21 +905,23 @@ Development CloudKit schema may be reset/recreated while this app has not shippe
 
 ## Implementation sequence from this blueprint
 
-After this blueprint is merged, the next persistence work should be production code rather than more SwiftData preparation:
+The Core Data replacement is test-first at the persistence boundary. The model blueprint is already established, but physical model/runtime implementation begins only after the permanent behavior contracts are in place.
 
 ```text
-1. yaHerdModel.xcdatamodeld + CD managed-object classes
-2. CoreDataPersistenceController / NSPersistentCloudKitContainer store setup
-3. Herd/reference-data repository + deterministic store routing
-4. Pasture repositories + pasture deletion transaction
-5. Animal repositories + aggregate transaction + tag/history mapping
-6. Field Check repositories
-7. Working repositories
-8. Dashboard/Home read models
-9. direct Core Data CKShare collaboration implementation
-10. switch PersistenceAssembly to Core Data
-11. delete SwiftData models/repositories/bootstrap/bridge/repair code
-12. strengthen final architecture verification and delete this cutover documentation when complete
+0. permanent persistence behavior contracts + temporary SwiftData contract runner
+1. reconcile this blueprint with any behavior exposed by those tests
+2. yaHerdModel.xcdatamodeld + CD managed-object classes + model-structure tests
+3. CoreDataPersistenceController / NSPersistentCloudKitContainer store setup
+4. selected-Herd scope + Herd/reference-data repository + deterministic store routing
+5. Pasture repositories + pasture deletion transaction
+6. Animal repositories + aggregate transaction + tag/history mapping
+7. Field Check repositories
+8. Working repositories
+9. Dashboard/Home read models
+10. direct Core Data CKShare collaboration implementation
+11. switch PersistenceAssembly to Core Data
+12. delete SwiftData models/repositories/bootstrap/bridge/repair code and temporary SwiftData contract runner
+13. strengthen final architecture verification and delete this cutover documentation when complete
 ```
 
-Do not add a temporary SwiftData implementation of any new model behavior just to keep both systems symmetrical during this sequence.
+Do not add a temporary SwiftData implementation of any **new production behavior** just to keep both systems symmetrical during this sequence. The only temporary SwiftData work justified by step 0 is the thin harness needed to run permanent persistence-neutral behavior contracts against the current implementation.
