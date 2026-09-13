@@ -6,7 +6,6 @@
 //
 
 import CloudKit
-import CoreData
 import SwiftUI
 import SwiftData
 
@@ -304,6 +303,7 @@ private struct RunningAppView: View {
     @StateObject private var recoveryModeController: RecoveryModeController
     @State private var cloudKitShareInvitationCoordinator: CloudKitShareInvitationCoordinator
     @State private var herdSharingSyncCoordinator: HerdSharingSyncCoordinator
+    @State private var tagColorMutationSequence: UInt64
     @State private var showsPendingCloudKitShareInvitation = false
 
     private let runtime: AppRuntime
@@ -322,6 +322,9 @@ private struct RunningAppView: View {
             wrappedValue: TagColorLibraryStore(
                 repository: runtime.dependencies.tagColorRepository
             )
+        )
+        self._tagColorMutationSequence = State(
+            initialValue: runtime.dependencies.applicationMutationCenter.currentSequence
         )
         self._cloudKitShareInvitationCoordinator = State(
             initialValue: CloudKitShareInvitationCoordinator(
@@ -405,13 +408,16 @@ private struct RunningAppView: View {
                     tagColorLibrary.refresh()
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)) { _ in
-                guard applicationSettings.syncMode == .iCloud else { return }
-
-                // Persistence notifications belong at the application boundary. Presentation only
-                // consumes the resulting application mutation stream and repository snapshots.
-                tagColorLibrary.refresh()
-                runtime.dependencies.applicationMutationCenter.recordSharedStoreImport()
+            .task {
+                let mutationStream = runtime.dependencies.applicationMutationCenter.events(
+                    after: tagColorMutationSequence
+                )
+                for await event in mutationStream {
+                    tagColorMutationSequence = event.sequence
+                    if event.source == .sharedStoreImport {
+                        tagColorLibrary.refresh()
+                    }
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .yaHerdCloudKitShareAccepted)) { notification in
                 guard runtime.dataAccessMode.allowsDataMutations else { return }
