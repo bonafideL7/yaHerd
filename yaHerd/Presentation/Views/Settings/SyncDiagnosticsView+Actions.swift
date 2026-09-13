@@ -283,20 +283,24 @@ extension SyncDiagnosticsView {
         }
     }
 
-    var swiftDataCloudKitDescription: String {
-        launchSnapshot.actualStorageMode == .iCloud
-            ? "Private: \(ModelContainerFactory.cloudKitContainerIdentifier)"
-            : "Disabled"
+    var persistenceCloudKitDescription: String {
+        guard launchSnapshot.actualStorageMode == .iCloud else { return "Disabled" }
+        guard let storageInfo else { return "Unavailable" }
+        return "Private: \(storageInfo.cloudKitContainerIdentifier)"
     }
 
     var activeStoreDescription: String {
+        guard let storageInfo else {
+            return launchSnapshot.actualStorageMode == .unavailable ? "None" : "Unavailable"
+        }
+
         switch launchSnapshot.actualStorageMode {
         case .recovery:
-            ModelContainerFactory.recoveryStoreName
+            storageInfo.recoveryStoreName
         case .unavailable:
             "None"
         case .localOnly, .iCloud:
-            ModelContainerFactory.storeName
+            storageInfo.storeName
         }
     }
 
@@ -322,7 +326,8 @@ extension SyncDiagnosticsView {
 
     var explanation: String {
         if applicationSettings.syncMode == .iCloud, launchSnapshot.actualStorageMode == .iCloud, launchSnapshot.cloudKitOpened {
-            return "This install opened the SwiftData store with CloudKit mirroring enabled. If another install does not show the same state, that install is not participating in sync."
+            let technologyName = storageInfo?.technologyName ?? "persistent"
+            return "This install opened the \(technologyName) store with CloudKit mirroring enabled. If another install does not show the same state, that install is not participating in sync."
         }
 
         if launchSnapshot.actualStorageMode == .recovery {

@@ -6,6 +6,7 @@
 //
 
 import CloudKit
+import CoreData
 import SwiftUI
 import SwiftData
 
@@ -64,14 +65,15 @@ struct yaHerdApp: App {
             )
 
             appSettingsSynchronizer.startIfNeeded(syncMode: syncMode)
+            let persistence = Self.makePersistenceRuntime(
+                modelContainer: container,
+                syncMode: syncMode
+            )
 
             return .ready(
                 AppRuntime(
-                    modelContainer: container,
-                    dependencies: Self.makeDependencies(
-                        modelContainer: container,
-                        syncMode: syncMode
-                    ),
+                    persistenceLifetime: persistence.assembly,
+                    dependencies: persistence.dependencies,
                     syncMode: syncMode,
                     dataAccessMode: .readWrite,
                     recoveryContext: nil,
@@ -102,13 +104,14 @@ struct yaHerdApp: App {
                         startupError: startupMessage
                     )
 
+                    let persistence = Self.makePersistenceRuntime(
+                        modelContainer: localContainer,
+                        syncMode: .localOnly
+                    )
                     return .ready(
                         AppRuntime(
-                            modelContainer: localContainer,
-                            dependencies: Self.makeDependencies(
-                                modelContainer: localContainer,
-                                syncMode: .localOnly
-                            ),
+                            persistenceLifetime: persistence.assembly,
+                            dependencies: persistence.dependencies,
                             syncMode: .localOnly,
                             dataAccessMode: .readWrite,
                             recoveryContext: nil,
@@ -135,14 +138,15 @@ struct yaHerdApp: App {
                             startupError: startupMessage
                         )
 
+                        let persistence = Self.makePersistenceRuntime(
+                            modelContainer: fallbackContainer,
+                            syncMode: .localOnly,
+                            dataAccessMode: .recoveryReadOnly
+                        )
                         return .ready(
                             AppRuntime(
-                                modelContainer: fallbackContainer,
-                                dependencies: Self.makeDependencies(
-                                    modelContainer: fallbackContainer,
-                                    syncMode: .localOnly,
-                                    dataAccessMode: .recoveryReadOnly
-                                ),
+                                persistenceLifetime: persistence.assembly,
+                                dependencies: persistence.dependencies,
                                 syncMode: .localOnly,
                                 dataAccessMode: .recoveryReadOnly,
                                 recoveryContext: RecoveryModeContext(
@@ -189,14 +193,15 @@ struct yaHerdApp: App {
                     startupError: startupMessage
                 )
 
+                let persistence = Self.makePersistenceRuntime(
+                    modelContainer: fallbackContainer,
+                    syncMode: .localOnly,
+                    dataAccessMode: .recoveryReadOnly
+                )
                 return .ready(
                     AppRuntime(
-                        modelContainer: fallbackContainer,
-                        dependencies: Self.makeDependencies(
-                            modelContainer: fallbackContainer,
-                            syncMode: .localOnly,
-                            dataAccessMode: .recoveryReadOnly
-                        ),
+                        persistenceLifetime: persistence.assembly,
+                        dependencies: persistence.dependencies,
                         syncMode: .localOnly,
                         dataAccessMode: .recoveryReadOnly,
                         recoveryContext: RecoveryModeContext(
@@ -226,18 +231,22 @@ struct yaHerdApp: App {
         }
     }
 
-    private static func makeDependencies(
+    private static func makePersistenceRuntime(
         modelContainer: ModelContainer,
         syncMode: SyncMode,
         dataAccessMode: AppDataAccessMode = .readWrite
-    ) -> AppDependencies {
+    ) -> AppPersistenceRuntime {
         let persistenceAssembly: any PersistenceAssembly = SwiftDataPersistenceAssembly(
             modelContainer: modelContainer
         )
-        return persistenceAssembly.makeDependencies(
+        let dependencies = persistenceAssembly.makeDependencies(
             tagColorDuplicateResolutionPolicy: syncMode.tagColorDuplicateResolutionPolicy,
             dataAccessMode: dataAccessMode,
             storageMode: syncMode.herdStorageMode
+        )
+        return AppPersistenceRuntime(
+            assembly: persistenceAssembly,
+            dependencies: dependencies
         )
     }
 
@@ -273,8 +282,15 @@ private enum AppBootstrapState {
     case storageUnavailable(String)
 }
 
+private struct AppPersistenceRuntime {
+    let assembly: any PersistenceAssembly
+    let dependencies: AppDependencies
+}
+
 private struct AppRuntime {
-    let modelContainer: ModelContainer
+    // Retain the selected persistence implementation for the lifetime of the running app without
+    // exposing its concrete container to SwiftUI or Presentation.
+    let persistenceLifetime: any PersistenceAssembly
     let dependencies: AppDependencies
     let syncMode: SyncMode
     let dataAccessMode: AppDataAccessMode
@@ -382,13 +398,20 @@ private struct RunningAppView: View {
             .environment(\.fieldCheckFeatureDependencies, runtime.dependencies.fieldCheckFeatureDependencies)
             .environment(\.workingSessionFeatureDependencies, runtime.dependencies.workingSessionFeatureDependencies)
             .environment(\.collaborationDependencies, collaborationDependencies)
-            .modelContainer(runtime.modelContainer)
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     guard runtime.dataAccessMode.allowsDataMutations else { return }
                     appSettingsSynchronizer.refreshFromICloudIfStarted()
                     tagColorLibrary.refresh()
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .NSPersistentStoreRemoteChange)) { _ in
+                guard applicationSettings.syncMode == .iCloud else { return }
+
+                // Persistence notifications belong at the application boundary. Presentation only
+                // consumes the resulting application mutation stream and repository snapshots.
+                tagColorLibrary.refresh()
+                runtime.dependencies.applicationMutationCenter.recordSharedStoreImport()
             }
             .onReceive(NotificationCenter.default.publisher(for: .yaHerdCloudKitShareAccepted)) { notification in
                 guard runtime.dataAccessMode.allowsDataMutations else { return }
