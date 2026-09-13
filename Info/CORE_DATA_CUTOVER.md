@@ -2,6 +2,8 @@
 
 > Temporary implementation instructions for replacing the current SwiftData/bridge persistence stack with the production Core Data architecture. Delete this document when the cutover is complete and `ARCHITECTURE.md` describes the implemented system rather than the target.
 
+`ARCHITECTURE.md` remains the authoritative clean-architecture guide throughout this work. This playbook changes persistence technology; it does not suspend or replace feature ownership, dependency direction, use-case rules, dependency-injection boundaries, mapping rules, navigation ownership, presentation responsibilities, or other persistence-independent architecture guidance.
+
 ## Non-negotiable direction
 
 This is a **replacement, not a migration**.
@@ -249,6 +251,7 @@ Do not run builds, tests, CI, or verification automatically unless explicitly re
 ## Self-review questions before finishing each Core Data PR
 
 - Is this code part of the final architecture, or only useful for transition?
+- Did I preserve the clean-architecture rules in `ARCHITECTURE.md`, or accidentally move business, presentation, navigation, or feature ownership into persistence while replacing technology?
 - Did any Core Data/CloudKit type leak into Domain or Presentation?
 - Is every durable entity still addressed by application UUID?
 - Did any code use `NSManagedObjectID` as externally visible identity?
@@ -279,5 +282,5 @@ The cutover is complete only when all of the following are true:
 - no SwiftData/Core Data mirror/import/export/reconciliation path remains;
 - obsolete public-ID bridge repair code is gone unless independently justified;
 - Core Data persistence tests cover the production behavior;
-- `ARCHITECTURE.md` matches the actual implementation;
+- `ARCHITECTURE.md` matches the actual implementation and still contains the broader clean-architecture guidance needed to maintain the project;
 - this file is deleted.
