@@ -120,13 +120,15 @@ The application operates on **exactly one selected Herd workspace at a time**:
 
 Selection behavior is deterministic:
 
-1. On first use with no Herd, create the user's owned Herd and select it.
+1. Creating a new owned Herd is an explicit onboarding/workspace-creation action. In iCloud mode, an empty local fetch is **not** evidence that the account has no Herd; creation must wait until initial CloudKit store loading/import has reached the application's confirmed-new-workspace boundary, then re-check accessible Herds immediately before inserting the new root.
 2. On launch, restore the locally remembered selected Herd UUID when that Herd is still accessible.
 3. If no remembered selection is valid and exactly one Herd is accessible, select that Herd.
 4. If multiple Herds are accessible and there is no valid remembered selection, require an explicit workspace selection rather than guessing based on store order.
 5. Successfully accepting another owner's share does **not** replace or delete an owned Herd. The accepted Herd becomes the selected workspace after acceptance so the user enters the graph they just accepted; the prior Herd remains available for later selection.
 6. Switching Herds invalidates/rebuilds Herd-scoped feature dependencies, read state, and navigation state so IDs from one workspace cannot be resolved through another workspace's repositories.
 7. If access to the selected shared Herd is revoked or removed, invalidate that selection. Select the sole remaining accessible Herd when exactly one remains; otherwise require a new explicit selection.
+
+A newly installed or newly configured iCloud client may temporarily observe zero local Herd rows while the user's private CloudKit graph is still importing. The app must remain in workspace-resolution/onboarding state during that transient condition; it must not synthesize an owned Herd merely because the current local store is empty. Local-only mode does not have this cloud-import ambiguity, but Herd creation is still performed by the explicit onboarding/workspace command rather than an arbitrary repository fetch.
 
 The selected-Herd preference may be stored using ordinary local app settings. It must not create a relationship between Herd graphs, influence CloudKit record identity, or become a second persistence source for business data.
 
@@ -846,26 +848,35 @@ The Core Data model must **not** reproduce these current implementation artifact
 
 ## Behavioral contracts before the physical model
 
-Before creating `yaHerdModel.xcdatamodeld`, establish the permanent persistence behavior contract suite described by the Core Data cutover plan. These tests define product behavior through Domain repository/transaction protocols rather than SwiftData types.
+Before creating `yaHerdModel.xcdatamodeld`, establish permanent persistence-neutral **characterization contracts for behavior the current application already implements**. These tests define product behavior through Domain repository/transaction protocols rather than SwiftData types.
 
-The existing SwiftData implementation may be used as the first runner for those contracts so the tests characterize intended current behavior before persistence changes. That runner is temporary; the contract definitions are permanent and later run unchanged against Core Data.
+The existing SwiftData implementation is the first runner for this characterization subset. The runner is temporary; the contract definitions are permanent and later run unchanged against Core Data. A characterization contract must not require adding new production behavior to SwiftData merely so the old implementation can pass a target-architecture requirement.
 
-At minimum the pre-model contract milestone should lock down:
+At minimum the pre-model characterization milestone should lock down current behavior that is observable through today's Domain ports, including:
 
-- application UUID identity and duplicate-ID failure behavior;
-- selected-Herd scoping so owned and accepted Herd graphs cannot be combined by ordinary repositories;
-- animal aggregate create/update/tag/revision behavior;
+- application UUID identity preservation and current duplicate-ID failure behavior;
+- current animal create/update/tag/history behavior;
 - movement and historical preservation behavior;
-- pasture deletion transaction semantics;
-- Field Check historical behavior;
-- Working queue/session history, including animal sex and dam-tag snapshots after animal deletion;
-- rollback/no-partial-commit semantics for important multi-record operations.
+- pasture deletion behavior observable through the current workflow, without pretending its known multi-save implementation is already atomic;
+- Field Check behavior and historical snapshots already supported by the current implementation;
+- Working queue/session behavior and existing historical snapshots;
+- mutation publication behavior on persistence success/failure where the current boundary exposes it.
 
-Do not postpone these behavior contracts until after Core Data repositories exist. They are the executable specification the Core Data implementation must satisfy.
+Some end-state requirements are intentionally **target-only contracts** because SwiftData does not implement them today. They are still permanent specifications, but their first executable runner is the Core Data harness. Target-only contracts include:
+
+- selected-Herd repository scoping across simultaneously attached private/shared Herd graphs;
+- deterministic workspace selection/switch/revocation behavior;
+- share-acceptance selection behavior;
+- private/shared store routing and cross-store relationship rejection;
+- new historical snapshot fields that do not exist in the SwiftData schema, such as the expanded Working queue sex/dam-tag snapshot contract;
+- atomic rollback/no-partial-commit semantics for workflows known to be multi-save in SwiftData, including pasture deletion;
+- any other final-architecture behavior that would require modifying throwaway SwiftData production code rather than adding only a thin test harness.
+
+Do not postpone characterization of existing behavior until after Core Data repositories exist, and do not force target-only behavior into SwiftData to make the two implementations superficially symmetrical. Together, the characterization contracts and target-only Core Data contracts form the executable persistence specification.
 
 ## Model validation required when implemented
 
-After the behavioral contract milestone, the Core Data foundation PR that creates `yaHerdModel.xcdatamodeld` should add focused model-level tests/validation for the production implementation, including:
+After the pre-model characterization milestone, the Core Data foundation PR that creates `yaHerdModel.xcdatamodeld` should add focused model-level tests/validation for the production implementation, including:
 
 - the model loads successfully;
 - every durable entity has an `id` UUID attribute;
@@ -876,7 +887,8 @@ After the behavioral contract milestone, the Core Data foundation PR that create
 - no relationship uses `Deny`;
 - every herd-owned entity has a Herd relationship;
 - private and shared store descriptions use the same model/configuration;
-- a new private Herd graph is inserted into the private store;
+- a new private Herd graph is inserted into the private store only through the explicit onboarding/workspace-creation boundary;
+- an empty private store during iCloud startup does not independently trigger Herd creation;
 - a record created for a shared Herd is assigned to the shared store;
 - simultaneous private and shared Herd roots remain isolated by selected-Herd repository scope;
 - accepting a shared Herd preserves the owned Herd and selects the accepted Herd deterministically;
@@ -886,7 +898,7 @@ After the behavioral contract milestone, the Core Data foundation PR that create
 - Working queue history retains animal tag/color, sex, and dam tag/color after the live animal relationship disappears;
 - model/schema validation can be run with `initializeCloudKitSchema(options: [.dryRun])` in a development/test-only path before any production schema promotion.
 
-As Core Data repositories are implemented, point the same permanent behavior contract suite at the Core Data harness feature by feature. Do not rewrite the contracts to accommodate persistence-specific behavior.
+As Core Data repositories are implemented, point the same permanent characterization contracts at the Core Data harness feature by feature and add the target-only contracts as their required production capabilities become available. Do not rewrite existing contracts to accommodate persistence-specific behavior.
 
 ## CloudKit schema promotion rule
 
@@ -905,18 +917,18 @@ Development CloudKit schema may be reset/recreated while this app has not shippe
 
 ## Implementation sequence from this blueprint
 
-The Core Data replacement is test-first at the persistence boundary. The model blueprint is already established, but physical model/runtime implementation begins only after the permanent behavior contracts are in place.
+The Core Data replacement is test-first at the persistence boundary. The model blueprint is already established, but physical model/runtime implementation begins only after the permanent characterization contracts for existing behavior are in place.
 
 ```text
-0. permanent persistence behavior contracts + temporary SwiftData contract runner
-1. reconcile this blueprint with any behavior exposed by those tests
+0. persistence-neutral characterization contracts for current behavior + temporary SwiftData runner
+1. reconcile this blueprint with behavior exposed by those characterization tests
 2. yaHerdModel.xcdatamodeld + CD managed-object classes + model-structure tests
-3. CoreDataPersistenceController / NSPersistentCloudKitContainer store setup
-4. selected-Herd scope + Herd/reference-data repository + deterministic store routing
-5. Pasture repositories + pasture deletion transaction
+3. CoreDataPersistenceController / NSPersistentCloudKitContainer store setup + Core Data contract harness
+4. selected-Herd scope + Herd/reference-data repository + deterministic store routing + target-only workspace contracts
+5. Pasture repositories + atomic pasture deletion transaction + target-only rollback contracts
 6. Animal repositories + aggregate transaction + tag/history mapping
 7. Field Check repositories
-8. Working repositories
+8. Working repositories + expanded historical-snapshot contracts
 9. Dashboard/Home read models
 10. direct Core Data CKShare collaboration implementation
 11. switch PersistenceAssembly to Core Data
@@ -924,4 +936,4 @@ The Core Data replacement is test-first at the persistence boundary. The model b
 13. strengthen final architecture verification and delete this cutover documentation when complete
 ```
 
-Do not add a temporary SwiftData implementation of any **new production behavior** just to keep both systems symmetrical during this sequence. The only temporary SwiftData work justified by step 0 is the thin harness needed to run permanent persistence-neutral behavior contracts against the current implementation.
+Do not add a temporary SwiftData implementation of any **new production behavior** just to keep both systems symmetrical during this sequence. The only temporary SwiftData work justified by step 0 is the thin harness needed to run persistence-neutral characterization contracts against the current implementation.
