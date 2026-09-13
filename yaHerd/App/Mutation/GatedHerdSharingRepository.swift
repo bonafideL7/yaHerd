@@ -260,7 +260,35 @@ final class GatedHerdSharingRepository: HerdSharingRepository,
 
     func syncSharedBridgeData(herd: HerdSummary?, storageMode: HerdStorageMode) async throws -> HerdSharingActionResult {
         try await withSynchronizationGate {
-            try await base.syncSharedBridgeData(herd: herd, storageMode: storageMode)
+            guard storageMode == .iCloud, let herd else {
+                return try await base.syncSharedBridgeData(herd: herd, storageMode: storageMode)
+            }
+
+            let access = try await fetchSharingAccess(for: herd, storageMode: storageMode)
+            let hasActiveOwnerShare =
+                !access.hasConflictingBridgeRecords
+                && access.bridgeLocation == .ownerPrivateStore
+                && access.hasActiveSystemShare
+                && access.creationState != .ownerStopCleanupPending
+                && access.creationState != .ownerBridgeVerificationRequired
+            let hasAcceptedParticipantShare =
+                !access.hasConflictingBridgeRecords
+                && access.bridgeLocation == .acceptedSharedStore
+                && access.creationState != .notOwnedByCurrentDevice
+
+            guard hasActiveOwnerShare || hasAcceptedParticipantShare else {
+                ReliabilityLog.syncEvent(
+                    "GatedHerdSharingRepository.syncSharedBridgeData.skipped",
+                    detail: "No active shared-herd relationship"
+                )
+                return HerdSharingActionResult(
+                    title: "No shared herd to sync",
+                    message:
+                        "iCloud Sync is enabled for this device, but this herd is not actively shared. SwiftData and CloudKit continue syncing your own devices; the collaboration bridge was not imported or exported."
+                )
+            }
+
+            return try await base.syncSharedBridgeData(herd: herd, storageMode: storageMode)
         }
     }
 
