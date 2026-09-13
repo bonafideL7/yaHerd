@@ -5,7 +5,7 @@ struct DashboardPresentationData {
     let seasonalCalvingCounts: [DashboardSeasonalCalvingCount]
     let monthlyMedicalRecords: [DashboardMonthlyMedicalRecordCount]
     let pinkEyeCasesByYear: [DashboardYearCount]
-    let offspringByDam: [DashboardOffspringDamMetric]
+    let offspringByDam: [DashboardOffspringDamChartValue]
     let statusOutcomesByYear: [DashboardStatusOutcomeYearCount]
     let animalTypeMixValues: [DashboardCategoryCountValue]
     let sexMixValues: [DashboardCategoryCountValue]
@@ -23,7 +23,7 @@ struct DashboardPresentationData {
         seasonalCalvingCounts = analytics?.seasonalCalvingCounts ?? []
         monthlyMedicalRecords = analytics?.monthlyMedicalRecords ?? []
         pinkEyeCasesByYear = analytics?.pinkEyeCasesByYear ?? []
-        offspringByDam = analytics?.offspringByDam ?? []
+        offspringByDam = Self.makeOffspringByDamChartValues(from: analytics?.offspringByDam ?? [])
         statusOutcomesByYear = analytics?.statusOutcomesByYear ?? []
         animalTypeMixValues = Self.makeAnimalTypeMixValues(from: animals)
         sexMixValues = Self.makeSexMixValues(from: animals)
@@ -41,6 +41,31 @@ struct DashboardPresentationData {
     func selectedPastureUtilizationValue(named pastureName: String?) -> DashboardPastureUtilizationValue? {
         guard let pastureName else { return nil }
         return pastureUtilizationValues.first { $0.name == pastureName }
+    }
+
+    private static func makeOffspringByDamChartValues(
+        from metrics: [DashboardOffspringDamMetric]
+    ) -> [DashboardOffspringDamChartValue] {
+        let metricsByDisplayTag = Dictionary(grouping: metrics, by: \.damDisplayTagNumber)
+
+        return metrics.map { metric in
+            let matchingMetrics = (metricsByDisplayTag[metric.damDisplayTagNumber] ?? [])
+                .sorted { $0.damID.uuidString < $1.damID.uuidString }
+            let label: String
+
+            if matchingMetrics.count > 1,
+               let index = matchingMetrics.firstIndex(where: { $0.damID == metric.damID }) {
+                label = "\(metric.damDisplayTagNumber) (\(index + 1))"
+            } else {
+                label = metric.damDisplayTagNumber
+            }
+
+            return DashboardOffspringDamChartValue(
+                id: metric.damID,
+                label: label,
+                offspringCount: metric.offspringCount
+            )
+        }
     }
 
     private static func makeAnimalTypeMixValues(from animals: [DashboardAnimalItem]) -> [DashboardCategoryCountValue] {
@@ -161,6 +186,12 @@ struct DashboardCategoryCountValue: Identifiable, Hashable {
     let count: Int
 
     var id: String { label }
+}
+
+struct DashboardOffspringDamChartValue: Identifiable, Hashable {
+    let id: ApplicationEntityID
+    let label: String
+    let offspringCount: Int
 }
 
 struct DashboardPastureUtilizationValue: Identifiable, Hashable {
