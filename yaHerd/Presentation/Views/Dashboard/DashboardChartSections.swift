@@ -251,7 +251,7 @@ struct DashboardChartsContent: View {
                 Chart(data.offspringByDam) { item in
                     BarMark(
                         x: .value("Offspring", item.offspringCount),
-                        y: .value("Dam", item.damDisplayTagNumber)
+                        y: .value("Dam", item.label)
                     )
                     .annotation(position: .trailing) {
                         Text(item.offspringCount.formatted())
