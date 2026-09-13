@@ -4,6 +4,7 @@ import SwiftData
 @MainActor
 final class SwiftDataPersistenceAssembly: PersistenceAssembly {
     private let modelContainer: ModelContainer
+    private var remoteStoreChangeObserver: SwiftDataRemoteStoreChangeObserver?
 
     init(modelContainer: ModelContainer) {
         self.modelContainer = modelContainer
@@ -16,6 +17,17 @@ final class SwiftDataPersistenceAssembly: PersistenceAssembly {
     ) -> AppDependencies {
         let context = modelContainer.mainContext
         let mutationCenter = ApplicationMutationCenter()
+
+        if storageMode == .iCloud {
+            remoteStoreChangeObserver = SwiftDataRemoteStoreChangeObserver { [weak mutationCenter] in
+                Task { @MainActor in
+                    mutationCenter?.recordSharedStoreImport()
+                }
+            }
+        } else {
+            remoteStoreChangeObserver = nil
+        }
+
         let mutationSyncScheduler = HerdSharingMutationSyncScheduler()
         let mutationPipeline = ApplicationMutationPipeline(
             center: mutationCenter,
