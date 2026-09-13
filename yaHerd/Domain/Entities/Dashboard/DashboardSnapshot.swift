@@ -49,11 +49,11 @@ enum DashboardCalvingSeason: String, CaseIterable, Hashable {
 }
 
 struct DashboardOffspringDamMetric: Identifiable, Hashable {
-    let damID: String
+    let damID: ApplicationEntityID
     let damDisplayTagNumber: String
     let offspringCount: Int
 
-    var id: String { damID }
+    var id: ApplicationEntityID { damID }
 }
 
 struct DashboardMonthlyMedicalRecordCount: Identifiable, Hashable {
@@ -84,7 +84,7 @@ struct DashboardStatusOutcomeYearCount: Identifiable, Hashable {
 }
 
 struct DashboardWorkingSessionSummary: Identifiable, Equatable {
-    let id: String
+    let id: ApplicationEntityID
     let date: Date
     let sourcePastureName: String?
     let treatmentTemplateName: String
@@ -102,20 +102,20 @@ struct DashboardOverview: Equatable {
 }
 
 struct DashboardAnimalItem: Identifiable, Hashable {
-    let id: UUID
+    let id: ApplicationEntityID
     let displayTagNumber: String
     let displayTagColorID: UUID?
     let damDisplayTagNumber: String?
     let damDisplayTagColorID: UUID?
     let sex: Sex
     let animalType: AnimalType
-    let pastureID: UUID?
+    let pastureID: ApplicationEntityID?
     let pastureName: String?
     let location: AnimalLocation
 }
 
 struct DashboardPastureItem: Identifiable, Hashable {
-    let id: UUID
+    let id: ApplicationEntityID
     let name: String
     let activeAnimalCount: Int
     let metrics: PastureMetrics
