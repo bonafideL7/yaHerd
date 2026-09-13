@@ -68,6 +68,12 @@ jobs:
             exit 1
           fi
 
+      - name: Verify privacy manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash Scripts/verify-privacy.sh
+
       - name: Select Xcode 26
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency }}
         shell: bash
