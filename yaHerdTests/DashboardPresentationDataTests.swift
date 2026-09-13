@@ -56,7 +56,45 @@ final class DashboardPresentationDataTests: XCTestCase {
         XCTAssertEqual(valuesByID[normalID]?.statusLabel, "Normal")
     }
 
-    private func makeSnapshot(pastures: [DashboardPastureItem]) -> DashboardSnapshot {
+    func testOffspringByDamDisambiguatesDuplicateDisplayTagsWithoutChangingIdentity() {
+        let firstDamID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        let secondDamID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+        let uniqueDamID = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
+        let snapshot = makeSnapshot(
+            pastures: [],
+            offspringByDam: [
+                DashboardOffspringDamMetric(
+                    damID: secondDamID,
+                    damDisplayTagNumber: "UT",
+                    offspringCount: 2
+                ),
+                DashboardOffspringDamMetric(
+                    damID: firstDamID,
+                    damDisplayTagNumber: "UT",
+                    offspringCount: 3
+                ),
+                DashboardOffspringDamMetric(
+                    damID: uniqueDamID,
+                    damDisplayTagNumber: "12",
+                    offspringCount: 1
+                )
+            ]
+        )
+
+        let data = DashboardPresentationData(snapshot: snapshot, fieldCheckSessions: [])
+        let valuesByID = Dictionary(uniqueKeysWithValues: data.offspringByDam.map { ($0.id, $0) })
+
+        XCTAssertEqual(valuesByID[firstDamID]?.label, "UT (1)")
+        XCTAssertEqual(valuesByID[secondDamID]?.label, "UT (2)")
+        XCTAssertEqual(valuesByID[uniqueDamID]?.label, "12")
+        XCTAssertEqual(Set(data.offspringByDam.map(\.id)), Set([firstDamID, secondDamID, uniqueDamID]))
+        XCTAssertEqual(Set(data.offspringByDam.map(\.label)).count, 3)
+    }
+
+    private func makeSnapshot(
+        pastures: [DashboardPastureItem],
+        offspringByDam: [DashboardOffspringDamMetric] = []
+    ) -> DashboardSnapshot {
         DashboardSnapshot(
             activeSession: nil,
             alerts: [],
@@ -71,7 +109,7 @@ final class DashboardPresentationDataTests: XCTestCase {
             analytics: DashboardAnalytics(
                 lifecycleMetrics: [],
                 seasonalCalvingCounts: [],
-                offspringByDam: [],
+                offspringByDam: offspringByDam,
                 monthlyMedicalRecords: [],
                 pinkEyeCasesByYear: [],
                 statusOutcomesByYear: []
