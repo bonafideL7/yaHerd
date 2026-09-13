@@ -1,0 +1,455 @@
+import XCTest
+@testable import yaHerd
+
+/// Persistence-neutral behavioral contract for `AnimalRepository` implementations.
+///
+/// A future Core Data repository should run this exact suite by supplying a fixture that
+/// creates repositories over the same backing store. The contract intentionally asserts
+/// domain-facing behavior only; it does not inspect SwiftData/Core Data models or contexts.
+@MainActor
+struct AnimalRepositoryContractFixture {
+    let makeAnimalRepository: () -> any AnimalRepository
+    let makePastureRepository: () -> any PastureRepository
+}
+
+@MainActor
+enum AnimalRepositoryContract {
+    static func assertCreateUpdateAndReload(
+        using fixture: AnimalRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeAnimalRepository()
+        let created = try repository.create(
+            input: makeAnimalInput(
+                name: "Contract Cow",
+                tagNumber: "101",
+                sex: .female,
+                birthDate: date(year: 2020, month: 1, day: 2),
+                distinguishingFeatures: [
+                    DistinguishingFeature(description: "White blaze", order: 0)
+                ]
+            )
+        )
+
+        XCTAssertEqual(created.name, "Contract Cow", file: file, line: line)
+        XCTAssertEqual(created.displayTagNumber, "101", file: file, line: line)
+        XCTAssertEqual(created.sex.rawValue, Sex.female.rawValue, file: file, line: line)
+        XCTAssertEqual(created.status.rawValue, AnimalStatus.active.rawValue, file: file, line: line)
+        XCTAssertEqual(created.distinguishingFeatures.map(\.description), ["White blaze"], file: file, line: line)
+
+        let updated = try repository.update(
+            id: created.id,
+            input: makeAnimalInput(
+                name: "Updated Contract Cow",
+                tagNumber: "102",
+                sex: .female,
+                birthDate: date(year: 2020, month: 1, day: 2),
+                distinguishingFeatures: [
+                    DistinguishingFeature(description: "White blaze", order: 0),
+                    DistinguishingFeature(description: "Left ear notch", order: 1)
+                ]
+            )
+        )
+
+        XCTAssertEqual(updated.id, created.id, "Updating must preserve application UUID identity.", file: file, line: line)
+        XCTAssertEqual(updated.name, "Updated Contract Cow", file: file, line: line)
+        XCTAssertEqual(updated.displayTagNumber, "102", file: file, line: line)
+        XCTAssertEqual(updated.distinguishingFeatures.map(\.description), ["White blaze", "Left ear notch"], file: file, line: line)
+
+        let reloaded = try XCTUnwrap(
+            fixture.makeAnimalRepository().fetchAnimalDetail(id: created.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloaded.id, created.id, file: file, line: line)
+        XCTAssertEqual(reloaded.name, updated.name, file: file, line: line)
+        XCTAssertEqual(reloaded.displayTagNumber, updated.displayTagNumber, file: file, line: line)
+        XCTAssertEqual(reloaded.distinguishingFeatures, updated.distinguishingFeatures, file: file, line: line)
+    }
+
+    static func assertArchiveRestorePreservesHistory(
+        using fixture: AnimalRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeAnimalRepository()
+        let created = try repository.create(
+            input: makeAnimalInput(
+                name: "Archive Contract Cow",
+                tagNumber: "201",
+                sex: .female,
+                birthDate: date(year: 2019, month: 4, day: 3)
+            )
+        )
+        let treatmentDate = date(year: 2026, month: 2, day: 10)
+        _ = try repository.addHealthRecord(
+            animalID: created.id,
+            input: HealthRecordInput(
+                date: treatmentDate,
+                treatment: "Contract vaccination",
+                notes: "Preserve across archive"
+            )
+        )
+
+        try repository.archive(ids: [created.id])
+
+        let archivedRepository = fixture.makeAnimalRepository()
+        let archived = try XCTUnwrap(
+            archivedRepository.fetchAnimalDetail(id: created.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(archived.id, created.id, file: file, line: line)
+        XCTAssertTrue(archived.isArchived, file: file, line: line)
+        XCTAssertNotNil(archived.archivedAt, file: file, line: line)
+        XCTAssertTrue(
+            try archivedRepository.fetchTimeline(id: created.id).contains(where: isHealthEvent),
+            "Archiving must not discard historical health records.",
+            file: file,
+            line: line
+        )
+
+        try archivedRepository.restore(ids: [created.id])
+
+        let restoredRepository = fixture.makeAnimalRepository()
+        let restored = try XCTUnwrap(
+            restoredRepository.fetchAnimalDetail(id: created.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(restored.id, created.id, file: file, line: line)
+        XCTAssertFalse(restored.isArchived, file: file, line: line)
+        XCTAssertNil(restored.archivedAt, file: file, line: line)
+        XCTAssertTrue(
+            try restoredRepository.fetchTimeline(id: created.id).contains(where: isHealthEvent),
+            "Restoring must retain historical records.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertMovementUpdatesPastureAndTimeline(
+        using fixture: AnimalRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let pastureRepository = fixture.makePastureRepository()
+        let north = try pastureRepository.create(
+            input: PastureInput(name: "Contract North", acreage: 25, usableAcreage: 22, targetAcresPerHead: 1.5)
+        )
+        let south = try pastureRepository.create(
+            input: PastureInput(name: "Contract South", acreage: 30, usableAcreage: 28, targetAcresPerHead: 1.75)
+        )
+
+        let animalRepository = fixture.makeAnimalRepository()
+        let animal = try animalRepository.create(
+            input: makeAnimalInput(
+                name: "Movement Contract Cow",
+                tagNumber: "301",
+                sex: .female,
+                birthDate: date(year: 2021, month: 3, day: 4),
+                pastureID: north.id
+            )
+        )
+
+        try animalRepository.move(ids: [animal.id], toPastureID: south.id)
+
+        let reloadedRepository = fixture.makeAnimalRepository()
+        let reloaded = try XCTUnwrap(
+            reloadedRepository.fetchAnimalDetail(id: animal.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloaded.pastureID, south.id, file: file, line: line)
+        XCTAssertEqual(reloaded.pastureName, south.name, file: file, line: line)
+        XCTAssertTrue(
+            try reloadedRepository.fetchTimeline(id: animal.id).contains(where: isMovementEvent),
+            "Moving an animal must create durable movement history.",
+            file: file,
+            line: line
+        )
+
+        let reloadedPastures = fixture.makePastureRepository()
+        XCTAssertFalse(
+            try reloadedPastures.fetchResidentAnimals(pastureID: north.id).contains { $0.id == animal.id },
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            try reloadedPastures.fetchResidentAnimals(pastureID: south.id).contains { $0.id == animal.id },
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertTagLifecyclePreservesHistory(
+        using fixture: AnimalRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeAnimalRepository()
+        let created = try repository.create(
+            input: makeAnimalInput(
+                name: "Tag Contract Cow",
+                tagNumber: "401",
+                sex: .female,
+                birthDate: date(year: 2020, month: 5, day: 6)
+            )
+        )
+        let originalTag = try XCTUnwrap(
+            created.activeTags.first { $0.number == "401" },
+            file: file,
+            line: line
+        )
+
+        let withReplacement = try repository.addTag(
+            animalID: created.id,
+            input: AnimalTagInput(number: "402", colorID: nil, isPrimary: true)
+        )
+        let replacementTag = try XCTUnwrap(
+            withReplacement.activeTags.first { $0.number == "402" },
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(replacementTag.isPrimary, file: file, line: line)
+        XCTAssertEqual(withReplacement.displayTagNumber, "402", file: file, line: line)
+        XCTAssertTrue(withReplacement.activeTags.contains { $0.id == originalTag.id }, file: file, line: line)
+
+        _ = try repository.retireTag(animalID: created.id, tagID: originalTag.id)
+
+        let reloadedRepository = fixture.makeAnimalRepository()
+        let reloaded = try XCTUnwrap(
+            reloadedRepository.fetchAnimalDetail(id: created.id),
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(reloaded.activeTags.contains { $0.id == replacementTag.id && $0.isPrimary }, file: file, line: line)
+        XCTAssertFalse(reloaded.activeTags.contains { $0.id == originalTag.id }, file: file, line: line)
+        let retiredTag = try XCTUnwrap(
+            reloaded.inactiveTags.first { $0.id == originalTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertNotNil(retiredTag.removedAt, file: file, line: line)
+        XCTAssertTrue(
+            try reloadedRepository.fetchTimeline(id: created.id).contains(where: isTagEvent),
+            "Tag replacement/retirement must remain represented in animal history.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertParentRelationshipsSurviveReload(
+        using fixture: AnimalRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeAnimalRepository()
+        let sire = try repository.create(
+            input: makeAnimalInput(
+                name: "Contract Sire",
+                tagNumber: "S01",
+                sex: .male,
+                birthDate: date(year: 2018, month: 1, day: 1)
+            )
+        )
+        let dam = try repository.create(
+            input: makeAnimalInput(
+                name: "Contract Dam",
+                tagNumber: "D01",
+                sex: .female,
+                birthDate: date(year: 2019, month: 1, day: 1)
+            )
+        )
+        let calf = try repository.create(
+            input: makeAnimalInput(
+                name: "Contract Calf",
+                tagNumber: "C01",
+                sex: .female,
+                birthDate: date(year: 2025, month: 2, day: 1),
+                sireID: sire.id,
+                damID: dam.id
+            )
+        )
+
+        let reloadedRepository = fixture.makeAnimalRepository()
+        let reloadedCalf = try XCTUnwrap(
+            reloadedRepository.fetchAnimalDetail(id: calf.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedCalf.sireID, sire.id, file: file, line: line)
+        XCTAssertEqual(reloadedCalf.damID, dam.id, file: file, line: line)
+
+        var reloadedDam = try XCTUnwrap(
+            reloadedRepository.fetchAnimalDetail(id: dam.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedDam.maternalOffspringCountIncludingArchived, 1, file: file, line: line)
+        XCTAssertTrue(reloadedDam.maternalOffspring.contains { $0.id == calf.id }, file: file, line: line)
+
+        try reloadedRepository.archive(ids: [calf.id])
+        reloadedDam = try XCTUnwrap(
+            fixture.makeAnimalRepository().fetchAnimalDetail(id: dam.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedDam.maternalOffspringCountIncludingArchived,
+            1,
+            "Archiving offspring must not break parent relationship history.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(reloadedDam.maternalOffspring.contains { $0.id == calf.id }, file: file, line: line)
+    }
+
+    static func assertHealthAndPregnancyRecordsSurviveReload(
+        using fixture: AnimalRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeAnimalRepository()
+        let animal = try repository.create(
+            input: makeAnimalInput(
+                name: "Records Contract Cow",
+                tagNumber: "501",
+                sex: .female,
+                birthDate: date(year: 2020, month: 6, day: 7)
+            )
+        )
+        let treatmentDate = date(year: 2026, month: 3, day: 1)
+        let pregnancyDate = date(year: 2026, month: 3, day: 2)
+
+        _ = try repository.addHealthRecord(
+            animalID: animal.id,
+            input: HealthRecordInput(
+                date: treatmentDate,
+                treatment: "Contract treatment",
+                notes: "Repository contract"
+            )
+        )
+        _ = try repository.addPregnancyCheck(
+            animalID: animal.id,
+            input: PregnancyCheckInput(
+                date: pregnancyDate,
+                result: .pregnant,
+                technician: "Contract Tech",
+                estimatedDaysPregnant: 90,
+                dueDate: date(year: 2026, month: 9, day: 1),
+                sireAnimalID: nil
+            )
+        )
+
+        let reloadedRepository = fixture.makeAnimalRepository()
+        let timeline = try reloadedRepository.fetchTimeline(id: animal.id)
+        XCTAssertTrue(timeline.contains(where: isHealthEvent), file: file, line: line)
+        XCTAssertTrue(timeline.contains(where: isPregnancyEvent), file: file, line: line)
+
+        let summary = try XCTUnwrap(
+            reloadedRepository.fetchAnimals().first { $0.id == animal.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(summary.lastTreatmentDate, treatmentDate, file: file, line: line)
+        XCTAssertEqual(summary.lastPregnancyCheckDate, pregnancyDate, file: file, line: line)
+    }
+
+    static func assertDeleteRemovesAggregate(
+        using fixture: AnimalRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeAnimalRepository()
+        let animal = try repository.create(
+            input: makeAnimalInput(
+                name: "Delete Contract Cow",
+                tagNumber: "601",
+                sex: .female,
+                birthDate: date(year: 2020, month: 7, day: 8)
+            )
+        )
+        _ = try repository.addHealthRecord(
+            animalID: animal.id,
+            input: HealthRecordInput(
+                date: date(year: 2026, month: 4, day: 1),
+                treatment: "Delete contract treatment",
+                notes: nil
+            )
+        )
+
+        try repository.delete(ids: [animal.id])
+
+        let reloadedRepository = fixture.makeAnimalRepository()
+        XCTAssertNil(try reloadedRepository.fetchAnimalDetail(id: animal.id), file: file, line: line)
+        XCTAssertFalse(try reloadedRepository.fetchAnimals().contains { $0.id == animal.id }, file: file, line: line)
+        XCTAssertTrue(try reloadedRepository.fetchTimeline(id: animal.id).isEmpty, file: file, line: line)
+        XCTAssertFalse(
+            try reloadedRepository.fetchParentOptions(excluding: nil).contains { $0.id == animal.id },
+            file: file,
+            line: line
+        )
+    }
+
+    private static func makeAnimalInput(
+        name: String,
+        tagNumber: String,
+        sex: Sex,
+        birthDate: Date,
+        pastureID: UUID? = nil,
+        sireID: UUID? = nil,
+        damID: UUID? = nil,
+        distinguishingFeatures: [DistinguishingFeature] = []
+    ) -> AnimalInput {
+        AnimalInput(
+            name: name,
+            tagNumber: tagNumber,
+            tagColorID: nil,
+            sex: sex,
+            birthDate: birthDate,
+            status: .active,
+            pastureID: pastureID,
+            sireID: sireID,
+            damID: damID,
+            distinguishingFeatures: distinguishingFeatures,
+            saleDate: nil,
+            salePrice: nil,
+            reasonSold: nil,
+            deathDate: nil,
+            causeOfDeath: nil,
+            statusReferenceID: nil
+        )
+    }
+
+    private static func date(year: Int, month: Int, day: Int) -> Date {
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .gregorian)
+        components.timeZone = TimeZone(secondsFromGMT: 0)
+        components.year = year
+        components.month = month
+        components.day = day
+        return components.date!
+    }
+
+    private static func isHealthEvent(_ event: AnimalTimelineEvent) -> Bool {
+        if case .health = event.type { return true }
+        return false
+    }
+
+    private static func isPregnancyEvent(_ event: AnimalTimelineEvent) -> Bool {
+        if case .pregnancy = event.type { return true }
+        return false
+    }
+
+    private static func isMovementEvent(_ event: AnimalTimelineEvent) -> Bool {
+        if case .movement = event.type { return true }
+        return false
+    }
+
+    private static func isTagEvent(_ event: AnimalTimelineEvent) -> Bool {
+        if case .tag = event.type { return true }
+        return false
+    }
+}
