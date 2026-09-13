@@ -96,7 +96,7 @@ For every durable application entity:
 - the UUID is generated once before or as the entity is created and is immutable afterward;
 - repository and transaction APIs address entities with UUIDs;
 - Domain snapshots expose the same UUID across reloads, sync, sharing, navigation, and relationships;
-- Core Data stores that UUID as a required UUID attribute on the managed object;
+- Core Data stores that UUID in a dedicated application-identity attribute. Identity is required by yaHerd even when the CloudKit-compatible physical Core Data attribute is optional because no safe static UUID default exists; factories assign it before first save and mappers reject missing identity rather than inventing a replacement;
 - `NSManagedObjectID`, object URI representations, `CKRecord.ID`, record names, store identifiers, and CloudKit zone identifiers are Data-layer implementation details and never become Domain identity;
 - stringifying a UUID is allowed only at serialization boundaries such as URLs, logs, diagnostics, or provider APIs; Domain models should retain the UUID type;
 - a duplicate application UUID is a persistence integrity error. Production code must reject or deterministically resolve it before exposing ambiguous Domain state; it must not silently mint a replacement for an already-established entity identity.
@@ -325,7 +325,7 @@ There is no second persistence graph to mirror. There is no SwiftData-to-Core Da
 
 The model is designed for CloudKit from the beginning rather than converted from the current SwiftData schema.
 
-- Every durable entity has a required application UUID attribute.
+- Every durable entity has a dedicated application UUID identity attribute. The UUID is required by application invariants; its physical Core Data optionality/default is chosen to satisfy CloudKit model rules without introducing unsafe static UUID defaults.
 - Relationships have explicit inverses and delete behavior is chosen intentionally.
 - CloudKit-compatible optionality/default requirements are handled in the model rather than patched in Presentation.
 - Domain enums are stored through stable raw values or explicit mapping owned by Data.
