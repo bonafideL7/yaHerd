@@ -49,11 +49,11 @@ There is one application data graph. Core Data owns local persistence and CloudK
 
 When introducing every Core Data entity:
 
-1. Add a required UUID application-ID attribute.
-2. Generate the UUID before or when the application creates the entity.
+1. Add a dedicated UUID application-ID attribute. Identity is required by the application even when the CloudKit-compatible physical Core Data attribute is optional because no safe static UUID default exists.
+2. Generate the UUID before or when the application creates the entity and before its first save.
 3. Never change an established entity UUID during ordinary updates or synchronization.
 4. Resolve repository requests by application UUID, not `NSManagedObjectID`.
-5. Map the same UUID back into Domain snapshots.
+5. Map the same UUID back into Domain snapshots; missing application identity is invalid/incomplete persisted state, not permission to invent a replacement UUID.
 6. Keep `NSManagedObjectID`, object URI strings, `CKRecord.ID`, record names, zones, and store identifiers inside Data/App implementation code.
 7. Treat duplicate UUIDs as an integrity failure; do not silently mint a new identity for an established record.
 8. Use UUIDs for relationship references that cross architectural or serialization boundaries. Use native Core Data relationships inside the managed graph.
@@ -80,49 +80,86 @@ Use `NSPersistentCloudKitContainer` with the final private/shared topology requi
 
 Do not add a second Core Data model or mirror just for sharing.
 
+A user may have multiple accessible Herd roots across the attached private/shared stores, but ordinary feature repositories operate against one explicitly selected Herd workspace. Do not combine all attached stores into one implicit herd data set.
+
+In iCloud mode, an empty local private-store fetch during startup is **not** proof that the user has no existing Herd. A reinstall/new device may be waiting for CloudKit import. New owned-Herd creation must occur through an explicit onboarding/workspace-creation boundary after cloud store readiness/initial import resolution, with accessible Herds rechecked immediately before insert. Never create a default Herd merely because an early fetch returned zero rows.
+
 ## Implementation order
 
-### Phase 1 — production Core Data foundation
+The cutover is **test-first at the persistence boundary**. Tests are divided deliberately between current-behavior characterization and end-state behavior that SwiftData does not implement.
 
-Create the final managed-object model and container configuration first.
+### Phase 0 — permanent behavior contracts before the physical Core Data model
 
-The model should be designed from Domain requirements, transaction boundaries, CloudKit requirements, and delete/history behavior. Do **not** clone the SwiftData schema because it is easier.
+Before creating `yaHerdModel.xcdatamodeld`, add persistence-neutral characterization contracts for behavior the current application already implements.
+
+The contracts must exercise Domain repository/transaction behavior rather than SwiftData types. A thin SwiftData test harness may instantiate the current repositories so these contracts characterize intended behavior before the persistence implementation changes. The contract definitions survive the cutover; only the SwiftData runner is temporary.
+
+Characterize current behavior such as:
+
+- application UUID preservation and current duplicate-ID integrity behavior;
+- animal create/update/tag/history behavior;
+- movement/history behavior;
+- pasture deletion behavior observable through the current workflow;
+- Field Check behavior and existing historical snapshots;
+- Working session/queue behavior and existing historical snapshots;
+- mutation publication on success/failure where the current boundary exposes it.
+
+Do **not** modify production SwiftData solely to make it pass new end-state behavior. Requirements that do not exist in the current implementation become target-only contracts whose first runner is Core Data. Examples include:
+
+- selected-Herd isolation across simultaneous private/shared Herd roots;
+- deterministic workspace selection/switch/revocation behavior;
+- private/shared Core Data store routing and cross-store relationship rejection;
+- expanded historical snapshot fields introduced by the final model;
+- atomic rollback for workflows known to be multi-save in SwiftData, including pasture deletion.
+
+Phase 0 is complete when the important existing persistence behavior is captured in reusable contracts and the model blueprint has been reconciled with anything those tests reveal.
+
+### Phase 1 — physical Core Data model and structure tests
+
+Create the final managed-object model only after Phase 0 characterization is established.
+
+The model is designed from Domain requirements, transaction boundaries, CloudKit requirements, delete/history behavior, and `CORE_DATA_MODEL_BLUEPRINT.md`. Do **not** clone the SwiftData schema because it is easier.
 
 At this phase establish:
 
-- model location and generated/manual managed-object strategy;
-- application UUID on every durable entity;
-- private/shared/local store descriptions;
+- model location and Manual/None managed-object strategy;
+- application UUID on every durable entity, following the documented application-required/physical-optionality distinction;
+- explicit relationships, inverses, delete rules, defaults, optionality, and indexes;
+- one `CloudData` configuration suitable for local/private/shared stores;
+- model-structure tests for CloudKit compatibility and required application invariants.
+
+Do not wire temporary SwiftData migration into the model or container startup.
+
+### Phase 2 — production Core Data persistence foundation
+
+Add the final Core Data container/infrastructure that will survive launch:
+
+- local store mode;
+- `NSPersistentCloudKitContainer` private/shared store descriptions;
 - persistent-history / remote-change configuration;
-- context creation policy;
+- context creation and queue-confinement policy;
 - mapper location and conventions;
-- deterministic store selection rules.
+- deterministic selected-Herd/store routing;
+- explicit onboarding/workspace creation that cannot mistake a transiently empty cloud store for a new account;
+- a Core Data contract harness.
 
-Do not wire temporary SwiftData migration into container startup.
+Run the applicable permanent characterization contracts against Core Data as soon as the required repository surface exists. Add target-only Core Data contracts as their production capability is introduced.
 
-### Phase 2 — Core Data repositories
+### Phase 3 — Core Data repositories, transactions, and read models
 
-Implement production repositories feature by feature behind existing Domain contracts.
+Implement production repositories feature by feature behind existing Domain contracts. Suggested order:
 
-Suggested order:
-
-1. Herd and reference data needed to establish ownership/root graph.
-2. Pasture and pasture groups.
-3. Animal, tags, status/history, health, pregnancy, parent/offspring relationships.
-4. Field Check.
-5. Working sessions, queue items, treatment records, and templates.
-6. Dashboard/Home read models.
-7. Tag colors and remaining app-scoped repositories.
-
-Use this order only when dependencies make it efficient; do not preserve temporary architecture merely to follow the list.
+1. selected-Herd scope, Herd and reference data needed to establish ownership/root graph;
+2. Pasture and pasture groups, including the atomic pasture-deletion transaction;
+3. Animal, tags, status/history, health, pregnancy, parent/offspring relationships and the animal aggregate transaction;
+4. Field Check;
+5. Working sessions, queue items, treatment records, and templates;
+6. Dashboard/Home and other read-heavy projections;
+7. remaining app-scoped repositories.
 
 For each repository, map managed objects to existing Domain snapshots. Do not expose managed objects as a shortcut.
 
-### Phase 3 — real transaction implementations
-
-Implement all multi-record logical writes as explicit Core Data transactions.
-
-Important boundaries include:
+Multi-record logical writes are explicit Core Data transactions. Important boundaries include:
 
 - animal aggregate create/update including tags and generated history;
 - pasture deletion including resident movements and field-check historical preservation;
@@ -133,17 +170,15 @@ Important boundaries include:
 - working-session completion and destination movements;
 - working-session deletion/cleanup.
 
-One logical success should correspond to one successful transaction commit. Failures must not expose partial state.
+One logical success corresponds to one successful transaction commit. Failures must not expose partial state. Perform the complete mutation on one appropriate context, save only after validation/mutation succeeds, and roll back/reset on failure as appropriate. Application mutation publication and sync scheduling happen only after commit.
 
-Use an appropriate private/main context for the operation, perform the complete mutation, save after all validation/mutation succeeds, and roll back/reset on failure as appropriate.
-
-Application mutation publication and sync scheduling happen only after commit.
+The permanent contract suite grows alongside this work. Do not defer Core Data repository/transaction testing to the end of the cutover.
 
 ### Phase 4 — direct CloudKit sync and sharing
 
 Wire same-user sync and cross-user sharing directly through `NSPersistentCloudKitContainer`.
 
-Keep or rebuild only provider-neutral collaboration concepts that still make sense. The final sharing path should resolve application UUIDs to Core Data objects internally and use Core Data sharing APIs from there.
+Keep or rebuild only provider-neutral collaboration concepts that still make sense. The final sharing path resolves application UUIDs to Core Data objects internally and uses Core Data sharing APIs from there.
 
 Do not port the old bridge architecture.
 
@@ -167,9 +202,9 @@ When enough Core Data repositories exist to run the application coherently, chan
 
 Prefer a decisive cutover over a long period where individual screens randomly use different persistence systems.
 
-The App layer may own a persistence assembly/lifetime object, but it should expose only Domain-facing repositories/services to Presentation.
+The App layer may own a persistence assembly/lifetime object, but it exposes only Domain-facing repositories/services to Presentation.
 
-After this point, SwiftData should no longer be the runtime persistence implementation.
+After this point, SwiftData is no longer the runtime persistence implementation. There is no fallback and no dual-write path.
 
 ### Phase 6 — delete SwiftData and bridge infrastructure
 
@@ -189,28 +224,29 @@ Expected deletion candidates include:
 - SwiftData/Core Data bridge models and synchronization code;
 - public-ID bridge repair/recovery machinery that has no final-product requirement;
 - bridge-specific diagnostics and reliability documentation;
-- SwiftData migration documentation and fixture stores.
+- SwiftData migration documentation and fixture stores;
+- the temporary SwiftData contract runner.
+
+Permanent persistence-neutral contracts remain and now run only against production Core Data.
 
 Do not retain dead compatibility code because it might be useful later.
 
-### Phase 7 — production persistence tests and cleanup
+### Phase 7 — final hardening and cleanup
 
-Add tests against the finished Core Data implementation, not the removed SwiftData baseline.
+Complete the production persistence coverage and architecture enforcement. At minimum the final Core Data suite covers:
 
-At minimum cover:
-
-- UUID identity preservation across reloads;
-- duplicate UUID integrity handling;
+- UUID identity preservation across reloads and missing/duplicate UUID handling;
 - repository create/read/update/delete behavior;
 - relationship and delete rules;
 - archive/history retention rules;
 - transaction rollback behavior;
+- selected-Herd isolation;
 - private/shared store routing;
 - remote-change invalidation;
 - sharing preparation/acceptance boundaries where deterministic testing is possible;
 - mapper correctness.
 
-Then remove this cutover document and update `ARCHITECTURE.md` from target wording to implemented wording if needed.
+Strengthen architecture verification so production code cannot reintroduce SwiftData or persistence-framework leakage into Domain/Presentation. Then remove this cutover document and update `ARCHITECTURE.md` from target wording to implemented wording if needed.
 
 ## What not to port automatically
 
@@ -237,8 +273,9 @@ Potentially retain/rework only if still required by product behavior:
 
 ## Pull-request discipline for this cutover
 
-Keep PRs focused on an end-state component or deletion step. A useful PR should generally do one of two things:
+Keep PRs focused on an end-state component, a permanent behavior-contract slice, or a deletion step. A useful PR should generally do one of three things:
 
+- establish permanent persistence-neutral behavior tests that survive the cutover;
 - add a production Core Data component that will survive launch; or
 - remove obsolete SwiftData/bridge infrastructure.
 
@@ -255,10 +292,13 @@ Do not run builds, tests, CI, or verification automatically unless explicitly re
 - Did any Core Data/CloudKit type leak into Domain or Presentation?
 - Is every durable entity still addressed by application UUID?
 - Did any code use `NSManagedObjectID` as externally visible identity?
+- Is application-required identity being confused with physical Core Data optionality/default requirements?
+- Could a transiently empty CloudKit-backed store accidentally create a duplicate Herd root?
 - Is a multi-record mutation actually atomic?
 - Are application mutation events emitted only after commit?
 - Did I recreate a bridge/mirror problem that `NSPersistentCloudKitContainer` already solves?
 - Could old SwiftData code be deleted now instead of adapted?
+- Am I adding new production behavior to SwiftData solely to make a temporary test runner pass?
 - Is long-running persistence work still forced onto the main actor unnecessarily?
 - Are private/shared stores selected intentionally?
 - Does this PR move toward one persistence graph?
@@ -267,11 +307,15 @@ Do not run builds, tests, CI, or verification automatically unless explicitly re
 
 The cutover is complete only when all of the following are true:
 
+- the permanent characterization contracts for preserved behavior run against Core Data;
+- target-only Core Data contracts cover new final-architecture behavior;
 - the app boots from the Core Data persistence assembly;
 - local-only mode uses Core Data;
 - iCloud mode uses `NSPersistentCloudKitContainer`;
 - same-user synchronization uses Core Data/CloudKit;
 - cross-user sharing uses the same Core Data graph and shared store;
+- repository instances are scoped to one selected Herd and do not combine private/shared Herd graphs;
+- iCloud startup cannot create a new Herd merely because the private store is temporarily empty;
 - repositories map managed objects to Domain values;
 - application UUIDs are stable across all repository surfaces;
 - important multi-record writes are transactional;
