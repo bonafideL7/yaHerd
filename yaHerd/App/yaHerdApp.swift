@@ -68,9 +68,9 @@ struct yaHerdApp: App {
             return .ready(
                 AppRuntime(
                     modelContainer: container,
-                    dependencies: AppDependencies(
-                        context: container.mainContext,
-                        tagColorDuplicateResolutionPolicy: syncMode.tagColorDuplicateResolutionPolicy
+                    dependencies: Self.makeDependencies(
+                        modelContainer: container,
+                        syncMode: syncMode
                     ),
                     syncMode: syncMode,
                     dataAccessMode: .readWrite,
@@ -105,9 +105,9 @@ struct yaHerdApp: App {
                     return .ready(
                         AppRuntime(
                             modelContainer: localContainer,
-                            dependencies: AppDependencies(
-                                context: localContainer.mainContext,
-                                tagColorDuplicateResolutionPolicy: SyncMode.localOnly.tagColorDuplicateResolutionPolicy
+                            dependencies: Self.makeDependencies(
+                                modelContainer: localContainer,
+                                syncMode: .localOnly
                             ),
                             syncMode: .localOnly,
                             dataAccessMode: .readWrite,
@@ -138,9 +138,9 @@ struct yaHerdApp: App {
                         return .ready(
                             AppRuntime(
                                 modelContainer: fallbackContainer,
-                                dependencies: AppDependencies(
-                                    context: fallbackContainer.mainContext,
-                                    tagColorDuplicateResolutionPolicy: SyncMode.localOnly.tagColorDuplicateResolutionPolicy,
+                                dependencies: Self.makeDependencies(
+                                    modelContainer: fallbackContainer,
+                                    syncMode: .localOnly,
                                     dataAccessMode: .recoveryReadOnly
                                 ),
                                 syncMode: .localOnly,
@@ -192,9 +192,9 @@ struct yaHerdApp: App {
                 return .ready(
                     AppRuntime(
                         modelContainer: fallbackContainer,
-                        dependencies: AppDependencies(
-                            context: fallbackContainer.mainContext,
-                            tagColorDuplicateResolutionPolicy: SyncMode.localOnly.tagColorDuplicateResolutionPolicy,
+                        dependencies: Self.makeDependencies(
+                            modelContainer: fallbackContainer,
+                            syncMode: .localOnly,
                             dataAccessMode: .recoveryReadOnly
                         ),
                         syncMode: .localOnly,
@@ -224,6 +224,21 @@ struct yaHerdApp: App {
                 return .storageUnavailable(startupMessage)
             }
         }
+    }
+
+    private static func makeDependencies(
+        modelContainer: ModelContainer,
+        syncMode: SyncMode,
+        dataAccessMode: AppDataAccessMode = .readWrite
+    ) -> AppDependencies {
+        let persistenceAssembly: any PersistenceAssembly = SwiftDataPersistenceAssembly(
+            modelContainer: modelContainer
+        )
+        return persistenceAssembly.makeDependencies(
+            tagColorDuplicateResolutionPolicy: syncMode.tagColorDuplicateResolutionPolicy,
+            dataAccessMode: dataAccessMode,
+            storageMode: syncMode.herdStorageMode
+        )
     }
 
     private static func runStartupDataMigrations(in context: ModelContext, syncMode: SyncMode) throws {
