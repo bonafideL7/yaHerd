@@ -296,11 +296,11 @@ extension SyncDiagnosticsView {
 
         switch launchSnapshot.actualStorageMode {
         case .recovery:
-            storageInfo.recoveryStoreName
+            return storageInfo.recoveryStoreName
         case .unavailable:
-            "None"
+            return "None"
         case .localOnly, .iCloud:
-            storageInfo.storeName
+            return storageInfo.storeName
         }
     }
 
