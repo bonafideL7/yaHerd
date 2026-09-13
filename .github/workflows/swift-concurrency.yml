@@ -22,7 +22,7 @@ on:
         type: boolean
         default: false
   pull_request:
-    types: [ready_for_review]
+    types: [opened, reopened, ready_for_review, synchronize]
 
 concurrency:
   group: yaherd-verification-${{ github.event.pull_request.number || github.ref }}
@@ -30,6 +30,7 @@ concurrency:
 
 jobs:
   verify:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
