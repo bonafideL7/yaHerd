@@ -121,13 +121,19 @@ final class ApplicationSettingsTests: XCTestCase {
     func testSettingsEmitPersistenceUpdatesForSynchronization() {
         let settings = ApplicationSettings(store: InMemoryApplicationSettingsStore())
         var persistedKeys: [ApplicationSettingKey] = []
+        var observedDashboardValues: [Bool] = []
 
-        settings.setPersistedChangeHandler { key in
+        settings.setPersistedChangeHandler { [weak settings] key in
             persistedKeys.append(key)
+            if key == .dashboardEnabled, let settings {
+                observedDashboardValues.append(settings.isDashboardEnabled)
+            }
         }
         settings.isDashboardEnabled = true
 
         XCTAssertEqual(persistedKeys, [.dashboardEnabled])
+        XCTAssertEqual(observedDashboardValues, [true])
+        settings.setPersistedChangeHandler(nil)
     }
 
     func testInMemoryStoresAreIndependent() {

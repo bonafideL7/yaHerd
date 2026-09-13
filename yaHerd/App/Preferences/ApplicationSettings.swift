@@ -71,7 +71,11 @@ final class ApplicationSettings {
 
     var syncMode: SyncMode {
         get { syncModeValue }
-        set { update(&syncModeValue, to: newValue, key: .syncMode, encodedValue: newValue.rawValue) }
+        set {
+            guard syncModeValue != newValue else { return }
+            syncModeValue = newValue
+            persistChange(key: .syncMode, encodedValue: newValue.rawValue)
+        }
     }
 
     var allowHardDelete: Bool {
@@ -80,16 +84,20 @@ final class ApplicationSettings {
 
     var isDashboardEnabled: Bool {
         get { dashboardEnabledValue }
-        set { update(&dashboardEnabledValue, to: newValue, key: .dashboardEnabled, encodedValue: newValue) }
+        set {
+            guard dashboardEnabledValue != newValue else { return }
+            dashboardEnabledValue = newValue
+            persistChange(key: .dashboardEnabled, encodedValue: newValue)
+        }
     }
 
     var targetAcresPerHeadDefault: Double {
         get { targetAcresPerHeadDefaultValue }
         set {
             let validatedValue = Self.validatedTargetAcresPerHead(newValue)
-            update(
-                &targetAcresPerHeadDefaultValue,
-                to: validatedValue,
+            guard targetAcresPerHeadDefaultValue != validatedValue else { return }
+            targetAcresPerHeadDefaultValue = validatedValue
+            persistChange(
                 key: .targetAcresPerHeadDefault,
                 encodedValue: validatedValue
             )
@@ -100,9 +108,9 @@ final class ApplicationSettings {
         get { usableAcreagePercentDefaultValue }
         set {
             let validatedValue = Self.validatedUsableAcreagePercent(newValue)
-            update(
-                &usableAcreagePercentDefaultValue,
-                to: validatedValue,
+            guard usableAcreagePercentDefaultValue != validatedValue else { return }
+            usableAcreagePercentDefaultValue = validatedValue
+            persistChange(
                 key: .usableAcreagePercentDefault,
                 encodedValue: validatedValue
             )
@@ -113,9 +121,9 @@ final class ApplicationSettings {
         get { recentPastureIDsValue }
         set {
             let validatedValue = Self.validatedRecentPastureIDs(newValue)
-            update(
-                &recentPastureIDsValue,
-                to: validatedValue,
+            guard recentPastureIDsValue != validatedValue else { return }
+            recentPastureIDsValue = validatedValue
+            persistChange(
                 key: .recentPastureIDs,
                 encodedValue: validatedValue.map(\.uuidString)
             )
@@ -126,9 +134,9 @@ final class ApplicationSettings {
         get { homeDismissedSetupSuggestionIDsValue }
         set {
             let validatedValue = Self.validatedStringSet(newValue)
-            update(
-                &homeDismissedSetupSuggestionIDsValue,
-                to: validatedValue,
+            guard homeDismissedSetupSuggestionIDsValue != validatedValue else { return }
+            homeDismissedSetupSuggestionIDsValue = validatedValue
+            persistChange(
                 key: .homeDismissedSetupSuggestionIDs,
                 encodedValue: validatedValue.sorted()
             )
@@ -138,9 +146,9 @@ final class ApplicationSettings {
     var isHomeSetupSuggestionsExpanded: Bool {
         get { homeSetupSuggestionsExpandedValue }
         set {
-            update(
-                &homeSetupSuggestionsExpandedValue,
-                to: newValue,
+            guard homeSetupSuggestionsExpandedValue != newValue else { return }
+            homeSetupSuggestionsExpandedValue = newValue
+            persistChange(
                 key: .homeSetupSuggestionsExpanded,
                 encodedValue: newValue
             )
@@ -243,14 +251,10 @@ final class ApplicationSettings {
         }
     }
 
-    private func update<Value: Equatable>(
-        _ storage: inout Value,
-        to value: Value,
+    private func persistChange(
         key: ApplicationSettingKey,
         encodedValue: Any
     ) {
-        guard storage != value else { return }
-        storage = value
         store.set(encodedValue, forKey: key.rawValue)
         persistedChangeHandler?(key)
     }
