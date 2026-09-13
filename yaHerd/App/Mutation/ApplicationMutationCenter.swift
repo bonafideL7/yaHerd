@@ -351,21 +351,27 @@ actor MutationPublishingPublicIDRepairTransactionalService:
     }
 }
 
-/// Records one successful local command and fans it out to UI invalidation and collaboration sync.
+/// Records successful local commands into the central application mutation stream. Collaboration
+/// synchronization observes that stream independently so repository save completion is not coupled
+/// to a sharing side effect.
 @MainActor
 final class ApplicationMutationPipeline:
     SuccessfulMutationRecording,
     ApplicationMutationStreamProviding
 {
     private let center: ApplicationMutationCenter
-    private let sharingScheduler: HerdSharingMutationSyncScheduler
+    private let syncObserver: ApplicationMutationSyncObserver
 
     init(
         center: ApplicationMutationCenter,
         sharingScheduler: HerdSharingMutationSyncScheduler
     ) {
         self.center = center
-        self.sharingScheduler = sharingScheduler
+        self.syncObserver = ApplicationMutationSyncObserver(
+            mutationStream: center
+        ) { reason in
+            sharingScheduler.requestSharedDataSyncAfterMutation(reason: reason)
+        }
     }
 
     var applicationMutationStream: any ApplicationMutationStreaming {
@@ -374,6 +380,5 @@ final class ApplicationMutationPipeline:
 
     func recordSuccessfulMutation(reason: SharedDataMutationReason) {
         center.recordSuccessfulMutation(reason: reason)
-        sharingScheduler.requestSharedDataSyncAfterMutation(reason: reason)
     }
 }
