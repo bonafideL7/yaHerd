@@ -37,13 +37,13 @@ final class DashboardMapperTests: XCTestCase {
         )
     }
 
-    func testMakeWorkingSessionRecordUsesStablePublicIDString() {
+    func testMakeWorkingSessionRecordPreservesApplicationUUID() {
         let publicID = UUID()
         let session = WorkingSession(publicID: publicID, date: .distantPast, status: .active, sourcePasture: nil, protocolName: "Spring Work", protocolItems: [])
 
         let record = DashboardMapper.makeWorkingSessionRecord(from: session)
 
-        XCTAssertEqual(record.id, publicID.uuidString)
+        XCTAssertEqual(record.id, publicID)
         XCTAssertTrue(record.isActive)
     }
 }

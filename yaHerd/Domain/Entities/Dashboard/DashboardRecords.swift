@@ -7,16 +7,17 @@ struct DashboardRecords: Sendable {
 }
 
 struct DashboardAnimalRecord: Identifiable, Hashable, Sendable {
-    let id: UUID
+    let id: ApplicationEntityID
     let displayTagNumber: String
     let displayTagColorID: UUID?
+    let damID: ApplicationEntityID?
     let damDisplayTagNumber: String?
     let damDisplayTagColorID: UUID?
     let sex: Sex
     let animalType: AnimalType
     let status: AnimalStatus
     let isArchived: Bool
-    let pastureID: UUID?
+    let pastureID: ApplicationEntityID?
     let pastureName: String?
     let location: AnimalLocation
     let lastPregnancyCheckDate: Date?
@@ -34,7 +35,7 @@ struct DashboardAnimalRecord: Identifiable, Hashable, Sendable {
     }
 
     var hasRecordedDam: Bool {
-        damDisplayTagNumber != nil
+        damID != nil
     }
 }
 
@@ -45,7 +46,7 @@ struct DashboardHealthRecord: Hashable, Sendable {
 }
 
 struct DashboardPastureRecord: Identifiable, Hashable, Sendable {
-    let id: UUID
+    let id: ApplicationEntityID
     let name: String
     let acreage: Double?
     let usableAcreage: Double?
@@ -65,7 +66,7 @@ struct DashboardPastureRecord: Identifiable, Hashable, Sendable {
 }
 
 struct DashboardWorkingSessionRecord: Identifiable, Hashable, Sendable {
-    let id: String
+    let id: ApplicationEntityID
     let date: Date
     let isActive: Bool
     let sourcePastureName: String?

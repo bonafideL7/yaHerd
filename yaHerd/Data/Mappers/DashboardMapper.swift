@@ -21,6 +21,7 @@ enum DashboardMapper {
             id: animal.publicID,
             displayTagNumber: animal.displayTagNumber,
             displayTagColorID: animal.displayTagColorID,
+            damID: animal.damAnimal?.publicID,
             damDisplayTagNumber: AnimalDisplayTagFormatter.displayTagNumber(for: animal.damAnimal),
             damDisplayTagColorID: animal.damAnimal?.displayTagColorID,
             sex: animal.sex ?? .unknown,
@@ -70,7 +71,7 @@ enum DashboardMapper {
 
     static func makeWorkingSessionRecord(from session: WorkingSession) -> DashboardWorkingSessionRecord {
         DashboardWorkingSessionRecord(
-            id: session.publicID.uuidString,
+            id: session.publicID,
             date: session.date,
             isActive: session.status == .active,
             sourcePastureName: session.sourcePasture?.name,
@@ -92,5 +93,4 @@ enum DashboardMapper {
             return .unknown
         }
     }
-
 }

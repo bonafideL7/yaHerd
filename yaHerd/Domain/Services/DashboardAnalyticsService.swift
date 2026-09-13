@@ -116,14 +116,21 @@ struct DashboardAnalyticsService {
 
     private func offspringByDam(in records: DashboardRecords) -> [DashboardOffspringDamMetric] {
         let animals = visibleAnimalsForAnalytics(in: records)
-        let grouped = Dictionary(grouping: animals.filter(\.hasRecordedDam)) { animal in
-            animal.damDisplayTagNumber ?? "Unknown"
+        let linkedOffspring = animals.compactMap { animal -> (damID: ApplicationEntityID, animal: DashboardAnimalRecord)? in
+            guard let damID = animal.damID else { return nil }
+            return (damID, animal)
         }
+        let grouped = Dictionary(grouping: linkedOffspring) { $0.damID }
 
         return grouped
-            .map { damTag, offspring in
-                DashboardOffspringDamMetric(
-                    damID: damTag,
+            .map { damID, offspring in
+                let damTag = offspring
+                    .compactMap { $0.animal.damDisplayTagNumber }
+                    .first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+                    ?? "Unknown"
+
+                return DashboardOffspringDamMetric(
+                    damID: damID,
                     damDisplayTagNumber: damTag,
                     offspringCount: offspring.count
                 )

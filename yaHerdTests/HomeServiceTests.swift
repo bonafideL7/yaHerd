@@ -103,6 +103,7 @@ final class HomeServiceTests: XCTestCase {
             id: UUID(),
             displayTagNumber: tag,
             displayTagColorID: nil,
+            damID: nil,
             damDisplayTagNumber: nil,
             damDisplayTagColorID: nil,
             sex: sex,

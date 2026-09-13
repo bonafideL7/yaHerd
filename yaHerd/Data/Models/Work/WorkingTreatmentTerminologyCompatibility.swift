@@ -135,7 +135,7 @@ extension WorkingQueueItemEditorSnapshot {
 
 extension DashboardWorkingSessionRecord {
     init(
-        id: String,
+        id: ApplicationEntityID,
         date: Date,
         isActive: Bool,
         sourcePastureName: String?,
@@ -159,7 +159,7 @@ extension DashboardWorkingSessionRecord {
 
 extension DashboardWorkingSessionSummary {
     init(
-        id: String,
+        id: ApplicationEntityID,
         date: Date,
         sourcePastureName: String?,
         protocolName: String,

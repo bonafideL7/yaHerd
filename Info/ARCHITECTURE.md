@@ -1,319 +1,221 @@
-# Clean Architecture layout
+# yaHerd Architecture
+
+> This document describes the **target production architecture**. During the Core Data cutover, existing SwiftData and bridge code may temporarily violate these rules. `CORE_DATA_CUTOVER.md` governs that temporary work. The target architecture is authoritative when the two disagree.
+
+## End-state architecture
+
+```text
+SwiftUI / Presentation
+        ↓
+Domain models, policies, use cases, repository + transaction contracts
+        ↓
+Data / Core Data repositories
+        ↓
+NSPersistentCloudKitContainer
+        ↓
+Local Core Data stores + CloudKit private/shared databases
+```
+
+Core Data is the sole production persistence implementation. `NSPersistentCloudKitContainer` is the sole production CloudKit synchronization mechanism. SwiftData, a SwiftData/Core Data mirror, dual-write persistence, and custom snapshot synchronization are not part of the final architecture.
 
 ## Top-level layers
 
 - `App/`
-  - app bootstrap, dependency wiring, app-scoped coordination, navigation entry points, preferences, diagnostics, and sync support
+  - app bootstrap, dependency assembly, navigation, app-scoped coordination, mutation/invalidation routing, preferences, diagnostics, and recovery entry points
 - `Domain/`
-  - business rules, entities, repository contracts, use cases, domain services, validation, and policies
+  - business entities, stable application identity, repository contracts, transaction contracts, use cases, policies, validation, and services
 - `Data/`
-  - SwiftData models, repository implementations, mappers, persistence support, seed/sample data, and sync/reset implementation details
+  - Core Data model, persistent-container setup, Core Data repository implementations, mappers, CloudKit sharing integration, and persistence diagnostics
 - `Presentation/`
-  - SwiftUI views, view models, presentation constants, UI support types, and local presentation state
+  - SwiftUI views, view models, UI support types, and presentation state
 
-## Dependency direction
+Dependency direction is strict:
 
-- `Presentation` depends on `Domain`
-- `Data` depends on `Domain`
-- `Domain` does not depend on `Presentation`, `Data`, SwiftUI, SwiftData, or app wiring
-- `App` wires concrete implementations to domain-facing abstractions
-- SwiftData access should stay inside `Data` repositories and app bootstrap/persistence setup
+- Presentation depends on Domain.
+- Data depends on Domain.
+- Domain does not import SwiftUI, Core Data, CloudKit, SwiftData, or App wiring.
+- App composes Data implementations behind Domain-facing contracts.
+- Presentation never receives a managed object or managed-object context.
 
-## Feature structure pattern
+## Application identity
 
-Features should generally follow this shape:
+`ApplicationEntityID` is the semantic name for the application's stable UUID identity. It is intentionally a typealias of `UUID`, not a persistence wrapper.
 
-- `Domain/Entities/<Feature>/*`
-- `Domain/Repositories/<Feature>Repository.swift`
-- `Domain/UseCases/<Feature>/*` only when the operation enforces policy, coordinates repositories, shapes a workflow, or defines a transaction
-- `Domain/Services/*` or `Domain/Policies/*` when business rules are reusable across use cases, repositories, or view models
-- `Data/Models/<Feature>/*`
-- `Data/Mappers/<Feature>Mapper.swift`
-- `Data/Repositories/SwiftData<Feature>Repository.swift`
-- `Presentation/ViewModels/<Feature>/*`
-- `Presentation/Views/<Feature>/*`
+For every durable application entity:
 
-Use cases should depend on the smallest domain-facing protocol they need. A concrete repository may still implement a larger composite protocol for app wiring, but individual use cases should not depend on a broad repository surface when a narrower capability protocol is available.
+- identity is a UUID owned by yaHerd, not by the persistence framework;
+- the UUID is generated once before or as the entity is created and is immutable afterward;
+- repository and transaction APIs address entities with UUIDs;
+- Domain snapshots expose the same UUID across reloads, sync, sharing, navigation, and relationships;
+- Core Data stores that UUID as a required UUID attribute on the managed object;
+- `NSManagedObjectID`, object URI representations, `CKRecord.ID`, record names, store identifiers, and CloudKit zone identifiers are Data-layer implementation details and never become Domain identity;
+- stringifying a UUID is allowed only at serialization boundaries such as URLs, logs, diagnostics, or provider APIs; Domain models should retain the UUID type;
+- a duplicate application UUID is a persistence integrity error. Production code must reject or deterministically resolve it before exposing ambiguous Domain state; it must not silently mint a replacement for an already-established entity identity.
 
-Use cases are not mandatory wrappers around repository methods. Presentation may call a narrow Domain repository port directly for a single query or command when no application policy, validation, transaction, data shaping, or cross-repository orchestration is involved. Do not add `CreateXUseCase`, `UpdateXUseCase`, or `LoadXUseCase` types that only forward one call.
+Derived UI/chart identifiers may use strings, dates, enums, or composite keys when they do not represent a durable entity. They must not be passed to repository APIs as entity identity.
 
-Keep a use case when it does at least one of the following:
+## Persistence and store topology
 
-- coordinates multiple repository capabilities or features
-- enforces a precondition or workflow transition
-- normalizes or validates input before persistence
-- derives a result through a Domain service or policy
-- defines a transaction boundary that must be tested as one operation
+The production persistence root is `NSPersistentCloudKitContainer` using one Core Data model.
 
-Cross-feature orchestration belongs in use cases, not data repositories. Repositories fetch and persist data and implement storage transactions; reusable business decisions belong in Domain services or policies.
+### Local-only mode
 
-The ceremonial-use-case cleanup reduced the application layer from 59 Swift use-case files to 25 focused files. Removed types were single-call CRUD/query wrappers; callers now use the same narrow Domain repository contracts directly. `Scripts/verify-architecture.sh` rejects new one-call forwarding use cases.
+Local-only mode uses the same Core Data model and repositories with a normal local persistent store and no CloudKit container options. Business behavior must not fork merely because CloudKit is disabled.
 
-## Dependency injection boundary
+### iCloud mode
 
-`yaHerdApp` injects dependencies by feature boundary instead of exposing one environment value per repository capability. The approved presentation containers are:
+iCloud mode uses Core Data stores configured for CloudKit:
+
+- a private store for the user's owned data;
+- a shared store for data accepted from other owners;
+- persistent-history tracking and remote-change observation where needed for application invalidation;
+- Core Data/CloudKit sharing APIs for `CKShare` creation, acceptance, participant management, and shared-store routing.
+
+The Data layer may use `NSManagedObjectID` when required by Core Data sharing APIs, but it must resolve application UUIDs to managed objects internally and return only Domain values upward.
+
+There is no second persistence graph to mirror. There is no SwiftData-to-Core Data exporter/importer, no bridge reconciliation pass, and no dual-write path.
+
+## Core Data model rules
+
+The model is designed for CloudKit from the beginning rather than converted from the current SwiftData schema.
+
+- Every durable entity has a required application UUID attribute.
+- Relationships have explicit inverses and delete behavior is chosen intentionally.
+- CloudKit-compatible optionality/default requirements are handled in the model rather than patched in Presentation.
+- Domain enums are stored through stable raw values or explicit mapping owned by Data.
+- Historical records that must survive parent status changes or archival are modeled accordingly.
+- Repository mappers are the only normal path from managed objects to Domain snapshots.
+- Core Data generated/accessor types do not escape Data.
+
+Do not copy the current SwiftData schema merely to reduce cutover work. Model the finished product.
+
+## Repository boundary
+
+Domain repository contracts describe application behavior, not Core Data operations. Use the narrowest capability needed by a use case or feature.
+
+A concrete Core Data repository may satisfy several capability protocols for dependency assembly, but callers should not depend on a broad repository when a smaller contract exists.
+
+Repositories are responsible for:
+
+- fetching and mapping persistent data;
+- applying persistence changes required by a Domain command;
+- enforcing persistence integrity, including stable UUID lookup;
+- executing storage transactions;
+- saving or rolling back the appropriate context;
+- translating persistence errors into meaningful Domain/application errors where appropriate.
+
+Repositories do not own reusable business decisions that belong in Domain services or policies.
+
+## Transaction boundary
+
+Multi-record business operations must have one explicit persistence transaction boundary. A successful command means the entire logical operation committed. A thrown error means no partial logical result is left committed.
+
+Important examples include:
+
+- animal aggregate create/update, including tags and generated history;
+- pasture deletion, resident-animal movement/history, and field-check historical preservation;
+- working-session collection, queue-item work-data replacement, session completion, and session deletion;
+- field-check commands that update the session plus roster/finding/animal state;
+- multi-animal pasture movement.
+
+Core Data implementations should perform these writes on one appropriate context and save only after the complete mutation succeeds. On failure, roll back/reset the transaction context as appropriate. Mutation publication and sync scheduling happen **after** a successful commit, never before.
+
+## Synchronization and UI invalidation
+
+Persistence synchronization and UI invalidation are separate concerns.
+
+- Core Data/CloudKit owns transport and merge behavior.
+- Data observes relevant persistent-store/remote-change events.
+- Data/App translates those events into persistence-neutral application mutation/invalidation events.
+- Presentation reloads through Domain repository/read-model contracts.
+- Views and view models do not subscribe to Core Data notifications directly.
+
+A local successful transaction should publish one logical application mutation after commit. Remote imports should publish invalidation without pretending they are local writes.
+
+## CloudKit sharing boundary
+
+Cross-user herd sharing is implemented directly on the production Core Data graph through `NSPersistentCloudKitContainer` and `CKShare`.
+
+CloudKit types remain inside Data/App integration boundaries. Domain collaboration types may contain application UUIDs, permissions/capabilities, URLs, and opaque provider tokens when necessary, but not `CKShare`, `CKRecord`, `CKShare.Metadata`, `NSManagedObject`, `NSManagedObjectID`, or `NSManagedObjectContext`.
+
+The final sharing path must not contain a second Core Data mirror of application data. Existing bridge-specific models, import/export snapshots, reconciliation journals, and public-ID bridge repair logic are cutover artifacts to be deleted unless a requirement is independently demonstrated in the final Core Data design.
+
+## Concurrency
+
+SwiftUI observable state and navigation remain main-actor isolated. Core Data work follows Core Data queue confinement rather than forcing all persistence onto the main actor.
+
+- UI state mutations happen on `@MainActor`.
+- Background/private contexts perform work with their own queue/executor using Core Data's concurrency APIs.
+- Managed objects never cross their context boundary into Domain or Presentation.
+- Sendable Domain snapshots cross concurrency boundaries instead.
+- Long reads, imports, and maintenance work should not block the main actor.
+- Do not use `@unchecked Sendable` to make managed objects or contexts cross isolation boundaries.
+
+Repository protocol isolation may evolve as the Core Data implementation is introduced; it should reflect actual caller and context safety rather than historical SwiftData `mainContext` constraints.
+
+## Feature boundaries
+
+Feature dependency containers remain the Presentation injection boundary:
 
 - `HomeFeatureDependencies`
 - `AnimalFeatureDependencies`
 - `PastureFeatureDependencies`
 - `FieldCheckFeatureDependencies`
 - `WorkingSessionFeatureDependencies`
-- `CollaborationDependencies`
+- collaboration/app-scoped dependencies where appropriate
 
-Each container preserves narrow Domain protocol types internally. A single concrete repository may satisfy several capability properties, but views receive one feature-scoped value rather than a long list of unrelated environment keys. Cross-feature ports are placed in the consuming feature container: for example, Animal receives pasture reference reading, Working receives animal summaries and pasture references, and Pasture receives animal movement and field-check archival capabilities used by its delete workflow.
+Cross-feature operations belong in focused Domain use cases or transaction contracts. Reference data remains owned by the feature that owns the data. Do not add persistence-framework dependencies to feature containers.
 
-Feature previews and focused tests should override only their feature container. The `preview(...)` factories supply fail-fast missing implementations for unspecified capabilities, so a preview can provide only the ports exercised by that screen. App-wide services such as recovery access mode remain separate global environment values because they apply to every feature.
+The current feature ownership remains:
 
-Do not add new root-level repository environment keys. Add a capability to the relevant feature container, or introduce a new feature container when the dependency belongs to a distinct feature boundary. `Scripts/verify-architecture.sh` enforces the approved root environment values and rejects the removed per-capability keys.
+- Animal: animal identity, tags, status, archive/restore, health, pregnancy, parent/offspring links, animal movement.
+- Pasture: pasture/group data, stocking/rotation policy, pasture reference data.
+- Field Check: check sessions, roster/check state, findings, historical snapshots.
+- Working: working sessions, queue items, treatment plans/records, destinations, working-session lifecycle.
+- Dashboard/Home: derived read models only; they do not own persistence identity for source entities.
+- Herd/Collaboration: herd-level identity and sharing policy.
 
-## Dashboard reference implementation
+## Recovery and diagnostics
 
-The dashboard flow follows the same layered split as the rest of the app:
+Recovery behavior should be designed around the production Core Data stores, not ported mechanically from SwiftData.
 
-- `Domain/Entities/Dashboard/*`
-- `Domain/Repositories/DashboardRepository.swift`
-- `Domain/UseCases/Dashboard/*`
-- `Domain/Services/DashboardService.swift`
-- `Data/Mappers/DashboardMapper.swift`
-- `Data/Repositories/SwiftDataDashboardRepository.swift`
-- `Presentation/ViewModels/Dashboard/*`
-- `Presentation/Views/Dashboard/*`
-- `App/Navigation/DashboardRoute.swift`
+A store-open failure must produce a controlled state that cannot accidentally write to an unintended replacement store. Diagnostics may expose store URLs, modes, history/sync state, and exportable diagnostic information, but persistence objects remain internal.
 
-The dashboard UI is a thin composition layer. Alert generation, overdue rules, stocking logic, list derivation, and snapshot assembly live in `Domain`.
-
-Dashboard may reuse domain summaries from other features, but dashboard-specific record shapes and list derivation should stay in the Dashboard domain/service layer.
-
-## Pasture reference implementation
-
-The pasture flow is the current reference implementation for feature cleanup and narrow domain boundaries:
-
-- `Domain/Entities/Pasture/*`
-- `Domain/Policies/PastureStockingPolicy.swift`
-- `Domain/Services/PastureInputValidator.swift`
-- `Domain/Services/PastureGroupInputValidator.swift`
-- `Domain/Services/PastureMetrics.swift`
-- `Domain/Repositories/PastureRepository.swift`
-- `Domain/UseCases/Pasture/*`
-- `Data/Models/Pasture/*`
-- `Data/Mappers/PastureMapper.swift`
-- `Data/Repositories/SwiftDataPastureRepository.swift`
-- `Presentation/ViewModels/Pasture/*`
-- `Presentation/Views/Pasture/*`
-
-Pasture use cases depend on narrow capability protocols instead of the full `PastureRepository` composite. Examples include:
-
-- `PastureListReader`
-- `PastureDetailReader`
-- `PastureResidentAnimalReader`
-- `PastureReferenceDataReader`
-- `PastureNameChecking`
-- `PastureCreating`
-- `PastureUpdating`
-- `PastureOrdering`
-- `PastureDeleting`
-- `PastureGroupListReader`
-- `PastureGroupDetailReader`
-- `PastureGroupNameChecking`
-- `PastureGroupCreating`
-- `PastureGroupUpdating`
-- `PastureGroupDeleting`
-- `PastureGroupAssignmentWriting`
-
-`PastureRepository` remains as a composite app-wiring contract implemented by `SwiftDataPastureRepository`, but use cases should prefer the narrow contracts.
-
-Pasture business rules belong in Domain services and policies:
-
-- `PastureInputValidator` handles pasture input normalization and validation.
-- `PastureGroupInputValidator` handles pasture group input normalization and validation.
-- `PastureStockingPolicy` owns stocking-field visibility and utilization thresholds.
-- `PastureUtilizationStatus` represents utilization state so views do not recalculate domain thresholds.
-- `PastureMetrics` owns pasture capacity and utilization calculations.
-
-Reference data for pasture selection belongs to the Pasture boundary:
-
-- Use `PastureReferenceDataReader.fetchPastureOptions()` directly when the caller only needs the query.
-- Do not add pasture option loading back to `AnimalRepository`.
-
-Pasture delete behavior is intentionally coordinated by `DeletePasturesUseCase`:
-
-1. validate requested pasture IDs
-2. fetch resident animals
-3. unassign resident animals through `AnimalPastureMoving`
-4. archive related field-check sessions through `FieldCheckPastureArchiveWriter`
-5. delete the pasture records through `PastureDeleting`
-
-That cross-feature sequence should not be moved into `SwiftDataPastureRepository`.
-
-Pasture Groups are part of the Pasture feature. Groups use stable public IDs and should be managed through Pasture domain entities, use cases, repository capabilities, view models, and views:
-
-- `PastureGroupInput`
-- `PastureGroupSummary`
-- `PastureGroupDetailSnapshot`
-- `PastureGroupListReader` and `PastureGroupDetailReader` for direct queries
-- `CreatePastureGroupUseCase`
-- `UpdatePastureGroupUseCase`
-- `DeletePastureGroupsUseCase`
-- `AssignPastureToGroupUseCase`
-
-Pasture presentation should stay state-light:
-
-- `PastureTileListViewModel` owns filtering, selection, delete state, drag/drop state, and reorder coordination.
-- `PastureTilePickerViewModel` owns loading, error state, recent pasture tracking, and legacy migration.
-- `PastureDetailViewModel` owns display decisions such as title text, summary visibility, active animal count text, stocking display state, and utilization display state.
-- SwiftUI views should render state and handle layout/navigation presentation, not business rules.
-
-## Animal reference implementation
-
-The animal list/add/detail flow follows the same layered pattern:
-
-- `Domain/Entities/Animal/*`
-- `Domain/Repositories/AnimalRepository.swift`
-- `Domain/UseCases/Animal/*`
-- `Domain/Services/Animal*`
-- `Data/Models/Animal/*`
-- `Data/Mappers/AnimalMapper.swift`
-- `Data/Repositories/SwiftDataAnimalRepository.swift`
-- `Presentation/ViewModels/Animal/*`
-- `Presentation/Views/Animal/*`
-
-Animal remains the owner of animal identity, tags, status transitions, archive/restore behavior, health records, pregnancy records, parent options, offspring draft preparation, and movement of animals between pastures.
-
-Pasture selection options should still come from the Pasture boundary. Animal flows may consume `PastureReferenceDataReader` directly, but should not make `AnimalRepository` responsible for Pasture reference data.
-
-`AnimalSireInferencePolicy` owns the neutral eligibility and single-candidate inference rule. `SwiftDataAnimalRepository` maps stored animals into `AnimalSireCandidate` values and applies the policy rather than embedding that decision in persistence code.
-
-## Home reference implementation
-
-Home is separated from Dashboard even though it reuses herd/pasture domain summaries where appropriate:
-
-- `Domain/Entities/Home/*`
-- `Domain/UseCases/Home/*`
-- `Domain/Services/HomeService.swift`
-- `Presentation/ViewModels/Home/*`
-- `Presentation/Views/Home/*`
-
-Home-specific task derivation, setup state, and current-work counts should stay out of `HomeView`. The SwiftUI view should render the `HomeViewModel` snapshot and handle only local navigation and presentation state.
-
-## Check reference implementation
-
-The pasture check flow is separated as:
-
-- `Domain/Entities/Check/*`
-- `Domain/Repositories/FieldCheckRepository.swift`
-- direct `Domain/Repositories/FieldCheckRepository.swift` capability protocols for isolated queries and commands
-- `Data/Models/Check/*`
-- `Data/Mappers/FieldCheckMapper.swift`
-- `Data/Repositories/SwiftDataFieldCheckRepository.swift`
-- `Presentation/ViewModels/Check/*`
-- `Presentation/Views/Check/*`
-
-Checks stay flexible by design: one session can mix head counts, tag-by-tag verification, and findings without templates or type-specific modes.
-
-Check-specific archive capabilities that are needed by other use cases should be exposed through narrow protocols, such as `FieldCheckPastureArchiveWriter`, instead of making unrelated features depend on the full `FieldCheckRepository` surface.
-
-## Working reference implementation
-
-The working-session flow follows the same layered pattern:
-
-- `Domain/Entities/Working/*`
-- `Domain/Repositories/WorkingRepository.swift`
-- `Domain/UseCases/Working/*`
-- `Data/Models/Work/*`
-- `Data/Mappers/WorkingMapper.swift`
-- `Data/Repositories/SwiftDataWorkingRepository.swift`
-- `Presentation/ViewModels/Working/*`
-- `Presentation/Views/Working/*`
-
-Working-session screens call narrow repository ports directly for isolated reads and commands. `CompleteWorkingSessionUseCase` remains because it verifies the session state and complete destination assignment set, while `WorkingSessionCompleting` commits destination updates, animal movements, and the finished state atomically in one save. Pasture choices used by working-session setup come from the Pasture boundary, not from Animal persistence.
-
-## Mapping rules
-
-- Data models should be converted to Domain snapshots/summaries through mapper types in `Data/Mappers`.
-- Avoid duplicate mapping paths for the same Domain entity.
-- Pasture resident animals should use `AnimalMapper.makeSummary(from:)` instead of a Pasture-specific duplicate mapping function.
-- Presentation views should consume Domain snapshots/summaries or view-model display state, not SwiftData models.
+Only carry forward existing recovery/public-ID tooling when the final Core Data architecture has the same requirement. Delete tooling whose sole purpose was repairing or coordinating the old dual-stack design.
 
 ## Testing expectations
 
-Feature cleanup should include focused tests for:
+Production persistence tests should target the Core Data implementation directly.
 
-- validators
-- domain policies
-- domain services
-- use cases
-- repository behavior
-- view-model state and orchestration
+Required coverage includes:
 
-Pasture currently has focused coverage for validators, metrics/policies, use cases, SwiftData repository behavior, tile picker behavior, and tile list behavior. Keep that pattern when extending Pasture or cleaning up other features.
+- repository behavior for important reads and writes;
+- application UUID preservation across create/update/reload;
+- duplicate UUID integrity behavior;
+- transaction rollback/all-or-nothing behavior;
+- relationship/delete-rule behavior;
+- private/shared store routing;
+- CloudKit sharing preparation/acceptance boundaries where they can be tested deterministically;
+- remote-change invalidation;
+- mapping between Core Data records and Domain snapshots.
+
+Do not add new tests whose only purpose is preserving the temporary SwiftData implementation. Shared Domain tests should exist only where they remain valuable after SwiftData deletion.
 
 ## Rules for future growth
 
-1. keep views declarative and state-light
-2. move screen logic into presentation view models
-3. put business rules, derivations, validation, and thresholds in domain services, policies, and meaningful use cases
-4. keep SwiftData access inside data repositories and app persistence setup
-5. keep navigation types in `App` or `Presentation`, never in `Data` or `Domain`
-6. call narrow repository capability protocols directly for simple one-port queries and commands
-7. keep use cases only for policy, validation, derivation, workflow orchestration, or transaction definition
-8. keep cross-feature orchestration in use cases, not data repositories
-9. keep reference-data ownership with the feature that owns the data
-10. add focused tests when introducing or refactoring feature behavior
-11. avoid duplicate mappers for the same domain snapshot or summary
-12. reject one-call pass-through use cases in `Scripts/verify-architecture.sh`
-13. inject presentation dependencies through feature containers rather than individual repository environment keys
+1. Design for the finished Core Data architecture, not compatibility with the old SwiftData store.
+2. Keep application UUIDs as the only Domain identity for durable entities.
+3. Keep Core Data and CloudKit types out of Domain and Presentation.
+4. Keep views declarative and state-light.
+5. Put reusable business rules in Domain services/policies.
+6. Use narrow repository capability protocols.
+7. Use explicit transaction boundaries for multi-record logical writes.
+8. Publish application mutations only after a successful commit.
+9. Use Core Data relationships internally; use application UUIDs at architectural boundaries.
+10. Do not introduce a second persistence graph, dual writes, mirror records, or migration-only adapters.
+11. Prefer deleting obsolete SwiftData/bridge code over porting it.
+12. Add tests for the production Core Data implementation as it is built.
 
-## SwiftData schema evolution
+## Cutover status
 
-- `Data/Persistence/Schema/YaHerdSchemaV1.swift` contains the frozen 1.0 persistent models.
-- `Data/Persistence/Schema/YaHerdCurrentModels.swift` exposes the current schema's models to the rest of the app through type aliases.
-- `Data/Persistence/Schema/YaHerdMigrationPlan.swift` is the ordered schema and migration-stage history.
-- `ModelContainerFactory` is the only production entry point for opening SwiftData stores and always supplies the migration plan.
-- Startup bootstrap and repair utilities run only after the store opens and are not substitutes for schema migration stages.
-
-See the repository-level `MIGRATIONS.md` for the required release workflow, fixture-store rules, and the model changes that require custom migration.
-
-## Sharing platform boundary
-
-Domain collaboration types are provider-neutral. `HerdShareInvitation` and `HerdSharePresentationRequest` carry only application identifiers, participant capabilities, invitation state, URLs, and opaque `HerdShareToken` values. They never retain `CKShare`, `CKContainer`, `CKShare.Metadata`, Core Data objects, or presentation callbacks.
-
-`CloudKitShareAdapter` under `Data/Sharing/CloudKit` is the translation and lifetime boundary. It converts incoming `CKShare.Metadata` into a neutral invitation while retaining the metadata behind an opaque token, and it retains prepared `CKShare` sessions behind neutral presentation requests. `CoreDataHerdSharingRepository` resolves those tokens only when accepting an invitation or preparing the system sharing UI. `Scripts/verify-architecture.sh` rejects platform-framework imports and platform types under `Domain`.
-
-## Sharing bridge risk boundary
-
-The SwiftData/Core Data CloudKit sharing bridge is treated as a separate high-risk boundary. Store lifecycle, import orchestration, export orchestration, operation journaling, and reconciliation are split into focused files under `Data/Sharing/CoreData`. Import precedes export, each direction uses one persistent-store commit, retries are idempotent, and duplicate application-managed public IDs are explicitly detected. See `SHARING_BRIDGE_RELIABILITY.md` at the repository root for release requirements and the two-device test matrix.
-## Recovery-mode boundary
-
-Persistent-store failure is handled by a separate `AppDataAccessMode.recoveryReadOnly` runtime state. The recovery container is in memory with saving disabled, all mutation-capable repositories are wrapped by `HerdCollaborationWritePolicy`, and the CloudKit sharing repository and automatic synchronization are not attached. `RecoveryModeBannerOverlay` provides the persistent cross-presentation warning, while `RecoveryModeController` owns diagnostics, diagnostic-store export, and the acknowledged production-store open/repair attempt. Recovery mode never transitions to writable state during the current launch. See the repository-level `RECOVERY_MODE.md` for invariants and release tests.
-
-## Concurrency boundary
-
-The app and test targets compile in Swift 6 mode with complete strict-concurrency checking and main-actor default isolation. Domain repository protocols are explicitly `@MainActor` because production repositories use `ModelContainer.mainContext`. Observable UI state, navigation, sharing coordinators, mutation scheduling, and collaboration write validation use the same actor. Application sources may not introduce `@unchecked Sendable`, lock-backed state managers, or `Task.detached`; the CI gate in `Scripts/verify-concurrency.sh` enforces those restrictions. See `CONCURRENCY.md` at the repository root.
-
-## Application navigation boundary
-
-`MainTabView` is a tab composition view, not the owner of application workflow state. App-scoped navigation lives in `AppNavigationState` and is divided into:
-
-- `selectedTab`
-- `HerdRouter` for the single herd navigation stack, list mode, search criteria, filters, sorting, and typed herd routes
-- `WorkflowRouter` for resumable field-check and working-session routes
-- `presentedSheet`
-- `fullScreenWorkflow`
-
-`HerdRoute`, `WorkflowRoute`, `AppPresentedSheet`, `AppFullScreenWorkflow`, and `AppNavigationRequest` are typed `Codable` values. `RootAppView` persists an `AppNavigationSnapshot` in scene storage and restores it when the scene starts. The same request model is used by URL routes and app-level notification routing.
-
-The supported URL shape is `yaherd://<destination>/<identifier>`, including animal, pasture, field-check, work-session, and search destinations. A field-check URL may include a `finding` query item to reopen a specific finding editor.
-
-Search is part of the herd feature hierarchy. Do not add a second Search tab containing another `HerdView`; that creates duplicate view trees and competing navigation ownership. The herd tab owns one `NavigationStack`, one search state, and one route path.
-
-Do not add app-level modal state, workflow routes, search/filter state, or `NavigationPath` values back to `MainTabView`. Add behavior to the appropriate router or presentation modifier. `NavigationCoordinator.globalPath` was removed because it was not connected to the actual stacks.
-
-## Application mutation and home invalidation
-
-Successful commands publish one typed `ApplicationMutationEvent` through `ApplicationMutationPipeline`. The pipeline sends the same successful command to `ApplicationMutationCenter` for feature invalidation and to `HerdSharingMutationSyncScheduler` for collaboration export. Publication occurs only after the repository command returns successfully.
-
-`HomeViewModel` subscribes to `ApplicationMutationStreaming` and reloads when an event affects `.home`. Home does not use navigation-owned refresh counters, sheet-dismiss reloads, tab-selection reloads, `task(id:)`, or `onAppear` refresh calls. The stream retains recent events so a home screen that was off-screen can catch up when it becomes active again.
-
-CloudKit bridge imports are wrapped by `MutationPublishingHerdSharingRepository`, so accepted invitations, manual imports, synchronization, accepted shared deletions, and conflict-field restoration also invalidate feature data after SwiftData has been updated.
-
-`Scripts/verify-architecture.sh` rejects manual home-refresh tokens and verifies that every collaboration-aware repository mutation publishes only after its persistence call succeeds.
+SwiftData and the existing SwiftData/Core Data sharing bridge are temporary implementation code. They are not architectural precedent. Follow `CORE_DATA_CUTOVER.md` until the replacement is complete; after cutover, remove that document and any remaining transition-only code.
