@@ -50,12 +50,26 @@ enum PastureRepositoryContract {
         XCTAssertEqual(updated.usableAcreage, 27, file: file, line: line)
         XCTAssertEqual(updated.targetAcresPerHead, 1.75, file: file, line: line)
 
+        let reloadedRepository = fixture.makePastureRepository()
         let reloaded = try XCTUnwrap(
-            fixture.makePastureRepository().fetchPastureDetail(id: created.id),
+            reloadedRepository.fetchPastureDetail(id: created.id),
             file: file,
             line: line
         )
         XCTAssertEqual(reloaded, updated, file: file, line: line)
+
+        let summary = try XCTUnwrap(
+            reloadedRepository.fetchPastures().first { $0.id == created.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(summary.name, "Updated Contract North", file: file, line: line)
+        XCTAssertEqual(summary.acreage, 30, file: file, line: line)
+        XCTAssertEqual(summary.usableAcreage, 27, file: file, line: line)
+        XCTAssertEqual(summary.targetAcresPerHead, 1.75, file: file, line: line)
+        XCTAssertEqual(summary.activeAnimalCount, 0, file: file, line: line)
+        XCTAssertNil(summary.groupID, file: file, line: line)
+        XCTAssertNil(summary.groupName, file: file, line: line)
     }
 
     static func assertListOrderingAndSubsetReorder(
@@ -81,6 +95,10 @@ enum PastureRepositoryContract {
         let reloaded = try fixture.makePastureRepository().fetchPastures()
         XCTAssertEqual(reloaded.map(\.id), [third.id, first.id, second.id], file: file, line: line)
         XCTAssertEqual(reloaded.map(\.sortOrder), [0, 1, 2], file: file, line: line)
+        XCTAssertEqual(reloaded.map(\.name), ["Third", "First", "Second"], file: file, line: line)
+        XCTAssertEqual(reloaded.map(\.acreage), [20, 20, 20], file: file, line: line)
+        XCTAssertEqual(reloaded.map(\.usableAcreage), [18, 18, 18], file: file, line: line)
+        XCTAssertEqual(reloaded.map(\.targetAcresPerHead), [1.5, 1.5, 1.5], file: file, line: line)
     }
 
     static func assertReferenceDataAndNameLookup(
@@ -147,6 +165,17 @@ enum PastureRepositoryContract {
             line: line
         )
         XCTAssertEqual(detail.activeAnimalCount, 2, file: file, line: line)
+
+        let summary = try XCTUnwrap(
+            reloadedPastures.fetchPastures().first { $0.id == pasture.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(summary.name, "Residents", file: file, line: line)
+        XCTAssertEqual(summary.activeAnimalCount, 2, file: file, line: line)
+        XCTAssertEqual(summary.acreage, 20, file: file, line: line)
+        XCTAssertEqual(summary.usableAcreage, 18, file: file, line: line)
+        XCTAssertEqual(summary.targetAcresPerHead, 1.5, file: file, line: line)
     }
 
     static func assertGroupLifecycleAndPastureAssignment(
@@ -194,7 +223,51 @@ enum PastureRepositoryContract {
         XCTAssertEqual(groupDetail.restDays, 30, file: file, line: line)
         XCTAssertEqual(groupDetail.pastures.map(\.id), [pasture.id], file: file, line: line)
 
-        try reloadedRepository.deleteGroups(ids: [createdGroup.id])
+        let groupedSummary = try XCTUnwrap(
+            reloadedRepository.fetchPastures().first { $0.id == pasture.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(groupedSummary.name, "Grouped Pasture", file: file, line: line)
+        XCTAssertEqual(groupedSummary.groupID, createdGroup.id, file: file, line: line)
+        XCTAssertEqual(groupedSummary.groupName, "Rotation Updated", file: file, line: line)
+        XCTAssertEqual(groupedSummary.restDays, 30, file: file, line: line)
+
+        try reloadedRepository.assignPasture(id: pasture.id, toGroupID: nil)
+
+        let unassignedRepository = fixture.makePastureRepository()
+        let unassignedPasture = try XCTUnwrap(
+            unassignedRepository.fetchPastureDetail(id: pasture.id),
+            file: file,
+            line: line
+        )
+        XCTAssertNil(unassignedPasture.groupID, file: file, line: line)
+        XCTAssertNil(unassignedPasture.groupName, file: file, line: line)
+        let groupAfterUnassignment = try XCTUnwrap(
+            unassignedRepository.fetchPastureGroupDetail(id: createdGroup.id),
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(groupAfterUnassignment.pastures.isEmpty, file: file, line: line)
+
+        let unassignedSummary = try XCTUnwrap(
+            unassignedRepository.fetchPastures().first { $0.id == pasture.id },
+            file: file,
+            line: line
+        )
+        XCTAssertNil(unassignedSummary.groupID, file: file, line: line)
+        XCTAssertNil(unassignedSummary.groupName, file: file, line: line)
+        XCTAssertNil(unassignedSummary.restDays, file: file, line: line)
+
+        try unassignedRepository.assignPasture(id: pasture.id, toGroupID: createdGroup.id)
+        let reassignedPasture = try XCTUnwrap(
+            fixture.makePastureRepository().fetchPastureDetail(id: pasture.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reassignedPasture.groupID, createdGroup.id, file: file, line: line)
+
+        try unassignedRepository.deleteGroups(ids: [createdGroup.id])
 
         XCTAssertNil(
             try fixture.makePastureRepository().fetchPastureGroupDetail(id: createdGroup.id),
