@@ -39,13 +39,17 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(created.status.rawValue, AnimalStatus.active.rawValue, file: file, line: line)
         XCTAssertEqual(created.distinguishingFeatures.map(\.description), ["White blaze"], file: file, line: line)
 
+        let updatedBirthDate = date(year: 2019, month: 12, day: 15)
+        let saleDate = date(year: 2026, month: 1, day: 15)
         let updated = try repository.update(
             id: created.id,
             input: makeAnimalInput(
                 name: "Updated Contract Cow",
                 tagNumber: "102",
-                sex: .female,
-                birthDate: date(year: 2020, month: 1, day: 2),
+                sex: .male,
+                birthDate: updatedBirthDate,
+                status: .sold,
+                saleDate: saleDate,
                 distinguishingFeatures: [
                     DistinguishingFeature(description: "White blaze", order: 0),
                     DistinguishingFeature(description: "Left ear notch", order: 1)
@@ -56,6 +60,10 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(updated.id, created.id, "Updating must preserve application UUID identity.", file: file, line: line)
         XCTAssertEqual(updated.name, "Updated Contract Cow", file: file, line: line)
         XCTAssertEqual(updated.displayTagNumber, "102", file: file, line: line)
+        XCTAssertEqual(updated.sex.rawValue, Sex.male.rawValue, file: file, line: line)
+        XCTAssertEqual(updated.birthDate, updatedBirthDate, file: file, line: line)
+        XCTAssertEqual(updated.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
+        XCTAssertEqual(updated.saleDate, saleDate, file: file, line: line)
         XCTAssertEqual(updated.distinguishingFeatures.map(\.description), ["White blaze", "Left ear notch"], file: file, line: line)
 
         let reloaded = try XCTUnwrap(
@@ -64,11 +72,12 @@ enum AnimalRepositoryContract {
             line: line
         )
         XCTAssertEqual(reloaded.id, created.id, file: file, line: line)
-        XCTAssertEqual(reloaded.name, updated.name, file: file, line: line)
-        XCTAssertEqual(reloaded.displayTagNumber, updated.displayTagNumber, file: file, line: line)
-        XCTAssertEqual(reloaded.sex.rawValue, updated.sex.rawValue, file: file, line: line)
-        XCTAssertEqual(reloaded.birthDate, updated.birthDate, file: file, line: line)
-        XCTAssertEqual(reloaded.status.rawValue, updated.status.rawValue, file: file, line: line)
+        XCTAssertEqual(reloaded.name, "Updated Contract Cow", file: file, line: line)
+        XCTAssertEqual(reloaded.displayTagNumber, "102", file: file, line: line)
+        XCTAssertEqual(reloaded.sex.rawValue, Sex.male.rawValue, file: file, line: line)
+        XCTAssertEqual(reloaded.birthDate, updatedBirthDate, file: file, line: line)
+        XCTAssertEqual(reloaded.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
+        XCTAssertEqual(reloaded.saleDate, saleDate, file: file, line: line)
         XCTAssertEqual(reloaded.distinguishingFeatures, updated.distinguishingFeatures, file: file, line: line)
     }
 
@@ -456,6 +465,8 @@ enum AnimalRepositoryContract {
         tagNumber: String,
         sex: Sex,
         birthDate: Date,
+        status: AnimalStatus = .active,
+        saleDate: Date? = nil,
         pastureID: UUID? = nil,
         sireID: UUID? = nil,
         damID: UUID? = nil,
@@ -467,12 +478,12 @@ enum AnimalRepositoryContract {
             tagColorID: nil,
             sex: sex,
             birthDate: birthDate,
-            status: .active,
+            status: status,
             pastureID: pastureID,
             sireID: sireID,
             damID: damID,
             distinguishingFeatures: distinguishingFeatures,
-            saleDate: nil,
+            saleDate: saleDate,
             salePrice: nil,
             reasonSold: nil,
             deathDate: nil,
