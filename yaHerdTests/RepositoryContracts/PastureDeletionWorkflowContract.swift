@@ -54,6 +54,33 @@ enum PastureDeletionWorkflowContract {
             )
         )
 
+        let soldAnimal = try animalRepository.create(
+            input: makeAnimalInput(
+                name: "Deletion Contract Sold Cow",
+                tagNumber: "703",
+                pastureID: firstPasture.id,
+                status: .sold,
+                saleDate: Date(timeIntervalSince1970: 1_779_000_000)
+            )
+        )
+        let deadAnimal = try animalRepository.create(
+            input: makeAnimalInput(
+                name: "Deletion Contract Dead Cow",
+                tagNumber: "704",
+                pastureID: secondPasture.id,
+                status: .dead,
+                deathDate: Date(timeIntervalSince1970: 1_779_100_000)
+            )
+        )
+        let archivedAnimal = try animalRepository.create(
+            input: makeAnimalInput(
+                name: "Deletion Contract Archived Cow",
+                tagNumber: "705",
+                pastureID: secondPasture.id
+            )
+        )
+        try animalRepository.archive(ids: [archivedAnimal.id])
+
         let firstStartedAt = Date(timeIntervalSince1970: 1_780_000_000)
         let secondStartedAt = Date(timeIntervalSince1970: 1_780_043_200)
         let archivedAt = Date(timeIntervalSince1970: 1_780_086_400)
@@ -104,6 +131,30 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+        try assertInactiveAnimalSurvivesPastureDeletion(
+            animalID: soldAnimal.id,
+            expectedStatus: .sold,
+            expectedArchived: false,
+            repository: reloadedAnimals,
+            file: file,
+            line: line
+        )
+        try assertInactiveAnimalSurvivesPastureDeletion(
+            animalID: deadAnimal.id,
+            expectedStatus: .dead,
+            expectedArchived: false,
+            repository: reloadedAnimals,
+            file: file,
+            line: line
+        )
+        try assertInactiveAnimalSurvivesPastureDeletion(
+            animalID: archivedAnimal.id,
+            expectedStatus: .active,
+            expectedArchived: true,
+            repository: reloadedAnimals,
+            file: file,
+            line: line
+        )
 
         let reloadedFieldChecks = fixture.makeFieldCheckRepository()
         try assertArchivedFieldCheckSession(
@@ -130,12 +181,37 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+
+        let sessionSummaries = try reloadedFieldChecks.fetchSessions()
+        try assertArchivedFieldCheckSummary(
+            sessionID: firstSessionID,
+            startedAt: firstStartedAt,
+            pastureID: firstPasture.id,
+            pastureName: "Delete Workflow North",
+            archivedAt: archivedAt,
+            summaries: sessionSummaries,
+            file: file,
+            line: line
+        )
+        try assertArchivedFieldCheckSummary(
+            sessionID: secondSessionID,
+            startedAt: secondStartedAt,
+            pastureID: secondPasture.id,
+            pastureName: "Delete Workflow South",
+            archivedAt: archivedAt,
+            summaries: sessionSummaries,
+            file: file,
+            line: line
+        )
     }
 
     private static func makeAnimalInput(
         name: String,
         tagNumber: String,
-        pastureID: UUID
+        pastureID: UUID,
+        status: AnimalStatus = .active,
+        saleDate: Date? = nil,
+        deathDate: Date? = nil
     ) -> AnimalInput {
         AnimalInput(
             name: name,
@@ -143,16 +219,16 @@ enum PastureDeletionWorkflowContract {
             tagColorID: nil,
             sex: .female,
             birthDate: Date(timeIntervalSince1970: 1_577_836_800),
-            status: .active,
+            status: status,
             pastureID: pastureID,
             sireID: nil,
             damID: nil,
             distinguishingFeatures: [],
-            saleDate: nil,
-            salePrice: nil,
-            reasonSold: nil,
-            deathDate: nil,
-            causeOfDeath: nil,
+            saleDate: saleDate,
+            salePrice: status == .sold ? 1_250 : nil,
+            reasonSold: status == .sold ? "Deletion workflow contract" : nil,
+            deathDate: deathDate,
+            causeOfDeath: status == .dead ? "Deletion workflow contract" : nil,
             statusReferenceID: nil
         )
     }
@@ -181,6 +257,26 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+    }
+
+    private static func assertInactiveAnimalSurvivesPastureDeletion(
+        animalID: UUID,
+        expectedStatus: AnimalStatus,
+        expectedArchived: Bool,
+        repository: any AnimalRepository,
+        file: StaticString,
+        line: UInt
+    ) throws {
+        let animal = try XCTUnwrap(
+            repository.fetchAnimalDetail(id: animalID),
+            "Deleting a pasture must not delete sold, dead, or archived animals that still reference it.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(animal.status, expectedStatus, file: file, line: line)
+        XCTAssertEqual(animal.isArchived, expectedArchived, file: file, line: line)
+        XCTAssertNil(animal.pastureID, file: file, line: line)
+        XCTAssertNil(animal.pastureName, file: file, line: line)
     }
 
     private static func assertArchivedFieldCheckSession(
@@ -214,5 +310,29 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+    }
+
+    private static func assertArchivedFieldCheckSummary(
+        sessionID: UUID,
+        startedAt: Date,
+        pastureID: UUID,
+        pastureName: String,
+        archivedAt: Date,
+        summaries: [FieldCheckSessionSummary],
+        file: StaticString,
+        line: UInt
+    ) throws {
+        let summary = try XCTUnwrap(
+            summaries.first { $0.id == sessionID },
+            "Archived field-check sessions must remain visible through the list reader.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(summary.startedAt, startedAt, file: file, line: line)
+        XCTAssertEqual(summary.pastureID, pastureID, file: file, line: line)
+        XCTAssertEqual(summary.pastureName, pastureName, file: file, line: line)
+        XCTAssertEqual(summary.pastureArchivedAt, archivedAt, file: file, line: line)
+        XCTAssertTrue(summary.isPastureArchived, file: file, line: line)
+        XCTAssertEqual(summary.expectedHeadCountSnapshot, 1, file: file, line: line)
     }
 }
