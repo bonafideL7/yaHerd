@@ -28,6 +28,10 @@ final class SwiftDataPastureRepositoryContractTests: XCTestCase {
         try PastureRepositoryContract.assertGroupLifecycleAndPastureAssignment(using: makeFixture())
     }
 
+    func testGroupListOrderingAndPastureCountsContract() throws {
+        try PastureRepositoryContract.assertGroupListOrderingAndPastureCounts(using: makeFixture())
+    }
+
     func testGroupNameLookupAndDuplicateProtectionContract() throws {
         try PastureRepositoryContract.assertGroupNameLookupAndDuplicateProtection(using: makeFixture())
     }
