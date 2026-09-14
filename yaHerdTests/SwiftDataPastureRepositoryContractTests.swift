@@ -18,12 +18,29 @@ final class SwiftDataPastureRepositoryContractTests: XCTestCase {
         )
     }
 
+    func testPersistedGrazingDateContract() throws {
+        let container = try TestSupport.makeModelContainer()
+        try PastureRepositoryEdgeCaseContract.assertPersistedGrazingDate(
+            using: makeFixture(container: container),
+            markPastureGrazed: { id, date in
+                try SwiftDataDashboardRepository(context: ModelContext(container))
+                    .markPastureGrazedToday(id: id, on: date)
+            }
+        )
+    }
+
     func testListOrderingAndSubsetReorderContract() throws {
         try PastureRepositoryContract.assertListOrderingAndSubsetReorder(using: makeFixture())
     }
 
     func testReferenceDataAndNameLookupContract() throws {
         try PastureRepositoryContract.assertReferenceDataAndNameLookup(using: makeFixture())
+    }
+
+    func testNameLookupExcludesOnlyRequestedPastureContract() throws {
+        try PastureRepositoryEdgeCaseContract.assertNameLookupExcludesOnlyRequestedPasture(
+            using: makeFixture()
+        )
     }
 
     func testResidentAnimalsAndActiveCountContract() throws {
@@ -62,10 +79,19 @@ final class SwiftDataPastureRepositoryContractTests: XCTestCase {
         )
     }
 
+    func testProductionDeletionPreservesCompleteFieldCheckRosterContract() throws {
+        try PastureDeletionMultiAnimalRosterContract.assertDeletionPreservesCompleteFieldCheckRoster(
+            using: makeDeletionWorkflowFixture()
+        )
+    }
+
     private func makeFixture() throws -> PastureRepositoryContractFixture {
         let container = try TestSupport.makeModelContainer()
+        return makeFixture(container: container)
+    }
 
-        return PastureRepositoryContractFixture(
+    private func makeFixture(container: ModelContainer) -> PastureRepositoryContractFixture {
+        PastureRepositoryContractFixture(
             makePastureRepository: {
                 SwiftDataPastureRepository(context: ModelContext(container))
             },
