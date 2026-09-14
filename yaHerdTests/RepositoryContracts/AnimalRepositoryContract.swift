@@ -165,8 +165,10 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloaded.pastureID, south.id, file: file, line: line)
         XCTAssertEqual(reloaded.pastureName, south.name, file: file, line: line)
         XCTAssertTrue(
-            try reloadedRepository.fetchTimeline(id: animal.id).contains(where: isMovementEvent),
-            "Moving an animal must create durable movement history.",
+            try reloadedRepository.fetchTimeline(id: animal.id).contains {
+                isMovementEvent($0, from: north.name, to: south.name)
+            },
+            "Moving an animal must create durable history for the specific source and destination pastures.",
             file: file,
             line: line
         )
@@ -233,9 +235,17 @@ enum AnimalRepositoryContract {
             line: line
         )
         XCTAssertNotNil(retiredTag.removedAt, file: file, line: line)
+
+        let timeline = try reloadedRepository.fetchTimeline(id: created.id)
         XCTAssertTrue(
-            try reloadedRepository.fetchTimeline(id: created.id).contains(where: isTagEvent),
-            "Tag replacement/retirement must remain represented in animal history.",
+            timeline.contains { isTagEvent($0, title: "Tag Assigned", number: "402") },
+            "Adding the replacement tag must create assignment history for tag 402.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            timeline.contains { isTagEvent($0, title: "Tag Retired", number: "401") },
+            "Retiring the original tag must create retirement history for tag 401.",
             file: file,
             line: line
         )
@@ -444,13 +454,22 @@ enum AnimalRepositoryContract {
         return false
     }
 
-    private static func isMovementEvent(_ event: AnimalTimelineEvent) -> Bool {
-        if case .movement = event.type { return true }
-        return false
+    private static func isMovementEvent(
+        _ event: AnimalTimelineEvent,
+        from sourcePasture: String,
+        to destinationPasture: String
+    ) -> Bool {
+        guard case .movement = event.type else { return false }
+        return event.title == "Pasture Movement"
+            && event.details == "\(sourcePasture) → \(destinationPasture)"
     }
 
-    private static func isTagEvent(_ event: AnimalTimelineEvent) -> Bool {
-        if case .tag = event.type { return true }
-        return false
+    private static func isTagEvent(
+        _ event: AnimalTimelineEvent,
+        title: String,
+        number: String
+    ) -> Bool {
+        guard case .tag = event.type else { return false }
+        return event.title == title && event.details == number
     }
 }
