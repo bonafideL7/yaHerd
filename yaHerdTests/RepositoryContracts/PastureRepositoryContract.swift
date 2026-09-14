@@ -189,6 +189,9 @@ enum PastureRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(groupDetail.name, "Rotation Updated", file: file, line: line)
+        XCTAssertEqual(groupDetail.grazeDays, 7, file: file, line: line)
+        XCTAssertEqual(groupDetail.restDays, 30, file: file, line: line)
         XCTAssertEqual(groupDetail.pastures.map(\.id), [pasture.id], file: file, line: line)
 
         try reloadedRepository.deleteGroups(ids: [createdGroup.id])
@@ -205,6 +208,42 @@ enum PastureRepositoryContract {
         )
         XCTAssertNil(pastureAfterGroupDelete.groupID, file: file, line: line)
         XCTAssertNil(pastureAfterGroupDelete.groupName, file: file, line: line)
+    }
+
+    static func assertGroupListOrderingAndPastureCounts(
+        using fixture: PastureRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makePastureRepository()
+        let north = try repository.create(input: makePastureInput(name: "North Pasture"))
+        let south = try repository.create(input: makePastureInput(name: "South Pasture"))
+        let east = try repository.create(input: makePastureInput(name: "East Pasture"))
+
+        let zulu = try repository.createGroup(
+            input: PastureGroupInput(name: "Zulu Rotation", grazeDays: 4, restDays: 16)
+        )
+        let alpha = try repository.createGroup(
+            input: PastureGroupInput(name: "Alpha Rotation", grazeDays: 6, restDays: 24)
+        )
+
+        try repository.assignPasture(id: north.id, toGroupID: alpha.id)
+        try repository.assignPasture(id: south.id, toGroupID: alpha.id)
+        try repository.assignPasture(id: east.id, toGroupID: zulu.id)
+
+        let groups = try fixture.makePastureRepository().fetchPastureGroups()
+        XCTAssertEqual(groups.map(\.id), [alpha.id, zulu.id], file: file, line: line)
+        XCTAssertEqual(groups.map(\.name), ["Alpha Rotation", "Zulu Rotation"], file: file, line: line)
+
+        let alphaSummary = try XCTUnwrap(groups.first { $0.id == alpha.id }, file: file, line: line)
+        XCTAssertEqual(alphaSummary.grazeDays, 6, file: file, line: line)
+        XCTAssertEqual(alphaSummary.restDays, 24, file: file, line: line)
+        XCTAssertEqual(alphaSummary.pastureCount, 2, file: file, line: line)
+
+        let zuluSummary = try XCTUnwrap(groups.first { $0.id == zulu.id }, file: file, line: line)
+        XCTAssertEqual(zuluSummary.grazeDays, 4, file: file, line: line)
+        XCTAssertEqual(zuluSummary.restDays, 16, file: file, line: line)
+        XCTAssertEqual(zuluSummary.pastureCount, 1, file: file, line: line)
     }
 
     static func assertGroupNameLookupAndDuplicateProtection(
