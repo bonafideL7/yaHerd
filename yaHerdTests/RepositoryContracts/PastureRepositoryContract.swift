@@ -10,6 +10,7 @@ import XCTest
 struct PastureRepositoryContractFixture {
     let makePastureRepository: () -> any PastureRepository
     let makeAnimalRepository: () -> any AnimalRepository
+    let makeTagColorRepository: () -> any TagColorRepository
 }
 
 @MainActor
@@ -140,15 +141,26 @@ enum PastureRepositoryContract {
         let pasture = try pastureRepository.create(input: makePastureInput(name: "Residents"))
         let otherPasture = try pastureRepository.create(input: makePastureInput(name: "Other"))
         let animalRepository = fixture.makeAnimalRepository()
-        let damColorID = UUID()
-        let tag3ColorID = UUID()
+        let tagColorRepository = fixture.makeTagColorRepository()
+        let damColor = TagColorSnapshot(
+            name: "Contract Dam Color",
+            prefix: "D",
+            rgba: RGBAColor(r: 0.2, g: 0.4, b: 0.8)
+        )
+        let tag3Color = TagColorSnapshot(
+            name: "Contract Resident Color",
+            prefix: "R",
+            rgba: RGBAColor(r: 0.2, g: 0.7, b: 0.3)
+        )
+        try tagColorRepository.upsert(damColor)
+        try tagColorRepository.upsert(tag3Color)
 
         let dam = try animalRepository.create(
             input: makeAnimalInput(
                 name: "Resident Dam",
                 tagNumber: "D3",
                 pastureID: otherPasture.id,
-                tagColorID: damColorID
+                tagColorID: damColor.id
             )
         )
         let tag20 = try animalRepository.create(
@@ -159,7 +171,7 @@ enum PastureRepositoryContract {
                 name: "Tag 3",
                 tagNumber: "3",
                 pastureID: pasture.id,
-                tagColorID: tag3ColorID,
+                tagColorID: tag3Color.id,
                 damID: dam.id
             )
         )
@@ -187,9 +199,9 @@ enum PastureRepositoryContract {
         let tag3Summary = try XCTUnwrap(residents.first { $0.id == tag3.id }, file: file, line: line)
         XCTAssertEqual(tag3Summary.name, "Tag 3", file: file, line: line)
         XCTAssertEqual(tag3Summary.displayTagNumber, "3", file: file, line: line)
-        XCTAssertEqual(tag3Summary.displayTagColorID, tag3ColorID, file: file, line: line)
+        XCTAssertEqual(tag3Summary.displayTagColorID, tag3Color.id, file: file, line: line)
         XCTAssertEqual(tag3Summary.damDisplayTagNumber, "D3", file: file, line: line)
-        XCTAssertEqual(tag3Summary.damDisplayTagColorID, damColorID, file: file, line: line)
+        XCTAssertEqual(tag3Summary.damDisplayTagColorID, damColor.id, file: file, line: line)
         XCTAssertEqual(tag3Summary.sex, .female, file: file, line: line)
         XCTAssertEqual(tag3Summary.animalType, .heifer, file: file, line: line)
         XCTAssertEqual(tag3Summary.status, .active, file: file, line: line)
@@ -314,18 +326,34 @@ enum PastureRepositoryContract {
 
         try unassignedRepository.deleteGroups(ids: [createdGroup.id])
 
+        let postDeleteRepository = fixture.makePastureRepository()
         XCTAssertNil(
-            try fixture.makePastureRepository().fetchPastureGroupDetail(id: createdGroup.id),
+            try postDeleteRepository.fetchPastureGroupDetail(id: createdGroup.id),
             file: file,
             line: line
         )
         let pastureAfterGroupDelete = try XCTUnwrap(
-            fixture.makePastureRepository().fetchPastureDetail(id: pasture.id),
+            postDeleteRepository.fetchPastureDetail(id: pasture.id),
             file: file,
             line: line
         )
         XCTAssertNil(pastureAfterGroupDelete.groupID, file: file, line: line)
         XCTAssertNil(pastureAfterGroupDelete.groupName, file: file, line: line)
+
+        XCTAssertFalse(
+            try postDeleteRepository.fetchPastureGroups().contains { $0.id == createdGroup.id },
+            "Deleting a group must remove it from the group-list projection.",
+            file: file,
+            line: line
+        )
+        let pastureSummaryAfterGroupDelete = try XCTUnwrap(
+            postDeleteRepository.fetchPastures().first { $0.id == pasture.id },
+            file: file,
+            line: line
+        )
+        XCTAssertNil(pastureSummaryAfterGroupDelete.groupID, file: file, line: line)
+        XCTAssertNil(pastureSummaryAfterGroupDelete.groupName, file: file, line: line)
+        XCTAssertNil(pastureSummaryAfterGroupDelete.restDays, file: file, line: line)
     }
 
     static func assertGroupListOrderingAndPastureCounts(
