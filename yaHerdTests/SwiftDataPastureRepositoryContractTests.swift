@@ -12,6 +12,12 @@ final class SwiftDataPastureRepositoryContractTests: XCTestCase {
         try PastureRepositoryContract.assertCreateUpdateAndReload(using: makeFixture())
     }
 
+    func testClearingOptionalStockingFieldsPersistsContract() throws {
+        try PastureRepositoryEdgeCaseContract.assertClearingOptionalStockingFieldsPersists(
+            using: makeFixture()
+        )
+    }
+
     func testListOrderingAndSubsetReorderContract() throws {
         try PastureRepositoryContract.assertListOrderingAndSubsetReorder(using: makeFixture())
     }
@@ -26,6 +32,12 @@ final class SwiftDataPastureRepositoryContractTests: XCTestCase {
 
     func testGroupLifecycleAndPastureAssignmentContract() throws {
         try PastureRepositoryContract.assertGroupLifecycleAndPastureAssignment(using: makeFixture())
+    }
+
+    func testDirectReassignmentBetweenGroupsUpdatesBothInversesContract() throws {
+        try PastureRepositoryEdgeCaseContract.assertDirectReassignmentBetweenGroupsUpdatesBothInverses(
+            using: makeFixture()
+        )
     }
 
     func testGroupListOrderingAndPastureCountsContract() throws {
