@@ -46,6 +46,15 @@ enum AnimalRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(reloadedCreated.name, "Contract Cow", file: file, line: line)
+        XCTAssertEqual(reloadedCreated.displayTagNumber, "101", file: file, line: line)
+        XCTAssertEqual(
+            reloadedCreated.sex.rawValue,
+            Sex.female.rawValue,
+            "Creating must persist the original sex before later updates.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(
             reloadedCreated.birthDate,
             createdBirthDate,
@@ -53,6 +62,8 @@ enum AnimalRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(reloadedCreated.status.rawValue, AnimalStatus.active.rawValue, file: file, line: line)
+        XCTAssertEqual(reloadedCreated.distinguishingFeatures.map(\.description), ["White blaze"], file: file, line: line)
 
         let updatedBirthDate = date(year: 2019, month: 12, day: 15)
         let saleDate = date(year: 2026, month: 1, day: 15)
