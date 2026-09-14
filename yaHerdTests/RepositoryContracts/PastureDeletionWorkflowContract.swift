@@ -46,6 +46,13 @@ enum PastureDeletionWorkflowContract {
                 pastureID: firstPasture.id
             )
         )
+        let firstPastureSecondAnimal = try animalRepository.create(
+            input: makeAnimalInput(
+                name: "Deletion Contract Cow North 2",
+                tagNumber: "706",
+                pastureID: firstPasture.id
+            )
+        )
         let secondAnimal = try animalRepository.create(
             input: makeAnimalInput(
                 name: "Deletion Contract Cow South",
@@ -125,6 +132,13 @@ enum PastureDeletionWorkflowContract {
             line: line
         )
         try assertAnimalMovedToUnassigned(
+            animalID: firstPastureSecondAnimal.id,
+            pastureName: "Delete Workflow North",
+            repository: reloadedAnimals,
+            file: file,
+            line: line
+        )
+        try assertAnimalMovedToUnassigned(
             animalID: secondAnimal.id,
             pastureName: "Delete Workflow South",
             repository: reloadedAnimals,
@@ -162,8 +176,10 @@ enum PastureDeletionWorkflowContract {
             startedAt: firstStartedAt,
             pastureID: firstPasture.id,
             pastureName: "Delete Workflow North",
-            animalID: firstAnimal.id,
-            tagNumber: "701",
+            expectedAnimals: [
+                (id: firstAnimal.id, tagNumber: "701"),
+                (id: firstPastureSecondAnimal.id, tagNumber: "706")
+            ],
             archivedAt: archivedAt,
             repository: reloadedFieldChecks,
             file: file,
@@ -174,8 +190,7 @@ enum PastureDeletionWorkflowContract {
             startedAt: secondStartedAt,
             pastureID: secondPasture.id,
             pastureName: "Delete Workflow South",
-            animalID: secondAnimal.id,
-            tagNumber: "702",
+            expectedAnimals: [(id: secondAnimal.id, tagNumber: "702")],
             archivedAt: archivedAt,
             repository: reloadedFieldChecks,
             file: file,
@@ -189,6 +204,7 @@ enum PastureDeletionWorkflowContract {
             pastureID: firstPasture.id,
             pastureName: "Delete Workflow North",
             archivedAt: archivedAt,
+            expectedHeadCount: 2,
             summaries: sessionSummaries,
             file: file,
             line: line
@@ -199,6 +215,7 @@ enum PastureDeletionWorkflowContract {
             pastureID: secondPasture.id,
             pastureName: "Delete Workflow South",
             archivedAt: archivedAt,
+            expectedHeadCount: 1,
             summaries: sessionSummaries,
             file: file,
             line: line
@@ -284,8 +301,7 @@ enum PastureDeletionWorkflowContract {
         startedAt: Date,
         pastureID: UUID,
         pastureName: String,
-        animalID: UUID,
-        tagNumber: String,
+        expectedAnimals: [(id: UUID, tagNumber: String)],
         archivedAt: Date,
         repository: any FieldCheckRepository,
         file: StaticString,
@@ -301,15 +317,27 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(archivedSession.pastureName, pastureName, file: file, line: line)
         XCTAssertEqual(archivedSession.pastureArchivedAt, archivedAt, file: file, line: line)
         XCTAssertTrue(archivedSession.isPastureArchived, file: file, line: line)
-        XCTAssertEqual(archivedSession.expectedHeadCountSnapshot, 1, file: file, line: line)
-        XCTAssertTrue(
-            archivedSession.animalChecks.contains {
-                $0.animalID == animalID && $0.displayTagNumber == tagNumber
-            },
-            "Deleting every pasture in a batch must retain its field-check roster snapshot.",
+        XCTAssertEqual(archivedSession.expectedHeadCountSnapshot, expectedAnimals.count, file: file, line: line)
+        XCTAssertEqual(archivedSession.animalChecks.count, expectedAnimals.count, file: file, line: line)
+
+        let actualAnimalIDs = archivedSession.animalChecks.compactMap(\.animalID)
+        XCTAssertEqual(actualAnimalIDs.count, expectedAnimals.count, file: file, line: line)
+        XCTAssertEqual(
+            Set(actualAnimalIDs),
+            Set(expectedAnimals.map { $0.id }),
+            "Deleting a pasture must preserve every Field Check animal snapshot, not only the first.",
             file: file,
             line: line
         )
+
+        for expectedAnimal in expectedAnimals {
+            let check = try XCTUnwrap(
+                archivedSession.animalChecks.first { $0.animalID == expectedAnimal.id },
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(check.displayTagNumber, expectedAnimal.tagNumber, file: file, line: line)
+        }
     }
 
     private static func assertArchivedFieldCheckSummary(
@@ -318,6 +346,7 @@ enum PastureDeletionWorkflowContract {
         pastureID: UUID,
         pastureName: String,
         archivedAt: Date,
+        expectedHeadCount: Int,
         summaries: [FieldCheckSessionSummary],
         file: StaticString,
         line: UInt
@@ -333,6 +362,6 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(summary.pastureName, pastureName, file: file, line: line)
         XCTAssertEqual(summary.pastureArchivedAt, archivedAt, file: file, line: line)
         XCTAssertTrue(summary.isPastureArchived, file: file, line: line)
-        XCTAssertEqual(summary.expectedHeadCountSnapshot, 1, file: file, line: line)
+        XCTAssertEqual(summary.expectedHeadCountSnapshot, expectedHeadCount, file: file, line: line)
     }
 }
