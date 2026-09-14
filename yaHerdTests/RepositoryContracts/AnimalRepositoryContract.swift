@@ -391,6 +391,7 @@ enum AnimalRepositoryContract {
         let pregnancyDate = date(year: 2026, month: 3, day: 2)
         let pregnancyResult = PregnancyResult.pregnant
         let technician = "Contract Tech"
+        let pregnancyDueDate = date(year: 2026, month: 9, day: 1)
 
         _ = try repository.addHealthRecord(
             animalID: animal.id,
@@ -407,7 +408,7 @@ enum AnimalRepositoryContract {
                 result: pregnancyResult,
                 technician: technician,
                 estimatedDaysPregnant: 90,
-                dueDate: date(year: 2026, month: 9, day: 1),
+                dueDate: pregnancyDueDate,
                 sireAnimalID: nil
             )
         )
@@ -448,6 +449,13 @@ enum AnimalRepositoryContract {
         )
         XCTAssertEqual(summary.lastTreatmentDate, treatmentDate, file: file, line: line)
         XCTAssertEqual(summary.lastPregnancyCheckDate, pregnancyDate, file: file, line: line)
+        XCTAssertEqual(
+            summary.expectedCalvingDate,
+            pregnancyDueDate,
+            "Reloading must preserve the explicit pregnancy due date exposed through the animal summary.",
+            file: file,
+            line: line
+        )
     }
 
     static func assertDeleteRemovesAggregate(
