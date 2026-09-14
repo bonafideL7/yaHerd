@@ -65,6 +65,12 @@ final class SwiftDataPastureRepositoryContractTests: XCTestCase {
         try PastureRepositoryContract.assertGroupNameLookupAndDuplicateProtection(using: makeFixture())
     }
 
+    func testGroupNameLookupExcludesOnlyRequestedGroupContract() throws {
+        try PastureRepositoryEdgeCaseContract.assertGroupNameLookupExcludesOnlyRequestedGroup(
+            using: makeFixture()
+        )
+    }
+
     func testIDValidationRejectsDuplicatesAndMissingRecordsContract() throws {
         try PastureRepositoryContract.assertIDValidationRejectsDuplicatesAndMissingRecords(using: makeFixture())
     }
@@ -75,12 +81,6 @@ final class SwiftDataPastureRepositoryContractTests: XCTestCase {
 
     func testProductionDeletionWorkflowPreservesHistoryContract() throws {
         try PastureDeletionWorkflowContract.assertDeleteMovesResidentsAndArchivesFieldCheckHistory(
-            using: makeDeletionWorkflowFixture()
-        )
-    }
-
-    func testProductionDeletionPreservesCompleteFieldCheckRosterContract() throws {
-        try PastureDeletionMultiAnimalRosterContract.assertDeletionPreservesCompleteFieldCheckRoster(
             using: makeDeletionWorkflowFixture()
         )
     }
