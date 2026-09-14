@@ -53,6 +53,78 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertNil(summary.targetAcresPerHead, file: file, line: line)
     }
 
+    static func assertPersistedGrazingDate(
+        using fixture: PastureRepositoryContractFixture,
+        markPastureGrazed: (UUID, Date) throws -> Void,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makePastureRepository()
+        let pasture = try repository.create(
+            input: PastureInput(
+                name: "Grazing Date Pasture",
+                acreage: 32,
+                usableAcreage: 28,
+                targetAcresPerHead: 1.75
+            )
+        )
+        let grazedAt = Date(timeIntervalSince1970: 1_780_172_800)
+
+        try markPastureGrazed(pasture.id, grazedAt)
+
+        let reloadedRepository = fixture.makePastureRepository()
+        let detail = try XCTUnwrap(
+            reloadedRepository.fetchPastureDetail(id: pasture.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(detail.lastGrazedDate, grazedAt, file: file, line: line)
+
+        let summary = try XCTUnwrap(
+            reloadedRepository.fetchPastures().first { $0.id == pasture.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(summary.lastGrazedDate, grazedAt, file: file, line: line)
+    }
+
+    static func assertNameLookupExcludesOnlyRequestedPasture(
+        using fixture: PastureRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makePastureRepository()
+        let alpha = try repository.create(
+            input: PastureInput(
+                name: "Alpha",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let bravo = try repository.create(
+            input: PastureInput(
+                name: "Bravo",
+                acreage: 24,
+                usableAcreage: 21,
+                targetAcresPerHead: 1.75
+            )
+        )
+
+        XCTAssertTrue(
+            try repository.nameExists("  ALPHA  ", excluding: bravo.id),
+            "Excluding one pasture must not hide a duplicate name owned by another pasture.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            try repository.nameExists(" alpha ", excluding: alpha.id),
+            "A pasture must be able to keep its own normalized name during update validation.",
+            file: file,
+            line: line
+        )
+    }
+
     static func assertDirectReassignmentBetweenGroupsUpdatesBothInverses(
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
