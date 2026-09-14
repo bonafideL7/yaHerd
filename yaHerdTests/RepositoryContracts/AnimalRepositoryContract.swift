@@ -21,12 +21,13 @@ enum AnimalRepositoryContract {
         line: UInt = #line
     ) throws {
         let repository = fixture.makeAnimalRepository()
+        let createdBirthDate = date(year: 2020, month: 1, day: 2)
         let created = try repository.create(
             input: makeAnimalInput(
                 name: "Contract Cow",
                 tagNumber: "101",
                 sex: .female,
-                birthDate: date(year: 2020, month: 1, day: 2),
+                birthDate: createdBirthDate,
                 distinguishingFeatures: [
                     DistinguishingFeature(description: "White blaze", order: 0)
                 ]
@@ -36,8 +37,22 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(created.name, "Contract Cow", file: file, line: line)
         XCTAssertEqual(created.displayTagNumber, "101", file: file, line: line)
         XCTAssertEqual(created.sex.rawValue, Sex.female.rawValue, file: file, line: line)
+        XCTAssertEqual(created.birthDate, createdBirthDate, file: file, line: line)
         XCTAssertEqual(created.status.rawValue, AnimalStatus.active.rawValue, file: file, line: line)
         XCTAssertEqual(created.distinguishingFeatures.map(\.description), ["White blaze"], file: file, line: line)
+
+        let reloadedCreated = try XCTUnwrap(
+            fixture.makeAnimalRepository().fetchAnimalDetail(id: created.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedCreated.birthDate,
+            createdBirthDate,
+            "Creating must persist the original birth date before later updates.",
+            file: file,
+            line: line
+        )
 
         let updatedBirthDate = date(year: 2019, month: 12, day: 15)
         let saleDate = date(year: 2026, month: 1, day: 15)
