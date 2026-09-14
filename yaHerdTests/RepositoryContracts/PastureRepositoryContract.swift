@@ -140,15 +140,37 @@ enum PastureRepositoryContract {
         let pasture = try pastureRepository.create(input: makePastureInput(name: "Residents"))
         let otherPasture = try pastureRepository.create(input: makePastureInput(name: "Other"))
         let animalRepository = fixture.makeAnimalRepository()
+        let damColorID = UUID()
+        let tag3ColorID = UUID()
 
+        let dam = try animalRepository.create(
+            input: makeAnimalInput(
+                name: "Resident Dam",
+                tagNumber: "D3",
+                pastureID: otherPasture.id,
+                tagColorID: damColorID
+            )
+        )
         let tag20 = try animalRepository.create(
             input: makeAnimalInput(name: "Tag 20", tagNumber: "20", pastureID: pasture.id)
         )
         let tag3 = try animalRepository.create(
-            input: makeAnimalInput(name: "Tag 3", tagNumber: "3", pastureID: pasture.id)
+            input: makeAnimalInput(
+                name: "Tag 3",
+                tagNumber: "3",
+                pastureID: pasture.id,
+                tagColorID: tag3ColorID,
+                damID: dam.id
+            )
         )
         let archived = try animalRepository.create(
             input: makeAnimalInput(name: "Archived", tagNumber: "99", pastureID: pasture.id)
+        )
+        let sold = try animalRepository.create(
+            input: makeAnimalInput(name: "Sold", tagNumber: "98", pastureID: pasture.id, status: .sold)
+        )
+        let dead = try animalRepository.create(
+            input: makeAnimalInput(name: "Dead", tagNumber: "97", pastureID: pasture.id, status: .dead)
         )
         _ = try animalRepository.create(
             input: makeAnimalInput(name: "Other Pasture", tagNumber: "1", pastureID: otherPasture.id)
@@ -158,6 +180,29 @@ enum PastureRepositoryContract {
         let reloadedPastures = fixture.makePastureRepository()
         let residents = try reloadedPastures.fetchResidentAnimals(pastureID: pasture.id)
         XCTAssertEqual(residents.map(\.id), [tag3.id, tag20.id], file: file, line: line)
+        XCTAssertFalse(residents.contains { $0.id == archived.id }, file: file, line: line)
+        XCTAssertFalse(residents.contains { $0.id == sold.id }, file: file, line: line)
+        XCTAssertFalse(residents.contains { $0.id == dead.id }, file: file, line: line)
+
+        let tag3Summary = try XCTUnwrap(residents.first { $0.id == tag3.id }, file: file, line: line)
+        XCTAssertEqual(tag3Summary.name, "Tag 3", file: file, line: line)
+        XCTAssertEqual(tag3Summary.displayTagNumber, "3", file: file, line: line)
+        XCTAssertEqual(tag3Summary.displayTagColorID, tag3ColorID, file: file, line: line)
+        XCTAssertEqual(tag3Summary.damDisplayTagNumber, "D3", file: file, line: line)
+        XCTAssertEqual(tag3Summary.damDisplayTagColorID, damColorID, file: file, line: line)
+        XCTAssertEqual(tag3Summary.sex, .female, file: file, line: line)
+        XCTAssertEqual(tag3Summary.animalType, .heifer, file: file, line: line)
+        XCTAssertEqual(tag3Summary.status, .active, file: file, line: line)
+        XCTAssertFalse(tag3Summary.isArchived, file: file, line: line)
+        XCTAssertEqual(tag3Summary.pastureID, pasture.id, file: file, line: line)
+        XCTAssertEqual(tag3Summary.pastureName, "Residents", file: file, line: line)
+
+        let tag20Summary = try XCTUnwrap(residents.first { $0.id == tag20.id }, file: file, line: line)
+        XCTAssertEqual(tag20Summary.displayTagNumber, "20", file: file, line: line)
+        XCTAssertNil(tag20Summary.displayTagColorID, file: file, line: line)
+        XCTAssertNil(tag20Summary.damDisplayTagNumber, file: file, line: line)
+        XCTAssertNil(tag20Summary.damDisplayTagColorID, file: file, line: line)
+        XCTAssertEqual(tag20Summary.animalType, .heifer, file: file, line: line)
 
         let detail = try XCTUnwrap(
             reloadedPastures.fetchPastureDetail(id: pasture.id),
@@ -429,22 +474,44 @@ enum PastureRepositoryContract {
         )
     }
 
-    private static func makeAnimalInput(name: String, tagNumber: String, pastureID: UUID) -> AnimalInput {
-        AnimalInput(
+    private static func makeAnimalInput(
+        name: String,
+        tagNumber: String,
+        pastureID: UUID,
+        tagColorID: UUID? = nil,
+        damID: UUID? = nil,
+        status: AnimalStatus = .active
+    ) -> AnimalInput {
+        let statusDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let saleDate: Date?
+        let deathDate: Date?
+        switch status {
+        case .active:
+            saleDate = nil
+            deathDate = nil
+        case .sold:
+            saleDate = statusDate
+            deathDate = nil
+        case .dead:
+            saleDate = nil
+            deathDate = statusDate
+        }
+
+        return AnimalInput(
             name: name,
             tagNumber: tagNumber,
-            tagColorID: nil,
+            tagColorID: tagColorID,
             sex: .female,
             birthDate: Date(timeIntervalSince1970: 1_577_836_800),
-            status: .active,
+            status: status,
             pastureID: pastureID,
             sireID: nil,
-            damID: nil,
+            damID: damID,
             distinguishingFeatures: [],
-            saleDate: nil,
+            saleDate: saleDate,
             salePrice: nil,
             reasonSold: nil,
-            deathDate: nil,
+            deathDate: deathDate,
             causeOfDeath: nil,
             statusReferenceID: nil
         )
