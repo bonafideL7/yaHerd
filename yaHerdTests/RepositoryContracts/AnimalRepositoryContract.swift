@@ -66,6 +66,9 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloaded.id, created.id, file: file, line: line)
         XCTAssertEqual(reloaded.name, updated.name, file: file, line: line)
         XCTAssertEqual(reloaded.displayTagNumber, updated.displayTagNumber, file: file, line: line)
+        XCTAssertEqual(reloaded.sex.rawValue, updated.sex.rawValue, file: file, line: line)
+        XCTAssertEqual(reloaded.birthDate, updated.birthDate, file: file, line: line)
+        XCTAssertEqual(reloaded.status.rawValue, updated.status.rawValue, file: file, line: line)
         XCTAssertEqual(reloaded.distinguishingFeatures, updated.distinguishingFeatures, file: file, line: line)
     }
 
@@ -84,12 +87,14 @@ enum AnimalRepositoryContract {
             )
         )
         let treatmentDate = date(year: 2026, month: 2, day: 10)
+        let treatment = "Contract vaccination"
+        let treatmentNotes = "Preserve across archive"
         _ = try repository.addHealthRecord(
             animalID: created.id,
             input: HealthRecordInput(
                 date: treatmentDate,
-                treatment: "Contract vaccination",
-                notes: "Preserve across archive"
+                treatment: treatment,
+                notes: treatmentNotes
             )
         )
 
@@ -105,8 +110,15 @@ enum AnimalRepositoryContract {
         XCTAssertTrue(archived.isArchived, file: file, line: line)
         XCTAssertNotNil(archived.archivedAt, file: file, line: line)
         XCTAssertTrue(
-            try archivedRepository.fetchTimeline(id: created.id).contains(where: isHealthEvent),
-            "Archiving must not discard historical health records.",
+            try archivedRepository.fetchTimeline(id: created.id).contains {
+                isHealthEvent(
+                    $0,
+                    date: treatmentDate,
+                    treatment: treatment,
+                    notes: treatmentNotes
+                )
+            },
+            "Archiving must preserve the complete historical health record.",
             file: file,
             line: line
         )
@@ -123,8 +135,15 @@ enum AnimalRepositoryContract {
         XCTAssertFalse(restored.isArchived, file: file, line: line)
         XCTAssertNil(restored.archivedAt, file: file, line: line)
         XCTAssertTrue(
-            try restoredRepository.fetchTimeline(id: created.id).contains(where: isHealthEvent),
-            "Restoring must retain historical records.",
+            try restoredRepository.fetchTimeline(id: created.id).contains {
+                isHealthEvent(
+                    $0,
+                    date: treatmentDate,
+                    treatment: treatment,
+                    notes: treatmentNotes
+                )
+            },
+            "Restoring must retain the complete historical health record.",
             file: file,
             line: line
         )
@@ -332,22 +351,26 @@ enum AnimalRepositoryContract {
             )
         )
         let treatmentDate = date(year: 2026, month: 3, day: 1)
+        let treatment = "Contract treatment"
+        let treatmentNotes = "Repository contract"
         let pregnancyDate = date(year: 2026, month: 3, day: 2)
+        let pregnancyResult = PregnancyResult.pregnant
+        let technician = "Contract Tech"
 
         _ = try repository.addHealthRecord(
             animalID: animal.id,
             input: HealthRecordInput(
                 date: treatmentDate,
-                treatment: "Contract treatment",
-                notes: "Repository contract"
+                treatment: treatment,
+                notes: treatmentNotes
             )
         )
         _ = try repository.addPregnancyCheck(
             animalID: animal.id,
             input: PregnancyCheckInput(
                 date: pregnancyDate,
-                result: .pregnant,
-                technician: "Contract Tech",
+                result: pregnancyResult,
+                technician: technician,
                 estimatedDaysPregnant: 90,
                 dueDate: date(year: 2026, month: 9, day: 1),
                 sireAnimalID: nil
@@ -356,8 +379,32 @@ enum AnimalRepositoryContract {
 
         let reloadedRepository = fixture.makeAnimalRepository()
         let timeline = try reloadedRepository.fetchTimeline(id: animal.id)
-        XCTAssertTrue(timeline.contains(where: isHealthEvent), file: file, line: line)
-        XCTAssertTrue(timeline.contains(where: isPregnancyEvent), file: file, line: line)
+        XCTAssertTrue(
+            timeline.contains {
+                isHealthEvent(
+                    $0,
+                    date: treatmentDate,
+                    treatment: treatment,
+                    notes: treatmentNotes
+                )
+            },
+            "Reloading must preserve the complete health record exposed through the timeline.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            timeline.contains {
+                isPregnancyEvent(
+                    $0,
+                    date: pregnancyDate,
+                    result: pregnancyResult,
+                    technician: technician
+                )
+            },
+            "Reloading must preserve the pregnancy result and technician exposed through the timeline.",
+            file: file,
+            line: line
+        )
 
         let summary = try XCTUnwrap(
             reloadedRepository.fetchAnimals().first { $0.id == animal.id },
@@ -444,14 +491,28 @@ enum AnimalRepositoryContract {
         return components.date!
     }
 
-    private static func isHealthEvent(_ event: AnimalTimelineEvent) -> Bool {
-        if case .health = event.type { return true }
-        return false
+    private static func isHealthEvent(
+        _ event: AnimalTimelineEvent,
+        date: Date,
+        treatment: String,
+        notes: String?
+    ) -> Bool {
+        guard case .health = event.type else { return false }
+        return event.date == date
+            && event.title == treatment
+            && event.details == notes
     }
 
-    private static func isPregnancyEvent(_ event: AnimalTimelineEvent) -> Bool {
-        if case .pregnancy = event.type { return true }
-        return false
+    private static func isPregnancyEvent(
+        _ event: AnimalTimelineEvent,
+        date: Date,
+        result: PregnancyResult,
+        technician: String?
+    ) -> Bool {
+        guard case .pregnancy = event.type else { return false }
+        return event.date == date
+            && event.title == "Pregnancy Check: \(result.rawValue.capitalized)"
+            && event.details == technician
     }
 
     private static func isMovementEvent(
