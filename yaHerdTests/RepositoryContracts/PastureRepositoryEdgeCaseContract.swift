@@ -185,6 +185,15 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(reloadedPasture.groupID, destinationGroup.id, file: file, line: line)
         XCTAssertEqual(reloadedPasture.groupName, "Destination Rotation", file: file, line: line)
 
+        let pastureSummary = try XCTUnwrap(
+            reloadedRepository.fetchPastures().first { $0.id == pasture.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(pastureSummary.groupID, destinationGroup.id, file: file, line: line)
+        XCTAssertEqual(pastureSummary.groupName, "Destination Rotation", file: file, line: line)
+        XCTAssertEqual(pastureSummary.restDays, 28, file: file, line: line)
+
         let sourceDetail = try XCTUnwrap(
             reloadedRepository.fetchPastureGroupDetail(id: sourceGroup.id),
             file: file,
