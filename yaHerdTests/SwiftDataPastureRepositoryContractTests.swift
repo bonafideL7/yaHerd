@@ -4,8 +4,8 @@ import XCTest
 
 /// Characterization runner for the current SwiftData pasture repository.
 ///
-/// The permanent contract lives in `RepositoryContracts/PastureRepositoryContract.swift` and should
-/// later run unchanged against the production Core Data repository.
+/// The permanent contracts live under `RepositoryContracts` and should later run unchanged against
+/// the production Core Data implementation.
 @MainActor
 final class SwiftDataPastureRepositoryContractTests: XCTestCase {
     func testCreateUpdateAndReloadContract() throws {
@@ -40,6 +40,12 @@ final class SwiftDataPastureRepositoryContractTests: XCTestCase {
         try PastureRepositoryContract.assertDeleteRemovesPasture(using: makeFixture())
     }
 
+    func testProductionDeletionWorkflowPreservesHistoryContract() throws {
+        try PastureDeletionWorkflowContract.assertDeleteMovesResidentsAndArchivesFieldCheckHistory(
+            using: makeDeletionWorkflowFixture()
+        )
+    }
+
     private func makeFixture() throws -> PastureRepositoryContractFixture {
         let container = try TestSupport.makeModelContainer()
 
@@ -49,6 +55,33 @@ final class SwiftDataPastureRepositoryContractTests: XCTestCase {
             },
             makeAnimalRepository: {
                 SwiftDataAnimalRepository(context: ModelContext(container))
+            }
+        )
+    }
+
+    private func makeDeletionWorkflowFixture() throws -> PastureDeletionWorkflowContractFixture {
+        let container = try TestSupport.makeModelContainer()
+
+        return PastureDeletionWorkflowContractFixture(
+            makePastureRepository: {
+                SwiftDataPastureRepository(context: ModelContext(container))
+            },
+            makeAnimalRepository: {
+                SwiftDataAnimalRepository(context: ModelContext(container))
+            },
+            makeFieldCheckRepository: {
+                SwiftDataFieldCheckRepository(context: ModelContext(container))
+            },
+            deletePastures: { ids, archivedAt in
+                // Production SwiftData wiring shares one context across the three collaborators.
+                // `archiveSessionsForDeletedPastures` deliberately relies on the pasture delete's
+                // final save to persist its archive marker, so the characterization runner does too.
+                let context = ModelContext(container)
+                try DeletePasturesUseCase(
+                    pastureRepository: SwiftDataPastureRepository(context: context),
+                    animalRepository: SwiftDataAnimalRepository(context: context),
+                    fieldCheckRepository: SwiftDataFieldCheckRepository(context: context)
+                ).execute(ids: ids, archivedAt: archivedAt)
             }
         )
     }
