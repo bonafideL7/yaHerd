@@ -125,6 +125,33 @@ enum PastureRepositoryEdgeCaseContract {
         )
     }
 
+    static func assertGroupNameLookupExcludesOnlyRequestedGroup(
+        using fixture: PastureRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makePastureRepository()
+        let north = try repository.createGroup(
+            input: PastureGroupInput(name: "North Rotation", grazeDays: 7, restDays: 21)
+        )
+        let south = try repository.createGroup(
+            input: PastureGroupInput(name: "South Rotation", grazeDays: 5, restDays: 25)
+        )
+
+        XCTAssertTrue(
+            try repository.groupNameExists("  NORTH ROTATION  ", excluding: south.id),
+            "Excluding one group must not hide a duplicate name owned by another group.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            try repository.groupNameExists(" north rotation ", excluding: north.id),
+            "A pasture group must be able to keep its own normalized name during update validation.",
+            file: file,
+            line: line
+        )
+    }
+
     static func assertDirectReassignmentBetweenGroupsUpdatesBothInverses(
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
