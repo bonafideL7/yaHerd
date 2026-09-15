@@ -101,6 +101,7 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(updated.birthDate, updatedBirthDate, file: file, line: line)
         XCTAssertEqual(updated.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
         XCTAssertEqual(updated.saleDate, saleDate, file: file, line: line)
+        XCTAssertNil(updated.deathDate, "Transitioning from dead to sold must clear the prior death date.", file: file, line: line)
         XCTAssertEqual(updated.distinguishingFeatures.map(\.description), ["White blaze", "Left ear notch"], file: file, line: line)
 
         let reloaded = try XCTUnwrap(
@@ -115,6 +116,7 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloaded.birthDate, updatedBirthDate, file: file, line: line)
         XCTAssertEqual(reloaded.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
         XCTAssertEqual(reloaded.saleDate, saleDate, file: file, line: line)
+        XCTAssertNil(reloaded.deathDate, "Reloading a sold animal must not restore the prior death date.", file: file, line: line)
         XCTAssertEqual(reloaded.distinguishingFeatures, updated.distinguishingFeatures, file: file, line: line)
     }
 
