@@ -113,6 +113,19 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(checkAfterDelete.animalSex, checkBeforeDelete.animalSex, file: file, line: line)
         XCTAssertEqual(checkAfterDelete.animalType, checkBeforeDelete.animalType, file: file, line: line)
         XCTAssertEqual(checkAfterDelete.wasExpectedAtStart, checkBeforeDelete.wasExpectedAtStart, file: file, line: line)
+        XCTAssertTrue(
+            checkAfterDelete.needsAttention,
+            "An unresolved linked finding must keep the orphaned historical roster check flagged after live-animal deletion.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloaded.flaggedAnimalCount,
+            1,
+            "Session detail must continue counting the orphaned roster check as flagged while its unresolved finding remains.",
+            file: file,
+            line: line
+        )
 
         let findingAfterDelete = try XCTUnwrap(
             reloaded.findings.first { $0.id == findingBeforeDelete.id },
@@ -143,6 +156,19 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(summaryCheck.animalID, animal.id, file: file, line: line)
         XCTAssertEqual(summaryCheck.displayTagNumber, checkBeforeDelete.displayTagNumber, file: file, line: line)
         XCTAssertEqual(summaryCheck.displayTagColorID, checkBeforeDelete.displayTagColorID, file: file, line: line)
+        XCTAssertTrue(
+            summaryCheck.needsAttention,
+            "Session summaries must preserve attention for orphaned roster history while an unresolved linked finding remains.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            summaryAfterDelete.flaggedAnimalCount,
+            1,
+            "Session summaries must continue reporting the orphaned historical roster check as flagged.",
+            file: file,
+            line: line
+        )
 
         let openFindingAfterDelete = try XCTUnwrap(
             reloadedRepository.fetchOpenFindings(limit: 0).first { $0.id == findingBeforeDelete.id },
