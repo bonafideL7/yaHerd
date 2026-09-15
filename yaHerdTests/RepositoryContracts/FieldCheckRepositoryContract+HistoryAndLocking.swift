@@ -94,8 +94,9 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
+        let reloadedRepository = fixture.makeFieldCheckRepository()
         let reloaded = try XCTUnwrap(
-            fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
+            reloadedRepository.fetchSessionDetail(id: sessionID),
             file: file,
             line: line
         )
@@ -125,5 +126,35 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(findingAfterDelete.pastureName, findingBeforeDelete.pastureName, file: file, line: line)
         XCTAssertEqual(findingAfterDelete.sessionID, sessionID, file: file, line: line)
         XCTAssertEqual(findingAfterDelete.note, "Snapshot must survive hard delete", file: file, line: line)
+
+        let summaryAfterDelete = try XCTUnwrap(
+            reloadedRepository.fetchSessions().first { $0.id == sessionID },
+            "Hard-deleting a live animal must not remove its Field Check history from session summaries.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(summaryAfterDelete.openFindingsCount, 1, file: file, line: line)
+        let summaryCheck = try XCTUnwrap(
+            summaryAfterDelete.animalChecks.first { $0.id == checkBeforeDelete.id },
+            "Session summaries must retain the orphaned roster projection after live-animal deletion.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(summaryCheck.animalID, animal.id, file: file, line: line)
+        XCTAssertEqual(summaryCheck.displayTagNumber, checkBeforeDelete.displayTagNumber, file: file, line: line)
+        XCTAssertEqual(summaryCheck.displayTagColorID, checkBeforeDelete.displayTagColorID, file: file, line: line)
+
+        let openFindingAfterDelete = try XCTUnwrap(
+            reloadedRepository.fetchOpenFindings(limit: 0).first { $0.id == findingBeforeDelete.id },
+            "Open-finding projections must retain findings whose linked live animal was hard-deleted.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(openFindingAfterDelete.sessionID, sessionID, file: file, line: line)
+        XCTAssertEqual(openFindingAfterDelete.animalID, animal.id, file: file, line: line)
+        XCTAssertEqual(openFindingAfterDelete.animalDisplayTagNumber, findingBeforeDelete.animalDisplayTagNumber, file: file, line: line)
+        XCTAssertEqual(openFindingAfterDelete.animalDisplayTagColorID, findingBeforeDelete.animalDisplayTagColorID, file: file, line: line)
+        XCTAssertEqual(openFindingAfterDelete.pastureName, findingBeforeDelete.pastureName, file: file, line: line)
+        XCTAssertEqual(openFindingAfterDelete.note, findingBeforeDelete.note, file: file, line: line)
     }
 }
