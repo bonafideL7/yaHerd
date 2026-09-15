@@ -174,6 +174,8 @@ enum PastureDeletionWorkflowContract {
         try animalRepository.archive(ids: [archivedAnimal.id])
 
         let workingStartedAt = Date(timeIntervalSince1970: 1_779_900_000)
+        let workingPregnancyCheckedAt = Date(timeIntervalSince1970: 1_779_905_000)
+        let workingPregnancyDueDate = Date(timeIntervalSince1970: 1_793_988_200)
         let workingTreatmentRecordedAt = Date(timeIntervalSince1970: 1_779_910_000)
         let workingTreatment = WorkingTreatmentPlanItem(
             id: UUID(),
@@ -223,7 +225,13 @@ enum PastureDeletionWorkflowContract {
                     )
                 )
             ],
-            pregnancyCheck: nil,
+            pregnancyCheck: WorkingPregnancyCheckInput(
+                date: workingPregnancyCheckedAt,
+                result: .pregnant,
+                estimatedDaysPregnant: 120,
+                dueDate: workingPregnancyDueDate,
+                sireAnimalID: firstPastureSecondAnimal.id
+            ),
             markCastrated: false,
             observationNotes: "Deletion workflow working history"
         )
@@ -253,6 +261,7 @@ enum PastureDeletionWorkflowContract {
             line: line
         )
         XCTAssertEqual(workingEditorBeforeDeletion.treatmentRecords.count, 1, file: file, line: line)
+        XCTAssertNotNil(workingEditorBeforeDeletion.pregnancyCheck, file: file, line: line)
 
         let firstStartedAt = Date(timeIntervalSince1970: 1_780_000_000)
         let secondStartedAt = Date(timeIntervalSince1970: 1_780_043_200)
@@ -437,7 +446,6 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(controlSummary.groupID, sharedGroup.id, file: file, line: line)
         XCTAssertEqual(controlSummary.groupName, "Delete Workflow Rotation", file: file, line: line)
         XCTAssertEqual(controlSummary.restDays, 25, file: file, line: line)
-
         let pastureOptions = try reloadedPastures.fetchPastureOptions()
         XCTAssertFalse(pastureOptions.contains { $0.id == firstPasture.id }, file: file, line: line)
         XCTAssertFalse(pastureOptions.contains { $0.id == secondPasture.id }, file: file, line: line)
@@ -631,6 +639,28 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(workingTreatmentRecord.dose.amount, 2.5, file: file, line: line)
         XCTAssertEqual(workingTreatmentRecord.dose.unit, .milliliter, file: file, line: line)
         XCTAssertEqual(workingTreatmentRecord.dose.route, .intramuscular, file: file, line: line)
+        let workingPregnancyCheck = try XCTUnwrap(
+            workingEditor.pregnancyCheck,
+            "Working pregnancy history must survive source-pasture deletion.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(workingPregnancyCheck.date, workingPregnancyCheckedAt, file: file, line: line)
+        XCTAssertEqual(workingPregnancyCheck.result, .pregnant, file: file, line: line)
+        XCTAssertEqual(workingPregnancyCheck.estimatedDaysPregnant, 120, file: file, line: line)
+        XCTAssertEqual(workingPregnancyCheck.dueDate, workingPregnancyDueDate, file: file, line: line)
+        let workingPregnancySire = try XCTUnwrap(
+            workingPregnancyCheck.sire,
+            "The persisted Working pregnancy snapshot must retain its sire.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(workingPregnancySire.id, firstPastureSecondAnimal.id, file: file, line: line)
+        XCTAssertEqual(workingPregnancySire.name, "Deletion Contract Bull North", file: file, line: line)
+        XCTAssertEqual(workingPregnancySire.displayTagNumber, "706", file: file, line: line)
+        XCTAssertNil(workingPregnancySire.displayTagColorID, file: file, line: line)
+        XCTAssertEqual(workingPregnancySire.sex, .male, file: file, line: line)
+        XCTAssertFalse(workingPregnancySire.isArchived, file: file, line: line)
 
         let reloadedFieldChecks = fixture.makeFieldCheckRepository()
         let firstExpectedAnimals = [
