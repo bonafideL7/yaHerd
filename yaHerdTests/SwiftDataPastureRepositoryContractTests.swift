@@ -114,6 +114,9 @@ final class SwiftDataPastureRepositoryContractTests: XCTestCase {
             makeAnimalRepository: {
                 SwiftDataAnimalRepository(context: ModelContext(container))
             },
+            makeTagColorRepository: {
+                SwiftDataTagColorRepository(context: ModelContext(container))
+            },
             makeFieldCheckRepository: {
                 SwiftDataFieldCheckRepository(context: ModelContext(container))
             },
