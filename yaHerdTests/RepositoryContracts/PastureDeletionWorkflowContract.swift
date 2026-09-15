@@ -118,6 +118,14 @@ enum PastureDeletionWorkflowContract {
                 sex: .male
             )
         )
+        let controlAnimal = try animalRepository.create(
+            input: makeAnimalInput(
+                name: "Deletion Contract Control Cow",
+                tagNumber: "708",
+                pastureID: controlPasture.id,
+                tagColorID: animalTagColor.id
+            )
+        )
 
         let soldAnimal = try animalRepository.create(
             input: makeAnimalInput(
@@ -148,11 +156,13 @@ enum PastureDeletionWorkflowContract {
 
         let firstStartedAt = Date(timeIntervalSince1970: 1_780_000_000)
         let secondStartedAt = Date(timeIntervalSince1970: 1_780_043_200)
+        let controlStartedAt = Date(timeIntervalSince1970: 1_780_064_000)
         let findingRecordedAt = Date(timeIntervalSince1970: 1_780_050_000)
         let trackedAt = Date(timeIntervalSince1970: 1_780_060_000)
         let archivedAt = Date(timeIntervalSince1970: 1_780_086_400)
         let firstNotes = "Deletion workflow contract north"
         let secondNotes = "Deletion workflow contract south"
+        let controlNotes = "Deletion workflow contract control"
         let fieldCheckRepository = fixture.makeFieldCheckRepository()
         let firstSessionID = try fieldCheckRepository.createSession(
             input: FieldCheckSessionStartInput(
@@ -166,6 +176,13 @@ enum PastureDeletionWorkflowContract {
                 pastureID: secondPasture.id,
                 startedAt: secondStartedAt,
                 notes: secondNotes
+            )
+        )
+        let controlSessionID = try fieldCheckRepository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: controlPasture.id,
+                startedAt: controlStartedAt,
+                notes: controlNotes
             )
         )
 
@@ -228,6 +245,11 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+        let controlMovementDetailsBeforeDeletion = try animalRepository.fetchTimeline(id: controlAnimal.id)
+            .compactMap { event -> String? in
+                guard case .movement = event.type else { return nil }
+                return event.details
+            }
 
         try fixture.deletePastures([firstPasture.id, secondPasture.id], archivedAt)
 
@@ -255,6 +277,7 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(controlDetail.acreage, 28, file: file, line: line)
         XCTAssertEqual(controlDetail.usableAcreage, 25, file: file, line: line)
         XCTAssertEqual(controlDetail.targetAcresPerHead, 2, file: file, line: line)
+        XCTAssertEqual(controlDetail.activeAnimalCount, 1, file: file, line: line)
 
         let pastureSummaries = try reloadedPastures.fetchPastures()
         XCTAssertFalse(pastureSummaries.contains { $0.id == firstPasture.id }, file: file, line: line)
@@ -269,6 +292,7 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(controlSummary.acreage, 28, file: file, line: line)
         XCTAssertEqual(controlSummary.usableAcreage, 25, file: file, line: line)
         XCTAssertEqual(controlSummary.targetAcresPerHead, 2, file: file, line: line)
+        XCTAssertEqual(controlSummary.activeAnimalCount, 1, file: file, line: line)
 
         let pastureOptions = try reloadedPastures.fetchPastureOptions()
         XCTAssertFalse(pastureOptions.contains { $0.id == firstPasture.id }, file: file, line: line)
@@ -318,6 +342,26 @@ enum PastureDeletionWorkflowContract {
                     && event.details == "Delete Workflow South → Delete Workflow North"
             },
             "Pasture deletion must preserve movement history recorded before the deletion workflow.",
+            file: file,
+            line: line
+        )
+        let reloadedControlAnimal = try XCTUnwrap(
+            reloadedAnimals.fetchAnimalDetail(id: controlAnimal.id),
+            "Deleting other pastures must preserve residents of an unselected pasture.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedControlAnimal.pastureID, controlPasture.id, file: file, line: line)
+        XCTAssertEqual(reloadedControlAnimal.pastureName, "Delete Workflow Control", file: file, line: line)
+        let controlMovementDetailsAfterDeletion = try reloadedAnimals.fetchTimeline(id: controlAnimal.id)
+            .compactMap { event -> String? in
+                guard case .movement = event.type else { return nil }
+                return event.details
+            }
+        XCTAssertEqual(
+            controlMovementDetailsAfterDeletion,
+            controlMovementDetailsBeforeDeletion,
+            "Deleting a selected subset must not move residents of an unselected pasture.",
             file: file,
             line: line
         )
@@ -458,6 +502,23 @@ enum PastureDeletionWorkflowContract {
             line: line
         )
 
+        let controlSession = try XCTUnwrap(
+            reloadedFieldChecks.fetchSessionDetail(id: controlSessionID),
+            "Field Checks for an unselected pasture must remain current after deleting other pastures.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(controlSession.startedAt, controlStartedAt, file: file, line: line)
+        XCTAssertNil(controlSession.completedAt, file: file, line: line)
+        XCTAssertEqual(controlSession.notes, controlNotes, file: file, line: line)
+        XCTAssertEqual(controlSession.pastureID, controlPasture.id, file: file, line: line)
+        XCTAssertEqual(controlSession.pastureName, "Delete Workflow Control", file: file, line: line)
+        XCTAssertNil(controlSession.pastureArchivedAt, file: file, line: line)
+        XCTAssertFalse(controlSession.isPastureArchived, file: file, line: line)
+        XCTAssertEqual(controlSession.expectedHeadCountSnapshot, 1, file: file, line: line)
+        XCTAssertEqual(controlSession.animalChecks.count, 1, file: file, line: line)
+        XCTAssertEqual(controlSession.animalChecks.first?.animalID, controlAnimal.id, file: file, line: line)
+
         let sessionSummaries = try reloadedFieldChecks.fetchSessions()
         try assertArchivedFieldCheckSummary(
             sessionID: firstSessionID,
@@ -487,6 +548,21 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+        let controlSummarySession = try XCTUnwrap(
+            sessionSummaries.first { $0.id == controlSessionID },
+            "The Field Check list reader must keep sessions for unselected pastures current.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(controlSummarySession.startedAt, controlStartedAt, file: file, line: line)
+        XCTAssertNil(controlSummarySession.completedAt, file: file, line: line)
+        XCTAssertEqual(controlSummarySession.pastureID, controlPasture.id, file: file, line: line)
+        XCTAssertEqual(controlSummarySession.pastureName, "Delete Workflow Control", file: file, line: line)
+        XCTAssertNil(controlSummarySession.pastureArchivedAt, file: file, line: line)
+        XCTAssertFalse(controlSummarySession.isPastureArchived, file: file, line: line)
+        XCTAssertEqual(controlSummarySession.expectedHeadCountSnapshot, 1, file: file, line: line)
+        XCTAssertEqual(controlSummarySession.animalChecks.count, 1, file: file, line: line)
+        XCTAssertEqual(controlSummarySession.animalChecks.first?.animalID, controlAnimal.id, file: file, line: line)
     }
 
     private static func makeAnimalInput(
