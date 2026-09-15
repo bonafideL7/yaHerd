@@ -11,6 +11,7 @@ import XCTest
 struct AnimalRepositoryContractFixture {
     let makeAnimalRepository: () -> any AnimalRepository
     let makePastureRepository: () -> any PastureRepository
+    let makeStatusReference: (_ name: String, _ baseStatus: AnimalStatus) throws -> AnimalStatusReferenceOption
 }
 
 @MainActor
@@ -24,15 +25,21 @@ enum AnimalRepositoryContract {
         let createdBirthDate = date(year: 2020, month: 1, day: 2)
         let createdDeathDate = date(year: 2025, month: 12, day: 20)
         let createdCauseOfDeath = "Contract illness"
+        let createdTagColorID = TagColorDefaults.whiteID
+        let updatedTagColorID = TagColorDefaults.yellowID
+        let createdStatusReference = try fixture.makeStatusReference("Contract Deceased", .dead)
+        let updatedStatusReference = try fixture.makeStatusReference("Contract Sold", .sold)
         let created = try repository.create(
             input: makeAnimalInput(
                 name: "Contract Cow",
                 tagNumber: "101",
+                tagColorID: createdTagColorID,
                 sex: .female,
                 birthDate: createdBirthDate,
                 status: .dead,
                 deathDate: createdDeathDate,
                 causeOfDeath: createdCauseOfDeath,
+                statusReferenceID: createdStatusReference.id,
                 distinguishingFeatures: [
                     DistinguishingFeature(description: "White blaze", order: 0)
                 ]
@@ -41,11 +48,14 @@ enum AnimalRepositoryContract {
 
         XCTAssertEqual(created.name, "Contract Cow", file: file, line: line)
         XCTAssertEqual(created.displayTagNumber, "101", file: file, line: line)
+        XCTAssertEqual(created.displayTagColorID, createdTagColorID, file: file, line: line)
         XCTAssertEqual(created.sex.rawValue, Sex.female.rawValue, file: file, line: line)
         XCTAssertEqual(created.birthDate, createdBirthDate, file: file, line: line)
         XCTAssertEqual(created.status.rawValue, AnimalStatus.dead.rawValue, file: file, line: line)
         XCTAssertEqual(created.deathDate, createdDeathDate, file: file, line: line)
         XCTAssertEqual(created.causeOfDeath, createdCauseOfDeath, file: file, line: line)
+        XCTAssertEqual(created.statusReferenceID, createdStatusReference.id, file: file, line: line)
+        XCTAssertEqual(created.statusReferenceName, createdStatusReference.name, file: file, line: line)
         XCTAssertEqual(created.distinguishingFeatures.map(\.description), ["White blaze"], file: file, line: line)
 
         let reloadedCreated = try XCTUnwrap(
@@ -55,6 +65,13 @@ enum AnimalRepositoryContract {
         )
         XCTAssertEqual(reloadedCreated.name, "Contract Cow", file: file, line: line)
         XCTAssertEqual(reloadedCreated.displayTagNumber, "101", file: file, line: line)
+        XCTAssertEqual(
+            reloadedCreated.displayTagColorID,
+            createdTagColorID,
+            "Creating must persist the original tag color before later updates.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(
             reloadedCreated.sex.rawValue,
             Sex.female.rawValue,
@@ -78,6 +95,14 @@ enum AnimalRepositoryContract {
         )
         XCTAssertEqual(reloadedCreated.deathDate, createdDeathDate, file: file, line: line)
         XCTAssertEqual(reloadedCreated.causeOfDeath, createdCauseOfDeath, file: file, line: line)
+        XCTAssertEqual(
+            reloadedCreated.statusReferenceID,
+            createdStatusReference.id,
+            "Creating must persist the selected custom status reference before later updates.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedCreated.statusReferenceName, createdStatusReference.name, file: file, line: line)
         XCTAssertEqual(reloadedCreated.distinguishingFeatures.map(\.description), ["White blaze"], file: file, line: line)
 
         let updatedBirthDate = date(year: 2019, month: 12, day: 15)
@@ -89,12 +114,14 @@ enum AnimalRepositoryContract {
             input: makeAnimalInput(
                 name: "Updated Contract Cow",
                 tagNumber: "102",
+                tagColorID: updatedTagColorID,
                 sex: .male,
                 birthDate: updatedBirthDate,
                 status: .sold,
                 saleDate: saleDate,
                 salePrice: salePrice,
                 reasonSold: reasonSold,
+                statusReferenceID: updatedStatusReference.id,
                 distinguishingFeatures: [
                     DistinguishingFeature(description: "White blaze", order: 0),
                     DistinguishingFeature(description: "Left ear notch", order: 1)
@@ -105,6 +132,7 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(updated.id, created.id, "Updating must preserve application UUID identity.", file: file, line: line)
         XCTAssertEqual(updated.name, "Updated Contract Cow", file: file, line: line)
         XCTAssertEqual(updated.displayTagNumber, "102", file: file, line: line)
+        XCTAssertEqual(updated.displayTagColorID, updatedTagColorID, file: file, line: line)
         XCTAssertEqual(updated.sex.rawValue, Sex.male.rawValue, file: file, line: line)
         XCTAssertEqual(updated.birthDate, updatedBirthDate, file: file, line: line)
         XCTAssertEqual(updated.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
@@ -113,6 +141,8 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(updated.reasonSold, reasonSold, file: file, line: line)
         XCTAssertNil(updated.deathDate, "Transitioning from dead to sold must clear the prior death date.", file: file, line: line)
         XCTAssertNil(updated.causeOfDeath, "Transitioning from dead to sold must clear the prior cause of death.", file: file, line: line)
+        XCTAssertEqual(updated.statusReferenceID, updatedStatusReference.id, file: file, line: line)
+        XCTAssertEqual(updated.statusReferenceName, updatedStatusReference.name, file: file, line: line)
         XCTAssertEqual(updated.distinguishingFeatures.map(\.description), ["White blaze", "Left ear notch"], file: file, line: line)
 
         let reloadedRepository = fixture.makeAnimalRepository()
@@ -124,6 +154,7 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloaded.id, created.id, file: file, line: line)
         XCTAssertEqual(reloaded.name, "Updated Contract Cow", file: file, line: line)
         XCTAssertEqual(reloaded.displayTagNumber, "102", file: file, line: line)
+        XCTAssertEqual(reloaded.displayTagColorID, updatedTagColorID, file: file, line: line)
         XCTAssertEqual(reloaded.sex.rawValue, Sex.male.rawValue, file: file, line: line)
         XCTAssertEqual(reloaded.birthDate, updatedBirthDate, file: file, line: line)
         XCTAssertEqual(reloaded.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
@@ -132,6 +163,8 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloaded.reasonSold, reasonSold, file: file, line: line)
         XCTAssertNil(reloaded.deathDate, "Reloading a sold animal must not restore the prior death date.", file: file, line: line)
         XCTAssertNil(reloaded.causeOfDeath, "Reloading a sold animal must not restore the prior cause of death.", file: file, line: line)
+        XCTAssertEqual(reloaded.statusReferenceID, updatedStatusReference.id, file: file, line: line)
+        XCTAssertEqual(reloaded.statusReferenceName, updatedStatusReference.name, file: file, line: line)
         XCTAssertEqual(reloaded.distinguishingFeatures, updated.distinguishingFeatures, file: file, line: line)
 
         let timeline = try reloadedRepository.fetchTimeline(id: created.id)
@@ -489,6 +522,13 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(summary.lastTreatmentDate, treatmentDate, file: file, line: line)
         XCTAssertEqual(summary.lastPregnancyCheckDate, pregnancyDate, file: file, line: line)
         XCTAssertEqual(
+            summary.lastPregnancyStatus,
+            AnimalPregnancyStatus.pregnant,
+            "Reloading must preserve the latest pregnancy result exposed through the animal summary.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
             summary.expectedCalvingDate,
             pregnancyDueDate,
             "Reloading must preserve the explicit pregnancy due date exposed through the animal summary.",
@@ -536,6 +576,7 @@ enum AnimalRepositoryContract {
     private static func makeAnimalInput(
         name: String,
         tagNumber: String,
+        tagColorID: UUID? = nil,
         sex: Sex,
         birthDate: Date,
         status: AnimalStatus = .active,
@@ -547,12 +588,13 @@ enum AnimalRepositoryContract {
         pastureID: UUID? = nil,
         sireID: UUID? = nil,
         damID: UUID? = nil,
+        statusReferenceID: UUID? = nil,
         distinguishingFeatures: [DistinguishingFeature] = []
     ) -> AnimalInput {
         AnimalInput(
             name: name,
             tagNumber: tagNumber,
-            tagColorID: nil,
+            tagColorID: tagColorID,
             sex: sex,
             birthDate: birthDate,
             status: status,
@@ -565,7 +607,7 @@ enum AnimalRepositoryContract {
             reasonSold: reasonSold,
             deathDate: deathDate,
             causeOfDeath: causeOfDeath,
-            statusReferenceID: nil
+            statusReferenceID: statusReferenceID
         )
     }
 
