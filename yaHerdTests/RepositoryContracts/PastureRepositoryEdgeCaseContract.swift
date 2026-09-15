@@ -167,6 +167,90 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(groupDetail.pastures.map(\.id), [pasture.id], file: file, line: line)
     }
 
+    static func assertReorderingPreservesNonOrderState(
+        using fixture: PastureRepositoryContractFixture,
+        markPastureGrazed: (UUID, Date) throws -> Void,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makePastureRepository()
+        let first = try repository.create(
+            input: PastureInput(name: "Reorder First", acreage: 20, usableAcreage: 18, targetAcresPerHead: 1.5)
+        )
+        let second = try repository.create(
+            input: PastureInput(name: "Reorder Second", acreage: 22, usableAcreage: 19, targetAcresPerHead: 1.5)
+        )
+        let third = try repository.create(
+            input: PastureInput(name: "Reorder Stateful", acreage: 24, usableAcreage: 21, targetAcresPerHead: 1.75)
+        )
+        let group = try repository.createGroup(
+            input: PastureGroupInput(name: "Reorder Rotation", grazeDays: 6, restDays: 24)
+        )
+        let grazedAt = Date(timeIntervalSince1970: 1_780_345_600)
+
+        try repository.assignPasture(id: third.id, toGroupID: group.id)
+        try markPastureGrazed(third.id, grazedAt)
+
+        let resident = try fixture.makeAnimalRepository().create(
+            input: AnimalInput(
+                name: "Reorder Resident",
+                tagNumber: "R-301",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSince1970: 1_577_836_800),
+                status: .active,
+                pastureID: third.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+
+        try repository.reorder(ids: [third.id, first.id])
+
+        let reloadedRepository = fixture.makePastureRepository()
+        let summaries = try reloadedRepository.fetchPastures()
+        XCTAssertEqual(summaries.map(\.id), [third.id, first.id, second.id], file: file, line: line)
+        XCTAssertEqual(summaries.map(\.sortOrder), [0, 1, 2], file: file, line: line)
+
+        let summary = try XCTUnwrap(
+            summaries.first { $0.id == third.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(summary.groupID, group.id, file: file, line: line)
+        XCTAssertEqual(summary.groupName, "Reorder Rotation", file: file, line: line)
+        XCTAssertEqual(summary.restDays, 24, file: file, line: line)
+        XCTAssertEqual(summary.lastGrazedDate, grazedAt, file: file, line: line)
+        XCTAssertEqual(summary.activeAnimalCount, 1, file: file, line: line)
+
+        let detail = try XCTUnwrap(
+            reloadedRepository.fetchPastureDetail(id: third.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(detail.groupID, group.id, file: file, line: line)
+        XCTAssertEqual(detail.groupName, "Reorder Rotation", file: file, line: line)
+        XCTAssertEqual(detail.lastGrazedDate, grazedAt, file: file, line: line)
+        XCTAssertEqual(detail.activeAnimalCount, 1, file: file, line: line)
+
+        let residents = try reloadedRepository.fetchResidentAnimals(pastureID: third.id)
+        XCTAssertEqual(residents.map(\.id), [resident.id], file: file, line: line)
+
+        let groupDetail = try XCTUnwrap(
+            reloadedRepository.fetchPastureGroupDetail(id: group.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(groupDetail.pastures.map(\.id), [third.id], file: file, line: line)
+    }
+
     static func assertNameLookupExcludesOnlyRequestedPasture(
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
