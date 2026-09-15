@@ -720,8 +720,9 @@ enum FieldCheckRepositoryContract {
             )
         )
 
+        let snapshotReader = fixture.makeFieldCheckRepository()
         let reloaded = try XCTUnwrap(
-            fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
+            snapshotReader.fetchSessionDetail(id: sessionID),
             file: file,
             line: line
         )
@@ -742,6 +743,40 @@ enum FieldCheckRepositoryContract {
         XCTAssertEqual(finding.animalDisplayTagNumber, "C50", file: file, line: line)
         XCTAssertEqual(finding.animalDisplayTagColorID, originalColorID, file: file, line: line)
         XCTAssertEqual(finding.pastureName, "Snapshot North", file: file, line: line)
+
+        let summary = try XCTUnwrap(
+            snapshotReader.fetchSessions().first { $0.id == sessionID },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(summary.pastureID, pasture.id, file: file, line: line)
+        XCTAssertEqual(summary.pastureName, "Snapshot North", file: file, line: line)
+        let summaryCalf = try XCTUnwrap(
+            summary.animalChecks.first { $0.id == calfBefore.id },
+            "Session summaries must retain the historical roster row application ID.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(summaryCalf.animalID, calf.id, file: file, line: line)
+        XCTAssertEqual(summaryCalf.displayTagNumber, "C50", file: file, line: line)
+        XCTAssertEqual(summaryCalf.displayTagColorID, originalColorID, file: file, line: line)
+        XCTAssertEqual(summaryCalf.damDisplayTagNumber, "D50", file: file, line: line)
+        XCTAssertEqual(summaryCalf.damDisplayTagColorID, originalColorID, file: file, line: line)
+        XCTAssertEqual(summaryCalf.animalName, "Snapshot Calf", file: file, line: line)
+        XCTAssertEqual(summaryCalf.animalSex, .female, file: file, line: line)
+        XCTAssertEqual(summaryCalf.animalType, calfBefore.animalType, file: file, line: line)
+
+        let openFinding = try XCTUnwrap(
+            try snapshotReader.fetchOpenFindings(limit: 0).first { $0.id == finding.id },
+            "Open-finding projection must expose the same historical finding application ID.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(openFinding.sessionID, sessionID, file: file, line: line)
+        XCTAssertEqual(openFinding.animalID, calf.id, file: file, line: line)
+        XCTAssertEqual(openFinding.animalDisplayTagNumber, "C50", file: file, line: line)
+        XCTAssertEqual(openFinding.animalDisplayTagColorID, originalColorID, file: file, line: line)
+        XCTAssertEqual(openFinding.pastureName, "Snapshot North", file: file, line: line)
     }
 
     static func assertCompletionReopenAndEditLocking(
