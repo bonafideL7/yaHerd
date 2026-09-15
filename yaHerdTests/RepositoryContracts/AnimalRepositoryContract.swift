@@ -79,6 +79,16 @@ enum AnimalRepositoryContract {
             file: file,
             line: line
         )
+        let reloadedCreatedPrimaryTag = try XCTUnwrap(
+            reloadedCreated.activeTags.first { $0.id == createdPrimaryTag.id },
+            "Creating must durably persist the original primary tag identity and payload.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(reloadedCreatedPrimaryTag.isPrimary, file: file, line: line)
+        XCTAssertTrue(reloadedCreatedPrimaryTag.isActive, file: file, line: line)
+        XCTAssertEqual(reloadedCreatedPrimaryTag.number, "101", file: file, line: line)
+        XCTAssertEqual(reloadedCreatedPrimaryTag.colorID, createdTagColorID, file: file, line: line)
         XCTAssertEqual(
             reloadedCreated.sex.rawValue,
             Sex.female.rawValue,
