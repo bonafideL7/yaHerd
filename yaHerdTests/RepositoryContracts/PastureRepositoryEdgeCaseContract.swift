@@ -120,6 +120,27 @@ enum PastureRepositoryEdgeCaseContract {
         try repository.reorder(ids: [orderAnchor.id, pasture.id])
         try markPastureGrazed(pasture.id, grazedAt)
 
+        let resident = try fixture.makeAnimalRepository().create(
+            input: AnimalInput(
+                name: "Update Preserve Resident",
+                tagNumber: "U-401",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSince1970: 1_577_836_800),
+                status: .active,
+                pastureID: pasture.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+
         let updateRepository = fixture.makePastureRepository()
         let updated = try updateRepository.update(
             id: pasture.id,
@@ -147,6 +168,7 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(detail.groupID, group.id, file: file, line: line)
         XCTAssertEqual(detail.groupName, "Preserve State Rotation", file: file, line: line)
         XCTAssertEqual(detail.lastGrazedDate, grazedAt, file: file, line: line)
+        XCTAssertEqual(detail.activeAnimalCount, 1, file: file, line: line)
 
         let summary = try XCTUnwrap(
             reloadedRepository.fetchPastures().first { $0.id == pasture.id },
@@ -158,6 +180,24 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(summary.groupName, "Preserve State Rotation", file: file, line: line)
         XCTAssertEqual(summary.restDays, 24, file: file, line: line)
         XCTAssertEqual(summary.lastGrazedDate, grazedAt, file: file, line: line)
+        XCTAssertEqual(summary.activeAnimalCount, 1, file: file, line: line)
+
+        let residents = try reloadedRepository.fetchResidentAnimals(pastureID: pasture.id)
+        XCTAssertEqual(
+            residents.map(\.id),
+            [resident.id],
+            "Updating pasture form fields must not drop existing resident relationships.",
+            file: file,
+            line: line
+        )
+
+        let reloadedResident = try XCTUnwrap(
+            fixture.makeAnimalRepository().fetchAnimalDetail(id: resident.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedResident.pastureID, pasture.id, file: file, line: line)
+        XCTAssertEqual(reloadedResident.pastureName, "Updated Preserve State Pasture", file: file, line: line)
 
         let groupDetail = try XCTUnwrap(
             reloadedRepository.fetchPastureGroupDetail(id: group.id),
