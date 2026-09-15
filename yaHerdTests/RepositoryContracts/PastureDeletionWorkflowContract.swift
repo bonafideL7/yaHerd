@@ -53,6 +53,14 @@ enum PastureDeletionWorkflowContract {
                 targetAcresPerHead: 1.75
             )
         )
+        let controlPasture = try pastureRepository.create(
+            input: PastureInput(
+                name: "Delete Workflow Control",
+                acreage: 28,
+                usableAcreage: 25,
+                targetAcresPerHead: 2
+            )
+        )
 
         let tagColorRepository = fixture.makeTagColorRepository()
         let animalTagColor = TagColorSnapshot(
@@ -237,6 +245,42 @@ enum PastureDeletionWorkflowContract {
             line: line
         )
 
+        let controlDetail = try XCTUnwrap(
+            reloadedPastures.fetchPastureDetail(id: controlPasture.id),
+            "Deleting a selected subset must preserve unselected pastures.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(controlDetail.name, "Delete Workflow Control", file: file, line: line)
+        XCTAssertEqual(controlDetail.acreage, 28, file: file, line: line)
+        XCTAssertEqual(controlDetail.usableAcreage, 25, file: file, line: line)
+        XCTAssertEqual(controlDetail.targetAcresPerHead, 2, file: file, line: line)
+
+        let pastureSummaries = try reloadedPastures.fetchPastures()
+        XCTAssertFalse(pastureSummaries.contains { $0.id == firstPasture.id }, file: file, line: line)
+        XCTAssertFalse(pastureSummaries.contains { $0.id == secondPasture.id }, file: file, line: line)
+        let controlSummary = try XCTUnwrap(
+            pastureSummaries.first { $0.id == controlPasture.id },
+            "The pasture list must retain an unselected pasture after a batch deletion.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(controlSummary.name, "Delete Workflow Control", file: file, line: line)
+        XCTAssertEqual(controlSummary.acreage, 28, file: file, line: line)
+        XCTAssertEqual(controlSummary.usableAcreage, 25, file: file, line: line)
+        XCTAssertEqual(controlSummary.targetAcresPerHead, 2, file: file, line: line)
+
+        let pastureOptions = try reloadedPastures.fetchPastureOptions()
+        XCTAssertFalse(pastureOptions.contains { $0.id == firstPasture.id }, file: file, line: line)
+        XCTAssertFalse(pastureOptions.contains { $0.id == secondPasture.id }, file: file, line: line)
+        let controlOption = try XCTUnwrap(
+            pastureOptions.first { $0.id == controlPasture.id },
+            "The pasture option projection must retain an unselected pasture after deletion.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(controlOption.name, "Delete Workflow Control", file: file, line: line)
+
         let reloadedAnimals = fixture.makeAnimalRepository()
         try assertAnimalMovedToUnassigned(
             animalID: firstAnimal.id,
@@ -263,6 +307,17 @@ enum PastureDeletionWorkflowContract {
             animalID: trackedAnimal.id,
             pastureName: "Delete Workflow North",
             repository: reloadedAnimals,
+            file: file,
+            line: line
+        )
+        let trackedTimeline = try reloadedAnimals.fetchTimeline(id: trackedAnimal.id)
+        XCTAssertTrue(
+            trackedTimeline.contains { event in
+                guard case .movement = event.type else { return false }
+                return event.title == "Pasture Movement"
+                    && event.details == "Delete Workflow South → Delete Workflow North"
+            },
+            "Pasture deletion must preserve movement history recorded before the deletion workflow.",
             file: file,
             line: line
         )
