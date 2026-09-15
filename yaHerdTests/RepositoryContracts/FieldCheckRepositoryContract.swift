@@ -48,7 +48,48 @@ enum FieldCheckRepositoryContract {
             pastureID: pasture.id,
             using: fixture
         )
-        try fixture.makeAnimalRepository().archive(ids: [archived.id])
+        let sold = try makeAnimal(
+            name: "Sold Contract Animal",
+            tagNumber: "S10",
+            tagColorID: colorID,
+            sex: .female,
+            pastureID: pasture.id,
+            using: fixture
+        )
+        let deceased = try makeAnimal(
+            name: "Deceased Contract Animal",
+            tagNumber: "X10",
+            tagColorID: colorID,
+            sex: .female,
+            pastureID: pasture.id,
+            using: fixture
+        )
+        let animalRepository = fixture.makeAnimalRepository()
+        try animalRepository.archive(ids: [archived.id])
+        _ = try animalRepository.update(
+            id: sold.id,
+            input: makeAnimalInput(
+                name: "Sold Contract Animal",
+                tagNumber: "S10",
+                tagColorID: colorID,
+                sex: .female,
+                pastureID: pasture.id,
+                status: .sold,
+                saleDate: date(year: 2026, month: 1, day: 8)
+            )
+        )
+        _ = try animalRepository.update(
+            id: deceased.id,
+            input: makeAnimalInput(
+                name: "Deceased Contract Animal",
+                tagNumber: "X10",
+                tagColorID: colorID,
+                sex: .female,
+                pastureID: pasture.id,
+                status: .dead,
+                deathDate: date(year: 2026, month: 1, day: 9)
+            )
+        )
 
         let startedAt = date(year: 2026, month: 1, day: 10, hour: 8)
         let repository = fixture.makeFieldCheckRepository()
@@ -80,6 +121,8 @@ enum FieldCheckRepositoryContract {
         XCTAssertEqual(Set(detail.animalChecks.map(\.id)), initialCheckIDs, "Roster application IDs must survive reload.", file: file, line: line)
         XCTAssertEqual(Set(detail.animalChecks.compactMap(\.animalID)), Set([dam.id, calf.id]), file: file, line: line)
         XCTAssertFalse(detail.animalChecks.contains { $0.animalID == archived.id }, "Archived animals must not enter the expected roster.", file: file, line: line)
+        XCTAssertFalse(detail.animalChecks.contains { $0.animalID == sold.id }, "Sold animals that retain a pasture relationship must not enter the expected roster.", file: file, line: line)
+        XCTAssertFalse(detail.animalChecks.contains { $0.animalID == deceased.id }, "Deceased animals that retain a pasture relationship must not enter the expected roster.", file: file, line: line)
 
         let damCheck = try XCTUnwrap(detail.animalChecks.first { $0.animalID == dam.id }, file: file, line: line)
         XCTAssertEqual(damCheck.displayTagNumber, "D10", file: file, line: line)
@@ -202,6 +245,35 @@ enum FieldCheckRepositoryContract {
         try repository.setAnimalCheckCounted(sessionID: sessionID, animalCheckID: firstCheck.id, isCounted: true)
         try repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: secondCheckID, isMissing: true)
 
+        let afterSecondMissing = try XCTUnwrap(
+            fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            afterSecondMissing.quickAnimalTypeCounts[snapshotType],
+            0,
+            "Marking the last quick-count-eligible animal missing must persistently clear the quick count.",
+            file: file,
+            line: line
+        )
+
+        try repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: secondCheckID, isMissing: false)
+        let afterSecondUnmarked = try XCTUnwrap(
+            fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(afterSecondUnmarked.animalChecks.first { $0.id == secondCheckID }?.isMissing == true, file: file, line: line)
+        XCTAssertEqual(
+            afterSecondUnmarked.quickAnimalTypeCounts[snapshotType],
+            0,
+            "Clearing missing state must not resurrect a stale quick count that was normalized away.",
+            file: file,
+            line: line
+        )
+
+        try repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: secondCheckID, isMissing: true)
         let reloaded = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
             file: file,
@@ -214,6 +286,7 @@ enum FieldCheckRepositoryContract {
         XCTAssertFalse(missing.wasCounted, file: file, line: line)
         XCTAssertTrue(missing.isMissing, file: file, line: line)
         XCTAssertEqual(reloaded.missingAnimalCount, 1, file: file, line: line)
+        XCTAssertEqual(reloaded.quickAnimalTypeCounts[snapshotType], 0, file: file, line: line)
 
         let summary = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessions().first { $0.id == sessionID },
@@ -246,6 +319,43 @@ enum FieldCheckRepositoryContract {
             pastureID: source.id,
             using: fixture
         )
+        let soldTracked = try makeAnimal(
+            name: "Sold Tracked Animal",
+            tagNumber: "S399",
+            sex: .female,
+            pastureID: source.id,
+            using: fixture
+        )
+        let deceasedTracked = try makeAnimal(
+            name: "Deceased Tracked Animal",
+            tagNumber: "X399",
+            sex: .female,
+            pastureID: source.id,
+            using: fixture
+        )
+        let animalRepository = fixture.makeAnimalRepository()
+        _ = try animalRepository.update(
+            id: soldTracked.id,
+            input: makeAnimalInput(
+                name: "Sold Tracked Animal",
+                tagNumber: "S399",
+                sex: .female,
+                pastureID: source.id,
+                status: .sold,
+                saleDate: date(year: 2026, month: 3, day: 8)
+            )
+        )
+        _ = try animalRepository.update(
+            id: deceasedTracked.id,
+            input: makeAnimalInput(
+                name: "Deceased Tracked Animal",
+                tagNumber: "X399",
+                sex: .female,
+                pastureID: source.id,
+                status: .dead,
+                deathDate: date(year: 2026, month: 3, day: 9)
+            )
+        )
 
         let repository = fixture.makeFieldCheckRepository()
         let sessionID = try repository.createSession(
@@ -275,7 +385,6 @@ enum FieldCheckRepositoryContract {
         XCTAssertFalse(trackedCheck.isMissing, file: file, line: line)
         XCTAssertEqual(trackedCheck.displayTagNumber, "399", file: file, line: line)
 
-        let animalRepository = fixture.makeAnimalRepository()
         let movedAnimal = try XCTUnwrap(animalRepository.fetchAnimalDetail(id: tracked.id), file: file, line: line)
         XCTAssertEqual(movedAnimal.pastureID, destination.id, file: file, line: line)
         XCTAssertEqual(movedAnimal.pastureName, destination.name, file: file, line: line)
@@ -301,6 +410,30 @@ enum FieldCheckRepositoryContract {
         XCTAssertEqual(afterRepeat.expectedHeadCountSnapshot, 2, "Rechecking an existing tracked animal must not duplicate the roster or head-count snapshot.", file: file, line: line)
         XCTAssertEqual(afterRepeat.animalChecks.filter { $0.animalID == tracked.id }.count, 1, file: file, line: line)
         XCTAssertEqual(afterRepeat.animalChecks.first { $0.animalID == tracked.id }?.id, trackedCheck.id, file: file, line: line)
+
+        assertThrowsRepositoryError(.animalNotActive, file: file, line: line) {
+            try repository.addTrackedAnimalToSession(
+                sessionID: sessionID,
+                animalID: soldTracked.id,
+                checkedAt: date(year: 2026, month: 3, day: 10, hour: 11)
+            )
+        }
+        assertThrowsRepositoryError(.animalNotActive, file: file, line: line) {
+            try repository.addTrackedAnimalToSession(
+                sessionID: sessionID,
+                animalID: deceasedTracked.id,
+                checkedAt: date(year: 2026, month: 3, day: 10, hour: 12)
+            )
+        }
+        let afterInactiveAttempts = try XCTUnwrap(
+            fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(afterInactiveAttempts.animalChecks.contains { $0.animalID == soldTracked.id }, file: file, line: line)
+        XCTAssertFalse(afterInactiveAttempts.animalChecks.contains { $0.animalID == deceasedTracked.id }, file: file, line: line)
+        XCTAssertEqual(try animalRepository.fetchAnimalDetail(id: soldTracked.id)?.pastureID, source.id, file: file, line: line)
+        XCTAssertEqual(try animalRepository.fetchAnimalDetail(id: deceasedTracked.id)?.pastureID, source.id, file: file, line: line)
     }
 
     static func assertFindingLifecycleAndOpenFindingReader(
@@ -475,6 +608,43 @@ enum FieldCheckRepositoryContract {
         )
         XCTAssertFalse(afterDelete.findings.contains { $0.id == remainingFinding.id }, file: file, line: line)
         XCTAssertTrue(afterDelete.findings.contains { $0.id == finding.id && $0.status == .resolved }, file: file, line: line)
+
+        try repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: date(year: 2026, month: 4, day: 10, hour: 13),
+                type: .missingAnimal,
+                severity: .warning,
+                status: .resolved,
+                note: "Already resolved missing report",
+                animalID: animal.id
+            )
+        )
+        let afterResolvedCreationRepository = fixture.makeFieldCheckRepository()
+        let afterResolvedCreation = try XCTUnwrap(
+            afterResolvedCreationRepository.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        let resolvedAtCreation = try XCTUnwrap(
+            afterResolvedCreation.findings.first { $0.note == "Already resolved missing report" },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(resolvedAtCreation.type, .missingAnimal, file: file, line: line)
+        XCTAssertEqual(resolvedAtCreation.status, .resolved, file: file, line: line)
+        XCTAssertFalse(
+            afterResolvedCreation.animalChecks.first { $0.animalID == animal.id }?.isMissing == true,
+            "A missing-animal finding created already resolved must not mark the roster animal missing.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            try afterResolvedCreationRepository.fetchOpenFindings(limit: 0).contains { $0.id == resolvedAtCreation.id },
+            "A finding created resolved must not enter the open-finding projection.",
+            file: file,
+            line: line
+        )
     }
 
     static func assertHistoricalSnapshotsSurviveLiveRecordChanges(
@@ -687,8 +857,9 @@ enum FieldCheckRepositoryContract {
             findingID: findingID,
             status: .resolved
         )
+        let statusUpdatedRepository = fixture.makeFieldCheckRepository()
         let statusUpdated = try XCTUnwrap(
-            fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
+            statusUpdatedRepository.fetchSessionDetail(id: sessionID),
             file: file,
             line: line
         )
@@ -700,13 +871,44 @@ enum FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertFalse(
+            try statusUpdatedRepository.fetchOpenFindings(limit: 0).contains { $0.id == findingID },
+            file: file,
+            line: line
+        )
+
+        try completedRepository.updateFindingStatus(
+            sessionID: sessionID,
+            findingID: findingID,
+            status: .monitoring
+        )
+        let reopenedFindingRepository = fixture.makeFieldCheckRepository()
+        let reopenedFinding = try XCTUnwrap(
+            reopenedFindingRepository.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        XCTAssertNotNil(reopenedFinding.completedAt, "Changing finding status must not reopen the completed session itself.", file: file, line: line)
+        XCTAssertEqual(reopenedFinding.findings.first { $0.id == findingID }?.status, .monitoring, file: file, line: line)
+        XCTAssertTrue(
+            try reopenedFindingRepository.fetchOpenFindings(limit: 0).contains { $0.id == findingID && $0.status == .monitoring },
+            "A resolved finding reopened while its session is completed must return to the open-finding projection.",
+            file: file,
+            line: line
+        )
+        let reopenedFindingSummary = try XCTUnwrap(
+            reopenedFindingRepository.fetchSessions().first { $0.id == sessionID },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reopenedFindingSummary.openFindingsCount, 1, file: file, line: line)
 
         try completedRepository.reopenSession(id: sessionID)
         let reopenedRepository = fixture.makeFieldCheckRepository()
         let reopened = try XCTUnwrap(reopenedRepository.fetchSessionDetail(id: sessionID), file: file, line: line)
         XCTAssertNil(reopened.completedAt, file: file, line: line)
         XCTAssertEqual(reopened.id, sessionID, file: file, line: line)
-        XCTAssertEqual(reopened.findings.first { $0.id == findingID }?.status, .resolved, file: file, line: line)
+        XCTAssertEqual(reopened.findings.first { $0.id == findingID }?.status, .monitoring, file: file, line: line)
 
         try reopenedRepository.updateNotes(sessionID: sessionID, notes: "Reopened notes")
         XCTAssertEqual(
@@ -828,7 +1030,10 @@ enum FieldCheckRepositoryContract {
         tagColorID: UUID? = nil,
         sex: Sex,
         pastureID: UUID,
-        damID: UUID? = nil
+        damID: UUID? = nil,
+        status: AnimalStatus = .active,
+        saleDate: Date? = nil,
+        deathDate: Date? = nil
     ) -> AnimalInput {
         AnimalInput(
             name: name,
@@ -836,15 +1041,15 @@ enum FieldCheckRepositoryContract {
             tagColorID: tagColorID,
             sex: sex,
             birthDate: date(year: 2020, month: 1, day: 1),
-            status: .active,
+            status: status,
             pastureID: pastureID,
             sireID: nil,
             damID: damID,
             distinguishingFeatures: [],
-            saleDate: nil,
+            saleDate: saleDate,
             salePrice: nil,
             reasonSold: nil,
-            deathDate: nil,
+            deathDate: deathDate,
             causeOfDeath: nil,
             statusReferenceID: nil
         )
