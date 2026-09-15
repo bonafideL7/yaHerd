@@ -109,6 +109,30 @@ enum AnimalRepositoryContract {
         let saleDate = date(year: 2026, month: 1, day: 15)
         let salePrice = 2475.50
         let reasonSold = "Contract sale"
+        let updatedPasture = try fixture.makePastureRepository().create(
+            input: PastureInput(
+                name: "Update Contract Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let updatedSire = try repository.create(
+            input: makeAnimalInput(
+                name: "Update Contract Sire",
+                tagNumber: "US01",
+                sex: .male,
+                birthDate: date(year: 2015, month: 1, day: 1)
+            )
+        )
+        let updatedDam = try repository.create(
+            input: makeAnimalInput(
+                name: "Update Contract Dam",
+                tagNumber: "UD01",
+                sex: .female,
+                birthDate: date(year: 2016, month: 1, day: 1)
+            )
+        )
         let updated = try repository.update(
             id: created.id,
             input: makeAnimalInput(
@@ -121,6 +145,9 @@ enum AnimalRepositoryContract {
                 saleDate: saleDate,
                 salePrice: salePrice,
                 reasonSold: reasonSold,
+                pastureID: updatedPasture.id,
+                sireID: updatedSire.id,
+                damID: updatedDam.id,
                 statusReferenceID: updatedStatusReference.id,
                 distinguishingFeatures: [
                     DistinguishingFeature(description: "White blaze", order: 0),
@@ -141,6 +168,12 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(updated.reasonSold, reasonSold, file: file, line: line)
         XCTAssertNil(updated.deathDate, "Transitioning from dead to sold must clear the prior death date.", file: file, line: line)
         XCTAssertNil(updated.causeOfDeath, "Transitioning from dead to sold must clear the prior cause of death.", file: file, line: line)
+        XCTAssertEqual(updated.pastureID, updatedPasture.id, file: file, line: line)
+        XCTAssertEqual(updated.pastureName, updatedPasture.name, file: file, line: line)
+        XCTAssertEqual(updated.sireID, updatedSire.id, file: file, line: line)
+        XCTAssertEqual(updated.sire, updatedSire.name, file: file, line: line)
+        XCTAssertEqual(updated.damID, updatedDam.id, file: file, line: line)
+        XCTAssertEqual(updated.dam, updatedDam.name, file: file, line: line)
         XCTAssertEqual(updated.statusReferenceID, updatedStatusReference.id, file: file, line: line)
         XCTAssertEqual(updated.statusReferenceName, updatedStatusReference.name, file: file, line: line)
         XCTAssertEqual(updated.distinguishingFeatures.map(\.description), ["White blaze", "Left ear notch"], file: file, line: line)
@@ -163,6 +196,12 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloaded.reasonSold, reasonSold, file: file, line: line)
         XCTAssertNil(reloaded.deathDate, "Reloading a sold animal must not restore the prior death date.", file: file, line: line)
         XCTAssertNil(reloaded.causeOfDeath, "Reloading a sold animal must not restore the prior cause of death.", file: file, line: line)
+        XCTAssertEqual(reloaded.pastureID, updatedPasture.id, file: file, line: line)
+        XCTAssertEqual(reloaded.pastureName, updatedPasture.name, file: file, line: line)
+        XCTAssertEqual(reloaded.sireID, updatedSire.id, file: file, line: line)
+        XCTAssertEqual(reloaded.sire, updatedSire.name, file: file, line: line)
+        XCTAssertEqual(reloaded.damID, updatedDam.id, file: file, line: line)
+        XCTAssertEqual(reloaded.dam, updatedDam.name, file: file, line: line)
         XCTAssertEqual(reloaded.statusReferenceID, updatedStatusReference.id, file: file, line: line)
         XCTAssertEqual(reloaded.statusReferenceName, updatedStatusReference.name, file: file, line: line)
         XCTAssertEqual(reloaded.distinguishingFeatures, updated.distinguishingFeatures, file: file, line: line)
