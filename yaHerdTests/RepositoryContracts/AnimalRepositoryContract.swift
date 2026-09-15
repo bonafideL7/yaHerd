@@ -270,17 +270,19 @@ enum AnimalRepositoryContract {
                 tagColorID: updatedTagColorID,
                 sex: .male,
                 birthDate: updatedBirthDate,
-                status: .sold,
-                saleDate: saleDate,
-                salePrice: salePrice,
-                reasonSold: reasonSold,
-                statusReferenceID: updatedStatusReference.id,
+                status: .active,
                 distinguishingFeatures: [
                     DistinguishingFeature(description: "White blaze", order: 0),
                     DistinguishingFeature(description: "Left ear notch", order: 1)
                 ]
             )
         )
+        XCTAssertEqual(cleared.status.rawValue, AnimalStatus.active.rawValue, file: file, line: line)
+        XCTAssertNil(cleared.saleDate, "Leaving sold status must clear the prior sale date.", file: file, line: line)
+        XCTAssertNil(cleared.salePrice, "Leaving sold status must clear the prior sale price.", file: file, line: line)
+        XCTAssertNil(cleared.reasonSold, "Leaving sold status must clear the prior sale reason.", file: file, line: line)
+        XCTAssertNil(cleared.statusReferenceID, "Updating with a nil status reference must clear the existing relationship.", file: file, line: line)
+        XCTAssertNil(cleared.statusReferenceName, file: file, line: line)
         XCTAssertNil(cleared.pastureID, "Updating with a nil pasture must clear the existing relationship.", file: file, line: line)
         XCTAssertNil(cleared.pastureName, file: file, line: line)
         XCTAssertNil(cleared.sireID, "Updating with a nil sire must clear the existing relationship.", file: file, line: line)
@@ -294,6 +296,12 @@ enum AnimalRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(reloadedCleared.status.rawValue, AnimalStatus.active.rawValue, file: file, line: line)
+        XCTAssertNil(reloadedCleared.saleDate, "Cleared sale date must remain nil after reload.", file: file, line: line)
+        XCTAssertNil(reloadedCleared.salePrice, "Cleared sale price must remain nil after reload.", file: file, line: line)
+        XCTAssertNil(reloadedCleared.reasonSold, "Cleared sale reason must remain nil after reload.", file: file, line: line)
+        XCTAssertNil(reloadedCleared.statusReferenceID, "Cleared status reference must remain nil after reload.", file: file, line: line)
+        XCTAssertNil(reloadedCleared.statusReferenceName, file: file, line: line)
         XCTAssertNil(reloadedCleared.pastureID, "Cleared pasture must remain nil after reload.", file: file, line: line)
         XCTAssertNil(reloadedCleared.pastureName, file: file, line: line)
         XCTAssertNil(reloadedCleared.sireID, "Cleared sire must remain nil after reload.", file: file, line: line)
@@ -301,11 +309,21 @@ enum AnimalRepositoryContract {
         XCTAssertNil(reloadedCleared.damID, "Cleared dam must remain nil after reload.", file: file, line: line)
         XCTAssertNil(reloadedCleared.dam, file: file, line: line)
 
+        let clearedTimeline = try clearedRepository.fetchTimeline(id: created.id)
         XCTAssertTrue(
-            try clearedRepository.fetchTimeline(id: created.id).contains {
+            clearedTimeline.contains {
                 isMovementEvent($0, from: updatedPasture.name, to: "—")
             },
             "Clearing pasture through the repository must create durable movement history from the prior pasture to unassigned.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            clearedTimeline.contains {
+                guard case .status = $0.type else { return false }
+                return $0.title == "Status Change" && $0.details == "Sold → Active"
+            },
+            "Leaving sold status must create durable history for the exact sold-to-active transition.",
             file: file,
             line: line
         )
