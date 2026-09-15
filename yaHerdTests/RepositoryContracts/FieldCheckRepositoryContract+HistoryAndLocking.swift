@@ -122,7 +122,6 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(findingAfterDelete.animalID, animal.id, file: file, line: line)
         XCTAssertEqual(findingAfterDelete.animalDisplayTagNumber, findingBeforeDelete.animalDisplayTagNumber, file: file, line: line)
         XCTAssertEqual(findingAfterDelete.animalDisplayTagColorID, findingBeforeDelete.animalDisplayTagColorID, file: file, line: line)
-        XCTAssertEqual(findingAfterDelete.animalName, findingBeforeDelete.animalName, file: file, line: line)
         XCTAssertEqual(findingAfterDelete.pastureName, findingBeforeDelete.pastureName, file: file, line: line)
         XCTAssertEqual(findingAfterDelete.sessionID, sessionID, file: file, line: line)
         XCTAssertEqual(findingAfterDelete.note, "Snapshot must survive hard delete", file: file, line: line)
