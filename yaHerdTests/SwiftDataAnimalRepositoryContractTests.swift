@@ -46,6 +46,17 @@ final class SwiftDataAnimalRepositoryContractTests: XCTestCase {
             },
             makePastureRepository: {
                 SwiftDataPastureRepository(context: ModelContext(container))
+            },
+            makeStatusReference: { name, baseStatus in
+                let context = ModelContext(container)
+                let reference = AnimalStatusReference(name: name, baseStatus: baseStatus)
+                try context.insertIntoDefaultHerd(reference)
+                try context.save()
+                return AnimalStatusReferenceOption(
+                    id: reference.id,
+                    name: reference.name,
+                    baseStatus: reference.baseStatus
+                )
             }
         )
     }
