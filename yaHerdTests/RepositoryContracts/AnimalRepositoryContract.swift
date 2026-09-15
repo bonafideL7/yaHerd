@@ -1,12 +1,11 @@
 import XCTest
 @testable import yaHerd
 
-/// Permanent persistence-neutral behavioral contract for `AnimalRepository` implementations.
+/// Permanent persistence-neutral behavioral contract for the production `AnimalRepository` implementation.
 ///
-/// During Phase 0 the current SwiftData repository is only a characterization runner for behavior
-/// it already implements. Production Core Data repositories should run these same assertions
-/// unchanged. The contract intentionally asserts Domain-facing behavior only and does not inspect
-/// SwiftData/Core Data models or contexts.
+/// The future Core Data repository should execute these assertions through its concrete test fixture.
+/// The contract intentionally asserts Domain-facing behavior only and does not inspect persistence models
+/// or contexts.
 @MainActor
 struct AnimalRepositoryContractFixture {
     let makeAnimalRepository: () -> any AnimalRepository
@@ -213,6 +212,14 @@ enum AnimalRepositoryContract {
                 return $0.title == "Status Change" && $0.details == "Dead → Sold"
             },
             "Updating status must create durable history for the exact dead-to-sold transition.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            timeline.contains {
+                isMovementEvent($0, from: "—", to: updatedPasture.name)
+            },
+            "Updating pasture through the repository must create durable movement history from unassigned to the selected pasture.",
             file: file,
             line: line
         )
