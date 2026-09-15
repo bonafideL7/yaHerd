@@ -3,8 +3,8 @@ import XCTest
 
 /// Permanent behavioral contract for the user-facing pasture-deletion workflow.
 ///
-/// This characterizes the durable outcome users rely on today without requiring the current
-/// SwiftData implementation to gain the stronger atomic transaction semantics planned for Core Data.
+/// This characterizes the durable outcome users rely on today while the stronger atomic transaction
+/// semantics remain a target for the production Core Data implementation.
 @MainActor
 struct PastureDeletionWorkflowContractFixture {
     let makePastureRepository: () -> any PastureRepository
@@ -270,6 +270,9 @@ enum PastureDeletionWorkflowContract {
             animalID: soldAnimal.id,
             expectedStatus: .sold,
             expectedArchived: false,
+            expectedSaleDate: Date(timeIntervalSince1970: 1_779_000_000),
+            expectedSalePrice: 1_250,
+            expectedReasonSold: "Deletion workflow contract",
             repository: reloadedAnimals,
             file: file,
             line: line
@@ -278,6 +281,8 @@ enum PastureDeletionWorkflowContract {
             animalID: deadAnimal.id,
             expectedStatus: .dead,
             expectedArchived: false,
+            expectedDeathDate: Date(timeIntervalSince1970: 1_779_100_000),
+            expectedCauseOfDeath: "Deletion workflow contract",
             repository: reloadedAnimals,
             file: file,
             line: line
@@ -490,6 +495,11 @@ enum PastureDeletionWorkflowContract {
         animalID: UUID,
         expectedStatus: AnimalStatus,
         expectedArchived: Bool,
+        expectedSaleDate: Date? = nil,
+        expectedSalePrice: Double? = nil,
+        expectedReasonSold: String? = nil,
+        expectedDeathDate: Date? = nil,
+        expectedCauseOfDeath: String? = nil,
         repository: any AnimalRepository,
         file: StaticString,
         line: UInt
@@ -502,6 +512,11 @@ enum PastureDeletionWorkflowContract {
         )
         XCTAssertEqual(animal.status, expectedStatus, file: file, line: line)
         XCTAssertEqual(animal.isArchived, expectedArchived, file: file, line: line)
+        XCTAssertEqual(animal.saleDate, expectedSaleDate, file: file, line: line)
+        XCTAssertEqual(animal.salePrice, expectedSalePrice, file: file, line: line)
+        XCTAssertEqual(animal.reasonSold, expectedReasonSold, file: file, line: line)
+        XCTAssertEqual(animal.deathDate, expectedDeathDate, file: file, line: line)
+        XCTAssertEqual(animal.causeOfDeath, expectedCauseOfDeath, file: file, line: line)
         XCTAssertNil(animal.pastureID, file: file, line: line)
         XCTAssertNil(animal.pastureName, file: file, line: line)
     }
