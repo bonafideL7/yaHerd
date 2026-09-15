@@ -115,8 +115,9 @@ enum AnimalRepositoryContract {
         XCTAssertNil(updated.causeOfDeath, "Transitioning from dead to sold must clear the prior cause of death.", file: file, line: line)
         XCTAssertEqual(updated.distinguishingFeatures.map(\.description), ["White blaze", "Left ear notch"], file: file, line: line)
 
+        let reloadedRepository = fixture.makeAnimalRepository()
         let reloaded = try XCTUnwrap(
-            fixture.makeAnimalRepository().fetchAnimalDetail(id: created.id),
+            reloadedRepository.fetchAnimalDetail(id: created.id),
             file: file,
             line: line
         )
@@ -132,6 +133,17 @@ enum AnimalRepositoryContract {
         XCTAssertNil(reloaded.deathDate, "Reloading a sold animal must not restore the prior death date.", file: file, line: line)
         XCTAssertNil(reloaded.causeOfDeath, "Reloading a sold animal must not restore the prior cause of death.", file: file, line: line)
         XCTAssertEqual(reloaded.distinguishingFeatures, updated.distinguishingFeatures, file: file, line: line)
+
+        let timeline = try reloadedRepository.fetchTimeline(id: created.id)
+        XCTAssertTrue(
+            timeline.contains {
+                guard case .status = $0.type else { return false }
+                return $0.title == "Status Change" && $0.details == "Dead → Sold"
+            },
+            "Updating status must create durable history for the exact dead-to-sold transition.",
+            file: file,
+            line: line
+        )
     }
 
     static func assertArchiveRestorePreservesHistory(
