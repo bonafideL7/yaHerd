@@ -3,8 +3,7 @@ import XCTest
 
 /// Permanent persistence-neutral behavioral contract for `PastureRepository` implementations.
 ///
-/// The current SwiftData repository is only a characterization runner for behavior it already
-/// implements. Production Core Data repositories should run these same assertions unchanged.
+/// Production Core Data repositories should run these assertions unchanged.
 /// The contract deliberately stays at Domain repository boundaries.
 @MainActor
 struct PastureRepositoryContractFixture {
@@ -451,6 +450,13 @@ enum PastureRepositoryContract {
             input: PastureGroupInput(name: "Validation Group", grazeDays: 7, restDays: 21)
         )
 
+        XCTAssertNoThrow(
+            try repository.validatePastureIDsExist([pasture.id]),
+            "Existing pasture IDs must pass validation.",
+            file: file,
+            line: line
+        )
+
         XCTAssertThrowsError(
             try repository.validatePastureIDsExist([pasture.id, pasture.id]),
             file: file,
@@ -472,6 +478,13 @@ enum PastureRepositoryContract {
                 line: line
             )
         }
+
+        XCTAssertNoThrow(
+            try repository.validatePastureGroupIDsExist([group.id]),
+            "Existing pasture-group IDs must pass validation.",
+            file: file,
+            line: line
+        )
 
         XCTAssertThrowsError(
             try repository.validatePastureGroupIDsExist([group.id, group.id]),
