@@ -90,6 +90,7 @@ enum PastureDeletionWorkflowContract {
 
         let firstStartedAt = Date(timeIntervalSince1970: 1_780_000_000)
         let secondStartedAt = Date(timeIntervalSince1970: 1_780_043_200)
+        let findingRecordedAt = Date(timeIntervalSince1970: 1_780_050_000)
         let archivedAt = Date(timeIntervalSince1970: 1_780_086_400)
         let firstNotes = "Deletion workflow contract north"
         let secondNotes = "Deletion workflow contract south"
@@ -108,6 +109,48 @@ enum PastureDeletionWorkflowContract {
                 notes: secondNotes
             )
         )
+
+        let firstSessionBeforeStateChanges = try XCTUnwrap(
+            fieldCheckRepository.fetchSessionDetail(id: firstSessionID),
+            file: file,
+            line: line
+        )
+        let countedCheck = try XCTUnwrap(
+            firstSessionBeforeStateChanges.animalChecks.first { $0.animalID == firstAnimal.id },
+            "The first resident must be present in the Field Check roster.",
+            file: file,
+            line: line
+        )
+        let missingCheck = try XCTUnwrap(
+            firstSessionBeforeStateChanges.animalChecks.first { $0.animalID == firstPastureSecondAnimal.id },
+            "The second resident must be present in the Field Check roster.",
+            file: file,
+            line: line
+        )
+        try fieldCheckRepository.setAnimalCheckCounted(
+            sessionID: firstSessionID,
+            animalCheckID: countedCheck.id,
+            isCounted: true
+        )
+        try fieldCheckRepository.setAnimalCheckMissing(
+            sessionID: firstSessionID,
+            animalCheckID: missingCheck.id,
+            isMissing: true
+        )
+        try fieldCheckRepository.updateQuickAnimalTypeCounts(
+            sessionID: secondSessionID,
+            counts: [.cow: 1]
+        )
+
+        let findingInput = FieldCheckFindingInput(
+            recordedAt: findingRecordedAt,
+            type: .pinkEye,
+            severity: .critical,
+            status: .monitoring,
+            note: "Deletion workflow finding",
+            animalID: secondAnimal.id
+        )
+        try fieldCheckRepository.addFinding(sessionID: secondSessionID, input: findingInput)
 
         try fieldCheckRepository.completeSession(id: firstSessionID)
         let completedFirstSession = try XCTUnwrap(
@@ -186,6 +229,14 @@ enum PastureDeletionWorkflowContract {
         )
 
         let reloadedFieldChecks = fixture.makeFieldCheckRepository()
+        let firstExpectedAnimals = [
+            (id: firstAnimal.id, tagNumber: "701", wasCounted: true, isMissing: false),
+            (id: firstPastureSecondAnimal.id, tagNumber: "706", wasCounted: false, isMissing: true)
+        ]
+        let secondExpectedAnimals = [
+            (id: secondAnimal.id, tagNumber: "702", wasCounted: false, isMissing: false)
+        ]
+
         try assertArchivedFieldCheckSession(
             sessionID: firstSessionID,
             startedAt: firstStartedAt,
@@ -193,10 +244,9 @@ enum PastureDeletionWorkflowContract {
             expectedNotes: firstNotes,
             pastureID: firstPasture.id,
             pastureName: "Delete Workflow North",
-            expectedAnimals: [
-                (id: firstAnimal.id, tagNumber: "701"),
-                (id: firstPastureSecondAnimal.id, tagNumber: "706")
-            ],
+            expectedAnimals: firstExpectedAnimals,
+            expectedQuickCounts: [:],
+            expectedFinding: nil,
             archivedAt: archivedAt,
             repository: reloadedFieldChecks,
             file: file,
@@ -209,7 +259,9 @@ enum PastureDeletionWorkflowContract {
             expectedNotes: secondNotes,
             pastureID: secondPasture.id,
             pastureName: "Delete Workflow South",
-            expectedAnimals: [(id: secondAnimal.id, tagNumber: "702")],
+            expectedAnimals: secondExpectedAnimals,
+            expectedQuickCounts: [.cow: 1],
+            expectedFinding: findingInput,
             archivedAt: archivedAt,
             repository: reloadedFieldChecks,
             file: file,
@@ -224,7 +276,9 @@ enum PastureDeletionWorkflowContract {
             pastureID: firstPasture.id,
             pastureName: "Delete Workflow North",
             archivedAt: archivedAt,
-            expectedHeadCount: 2,
+            expectedAnimals: firstExpectedAnimals,
+            expectedQuickCounts: [:],
+            expectedOpenFindingsCount: 0,
             summaries: sessionSummaries,
             file: file,
             line: line
@@ -236,7 +290,9 @@ enum PastureDeletionWorkflowContract {
             pastureID: secondPasture.id,
             pastureName: "Delete Workflow South",
             archivedAt: archivedAt,
-            expectedHeadCount: 1,
+            expectedAnimals: secondExpectedAnimals,
+            expectedQuickCounts: [.cow: 1],
+            expectedOpenFindingsCount: 1,
             summaries: sessionSummaries,
             file: file,
             line: line
@@ -324,7 +380,9 @@ enum PastureDeletionWorkflowContract {
         expectedNotes: String,
         pastureID: UUID,
         pastureName: String,
-        expectedAnimals: [(id: UUID, tagNumber: String)],
+        expectedAnimals: [(id: UUID, tagNumber: String, wasCounted: Bool, isMissing: Bool)],
+        expectedQuickCounts: [AnimalType: Int],
+        expectedFinding: FieldCheckFindingInput?,
         archivedAt: Date,
         repository: any FieldCheckRepository,
         file: StaticString,
@@ -344,6 +402,11 @@ enum PastureDeletionWorkflowContract {
         XCTAssertTrue(archivedSession.isPastureArchived, file: file, line: line)
         XCTAssertEqual(archivedSession.expectedHeadCountSnapshot, expectedAnimals.count, file: file, line: line)
         XCTAssertEqual(archivedSession.animalChecks.count, expectedAnimals.count, file: file, line: line)
+        XCTAssertEqual(archivedSession.quickCowCount, expectedQuickCounts[.cow, default: 0], file: file, line: line)
+        XCTAssertEqual(archivedSession.quickHeiferCount, expectedQuickCounts[.heifer, default: 0], file: file, line: line)
+        XCTAssertEqual(archivedSession.quickCalfCount, expectedQuickCounts[.calf, default: 0], file: file, line: line)
+        XCTAssertEqual(archivedSession.quickBullCount, expectedQuickCounts[.bull, default: 0], file: file, line: line)
+        XCTAssertEqual(archivedSession.quickSteerCount, expectedQuickCounts[.steer, default: 0], file: file, line: line)
 
         let actualAnimalIDs = archivedSession.animalChecks.compactMap(\.animalID)
         XCTAssertEqual(actualAnimalIDs.count, expectedAnimals.count, file: file, line: line)
@@ -362,6 +425,33 @@ enum PastureDeletionWorkflowContract {
                 line: line
             )
             XCTAssertEqual(check.displayTagNumber, expectedAnimal.tagNumber, file: file, line: line)
+            XCTAssertEqual(check.wasCounted, expectedAnimal.wasCounted, file: file, line: line)
+            XCTAssertEqual(check.isMissing, expectedAnimal.isMissing, file: file, line: line)
+        }
+
+        if let expectedFinding {
+            XCTAssertEqual(archivedSession.findings.count, 1, file: file, line: line)
+            let finding = try XCTUnwrap(archivedSession.findings.first, file: file, line: line)
+            XCTAssertEqual(finding.recordedAt, expectedFinding.recordedAt, file: file, line: line)
+            XCTAssertEqual(finding.type, expectedFinding.type, file: file, line: line)
+            XCTAssertEqual(finding.severity, expectedFinding.severity, file: file, line: line)
+            XCTAssertEqual(finding.status, expectedFinding.status, file: file, line: line)
+            XCTAssertEqual(finding.note, expectedFinding.note, file: file, line: line)
+            XCTAssertEqual(finding.animalID, expectedFinding.animalID, file: file, line: line)
+            XCTAssertEqual(finding.pastureName, pastureName, file: file, line: line)
+            XCTAssertEqual(finding.sessionID, sessionID, file: file, line: line)
+
+            if let animalID = expectedFinding.animalID,
+               let expectedAnimal = expectedAnimals.first(where: { $0.id == animalID }) {
+                XCTAssertEqual(
+                    finding.animalDisplayTagNumber,
+                    expectedAnimal.tagNumber,
+                    file: file,
+                    line: line
+                )
+            }
+        } else {
+            XCTAssertTrue(archivedSession.findings.isEmpty, file: file, line: line)
         }
     }
 
@@ -372,7 +462,9 @@ enum PastureDeletionWorkflowContract {
         pastureID: UUID,
         pastureName: String,
         archivedAt: Date,
-        expectedHeadCount: Int,
+        expectedAnimals: [(id: UUID, tagNumber: String, wasCounted: Bool, isMissing: Bool)],
+        expectedQuickCounts: [AnimalType: Int],
+        expectedOpenFindingsCount: Int,
         summaries: [FieldCheckSessionSummary],
         file: StaticString,
         line: UInt
@@ -389,6 +481,24 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(summary.pastureName, pastureName, file: file, line: line)
         XCTAssertEqual(summary.pastureArchivedAt, archivedAt, file: file, line: line)
         XCTAssertTrue(summary.isPastureArchived, file: file, line: line)
-        XCTAssertEqual(summary.expectedHeadCountSnapshot, expectedHeadCount, file: file, line: line)
+        XCTAssertEqual(summary.expectedHeadCountSnapshot, expectedAnimals.count, file: file, line: line)
+        XCTAssertEqual(summary.quickCowCount, expectedQuickCounts[.cow, default: 0], file: file, line: line)
+        XCTAssertEqual(summary.quickHeiferCount, expectedQuickCounts[.heifer, default: 0], file: file, line: line)
+        XCTAssertEqual(summary.quickCalfCount, expectedQuickCounts[.calf, default: 0], file: file, line: line)
+        XCTAssertEqual(summary.quickBullCount, expectedQuickCounts[.bull, default: 0], file: file, line: line)
+        XCTAssertEqual(summary.quickSteerCount, expectedQuickCounts[.steer, default: 0], file: file, line: line)
+        XCTAssertEqual(summary.openFindingsCount, expectedOpenFindingsCount, file: file, line: line)
+        XCTAssertEqual(summary.animalChecks.count, expectedAnimals.count, file: file, line: line)
+
+        for expectedAnimal in expectedAnimals {
+            let check = try XCTUnwrap(
+                summary.animalChecks.first { $0.animalID == expectedAnimal.id },
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(check.displayTagNumber, expectedAnimal.tagNumber, file: file, line: line)
+            XCTAssertEqual(check.wasCounted, expectedAnimal.wasCounted, file: file, line: line)
+            XCTAssertEqual(check.isMissing, expectedAnimal.isMissing, file: file, line: line)
+        }
     }
 }
