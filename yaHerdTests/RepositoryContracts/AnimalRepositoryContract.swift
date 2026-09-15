@@ -261,6 +261,54 @@ enum AnimalRepositoryContract {
             file: file,
             line: line
         )
+
+        let cleared = try reloadedRepository.update(
+            id: created.id,
+            input: makeAnimalInput(
+                name: "Updated Contract Cow",
+                tagNumber: "102",
+                tagColorID: updatedTagColorID,
+                sex: .male,
+                birthDate: updatedBirthDate,
+                status: .sold,
+                saleDate: saleDate,
+                salePrice: salePrice,
+                reasonSold: reasonSold,
+                statusReferenceID: updatedStatusReference.id,
+                distinguishingFeatures: [
+                    DistinguishingFeature(description: "White blaze", order: 0),
+                    DistinguishingFeature(description: "Left ear notch", order: 1)
+                ]
+            )
+        )
+        XCTAssertNil(cleared.pastureID, "Updating with a nil pasture must clear the existing relationship.", file: file, line: line)
+        XCTAssertNil(cleared.pastureName, file: file, line: line)
+        XCTAssertNil(cleared.sireID, "Updating with a nil sire must clear the existing relationship.", file: file, line: line)
+        XCTAssertNil(cleared.sire, file: file, line: line)
+        XCTAssertNil(cleared.damID, "Updating with a nil dam must clear the existing relationship.", file: file, line: line)
+        XCTAssertNil(cleared.dam, file: file, line: line)
+
+        let clearedRepository = fixture.makeAnimalRepository()
+        let reloadedCleared = try XCTUnwrap(
+            clearedRepository.fetchAnimalDetail(id: created.id),
+            file: file,
+            line: line
+        )
+        XCTAssertNil(reloadedCleared.pastureID, "Cleared pasture must remain nil after reload.", file: file, line: line)
+        XCTAssertNil(reloadedCleared.pastureName, file: file, line: line)
+        XCTAssertNil(reloadedCleared.sireID, "Cleared sire must remain nil after reload.", file: file, line: line)
+        XCTAssertNil(reloadedCleared.sire, file: file, line: line)
+        XCTAssertNil(reloadedCleared.damID, "Cleared dam must remain nil after reload.", file: file, line: line)
+        XCTAssertNil(reloadedCleared.dam, file: file, line: line)
+
+        XCTAssertTrue(
+            try clearedRepository.fetchTimeline(id: created.id).contains {
+                isMovementEvent($0, from: updatedPasture.name, to: "—")
+            },
+            "Clearing pasture through the repository must create durable movement history from the prior pasture to unassigned.",
+            file: file,
+            line: line
+        )
     }
 
     static func assertArchiveRestorePreservesHistory(
