@@ -249,9 +249,14 @@ enum PastureRepositoryContract {
     ) throws {
         let repository = fixture.makePastureRepository()
         let pasture = try repository.create(input: makePastureInput(name: "Grouped Pasture"))
+        let survivingPasture = try repository.create(input: makePastureInput(name: "Surviving Group Pasture"))
         let createdGroup = try repository.createGroup(
             input: PastureGroupInput(name: "  Rotation A  ", grazeDays: 5, restDays: 25)
         )
+        let survivingGroup = try repository.createGroup(
+            input: PastureGroupInput(name: "Surviving Rotation", grazeDays: 4, restDays: 18)
+        )
+        try repository.assignPasture(id: survivingPasture.id, toGroupID: survivingGroup.id)
 
         XCTAssertEqual(createdGroup.name, "Rotation A", file: file, line: line)
         XCTAssertEqual(createdGroup.grazeDays, 5, file: file, line: line)
@@ -358,20 +363,61 @@ enum PastureRepositoryContract {
         XCTAssertNil(pastureAfterGroupDelete.groupID, file: file, line: line)
         XCTAssertNil(pastureAfterGroupDelete.groupName, file: file, line: line)
 
+        let groupSummariesAfterDelete = try postDeleteRepository.fetchPastureGroups()
         XCTAssertFalse(
-            try postDeleteRepository.fetchPastureGroups().contains { $0.id == createdGroup.id },
+            groupSummariesAfterDelete.contains { $0.id == createdGroup.id },
             "Deleting a group must remove it from the group-list projection.",
             file: file,
             line: line
         )
+        let survivingGroupSummary = try XCTUnwrap(
+            groupSummariesAfterDelete.first { $0.id == survivingGroup.id },
+            "Deleting one group must not remove an unrelated rotation.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(survivingGroupSummary.name, "Surviving Rotation", file: file, line: line)
+        XCTAssertEqual(survivingGroupSummary.grazeDays, 4, file: file, line: line)
+        XCTAssertEqual(survivingGroupSummary.restDays, 18, file: file, line: line)
+        XCTAssertEqual(survivingGroupSummary.pastureCount, 1, file: file, line: line)
+
+        let survivingGroupDetail = try XCTUnwrap(
+            postDeleteRepository.fetchPastureGroupDetail(id: survivingGroup.id),
+            "Deleting one group must preserve unrelated group detail and membership.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(survivingGroupDetail.name, "Surviving Rotation", file: file, line: line)
+        XCTAssertEqual(survivingGroupDetail.grazeDays, 4, file: file, line: line)
+        XCTAssertEqual(survivingGroupDetail.restDays, 18, file: file, line: line)
+        XCTAssertEqual(survivingGroupDetail.pastures.map(\.id), [survivingPasture.id], file: file, line: line)
+
+        let survivingPastureDetail = try XCTUnwrap(
+            postDeleteRepository.fetchPastureDetail(id: survivingPasture.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(survivingPastureDetail.groupID, survivingGroup.id, file: file, line: line)
+        XCTAssertEqual(survivingPastureDetail.groupName, "Surviving Rotation", file: file, line: line)
+
+        let pastureSummariesAfterDelete = try postDeleteRepository.fetchPastures()
         let pastureSummaryAfterGroupDelete = try XCTUnwrap(
-            postDeleteRepository.fetchPastures().first { $0.id == pasture.id },
+            pastureSummariesAfterDelete.first { $0.id == pasture.id },
             file: file,
             line: line
         )
         XCTAssertNil(pastureSummaryAfterGroupDelete.groupID, file: file, line: line)
         XCTAssertNil(pastureSummaryAfterGroupDelete.groupName, file: file, line: line)
         XCTAssertNil(pastureSummaryAfterGroupDelete.restDays, file: file, line: line)
+
+        let survivingPastureSummary = try XCTUnwrap(
+            pastureSummariesAfterDelete.first { $0.id == survivingPasture.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(survivingPastureSummary.groupID, survivingGroup.id, file: file, line: line)
+        XCTAssertEqual(survivingPastureSummary.groupName, "Surviving Rotation", file: file, line: line)
+        XCTAssertEqual(survivingPastureSummary.restDays, 18, file: file, line: line)
     }
 
     static func assertGroupListOrderingAndPastureCounts(
