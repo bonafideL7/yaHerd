@@ -511,6 +511,33 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(controlOption.name, "Delete Workflow Control", file: file, line: line)
 
         let reloadedAnimals = fixture.makeAnimalRepository()
+        let animalSummaries = try reloadedAnimals.fetchAnimals()
+        for movedAnimalID in [
+            firstAnimal.id,
+            firstPastureSecondAnimal.id,
+            secondAnimal.id,
+            trackedAnimal.id
+        ] {
+            let summary = try XCTUnwrap(
+                animalSummaries.first { $0.id == movedAnimalID },
+                "Animals moved out of deleted pastures must remain visible through the animal-list reader.",
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(summary.location, .pasture, file: file, line: line)
+            XCTAssertNil(summary.pastureID, file: file, line: line)
+            XCTAssertNil(summary.pastureName, file: file, line: line)
+        }
+        let controlAnimalSummary = try XCTUnwrap(
+            animalSummaries.first { $0.id == controlAnimal.id },
+            "Residents of an unselected pasture must remain visible through the animal-list reader.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(controlAnimalSummary.location, .pasture, file: file, line: line)
+        XCTAssertEqual(controlAnimalSummary.pastureID, controlPasture.id, file: file, line: line)
+        XCTAssertEqual(controlAnimalSummary.pastureName, "Delete Workflow Control", file: file, line: line)
+
         try assertAnimalMovedToUnassigned(
             animalID: firstAnimal.id,
             pastureName: "Delete Workflow North",
@@ -886,6 +913,31 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(controlSummarySession.expectedHeadCountSnapshot, 1, file: file, line: line)
         XCTAssertEqual(controlSummarySession.animalChecks.count, 1, file: file, line: line)
         XCTAssertEqual(controlSummarySession.animalChecks.first?.animalID, controlAnimal.id, file: file, line: line)
+
+        let openFindings = try reloadedFieldChecks.fetchOpenFindings(limit: 100)
+        XCTAssertEqual(
+            openFindings.count,
+            1,
+            "The unresolved finding must remain available through the open-findings projection after pasture deletion.",
+            file: file,
+            line: line
+        )
+        let openFinding = try XCTUnwrap(
+            openFindings.first { $0.sessionID == secondSessionID && $0.animalID == secondAnimal.id },
+            "The open-findings projection must retain the archived session's unresolved finding snapshots.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(openFinding.recordedAt, findingInput.recordedAt, file: file, line: line)
+        XCTAssertEqual(openFinding.type, findingInput.type, file: file, line: line)
+        XCTAssertEqual(openFinding.severity, findingInput.severity, file: file, line: line)
+        XCTAssertEqual(openFinding.status, findingInput.status, file: file, line: line)
+        XCTAssertEqual(openFinding.note, findingInput.note, file: file, line: line)
+        XCTAssertEqual(openFinding.animalID, secondAnimal.id, file: file, line: line)
+        XCTAssertEqual(openFinding.animalDisplayTagNumber, "702", file: file, line: line)
+        XCTAssertEqual(openFinding.animalDisplayTagColorID, animalTagColor.id, file: file, line: line)
+        XCTAssertEqual(openFinding.pastureName, "Delete Workflow South", file: file, line: line)
+        XCTAssertEqual(openFinding.sessionID, secondSessionID, file: file, line: line)
     }
 
     private static func makeAnimalInput(
