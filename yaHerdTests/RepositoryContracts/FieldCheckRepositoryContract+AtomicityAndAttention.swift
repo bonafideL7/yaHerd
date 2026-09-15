@@ -181,6 +181,17 @@ extension FieldCheckRepositoryContract {
                 animalID: animal.id
             )
         )
+        try repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: rollbackDate(year: 2026, month: 9, day: 10, hour: 10),
+                type: .pinkEye,
+                severity: .warning,
+                status: .monitoring,
+                note: "Second linked attention finding",
+                animalID: animal.id
+            )
+        )
 
         let afterAddRepository = fixture.makeFieldCheckRepository()
         let afterAddDetail = try XCTUnwrap(
@@ -188,11 +199,18 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
-        let finding = try XCTUnwrap(
-            afterAddDetail.findings.first { $0.animalID == animal.id && $0.type == .limping },
+        let firstFinding = try XCTUnwrap(
+            afterAddDetail.findings.first { $0.note == "Linked attention finding" },
             file: file,
             line: line
         )
+        let secondFinding = try XCTUnwrap(
+            afterAddDetail.findings.first { $0.note == "Second linked attention finding" },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(firstFinding.animalID, animal.id, file: file, line: line)
+        XCTAssertEqual(secondFinding.animalID, animal.id, file: file, line: line)
         let detailCheck = try XCTUnwrap(
             afterAddDetail.animalChecks.first { $0.animalID == animal.id },
             file: file,
@@ -200,7 +218,7 @@ extension FieldCheckRepositoryContract {
         )
         XCTAssertTrue(
             detailCheck.needsAttention,
-            "An unresolved linked finding must flag the roster animal for attention.",
+            "Unresolved linked findings must flag the roster animal for attention.",
             file: file,
             line: line
         )
@@ -228,50 +246,100 @@ extension FieldCheckRepositoryContract {
 
         try repository.updateFindingStatus(
             sessionID: sessionID,
-            findingID: finding.id,
+            findingID: firstFinding.id,
             status: .resolved
         )
 
-        let afterResolveRepository = fixture.makeFieldCheckRepository()
-        let afterResolveDetail = try XCTUnwrap(
-            afterResolveRepository.fetchSessionDetail(id: sessionID),
+        let afterFirstResolveRepository = fixture.makeFieldCheckRepository()
+        let afterFirstResolveDetail = try XCTUnwrap(
+            afterFirstResolveRepository.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        let afterFirstResolveCheck = try XCTUnwrap(
+            afterFirstResolveDetail.animalChecks.first { $0.id == detailCheck.id },
+            "Resolving one finding must not delete or omit its roster check from session detail.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(afterFirstResolveCheck.animalID, animal.id, file: file, line: line)
+        XCTAssertTrue(
+            afterFirstResolveCheck.needsAttention,
+            "Resolving one of multiple linked findings must keep attention set while another remains unresolved.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(afterFirstResolveDetail.flaggedAnimalCount, 1, file: file, line: line)
+        let afterFirstResolveOpenFindings = try afterFirstResolveRepository.fetchOpenFindings(limit: 0)
+        XCTAssertFalse(afterFirstResolveOpenFindings.contains { $0.id == firstFinding.id }, file: file, line: line)
+        XCTAssertTrue(afterFirstResolveOpenFindings.contains { $0.id == secondFinding.id }, file: file, line: line)
+
+        let afterFirstResolveSummary = try XCTUnwrap(
+            afterFirstResolveRepository.fetchSessions().first { $0.id == sessionID },
+            file: file,
+            line: line
+        )
+        let afterFirstResolveSummaryCheck = try XCTUnwrap(
+            afterFirstResolveSummary.animalChecks.first { $0.id == detailCheck.id },
+            "Resolving one finding must not delete or omit its roster check from the session summary.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(afterFirstResolveSummaryCheck.animalID, animal.id, file: file, line: line)
+        XCTAssertTrue(
+            afterFirstResolveSummaryCheck.needsAttention,
+            "Session summaries must remain flagged until the final unresolved linked finding is resolved.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(afterFirstResolveSummary.flaggedAnimalCount, 1, file: file, line: line)
+
+        try repository.updateFindingStatus(
+            sessionID: sessionID,
+            findingID: secondFinding.id,
+            status: .resolved
+        )
+
+        let afterFinalResolveRepository = fixture.makeFieldCheckRepository()
+        let afterFinalResolveDetail = try XCTUnwrap(
+            afterFinalResolveRepository.fetchSessionDetail(id: sessionID),
             file: file,
             line: line
         )
         let resolvedDetailCheck = try XCTUnwrap(
-            afterResolveDetail.animalChecks.first { $0.id == detailCheck.id },
-            "Resolving a finding must not delete or omit its roster check from session detail.",
+            afterFinalResolveDetail.animalChecks.first { $0.id == detailCheck.id },
+            "Resolving the final finding must not delete or omit its roster check from session detail.",
             file: file,
             line: line
         )
         XCTAssertEqual(resolvedDetailCheck.animalID, animal.id, file: file, line: line)
         XCTAssertFalse(
             resolvedDetailCheck.needsAttention,
-            "Resolving the animal's only unresolved linked finding must clear attention state.",
+            "Resolving the animal's final unresolved linked finding must clear attention state.",
             file: file,
             line: line
         )
-        XCTAssertEqual(afterResolveDetail.flaggedAnimalCount, 0, file: file, line: line)
+        XCTAssertEqual(afterFinalResolveDetail.flaggedAnimalCount, 0, file: file, line: line)
 
-        let afterResolveSummary = try XCTUnwrap(
-            afterResolveRepository.fetchSessions().first { $0.id == sessionID },
+        let afterFinalResolveSummary = try XCTUnwrap(
+            afterFinalResolveRepository.fetchSessions().first { $0.id == sessionID },
             file: file,
             line: line
         )
         let resolvedSummaryCheck = try XCTUnwrap(
-            afterResolveSummary.animalChecks.first { $0.id == detailCheck.id },
-            "Resolving a finding must not delete or omit its roster check from the session summary.",
+            afterFinalResolveSummary.animalChecks.first { $0.id == detailCheck.id },
+            "Resolving the final finding must not delete or omit its roster check from the session summary.",
             file: file,
             line: line
         )
         XCTAssertEqual(resolvedSummaryCheck.animalID, animal.id, file: file, line: line)
         XCTAssertFalse(
             resolvedSummaryCheck.needsAttention,
-            "Resolved linked findings must not keep the session summary flagged.",
+            "No resolved linked findings may keep the session summary flagged once the final unresolved finding is resolved.",
             file: file,
             line: line
         )
-        XCTAssertEqual(afterResolveSummary.flaggedAnimalCount, 0, file: file, line: line)
+        XCTAssertEqual(afterFinalResolveSummary.flaggedAnimalCount, 0, file: file, line: line)
     }
 
     private static func rollbackAnimalInput(
