@@ -36,6 +36,26 @@ extension FieldCheckRepositoryContract {
                 statusReferenceID: nil
             )
         )
+        let reassignedAnimal = try fixture.makeAnimalRepository().create(
+            input: AnimalInput(
+                name: "Reassigned Missing Finding Animal",
+                tagNumber: "MF902",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSince1970: 1_577_836_800),
+                status: .active,
+                pastureID: pasture.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
 
         let repository = fixture.makeFieldCheckRepository()
         let sessionID = try repository.createSession(
@@ -70,14 +90,14 @@ extension FieldCheckRepositoryContract {
             )
         }
 
-        func reloadedAnimalCheck() throws -> FieldCheckAnimalCheckSnapshot {
+        func reloadedAnimalCheck(animalID: UUID = animal.id) throws -> FieldCheckAnimalCheckSnapshot {
             let detail = try XCTUnwrap(
                 fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
                 file: file,
                 line: line
             )
             return try XCTUnwrap(
-                detail.animalChecks.first { $0.animalID == animal.id },
+                detail.animalChecks.first { $0.animalID == animalID },
                 file: file,
                 line: line
             )
@@ -182,5 +202,73 @@ extension FieldCheckRepositoryContract {
         XCTAssertFalse(afterDeletion.findings.contains { $0.id == secondDeletableID }, file: file, line: line)
         XCTAssertTrue(afterDeletion.findings.contains { $0.id == firstResolvableID && $0.status == .resolved }, file: file, line: line)
         XCTAssertTrue(afterDeletion.findings.contains { $0.id == secondResolvableID && $0.status == .resolved }, file: file, line: line)
+
+        let firstReassignmentID = try addMissingFinding(
+            note: "Reassign one of multiple missing findings",
+            recordedAt: Date(timeIntervalSince1970: 1_780_218_000)
+        )
+        let remainingOriginalID = try addMissingFinding(
+            note: "Remain on original animal",
+            recordedAt: Date(timeIntervalSince1970: 1_780_221_600)
+        )
+        XCTAssertTrue(try reloadedAnimalCheck().isMissing, file: file, line: line)
+        XCTAssertFalse(
+            try reloadedAnimalCheck(animalID: reassignedAnimal.id).isMissing,
+            file: file,
+            line: line
+        )
+
+        try repository.updateFinding(
+            sessionID: sessionID,
+            findingID: firstReassignmentID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSince1970: 1_780_225_200),
+                type: .missingAnimal,
+                severity: .critical,
+                status: .monitoring,
+                note: "Reassigned while original still has another missing finding",
+                animalID: reassignedAnimal.id
+            )
+        )
+
+        let afterReassignment = try XCTUnwrap(
+            fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        let originalCheckAfterReassignment = try XCTUnwrap(
+            afterReassignment.animalChecks.first { $0.animalID == animal.id },
+            file: file,
+            line: line
+        )
+        let reassignedCheckAfterReassignment = try XCTUnwrap(
+            afterReassignment.animalChecks.first { $0.animalID == reassignedAnimal.id },
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            originalCheckAfterReassignment.isMissing,
+            "Reassigning one missing finding must preserve the old animal's missing state while another unresolved missing finding remains linked to it.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            reassignedCheckAfterReassignment.isMissing,
+            "Reassigning an unresolved missing finding must mark the newly linked roster animal missing.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            afterReassignment.findings.first { $0.id == firstReassignmentID }?.animalID,
+            reassignedAnimal.id,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            afterReassignment.findings.first { $0.id == remainingOriginalID }?.animalID,
+            animal.id,
+            file: file,
+            line: line
+        )
     }
 }
