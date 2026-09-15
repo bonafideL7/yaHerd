@@ -263,6 +263,59 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(workingEditorBeforeDeletion.treatmentRecords.count, 1, file: file, line: line)
         XCTAssertNotNil(workingEditorBeforeDeletion.pregnancyCheck, file: file, line: line)
 
+        try workingRepository.saveEdits(
+            forQueueItemID: workingQueueItemID,
+            inSessionID: workingSessionID,
+            input: WorkingSessionAnimalEditInput(
+                status: .done,
+                completedAt: workingCompletedAt,
+                destinationPastureID: secondPasture.id,
+                treatmentEntries: [
+                    WorkingTreatmentEntryInput(
+                        date: workingTreatmentRecordedAt,
+                        treatmentItemID: workingTreatment.id,
+                        itemName: workingTreatment.name,
+                        given: true,
+                        dose: WorkingTreatmentDose(
+                            amount: 2.5,
+                            unit: .milliliter,
+                            route: .intramuscular
+                        )
+                    )
+                ],
+                pregnancyCheck: WorkingPregnancyCheckInput(
+                    date: workingPregnancyCheckedAt,
+                    result: .pregnant,
+                    estimatedDaysPregnant: 120,
+                    dueDate: workingPregnancyDueDate,
+                    sireAnimalID: firstPastureSecondAnimal.id
+                ),
+                castrationPerformed: false,
+                observationNotes: "Deletion workflow working history"
+            )
+        )
+        let workingSessionWithDestination = try XCTUnwrap(
+            workingRepository.fetchSessionDetail(id: workingSessionID),
+            file: file,
+            line: line
+        )
+        let workingQueueItemWithDestination = try XCTUnwrap(
+            workingSessionWithDestination.queueItems.first,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(workingQueueItemWithDestination.destinationPastureID, secondPasture.id, file: file, line: line)
+        XCTAssertEqual(workingQueueItemWithDestination.destinationPastureName, "Delete Workflow South", file: file, line: line)
+        let workingEditorWithDestination = try XCTUnwrap(
+            workingRepository.fetchQueueItemEditor(
+                sessionID: workingSessionID,
+                queueItemID: workingQueueItemID
+            ),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(workingEditorWithDestination.destinationPastureID, secondPasture.id, file: file, line: line)
+
         let firstStartedAt = Date(timeIntervalSince1970: 1_780_000_000)
         let secondStartedAt = Date(timeIntervalSince1970: 1_780_043_200)
         let controlStartedAt = Date(timeIntervalSince1970: 1_780_064_000)
@@ -592,6 +645,8 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(workingQueueItem.animalDamDisplayTagColorID, damTagColor.id, file: file, line: line)
         XCTAssertEqual(workingQueueItem.animalSex, .female, file: file, line: line)
         XCTAssertEqual(workingQueueItem.collectedFromPastureName, "Delete Workflow North", file: file, line: line)
+        XCTAssertEqual(workingQueueItem.destinationPastureID, secondPasture.id, file: file, line: line)
+        XCTAssertEqual(workingQueueItem.destinationPastureName, "Delete Workflow South", file: file, line: line)
 
         let workingSummaries = try reloadedWorking.fetchSessions()
         let workingSummary = try XCTUnwrap(
@@ -623,6 +678,7 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(workingEditor.status, .done, file: file, line: line)
         XCTAssertEqual(workingEditor.completedAt, workingCompletedAt, file: file, line: line)
         XCTAssertEqual(workingEditor.collectedFromPastureName, "Delete Workflow North", file: file, line: line)
+        XCTAssertEqual(workingEditor.destinationPastureID, secondPasture.id, file: file, line: line)
         XCTAssertEqual(workingEditor.animalID, workingAnimal.id, file: file, line: line)
         XCTAssertEqual(workingEditor.animalDisplayTagNumber, "709", file: file, line: line)
         XCTAssertEqual(workingEditor.animalDisplayTagColorID, animalTagColor.id, file: file, line: line)
