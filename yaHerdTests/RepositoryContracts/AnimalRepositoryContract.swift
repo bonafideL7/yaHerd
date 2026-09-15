@@ -48,6 +48,14 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(created.name, "Contract Cow", file: file, line: line)
         XCTAssertEqual(created.displayTagNumber, "101", file: file, line: line)
         XCTAssertEqual(created.displayTagColorID, createdTagColorID, file: file, line: line)
+        let createdPrimaryTag = try XCTUnwrap(
+            created.activeTags.first { $0.isPrimary },
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(createdPrimaryTag.isActive, file: file, line: line)
+        XCTAssertEqual(createdPrimaryTag.number, "101", file: file, line: line)
+        XCTAssertEqual(createdPrimaryTag.colorID, createdTagColorID, file: file, line: line)
         XCTAssertEqual(created.sex.rawValue, Sex.female.rawValue, file: file, line: line)
         XCTAssertEqual(created.birthDate, createdBirthDate, file: file, line: line)
         XCTAssertEqual(created.status.rawValue, AnimalStatus.dead.rawValue, file: file, line: line)
@@ -159,6 +167,16 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(updated.name, "Updated Contract Cow", file: file, line: line)
         XCTAssertEqual(updated.displayTagNumber, "102", file: file, line: line)
         XCTAssertEqual(updated.displayTagColorID, updatedTagColorID, file: file, line: line)
+        let updatedPrimaryTag = try XCTUnwrap(
+            updated.activeTags.first { $0.id == createdPrimaryTag.id },
+            "Updating editor tag fields must mutate the existing primary tag instead of replacing it.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(updatedPrimaryTag.isPrimary, file: file, line: line)
+        XCTAssertTrue(updatedPrimaryTag.isActive, file: file, line: line)
+        XCTAssertEqual(updatedPrimaryTag.number, "102", file: file, line: line)
+        XCTAssertEqual(updatedPrimaryTag.colorID, updatedTagColorID, file: file, line: line)
         XCTAssertEqual(updated.sex.rawValue, Sex.male.rawValue, file: file, line: line)
         XCTAssertEqual(updated.birthDate, updatedBirthDate, file: file, line: line)
         XCTAssertEqual(updated.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
@@ -187,6 +205,16 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloaded.name, "Updated Contract Cow", file: file, line: line)
         XCTAssertEqual(reloaded.displayTagNumber, "102", file: file, line: line)
         XCTAssertEqual(reloaded.displayTagColorID, updatedTagColorID, file: file, line: line)
+        let reloadedPrimaryTag = try XCTUnwrap(
+            reloaded.activeTags.first { $0.id == createdPrimaryTag.id },
+            "Reloading must preserve the edited primary tag identity and payload.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(reloadedPrimaryTag.isPrimary, file: file, line: line)
+        XCTAssertTrue(reloadedPrimaryTag.isActive, file: file, line: line)
+        XCTAssertEqual(reloadedPrimaryTag.number, "102", file: file, line: line)
+        XCTAssertEqual(reloadedPrimaryTag.colorID, updatedTagColorID, file: file, line: line)
         XCTAssertEqual(reloaded.sex.rawValue, Sex.male.rawValue, file: file, line: line)
         XCTAssertEqual(reloaded.birthDate, updatedBirthDate, file: file, line: line)
         XCTAssertEqual(reloaded.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
