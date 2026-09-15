@@ -199,8 +199,9 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(workingSessionAtStart.queueItems.count, 1, file: file, line: line)
         let workingQueueItemID = try XCTUnwrap(
-            workingSessionAtStart.queueItems.only?.id,
+            workingSessionAtStart.queueItems.first?.id,
             "The Working deletion fixture must contain exactly one queue item.",
             file: file,
             line: line
@@ -230,8 +231,9 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(workingSessionBeforeDeletion.queueItems.count, 1, file: file, line: line)
         let workingQueueItemBeforeDeletion = try XCTUnwrap(
-            workingSessionBeforeDeletion.queueItems.only,
+            workingSessionBeforeDeletion.queueItems.first,
             file: file,
             line: line
         )
