@@ -107,6 +107,19 @@ enum PastureDeletionWorkflowContract {
             )
         )
 
+        try fieldCheckRepository.completeSession(id: firstSessionID)
+        let completedFirstSession = try XCTUnwrap(
+            fieldCheckRepository.fetchSessionDetail(id: firstSessionID),
+            file: file,
+            line: line
+        )
+        let firstCompletedAt = try XCTUnwrap(
+            completedFirstSession.completedAt,
+            "The completed-session fixture must persist its completion timestamp before deletion.",
+            file: file,
+            line: line
+        )
+
         try fixture.deletePastures([firstPasture.id, secondPasture.id], archivedAt)
 
         let reloadedPastures = fixture.makePastureRepository()
@@ -174,6 +187,7 @@ enum PastureDeletionWorkflowContract {
         try assertArchivedFieldCheckSession(
             sessionID: firstSessionID,
             startedAt: firstStartedAt,
+            expectedCompletedAt: firstCompletedAt,
             pastureID: firstPasture.id,
             pastureName: "Delete Workflow North",
             expectedAnimals: [
@@ -188,6 +202,7 @@ enum PastureDeletionWorkflowContract {
         try assertArchivedFieldCheckSession(
             sessionID: secondSessionID,
             startedAt: secondStartedAt,
+            expectedCompletedAt: nil,
             pastureID: secondPasture.id,
             pastureName: "Delete Workflow South",
             expectedAnimals: [(id: secondAnimal.id, tagNumber: "702")],
@@ -201,6 +216,7 @@ enum PastureDeletionWorkflowContract {
         try assertArchivedFieldCheckSummary(
             sessionID: firstSessionID,
             startedAt: firstStartedAt,
+            expectedCompletedAt: firstCompletedAt,
             pastureID: firstPasture.id,
             pastureName: "Delete Workflow North",
             archivedAt: archivedAt,
@@ -212,6 +228,7 @@ enum PastureDeletionWorkflowContract {
         try assertArchivedFieldCheckSummary(
             sessionID: secondSessionID,
             startedAt: secondStartedAt,
+            expectedCompletedAt: nil,
             pastureID: secondPasture.id,
             pastureName: "Delete Workflow South",
             archivedAt: archivedAt,
@@ -299,6 +316,7 @@ enum PastureDeletionWorkflowContract {
     private static func assertArchivedFieldCheckSession(
         sessionID: UUID,
         startedAt: Date,
+        expectedCompletedAt: Date?,
         pastureID: UUID,
         pastureName: String,
         expectedAnimals: [(id: UUID, tagNumber: String)],
@@ -313,6 +331,7 @@ enum PastureDeletionWorkflowContract {
             line: line
         )
         XCTAssertEqual(archivedSession.startedAt, startedAt, file: file, line: line)
+        XCTAssertEqual(archivedSession.completedAt, expectedCompletedAt, file: file, line: line)
         XCTAssertEqual(archivedSession.pastureID, pastureID, file: file, line: line)
         XCTAssertEqual(archivedSession.pastureName, pastureName, file: file, line: line)
         XCTAssertEqual(archivedSession.pastureArchivedAt, archivedAt, file: file, line: line)
@@ -343,6 +362,7 @@ enum PastureDeletionWorkflowContract {
     private static func assertArchivedFieldCheckSummary(
         sessionID: UUID,
         startedAt: Date,
+        expectedCompletedAt: Date?,
         pastureID: UUID,
         pastureName: String,
         archivedAt: Date,
@@ -358,6 +378,7 @@ enum PastureDeletionWorkflowContract {
             line: line
         )
         XCTAssertEqual(summary.startedAt, startedAt, file: file, line: line)
+        XCTAssertEqual(summary.completedAt, expectedCompletedAt, file: file, line: line)
         XCTAssertEqual(summary.pastureID, pastureID, file: file, line: line)
         XCTAssertEqual(summary.pastureName, pastureName, file: file, line: line)
         XCTAssertEqual(summary.pastureArchivedAt, archivedAt, file: file, line: line)
