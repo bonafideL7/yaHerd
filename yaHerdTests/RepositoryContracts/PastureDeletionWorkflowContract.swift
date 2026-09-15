@@ -139,7 +139,7 @@ enum PastureDeletionWorkflowContract {
         )
         try fieldCheckRepository.updateQuickAnimalTypeCounts(
             sessionID: secondSessionID,
-            counts: [.cow: 1]
+            counts: [.heifer: 1]
         )
 
         let findingInput = FieldCheckFindingInput(
@@ -260,7 +260,7 @@ enum PastureDeletionWorkflowContract {
             pastureID: secondPasture.id,
             pastureName: "Delete Workflow South",
             expectedAnimals: secondExpectedAnimals,
-            expectedQuickCounts: [.cow: 1],
+            expectedQuickCounts: [.heifer: 1],
             expectedFinding: findingInput,
             archivedAt: archivedAt,
             repository: reloadedFieldChecks,
@@ -291,7 +291,7 @@ enum PastureDeletionWorkflowContract {
             pastureName: "Delete Workflow South",
             archivedAt: archivedAt,
             expectedAnimals: secondExpectedAnimals,
-            expectedQuickCounts: [.cow: 1],
+            expectedQuickCounts: [.heifer: 1],
             expectedOpenFindingsCount: 1,
             summaries: sessionSummaries,
             file: file,
