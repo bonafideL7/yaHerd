@@ -22,12 +22,15 @@ enum AnimalRepositoryContract {
     ) throws {
         let repository = fixture.makeAnimalRepository()
         let createdBirthDate = date(year: 2020, month: 1, day: 2)
+        let createdDeathDate = date(year: 2025, month: 12, day: 20)
         let created = try repository.create(
             input: makeAnimalInput(
                 name: "Contract Cow",
                 tagNumber: "101",
                 sex: .female,
                 birthDate: createdBirthDate,
+                status: .dead,
+                deathDate: createdDeathDate,
                 distinguishingFeatures: [
                     DistinguishingFeature(description: "White blaze", order: 0)
                 ]
@@ -38,7 +41,8 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(created.displayTagNumber, "101", file: file, line: line)
         XCTAssertEqual(created.sex.rawValue, Sex.female.rawValue, file: file, line: line)
         XCTAssertEqual(created.birthDate, createdBirthDate, file: file, line: line)
-        XCTAssertEqual(created.status.rawValue, AnimalStatus.active.rawValue, file: file, line: line)
+        XCTAssertEqual(created.status.rawValue, AnimalStatus.dead.rawValue, file: file, line: line)
+        XCTAssertEqual(created.deathDate, createdDeathDate, file: file, line: line)
         XCTAssertEqual(created.distinguishingFeatures.map(\.description), ["White blaze"], file: file, line: line)
 
         let reloadedCreated = try XCTUnwrap(
@@ -62,7 +66,14 @@ enum AnimalRepositoryContract {
             file: file,
             line: line
         )
-        XCTAssertEqual(reloadedCreated.status.rawValue, AnimalStatus.active.rawValue, file: file, line: line)
+        XCTAssertEqual(
+            reloadedCreated.status.rawValue,
+            AnimalStatus.dead.rawValue,
+            "Creating must persist a non-default status before later updates.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedCreated.deathDate, createdDeathDate, file: file, line: line)
         XCTAssertEqual(reloadedCreated.distinguishingFeatures.map(\.description), ["White blaze"], file: file, line: line)
 
         let updatedBirthDate = date(year: 2019, month: 12, day: 15)
@@ -501,6 +512,7 @@ enum AnimalRepositoryContract {
         birthDate: Date,
         status: AnimalStatus = .active,
         saleDate: Date? = nil,
+        deathDate: Date? = nil,
         pastureID: UUID? = nil,
         sireID: UUID? = nil,
         damID: UUID? = nil,
@@ -520,7 +532,7 @@ enum AnimalRepositoryContract {
             saleDate: saleDate,
             salePrice: nil,
             reasonSold: nil,
-            deathDate: nil,
+            deathDate: deathDate,
             causeOfDeath: nil,
             statusReferenceID: nil
         )
