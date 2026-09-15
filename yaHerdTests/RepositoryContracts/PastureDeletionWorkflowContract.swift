@@ -141,7 +141,8 @@ enum PastureDeletionWorkflowContract {
                 name: "Deletion Contract Working Cow",
                 tagNumber: "709",
                 pastureID: firstPasture.id,
-                tagColorID: animalTagColor.id
+                tagColorID: animalTagColor.id,
+                damID: dam.id
             )
         )
 
@@ -344,11 +345,27 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
-        let controlMovementDetailsBeforeDeletion = try animalRepository.fetchTimeline(id: controlAnimal.id)
-            .compactMap { event -> String? in
-                guard case .movement = event.type else { return nil }
-                return event.details
-            }
+        let preDeletionAnimals = fixture.makeAnimalRepository()
+        let controlMovementDetailsBeforeDeletion = try movementDetails(
+            animalID: controlAnimal.id,
+            repository: preDeletionAnimals
+        )
+        let workingMovementDetailsBeforeDeletion = try movementDetails(
+            animalID: workingAnimal.id,
+            repository: preDeletionAnimals
+        )
+        let soldMovementDetailsBeforeDeletion = try movementDetails(
+            animalID: soldAnimal.id,
+            repository: preDeletionAnimals
+        )
+        let deadMovementDetailsBeforeDeletion = try movementDetails(
+            animalID: deadAnimal.id,
+            repository: preDeletionAnimals
+        )
+        let archivedMovementDetailsBeforeDeletion = try movementDetails(
+            animalID: archivedAnimal.id,
+            repository: preDeletionAnimals
+        )
 
         try fixture.deletePastures([firstPasture.id, secondPasture.id], archivedAt)
 
@@ -480,11 +497,10 @@ enum PastureDeletionWorkflowContract {
         )
         XCTAssertEqual(reloadedControlAnimal.pastureID, controlPasture.id, file: file, line: line)
         XCTAssertEqual(reloadedControlAnimal.pastureName, "Delete Workflow Control", file: file, line: line)
-        let controlMovementDetailsAfterDeletion = try reloadedAnimals.fetchTimeline(id: controlAnimal.id)
-            .compactMap { event -> String? in
-                guard case .movement = event.type else { return nil }
-                return event.details
-            }
+        let controlMovementDetailsAfterDeletion = try movementDetails(
+            animalID: controlAnimal.id,
+            repository: reloadedAnimals
+        )
         XCTAssertEqual(
             controlMovementDetailsAfterDeletion,
             controlMovementDetailsBeforeDeletion,
@@ -492,6 +508,24 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+
+        let reloadedWorkingAnimal = try XCTUnwrap(
+            reloadedAnimals.fetchAnimalDetail(id: workingAnimal.id),
+            "Deleting a Working session's source pasture must preserve the actively worked animal.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedWorkingAnimal.location, .workingPen, file: file, line: line)
+        XCTAssertNil(reloadedWorkingAnimal.pastureID, file: file, line: line)
+        XCTAssertNil(reloadedWorkingAnimal.pastureName, file: file, line: line)
+        XCTAssertEqual(
+            try movementDetails(animalID: workingAnimal.id, repository: reloadedAnimals),
+            workingMovementDetailsBeforeDeletion,
+            "Deleting a Working session's source pasture must not change the active Working animal's movement history.",
+            file: file,
+            line: line
+        )
+
         try assertInactiveAnimalSurvivesPastureDeletion(
             animalID: soldAnimal.id,
             expectedStatus: .sold,
@@ -499,6 +533,7 @@ enum PastureDeletionWorkflowContract {
             expectedSaleDate: Date(timeIntervalSince1970: 1_779_000_000),
             expectedSalePrice: 1_250,
             expectedReasonSold: "Deletion workflow contract",
+            expectedMovementDetails: soldMovementDetailsBeforeDeletion,
             repository: reloadedAnimals,
             file: file,
             line: line
@@ -509,6 +544,7 @@ enum PastureDeletionWorkflowContract {
             expectedArchived: false,
             expectedDeathDate: Date(timeIntervalSince1970: 1_779_100_000),
             expectedCauseOfDeath: "Deletion workflow contract",
+            expectedMovementDetails: deadMovementDetailsBeforeDeletion,
             repository: reloadedAnimals,
             file: file,
             line: line
@@ -517,6 +553,7 @@ enum PastureDeletionWorkflowContract {
             animalID: archivedAnimal.id,
             expectedStatus: .active,
             expectedArchived: true,
+            expectedMovementDetails: archivedMovementDetailsBeforeDeletion,
             repository: reloadedAnimals,
             file: file,
             line: line
@@ -543,6 +580,8 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(workingQueueItem.animalID, workingAnimal.id, file: file, line: line)
         XCTAssertEqual(workingQueueItem.animalDisplayTagNumber, "709", file: file, line: line)
         XCTAssertEqual(workingQueueItem.animalDisplayTagColorID, animalTagColor.id, file: file, line: line)
+        XCTAssertEqual(workingQueueItem.animalDamDisplayTagNumber, "D700", file: file, line: line)
+        XCTAssertEqual(workingQueueItem.animalDamDisplayTagColorID, damTagColor.id, file: file, line: line)
         XCTAssertEqual(workingQueueItem.animalSex, .female, file: file, line: line)
         XCTAssertEqual(workingQueueItem.collectedFromPastureName, "Delete Workflow North", file: file, line: line)
 
@@ -579,6 +618,8 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(workingEditor.animalID, workingAnimal.id, file: file, line: line)
         XCTAssertEqual(workingEditor.animalDisplayTagNumber, "709", file: file, line: line)
         XCTAssertEqual(workingEditor.animalDisplayTagColorID, animalTagColor.id, file: file, line: line)
+        XCTAssertEqual(workingEditor.animalDamDisplayTagNumber, "D700", file: file, line: line)
+        XCTAssertEqual(workingEditor.animalDamDisplayTagColorID, damTagColor.id, file: file, line: line)
         XCTAssertEqual(workingEditor.animalSex, .female, file: file, line: line)
         XCTAssertEqual(workingEditor.observationNotes, "Deletion workflow working history", file: file, line: line)
         XCTAssertEqual(workingEditor.treatmentRecords.count, 1, file: file, line: line)
@@ -792,6 +833,16 @@ enum PastureDeletionWorkflowContract {
         )
     }
 
+    private static func movementDetails(
+        animalID: UUID,
+        repository: any AnimalRepository
+    ) throws -> [String] {
+        try repository.fetchTimeline(id: animalID).compactMap { event -> String? in
+            guard case .movement = event.type else { return nil }
+            return event.details
+        }
+    }
+
     private static func assertAnimalMovedToUnassigned(
         animalID: UUID,
         pastureName: String,
@@ -827,6 +878,7 @@ enum PastureDeletionWorkflowContract {
         expectedReasonSold: String? = nil,
         expectedDeathDate: Date? = nil,
         expectedCauseOfDeath: String? = nil,
+        expectedMovementDetails: [String],
         repository: any AnimalRepository,
         file: StaticString,
         line: UInt
@@ -846,6 +898,13 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(animal.causeOfDeath, expectedCauseOfDeath, file: file, line: line)
         XCTAssertNil(animal.pastureID, file: file, line: line)
         XCTAssertNil(animal.pastureName, file: file, line: line)
+        XCTAssertEqual(
+            try movementDetails(animalID: animalID, repository: repository),
+            expectedMovementDetails,
+            "Pasture deletion must not append movement events for inactive animals.",
+            file: file,
+            line: line
+        )
     }
 
     private static func assertArchivedFieldCheckSession(
