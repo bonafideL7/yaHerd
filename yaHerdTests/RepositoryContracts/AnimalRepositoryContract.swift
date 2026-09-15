@@ -82,6 +82,8 @@ enum AnimalRepositoryContract {
 
         let updatedBirthDate = date(year: 2019, month: 12, day: 15)
         let saleDate = date(year: 2026, month: 1, day: 15)
+        let salePrice = 2475.50
+        let reasonSold = "Contract sale"
         let updated = try repository.update(
             id: created.id,
             input: makeAnimalInput(
@@ -91,6 +93,8 @@ enum AnimalRepositoryContract {
                 birthDate: updatedBirthDate,
                 status: .sold,
                 saleDate: saleDate,
+                salePrice: salePrice,
+                reasonSold: reasonSold,
                 distinguishingFeatures: [
                     DistinguishingFeature(description: "White blaze", order: 0),
                     DistinguishingFeature(description: "Left ear notch", order: 1)
@@ -105,6 +109,8 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(updated.birthDate, updatedBirthDate, file: file, line: line)
         XCTAssertEqual(updated.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
         XCTAssertEqual(updated.saleDate, saleDate, file: file, line: line)
+        XCTAssertEqual(updated.salePrice, salePrice, file: file, line: line)
+        XCTAssertEqual(updated.reasonSold, reasonSold, file: file, line: line)
         XCTAssertNil(updated.deathDate, "Transitioning from dead to sold must clear the prior death date.", file: file, line: line)
         XCTAssertNil(updated.causeOfDeath, "Transitioning from dead to sold must clear the prior cause of death.", file: file, line: line)
         XCTAssertEqual(updated.distinguishingFeatures.map(\.description), ["White blaze", "Left ear notch"], file: file, line: line)
@@ -121,6 +127,8 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloaded.birthDate, updatedBirthDate, file: file, line: line)
         XCTAssertEqual(reloaded.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
         XCTAssertEqual(reloaded.saleDate, saleDate, file: file, line: line)
+        XCTAssertEqual(reloaded.salePrice, salePrice, file: file, line: line)
+        XCTAssertEqual(reloaded.reasonSold, reasonSold, file: file, line: line)
         XCTAssertNil(reloaded.deathDate, "Reloading a sold animal must not restore the prior death date.", file: file, line: line)
         XCTAssertNil(reloaded.causeOfDeath, "Reloading a sold animal must not restore the prior cause of death.", file: file, line: line)
         XCTAssertEqual(reloaded.distinguishingFeatures, updated.distinguishingFeatures, file: file, line: line)
@@ -520,6 +528,8 @@ enum AnimalRepositoryContract {
         birthDate: Date,
         status: AnimalStatus = .active,
         saleDate: Date? = nil,
+        salePrice: Double? = nil,
+        reasonSold: String? = nil,
         deathDate: Date? = nil,
         causeOfDeath: String? = nil,
         pastureID: UUID? = nil,
@@ -539,8 +549,8 @@ enum AnimalRepositoryContract {
             damID: damID,
             distinguishingFeatures: distinguishingFeatures,
             saleDate: saleDate,
-            salePrice: nil,
-            reasonSold: nil,
+            salePrice: salePrice,
+            reasonSold: reasonSold,
             deathDate: deathDate,
             causeOfDeath: causeOfDeath,
             statusReferenceID: nil
