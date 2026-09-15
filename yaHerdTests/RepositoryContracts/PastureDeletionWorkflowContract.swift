@@ -9,12 +9,28 @@ import XCTest
 struct PastureDeletionWorkflowContractFixture {
     let makePastureRepository: () -> any PastureRepository
     let makeAnimalRepository: () -> any AnimalRepository
+    let makeTagColorRepository: () -> any TagColorRepository
     let makeFieldCheckRepository: () -> any FieldCheckRepository
     let deletePastures: ([UUID], Date) throws -> Void
 }
 
 @MainActor
 enum PastureDeletionWorkflowContract {
+    private struct ExpectedAnimalCheck {
+        let animalID: UUID
+        let displayTagNumber: String
+        let displayTagColorID: UUID?
+        let damDisplayTagNumber: String?
+        let damDisplayTagColorID: UUID?
+        let animalName: String
+        let animalSex: Sex
+        let animalType: AnimalType
+        let wasExpectedAtStart: Bool
+        let wasCounted: Bool
+        let needsAttention: Bool
+        let isMissing: Bool
+    }
+
     static func assertDeleteMovesResidentsAndArchivesFieldCheckHistory(
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
@@ -38,26 +54,60 @@ enum PastureDeletionWorkflowContract {
             )
         )
 
+        let tagColorRepository = fixture.makeTagColorRepository()
+        let animalTagColor = TagColorSnapshot(
+            name: "Deletion Contract Animal Color",
+            prefix: "A",
+            rgba: RGBAColor(r: 0.2, g: 0.6, b: 0.8)
+        )
+        let damTagColor = TagColorSnapshot(
+            name: "Deletion Contract Dam Color",
+            prefix: "D",
+            rgba: RGBAColor(r: 0.8, g: 0.5, b: 0.2)
+        )
+        try tagColorRepository.upsert(animalTagColor)
+        try tagColorRepository.upsert(damTagColor)
+
         let animalRepository = fixture.makeAnimalRepository()
+        let dam = try animalRepository.create(
+            input: makeAnimalInput(
+                name: "Deletion Contract Dam",
+                tagNumber: "D700",
+                pastureID: nil,
+                tagColorID: damTagColor.id
+            )
+        )
         let firstAnimal = try animalRepository.create(
             input: makeAnimalInput(
                 name: "Deletion Contract Cow North",
                 tagNumber: "701",
-                pastureID: firstPasture.id
+                pastureID: firstPasture.id,
+                tagColorID: animalTagColor.id,
+                damID: dam.id
             )
         )
         let firstPastureSecondAnimal = try animalRepository.create(
             input: makeAnimalInput(
-                name: "Deletion Contract Cow North 2",
+                name: "Deletion Contract Bull North",
                 tagNumber: "706",
-                pastureID: firstPasture.id
+                pastureID: firstPasture.id,
+                sex: .male
             )
         )
         let secondAnimal = try animalRepository.create(
             input: makeAnimalInput(
                 name: "Deletion Contract Cow South",
                 tagNumber: "702",
-                pastureID: secondPasture.id
+                pastureID: secondPasture.id,
+                tagColorID: animalTagColor.id
+            )
+        )
+        let trackedAnimal = try animalRepository.create(
+            input: makeAnimalInput(
+                name: "Deletion Contract Tracked Bull",
+                tagNumber: "707",
+                pastureID: secondPasture.id,
+                sex: .male
             )
         )
 
@@ -91,6 +141,7 @@ enum PastureDeletionWorkflowContract {
         let firstStartedAt = Date(timeIntervalSince1970: 1_780_000_000)
         let secondStartedAt = Date(timeIntervalSince1970: 1_780_043_200)
         let findingRecordedAt = Date(timeIntervalSince1970: 1_780_050_000)
+        let trackedAt = Date(timeIntervalSince1970: 1_780_060_000)
         let archivedAt = Date(timeIntervalSince1970: 1_780_086_400)
         let firstNotes = "Deletion workflow contract north"
         let secondNotes = "Deletion workflow contract south"
@@ -136,6 +187,11 @@ enum PastureDeletionWorkflowContract {
             sessionID: firstSessionID,
             animalCheckID: missingCheck.id,
             isMissing: true
+        )
+        try fieldCheckRepository.addTrackedAnimalToSession(
+            sessionID: firstSessionID,
+            animalID: trackedAnimal.id,
+            checkedAt: trackedAt
         )
         try fieldCheckRepository.updateQuickAnimalTypeCounts(
             sessionID: secondSessionID,
@@ -203,6 +259,13 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+        try assertAnimalMovedToUnassigned(
+            animalID: trackedAnimal.id,
+            pastureName: "Delete Workflow North",
+            repository: reloadedAnimals,
+            file: file,
+            line: line
+        )
         try assertInactiveAnimalSurvivesPastureDeletion(
             animalID: soldAnimal.id,
             expectedStatus: .sold,
@@ -230,11 +293,78 @@ enum PastureDeletionWorkflowContract {
 
         let reloadedFieldChecks = fixture.makeFieldCheckRepository()
         let firstExpectedAnimals = [
-            (id: firstAnimal.id, tagNumber: "701", wasCounted: true, isMissing: false),
-            (id: firstPastureSecondAnimal.id, tagNumber: "706", wasCounted: false, isMissing: true)
+            ExpectedAnimalCheck(
+                animalID: firstAnimal.id,
+                displayTagNumber: "701",
+                displayTagColorID: animalTagColor.id,
+                damDisplayTagNumber: "D700",
+                damDisplayTagColorID: damTagColor.id,
+                animalName: "Deletion Contract Cow North",
+                animalSex: .female,
+                animalType: .heifer,
+                wasExpectedAtStart: true,
+                wasCounted: true,
+                needsAttention: false,
+                isMissing: false
+            ),
+            ExpectedAnimalCheck(
+                animalID: firstPastureSecondAnimal.id,
+                displayTagNumber: "706",
+                displayTagColorID: nil,
+                damDisplayTagNumber: nil,
+                damDisplayTagColorID: nil,
+                animalName: "Deletion Contract Bull North",
+                animalSex: .male,
+                animalType: .bull,
+                wasExpectedAtStart: true,
+                wasCounted: false,
+                needsAttention: false,
+                isMissing: true
+            ),
+            ExpectedAnimalCheck(
+                animalID: trackedAnimal.id,
+                displayTagNumber: "707",
+                displayTagColorID: nil,
+                damDisplayTagNumber: nil,
+                damDisplayTagColorID: nil,
+                animalName: "Deletion Contract Tracked Bull",
+                animalSex: .male,
+                animalType: .bull,
+                wasExpectedAtStart: false,
+                wasCounted: true,
+                needsAttention: false,
+                isMissing: false
+            )
         ]
         let secondExpectedAnimals = [
-            (id: secondAnimal.id, tagNumber: "702", wasCounted: false, isMissing: false)
+            ExpectedAnimalCheck(
+                animalID: secondAnimal.id,
+                displayTagNumber: "702",
+                displayTagColorID: animalTagColor.id,
+                damDisplayTagNumber: nil,
+                damDisplayTagColorID: nil,
+                animalName: "Deletion Contract Cow South",
+                animalSex: .female,
+                animalType: .heifer,
+                wasExpectedAtStart: true,
+                wasCounted: false,
+                needsAttention: true,
+                isMissing: false
+            ),
+            ExpectedAnimalCheck(
+                animalID: trackedAnimal.id,
+                displayTagNumber: "707",
+                displayTagColorID: nil,
+                damDisplayTagNumber: nil,
+                damDisplayTagColorID: nil,
+                animalName: "Deletion Contract Tracked Bull",
+                animalSex: .male,
+                animalType: .bull,
+                wasExpectedAtStart: true,
+                wasCounted: false,
+                needsAttention: false,
+                isMissing: false
+            )
         ]
 
         try assertArchivedFieldCheckSession(
@@ -302,7 +432,10 @@ enum PastureDeletionWorkflowContract {
     private static func makeAnimalInput(
         name: String,
         tagNumber: String,
-        pastureID: UUID,
+        pastureID: UUID?,
+        tagColorID: UUID? = nil,
+        sex: Sex = .female,
+        damID: UUID? = nil,
         status: AnimalStatus = .active,
         saleDate: Date? = nil,
         deathDate: Date? = nil
@@ -310,13 +443,13 @@ enum PastureDeletionWorkflowContract {
         AnimalInput(
             name: name,
             tagNumber: tagNumber,
-            tagColorID: nil,
-            sex: .female,
+            tagColorID: tagColorID,
+            sex: sex,
             birthDate: Date(timeIntervalSince1970: 1_577_836_800),
             status: status,
             pastureID: pastureID,
             sireID: nil,
-            damID: nil,
+            damID: damID,
             distinguishingFeatures: [],
             saleDate: saleDate,
             salePrice: status == .sold ? 1_250 : nil,
@@ -380,7 +513,7 @@ enum PastureDeletionWorkflowContract {
         expectedNotes: String,
         pastureID: UUID,
         pastureName: String,
-        expectedAnimals: [(id: UUID, tagNumber: String, wasCounted: Bool, isMissing: Bool)],
+        expectedAnimals: [ExpectedAnimalCheck],
         expectedQuickCounts: [AnimalType: Int],
         expectedFinding: FieldCheckFindingInput?,
         archivedAt: Date,
@@ -412,7 +545,7 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(actualAnimalIDs.count, expectedAnimals.count, file: file, line: line)
         XCTAssertEqual(
             Set(actualAnimalIDs),
-            Set(expectedAnimals.map { $0.id }),
+            Set(expectedAnimals.map(\.animalID)),
             "Deleting a pasture must preserve every Field Check animal snapshot, not only the first.",
             file: file,
             line: line
@@ -420,13 +553,11 @@ enum PastureDeletionWorkflowContract {
 
         for expectedAnimal in expectedAnimals {
             let check = try XCTUnwrap(
-                archivedSession.animalChecks.first { $0.animalID == expectedAnimal.id },
+                archivedSession.animalChecks.first { $0.animalID == expectedAnimal.animalID },
                 file: file,
                 line: line
             )
-            XCTAssertEqual(check.displayTagNumber, expectedAnimal.tagNumber, file: file, line: line)
-            XCTAssertEqual(check.wasCounted, expectedAnimal.wasCounted, file: file, line: line)
-            XCTAssertEqual(check.isMissing, expectedAnimal.isMissing, file: file, line: line)
+            assertAnimalCheck(check, matches: expectedAnimal, file: file, line: line)
         }
 
         if let expectedFinding {
@@ -442,10 +573,16 @@ enum PastureDeletionWorkflowContract {
             XCTAssertEqual(finding.sessionID, sessionID, file: file, line: line)
 
             if let animalID = expectedFinding.animalID,
-               let expectedAnimal = expectedAnimals.first(where: { $0.id == animalID }) {
+               let expectedAnimal = expectedAnimals.first(where: { $0.animalID == animalID }) {
                 XCTAssertEqual(
                     finding.animalDisplayTagNumber,
-                    expectedAnimal.tagNumber,
+                    expectedAnimal.displayTagNumber,
+                    file: file,
+                    line: line
+                )
+                XCTAssertEqual(
+                    finding.animalDisplayTagColorID,
+                    expectedAnimal.displayTagColorID,
                     file: file,
                     line: line
                 )
@@ -462,7 +599,7 @@ enum PastureDeletionWorkflowContract {
         pastureID: UUID,
         pastureName: String,
         archivedAt: Date,
-        expectedAnimals: [(id: UUID, tagNumber: String, wasCounted: Bool, isMissing: Bool)],
+        expectedAnimals: [ExpectedAnimalCheck],
         expectedQuickCounts: [AnimalType: Int],
         expectedOpenFindingsCount: Int,
         summaries: [FieldCheckSessionSummary],
@@ -492,13 +629,31 @@ enum PastureDeletionWorkflowContract {
 
         for expectedAnimal in expectedAnimals {
             let check = try XCTUnwrap(
-                summary.animalChecks.first { $0.animalID == expectedAnimal.id },
+                summary.animalChecks.first { $0.animalID == expectedAnimal.animalID },
                 file: file,
                 line: line
             )
-            XCTAssertEqual(check.displayTagNumber, expectedAnimal.tagNumber, file: file, line: line)
-            XCTAssertEqual(check.wasCounted, expectedAnimal.wasCounted, file: file, line: line)
-            XCTAssertEqual(check.isMissing, expectedAnimal.isMissing, file: file, line: line)
+            assertAnimalCheck(check, matches: expectedAnimal, file: file, line: line)
         }
+    }
+
+    private static func assertAnimalCheck(
+        _ check: FieldCheckAnimalCheckSnapshot,
+        matches expected: ExpectedAnimalCheck,
+        file: StaticString,
+        line: UInt
+    ) {
+        XCTAssertEqual(check.animalID, expected.animalID, file: file, line: line)
+        XCTAssertEqual(check.displayTagNumber, expected.displayTagNumber, file: file, line: line)
+        XCTAssertEqual(check.displayTagColorID, expected.displayTagColorID, file: file, line: line)
+        XCTAssertEqual(check.damDisplayTagNumber, expected.damDisplayTagNumber, file: file, line: line)
+        XCTAssertEqual(check.damDisplayTagColorID, expected.damDisplayTagColorID, file: file, line: line)
+        XCTAssertEqual(check.animalName, expected.animalName, file: file, line: line)
+        XCTAssertEqual(check.animalSex, expected.animalSex, file: file, line: line)
+        XCTAssertEqual(check.animalType, expected.animalType, file: file, line: line)
+        XCTAssertEqual(check.wasExpectedAtStart, expected.wasExpectedAtStart, file: file, line: line)
+        XCTAssertEqual(check.wasCounted, expected.wasCounted, file: file, line: line)
+        XCTAssertEqual(check.needsAttention, expected.needsAttention, file: file, line: line)
+        XCTAssertEqual(check.isMissing, expected.isMissing, file: file, line: line)
     }
 }
