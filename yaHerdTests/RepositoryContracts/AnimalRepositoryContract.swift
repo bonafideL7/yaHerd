@@ -187,7 +187,15 @@ enum AnimalRepositoryContract {
         XCTAssertTrue(updatedPrimaryTag.isActive, file: file, line: line)
         XCTAssertEqual(updatedPrimaryTag.number, "102", file: file, line: line)
         XCTAssertEqual(updatedPrimaryTag.colorID, updatedTagColorID, file: file, line: line)
+        XCTAssertEqual(
+            updatedPrimaryTag.assignedAt,
+            createdPrimaryTag.assignedAt,
+            "Editing the primary tag must preserve its original assignment date.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(updated.sex.rawValue, Sex.male.rawValue, file: file, line: line)
+        XCTAssertEqual(updated.animalType, .bull, file: file, line: line)
         XCTAssertEqual(updated.birthDate, updatedBirthDate, file: file, line: line)
         XCTAssertEqual(updated.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
         XCTAssertEqual(updated.saleDate, saleDate, file: file, line: line)
@@ -225,7 +233,15 @@ enum AnimalRepositoryContract {
         XCTAssertTrue(reloadedPrimaryTag.isActive, file: file, line: line)
         XCTAssertEqual(reloadedPrimaryTag.number, "102", file: file, line: line)
         XCTAssertEqual(reloadedPrimaryTag.colorID, updatedTagColorID, file: file, line: line)
+        XCTAssertEqual(
+            reloadedPrimaryTag.assignedAt,
+            createdPrimaryTag.assignedAt,
+            "Reloading the edited primary tag must preserve its original assignment date.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(reloaded.sex.rawValue, Sex.male.rawValue, file: file, line: line)
+        XCTAssertEqual(reloaded.animalType, .bull, file: file, line: line)
         XCTAssertEqual(reloaded.birthDate, updatedBirthDate, file: file, line: line)
         XCTAssertEqual(reloaded.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
         XCTAssertEqual(reloaded.saleDate, saleDate, file: file, line: line)
@@ -242,6 +258,13 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloaded.statusReferenceID, updatedStatusReference.id, file: file, line: line)
         XCTAssertEqual(reloaded.statusReferenceName, updatedStatusReference.name, file: file, line: line)
         XCTAssertEqual(reloaded.distinguishingFeatures, updated.distinguishingFeatures, file: file, line: line)
+
+        let reloadedSummary = try XCTUnwrap(
+            reloadedRepository.fetchAnimals().first { $0.id == created.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedSummary.animalType, .bull, file: file, line: line)
 
         let timeline = try reloadedRepository.fetchTimeline(id: created.id)
         XCTAssertTrue(
