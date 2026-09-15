@@ -91,19 +91,21 @@ enum PastureDeletionWorkflowContract {
         let firstStartedAt = Date(timeIntervalSince1970: 1_780_000_000)
         let secondStartedAt = Date(timeIntervalSince1970: 1_780_043_200)
         let archivedAt = Date(timeIntervalSince1970: 1_780_086_400)
+        let firstNotes = "Deletion workflow contract north"
+        let secondNotes = "Deletion workflow contract south"
         let fieldCheckRepository = fixture.makeFieldCheckRepository()
         let firstSessionID = try fieldCheckRepository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: firstPasture.id,
                 startedAt: firstStartedAt,
-                notes: "Deletion workflow contract north"
+                notes: firstNotes
             )
         )
         let secondSessionID = try fieldCheckRepository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: secondPasture.id,
                 startedAt: secondStartedAt,
-                notes: "Deletion workflow contract south"
+                notes: secondNotes
             )
         )
 
@@ -188,6 +190,7 @@ enum PastureDeletionWorkflowContract {
             sessionID: firstSessionID,
             startedAt: firstStartedAt,
             expectedCompletedAt: firstCompletedAt,
+            expectedNotes: firstNotes,
             pastureID: firstPasture.id,
             pastureName: "Delete Workflow North",
             expectedAnimals: [
@@ -203,6 +206,7 @@ enum PastureDeletionWorkflowContract {
             sessionID: secondSessionID,
             startedAt: secondStartedAt,
             expectedCompletedAt: nil,
+            expectedNotes: secondNotes,
             pastureID: secondPasture.id,
             pastureName: "Delete Workflow South",
             expectedAnimals: [(id: secondAnimal.id, tagNumber: "702")],
@@ -317,6 +321,7 @@ enum PastureDeletionWorkflowContract {
         sessionID: UUID,
         startedAt: Date,
         expectedCompletedAt: Date?,
+        expectedNotes: String,
         pastureID: UUID,
         pastureName: String,
         expectedAnimals: [(id: UUID, tagNumber: String)],
@@ -332,6 +337,7 @@ enum PastureDeletionWorkflowContract {
         )
         XCTAssertEqual(archivedSession.startedAt, startedAt, file: file, line: line)
         XCTAssertEqual(archivedSession.completedAt, expectedCompletedAt, file: file, line: line)
+        XCTAssertEqual(archivedSession.notes, expectedNotes, file: file, line: line)
         XCTAssertEqual(archivedSession.pastureID, pastureID, file: file, line: line)
         XCTAssertEqual(archivedSession.pastureName, pastureName, file: file, line: line)
         XCTAssertEqual(archivedSession.pastureArchivedAt, archivedAt, file: file, line: line)
