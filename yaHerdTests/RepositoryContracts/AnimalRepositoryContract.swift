@@ -23,6 +23,7 @@ enum AnimalRepositoryContract {
         let repository = fixture.makeAnimalRepository()
         let createdBirthDate = date(year: 2020, month: 1, day: 2)
         let createdDeathDate = date(year: 2025, month: 12, day: 20)
+        let createdCauseOfDeath = "Contract illness"
         let created = try repository.create(
             input: makeAnimalInput(
                 name: "Contract Cow",
@@ -31,6 +32,7 @@ enum AnimalRepositoryContract {
                 birthDate: createdBirthDate,
                 status: .dead,
                 deathDate: createdDeathDate,
+                causeOfDeath: createdCauseOfDeath,
                 distinguishingFeatures: [
                     DistinguishingFeature(description: "White blaze", order: 0)
                 ]
@@ -43,6 +45,7 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(created.birthDate, createdBirthDate, file: file, line: line)
         XCTAssertEqual(created.status.rawValue, AnimalStatus.dead.rawValue, file: file, line: line)
         XCTAssertEqual(created.deathDate, createdDeathDate, file: file, line: line)
+        XCTAssertEqual(created.causeOfDeath, createdCauseOfDeath, file: file, line: line)
         XCTAssertEqual(created.distinguishingFeatures.map(\.description), ["White blaze"], file: file, line: line)
 
         let reloadedCreated = try XCTUnwrap(
@@ -74,6 +77,7 @@ enum AnimalRepositoryContract {
             line: line
         )
         XCTAssertEqual(reloadedCreated.deathDate, createdDeathDate, file: file, line: line)
+        XCTAssertEqual(reloadedCreated.causeOfDeath, createdCauseOfDeath, file: file, line: line)
         XCTAssertEqual(reloadedCreated.distinguishingFeatures.map(\.description), ["White blaze"], file: file, line: line)
 
         let updatedBirthDate = date(year: 2019, month: 12, day: 15)
@@ -102,6 +106,7 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(updated.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
         XCTAssertEqual(updated.saleDate, saleDate, file: file, line: line)
         XCTAssertNil(updated.deathDate, "Transitioning from dead to sold must clear the prior death date.", file: file, line: line)
+        XCTAssertNil(updated.causeOfDeath, "Transitioning from dead to sold must clear the prior cause of death.", file: file, line: line)
         XCTAssertEqual(updated.distinguishingFeatures.map(\.description), ["White blaze", "Left ear notch"], file: file, line: line)
 
         let reloaded = try XCTUnwrap(
@@ -117,6 +122,7 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloaded.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
         XCTAssertEqual(reloaded.saleDate, saleDate, file: file, line: line)
         XCTAssertNil(reloaded.deathDate, "Reloading a sold animal must not restore the prior death date.", file: file, line: line)
+        XCTAssertNil(reloaded.causeOfDeath, "Reloading a sold animal must not restore the prior cause of death.", file: file, line: line)
         XCTAssertEqual(reloaded.distinguishingFeatures, updated.distinguishingFeatures, file: file, line: line)
     }
 
@@ -515,6 +521,7 @@ enum AnimalRepositoryContract {
         status: AnimalStatus = .active,
         saleDate: Date? = nil,
         deathDate: Date? = nil,
+        causeOfDeath: String? = nil,
         pastureID: UUID? = nil,
         sireID: UUID? = nil,
         damID: UUID? = nil,
@@ -535,7 +542,7 @@ enum AnimalRepositoryContract {
             salePrice: nil,
             reasonSold: nil,
             deathDate: deathDate,
-            causeOfDeath: nil,
+            causeOfDeath: causeOfDeath,
             statusReferenceID: nil
         )
     }
