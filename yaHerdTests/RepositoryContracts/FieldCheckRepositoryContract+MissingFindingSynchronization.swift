@@ -90,7 +90,7 @@ extension FieldCheckRepositoryContract {
             )
         }
 
-        func reloadedAnimalCheck(animalID: UUID = animal.id) throws -> FieldCheckAnimalCheckSnapshot {
+        func reloadedAnimalCheck(animalID: UUID) throws -> FieldCheckAnimalCheckSnapshot {
             let detail = try XCTUnwrap(
                 fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
                 file: file,
@@ -112,7 +112,7 @@ extension FieldCheckRepositoryContract {
             recordedAt: Date(timeIntervalSince1970: 1_780_207_200)
         )
         XCTAssertTrue(
-            try reloadedAnimalCheck().isMissing,
+            try reloadedAnimalCheck(animalID: animal.id).isMissing,
             "Any unresolved missing-animal finding must mark the roster animal missing.",
             file: file,
             line: line
@@ -124,7 +124,7 @@ extension FieldCheckRepositoryContract {
             status: .resolved
         )
         XCTAssertTrue(
-            try reloadedAnimalCheck().isMissing,
+            try reloadedAnimalCheck(animalID: animal.id).isMissing,
             "Resolving one missing-animal finding must preserve missing state while another unresolved missing finding remains.",
             file: file,
             line: line
@@ -136,7 +136,7 @@ extension FieldCheckRepositoryContract {
             status: .resolved
         )
         XCTAssertFalse(
-            try reloadedAnimalCheck().isMissing,
+            try reloadedAnimalCheck(animalID: animal.id).isMissing,
             "Resolving the final unresolved missing-animal finding must clear synchronized roster missing state.",
             file: file,
             line: line
@@ -168,14 +168,14 @@ extension FieldCheckRepositoryContract {
             recordedAt: Date(timeIntervalSince1970: 1_780_214_400)
         )
         XCTAssertTrue(
-            try reloadedAnimalCheck().isMissing,
+            try reloadedAnimalCheck(animalID: animal.id).isMissing,
             file: file,
             line: line
         )
 
         try repository.deleteFinding(sessionID: sessionID, findingID: firstDeletableID)
         XCTAssertTrue(
-            try reloadedAnimalCheck().isMissing,
+            try reloadedAnimalCheck(animalID: animal.id).isMissing,
             "Deleting one missing-animal finding must preserve missing state while another unresolved missing finding remains.",
             file: file,
             line: line
@@ -211,7 +211,11 @@ extension FieldCheckRepositoryContract {
             note: "Remain on original animal",
             recordedAt: Date(timeIntervalSince1970: 1_780_221_600)
         )
-        XCTAssertTrue(try reloadedAnimalCheck().isMissing, file: file, line: line)
+        XCTAssertTrue(
+            try reloadedAnimalCheck(animalID: animal.id).isMissing,
+            file: file,
+            line: line
+        )
         XCTAssertFalse(
             try reloadedAnimalCheck(animalID: reassignedAnimal.id).isMissing,
             file: file,
