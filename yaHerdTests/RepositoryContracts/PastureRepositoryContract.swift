@@ -71,6 +71,14 @@ enum PastureRepositoryContract {
         XCTAssertEqual(summary.activeAnimalCount, 0, file: file, line: line)
         XCTAssertNil(summary.groupID, file: file, line: line)
         XCTAssertNil(summary.groupName, file: file, line: line)
+
+        let option = try XCTUnwrap(
+            reloadedRepository.fetchPastureOptions().first { $0.id == created.id },
+            "Renaming a pasture must update the option projection used by pasture selectors.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(option.name, "Updated Contract North", file: file, line: line)
     }
 
     static func assertListOrderingAndSubsetReorder(
@@ -279,6 +287,17 @@ enum PastureRepositoryContract {
         XCTAssertEqual(groupDetail.grazeDays, 7, file: file, line: line)
         XCTAssertEqual(groupDetail.restDays, 30, file: file, line: line)
         XCTAssertEqual(groupDetail.pastures.map(\.id), [pasture.id], file: file, line: line)
+
+        let updatedGroupSummary = try XCTUnwrap(
+            reloadedRepository.fetchPastureGroups().first { $0.id == createdGroup.id },
+            "Updating a group must refresh the group-list projection.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(updatedGroupSummary.name, "Rotation Updated", file: file, line: line)
+        XCTAssertEqual(updatedGroupSummary.grazeDays, 7, file: file, line: line)
+        XCTAssertEqual(updatedGroupSummary.restDays, 30, file: file, line: line)
+        XCTAssertEqual(updatedGroupSummary.pastureCount, 1, file: file, line: line)
 
         let groupedSummary = try XCTUnwrap(
             reloadedRepository.fetchPastures().first { $0.id == pasture.id },
