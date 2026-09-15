@@ -2,10 +2,15 @@ import Foundation
 import XCTest
 @testable import yaHerd
 
+enum FieldCheckTrackedAnimalRollbackInjectedError: Error, Equatable {
+    case afterMovementStaged
+}
+
 /// Permanent fault-injection hook for persistence implementations that can force the tracked-animal
 /// transaction to fail after movement changes have been staged but before the logical operation commits.
 ///
-/// The Core Data contract runner should install its failure at roster insertion or final context save,
+/// The Core Data contract runner should install its failure at roster insertion or final context save so
+/// the production operation surfaces `FieldCheckTrackedAnimalRollbackInjectedError.afterMovementStaged`,
 /// then invoke `addTrackedAnimalToSession` through this closure. No SwiftData-specific failure adapter
 /// should be added for this contract.
 @MainActor
@@ -86,10 +91,18 @@ extension FieldCheckRepositoryContract {
                 tracked.id,
                 rollbackDate(year: 2026, month: 8, day: 10, hour: 9)
             ),
-            "The fault-injected tracked-animal transaction must fail.",
+            "The fault-injected tracked-animal transaction must fail at the configured post-movement failpoint.",
             file: file,
             line: line
-        )
+        ) { error in
+            XCTAssertEqual(
+                error as? FieldCheckTrackedAnimalRollbackInjectedError,
+                .afterMovementStaged,
+                "The production operation must reach and surface the configured post-movement failpoint rather than failing earlier for an unrelated reason.",
+                file: file,
+                line: line
+            )
+        }
 
         let afterSession = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
@@ -198,8 +211,15 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        let summaryCheck = try XCTUnwrap(
+            afterAddSummary.animalChecks.first { $0.id == detailCheck.id },
+            "The session summary must retain the same roster check application ID.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(summaryCheck.animalID, animal.id, file: file, line: line)
         XCTAssertTrue(
-            afterAddSummary.animalChecks.first { $0.animalID == animal.id }?.needsAttention == true,
+            summaryCheck.needsAttention,
             "Session summaries must preserve linked-finding attention state.",
             file: file,
             line: line
@@ -218,8 +238,15 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        let resolvedDetailCheck = try XCTUnwrap(
+            afterResolveDetail.animalChecks.first { $0.id == detailCheck.id },
+            "Resolving a finding must not delete or omit its roster check from session detail.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(resolvedDetailCheck.animalID, animal.id, file: file, line: line)
         XCTAssertFalse(
-            afterResolveDetail.animalChecks.first { $0.animalID == animal.id }?.needsAttention == true,
+            resolvedDetailCheck.needsAttention,
             "Resolving the animal's only unresolved linked finding must clear attention state.",
             file: file,
             line: line
@@ -231,8 +258,15 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        let resolvedSummaryCheck = try XCTUnwrap(
+            afterResolveSummary.animalChecks.first { $0.id == detailCheck.id },
+            "Resolving a finding must not delete or omit its roster check from the session summary.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(resolvedSummaryCheck.animalID, animal.id, file: file, line: line)
         XCTAssertFalse(
-            afterResolveSummary.animalChecks.first { $0.animalID == animal.id }?.needsAttention == true,
+            resolvedSummaryCheck.needsAttention,
             "Resolved linked findings must not keep the session summary flagged.",
             file: file,
             line: line
