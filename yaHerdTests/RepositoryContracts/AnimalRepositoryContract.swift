@@ -659,9 +659,10 @@ enum AnimalRepositoryContract {
             line: line
         )
 
+        let replacementColorID = TagColorDefaults.yellowID
         let withReplacement = try repository.addTag(
             animalID: created.id,
-            input: AnimalTagInput(number: "402", colorID: nil, isPrimary: true)
+            input: AnimalTagInput(number: "402", colorID: replacementColorID, isPrimary: true)
         )
         XCTAssertEqual(
             withReplacement.activeTags.filter { $0.isPrimary && $0.isActive }.count,
@@ -676,10 +677,61 @@ enum AnimalRepositoryContract {
             line: line
         )
         XCTAssertTrue(replacementTag.isPrimary, file: file, line: line)
+        XCTAssertEqual(replacementTag.colorID, replacementColorID, file: file, line: line)
         XCTAssertEqual(withReplacement.displayTagNumber, "402", file: file, line: line)
         XCTAssertTrue(withReplacement.activeTags.contains { $0.id == originalTag.id }, file: file, line: line)
 
-        _ = try repository.retireTag(animalID: created.id, tagID: originalTag.id)
+        let updatedOriginalColorID = TagColorDefaults.blueID
+        let withUpdatedOriginal = try repository.updateTag(
+            animalID: created.id,
+            tagID: originalTag.id,
+            input: AnimalTagInput(number: "403", colorID: updatedOriginalColorID, isPrimary: true)
+        )
+        XCTAssertEqual(
+            withUpdatedOriginal.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            "Promoting an updated tag must preserve exactly one active primary tag.",
+            file: file,
+            line: line
+        )
+        let updatedOriginalTag = try XCTUnwrap(
+            withUpdatedOriginal.activeTags.first { $0.id == originalTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(updatedOriginalTag.number, "403", file: file, line: line)
+        XCTAssertEqual(updatedOriginalTag.colorID, updatedOriginalColorID, file: file, line: line)
+        XCTAssertTrue(updatedOriginalTag.isPrimary, file: file, line: line)
+        XCTAssertTrue(updatedOriginalTag.isActive, file: file, line: line)
+        XCTAssertEqual(updatedOriginalTag.assignedAt, originalTag.assignedAt, file: file, line: line)
+
+        let updatedTagRepository = fixture.makeAnimalRepository()
+        let reloadedAfterTagUpdate = try XCTUnwrap(
+            updatedTagRepository.fetchAnimalDetail(id: created.id),
+            "Updating an existing tag must persist its exact identity, payload, and primary state.",
+            file: file,
+            line: line
+        )
+        let reloadedUpdatedOriginalTag = try XCTUnwrap(
+            reloadedAfterTagUpdate.activeTags.first { $0.id == originalTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedUpdatedOriginalTag.number, "403", file: file, line: line)
+        XCTAssertEqual(reloadedUpdatedOriginalTag.colorID, updatedOriginalColorID, file: file, line: line)
+        XCTAssertTrue(reloadedUpdatedOriginalTag.isPrimary, file: file, line: line)
+        XCTAssertTrue(reloadedUpdatedOriginalTag.isActive, file: file, line: line)
+        XCTAssertEqual(reloadedUpdatedOriginalTag.assignedAt, originalTag.assignedAt, file: file, line: line)
+        let reloadedReplacementBeforeRetire = try XCTUnwrap(
+            reloadedAfterTagUpdate.activeTags.first { $0.id == replacementTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(reloadedReplacementBeforeRetire.isPrimary, file: file, line: line)
+        XCTAssertEqual(reloadedReplacementBeforeRetire.number, "402", file: file, line: line)
+        XCTAssertEqual(reloadedReplacementBeforeRetire.colorID, replacementColorID, file: file, line: line)
+
+        _ = try updatedTagRepository.retireTag(animalID: created.id, tagID: originalTag.id)
 
         let reloadedRepository = fixture.makeAnimalRepository()
         let reloaded = try XCTUnwrap(
@@ -687,13 +739,22 @@ enum AnimalRepositoryContract {
             file: file,
             line: line
         )
-        XCTAssertTrue(reloaded.activeTags.contains { $0.id == replacementTag.id && $0.isPrimary }, file: file, line: line)
+        let reloadedReplacement = try XCTUnwrap(
+            reloaded.activeTags.first { $0.id == replacementTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(reloadedReplacement.isPrimary, file: file, line: line)
+        XCTAssertEqual(reloadedReplacement.number, "402", file: file, line: line)
+        XCTAssertEqual(reloadedReplacement.colorID, replacementColorID, file: file, line: line)
         XCTAssertFalse(reloaded.activeTags.contains { $0.id == originalTag.id }, file: file, line: line)
         let retiredTag = try XCTUnwrap(
             reloaded.inactiveTags.first { $0.id == originalTag.id },
             file: file,
             line: line
         )
+        XCTAssertEqual(retiredTag.number, "403", file: file, line: line)
+        XCTAssertEqual(retiredTag.colorID, updatedOriginalColorID, file: file, line: line)
         XCTAssertNotNil(retiredTag.removedAt, file: file, line: line)
 
         let timeline = try reloadedRepository.fetchTimeline(id: created.id)
@@ -704,8 +765,8 @@ enum AnimalRepositoryContract {
             line: line
         )
         XCTAssertTrue(
-            timeline.contains { isTagEvent($0, title: "Tag Retired", number: "401") },
-            "Retiring the original tag must create retirement history for tag 401.",
+            timeline.contains { isTagEvent($0, title: "Tag Retired", number: "403") },
+            "Retiring the updated original tag must create retirement history for its current number 403.",
             file: file,
             line: line
         )
@@ -807,6 +868,22 @@ enum AnimalRepositoryContract {
                 notes: treatmentNotes
             )
         )
+
+        let healthReloadRepository = fixture.makeAnimalRepository()
+        XCTAssertTrue(
+            try healthReloadRepository.fetchTimeline(id: animal.id).contains {
+                isHealthEvent(
+                    $0,
+                    date: treatmentDate,
+                    treatment: treatment,
+                    notes: treatmentNotes
+                )
+            },
+            "Adding a health record must durably persist it before any later mutation occurs.",
+            file: file,
+            line: line
+        )
+
         _ = try repository.addPregnancyCheck(
             animalID: animal.id,
             input: PregnancyCheckInput(
