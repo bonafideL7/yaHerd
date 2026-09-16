@@ -524,6 +524,18 @@ enum PastureRepositoryContract {
                 line: line
             )
         }
+        XCTAssertThrowsError(
+            try repository.validatePastureIDsExist([pasture.id, missingPastureID]),
+            file: file,
+            line: line
+        ) { error in
+            XCTAssertEqual(
+                error as? PastureRepositoryError,
+                .pastureIDsNotFound([missingPastureID]),
+                file: file,
+                line: line
+            )
+        }
 
         XCTAssertNoThrow(
             try repository.validatePastureGroupIDsExist([group.id]),
@@ -543,6 +555,18 @@ enum PastureRepositoryContract {
         let missingGroupID = UUID()
         XCTAssertThrowsError(
             try repository.validatePastureGroupIDsExist([missingGroupID]),
+            file: file,
+            line: line
+        ) { error in
+            XCTAssertEqual(
+                error as? PastureRepositoryError,
+                .pastureGroupIDsNotFound([missingGroupID]),
+                file: file,
+                line: line
+            )
+        }
+        XCTAssertThrowsError(
+            try repository.validatePastureGroupIDsExist([group.id, missingGroupID]),
             file: file,
             line: line
         ) { error in
