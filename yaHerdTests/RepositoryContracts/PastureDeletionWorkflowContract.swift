@@ -272,6 +272,7 @@ enum PastureDeletionWorkflowContract {
         )
         XCTAssertEqual(workingEditorBeforeDeletion.treatmentRecords.count, 1, file: file, line: line)
         XCTAssertNotNil(workingEditorBeforeDeletion.pregnancyCheck, file: file, line: line)
+        let workingAnimalAgeInMonthsBeforeDeletion = workingEditorBeforeDeletion.animalAgeInMonths
 
         try workingRepository.saveEdits(
             forQueueItemID: workingQueueItemID,
@@ -488,6 +489,21 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+        let firstAnimalCheckIDsBeforeDeletion = animalCheckIDs(completedFirstSession.animalChecks)
+        let secondSessionBeforeDeletion = try XCTUnwrap(
+            fieldCheckRepository.fetchSessionDetail(id: secondSessionID),
+            file: file,
+            line: line
+        )
+        let secondAnimalCheckIDsBeforeDeletion = animalCheckIDs(secondSessionBeforeDeletion.animalChecks)
+        XCTAssertEqual(secondSessionBeforeDeletion.findings.count, 1, file: file, line: line)
+        let secondFindingBeforeDeletion = try XCTUnwrap(
+            secondSessionBeforeDeletion.findings.first,
+            "The second Field Check fixture must persist its finding before pasture deletion.",
+            file: file,
+            line: line
+        )
+
         let preDeletionAnimals = fixture.makeAnimalRepository()
         let controlMovementDetailsBeforeDeletion = try movementDetails(
             animalID: controlAnimal.id,
@@ -793,6 +809,13 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(workingEditor.animalDamDisplayTagNumber, "D700", file: file, line: line)
         XCTAssertEqual(workingEditor.animalDamDisplayTagColorID, damTagColor.id, file: file, line: line)
         XCTAssertEqual(workingEditor.animalSex, .female, file: file, line: line)
+        XCTAssertEqual(
+            workingEditor.animalAgeInMonths,
+            workingAnimalAgeInMonthsBeforeDeletion,
+            "Pasture deletion must preserve the Working animal age used for pregnancy eligibility.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(workingEditor.observationNotes, "Deletion workflow working history", file: file, line: line)
         XCTAssertEqual(workingEditor.treatmentRecords.count, 1, file: file, line: line)
         let workingTreatmentRecord = try XCTUnwrap(workingEditor.treatmentRecords.first, file: file, line: line)
@@ -896,6 +919,38 @@ enum PastureDeletionWorkflowContract {
         XCTAssertNil(finishedWorkingEditor.pregnancyCheck, file: file, line: line)
 
         let reloadedFieldChecks = fixture.makeFieldCheckRepository()
+        let archivedFirstSessionForIdentity = try XCTUnwrap(
+            reloadedFieldChecks.fetchSessionDetail(id: firstSessionID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            animalCheckIDs(archivedFirstSessionForIdentity.animalChecks),
+            firstAnimalCheckIDsBeforeDeletion,
+            "Pasture deletion must preserve Field Check animal-check UUIDs in the detail reader.",
+            file: file,
+            line: line
+        )
+        let archivedSecondSessionForIdentity = try XCTUnwrap(
+            reloadedFieldChecks.fetchSessionDetail(id: secondSessionID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            animalCheckIDs(archivedSecondSessionForIdentity.animalChecks),
+            secondAnimalCheckIDsBeforeDeletion,
+            "Pasture deletion must preserve Field Check animal-check UUIDs in the detail reader.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            archivedSecondSessionForIdentity.findings.first?.id,
+            secondFindingBeforeDeletion.id,
+            "Pasture deletion must preserve Field Check finding UUIDs in the detail reader.",
+            file: file,
+            line: line
+        )
+
         let firstExpectedAnimals = [
             ExpectedAnimalCheck(
                 animalID: firstAnimal.id,
@@ -1020,6 +1075,31 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(controlSession.animalChecks.first?.animalID, controlAnimal.id, file: file, line: line)
 
         let sessionSummaries = try reloadedFieldChecks.fetchSessions()
+        let firstSummaryForIdentity = try XCTUnwrap(
+            sessionSummaries.first { $0.id == firstSessionID },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            animalCheckIDs(firstSummaryForIdentity.animalChecks),
+            firstAnimalCheckIDsBeforeDeletion,
+            "Pasture deletion must preserve Field Check animal-check UUIDs in the list reader.",
+            file: file,
+            line: line
+        )
+        let secondSummaryForIdentity = try XCTUnwrap(
+            sessionSummaries.first { $0.id == secondSessionID },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            animalCheckIDs(secondSummaryForIdentity.animalChecks),
+            secondAnimalCheckIDsBeforeDeletion,
+            "Pasture deletion must preserve Field Check animal-check UUIDs in the list reader.",
+            file: file,
+            line: line
+        )
+
         try assertArchivedFieldCheckSummary(
             sessionID: firstSessionID,
             startedAt: firstStartedAt,
@@ -1078,6 +1158,7 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(openFinding.id, secondFindingBeforeDeletion.id, file: file, line: line)
         XCTAssertEqual(openFinding.recordedAt, findingInput.recordedAt, file: file, line: line)
         XCTAssertEqual(openFinding.type, findingInput.type, file: file, line: line)
         XCTAssertEqual(openFinding.severity, findingInput.severity, file: file, line: line)
@@ -1118,6 +1199,17 @@ enum PastureDeletionWorkflowContract {
             deathDate: deathDate,
             causeOfDeath: status == .dead ? "Deletion workflow contract" : nil,
             statusReferenceID: nil
+        )
+    }
+
+    private static func animalCheckIDs(
+        _ checks: [FieldCheckAnimalCheckSnapshot]
+    ) -> [UUID: UUID] {
+        Dictionary(
+            uniqueKeysWithValues: checks.compactMap { check in
+                guard let animalID = check.animalID else { return nil }
+                return (animalID, check.id)
+            }
         )
     }
 
