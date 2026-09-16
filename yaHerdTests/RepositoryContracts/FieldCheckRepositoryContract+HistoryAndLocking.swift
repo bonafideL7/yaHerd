@@ -182,5 +182,335 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(openFindingAfterDelete.animalDisplayTagColorID, findingBeforeDelete.animalDisplayTagColorID, file: file, line: line)
         XCTAssertEqual(openFindingAfterDelete.pastureName, findingBeforeDelete.pastureName, file: file, line: line)
         XCTAssertEqual(openFindingAfterDelete.note, findingBeforeDelete.note, file: file, line: line)
+
+        try reloadedRepository.updateFindingStatus(
+            sessionID: sessionID,
+            findingID: findingBeforeDelete.id,
+            status: .resolved
+        )
+
+        let resolvedRepository = fixture.makeFieldCheckRepository()
+        let resolvedDetail = try XCTUnwrap(
+            resolvedRepository.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        let resolvedCheck = try XCTUnwrap(
+            resolvedDetail.animalChecks.first { $0.id == checkBeforeDelete.id },
+            "Resolving an orphaned finding must not remove its historical roster row.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(resolvedCheck.animalID, animal.id, file: file, line: line)
+        XCTAssertEqual(resolvedCheck.displayTagNumber, checkBeforeDelete.displayTagNumber, file: file, line: line)
+        XCTAssertFalse(resolvedCheck.needsAttention, file: file, line: line)
+        XCTAssertEqual(resolvedDetail.flaggedAnimalCount, 0, file: file, line: line)
+        XCTAssertEqual(
+            resolvedDetail.findings.first { $0.id == findingBeforeDelete.id }?.status,
+            .resolved,
+            file: file,
+            line: line
+        )
+
+        let resolvedSummary = try XCTUnwrap(
+            resolvedRepository.fetchSessions().first { $0.id == sessionID },
+            file: file,
+            line: line
+        )
+        let resolvedSummaryCheck = try XCTUnwrap(
+            resolvedSummary.animalChecks.first { $0.id == checkBeforeDelete.id },
+            "Resolving an orphaned finding must preserve its summary roster row.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(resolvedSummaryCheck.needsAttention, file: file, line: line)
+        XCTAssertEqual(resolvedSummary.flaggedAnimalCount, 0, file: file, line: line)
+        XCTAssertEqual(resolvedSummary.openFindingsCount, 0, file: file, line: line)
+        XCTAssertFalse(
+            try resolvedRepository.fetchOpenFindings(limit: 0).contains { $0.id == findingBeforeDelete.id },
+            "A resolved orphaned finding must leave the open-finding projection.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertCompletedSessionMissingFindingStatusSynchronization(
+        using fixture: FieldCheckRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let pasture = try fixture.makePastureRepository().create(
+            input: PastureInput(
+                name: "Completed Missing Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animal = try fixture.makeAnimalRepository().create(
+            input: AnimalInput(
+                name: "Completed Missing Animal",
+                tagNumber: "CM801",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSince1970: 1_577_836_800),
+                status: .active,
+                pastureID: pasture.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+
+        let repository = fixture.makeFieldCheckRepository()
+        let sessionID = try repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.id,
+                startedAt: Date(timeIntervalSince1970: 1_781_000_000),
+                notes: "Completed missing synchronization"
+            )
+        )
+        try repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSince1970: 1_781_003_600),
+                type: .missingAnimal,
+                severity: .warning,
+                status: .open,
+                note: "Missing before completion",
+                animalID: animal.id
+            )
+        )
+
+        let beforeCompletion = try XCTUnwrap(
+            repository.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        let checkID = try XCTUnwrap(
+            beforeCompletion.animalChecks.first { $0.animalID == animal.id }?.id,
+            file: file,
+            line: line
+        )
+        let findingID = try XCTUnwrap(
+            beforeCompletion.findings.first { $0.animalID == animal.id }?.id,
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(beforeCompletion.animalChecks.first { $0.id == checkID }?.isMissing == true, file: file, line: line)
+        XCTAssertEqual(beforeCompletion.missingAnimalCount, 1, file: file, line: line)
+
+        try repository.completeSession(id: sessionID)
+        let completedRepository = fixture.makeFieldCheckRepository()
+        let completed = try XCTUnwrap(
+            completedRepository.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        XCTAssertNotNil(completed.completedAt, file: file, line: line)
+        XCTAssertTrue(completed.animalChecks.first { $0.id == checkID }?.isMissing == true, file: file, line: line)
+        XCTAssertEqual(completed.missingAnimalCount, 1, file: file, line: line)
+
+        try completedRepository.updateFindingStatus(
+            sessionID: sessionID,
+            findingID: findingID,
+            status: .resolved
+        )
+
+        let resolvedRepository = fixture.makeFieldCheckRepository()
+        let resolved = try XCTUnwrap(
+            resolvedRepository.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        XCTAssertNotNil(resolved.completedAt, "Resolving a finding must not reopen its completed session.", file: file, line: line)
+        let resolvedCheck = try XCTUnwrap(
+            resolved.animalChecks.first { $0.id == checkID },
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(resolvedCheck.isMissing, "Resolving the completed session's final missing finding must clear synchronized missing state.", file: file, line: line)
+        XCTAssertEqual(resolved.missingAnimalCount, 0, file: file, line: line)
+        XCTAssertEqual(resolved.findings.first { $0.id == findingID }?.status, .resolved, file: file, line: line)
+        XCTAssertFalse(
+            try resolvedRepository.fetchOpenFindings(limit: 0).contains { $0.id == findingID },
+            file: file,
+            line: line
+        )
+
+        let resolvedSummary = try XCTUnwrap(
+            resolvedRepository.fetchSessions().first { $0.id == sessionID },
+            file: file,
+            line: line
+        )
+        XCTAssertNotNil(resolvedSummary.completedAt, file: file, line: line)
+        let resolvedSummaryCheck = try XCTUnwrap(
+            resolvedSummary.animalChecks.first { $0.id == checkID },
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(resolvedSummaryCheck.isMissing, file: file, line: line)
+        XCTAssertEqual(resolvedSummary.missingAnimalCount, 0, file: file, line: line)
+
+        try resolvedRepository.updateFindingStatus(
+            sessionID: sessionID,
+            findingID: findingID,
+            status: .monitoring
+        )
+        let monitoringRepository = fixture.makeFieldCheckRepository()
+        let monitoring = try XCTUnwrap(
+            monitoringRepository.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        XCTAssertNotNil(monitoring.completedAt, "Reopening a finding must not reopen its completed session.", file: file, line: line)
+        XCTAssertTrue(monitoring.animalChecks.first { $0.id == checkID }?.isMissing == true, file: file, line: line)
+        XCTAssertEqual(monitoring.missingAnimalCount, 1, file: file, line: line)
+        XCTAssertTrue(
+            try monitoringRepository.fetchOpenFindings(limit: 0).contains { $0.id == findingID && $0.status == .monitoring },
+            file: file,
+            line: line
+        )
+        let monitoringSummary = try XCTUnwrap(
+            monitoringRepository.fetchSessions().first { $0.id == sessionID },
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(monitoringSummary.animalChecks.first { $0.id == checkID }?.isMissing == true, file: file, line: line)
+        XCTAssertEqual(monitoringSummary.missingAnimalCount, 1, file: file, line: line)
+    }
+
+    static func assertUntaggedFindingNameSnapshotSurvivesLiveRename(
+        using fixture: FieldCheckRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let pasture = try fixture.makePastureRepository().create(
+            input: PastureInput(
+                name: "Untagged Snapshot Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animal = try fixture.makeAnimalRepository().create(
+            input: AnimalInput(
+                name: "Original Untagged Name",
+                tagNumber: "",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSince1970: 1_577_836_800),
+                status: .active,
+                pastureID: pasture.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+
+        let repository = fixture.makeFieldCheckRepository()
+        let sessionID = try repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.id,
+                startedAt: Date(timeIntervalSince1970: 1_782_000_000),
+                notes: "Untagged finding snapshot"
+            )
+        )
+        try repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSince1970: 1_782_003_600),
+                type: .generalObservation,
+                severity: .info,
+                status: .open,
+                note: "Untagged historical display",
+                animalID: animal.id
+            )
+        )
+        let beforeRename = try XCTUnwrap(
+            repository.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        let findingID = try XCTUnwrap(
+            beforeRename.findings.first { $0.animalID == animal.id }?.id,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            beforeRename.findings.first { $0.id == findingID }?.animalDisplayTagNumber,
+            "Original Untagged Name",
+            "An untagged finding must display its captured animal-name fallback.",
+            file: file,
+            line: line
+        )
+
+        _ = try fixture.makeAnimalRepository().update(
+            id: animal.id,
+            input: AnimalInput(
+                name: "Changed Live Untagged Name",
+                tagNumber: "",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSince1970: 1_577_836_800),
+                status: .active,
+                pastureID: pasture.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+
+        let snapshotRepository = fixture.makeFieldCheckRepository()
+        let reloaded = try XCTUnwrap(
+            snapshotRepository.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        let reloadedFinding = try XCTUnwrap(
+            reloaded.findings.first { $0.id == findingID },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedFinding.animalID, animal.id, file: file, line: line)
+        XCTAssertEqual(
+            reloadedFinding.animalDisplayTagNumber,
+            "Original Untagged Name",
+            "Historical detail must use the persisted name snapshot when the captured tag is empty.",
+            file: file,
+            line: line
+        )
+
+        let openFinding = try XCTUnwrap(
+            try snapshotRepository.fetchOpenFindings(limit: 0).first { $0.id == findingID },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(openFinding.animalID, animal.id, file: file, line: line)
+        XCTAssertEqual(
+            openFinding.animalDisplayTagNumber,
+            "Original Untagged Name",
+            "Open-finding history must not join the renamed live animal when the historical tag is empty.",
+            file: file,
+            line: line
+        )
     }
 }
