@@ -197,6 +197,10 @@ enum AnimalRepositoryContract {
                 birthDate: date(year: 2016, month: 1, day: 1)
             )
         )
+        let updatedDistinguishingFeatures = [
+            DistinguishingFeature(description: "White blaze", order: 0),
+            DistinguishingFeature(description: "Left ear notch", order: 1)
+        ]
         let updated = try repository.update(
             id: created.id,
             input: makeAnimalInput(
@@ -213,10 +217,7 @@ enum AnimalRepositoryContract {
                 sireID: updatedSire.id,
                 damID: updatedDam.id,
                 statusReferenceID: updatedStatusReference.id,
-                distinguishingFeatures: [
-                    DistinguishingFeature(description: "White blaze", order: 0),
-                    DistinguishingFeature(description: "Left ear notch", order: 1)
-                ]
+                distinguishingFeatures: updatedDistinguishingFeatures
             )
         )
 
@@ -265,7 +266,13 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(updated.dam, "UD01", file: file, line: line)
         XCTAssertEqual(updated.statusReferenceID, updatedStatusReference.id, file: file, line: line)
         XCTAssertEqual(updated.statusReferenceName, updatedStatusReference.name, file: file, line: line)
-        XCTAssertEqual(updated.distinguishingFeatures.map(\.description), ["White blaze", "Left ear notch"], file: file, line: line)
+        XCTAssertEqual(
+            updated.distinguishingFeatures,
+            updatedDistinguishingFeatures,
+            "Updating distinguishing features must preserve their UUIDs and ordering.",
+            file: file,
+            line: line
+        )
 
         let reloadedRepository = fixture.makeAnimalRepository()
         let reloaded = try XCTUnwrap(
@@ -318,7 +325,7 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloaded.dam, "UD01", file: file, line: line)
         XCTAssertEqual(reloaded.statusReferenceID, updatedStatusReference.id, file: file, line: line)
         XCTAssertEqual(reloaded.statusReferenceName, updatedStatusReference.name, file: file, line: line)
-        XCTAssertEqual(reloaded.distinguishingFeatures, updated.distinguishingFeatures, file: file, line: line)
+        XCTAssertEqual(reloaded.distinguishingFeatures, updatedDistinguishingFeatures, file: file, line: line)
 
         let reloadedSummary = try XCTUnwrap(
             reloadedRepository.fetchAnimals().first { $0.id == created.id },
@@ -366,10 +373,7 @@ enum AnimalRepositoryContract {
                 sex: .male,
                 birthDate: updatedBirthDate,
                 status: .active,
-                distinguishingFeatures: [
-                    DistinguishingFeature(description: "White blaze", order: 0),
-                    DistinguishingFeature(description: "Left ear notch", order: 1)
-                ]
+                distinguishingFeatures: updatedDistinguishingFeatures
             )
         )
         XCTAssertEqual(cleared.status.rawValue, AnimalStatus.active.rawValue, file: file, line: line)
@@ -391,6 +395,13 @@ enum AnimalRepositoryContract {
         XCTAssertNil(cleared.sire, file: file, line: line)
         XCTAssertNil(cleared.damID, "Updating with a nil dam must clear the existing relationship.", file: file, line: line)
         XCTAssertNil(cleared.dam, file: file, line: line)
+        XCTAssertEqual(
+            cleared.distinguishingFeatures,
+            updatedDistinguishingFeatures,
+            "Clearing unrelated editable fields must preserve exact distinguishing-feature identities and order.",
+            file: file,
+            line: line
+        )
 
         let clearedRepository = fixture.makeAnimalRepository()
         let reloadedCleared = try XCTUnwrap(
@@ -417,6 +428,13 @@ enum AnimalRepositoryContract {
         XCTAssertNil(reloadedCleared.sire, file: file, line: line)
         XCTAssertNil(reloadedCleared.damID, "Cleared dam must remain nil after reload.", file: file, line: line)
         XCTAssertNil(reloadedCleared.dam, file: file, line: line)
+        XCTAssertEqual(
+            reloadedCleared.distinguishingFeatures,
+            updatedDistinguishingFeatures,
+            "Reloading after clearing unrelated fields must preserve exact distinguishing-feature identities and order.",
+            file: file,
+            line: line
+        )
 
         let clearedSummary = try XCTUnwrap(
             clearedRepository.fetchAnimals().first { $0.id == created.id },
