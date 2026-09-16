@@ -170,8 +170,9 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(detail.lastGrazedDate, grazedAt, file: file, line: line)
         XCTAssertEqual(detail.activeAnimalCount, 1, file: file, line: line)
 
+        let summaries = try reloadedRepository.fetchPastures()
         let summary = try XCTUnwrap(
-            reloadedRepository.fetchPastures().first { $0.id == pasture.id },
+            summaries.first { $0.id == pasture.id },
             file: file,
             line: line
         )
@@ -205,6 +206,46 @@ enum PastureRepositoryEdgeCaseContract {
             line: line
         )
         XCTAssertEqual(groupDetail.pastures.map(\.id), [pasture.id], file: file, line: line)
+
+        let anchorDetail = try XCTUnwrap(
+            reloadedRepository.fetchPastureDetail(id: orderAnchor.id),
+            "Updating one pasture must not mutate an unrelated pasture.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(anchorDetail.name, "Order Anchor", file: file, line: line)
+        XCTAssertEqual(anchorDetail.acreage, 18, file: file, line: line)
+        XCTAssertEqual(anchorDetail.usableAcreage, 16, file: file, line: line)
+        XCTAssertEqual(anchorDetail.targetAcresPerHead, 1.25, file: file, line: line)
+        XCTAssertNil(anchorDetail.groupID, file: file, line: line)
+        XCTAssertNil(anchorDetail.groupName, file: file, line: line)
+        XCTAssertNil(anchorDetail.lastGrazedDate, file: file, line: line)
+        XCTAssertEqual(anchorDetail.activeAnimalCount, 0, file: file, line: line)
+
+        let anchorSummary = try XCTUnwrap(
+            summaries.first { $0.id == orderAnchor.id },
+            "The pasture-list projection must leave unrelated pastures unchanged after an update.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(anchorSummary.name, "Order Anchor", file: file, line: line)
+        XCTAssertEqual(anchorSummary.acreage, 18, file: file, line: line)
+        XCTAssertEqual(anchorSummary.usableAcreage, 16, file: file, line: line)
+        XCTAssertEqual(anchorSummary.targetAcresPerHead, 1.25, file: file, line: line)
+        XCTAssertEqual(anchorSummary.sortOrder, 0, file: file, line: line)
+        XCTAssertNil(anchorSummary.groupID, file: file, line: line)
+        XCTAssertNil(anchorSummary.groupName, file: file, line: line)
+        XCTAssertNil(anchorSummary.restDays, file: file, line: line)
+        XCTAssertNil(anchorSummary.lastGrazedDate, file: file, line: line)
+        XCTAssertEqual(anchorSummary.activeAnimalCount, 0, file: file, line: line)
+
+        let anchorOption = try XCTUnwrap(
+            reloadedRepository.fetchPastureOptions().first { $0.id == orderAnchor.id },
+            "The pasture-option projection must leave unrelated pastures unchanged after an update.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(anchorOption.name, "Order Anchor", file: file, line: line)
     }
 
     static func assertReorderingPreservesNonOrderState(
@@ -483,11 +524,19 @@ enum PastureRepositoryEdgeCaseContract {
         line: UInt = #line
     ) throws {
         let repository = fixture.makePastureRepository()
-        let pasture = try repository.create(
+        let firstPasture = try repository.create(
             input: PastureInput(
-                name: "Group Update Member",
+                name: "Group Update Member One",
                 acreage: 20,
                 usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let secondPasture = try repository.create(
+            input: PastureInput(
+                name: "Group Update Member Two",
+                acreage: 22,
+                usableAcreage: 20,
                 targetAcresPerHead: 1.5
             )
         )
@@ -495,14 +544,21 @@ enum PastureRepositoryEdgeCaseContract {
             input: PastureGroupInput(name: "Group Before Update", grazeDays: 5, restDays: 20)
         )
 
-        try repository.assignPasture(id: pasture.id, toGroupID: group.id)
+        try repository.assignPasture(id: firstPasture.id, toGroupID: group.id)
+        try repository.assignPasture(id: secondPasture.id, toGroupID: group.id)
 
         let updated = try repository.updateGroup(
             id: group.id,
             input: PastureGroupInput(name: "Group After Update", grazeDays: 7, restDays: 28)
         )
         XCTAssertEqual(updated.id, group.id, file: file, line: line)
-        XCTAssertEqual(updated.pastures.map(\.id), [pasture.id], file: file, line: line)
+        XCTAssertEqual(
+            Set(updated.pastures.map(\.id)),
+            Set([firstPasture.id, secondPasture.id]),
+            "Updating a group must preserve every existing pasture member.",
+            file: file,
+            line: line
+        )
 
         let reloadedRepository = fixture.makePastureRepository()
         let groupDetail = try XCTUnwrap(
@@ -513,24 +569,32 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(groupDetail.name, "Group After Update", file: file, line: line)
         XCTAssertEqual(groupDetail.grazeDays, 7, file: file, line: line)
         XCTAssertEqual(groupDetail.restDays, 28, file: file, line: line)
-        XCTAssertEqual(groupDetail.pastures.map(\.id), [pasture.id], file: file, line: line)
-
-        let pastureDetail = try XCTUnwrap(
-            reloadedRepository.fetchPastureDetail(id: pasture.id),
+        XCTAssertEqual(
+            Set(groupDetail.pastures.map(\.id)),
+            Set([firstPasture.id, secondPasture.id]),
             file: file,
             line: line
         )
-        XCTAssertEqual(pastureDetail.groupID, group.id, file: file, line: line)
-        XCTAssertEqual(pastureDetail.groupName, "Group After Update", file: file, line: line)
 
-        let pastureSummary = try XCTUnwrap(
-            reloadedRepository.fetchPastures().first { $0.id == pasture.id },
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(pastureSummary.groupID, group.id, file: file, line: line)
-        XCTAssertEqual(pastureSummary.groupName, "Group After Update", file: file, line: line)
-        XCTAssertEqual(pastureSummary.restDays, 28, file: file, line: line)
+        let pastureSummaries = try reloadedRepository.fetchPastures()
+        for pasture in [firstPasture, secondPasture] {
+            let pastureDetail = try XCTUnwrap(
+                reloadedRepository.fetchPastureDetail(id: pasture.id),
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(pastureDetail.groupID, group.id, file: file, line: line)
+            XCTAssertEqual(pastureDetail.groupName, "Group After Update", file: file, line: line)
+
+            let pastureSummary = try XCTUnwrap(
+                pastureSummaries.first { $0.id == pasture.id },
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(pastureSummary.groupID, group.id, file: file, line: line)
+            XCTAssertEqual(pastureSummary.groupName, "Group After Update", file: file, line: line)
+            XCTAssertEqual(pastureSummary.restDays, 28, file: file, line: line)
+        }
 
         let groupSummary = try XCTUnwrap(
             reloadedRepository.fetchPastureGroups().first { $0.id == group.id },
@@ -540,6 +604,78 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(groupSummary.name, "Group After Update", file: file, line: line)
         XCTAssertEqual(groupSummary.grazeDays, 7, file: file, line: line)
         XCTAssertEqual(groupSummary.restDays, 28, file: file, line: line)
-        XCTAssertEqual(groupSummary.pastureCount, 1, file: file, line: line)
+        XCTAssertEqual(groupSummary.pastureCount, 2, file: file, line: line)
+    }
+
+    static func assertArchivedAnimalTimestampSurvivesPastureDeletion(
+        using fixture: PastureDeletionWorkflowContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let pastureRepository = fixture.makePastureRepository()
+        let pasture = try pastureRepository.create(
+            input: PastureInput(
+                name: "Archived Timestamp Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animalRepository = fixture.makeAnimalRepository()
+        let archivedAnimal = try animalRepository.create(
+            input: AnimalInput(
+                name: "Archived Timestamp Cow",
+                tagNumber: "AT-1",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSince1970: 1_577_836_800),
+                status: .active,
+                pastureID: pasture.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+        try animalRepository.archive(ids: [archivedAnimal.id])
+
+        let archivedBeforeDeletion = try XCTUnwrap(
+            fixture.makeAnimalRepository().fetchAnimalDetail(id: archivedAnimal.id),
+            file: file,
+            line: line
+        )
+        let archivedAt = try XCTUnwrap(
+            archivedBeforeDeletion.archivedAt,
+            "The fixture must persist an archive timestamp before deleting the pasture.",
+            file: file,
+            line: line
+        )
+
+        try fixture.deletePastures(
+            [pasture.id],
+            Date(timeIntervalSince1970: 1_781_000_000)
+        )
+
+        let archivedAfterDeletion = try XCTUnwrap(
+            fixture.makeAnimalRepository().fetchAnimalDetail(id: archivedAnimal.id),
+            "Deleting the pasture must preserve the archived animal.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(archivedAfterDeletion.isArchived, file: file, line: line)
+        XCTAssertEqual(
+            archivedAfterDeletion.archivedAt,
+            archivedAt,
+            "Pasture deletion must preserve the animal's original archive timestamp.",
+            file: file,
+            line: line
+        )
+        XCTAssertNil(archivedAfterDeletion.pastureID, file: file, line: line)
+        XCTAssertNil(archivedAfterDeletion.pastureName, file: file, line: line)
     }
 }
