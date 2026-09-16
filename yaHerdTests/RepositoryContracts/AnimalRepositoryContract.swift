@@ -475,6 +475,18 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(archived.id, created.id, file: file, line: line)
         XCTAssertTrue(archived.isArchived, file: file, line: line)
         XCTAssertNotNil(archived.archivedAt, file: file, line: line)
+        let archivedSummary = try XCTUnwrap(
+            archivedRepository.fetchAnimals().first { $0.id == created.id },
+            "Archiving must mark the summary read model as archived.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            archivedSummary.isArchived,
+            "Archived animals must remain archived in the summary read model used by animal-list filtering.",
+            file: file,
+            line: line
+        )
         XCTAssertTrue(
             try archivedRepository.fetchTimeline(id: created.id).contains {
                 isHealthEvent(
@@ -500,6 +512,18 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(restored.id, created.id, file: file, line: line)
         XCTAssertFalse(restored.isArchived, file: file, line: line)
         XCTAssertNil(restored.archivedAt, file: file, line: line)
+        let restoredSummary = try XCTUnwrap(
+            restoredRepository.fetchAnimals().first { $0.id == created.id },
+            "Restoring must return the animal through the summary read model.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            restoredSummary.isArchived,
+            "Restored animals must no longer be archived in the summary read model used by animal-list filtering.",
+            file: file,
+            line: line
+        )
         XCTAssertTrue(
             try restoredRepository.fetchTimeline(id: created.id).contains {
                 isHealthEvent(
