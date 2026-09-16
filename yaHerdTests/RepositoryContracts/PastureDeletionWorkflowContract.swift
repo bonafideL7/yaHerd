@@ -145,6 +145,15 @@ enum PastureDeletionWorkflowContract {
                 damID: dam.id
             )
         )
+        let finishedWorkingAnimal = try animalRepository.create(
+            input: makeAnimalInput(
+                name: "Deletion Contract Finished Working Bull",
+                tagNumber: "710",
+                pastureID: secondPasture.id,
+                tagColorID: animalTagColor.id,
+                sex: .male
+            )
+        )
 
         let soldAnimal = try animalRepository.create(
             input: makeAnimalInput(
@@ -177,6 +186,7 @@ enum PastureDeletionWorkflowContract {
         let workingPregnancyCheckedAt = Date(timeIntervalSince1970: 1_779_905_000)
         let workingPregnancyDueDate = Date(timeIntervalSince1970: 1_793_988_200)
         let workingTreatmentRecordedAt = Date(timeIntervalSince1970: 1_779_910_000)
+        let finishedWorkingStartedAt = Date(timeIntervalSince1970: 1_779_920_000)
         let workingTreatment = WorkingTreatmentPlanItem(
             id: UUID(),
             name: "Deletion Contract Vaccine",
@@ -315,6 +325,77 @@ enum PastureDeletionWorkflowContract {
             line: line
         )
         XCTAssertEqual(workingEditorWithDestination.destinationPastureID, secondPasture.id, file: file, line: line)
+
+        let finishedWorkingSessionID = try workingRepository.startSession(
+            input: WorkingSessionStartInput(
+                date: finishedWorkingStartedAt,
+                sourcePastureID: secondPasture.id,
+                treatmentTemplateName: "Deletion Contract Finished Work",
+                plannedTreatments: [],
+                animalIDs: [finishedWorkingAnimal.id]
+            )
+        )
+        let finishedWorkingSessionAtStart = try XCTUnwrap(
+            workingRepository.fetchSessionDetail(id: finishedWorkingSessionID),
+            "The finished Working fixture must create its session before pasture deletion.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(finishedWorkingSessionAtStart.queueItems.count, 1, file: file, line: line)
+        let finishedWorkingQueueItemID = try XCTUnwrap(
+            finishedWorkingSessionAtStart.queueItems.first?.id,
+            "The finished Working fixture must contain exactly one queue item.",
+            file: file,
+            line: line
+        )
+        try workingRepository.complete(
+            queueItemID: finishedWorkingQueueItemID,
+            inSessionID: finishedWorkingSessionID,
+            treatmentEntries: [],
+            pregnancyCheck: nil,
+            markCastrated: true,
+            observationNotes: "Deletion workflow finished working history"
+        )
+        let finishedWorkingBeforeFinish = try XCTUnwrap(
+            workingRepository.fetchSessionDetail(id: finishedWorkingSessionID),
+            file: file,
+            line: line
+        )
+        let finishedWorkingQueueBeforeFinish = try XCTUnwrap(
+            finishedWorkingBeforeFinish.queueItems.first,
+            file: file,
+            line: line
+        )
+        let finishedWorkingCompletedAt = try XCTUnwrap(
+            finishedWorkingQueueBeforeFinish.completedAt,
+            "The finished Working queue item must be completed before the session is finished.",
+            file: file,
+            line: line
+        )
+        let finishedWorkingEditorBeforeDeletion = try XCTUnwrap(
+            workingRepository.fetchQueueItemEditor(
+                sessionID: finishedWorkingSessionID,
+                queueItemID: finishedWorkingQueueItemID
+            ),
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(finishedWorkingEditorBeforeDeletion.castrationPerformedInSession, file: file, line: line)
+        try workingRepository.completeSession(
+            id: finishedWorkingSessionID,
+            assignments: [
+                WorkingQueueDestinationAssignment(
+                    queueItemID: finishedWorkingQueueItemID,
+                    destinationPastureID: nil
+                )
+            ]
+        )
+        let finishedWorkingSessionBeforeDeletion = try XCTUnwrap(
+            workingRepository.fetchSessionDetail(id: finishedWorkingSessionID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(finishedWorkingSessionBeforeDeletion.status, .finished, file: file, line: line)
 
         let firstStartedAt = Date(timeIntervalSince1970: 1_780_000_000)
         let secondStartedAt = Date(timeIntervalSince1970: 1_780_043_200)
@@ -744,6 +825,75 @@ enum PastureDeletionWorkflowContract {
         XCTAssertNil(workingPregnancySire.displayTagColorID, file: file, line: line)
         XCTAssertEqual(workingPregnancySire.sex, .male, file: file, line: line)
         XCTAssertFalse(workingPregnancySire.isArchived, file: file, line: line)
+
+        let finishedWorkingDetail = try XCTUnwrap(
+            reloadedWorking.fetchSessionDetail(id: finishedWorkingSessionID),
+            "Finished Working sessions must survive deletion of their source pasture.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(finishedWorkingDetail.date, finishedWorkingStartedAt, file: file, line: line)
+        XCTAssertEqual(finishedWorkingDetail.status, .finished, file: file, line: line)
+        XCTAssertEqual(finishedWorkingDetail.sourcePastureID, secondPasture.id, file: file, line: line)
+        XCTAssertEqual(finishedWorkingDetail.sourcePastureName, "Delete Workflow South", file: file, line: line)
+        XCTAssertEqual(finishedWorkingDetail.treatmentTemplateName, "Deletion Contract Finished Work", file: file, line: line)
+        XCTAssertTrue(finishedWorkingDetail.plannedTreatments.isEmpty, file: file, line: line)
+        XCTAssertEqual(finishedWorkingDetail.queueItems.count, 1, file: file, line: line)
+        let finishedWorkingQueueItem = try XCTUnwrap(finishedWorkingDetail.queueItems.first, file: file, line: line)
+        XCTAssertEqual(finishedWorkingQueueItem.id, finishedWorkingQueueItemID, file: file, line: line)
+        XCTAssertEqual(finishedWorkingQueueItem.status, .done, file: file, line: line)
+        XCTAssertEqual(finishedWorkingQueueItem.completedAt, finishedWorkingCompletedAt, file: file, line: line)
+        XCTAssertEqual(finishedWorkingQueueItem.animalID, finishedWorkingAnimal.id, file: file, line: line)
+        XCTAssertEqual(finishedWorkingQueueItem.animalDisplayTagNumber, "710", file: file, line: line)
+        XCTAssertEqual(finishedWorkingQueueItem.animalDisplayTagColorID, animalTagColor.id, file: file, line: line)
+        XCTAssertEqual(finishedWorkingQueueItem.animalSex, .male, file: file, line: line)
+        XCTAssertEqual(finishedWorkingQueueItem.collectedFromPastureName, "Delete Workflow South", file: file, line: line)
+        XCTAssertNil(finishedWorkingQueueItem.destinationPastureID, file: file, line: line)
+        XCTAssertNil(finishedWorkingQueueItem.destinationPastureName, file: file, line: line)
+
+        let finishedWorkingSummary = try XCTUnwrap(
+            workingSummaries.first { $0.id == finishedWorkingSessionID },
+            "Finished Working sessions must remain visible through the list reader after source-pasture deletion.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(finishedWorkingSummary.date, finishedWorkingStartedAt, file: file, line: line)
+        XCTAssertEqual(finishedWorkingSummary.status, .finished, file: file, line: line)
+        XCTAssertEqual(finishedWorkingSummary.sourcePastureName, "Delete Workflow South", file: file, line: line)
+        XCTAssertEqual(finishedWorkingSummary.treatmentTemplateName, "Deletion Contract Finished Work", file: file, line: line)
+        XCTAssertEqual(finishedWorkingSummary.totalQueueItems, 1, file: file, line: line)
+        XCTAssertEqual(finishedWorkingSummary.completedQueueItems, 1, file: file, line: line)
+
+        let finishedWorkingEditor = try XCTUnwrap(
+            reloadedWorking.fetchQueueItemEditor(
+                sessionID: finishedWorkingSessionID,
+                queueItemID: finishedWorkingQueueItemID
+            ),
+            "Finished Working queue history must survive source-pasture deletion.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(finishedWorkingEditor.sessionDate, finishedWorkingStartedAt, file: file, line: line)
+        XCTAssertEqual(finishedWorkingEditor.sessionStatus, .finished, file: file, line: line)
+        XCTAssertEqual(finishedWorkingEditor.sessionSourcePastureName, "Delete Workflow South", file: file, line: line)
+        XCTAssertTrue(finishedWorkingEditor.plannedTreatments.isEmpty, file: file, line: line)
+        XCTAssertEqual(finishedWorkingEditor.status, .done, file: file, line: line)
+        XCTAssertEqual(finishedWorkingEditor.completedAt, finishedWorkingCompletedAt, file: file, line: line)
+        XCTAssertEqual(finishedWorkingEditor.collectedFromPastureName, "Delete Workflow South", file: file, line: line)
+        XCTAssertNil(finishedWorkingEditor.destinationPastureID, file: file, line: line)
+        XCTAssertEqual(finishedWorkingEditor.animalID, finishedWorkingAnimal.id, file: file, line: line)
+        XCTAssertEqual(finishedWorkingEditor.animalDisplayTagNumber, "710", file: file, line: line)
+        XCTAssertEqual(finishedWorkingEditor.animalDisplayTagColorID, animalTagColor.id, file: file, line: line)
+        XCTAssertEqual(finishedWorkingEditor.animalSex, .male, file: file, line: line)
+        XCTAssertTrue(finishedWorkingEditor.castrationPerformedInSession, file: file, line: line)
+        XCTAssertEqual(
+            finishedWorkingEditor.observationNotes,
+            "Deletion workflow finished working history",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(finishedWorkingEditor.treatmentRecords.isEmpty, file: file, line: line)
+        XCTAssertNil(finishedWorkingEditor.pregnancyCheck, file: file, line: line)
 
         let reloadedFieldChecks = fixture.makeFieldCheckRepository()
         let firstExpectedAnimals = [
