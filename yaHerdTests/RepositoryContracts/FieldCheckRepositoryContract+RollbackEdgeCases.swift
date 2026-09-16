@@ -35,6 +35,29 @@ struct FieldCheckRosterStateRollbackFailureInjection {
     ) throws -> Void
 }
 
+enum FieldCheckMissingFindingQuickCountRollbackInjectedError: Error, Equatable {
+    case afterMissingStateAndQuickCountNormalizationStaged(
+        sessionID: UUID,
+        findingID: UUID,
+        animalCheckID: UUID
+    )
+}
+
+/// Permanent fault-injection hook for the missing-finding write whose synchronized roster mutation
+/// also reduces quick-count capacity. The injected failure must occur only after the finding,
+/// missing-state synchronization, and quick-count normalization have all been staged but before the
+/// logical operation commits.
+@MainActor
+struct FieldCheckMissingFindingQuickCountRollbackFailureInjection {
+    let rawQuickCowCount: (
+        _ sessionID: UUID
+    ) throws -> Int?
+    let addMissingFindingFailingAfterMissingStateAndQuickCountNormalizationStaged: (
+        _ sessionID: UUID,
+        _ input: FieldCheckFindingInput
+    ) throws -> Void
+}
+
 @MainActor
 extension FieldCheckRepositoryContract {
     static func assertMissingFindingTypeTransitionFailureRollsBack(
@@ -525,8 +548,7 @@ extension FieldCheckRepositoryContract {
 
     static func assertMissingFindingQuickCountNormalizationFailureRollsBack(
         using fixture: FieldCheckRepositoryContractFixture,
-        failureInjection: FieldCheckMissingFindingRollbackFailureInjection,
-        rawQuickCowCount: (_ sessionID: UUID) throws -> Int?,
+        failureInjection: FieldCheckMissingFindingQuickCountRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
@@ -578,7 +600,7 @@ extension FieldCheckRepositoryContract {
             line: line
         )
         let rawBeforeFailure = try XCTUnwrap(
-            rawQuickCowCount(sessionID),
+            failureInjection.rawQuickCowCount(sessionID),
             "The finding rollback raw-count probe must find the persisted session.",
             file: file,
             line: line
@@ -601,29 +623,48 @@ extension FieldCheckRepositoryContract {
         )
         var stagedFindingID: UUID?
         XCTAssertThrowsError(
-            try failureInjection.addMissingFindingFailingBetweenFindingAndMissingState(sessionID, input),
-            "The fault-injected missing-finding add must fail after a coordinated mutation has been staged.",
+            try failureInjection.addMissingFindingFailingAfterMissingStateAndQuickCountNormalizationStaged(
+                sessionID,
+                input
+            ),
+            "The fault-injected missing-finding add must fail after the finding, synchronized missing state, and quick-count normalization have all been staged.",
             file: file,
             line: line
         ) { error in
-            guard let injected = error as? FieldCheckMissingFindingRollbackInjectedError else {
+            guard let injected = error as? FieldCheckMissingFindingQuickCountRollbackInjectedError else {
                 XCTFail(
-                    "The operation must surface FieldCheckMissingFindingRollbackInjectedError rather than an unrelated early failure: \(error)",
+                    "The operation must surface FieldCheckMissingFindingQuickCountRollbackInjectedError rather than an unrelated early failure: \(error)",
                     file: file,
                     line: line
                 )
                 return
             }
             switch injected {
-            case .betweenFindingAndMissingState(let operation, let findingID):
-                XCTAssertEqual(operation, .add, file: file, line: line)
+            case .afterMissingStateAndQuickCountNormalizationStaged(
+                let actualSessionID,
+                let findingID,
+                let animalCheckID
+            ):
+                XCTAssertEqual(actualSessionID, sessionID, file: file, line: line)
+                XCTAssertEqual(
+                    animalCheckID,
+                    firstCheckID,
+                    "The failpoint must identify the roster row whose missing-state transition caused quick-count normalization.",
+                    file: file,
+                    line: line
+                )
                 stagedFindingID = findingID
             }
         }
-        let failedFindingID = try XCTUnwrap(stagedFindingID, file: file, line: line)
+        let failedFindingID = try XCTUnwrap(
+            stagedFindingID,
+            "The post-normalization failpoint must identify the staged finding application UUID.",
+            file: file,
+            line: line
+        )
 
         let rawAfterFailure = try XCTUnwrap(
-            rawQuickCowCount(sessionID),
+            failureInjection.rawQuickCowCount(sessionID),
             "The raw-count probe must still find the session after the injected failure.",
             file: file,
             line: line
