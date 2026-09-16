@@ -560,7 +560,18 @@ enum FieldCheckRepositoryContract {
         XCTAssertEqual(updated.status, .monitoring, file: file, line: line)
         XCTAssertEqual(updated.note, "Rear leg", file: file, line: line)
         XCTAssertEqual(updated.animalID, reassignedAnimal.id, file: file, line: line)
-        XCTAssertFalse(afterUpdate.animalChecks.first { $0.animalID == reassignedAnimal.id }?.isMissing == true, "Changing the only open missing-animal finding to another type must clear synchronized missing state.", file: file, line: line)
+        let updatedRosterCheck = try XCTUnwrap(
+            afterUpdate.animalChecks.first { $0.animalID == reassignedAnimal.id },
+            "Changing a finding type must not remove the reassigned animal's roster row.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            updatedRosterCheck.isMissing,
+            "Changing the only open missing-animal finding to another type must clear synchronized missing state.",
+            file: file,
+            line: line
+        )
 
         let pastureFindingDate = date(year: 2026, month: 4, day: 10, hour: 12)
         try repository.addFinding(
