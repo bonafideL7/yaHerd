@@ -536,6 +536,21 @@ enum PastureRepositoryContract {
                 line: line
             )
         }
+        XCTAssertThrowsError(
+            try repository.update(
+                id: missingPastureID,
+                input: makePastureInput(name: "Missing Update Pasture")
+            ),
+            file: file,
+            line: line
+        ) { error in
+            XCTAssertEqual(
+                error as? PastureValidationError,
+                .pastureNotFound,
+                file: file,
+                line: line
+            )
+        }
 
         XCTAssertNoThrow(
             try repository.validatePastureGroupIDsExist([group.id]),
@@ -573,6 +588,21 @@ enum PastureRepositoryContract {
             XCTAssertEqual(
                 error as? PastureRepositoryError,
                 .pastureGroupIDsNotFound([missingGroupID]),
+                file: file,
+                line: line
+            )
+        }
+        XCTAssertThrowsError(
+            try repository.updateGroup(
+                id: missingGroupID,
+                input: PastureGroupInput(name: "Missing Update Group", grazeDays: 5, restDays: 20)
+            ),
+            file: file,
+            line: line
+        ) { error in
+            XCTAssertEqual(
+                error as? PastureValidationError,
+                .pastureGroupNotFound,
                 file: file,
                 line: line
             )
