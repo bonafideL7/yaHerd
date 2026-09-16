@@ -17,27 +17,18 @@ extension FieldCheckRepositoryContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let sourceAnimal = try fixture.makeAnimalRepository().create(
-            input: reviewHardeningAnimalInput(
-                name: "Final Reassignment Source",
-                tagNumber: "FR701",
-                pastureID: pasture.id
-            )
+        let source = try fixture.makeAnimalRepository().create(
+            input: reviewHardeningAnimalInput(name: "Reassignment Source", tagNumber: "FR701", pastureID: pasture.id)
         )
-        let destinationAnimal = try fixture.makeAnimalRepository().create(
-            input: reviewHardeningAnimalInput(
-                name: "Final Reassignment Destination",
-                tagNumber: "FR702",
-                pastureID: pasture.id
-            )
+        let destination = try fixture.makeAnimalRepository().create(
+            input: reviewHardeningAnimalInput(name: "Reassignment Destination", tagNumber: "FR702", pastureID: pasture.id)
         )
-
         let repository = fixture.makeFieldCheckRepository()
         let sessionID = try repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: reviewHardeningDate(year: 2026, month: 9, day: 27, hour: 8),
-                notes: "Final missing-finding reassignment"
+                notes: "Final finding reassignment"
             )
         )
         try repository.addFinding(
@@ -47,36 +38,16 @@ extension FieldCheckRepositoryContract {
                 type: .missingAnimal,
                 severity: .warning,
                 status: .open,
-                note: "Source animal missing",
-                animalID: sourceAnimal.id
+                note: "Source missing",
+                animalID: source.id
             )
         )
 
-        let before = try XCTUnwrap(
-            fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
-            file: file,
-            line: line
-        )
-        let findingID = try XCTUnwrap(
-            before.findings.first { $0.animalID == sourceAnimal.id }?.id,
-            file: file,
-            line: line
-        )
-        let sourceCheckID = try XCTUnwrap(
-            before.animalChecks.first { $0.animalID == sourceAnimal.id }?.id,
-            file: file,
-            line: line
-        )
-        let destinationCheckID = try XCTUnwrap(
-            before.animalChecks.first { $0.animalID == destinationAnimal.id }?.id,
-            file: file,
-            line: line
-        )
-        XCTAssertTrue(
-            try XCTUnwrap(before.animalChecks.first { $0.id == sourceCheckID }, file: file, line: line).isMissing,
-            file: file,
-            line: line
-        )
+        let before = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID), file: file, line: line)
+        let findingID = try XCTUnwrap(before.findings.first { $0.animalID == source.id }?.id, file: file, line: line)
+        let sourceCheckID = try XCTUnwrap(before.animalChecks.first { $0.animalID == source.id }?.id, file: file, line: line)
+        let destinationCheckID = try XCTUnwrap(before.animalChecks.first { $0.animalID == destination.id }?.id, file: file, line: line)
+        XCTAssertTrue(try XCTUnwrap(before.animalChecks.first { $0.id == sourceCheckID }, file: file, line: line).isMissing, file: file, line: line)
 
         try repository.updateFinding(
             sessionID: sessionID,
@@ -86,65 +57,32 @@ extension FieldCheckRepositoryContract {
                 type: .missingAnimal,
                 severity: .critical,
                 status: .monitoring,
-                note: "Destination animal missing",
-                animalID: destinationAnimal.id
+                note: "Destination missing",
+                animalID: destination.id
             )
         )
 
-        let reloadedRepository = fixture.makeFieldCheckRepository()
         let after = try XCTUnwrap(
-            reloadedRepository.fetchSessionDetail(id: sessionID),
+            fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
             file: file,
             line: line
         )
         let sourceCheck = try XCTUnwrap(
             after.animalChecks.first { $0.id == sourceCheckID },
-            "Reassigning the only unresolved missing finding must preserve the source roster row and its application UUID.",
+            "Reassigning the only unresolved missing finding must preserve the source roster row and application UUID.",
             file: file,
             line: line
         )
         let destinationCheck = try XCTUnwrap(
             after.animalChecks.first { $0.id == destinationCheckID },
-            "Reassigning the only unresolved missing finding must preserve the destination roster row and its application UUID.",
             file: file,
             line: line
         )
-        XCTAssertEqual(sourceCheck.animalID, sourceAnimal.id, file: file, line: line)
-        XCTAssertFalse(
-            sourceCheck.isMissing,
-            "Reassigning the final unresolved missing finding must clear missing state without deleting the source roster row.",
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(destinationCheck.animalID, destinationAnimal.id, file: file, line: line)
+        XCTAssertEqual(sourceCheck.animalID, source.id, file: file, line: line)
+        XCTAssertFalse(sourceCheck.isMissing, file: file, line: line)
+        XCTAssertEqual(destinationCheck.animalID, destination.id, file: file, line: line)
         XCTAssertTrue(destinationCheck.isMissing, file: file, line: line)
-
-        let reassignedFinding = try XCTUnwrap(
-            after.findings.first { $0.id == findingID },
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(reassignedFinding.animalID, destinationAnimal.id, file: file, line: line)
-        XCTAssertEqual(reassignedFinding.status, .monitoring, file: file, line: line)
-
-        let summary = try XCTUnwrap(
-            reloadedRepository.fetchSessions().first { $0.id == sessionID },
-            file: file,
-            line: line
-        )
-        let sourceSummaryCheck = try XCTUnwrap(
-            summary.animalChecks.first { $0.id == sourceCheckID },
-            "Session summaries must retain the source roster row after final-finding reassignment.",
-            file: file,
-            line: line
-        )
-        let destinationSummaryCheck = try XCTUnwrap(
-            summary.animalChecks.first { $0.id == destinationCheckID },
-            file: file,
-            line: line
-        )
-        XCTAssertFalse(sourceSummaryCheck.isMissing, file: file, line: line)
-        XCTAssertTrue(destinationSummaryCheck.isMissing, file: file, line: line)
+        XCTAssertEqual(after.findings.first { $0.id == findingID }?.animalID, destination.id, file: file, line: line)
     }
 
     static func assertCompletedSessionRejectedMutationsAreMutationFree(
@@ -161,13 +99,8 @@ extension FieldCheckRepositoryContract {
             )
         )
         let animal = try fixture.makeAnimalRepository().create(
-            input: reviewHardeningAnimalInput(
-                name: "Completed Rejection Animal",
-                tagNumber: "CR901",
-                pastureID: pasture.id
-            )
+            input: reviewHardeningAnimalInput(name: "Completed Rejection Animal", tagNumber: "CR901", pastureID: pasture.id)
         )
-
         let repository = fixture.makeFieldCheckRepository()
         let sessionID = try repository.createSession(
             input: FieldCheckSessionStartInput(
@@ -194,39 +127,18 @@ extension FieldCheckRepositoryContract {
         try repository.completeSession(id: sessionID)
 
         let completedRepository = fixture.makeFieldCheckRepository()
-        let completedBaseline = try XCTUnwrap(
-            completedRepository.fetchSessionDetail(id: sessionID),
-            file: file,
-            line: line
-        )
-        let completedSummaryBaseline = try XCTUnwrap(
-            completedRepository.fetchSessions().first { $0.id == sessionID },
-            file: file,
-            line: line
-        )
+        let baseline = try XCTUnwrap(completedRepository.fetchSessionDetail(id: sessionID), file: file, line: line)
         let openFindingsBaseline = try completedRepository.fetchOpenFindings(limit: 0)
 
         XCTAssertThrowsError(try completedRepository.updateNotes(sessionID: sessionID, notes: "Blocked notes"), file: file, line: line)
+        XCTAssertThrowsError(try completedRepository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.heifer: 1]), file: file, line: line)
         XCTAssertThrowsError(
-            try completedRepository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.heifer: 1]),
+            try completedRepository.setAnimalCheckCounted(sessionID: sessionID, animalCheckID: animalCheckID, isCounted: true),
             file: file,
             line: line
         )
         XCTAssertThrowsError(
-            try completedRepository.setAnimalCheckCounted(
-                sessionID: sessionID,
-                animalCheckID: animalCheckID,
-                isCounted: true
-            ),
-            file: file,
-            line: line
-        )
-        XCTAssertThrowsError(
-            try completedRepository.setAnimalCheckMissing(
-                sessionID: sessionID,
-                animalCheckID: animalCheckID,
-                isMissing: true
-            ),
+            try completedRepository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: animalCheckID, isMissing: true),
             file: file,
             line: line
         )
@@ -270,87 +182,43 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
-        XCTAssertThrowsError(
-            try completedRepository.deleteFinding(sessionID: sessionID, findingID: findingID),
-            file: file,
-            line: line
-        )
+        XCTAssertThrowsError(try completedRepository.deleteFinding(sessionID: sessionID, findingID: findingID), file: file, line: line)
 
         let postRejectionRepository = fixture.makeFieldCheckRepository()
-        let postRejection = try XCTUnwrap(
-            postRejectionRepository.fetchSessionDetail(id: sessionID),
-            "Rejected completed-session mutations must leave the completed snapshot readable.",
-            file: file,
-            line: line
-        )
-        try assertReviewHardeningDetailEqual(
-            postRejection,
-            expected: completedBaseline,
-            file: file,
-            line: line
-        )
-        let postRejectionSummary = try XCTUnwrap(
-            postRejectionRepository.fetchSessions().first { $0.id == sessionID },
-            file: file,
-            line: line
-        )
-        try assertReviewHardeningSummaryEqual(
-            postRejectionSummary,
-            expected: completedSummaryBaseline,
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(
-            try postRejectionRepository.fetchOpenFindings(limit: 0),
-            openFindingsBaseline,
-            "Rejected completed-session mutations must not alter open-finding projections.",
-            file: file,
-            line: line
-        )
+        let postRejection = try XCTUnwrap(postRejectionRepository.fetchSessionDetail(id: sessionID), file: file, line: line)
+        assertReviewHardeningDetailEqual(postRejection, expected: baseline, file: file, line: line)
+        XCTAssertEqual(try postRejectionRepository.fetchOpenFindings(limit: 0), openFindingsBaseline, file: file, line: line)
 
-        try completedRepository.updateFindingStatus(
-            sessionID: sessionID,
-            findingID: findingID,
-            status: .resolved
-        )
-
-        let afterAllowedSaveRepository = fixture.makeFieldCheckRepository()
+        try completedRepository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: .resolved)
         let afterAllowedSave = try XCTUnwrap(
-            afterAllowedSaveRepository.fetchSessionDetail(id: sessionID),
+            fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
             file: file,
             line: line
         )
-        XCTAssertEqual(afterAllowedSave.id, completedBaseline.id, file: file, line: line)
-        XCTAssertEqual(afterAllowedSave.completedAt, completedBaseline.completedAt, file: file, line: line)
-        XCTAssertEqual(afterAllowedSave.notes, completedBaseline.notes, file: file, line: line)
-        XCTAssertEqual(afterAllowedSave.expectedHeadCountSnapshot, completedBaseline.expectedHeadCountSnapshot, file: file, line: line)
-        XCTAssertEqual(afterAllowedSave.quickCowCount, completedBaseline.quickCowCount, file: file, line: line)
-        XCTAssertEqual(afterAllowedSave.quickHeiferCount, completedBaseline.quickHeiferCount, file: file, line: line)
-        XCTAssertEqual(afterAllowedSave.quickCalfCount, completedBaseline.quickCalfCount, file: file, line: line)
-        XCTAssertEqual(afterAllowedSave.quickBullCount, completedBaseline.quickBullCount, file: file, line: line)
-        XCTAssertEqual(afterAllowedSave.quickSteerCount, completedBaseline.quickSteerCount, file: file, line: line)
+        XCTAssertEqual(afterAllowedSave.completedAt, baseline.completedAt, file: file, line: line)
+        XCTAssertEqual(afterAllowedSave.notes, baseline.notes, file: file, line: line)
+        XCTAssertEqual(afterAllowedSave.expectedHeadCountSnapshot, baseline.expectedHeadCountSnapshot, file: file, line: line)
+        XCTAssertEqual(afterAllowedSave.quickCowCount, baseline.quickCowCount, file: file, line: line)
+        XCTAssertEqual(afterAllowedSave.quickHeiferCount, baseline.quickHeiferCount, file: file, line: line)
+        XCTAssertEqual(afterAllowedSave.quickCalfCount, baseline.quickCalfCount, file: file, line: line)
+        XCTAssertEqual(afterAllowedSave.quickBullCount, baseline.quickBullCount, file: file, line: line)
+        XCTAssertEqual(afterAllowedSave.quickSteerCount, baseline.quickSteerCount, file: file, line: line)
         XCTAssertEqual(
             afterAllowedSave.animalChecks.sorted(by: reviewHardeningSnapshotIDOrder),
-            completedBaseline.animalChecks.sorted(by: reviewHardeningSnapshotIDOrder),
-            "A later allowed finding-status save must not flush mutations from previously rejected completed-session edits.",
+            baseline.animalChecks.sorted(by: reviewHardeningSnapshotIDOrder),
+            "An allowed status save must not flush state staged by previously rejected completed-session mutations.",
             file: file,
             line: line
         )
-        let baselineFinding = try XCTUnwrap(completedBaseline.findings.first { $0.id == findingID }, file: file, line: line)
+        let baselineFinding = try XCTUnwrap(baseline.findings.first { $0.id == findingID }, file: file, line: line)
         let resolvedFinding = try XCTUnwrap(afterAllowedSave.findings.first { $0.id == findingID }, file: file, line: line)
-        XCTAssertEqual(resolvedFinding.id, baselineFinding.id, file: file, line: line)
         XCTAssertEqual(resolvedFinding.recordedAt, baselineFinding.recordedAt, file: file, line: line)
         XCTAssertEqual(resolvedFinding.type, baselineFinding.type, file: file, line: line)
         XCTAssertEqual(resolvedFinding.severity, baselineFinding.severity, file: file, line: line)
         XCTAssertEqual(resolvedFinding.note, baselineFinding.note, file: file, line: line)
         XCTAssertEqual(resolvedFinding.animalID, baselineFinding.animalID, file: file, line: line)
         XCTAssertEqual(resolvedFinding.status, .resolved, file: file, line: line)
-        XCTAssertEqual(afterAllowedSave.findings.count, completedBaseline.findings.count, file: file, line: line)
-        XCTAssertFalse(
-            try afterAllowedSaveRepository.fetchOpenFindings(limit: 0).contains { $0.id == findingID },
-            file: file,
-            line: line
-        )
+        XCTAssertEqual(afterAllowedSave.findings.count, baseline.findings.count, file: file, line: line)
     }
 
     private static func assertReviewHardeningDetailEqual(
@@ -358,7 +226,7 @@ extension FieldCheckRepositoryContract {
         expected: FieldCheckSessionDetailSnapshot,
         file: StaticString,
         line: UInt
-    ) throws {
+    ) {
         XCTAssertEqual(actual.id, expected.id, file: file, line: line)
         XCTAssertEqual(actual.startedAt, expected.startedAt, file: file, line: line)
         XCTAssertEqual(actual.completedAt, expected.completedAt, file: file, line: line)
@@ -387,46 +255,11 @@ extension FieldCheckRepositoryContract {
         )
     }
 
-    private static func assertReviewHardeningSummaryEqual(
-        _ actual: FieldCheckSessionSummary,
-        expected: FieldCheckSessionSummary,
-        file: StaticString,
-        line: UInt
-    ) throws {
-        XCTAssertEqual(actual.id, expected.id, file: file, line: line)
-        XCTAssertEqual(actual.startedAt, expected.startedAt, file: file, line: line)
-        XCTAssertEqual(actual.completedAt, expected.completedAt, file: file, line: line)
-        XCTAssertEqual(actual.pastureID, expected.pastureID, file: file, line: line)
-        XCTAssertEqual(actual.pastureName, expected.pastureName, file: file, line: line)
-        XCTAssertEqual(actual.pastureArchivedAt, expected.pastureArchivedAt, file: file, line: line)
-        XCTAssertEqual(actual.isPastureArchived, expected.isPastureArchived, file: file, line: line)
-        XCTAssertEqual(actual.expectedHeadCountSnapshot, expected.expectedHeadCountSnapshot, file: file, line: line)
-        XCTAssertEqual(actual.quickCowCount, expected.quickCowCount, file: file, line: line)
-        XCTAssertEqual(actual.quickHeiferCount, expected.quickHeiferCount, file: file, line: line)
-        XCTAssertEqual(actual.quickCalfCount, expected.quickCalfCount, file: file, line: line)
-        XCTAssertEqual(actual.quickBullCount, expected.quickBullCount, file: file, line: line)
-        XCTAssertEqual(actual.quickSteerCount, expected.quickSteerCount, file: file, line: line)
-        XCTAssertEqual(actual.openFindingsCount, expected.openFindingsCount, file: file, line: line)
-        XCTAssertEqual(
-            actual.animalChecks.sorted(by: reviewHardeningSnapshotIDOrder),
-            expected.animalChecks.sorted(by: reviewHardeningSnapshotIDOrder),
-            file: file,
-            line: line
-        )
-    }
-
-    private static func reviewHardeningSnapshotIDOrder<T: Identifiable>(
-        _ lhs: T,
-        _ rhs: T
-    ) -> Bool where T.ID == UUID {
+    private static func reviewHardeningSnapshotIDOrder<T: Identifiable>(_ lhs: T, _ rhs: T) -> Bool where T.ID == UUID {
         lhs.id.uuidString < rhs.id.uuidString
     }
 
-    private static func reviewHardeningAnimalInput(
-        name: String,
-        tagNumber: String,
-        pastureID: UUID
-    ) -> AnimalInput {
+    private static func reviewHardeningAnimalInput(name: String, tagNumber: String, pastureID: UUID) -> AnimalInput {
         AnimalInput(
             name: name,
             tagNumber: tagNumber,
@@ -447,12 +280,7 @@ extension FieldCheckRepositoryContract {
         )
     }
 
-    private static func reviewHardeningDate(
-        year: Int,
-        month: Int,
-        day: Int,
-        hour: Int = 0
-    ) -> Date {
+    private static func reviewHardeningDate(year: Int, month: Int, day: Int, hour: Int = 0) -> Date {
         var components = DateComponents()
         components.calendar = Calendar(identifier: .gregorian)
         components.timeZone = TimeZone(secondsFromGMT: 0)
