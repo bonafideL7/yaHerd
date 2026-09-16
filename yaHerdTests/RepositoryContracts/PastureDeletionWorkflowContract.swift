@@ -154,6 +154,14 @@ enum PastureDeletionWorkflowContract {
                 sex: .male
             )
         )
+        let controlWorkingAnimal = try animalRepository.create(
+            input: makeAnimalInput(
+                name: "Deletion Contract Control Working Cow",
+                tagNumber: "711",
+                pastureID: controlPasture.id,
+                tagColorID: animalTagColor.id
+            )
+        )
 
         let soldAnimal = try animalRepository.create(
             input: makeAnimalInput(
@@ -187,6 +195,7 @@ enum PastureDeletionWorkflowContract {
         let workingPregnancyDueDate = Date(timeIntervalSince1970: 1_793_988_200)
         let workingTreatmentRecordedAt = Date(timeIntervalSince1970: 1_779_910_000)
         let finishedWorkingStartedAt = Date(timeIntervalSince1970: 1_779_920_000)
+        let controlWorkingStartedAt = Date(timeIntervalSince1970: 1_779_930_000)
         let workingTreatment = WorkingTreatmentPlanItem(
             id: UUID(),
             name: "Deletion Contract Vaccine",
@@ -405,6 +414,46 @@ enum PastureDeletionWorkflowContract {
         )
         XCTAssertEqual(finishedWorkingSessionBeforeDeletion.status, .finished, file: file, line: line)
 
+        let controlWorkingSessionID = try workingRepository.startSession(
+            input: WorkingSessionStartInput(
+                date: controlWorkingStartedAt,
+                sourcePastureID: controlPasture.id,
+                treatmentTemplateName: "Deletion Contract Control Work",
+                plannedTreatments: [],
+                animalIDs: [controlWorkingAnimal.id]
+            )
+        )
+        let controlWorkingSessionBeforeDeletion = try XCTUnwrap(
+            workingRepository.fetchSessionDetail(id: controlWorkingSessionID),
+            "The unrelated Working fixture must exist before deleting other pastures.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(controlWorkingSessionBeforeDeletion.status, .active, file: file, line: line)
+        XCTAssertEqual(controlWorkingSessionBeforeDeletion.sourcePastureID, controlPasture.id, file: file, line: line)
+        XCTAssertEqual(controlWorkingSessionBeforeDeletion.sourcePastureName, "Delete Workflow Control", file: file, line: line)
+        XCTAssertEqual(controlWorkingSessionBeforeDeletion.queueItems.count, 1, file: file, line: line)
+        let controlWorkingQueueItemID = try XCTUnwrap(
+            controlWorkingSessionBeforeDeletion.queueItems.first?.id,
+            "The unrelated Working fixture must contain one queued animal.",
+            file: file,
+            line: line
+        )
+        let controlWorkingEditorBeforeDeletion = try XCTUnwrap(
+            workingRepository.fetchQueueItemEditor(
+                sessionID: controlWorkingSessionID,
+                queueItemID: controlWorkingQueueItemID
+            ),
+            file: file,
+            line: line
+        )
+        let controlWorkingSummaryBeforeDeletion = try XCTUnwrap(
+            workingRepository.fetchSessions().first { $0.id == controlWorkingSessionID },
+            "The unrelated Working fixture must appear in the list reader before deletion.",
+            file: file,
+            line: line
+        )
+
         let firstStartedAt = Date(timeIntervalSince1970: 1_780_000_000)
         let secondStartedAt = Date(timeIntervalSince1970: 1_780_043_200)
         let controlStartedAt = Date(timeIntervalSince1970: 1_780_064_000)
@@ -524,8 +573,24 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+        let controlWorkingAnimalDetailBeforeDeletion = try XCTUnwrap(
+            preDeletionAnimals.fetchAnimalDetail(id: controlWorkingAnimal.id),
+            "The unrelated Working animal must remain readable while its session is active.",
+            file: file,
+            line: line
+        )
+        let controlWorkingAnimalSummaryBeforeDeletion = try XCTUnwrap(
+            preDeletionAnimals.fetchAnimals().first { $0.id == controlWorkingAnimal.id },
+            "The unrelated Working animal must remain visible through the animal-list reader.",
+            file: file,
+            line: line
+        )
         let controlMovementDetailsBeforeDeletion = try movementDetails(
             animalID: controlAnimal.id,
+            repository: preDeletionAnimals
+        )
+        let controlWorkingMovementDetailsBeforeDeletion = try movementDetails(
+            animalID: controlWorkingAnimal.id,
             repository: preDeletionAnimals
         )
         let workingMovementDetailsBeforeDeletion = try movementDetails(
@@ -669,6 +734,22 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(controlAnimalSummary.location, .pasture, file: file, line: line)
         XCTAssertEqual(controlAnimalSummary.pastureID, controlPasture.id, file: file, line: line)
         XCTAssertEqual(controlAnimalSummary.pastureName, "Delete Workflow Control", file: file, line: line)
+        let controlWorkingAnimalSummaryAfterDeletion = try XCTUnwrap(
+            animalSummaries.first { $0.id == controlWorkingAnimal.id },
+            "An animal active in an unrelated Working session must remain in the animal-list projection.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            controlWorkingAnimalSummaryAfterDeletion,
+            controlWorkingAnimalSummaryBeforeDeletion,
+            "Deleting other pastures must not rewrite the unrelated Working animal's list state.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(controlWorkingAnimalSummaryAfterDeletion.location, .workingPen, file: file, line: line)
+        XCTAssertNil(controlWorkingAnimalSummaryAfterDeletion.pastureID, file: file, line: line)
+        XCTAssertNil(controlWorkingAnimalSummaryAfterDeletion.pastureName, file: file, line: line)
 
         for (animalID, expectedStatus, expectedArchived) in [
             (soldAnimal.id, AnimalStatus.sold, false),
@@ -768,6 +849,29 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+        let reloadedControlWorkingAnimal = try XCTUnwrap(
+            reloadedAnimals.fetchAnimalDetail(id: controlWorkingAnimal.id),
+            "Deleting other pastures must preserve the animal active in an unrelated Working session.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedControlWorkingAnimal,
+            controlWorkingAnimalDetailBeforeDeletion,
+            "Deleting other pastures must not rewrite the unrelated Working animal's detail state.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedControlWorkingAnimal.location, .workingPen, file: file, line: line)
+        XCTAssertNil(reloadedControlWorkingAnimal.pastureID, file: file, line: line)
+        XCTAssertNil(reloadedControlWorkingAnimal.pastureName, file: file, line: line)
+        XCTAssertEqual(
+            try movementDetails(animalID: controlWorkingAnimal.id, repository: reloadedAnimals),
+            controlWorkingMovementDetailsBeforeDeletion,
+            "Deleting other pastures must not alter movement history for an unrelated Working animal.",
+            file: file,
+            line: line
+        )
 
         let reloadedWorkingAnimal = try XCTUnwrap(
             reloadedAnimals.fetchAnimalDetail(id: workingAnimal.id),
@@ -820,6 +924,20 @@ enum PastureDeletionWorkflowContract {
         )
 
         let reloadedWorking = fixture.makeWorkingRepository()
+        let controlWorkingDetailAfterDeletion = try XCTUnwrap(
+            reloadedWorking.fetchSessionDetail(id: controlWorkingSessionID),
+            "Deleting other pastures must preserve an unrelated Working session.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            controlWorkingDetailAfterDeletion,
+            controlWorkingSessionBeforeDeletion,
+            "An unrelated Working session's detail projection must remain unchanged.",
+            file: file,
+            line: line
+        )
+
         let workingDetail = try XCTUnwrap(
             reloadedWorking.fetchSessionDetail(id: workingSessionID),
             "Working sessions must survive deletion of their source pasture.",
@@ -848,6 +966,19 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(workingQueueItem.destinationPastureName, "Delete Workflow South", file: file, line: line)
 
         let workingSummaries = try reloadedWorking.fetchSessions()
+        let controlWorkingSummaryAfterDeletion = try XCTUnwrap(
+            workingSummaries.first { $0.id == controlWorkingSessionID },
+            "The Working list reader must preserve an unrelated session after deleting other pastures.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            controlWorkingSummaryAfterDeletion,
+            controlWorkingSummaryBeforeDeletion,
+            "An unrelated Working session's list projection must remain unchanged.",
+            file: file,
+            line: line
+        )
         let workingSummary = try XCTUnwrap(
             workingSummaries.first { $0.id == workingSessionID },
             "Working sessions must remain visible through the list reader after source-pasture deletion.",
@@ -860,6 +991,23 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(workingSummary.treatmentTemplateName, "Deletion Contract Work", file: file, line: line)
         XCTAssertEqual(workingSummary.totalQueueItems, 1, file: file, line: line)
         XCTAssertEqual(workingSummary.completedQueueItems, 1, file: file, line: line)
+
+        let controlWorkingEditorAfterDeletion = try XCTUnwrap(
+            reloadedWorking.fetchQueueItemEditor(
+                sessionID: controlWorkingSessionID,
+                queueItemID: controlWorkingQueueItemID
+            ),
+            "The Working editor must preserve an unrelated queued animal after deleting other pastures.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            controlWorkingEditorAfterDeletion,
+            controlWorkingEditorBeforeDeletion,
+            "An unrelated Working queue-editor projection must remain unchanged.",
+            file: file,
+            line: line
+        )
 
         let workingEditor = try XCTUnwrap(
             reloadedWorking.fetchQueueItemEditor(
