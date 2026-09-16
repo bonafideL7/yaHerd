@@ -28,6 +28,37 @@ enum AnimalRepositoryContract {
         let updatedTagColorID = TagColorDefaults.yellowID
         let createdStatusReference = try fixture.makeStatusReference("Contract Deceased", .dead)
         let updatedStatusReference = try fixture.makeStatusReference("Contract Sold", .sold)
+
+        let statusReferenceOptions = try fixture.makeAnimalRepository().fetchStatusReferenceOptions()
+        let reloadedCreatedStatusReference = try XCTUnwrap(
+            statusReferenceOptions.first { $0.id == createdStatusReference.id },
+            "The created status reference must be returned through the repository read API.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedCreatedStatusReference.name, createdStatusReference.name, file: file, line: line)
+        XCTAssertEqual(
+            reloadedCreatedStatusReference.baseStatus.rawValue,
+            AnimalStatus.dead.rawValue,
+            "The dead status reference must retain its exact base status through the repository read API.",
+            file: file,
+            line: line
+        )
+        let reloadedUpdatedStatusReference = try XCTUnwrap(
+            statusReferenceOptions.first { $0.id == updatedStatusReference.id },
+            "The updated status reference must be returned through the repository read API.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedUpdatedStatusReference.name, updatedStatusReference.name, file: file, line: line)
+        XCTAssertEqual(
+            reloadedUpdatedStatusReference.baseStatus.rawValue,
+            AnimalStatus.sold.rawValue,
+            "The sold status reference must retain its exact base status through the repository read API.",
+            file: file,
+            line: line
+        )
+
         let created = try repository.create(
             input: makeAnimalInput(
                 name: "Contract Cow",
@@ -48,6 +79,13 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(created.name, "Contract Cow", file: file, line: line)
         XCTAssertEqual(created.displayTagNumber, "101", file: file, line: line)
         XCTAssertEqual(created.displayTagColorID, createdTagColorID, file: file, line: line)
+        XCTAssertEqual(
+            created.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            "A tagged animal must have exactly one active primary tag after creation.",
+            file: file,
+            line: line
+        )
         let createdPrimaryTag = try XCTUnwrap(
             created.activeTags.first { $0.isPrimary },
             file: file,
@@ -76,6 +114,13 @@ enum AnimalRepositoryContract {
             reloadedCreated.displayTagColorID,
             createdTagColorID,
             "Creating must persist the original tag color before later updates.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedCreated.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            "Reloading a tagged animal after creation must preserve exactly one active primary tag.",
             file: file,
             line: line
         )
@@ -177,6 +222,13 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(updated.name, "Updated Contract Cow", file: file, line: line)
         XCTAssertEqual(updated.displayTagNumber, "102", file: file, line: line)
         XCTAssertEqual(updated.displayTagColorID, updatedTagColorID, file: file, line: line)
+        XCTAssertEqual(
+            updated.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            "Updating a tagged animal must preserve exactly one active primary tag.",
+            file: file,
+            line: line
+        )
         let updatedPrimaryTag = try XCTUnwrap(
             updated.activeTags.first { $0.id == createdPrimaryTag.id },
             "Updating editor tag fields must mutate the existing primary tag instead of replacing it.",
@@ -223,6 +275,13 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloaded.name, "Updated Contract Cow", file: file, line: line)
         XCTAssertEqual(reloaded.displayTagNumber, "102", file: file, line: line)
         XCTAssertEqual(reloaded.displayTagColorID, updatedTagColorID, file: file, line: line)
+        XCTAssertEqual(
+            reloaded.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            "Reloading an updated tagged animal must preserve exactly one active primary tag.",
+            file: file,
+            line: line
+        )
         let reloadedPrimaryTag = try XCTUnwrap(
             reloaded.activeTags.first { $0.id == createdPrimaryTag.id },
             "Reloading must preserve the edited primary tag identity and payload.",
@@ -264,7 +323,16 @@ enum AnimalRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(reloadedSummary.name, "Updated Contract Cow", file: file, line: line)
+        XCTAssertEqual(reloadedSummary.displayTagNumber, "102", file: file, line: line)
+        XCTAssertEqual(reloadedSummary.displayTagColorID, updatedTagColorID, file: file, line: line)
+        XCTAssertEqual(reloadedSummary.sex.rawValue, Sex.male.rawValue, file: file, line: line)
         XCTAssertEqual(reloadedSummary.animalType, .bull, file: file, line: line)
+        XCTAssertEqual(reloadedSummary.birthDate, updatedBirthDate, file: file, line: line)
+        XCTAssertEqual(reloadedSummary.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
+        XCTAssertEqual(reloadedSummary.pastureID, updatedPasture.id, file: file, line: line)
+        XCTAssertEqual(reloadedSummary.pastureName, updatedPasture.name, file: file, line: line)
+        XCTAssertEqual(reloadedSummary.firstDistinguishingFeature, "White blaze", file: file, line: line)
 
         let timeline = try reloadedRepository.fetchTimeline(id: created.id)
         XCTAssertTrue(
@@ -301,6 +369,13 @@ enum AnimalRepositoryContract {
             )
         )
         XCTAssertEqual(cleared.status.rawValue, AnimalStatus.active.rawValue, file: file, line: line)
+        XCTAssertEqual(
+            cleared.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            "Clearing other editable fields must preserve exactly one active primary tag.",
+            file: file,
+            line: line
+        )
         XCTAssertNil(cleared.saleDate, "Leaving sold status must clear the prior sale date.", file: file, line: line)
         XCTAssertNil(cleared.salePrice, "Leaving sold status must clear the prior sale price.", file: file, line: line)
         XCTAssertNil(cleared.reasonSold, "Leaving sold status must clear the prior sale reason.", file: file, line: line)
@@ -320,6 +395,13 @@ enum AnimalRepositoryContract {
             line: line
         )
         XCTAssertEqual(reloadedCleared.status.rawValue, AnimalStatus.active.rawValue, file: file, line: line)
+        XCTAssertEqual(
+            reloadedCleared.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            "Reloading after clearing other editable fields must preserve exactly one active primary tag.",
+            file: file,
+            line: line
+        )
         XCTAssertNil(reloadedCleared.saleDate, "Cleared sale date must remain nil after reload.", file: file, line: line)
         XCTAssertNil(reloadedCleared.salePrice, "Cleared sale price must remain nil after reload.", file: file, line: line)
         XCTAssertNil(reloadedCleared.reasonSold, "Cleared sale reason must remain nil after reload.", file: file, line: line)
