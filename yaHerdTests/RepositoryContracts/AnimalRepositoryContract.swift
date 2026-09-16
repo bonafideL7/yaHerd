@@ -26,6 +26,7 @@ enum AnimalRepositoryContract {
         let createdCauseOfDeath = "Contract illness"
         let createdTagColorID = TagColorDefaults.whiteID
         let updatedTagColorID = TagColorDefaults.yellowID
+        let updatedDamTagColorID = TagColorDefaults.blueID
         let createdStatusReference = try fixture.makeStatusReference("Contract Deceased", .dead)
         let updatedStatusReference = try fixture.makeStatusReference("Contract Sold", .sold)
 
@@ -191,6 +192,7 @@ enum AnimalRepositoryContract {
             input: makeAnimalInput(
                 name: "Update Contract Dam",
                 tagNumber: "UD01",
+                tagColorID: updatedDamTagColorID,
                 sex: .female,
                 birthDate: date(year: 2016, month: 1, day: 1)
             )
@@ -332,6 +334,8 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloadedSummary.status.rawValue, AnimalStatus.sold.rawValue, file: file, line: line)
         XCTAssertEqual(reloadedSummary.pastureID, updatedPasture.id, file: file, line: line)
         XCTAssertEqual(reloadedSummary.pastureName, updatedPasture.name, file: file, line: line)
+        XCTAssertEqual(reloadedSummary.damDisplayTagNumber, "UD01", file: file, line: line)
+        XCTAssertEqual(reloadedSummary.damDisplayTagColorID, updatedDamTagColorID, file: file, line: line)
         XCTAssertEqual(reloadedSummary.firstDistinguishingFeature, "White blaze", file: file, line: line)
 
         let timeline = try reloadedRepository.fetchTimeline(id: created.id)
