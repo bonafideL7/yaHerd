@@ -91,6 +91,19 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        let sourceCheckBeforeReassignment = try XCTUnwrap(
+            beforeReassignment.animalChecks.first { $0.animalID == sourceAnimal.id },
+            file: file,
+            line: line
+        )
+        let targetCheckBeforeReassignment = try XCTUnwrap(
+            beforeReassignment.animalChecks.first { $0.id == targetCheckBeforeLiveChange.id },
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(sourceCheckBeforeReassignment.needsAttention, file: file, line: line)
+        XCTAssertFalse(targetCheckBeforeReassignment.needsAttention, file: file, line: line)
+        XCTAssertEqual(beforeReassignment.flaggedAnimalCount, 1, file: file, line: line)
 
         _ = try fixture.makePastureRepository().update(
             id: pasture.id,
@@ -155,14 +168,67 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(reassignedFinding.pastureName, "Reassignment Snapshot North", file: file, line: line)
         XCTAssertEqual(reassignedFinding.note, "Finding reassigned after live changes", file: file, line: line)
 
+        let retainedSourceCheck = try XCTUnwrap(
+            reloadedDetail.animalChecks.first { $0.id == sourceCheckBeforeReassignment.id },
+            "Reassigning a finding must retain the source animal's roster row.",
+            file: file,
+            line: line
+        )
         let retainedTargetCheck = try XCTUnwrap(
             reloadedDetail.animalChecks.first { $0.id == targetCheckBeforeLiveChange.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(retainedSourceCheck.animalID, sourceAnimal.id, file: file, line: line)
+        XCTAssertFalse(
+            retainedSourceCheck.needsAttention,
+            "Reassigning the source animal's only unresolved finding must clear its attention state.",
             file: file,
             line: line
         )
         XCTAssertEqual(retainedTargetCheck.animalID, targetAnimal.id, file: file, line: line)
         XCTAssertEqual(retainedTargetCheck.displayTagNumber, "RS702", file: file, line: line)
         XCTAssertEqual(retainedTargetCheck.displayTagColorID, originalColor.id, file: file, line: line)
+        XCTAssertTrue(
+            retainedTargetCheck.needsAttention,
+            "Reassigning an unresolved finding must move attention to the target roster animal.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedDetail.flaggedAnimalCount, 1, file: file, line: line)
+
+        let reloadedSummary = try XCTUnwrap(
+            reloadedRepository.fetchSessions().first { $0.id == sessionID },
+            file: file,
+            line: line
+        )
+        let summarySourceCheck = try XCTUnwrap(
+            reloadedSummary.animalChecks.first { $0.id == sourceCheckBeforeReassignment.id },
+            "The session summary must retain the source roster row after finding reassignment.",
+            file: file,
+            line: line
+        )
+        let summaryTargetCheck = try XCTUnwrap(
+            reloadedSummary.animalChecks.first { $0.id == targetCheckBeforeLiveChange.id },
+            "The session summary must retain the target roster row after finding reassignment.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(summarySourceCheck.animalID, sourceAnimal.id, file: file, line: line)
+        XCTAssertFalse(
+            summarySourceCheck.needsAttention,
+            "Session summaries must clear attention from the source animal after its final unresolved finding is reassigned.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(summaryTargetCheck.animalID, targetAnimal.id, file: file, line: line)
+        XCTAssertTrue(
+            summaryTargetCheck.needsAttention,
+            "Session summaries must move attention to the target animal after finding reassignment.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedSummary.flaggedAnimalCount, 1, file: file, line: line)
 
         let openFinding = try XCTUnwrap(
             try reloadedRepository.fetchOpenFindings(limit: 0).first { $0.id == findingID },
