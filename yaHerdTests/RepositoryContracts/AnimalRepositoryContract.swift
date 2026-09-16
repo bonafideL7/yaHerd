@@ -30,7 +30,8 @@ enum AnimalRepositoryContract {
         let createdStatusReference = try fixture.makeStatusReference("Contract Deceased", .dead)
         let updatedStatusReference = try fixture.makeStatusReference("Contract Sold", .sold)
         let createdDistinguishingFeatures = [
-            DistinguishingFeature(description: "White blaze", order: 0)
+            DistinguishingFeature(description: "White blaze", order: 0),
+            DistinguishingFeature(description: "Black tail switch", order: 1)
         ]
 
         let statusReferenceOptions = try fixture.makeAnimalRepository().fetchStatusReferenceOptions()
@@ -661,6 +662,13 @@ enum AnimalRepositoryContract {
         let withReplacement = try repository.addTag(
             animalID: created.id,
             input: AnimalTagInput(number: "402", colorID: nil, isPrimary: true)
+        )
+        XCTAssertEqual(
+            withReplacement.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            "Adding a primary tag must leave exactly one active primary tag.",
+            file: file,
+            line: line
         )
         let replacementTag = try XCTUnwrap(
             withReplacement.activeTags.first { $0.number == "402" },
