@@ -3,7 +3,7 @@ import XCTest
 @testable import yaHerd
 
 enum FieldCheckSessionCreationRollbackInjectedError: Error, Equatable {
-    case afterSessionStaged(sessionID: UUID)
+    case afterSessionStaged(sessionID: UUID, stagedAnimalCheckIDs: Set<UUID>)
 }
 
 enum FieldCheckMissingFindingRollbackOperation: Equatable {
@@ -25,15 +25,18 @@ enum FieldCheckSessionCompletionRollbackInjectedError: Error, Equatable {
 }
 
 /// Permanent fault-injection hook for persistence implementations that can fail session creation
-/// after the session itself has been staged but before its initial roster is fully persisted.
+/// after the session and at least one initial roster row have been staged but before the logical
+/// operation commits.
 ///
-/// The final persistence runner should surface the sentinel with the staged application UUID so
-/// this contract can prove that neither the partial session nor any of its roster rows survive.
+/// The final persistence runner must surface the staged application UUIDs and expose a direct
+/// persisted-row probe so this contract can detect orphaned roster rows even when the staged session
+/// itself was rolled back or is no longer reachable through repository projections.
 @MainActor
 struct FieldCheckSessionCreationRollbackFailureInjection {
     let createSessionFailingAfterSessionStaged: (
         _ input: FieldCheckSessionStartInput
     ) throws -> Void
+    let persistedAnimalCheckIDs: () throws -> Set<UUID>
 }
 
 /// Permanent fault-injection hook for persistence implementations that can fail coordinated
@@ -67,8 +70,19 @@ struct FieldCheckMissingFindingRollbackFailureInjection {
 
 /// Permanent fault-injection hook for persistence implementations that can fail session completion
 /// after completion-time snapshot/count changes have been staged but before the operation commits.
+///
+/// The raw quick-count accessors intentionally bypass repository projection normalization. They let
+/// the final persistence runner seed a stale persisted value that completion must normalize, then
+/// prove that failed completion does not leak that staged normalization into durable storage.
 @MainActor
 struct FieldCheckSessionCompletionRollbackFailureInjection {
+    let seedRawQuickCowCount: (
+        _ sessionID: UUID,
+        _ count: Int
+    ) throws -> Void
+    let rawQuickCowCount: (
+        _ sessionID: UUID
+    ) throws -> Int?
     let completeSessionFailingAfterCompletionStaged: (
         _ sessionID: UUID
     ) throws -> Void
@@ -107,16 +121,18 @@ extension FieldCheckRepositoryContract {
 
         let beforeRepository = fixture.makeFieldCheckRepository()
         let beforeSessions = try beforeRepository.fetchSessions()
+        let beforePersistedAnimalCheckIDs = try failureInjection.persistedAnimalCheckIDs()
         let input = FieldCheckSessionStartInput(
             pastureID: pasture.id,
             startedAt: atomicityDate(year: 2026, month: 9, day: 20, hour: 8),
             notes: "Session creation rollback contract"
         )
         var stagedSessionID: UUID?
+        var stagedAnimalCheckIDs = Set<UUID>()
 
         XCTAssertThrowsError(
             try failureInjection.createSessionFailingAfterSessionStaged(input),
-            "The fault-injected create-session operation must fail after the session has been staged.",
+            "The fault-injected create-session operation must fail after the session and an initial roster row have been staged.",
             file: file,
             line: line
         ) { error in
@@ -129,8 +145,9 @@ extension FieldCheckRepositoryContract {
                 return
             }
             switch injected {
-            case .afterSessionStaged(let sessionID):
+            case .afterSessionStaged(let sessionID, let animalCheckIDs):
                 stagedSessionID = sessionID
+                stagedAnimalCheckIDs = animalCheckIDs
             }
         }
 
@@ -140,6 +157,13 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertFalse(
+            stagedAnimalCheckIDs.isEmpty,
+            "The creation failpoint must be reached after at least one initial roster row has been staged.",
+            file: file,
+            line: line
+        )
+
         let afterRepository = fixture.makeFieldCheckRepository()
         XCTAssertEqual(
             try afterRepository.fetchSessions(),
@@ -150,7 +174,22 @@ extension FieldCheckRepositoryContract {
         )
         XCTAssertNil(
             try afterRepository.fetchSessionDetail(id: failedSessionID),
-            "A failed session-creation boundary must not leave a partial session or roster behind.",
+            "A failed session-creation boundary must not leave a partial session reachable through repository projections.",
+            file: file,
+            line: line
+        )
+
+        let afterPersistedAnimalCheckIDs = try failureInjection.persistedAnimalCheckIDs()
+        XCTAssertEqual(
+            afterPersistedAnimalCheckIDs,
+            beforePersistedAnimalCheckIDs,
+            "A failed session-creation boundary must not leave orphaned roster rows in persistent storage.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            stagedAnimalCheckIDs.isDisjoint(with: afterPersistedAnimalCheckIDs),
+            "None of the roster rows identified by the staged failpoint may survive rollback.",
             file: file,
             line: line
         )
@@ -430,6 +469,16 @@ extension FieldCheckRepositoryContract {
             )
         )
 
+        let staleRawQuickCowCount = 99
+        try failureInjection.seedRawQuickCowCount(sessionID, staleRawQuickCowCount)
+        XCTAssertEqual(
+            try failureInjection.rawQuickCowCount(sessionID),
+            staleRawQuickCowCount,
+            "The completion rollback fixture must begin with a stale persisted quick count that completion is required to normalize.",
+            file: file,
+            line: line
+        )
+
         let beforeRepository = fixture.makeFieldCheckRepository()
         let beforeDetail = try XCTUnwrap(
             beforeRepository.fetchSessionDetail(id: sessionID),
@@ -439,7 +488,13 @@ extension FieldCheckRepositoryContract {
         let beforeSessions = try beforeRepository.fetchSessions()
         let beforeOpenFindings = try beforeRepository.fetchOpenFindings(limit: 0)
         XCTAssertNil(beforeDetail.completedAt, file: file, line: line)
-        XCTAssertEqual(beforeDetail.quickCowCount, 1, file: file, line: line)
+        XCTAssertEqual(
+            beforeDetail.quickCowCount,
+            1,
+            "Repository projections should continue to enforce current quick-count capacity even when the persisted legacy value is stale.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(beforeDetail.animalChecks.count, 1, file: file, line: line)
         XCTAssertEqual(beforeDetail.findings.count, 1, file: file, line: line)
 
@@ -457,6 +512,14 @@ extension FieldCheckRepositoryContract {
                 line: line
             )
         }
+
+        XCTAssertEqual(
+            try failureInjection.rawQuickCowCount(sessionID),
+            staleRawQuickCowCount,
+            "A failed completion must roll back the staged normalization of the deliberately stale persisted quick count.",
+            file: file,
+            line: line
+        )
 
         let afterRepository = fixture.makeFieldCheckRepository()
         let afterDetail = try XCTUnwrap(
