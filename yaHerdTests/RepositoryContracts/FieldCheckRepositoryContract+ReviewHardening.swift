@@ -203,13 +203,34 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(afterAllowedSave.quickCalfCount, baseline.quickCalfCount, file: file, line: line)
         XCTAssertEqual(afterAllowedSave.quickBullCount, baseline.quickBullCount, file: file, line: line)
         XCTAssertEqual(afterAllowedSave.quickSteerCount, baseline.quickSteerCount, file: file, line: line)
-        XCTAssertEqual(
-            afterAllowedSave.animalChecks.sorted(by: reviewHardeningSnapshotIDOrder),
-            baseline.animalChecks.sorted(by: reviewHardeningSnapshotIDOrder),
-            "An allowed status save must not flush state staged by previously rejected completed-session mutations.",
+
+        let baselineCheck = try XCTUnwrap(
+            baseline.animalChecks.first { $0.id == animalCheckID },
             file: file,
             line: line
         )
+        let afterAllowedCheck = try XCTUnwrap(
+            afterAllowedSave.animalChecks.first { $0.id == animalCheckID },
+            "The allowed finding-status save must preserve the completed session's roster row.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(afterAllowedSave.animalChecks.count, baseline.animalChecks.count, file: file, line: line)
+        XCTAssertEqual(afterAllowedCheck.animalID, baselineCheck.animalID, file: file, line: line)
+        XCTAssertEqual(afterAllowedCheck.displayTagNumber, baselineCheck.displayTagNumber, file: file, line: line)
+        XCTAssertEqual(afterAllowedCheck.displayTagColorID, baselineCheck.displayTagColorID, file: file, line: line)
+        XCTAssertEqual(afterAllowedCheck.damDisplayTagNumber, baselineCheck.damDisplayTagNumber, file: file, line: line)
+        XCTAssertEqual(afterAllowedCheck.damDisplayTagColorID, baselineCheck.damDisplayTagColorID, file: file, line: line)
+        XCTAssertEqual(afterAllowedCheck.animalName, baselineCheck.animalName, file: file, line: line)
+        XCTAssertEqual(afterAllowedCheck.animalSex, baselineCheck.animalSex, file: file, line: line)
+        XCTAssertEqual(afterAllowedCheck.animalType, baselineCheck.animalType, file: file, line: line)
+        XCTAssertEqual(afterAllowedCheck.wasExpectedAtStart, baselineCheck.wasExpectedAtStart, file: file, line: line)
+        XCTAssertEqual(afterAllowedCheck.wasCounted, baselineCheck.wasCounted, file: file, line: line)
+        XCTAssertEqual(afterAllowedCheck.isMissing, baselineCheck.isMissing, file: file, line: line)
+        XCTAssertTrue(baselineCheck.needsAttention, file: file, line: line)
+        XCTAssertFalse(afterAllowedCheck.needsAttention, file: file, line: line)
+        XCTAssertEqual(afterAllowedSave.flaggedAnimalCount, 0, file: file, line: line)
+
         let baselineFinding = try XCTUnwrap(baseline.findings.first { $0.id == findingID }, file: file, line: line)
         let resolvedFinding = try XCTUnwrap(afterAllowedSave.findings.first { $0.id == findingID }, file: file, line: line)
         XCTAssertEqual(resolvedFinding.recordedAt, baselineFinding.recordedAt, file: file, line: line)
