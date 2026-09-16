@@ -471,8 +471,14 @@ extension FieldCheckRepositoryContract {
 
         let staleRawQuickCowCount = 99
         try failureInjection.seedRawQuickCowCount(sessionID, staleRawQuickCowCount)
+        let rawQuickCowCountBeforeFailure = try XCTUnwrap(
+            failureInjection.rawQuickCowCount(sessionID),
+            "The raw completion-rollback probe must be able to read the seeded session row.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(
-            try failureInjection.rawQuickCowCount(sessionID),
+            rawQuickCowCountBeforeFailure,
             staleRawQuickCowCount,
             "The completion rollback fixture must begin with a stale persisted quick count that completion is required to normalize.",
             file: file,
@@ -490,8 +496,15 @@ extension FieldCheckRepositoryContract {
         XCTAssertNil(beforeDetail.completedAt, file: file, line: line)
         XCTAssertEqual(
             beforeDetail.quickCowCount,
+            staleRawQuickCowCount,
+            "The snapshot should expose the deliberately stale persisted value so rollback can prove completion did not commit normalization.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            beforeDetail.quickAnimalTypeCounts[.cow],
             1,
-            "Repository projections should continue to enforce current quick-count capacity even when the persisted legacy value is stale.",
+            "The derived quick-count projection must still enforce the current roster capacity before completion.",
             file: file,
             line: line
         )
@@ -513,8 +526,14 @@ extension FieldCheckRepositoryContract {
             )
         }
 
+        let rawQuickCowCountAfterFailure = try XCTUnwrap(
+            failureInjection.rawQuickCowCount(sessionID),
+            "The raw completion-rollback probe must still find the session after the injected failure.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(
-            try failureInjection.rawQuickCowCount(sessionID),
+            rawQuickCowCountAfterFailure,
             staleRawQuickCowCount,
             "A failed completion must roll back the staged normalization of the deliberately stale persisted quick count.",
             file: file,
