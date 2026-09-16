@@ -647,17 +647,15 @@ extension FieldCheckRepositoryContract {
         }
 
         let afterRepository = fixture.makeFieldCheckRepository()
-        XCTAssertEqual(
+        try assertRollbackDetailEqualIgnoringRelationshipOrder(
             try afterRepository.fetchSessionDetail(id: sessionID),
-            beforeDetail,
-            "A failed coordinated finding write must leave finding history and roster synchronization unchanged.",
+            expected: beforeDetail,
             file: file,
             line: line
         )
-        XCTAssertEqual(
+        try assertRollbackSummariesEqualIgnoringRelationshipOrder(
             try afterRepository.fetchSessions(),
-            beforeSessions,
-            "A failed coordinated finding write must leave session-summary projections unchanged.",
+            expected: beforeSessions,
             file: file,
             line: line
         )
@@ -669,6 +667,101 @@ extension FieldCheckRepositoryContract {
             line: line
         )
         return failedFindingID
+    }
+
+    private static func assertRollbackDetailEqualIgnoringRelationshipOrder(
+        _ actual: FieldCheckSessionDetailSnapshot?,
+        expected: FieldCheckSessionDetailSnapshot,
+        file: StaticString,
+        line: UInt
+    ) throws {
+        let actual = try XCTUnwrap(
+            actual,
+            "A failed coordinated finding write must leave the session detail readable.",
+            file: file,
+            line: line
+        )
+
+        XCTAssertEqual(actual.id, expected.id, file: file, line: line)
+        XCTAssertEqual(actual.startedAt, expected.startedAt, file: file, line: line)
+        XCTAssertEqual(actual.completedAt, expected.completedAt, file: file, line: line)
+        XCTAssertEqual(actual.notes, expected.notes, file: file, line: line)
+        XCTAssertEqual(actual.pastureID, expected.pastureID, file: file, line: line)
+        XCTAssertEqual(actual.pastureName, expected.pastureName, file: file, line: line)
+        XCTAssertEqual(actual.pastureArchivedAt, expected.pastureArchivedAt, file: file, line: line)
+        XCTAssertEqual(actual.isPastureArchived, expected.isPastureArchived, file: file, line: line)
+        XCTAssertEqual(actual.expectedHeadCountSnapshot, expected.expectedHeadCountSnapshot, file: file, line: line)
+        XCTAssertEqual(actual.quickCowCount, expected.quickCowCount, file: file, line: line)
+        XCTAssertEqual(actual.quickHeiferCount, expected.quickHeiferCount, file: file, line: line)
+        XCTAssertEqual(actual.quickCalfCount, expected.quickCalfCount, file: file, line: line)
+        XCTAssertEqual(actual.quickBullCount, expected.quickBullCount, file: file, line: line)
+        XCTAssertEqual(actual.quickSteerCount, expected.quickSteerCount, file: file, line: line)
+        XCTAssertEqual(
+            actual.animalChecks.sorted(by: rollbackSnapshotIDOrder),
+            expected.animalChecks.sorted(by: rollbackSnapshotIDOrder),
+            "A failed coordinated finding write must leave roster snapshots unchanged regardless of relationship iteration order.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            actual.findings.sorted(by: rollbackSnapshotIDOrder),
+            expected.findings.sorted(by: rollbackSnapshotIDOrder),
+            "A failed coordinated finding write must leave finding history unchanged regardless of relationship iteration order.",
+            file: file,
+            line: line
+        )
+    }
+
+    private static func assertRollbackSummariesEqualIgnoringRelationshipOrder(
+        _ actual: [FieldCheckSessionSummary],
+        expected: [FieldCheckSessionSummary],
+        file: StaticString,
+        line: UInt
+    ) throws {
+        XCTAssertEqual(
+            actual.map(\.id),
+            expected.map(\.id),
+            "A failed coordinated finding write must preserve the repository-defined session-summary ordering.",
+            file: file,
+            line: line
+        )
+        guard actual.count == expected.count else { return }
+
+        for (actualSummary, expectedSummary) in zip(actual, expected) {
+            XCTAssertEqual(actualSummary.id, expectedSummary.id, file: file, line: line)
+            XCTAssertEqual(actualSummary.startedAt, expectedSummary.startedAt, file: file, line: line)
+            XCTAssertEqual(actualSummary.completedAt, expectedSummary.completedAt, file: file, line: line)
+            XCTAssertEqual(actualSummary.pastureID, expectedSummary.pastureID, file: file, line: line)
+            XCTAssertEqual(actualSummary.pastureName, expectedSummary.pastureName, file: file, line: line)
+            XCTAssertEqual(actualSummary.pastureArchivedAt, expectedSummary.pastureArchivedAt, file: file, line: line)
+            XCTAssertEqual(actualSummary.isPastureArchived, expectedSummary.isPastureArchived, file: file, line: line)
+            XCTAssertEqual(
+                actualSummary.expectedHeadCountSnapshot,
+                expectedSummary.expectedHeadCountSnapshot,
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(actualSummary.quickCowCount, expectedSummary.quickCowCount, file: file, line: line)
+            XCTAssertEqual(actualSummary.quickHeiferCount, expectedSummary.quickHeiferCount, file: file, line: line)
+            XCTAssertEqual(actualSummary.quickCalfCount, expectedSummary.quickCalfCount, file: file, line: line)
+            XCTAssertEqual(actualSummary.quickBullCount, expectedSummary.quickBullCount, file: file, line: line)
+            XCTAssertEqual(actualSummary.quickSteerCount, expectedSummary.quickSteerCount, file: file, line: line)
+            XCTAssertEqual(actualSummary.openFindingsCount, expectedSummary.openFindingsCount, file: file, line: line)
+            XCTAssertEqual(
+                actualSummary.animalChecks.sorted(by: rollbackSnapshotIDOrder),
+                expectedSummary.animalChecks.sorted(by: rollbackSnapshotIDOrder),
+                "A failed coordinated finding write must preserve summary roster snapshots regardless of relationship iteration order.",
+                file: file,
+                line: line
+            )
+        }
+    }
+
+    private static func rollbackSnapshotIDOrder<T: Identifiable>(
+        _ lhs: T,
+        _ rhs: T
+    ) -> Bool where T.ID == UUID {
+        lhs.id.uuidString < rhs.id.uuidString
     }
 
     private static func assertMissingFindingRollbackRosterState(
