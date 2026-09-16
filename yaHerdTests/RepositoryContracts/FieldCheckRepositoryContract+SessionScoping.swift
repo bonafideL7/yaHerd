@@ -172,6 +172,9 @@ extension FieldCheckRepositoryContract {
             }
         }
 
+        let intentionalFirstNotes = "First scoped session flush"
+        try repository.updateNotes(sessionID: firstSessionID, notes: intentionalFirstNotes)
+
         let firstAfter = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: firstSessionID),
             file: file,
@@ -182,6 +185,9 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+
+        XCTAssertEqual(firstAfter.notes, intentionalFirstNotes, file: file, line: line)
+        XCTAssertEqual(secondAfter.notes, secondBefore.notes, file: file, line: line)
 
         let firstCheckAfter = try XCTUnwrap(
             firstAfter.animalChecks.first { $0.id == firstCheck.id },
