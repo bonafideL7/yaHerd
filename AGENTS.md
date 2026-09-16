@@ -28,7 +28,22 @@ If implementation begins expanding because earlier changes created new problems,
 
 A review comment that reveals a missed production path, persistence/synchronization flaw, concurrency flaw, or incorrect ownership/state model requires a design reassessment of the affected feature, not another isolated patch.
 
-## 3. Test behavior, not review comments
+## 3. Persistence direction: Core Data only
+
+yaHerd is replacing SwiftData with Core Data. SwiftData is legacy transitional code scheduled for removal and is not an implementation target for new work.
+
+- Do not add new SwiftData production code, repositories, models, adapters, migrations, fixtures, test runners, or verification infrastructure.
+- Do not expand, refactor, or otherwise invest in SwiftData as part of the Core Data migration.
+- Existing SwiftData code may be inspected only to understand current behavior that must be preserved during migration.
+- New persistence behavior, repositories, migration work, and executable persistence tests must target Core Data, including the planned `NSPersistentCloudKitContainer` architecture, or remain persistence-neutral until the Core Data implementation exists.
+- Permanent repository contracts may remain persistence-neutral without an executable runner when the only available runner would require adding or restoring SwiftData-specific code. Wire those contracts into the Core Data test suite when the corresponding Core Data repository is implemented.
+- Never satisfy a review comment by adding, restoring, or recommending a SwiftData contract runner solely to execute new persistence-neutral contracts against the legacy implementation.
+- During code review, do not report the absence of new SwiftData coverage as a defect when adding that coverage would create temporary SwiftData code. Identify the future Core Data runner as the correct integration point instead.
+- Touch existing SwiftData code only when the user explicitly requests a narrowly scoped SwiftData fix or removal step. Do not create new dependencies on SwiftData that will need to be migrated later.
+
+When persistence direction is ambiguous, prefer the Core Data replacement architecture and avoid creating any new SwiftData surface area.
+
+## 4. Test behavior, not review comments
 
 Tests exist to protect stable behavior and important invariants.
 
@@ -42,7 +57,7 @@ Do not add duplicate tests that exercise the same invariant through slightly dif
 
 Feature-specific regression tests must remain ordinary test-target tests unless they protect a repository-wide invariant. Do not append feature-specific suites to `Scripts/verify-concurrency.sh`.
 
-## 4. Verification execution policy
+## 5. Verification execution policy
 
 Do not run verification scripts, test commands, build commands, lint commands, or GitHub Actions verification unless the user explicitly requests verification in the current conversation.
 
@@ -59,7 +74,7 @@ Code review and self-review must use repository inspection, call-path tracing, d
 
 A lack of executed verification is expected under this policy and must not by itself cause another verification run.
 
-## 5. Self-review before push
+## 6. Self-review before push
 
 Before pushing a completed change:
 
@@ -73,7 +88,7 @@ Do not run tests or verification as part of this self-review unless the user exp
 
 GitHub review is the independent final check, not the mechanism used to discover basic implementation completeness.
 
-## 6. Delivery
+## 7. Delivery
 
 Every delivery must report:
 
