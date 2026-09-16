@@ -418,6 +418,18 @@ enum AnimalRepositoryContract {
         XCTAssertNil(reloadedCleared.damID, "Cleared dam must remain nil after reload.", file: file, line: line)
         XCTAssertNil(reloadedCleared.dam, file: file, line: line)
 
+        let clearedSummary = try XCTUnwrap(
+            clearedRepository.fetchAnimals().first { $0.id == created.id },
+            "Clearing status and relationships must be reflected in the summary read model.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(clearedSummary.status.rawValue, AnimalStatus.active.rawValue, file: file, line: line)
+        XCTAssertNil(clearedSummary.pastureID, "Cleared pasture must be nil in the summary read model.", file: file, line: line)
+        XCTAssertNil(clearedSummary.pastureName, "Cleared pasture name must be nil in the summary read model.", file: file, line: line)
+        XCTAssertNil(clearedSummary.damDisplayTagNumber, "Cleared dam must be nil in the summary read model.", file: file, line: line)
+        XCTAssertNil(clearedSummary.damDisplayTagColorID, "Cleared dam tag color must be nil in the summary read model.", file: file, line: line)
+
         let clearedTimeline = try clearedRepository.fetchTimeline(id: created.id)
         XCTAssertTrue(
             clearedTimeline.contains {
@@ -747,7 +759,6 @@ enum AnimalRepositoryContract {
         let pregnancyResult = PregnancyResult.pregnant
         let technician = "Contract Tech"
         let pregnancyDueDate = date(year: 2026, month: 9, day: 1)
-
         _ = try repository.addHealthRecord(
             animalID: animal.id,
             input: HealthRecordInput(
