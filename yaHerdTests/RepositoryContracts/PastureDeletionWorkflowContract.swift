@@ -326,6 +326,13 @@ enum PastureDeletionWorkflowContract {
             line: line
         )
         XCTAssertEqual(workingEditorWithDestination.destinationPastureID, secondPasture.id, file: file, line: line)
+        XCTAssertEqual(workingEditorWithDestination.treatmentRecords.count, 1, file: file, line: line)
+        let workingTreatmentRecordIDBeforeDeletion = try XCTUnwrap(
+            workingEditorWithDestination.treatmentRecords.first?.id,
+            "The Working treatment fixture must persist its treatment-record identity before pasture deletion.",
+            file: file,
+            line: line
+        )
 
         let finishedWorkingSessionID = try workingRepository.startSession(
             input: WorkingSessionStartInput(
@@ -505,6 +512,18 @@ enum PastureDeletionWorkflowContract {
         )
 
         let preDeletionAnimals = fixture.makeAnimalRepository()
+        let firstAnimalDetailBeforeDeletion = try XCTUnwrap(
+            preDeletionAnimals.fetchAnimalDetail(id: firstAnimal.id),
+            "The moved-animal fixture must be readable before pasture deletion.",
+            file: file,
+            line: line
+        )
+        let firstAnimalSummaryBeforeDeletion = try XCTUnwrap(
+            preDeletionAnimals.fetchAnimals().first { $0.id == firstAnimal.id },
+            "The moved-animal fixture must appear in the list projection before pasture deletion.",
+            file: file,
+            line: line
+        )
         let controlMovementDetailsBeforeDeletion = try movementDetails(
             animalID: controlAnimal.id,
             repository: preDeletionAnimals
@@ -625,6 +644,22 @@ enum PastureDeletionWorkflowContract {
             XCTAssertNil(summary.pastureID, file: file, line: line)
             XCTAssertNil(summary.pastureName, file: file, line: line)
         }
+        let firstAnimalSummaryAfterDeletion = try XCTUnwrap(
+            animalSummaries.first { $0.id == firstAnimal.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(firstAnimalSummaryAfterDeletion.name, firstAnimalSummaryBeforeDeletion.name, file: file, line: line)
+        XCTAssertEqual(firstAnimalSummaryAfterDeletion.displayTagNumber, firstAnimalSummaryBeforeDeletion.displayTagNumber, file: file, line: line)
+        XCTAssertEqual(firstAnimalSummaryAfterDeletion.displayTagColorID, firstAnimalSummaryBeforeDeletion.displayTagColorID, file: file, line: line)
+        XCTAssertEqual(firstAnimalSummaryAfterDeletion.damDisplayTagNumber, firstAnimalSummaryBeforeDeletion.damDisplayTagNumber, file: file, line: line)
+        XCTAssertEqual(firstAnimalSummaryAfterDeletion.damDisplayTagColorID, firstAnimalSummaryBeforeDeletion.damDisplayTagColorID, file: file, line: line)
+        XCTAssertEqual(firstAnimalSummaryAfterDeletion.sex, firstAnimalSummaryBeforeDeletion.sex, file: file, line: line)
+        XCTAssertEqual(firstAnimalSummaryAfterDeletion.animalType, firstAnimalSummaryBeforeDeletion.animalType, file: file, line: line)
+        XCTAssertEqual(firstAnimalSummaryAfterDeletion.firstDistinguishingFeature, firstAnimalSummaryBeforeDeletion.firstDistinguishingFeature, file: file, line: line)
+        XCTAssertEqual(firstAnimalSummaryAfterDeletion.birthDate, firstAnimalSummaryBeforeDeletion.birthDate, file: file, line: line)
+        XCTAssertEqual(firstAnimalSummaryAfterDeletion.status, firstAnimalSummaryBeforeDeletion.status, file: file, line: line)
+        XCTAssertEqual(firstAnimalSummaryAfterDeletion.isArchived, firstAnimalSummaryBeforeDeletion.isArchived, file: file, line: line)
         let controlAnimalSummary = try XCTUnwrap(
             animalSummaries.first { $0.id == controlAnimal.id },
             "Residents of an unselected pasture must remain visible through the animal-list reader.",
@@ -660,6 +695,28 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+        let firstAnimalDetailAfterDeletion = try XCTUnwrap(
+            reloadedAnimals.fetchAnimalDetail(id: firstAnimal.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.name, firstAnimalDetailBeforeDeletion.name, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.displayTagNumber, firstAnimalDetailBeforeDeletion.displayTagNumber, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.displayTagColorID, firstAnimalDetailBeforeDeletion.displayTagColorID, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.sex, firstAnimalDetailBeforeDeletion.sex, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.animalType, firstAnimalDetailBeforeDeletion.animalType, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.birthDate, firstAnimalDetailBeforeDeletion.birthDate, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.status, firstAnimalDetailBeforeDeletion.status, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.sireID, firstAnimalDetailBeforeDeletion.sireID, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.sire, firstAnimalDetailBeforeDeletion.sire, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.damID, firstAnimalDetailBeforeDeletion.damID, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.dam, firstAnimalDetailBeforeDeletion.dam, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.distinguishingFeatures, firstAnimalDetailBeforeDeletion.distinguishingFeatures, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.statusReferenceID, firstAnimalDetailBeforeDeletion.statusReferenceID, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.statusReferenceName, firstAnimalDetailBeforeDeletion.statusReferenceName, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.isArchived, firstAnimalDetailBeforeDeletion.isArchived, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.activeTags, firstAnimalDetailBeforeDeletion.activeTags, file: file, line: line)
+        XCTAssertEqual(firstAnimalDetailAfterDeletion.inactiveTags, firstAnimalDetailBeforeDeletion.inactiveTags, file: file, line: line)
         try assertAnimalMovedToUnassigned(
             animalID: firstPastureSecondAnimal.id,
             pastureName: "Delete Workflow North",
@@ -839,6 +896,13 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(workingEditor.observationNotes, "Deletion workflow working history", file: file, line: line)
         XCTAssertEqual(workingEditor.treatmentRecords.count, 1, file: file, line: line)
         let workingTreatmentRecord = try XCTUnwrap(workingEditor.treatmentRecords.first, file: file, line: line)
+        XCTAssertEqual(
+            workingTreatmentRecord.id,
+            workingTreatmentRecordIDBeforeDeletion,
+            "Pasture deletion must preserve the Working treatment-record application UUID.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(workingTreatmentRecord.date, workingTreatmentRecordedAt, file: file, line: line)
         XCTAssertEqual(workingTreatmentRecord.treatmentItemID, workingTreatment.id, file: file, line: line)
         XCTAssertEqual(workingTreatmentRecord.itemName, workingTreatment.name, file: file, line: line)
