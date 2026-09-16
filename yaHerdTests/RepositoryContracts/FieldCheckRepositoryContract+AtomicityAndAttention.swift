@@ -385,6 +385,122 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(afterFinalResolveSummary.flaggedAnimalCount, 0, file: file, line: line)
     }
 
+    static func assertUnlinkedFindingDoesNotFlagRosterAnimals(
+        using fixture: FieldCheckRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let pasture = try fixture.makePastureRepository().create(
+            input: PastureInput(
+                name: "Unlinked Attention Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let firstAnimal = try fixture.makeAnimalRepository().create(
+            input: rollbackAnimalInput(
+                name: "Unlinked Attention One",
+                tagNumber: "UA101",
+                pastureID: pasture.id
+            )
+        )
+        let secondAnimal = try fixture.makeAnimalRepository().create(
+            input: rollbackAnimalInput(
+                name: "Unlinked Attention Two",
+                tagNumber: "UA102",
+                pastureID: pasture.id
+            )
+        )
+
+        let repository = fixture.makeFieldCheckRepository()
+        let sessionID = try repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.id,
+                startedAt: rollbackDate(year: 2026, month: 9, day: 11, hour: 8),
+                notes: "Unlinked attention isolation contract"
+            )
+        )
+        try repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: rollbackDate(year: 2026, month: 9, day: 11, hour: 9),
+                type: .waterIssue,
+                severity: .warning,
+                status: .open,
+                note: "Pasture-level unlinked finding",
+                animalID: nil
+            )
+        )
+
+        let reader = fixture.makeFieldCheckRepository()
+        let detail = try XCTUnwrap(
+            reader.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        let finding = try XCTUnwrap(
+            detail.findings.first { $0.note == "Pasture-level unlinked finding" },
+            file: file,
+            line: line
+        )
+        XCTAssertNil(finding.animalID, file: file, line: line)
+        XCTAssertEqual(detail.openFindingsCount, 1, file: file, line: line)
+        XCTAssertEqual(detail.flaggedAnimalCount, 0, file: file, line: line)
+
+        let firstDetailCheck = try XCTUnwrap(
+            detail.animalChecks.first { $0.animalID == firstAnimal.id },
+            file: file,
+            line: line
+        )
+        let secondDetailCheck = try XCTUnwrap(
+            detail.animalChecks.first { $0.animalID == secondAnimal.id },
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            firstDetailCheck.needsAttention,
+            "An unresolved finding without an animal link must not flag a roster animal.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            secondDetailCheck.needsAttention,
+            "An unresolved finding without an animal link must not flag every roster animal.",
+            file: file,
+            line: line
+        )
+
+        let summary = try XCTUnwrap(
+            reader.fetchSessions().first { $0.id == sessionID },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(summary.openFindingsCount, 1, file: file, line: line)
+        XCTAssertEqual(summary.flaggedAnimalCount, 0, file: file, line: line)
+        let firstSummaryCheck = try XCTUnwrap(
+            summary.animalChecks.first { $0.id == firstDetailCheck.id },
+            file: file,
+            line: line
+        )
+        let secondSummaryCheck = try XCTUnwrap(
+            summary.animalChecks.first { $0.id == secondDetailCheck.id },
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(firstSummaryCheck.needsAttention, file: file, line: line)
+        XCTAssertFalse(secondSummaryCheck.needsAttention, file: file, line: line)
+
+        let openFinding = try XCTUnwrap(
+            try reader.fetchOpenFindings(limit: 0).first { $0.id == finding.id },
+            "The unlinked unresolved finding must still appear in the open-finding reader.",
+            file: file,
+            line: line
+        )
+        XCTAssertNil(openFinding.animalID, file: file, line: line)
+        XCTAssertEqual(openFinding.sessionID, sessionID, file: file, line: line)
+    }
+
     private static func rollbackAnimalInput(
         name: String,
         tagNumber: String,
