@@ -1,7 +1,7 @@
 import Foundation
 
-// SwiftData and CloudKit field/entity names still use the original storage vocabulary.
-// Domain and presentation code use treatment terminology; these adapters isolate storage compatibility.
+// SwiftData field/entity names still use the original storage vocabulary.
+// Domain and presentation code use treatment terminology; these adapters isolate legacy storage naming.
 typealias WorkingProtocolItem = WorkingTreatmentPlanItem
 
 typealias WorkingProtocolTemplateSummary = WorkingTreatmentTemplateSummary

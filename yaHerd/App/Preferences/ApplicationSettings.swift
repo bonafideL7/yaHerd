@@ -11,9 +11,7 @@ final class ApplicationSettings {
     nonisolated static let maximumRecentPastures = 4
 
     @ObservationIgnored private let store: any ApplicationSettingsStore
-    @ObservationIgnored private var persistedChangeHandler: (@MainActor (ApplicationSettingKey) -> Void)?
 
-    private var syncModeValue: SyncMode
     private var dashboardEnabledValue: Bool
     private var targetAcresPerHeadDefaultValue: Double
     private var usableAcreagePercentDefaultValue: Int
@@ -31,7 +29,6 @@ final class ApplicationSettings {
         ApplicationSettingsKeyMigrator.migrate(store: store)
         store.removeObject(forKey: ApplicationSettingKey.allowHardDelete.rawValue)
 
-        self.syncModeValue = Self.decodeSyncMode(store.object(forKey: ApplicationSettingKey.syncMode.rawValue))
         self.dashboardEnabledValue = Self.decodeBool(
             store.object(forKey: ApplicationSettingKey.dashboardEnabled.rawValue),
             defaultValue: false
@@ -67,15 +64,6 @@ final class ApplicationSettings {
         )
 
         persistNormalizedValues()
-    }
-
-    var syncMode: SyncMode {
-        get { syncModeValue }
-        set {
-            guard syncModeValue != newValue else { return }
-            syncModeValue = newValue
-            persistChange(key: .syncMode, encodedValue: newValue.rawValue)
-        }
     }
 
     var allowHardDelete: Bool {
@@ -165,68 +153,7 @@ final class ApplicationSettings {
         store.removeObject(forKey: ApplicationSettingKey.legacyRecentPastureNames.rawValue)
     }
 
-    func setPersistedChangeHandler(
-        _ handler: (@MainActor (ApplicationSettingKey) -> Void)?
-    ) {
-        persistedChangeHandler = handler
-    }
-
-    func encodedValue(for key: ApplicationSettingKey) -> Any? {
-        switch key {
-        case .syncMode:
-            syncMode.rawValue
-        case .allowHardDelete:
-            nil
-        case .dashboardEnabled:
-            isDashboardEnabled
-        case .targetAcresPerHeadDefault:
-            targetAcresPerHeadDefault
-        case .usableAcreagePercentDefault:
-            usableAcreagePercentDefault
-        case .recentPastureIDs:
-            recentPastureIDs.map(\.uuidString)
-        case .homeDismissedSetupSuggestionIDs:
-            homeDismissedSetupSuggestionIDs.sorted()
-        case .homeSetupSuggestionsExpanded:
-            isHomeSetupSuggestionsExpanded
-        case .legacyRecentPastureNames:
-            legacyRecentPastureNames
-        }
-    }
-
-    func applyExternalValue(_ value: Any, for key: ApplicationSettingKey) {
-        switch key {
-        case .syncMode:
-            syncMode = Self.decodeSyncMode(value)
-        case .allowHardDelete:
-            store.removeObject(forKey: key.rawValue)
-        case .dashboardEnabled:
-            isDashboardEnabled = Self.decodeBool(value, defaultValue: false)
-        case .targetAcresPerHeadDefault:
-            targetAcresPerHeadDefault = Self.decodeDouble(
-                value,
-                defaultValue: Self.defaultTargetAcresPerHead
-            )
-        case .usableAcreagePercentDefault:
-            usableAcreagePercentDefault = Self.decodeInt(
-                value,
-                defaultValue: Self.defaultUsableAcreagePercent
-            )
-        case .recentPastureIDs:
-            recentPastureIDs = Self.decodeUUIDs(value)
-        case .homeDismissedSetupSuggestionIDs:
-            homeDismissedSetupSuggestionIDs = Self.decodeStrings(value, legacySeparator: ",")
-        case .homeSetupSuggestionsExpanded:
-            isHomeSetupSuggestionsExpanded = Self.decodeBool(value, defaultValue: true)
-        case .legacyRecentPastureNames:
-            legacyRecentPastureNamesValue = Self.decodeStrings(value, legacySeparator: "|")
-            store.set(legacyRecentPastureNamesValue, forKey: key.rawValue)
-            persistedChangeHandler?(key)
-        }
-    }
-
     func resetToDefaults() {
-        syncMode = .localOnly
         isDashboardEnabled = false
         targetAcresPerHeadDefault = Self.defaultTargetAcresPerHead
         usableAcreagePercentDefault = Self.defaultUsableAcreagePercent
@@ -251,22 +178,32 @@ final class ApplicationSettings {
         }
     }
 
+    private func encodedValue(for key: ApplicationSettingKey) -> Any? {
+        switch key {
+        case .allowHardDelete:
+            nil
+        case .dashboardEnabled:
+            isDashboardEnabled
+        case .targetAcresPerHeadDefault:
+            targetAcresPerHeadDefault
+        case .usableAcreagePercentDefault:
+            usableAcreagePercentDefault
+        case .recentPastureIDs:
+            recentPastureIDs.map(\.uuidString)
+        case .homeDismissedSetupSuggestionIDs:
+            homeDismissedSetupSuggestionIDs.sorted()
+        case .homeSetupSuggestionsExpanded:
+            isHomeSetupSuggestionsExpanded
+        case .legacyRecentPastureNames:
+            legacyRecentPastureNames
+        }
+    }
+
     private func persistChange(
         key: ApplicationSettingKey,
         encodedValue: Any
     ) {
         store.set(encodedValue, forKey: key.rawValue)
-        persistedChangeHandler?(key)
-    }
-
-    private static func decodeSyncMode(_ value: Any?) -> SyncMode {
-        if let value = value as? SyncMode {
-            return value
-        }
-        if let rawValue = value as? String, let mode = SyncMode(rawValue: rawValue) {
-            return mode
-        }
-        return .localOnly
     }
 
     private static func decodeBool(_ value: Any?, defaultValue: Bool) -> Bool {

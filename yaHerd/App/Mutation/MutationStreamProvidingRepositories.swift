@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-extension SyncRequestingFieldCheckRepository: ApplicationMutationStreamProviding {
+extension MutationPublishingFieldCheckRepository: ApplicationMutationStreamProviding {
     var applicationMutationStream: any ApplicationMutationStreaming {
         guard let provider = mutationRecorder as? any ApplicationMutationStreamProviding else {
             return InactiveApplicationMutationStream()

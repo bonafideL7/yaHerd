@@ -162,17 +162,6 @@ extension HomeView {
                 onAction: { openPastureList(.missingStockingData) },
                 onDismiss: { dismissSetupSuggestion(.completePastureStockingData) }
             )
-        case .reviewSyncSetup:
-            HomeSuggestionNavigationRow(
-                title: "Set up sync",
-                subtitle: "Data is currently stored on this device only.",
-                systemImage: "icloud.slash.fill",
-                tint: .cyan,
-                actionTitle: "Open",
-                cardWidth: cardWidth,
-                destination: { SyncSettingsView() },
-                onDismiss: { dismissSetupSuggestion(.reviewSyncSetup) }
-            )
         }
     }
 }

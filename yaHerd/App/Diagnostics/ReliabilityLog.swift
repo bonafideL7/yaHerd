@@ -1,14 +1,12 @@
-import CoreData
 import Foundation
 import OSLog
 import SwiftData
 
-/// Centralized reliability logging for persistence, sharing sync, and user-visible failures.
+/// Centralized reliability logging for persistence and user-visible failures.
 enum ReliabilityLog {
     nonisolated private static let subsystem = Bundle.main.bundleIdentifier ?? "yaHerd"
 
     nonisolated static let persistence = Logger(subsystem: subsystem, category: "Persistence")
-    nonisolated static let sync = Logger(subsystem: subsystem, category: "Sync")
     nonisolated static let userVisibleError = Logger(subsystem: subsystem, category: "UserVisibleError")
 
     nonisolated static func persistenceEvent(_ operation: String, detail: String? = nil) {
@@ -22,18 +20,6 @@ enum ReliabilityLog {
     nonisolated static func persistenceFailure(_ operation: String, error: Error) {
         persistence.error(
             "operation=\(operation, privacy: .public) failed error=\(String(describing: error), privacy: .public)"
-        )
-    }
-
-    nonisolated static func syncEvent(_ operation: String, trigger: String? = nil, detail: String? = nil) {
-        sync.notice(
-            "operation=\(operation, privacy: .public) trigger=\(trigger ?? "n/a", privacy: .public) detail=\(detail ?? "", privacy: .public)"
-        )
-    }
-
-    nonisolated static func syncFailure(_ operation: String, trigger: String? = nil, error: Error) {
-        sync.error(
-            "operation=\(operation, privacy: .public) trigger=\(trigger ?? "n/a", privacy: .public) failed error=\(String(describing: error), privacy: .public)"
         )
     }
 
@@ -52,27 +38,10 @@ enum PersistenceLog {
 
     nonisolated static func save(_ context: ModelContext, operation: String) throws {
         do {
-            let preparedSave = try CollaborationMutationPipeline.prepareForSave(
-                in: context,
-                operation: operation
-            )
             try PerformanceLog.measure("SwiftData.save.\(operation)") {
                 try context.save()
             }
-            preparedSave.commitRegistryUpdates()
             ReliabilityLog.persistenceEvent(operation, detail: "SwiftData save completed")
-        } catch {
-            ReliabilityLog.persistenceFailure(operation, error: error)
-            throw error
-        }
-    }
-
-    nonisolated static func save(_ context: NSManagedObjectContext, operation: String) throws {
-        do {
-            try PerformanceLog.measure("CoreData.save.\(operation)") {
-                try context.save()
-            }
-            ReliabilityLog.persistenceEvent(operation, detail: "Core Data save completed")
         } catch {
             ReliabilityLog.persistenceFailure(operation, error: error)
             throw error
@@ -98,14 +67,6 @@ enum UserVisibleErrorMessage {
 
     static func saveFailed(_ error: Error) -> String {
         make(error, context: "Save failed")
-    }
-
-    static func importFailed(_ error: Error) -> String {
-        make(error, context: "Shared-data import failed")
-    }
-
-    static func syncFailed(_ error: Error) -> String {
-        make(error, context: "Shared-data sync failed")
     }
 
     private static func localizedMessage(for error: Error) -> String {

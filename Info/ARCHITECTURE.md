@@ -1,6 +1,6 @@
 # yaHerd Architecture
 
-> This document describes the **target production architecture** and the clean-architecture rules that should remain stable as implementation details change. During the Core Data cutover, existing SwiftData and bridge code may temporarily violate persistence-specific rules; `CORE_DATA_CUTOVER.md` governs that temporary work. The clean-architecture boundaries in this document remain authoritative throughout the cutover.
+> This document describes the **target production architecture** and the clean-architecture rules that should remain stable as implementation details change. During the Core Data cutover, existing SwiftData code may temporarily violate persistence-specific rules; `CORE_DATA_CUTOVER.md` governs that temporary work. The clean-architecture boundaries in this document remain authoritative throughout the cutover.
 
 ## End-state architecture
 
@@ -11,21 +11,21 @@ Domain models, policies, use cases, repository + transaction contracts
         ↓
 Data / Core Data repositories
         ↓
-NSPersistentCloudKitContainer
+NSPersistentContainer
         ↓
-Local Core Data stores + CloudKit private/shared databases
+Local Core Data persistent store
 ```
 
-Core Data is the sole production persistence implementation. `NSPersistentCloudKitContainer` is the sole production CloudKit synchronization mechanism. SwiftData, a SwiftData/Core Data mirror, dual-write persistence, and custom snapshot synchronization are not part of the final architecture.
+Core Data is the sole production persistence implementation. yaHerd's production data is local-only. SwiftData, CloudKit/iCloud synchronization, shared stores, cross-user herd collaboration, mirror persistence, dual-write persistence, and custom synchronization are not part of the final architecture.
 
 ## Top-level layers
 
 - `App/`
-  - app bootstrap, dependency wiring, app-scoped coordination, navigation entry points, mutation/invalidation routing, preferences, diagnostics, recovery, and sync integration
+  - app bootstrap, dependency wiring, app-scoped coordination, navigation entry points, mutation/invalidation routing, preferences, diagnostics, and recovery
 - `Domain/`
   - business rules, entities, stable application identity, repository contracts, transaction contracts, use cases, domain services, validation, and policies
 - `Data/`
-  - Core Data models, repository implementations, mappers, persistence support, CloudKit sharing integration, seed/sample data, and persistence diagnostics
+  - Core Data models, repository implementations, mappers, persistence support, seed/sample data, and persistence diagnostics
 - `Presentation/`
   - SwiftUI views, view models, presentation constants, UI support types, and local presentation state
 
@@ -33,10 +33,10 @@ Core Data is the sole production persistence implementation. `NSPersistentCloudK
 
 - `Presentation` depends on `Domain`.
 - `Data` depends on `Domain`.
-- `Domain` does not depend on `Presentation`, `Data`, SwiftUI, Core Data, CloudKit, SwiftData, or app wiring.
+- `Domain` does not depend on `Presentation`, `Data`, SwiftUI, Core Data, SwiftData, or app wiring.
 - `App` wires concrete implementations to domain-facing abstractions.
 - Presentation never receives a persistence model, `NSManagedObject`, `NSManagedObjectContext`, or persistence-native identifier.
-- Core Data and CloudKit access stay inside `Data` and narrowly-scoped app bootstrap/integration code.
+- Core Data access stays inside `Data` and narrowly-scoped app bootstrap/integration code.
 
 ## Feature structure pattern
 
@@ -78,13 +78,12 @@ The ceremonial-use-case cleanup reduced the application layer from 59 Swift use-
 - `PastureFeatureDependencies`
 - `FieldCheckFeatureDependencies`
 - `WorkingSessionFeatureDependencies`
-- `CollaborationDependencies`
 
 Each container preserves narrow Domain protocol types internally. A single concrete repository may satisfy several capability properties, but views receive one feature-scoped value rather than a long list of unrelated environment keys. Cross-feature ports are placed in the consuming feature container: for example, Animal receives pasture reference reading, Working receives animal summaries and pasture references, and Pasture receives the capabilities needed to author its delete workflow.
 
 Feature previews and focused tests should override only their feature container. The `preview(...)` factories supply fail-fast missing implementations for unspecified capabilities, so a preview can provide only the ports exercised by that screen. App-wide services such as recovery access mode remain separate global environment values because they apply to every feature.
 
-Do not add new root-level repository environment keys. Add a capability to the relevant feature container, or introduce a new feature container when the dependency belongs to a distinct feature boundary. `Scripts/verify-architecture.sh` enforces the approved root environment values and rejects the removed per-capability keys.
+Do not add new root-level repository environment keys. Add a capability to the relevant feature container, or introduce a new feature container when the dependency belongs to a distinct feature boundary. `Scripts/verify-architecture.sh` enforces the approved root environment values and rejects removed per-capability keys.
 
 ## Application identity
 
@@ -95,11 +94,11 @@ For every durable application entity:
 - identity is a UUID owned by yaHerd, not by the persistence framework;
 - the UUID is generated once before or as the entity is created and is immutable afterward;
 - repository and transaction APIs address entities with UUIDs;
-- Domain snapshots expose the same UUID across reloads, sync, sharing, navigation, and relationships;
-- Core Data stores that UUID in a dedicated application-identity attribute. Identity is required by yaHerd even when the CloudKit-compatible physical Core Data attribute is optional because no safe static UUID default exists; factories assign it before first save and mappers reject missing identity rather than inventing a replacement;
-- `NSManagedObjectID`, object URI representations, `CKRecord.ID`, record names, store identifiers, and CloudKit zone identifiers are Data-layer implementation details and never become Domain identity;
+- Domain snapshots expose the same UUID across reloads, navigation, and relationships;
+- Core Data stores that UUID in a dedicated required application-identity attribute assigned before first save;
+- `NSManagedObjectID`, object URI representations, and store identifiers are Data-layer implementation details and never become Domain identity;
 - stringifying a UUID is allowed only at serialization boundaries such as URLs, logs, diagnostics, or provider APIs; Domain models should retain the UUID type;
-- a duplicate application UUID is a persistence integrity error. Production code must reject or deterministically resolve it before exposing ambiguous Domain state; it must not silently mint a replacement for an already-established entity identity.
+- a duplicate application UUID is a persistence integrity error. Production code must reject it before exposing ambiguous Domain state; it must not silently mint a replacement for an already-established entity identity.
 
 Derived UI/chart identifiers may use strings, dates, enums, or composite keys when they do not represent a durable entity. They must not be passed to repository APIs as entity identity.
 
@@ -213,7 +212,7 @@ Pasture selection options should still come from the Pasture boundary. Animal fl
 
 `AnimalSireInferencePolicy` owns the neutral eligibility and single-candidate inference rule. The Data repository maps stored animals into `AnimalSireCandidate` values and applies the policy rather than embedding that decision in persistence code.
 
-Complete-state animal editor updates use optimistic concurrency. The editor read carries an aggregate revision; the update transaction must compare that expected revision with current persisted state before mutating so a stale editor cannot silently overwrite a remote/imported change.
+Complete-state animal editor updates use optimistic concurrency. The editor read carries an aggregate revision; the update transaction compares that expected revision with current persisted state before mutating so a stale editor cannot silently overwrite a newer local persisted edit.
 
 ## Home reference implementation
 
@@ -296,77 +295,55 @@ Important examples include:
 - field-check commands that update the session plus roster/finding/animal state;
 - multi-animal pasture movement.
 
-Core Data implementations should perform these writes on one appropriate context and save only after the complete mutation succeeds. On failure, roll back/reset the transaction context as appropriate. Mutation publication and sync scheduling happen **after** a successful commit, never before.
+Core Data implementations should perform these writes on one appropriate context and save only after the complete mutation succeeds. On failure, roll back/reset the transaction context as appropriate. Application mutation publication happens **after** a successful commit, never before.
 
 Domain use cases still own validation, workflow policy, and the meaning/order of cross-feature operations. Persistence owns stale-state validation where required, atomic execution, commit, and rollback. A use case may build a normalized transaction request/plan, but it must not recreate the transaction by chaining independently-saving persistence calls.
 
 ## Persistence and store topology
 
-The production persistence root is `NSPersistentCloudKitContainer` using one Core Data model.
+The production persistence root is `NSPersistentContainer` using one Core Data model and one local persistent store.
 
-### Local-only mode
+There is no iCloud mode, CloudKit container configuration, private/shared-store split, remote cloud import path, or collaboration store routing.
 
-Local-only mode uses the same Core Data model and repositories with a normal local persistent store and no CloudKit container options. Business behavior must not fork merely because CloudKit is disabled.
-
-### iCloud mode
-
-iCloud mode uses Core Data stores configured for CloudKit:
-
-- a private store for the user's owned data;
-- a shared store for data accepted from other owners;
-- persistent-history tracking and remote-change observation where needed for application invalidation;
-- Core Data/CloudKit sharing APIs for `CKShare` creation, acceptance, participant management, and shared-store routing.
-
-The Data layer may use `NSManagedObjectID` when required by Core Data sharing APIs, but it must resolve application UUIDs to managed objects internally and return only Domain values upward.
-
-There is no second persistence graph to mirror. There is no SwiftData-to-Core Data exporter/importer, no bridge reconciliation pass, and no dual-write path.
+Herd remains the logical scope root. Repositories must resolve and query that scope deterministically rather than relying on fetch order.
 
 ## Core Data model rules
 
-The model is designed for CloudKit from the beginning rather than converted from the current SwiftData schema.
+The model is designed for local Core Data from the beginning rather than copied from the current SwiftData schema or constrained by removed CloudKit requirements.
 
-- Every durable entity has a dedicated application UUID identity attribute. The UUID is required by application invariants; its physical Core Data optionality/default is chosen to satisfy CloudKit model rules without introducing unsafe static UUID defaults.
+- Every durable entity has a dedicated required application UUID identity attribute assigned before first save.
+- Application-ID unique constraints may be used where they reinforce the identity invariant safely.
 - Relationships have explicit inverses and delete behavior is chosen intentionally.
-- CloudKit-compatible optionality/default requirements are handled in the model rather than patched in Presentation.
+- Relationship and attribute optionality reflect real application semantics rather than synchronization import ordering.
 - Domain enums are stored through stable raw values or explicit mapping owned by Data.
-- Historical records that must survive parent status changes or archival are modeled accordingly.
+- Historical records that must survive parent status changes, archival, rename, or deletion are modeled with appropriate snapshots.
 - Repository mappers are the only normal path from managed objects to Domain snapshots.
 - Core Data generated/accessor types do not escape Data.
 - Do not reproduce duplicated persistence state when one relationship/record set can be authoritative. In particular, the production animal model should not maintain separate scalar primary-tag fields in addition to authoritative tag records.
 
 Do not copy the current SwiftData schema merely to reduce cutover work. Model the finished product.
 
-## Synchronization and UI invalidation
+## Application mutation and UI invalidation
 
-Persistence synchronization and UI invalidation are separate concerns.
+Persistence and UI invalidation are separate concerns.
 
-- Core Data/CloudKit owns transport and merge behavior.
-- Data observes relevant persistent-store/remote-change events.
-- Data/App translates those events into persistence-neutral application mutation/invalidation events.
-- Presentation reloads through Domain repository/read-model contracts.
-- Views and view models do not subscribe to Core Data notifications directly.
-
-A local successful transaction publishes one logical application mutation after commit. `ApplicationMutationCenter` owns application invalidation; collaboration/sync scheduling observes successful local mutations separately rather than being coupled to UI refresh. Remote imports publish persistence-neutral invalidation without pretending they are local writes.
+- Core Data owns durable local storage.
+- successful local transactions publish persistence-neutral application mutation events after commit;
+- `ApplicationMutationCenter` owns application invalidation sequencing;
+- Presentation reloads through Domain repository/read-model contracts;
+- views and view models do not subscribe to Core Data notifications directly merely to discover their own successful writes.
 
 `HomeViewModel` subscribes to `ApplicationMutationStreaming` and reloads when an event affects `.home`. Home should not return to navigation-owned refresh counters, sheet-dismiss reloads, tab-selection reloads, `task(id:)` refresh tokens, or ad-hoc `onAppear` refresh calls.
 
-## Sharing platform boundary
-
-Domain collaboration types are provider-neutral. `HerdShareInvitation` and `HerdSharePresentationRequest` carry only application identifiers, participant capabilities, invitation state, URLs, and opaque provider tokens. They never retain `CKShare`, `CKContainer`, `CKShare.Metadata`, Core Data objects, or presentation callbacks.
-
-CloudKit translation/lifetime adapters belong under `Data/Sharing/CloudKit` or another Data-layer provider boundary. Incoming `CKShare.Metadata` should be translated into a neutral invitation before crossing into Domain/App coordination, and prepared system-sharing state should likewise be hidden behind neutral requests/tokens.
-
-Cross-user herd sharing is implemented directly on the production Core Data graph through `NSPersistentCloudKitContainer` and `CKShare`. The final sharing path must not contain a second Core Data mirror of application data. Existing bridge-specific models, import/export snapshots, reconciliation journals, and public-ID bridge repair logic are cutover artifacts to be deleted unless a requirement is independently demonstrated in the final Core Data design.
-
-`Scripts/verify-architecture.sh` should continue to reject platform-framework imports and platform types under `Domain`.
+Do not couple local UI refresh to a sync scheduler, remote-store observer, collaboration revision, or public-ID repair subsystem.
 
 ## Recovery-mode boundary
 
-Persistent-store failure must produce a controlled runtime state that cannot accidentally write to an unintended replacement store. Recovery behavior should be designed around the production Core Data stores rather than mechanically ported from SwiftData.
+Persistent-store failure must produce a controlled runtime state that cannot accidentally write to an unintended replacement store.
 
-Recovery UI remains app-scoped rather than feature-owned. Recovery access must be read-only until the user explicitly chooses an allowed recovery action. Diagnostics may expose store locations, modes, history/sync state, and exportable diagnostic information, but persistence objects remain internal.
+Recovery UI remains app-scoped rather than feature-owned. Recovery access must be read-only until the user explicitly chooses an allowed recovery action. Diagnostics may expose local store locations, load failures, integrity information, and exportable diagnostic information, but persistence objects remain internal.
 
-Only carry forward existing recovery/public-ID tooling when the final Core Data architecture has the same requirement. Delete tooling whose sole purpose was repairing or coordinating the old dual-stack design.
+Only carry forward existing recovery/public-ID tooling when the final local Core Data architecture has the same independent requirement. Delete tooling whose sole purpose was repairing or coordinating removed synchronization/sharing designs.
 
 ## Concurrency boundary
 
@@ -377,7 +354,7 @@ The app and test targets compile in Swift 6 mode with complete strict-concurrenc
 - Background/private contexts perform work using Core Data's concurrency APIs on their own queue/executor.
 - Managed objects never cross their context boundary into Domain or Presentation.
 - Sendable Domain snapshots cross concurrency boundaries instead.
-- Long reads, imports, and maintenance work should not block the main actor.
+- Long reads and maintenance work should not block the main actor.
 - Application sources should not introduce `@unchecked Sendable`, lock-backed state managers, or `Task.detached` as shortcuts around isolation; `Scripts/verify-concurrency.sh` enforces the project restrictions.
 
 Repository protocol isolation may evolve as the Core Data implementation is introduced; it should reflect actual caller and context safety rather than historical SwiftData `mainContext` constraints. See `CONCURRENCY.md` for the broader concurrency rules.
@@ -412,8 +389,8 @@ Feature cleanup and production persistence work should include focused tests for
 - transaction rollback/all-or-nothing behavior
 - stable application UUID preservation and duplicate-ID handling
 - relationship/delete-rule behavior
-- private/shared store routing
-- remote-change invalidation
+- Herd scoping
+- local store/recovery behavior
 - mapper behavior
 - view-model state and orchestration
 
@@ -424,7 +401,7 @@ Do not add new tests whose only purpose is preserving the temporary SwiftData im
 1. keep views declarative and state-light
 2. move screen logic into presentation view models
 3. put business rules, derivations, validation, and thresholds in Domain services, policies, and meaningful use cases
-4. keep Core Data/CloudKit access inside Data and narrowly-scoped app persistence integration
+4. keep Core Data access inside Data and narrowly-scoped app persistence integration
 5. keep navigation types in `App` or `Presentation`, never in `Data` or `Domain`
 6. call narrow repository capability protocols directly for simple one-port queries and commands
 7. keep use cases only for policy, validation, derivation, workflow orchestration, or transaction-plan definition
@@ -435,12 +412,12 @@ Do not add new tests whose only purpose is preserving the temporary SwiftData im
 12. reject one-call pass-through use cases in `Scripts/verify-architecture.sh`
 13. inject presentation dependencies through feature containers rather than individual repository environment keys
 14. keep application UUIDs as the only Domain identity for durable entities
-15. keep Core Data and CloudKit types out of Domain and Presentation
+15. keep Core Data types out of Domain and Presentation
 16. use explicit transaction boundaries for multi-record logical writes
 17. publish application mutations only after a successful commit
-18. do not introduce a second persistence graph, dual writes, mirror records, or migration-only adapters
-19. prefer deleting obsolete SwiftData/bridge code over porting it
+18. do not introduce a second persistence graph, dual writes, mirror records, synchronization bridges, or sharing infrastructure
+19. prefer deleting obsolete SwiftData/sync/share code over porting it
 
 ## Cutover status
 
-SwiftData and the existing SwiftData/Core Data sharing bridge are temporary implementation code. They are not architectural precedent. Follow `CORE_DATA_CUTOVER.md` until the replacement is complete; after cutover, remove that document and any remaining transition-only code.
+SwiftData is temporary implementation code and is not architectural precedent. Sync/share/CloudKit infrastructure has been removed and must not be reintroduced as part of the Core Data replacement. Follow `CORE_DATA_CUTOVER.md` until the persistence replacement is complete; after cutover, remove that document and any remaining transition-only code.

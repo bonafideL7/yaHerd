@@ -17,11 +17,9 @@ struct RecoveryModeView: View {
           VStack(alignment: .leading, spacing: 4) {
             Text("Recovery Mode Is Read-Only")
               .font(.headline)
-            Text(
-              "Data changes cannot be saved. Editing, sharing, and synchronization are disabled for this launch."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            Text("Data changes cannot be saved for this launch.")
+              .font(.caption)
+              .foregroundStyle(.secondary)
           }
         } icon: {
           Image(systemName: "externaldrive.badge.exclamationmark")
@@ -30,20 +28,15 @@ struct RecoveryModeView: View {
       }
 
       Section("Storage State") {
-        LabeledContent("Requested Mode", value: controller.context.requestedSyncMode.displayName)
         LabeledContent("Active Store", value: "In-memory recovery store")
         LabeledContent("Data Mutations", value: "Disabled")
-        LabeledContent("Sharing and Sync", value: "Disabled")
         LabeledContent(
           "Entered Recovery",
-          value: controller.context.enteredAt.formatted(date: .abbreviated, time: .standard))
+          value: controller.context.enteredAt.formatted(date: .abbreviated, time: .standard)
+        )
       }
 
       Section("Storage Diagnostics") {
-        LabeledContent(
-          "In-Memory Records",
-          value: controller.diagnostics.totalRecoveryRecordCount.formatted()
-        )
         LabeledContent(
           "Persistent Store Files Found",
           value: controller.diagnostics.recoverableStoreFiles.count.formatted()
@@ -59,12 +52,6 @@ struct RecoveryModeView: View {
           "Last Refreshed",
           value: controller.diagnostics.generatedAt.formatted(date: .omitted, time: .standard)
         )
-
-        if let countError = controller.diagnostics.recoveryStoreCountError {
-          Text("The in-memory record count could not be read: \(countError)")
-            .font(.caption)
-            .foregroundStyle(.red)
-        }
 
         if !controller.diagnostics.recoverableStoreFiles.isEmpty {
           DisclosureGroup("Store File Inventory") {
@@ -103,7 +90,7 @@ struct RecoveryModeView: View {
         .disabled(controller.isPreparingExport)
 
         Text(
-          "Creates a TAR archive containing storage diagnostics and copies of discoverable yaHerd SwiftData and sharing-bridge store files. Keep the archive private because it may contain herd records."
+          "Creates a TAR archive containing storage diagnostics and copies of discoverable yaHerd SwiftData store files. Keep the archive private because it may contain herd records."
         )
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -124,8 +111,7 @@ struct RecoveryModeView: View {
       Section("Persistent Store Repair") {
         Toggle(isOn: $controller.hasAcknowledgedRepairRisk) {
           VStack(alignment: .leading, spacing: 4) {
-            Text(
-              "I understand this local-only repair probe may open and migrate the persistent store")
+            Text("I understand this repair probe may open and migrate the persistent store")
             Text(
               "Recovery mode remains read-only until yaHerd is restarted, even when the store opens successfully."
             )

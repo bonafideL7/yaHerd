@@ -1,6 +1,6 @@
 # Persistence Transaction Boundaries
 
-This document defines the transaction model for the production persistence layer. The target implementation is Core Data with `NSPersistentCloudKitContainer`. These boundaries are application contracts; they do not expose SwiftData, Core Data, `ModelContext`, `NSManagedObjectContext`, persistent object IDs, or CloudKit record IDs.
+This document defines the transaction model for the production persistence layer. The target implementation is local Core Data using `NSPersistentContainer`. These boundaries are application contracts; they do not expose SwiftData, Core Data, `ModelContext`, `NSManagedObjectContext`, or persistent object IDs.
 
 ## Commit rule
 
@@ -9,7 +9,7 @@ A method documented as a transaction boundary has only two externally visible ou
 - success: every mutation in the logical operation is durably committed
 - failure: none of the logical operation is durably committed
 
-Repository reads and validation may occur before a transaction begins, but any validation that can become stale before the write must be repeated inside the persistence transaction. Mutation notifications, UI invalidation, CloudKit/share synchronization requests, and other post-write side effects are published only after the commit succeeds.
+Repository reads and validation may occur before a transaction begins, but any validation that can become stale before the write must be repeated inside the persistence transaction. Mutation notifications, UI invalidation, and other post-write side effects are published only after the commit succeeds.
 
 Do not implement transaction boundaries by chaining independently-saving repositories. The production Core Data implementation must use one write context/transaction and one final save for the logical operation.
 
@@ -38,11 +38,11 @@ A failed tag or relationship mutation must not leave the animal edit committed, 
 
 Animal editor reads use `AnimalAggregateEditReading` and receive an `AnimalAggregateRevision` together with the `AnimalDetailSnapshot`. The revision is an optimistic-concurrency token, not entity identity.
 
-The production Core Data model must store this revision with the animal aggregate. Any successful mutation of fields or tag state owned by the animal editor rotates the revision, including equivalent changes arriving from CloudKit. `UpdateAnimalAggregateTransaction` carries the revision observed when the editor loaded the record.
+The production Core Data model must store this revision with the animal aggregate. Any successful mutation of fields or tag state owned by the animal editor rotates the revision. `UpdateAnimalAggregateTransaction` carries the revision observed when the editor loaded the record.
 
-Before changing any object, the Core Data transaction implementation must re-fetch the current aggregate and compare the stored revision to `expectedRevision`. A mismatch means the editor is stale and the write must fail without committing any part of the request. The caller can then reload or present conflict handling instead of silently replacing another collaborator's imported changes.
+Before changing any object, the Core Data transaction implementation must re-fetch the current aggregate and compare the stored revision to `expectedRevision`. A mismatch means the editor is stale and the write must fail without committing any part of the request. The caller can then reload rather than silently replacing a newer persisted edit.
 
-This guards stale local editors after remote imports. It does not replace Core Data/CloudKit merge policy for truly concurrent offline commits; the production synchronization layer must still handle those persistent-store conflicts deliberately.
+This protects against multiple presentation/editor instances acting on stale state. It is a local application concurrency invariant and does not depend on synchronization or collaboration.
 
 ### Pasture deletion
 
@@ -96,4 +96,4 @@ A use case must not recreate a transaction by making several independently-savin
 
 This keeps the final architecture split cleanly:
 
-`Presentation -> Domain use case/transaction plan -> Core Data transaction implementation -> NSPersistentCloudKitContainer`
+`Presentation -> Domain use case/transaction plan -> Core Data transaction implementation -> NSPersistentContainer`

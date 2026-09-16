@@ -14,20 +14,6 @@ root = Path("yaHerd/Domain")
 allowed_imports = {"Foundation"}
 failures: list[str] = []
 
-legacy_preferences_path = Path("yaHerd/App/Preferences/AppPreferences.swift")
-if legacy_preferences_path.exists():
-    legacy_preferences_source = legacy_preferences_path.read_text()
-    legacy_declarations = re.findall(
-        r"^\s*(?:protocol|class|final\s+class|struct|actor|enum|typealias)\s+"
-        r"(?:AppPreferences|AppSettingsSyncing|AppSettingsSynchronizer|AppPreferenceKey|SyncedAppSettingKey)\b",
-        legacy_preferences_source,
-        re.MULTILINE,
-    )
-    if legacy_declarations:
-        failures.append(
-            f"{legacy_preferences_path}: legacy application-settings declarations must not be restored"
-        )
-
 for path in root.rglob("*.swift"):
     source = path.read_text()
     for line_number, line in enumerate(source.splitlines(), start=1):
@@ -44,7 +30,6 @@ for path in root.rglob("*.swift"):
         )
 
 
-
 app_source = Path("yaHerd/App/yaHerdApp.swift").read_text()
 allowed_root_environment_values = {
     "appDataAccessMode",
@@ -54,7 +39,6 @@ allowed_root_environment_values = {
     "pastureFeatureDependencies",
     "fieldCheckFeatureDependencies",
     "workingSessionFeatureDependencies",
-    "collaborationDependencies",
 }
 root_environment_values = re.findall(r"\.environment\(\\\.([A-Za-z0-9_]+)", app_source)
 for environment_value in root_environment_values:
@@ -89,10 +73,7 @@ legacy_dependency_keys = {
     "workingFinishSessionRepository", "workingProtocolTemplatesRepository",
     "workingProtocolTemplateCreator", "workingProtocolTemplateEditorRepository",
     "workingAnimalSummaryReader", "workingProtocolTemplateReader",
-    "dashboardRecordReader", "herdRepository", "herdSharingRepository",
-    "cloudKitShareInvitationCoordinator", "cloudKitShareAdapter",
-    "herdSharingSyncCoordinator", "herdCollaborationWritePolicy",
-    "herdSharingConflictReviewStore", "syncDiagnosticsRepository",
+    "dashboardRecordReader", "herdRepository",
 }
 for path in Path("yaHerd").rglob("*.swift"):
     source = path.read_text()
@@ -116,7 +97,6 @@ required_feature_dependency_keys = {
     "pastureFeatureDependencies",
     "fieldCheckFeatureDependencies",
     "workingSessionFeatureDependencies",
-    "collaborationDependencies",
 }
 missing_feature_dependency_keys = required_feature_dependency_keys - feature_dependency_keys
 if missing_feature_dependency_keys:
@@ -127,7 +107,6 @@ if missing_feature_dependency_keys:
 
 settings_catalog_path = Path("yaHerd/App/Preferences/ApplicationSettingCatalog.swift")
 known_setting_literals = {
-    "syncMode",
     "allowHardDelete",
     "isDashboardEnabled",
     "targetAcresPerHeadDefault",
@@ -136,7 +115,6 @@ known_setting_literals = {
     "recentPastureNames",
     "homeDismissedSetupSuggestionIDs",
     "homeSetupSuggestionsExpanded",
-    "settings.syncMode",
     "settings.allowHardDelete",
     "settings.dashboardEnabled",
     "settings.targetAcresPerHeadDefault",
@@ -166,7 +144,6 @@ for path in Path("yaHerd").rglob("*.swift"):
             )
 
 required_setting_cases = {
-    "syncMode",
     "allowHardDelete",
     "dashboardEnabled",
     "targetAcresPerHeadDefault",
@@ -183,7 +160,6 @@ if missing_setting_cases:
     failures.append(
         "ApplicationSettingCatalog is missing settings: " + ", ".join(sorted(missing_setting_cases))
     )
-
 
 
 navigation_state_path = Path("yaHerd/App/Navigation/AppNavigationState.swift")
@@ -302,7 +278,6 @@ for required_fragment in (
         failures.append(
             f"yaHerdApp.swift is missing navigation restoration/routing fragment: {required_fragment}"
         )
-
 
 
 mutation_center_path = Path("yaHerd/App/Mutation/ApplicationMutationCenter.swift")
