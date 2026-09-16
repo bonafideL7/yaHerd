@@ -3,9 +3,9 @@ import XCTest
 
 /// Permanent persistence-neutral behavioral contract for `FieldCheckRepository` implementations.
 ///
-/// During Phase 0 the current SwiftData repository is only a characterization runner for behavior
-/// it already implements. Production Core Data repositories should run these same assertions
-/// unchanged. The contract intentionally works through Domain repositories and snapshots only.
+/// These assertions define persistence behavior for the Core Data replacement and remain independent
+/// of the outgoing SwiftData stack. The contract intentionally works through Domain repositories and
+/// snapshots only.
 @MainActor
 struct FieldCheckRepositoryContractFixture {
     let makeFieldCheckRepository: () -> any FieldCheckRepository
@@ -518,6 +518,12 @@ enum FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        let reassignedAnimalCheck = try XCTUnwrap(
+            afterReassignment.animalChecks.first { $0.animalID == reassignedAnimal.id },
+            "Reassigning an unresolved missing finding must preserve the linked animal's roster row.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(reassignedFinding.id, finding.id, "Finding application UUID must survive reassignment.", file: file, line: line)
         XCTAssertEqual(reassignedFinding.animalID, reassignedAnimal.id, file: file, line: line)
         XCTAssertEqual(reassignedFinding.animalDisplayTagNumber, "402", file: file, line: line)
@@ -528,7 +534,7 @@ enum FieldCheckRepositoryContract {
             line: line
         )
         XCTAssertTrue(
-            afterReassignment.animalChecks.first { $0.animalID == reassignedAnimal.id }?.isMissing == true,
+            reassignedAnimalCheck.isMissing,
             "Reassigning an unresolved missing finding must mark the newly linked roster animal missing.",
             file: file,
             line: line
@@ -561,8 +567,8 @@ enum FieldCheckRepositoryContract {
         XCTAssertEqual(updated.note, "Rear leg", file: file, line: line)
         XCTAssertEqual(updated.animalID, reassignedAnimal.id, file: file, line: line)
         let updatedRosterCheck = try XCTUnwrap(
-            afterUpdate.animalChecks.first { $0.animalID == reassignedAnimal.id },
-            "Changing a finding type must not remove the reassigned animal's roster row.",
+            afterUpdate.animalChecks.first { $0.id == reassignedAnimalCheck.id },
+            "Changing a finding type must not remove or replace the reassigned animal's roster row.",
             file: file,
             line: line
         )
