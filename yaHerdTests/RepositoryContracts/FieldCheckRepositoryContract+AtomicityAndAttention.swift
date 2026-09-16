@@ -161,6 +161,13 @@ extension FieldCheckRepositoryContract {
                 pastureID: pasture.id
             )
         )
+        let unrelatedAnimal = try fixture.makeAnimalRepository().create(
+            input: rollbackAnimalInput(
+                name: "Unrelated Attention Animal",
+                tagNumber: "A902",
+                pastureID: pasture.id
+            )
+        )
 
         let repository = fixture.makeFieldCheckRepository()
         let sessionID = try repository.createSession(
@@ -216,9 +223,20 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        let unrelatedDetailCheck = try XCTUnwrap(
+            afterAddDetail.animalChecks.first { $0.animalID == unrelatedAnimal.id },
+            file: file,
+            line: line
+        )
         XCTAssertTrue(
             detailCheck.needsAttention,
             "Unresolved linked findings must flag the roster animal for attention.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            unrelatedDetailCheck.needsAttention,
+            "An unresolved finding linked to one animal must not flag unrelated roster animals.",
             file: file,
             line: line
         )
@@ -235,10 +253,23 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        let unrelatedSummaryCheck = try XCTUnwrap(
+            afterAddSummary.animalChecks.first { $0.id == unrelatedDetailCheck.id },
+            "The session summary must retain the unrelated roster check application ID.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(summaryCheck.animalID, animal.id, file: file, line: line)
         XCTAssertTrue(
             summaryCheck.needsAttention,
             "Session summaries must preserve linked-finding attention state.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(unrelatedSummaryCheck.animalID, unrelatedAnimal.id, file: file, line: line)
+        XCTAssertFalse(
+            unrelatedSummaryCheck.needsAttention,
+            "Session summaries must not propagate one animal's attention state to unrelated roster animals.",
             file: file,
             line: line
         )
@@ -262,6 +293,11 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        let afterFirstResolveUnrelatedCheck = try XCTUnwrap(
+            afterFirstResolveDetail.animalChecks.first { $0.id == unrelatedDetailCheck.id },
+            file: file,
+            line: line
+        )
         XCTAssertEqual(afterFirstResolveCheck.animalID, animal.id, file: file, line: line)
         XCTAssertTrue(
             afterFirstResolveCheck.needsAttention,
@@ -269,6 +305,7 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertFalse(afterFirstResolveUnrelatedCheck.needsAttention, file: file, line: line)
         XCTAssertEqual(afterFirstResolveDetail.flaggedAnimalCount, 1, file: file, line: line)
         let afterFirstResolveOpenFindings = try afterFirstResolveRepository.fetchOpenFindings(limit: 0)
         XCTAssertFalse(afterFirstResolveOpenFindings.contains { $0.id == firstFinding.id }, file: file, line: line)
@@ -285,6 +322,11 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        let afterFirstResolveUnrelatedSummaryCheck = try XCTUnwrap(
+            afterFirstResolveSummary.animalChecks.first { $0.id == unrelatedDetailCheck.id },
+            file: file,
+            line: line
+        )
         XCTAssertEqual(afterFirstResolveSummaryCheck.animalID, animal.id, file: file, line: line)
         XCTAssertTrue(
             afterFirstResolveSummaryCheck.needsAttention,
@@ -292,6 +334,7 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertFalse(afterFirstResolveUnrelatedSummaryCheck.needsAttention, file: file, line: line)
         XCTAssertEqual(afterFirstResolveSummary.flaggedAnimalCount, 1, file: file, line: line)
 
         try repository.updateFindingStatus(
