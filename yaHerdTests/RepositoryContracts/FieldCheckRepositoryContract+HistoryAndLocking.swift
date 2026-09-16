@@ -451,8 +451,8 @@ extension FieldCheckRepositoryContract {
         )
         XCTAssertEqual(
             beforeRename.findings.first { $0.id == findingID }?.animalDisplayTagNumber,
-            "Original Untagged Name",
-            "An untagged finding must display its captured animal-name fallback.",
+            "UT",
+            "An untagged finding must use the formatter's captured UT display placeholder.",
             file: file,
             line: line
         )
@@ -493,8 +493,8 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(reloadedFinding.animalID, animal.id, file: file, line: line)
         XCTAssertEqual(
             reloadedFinding.animalDisplayTagNumber,
-            "Original Untagged Name",
-            "Historical detail must use the persisted name snapshot when the captured tag is empty.",
+            "UT",
+            "Historical detail must preserve the captured untagged display placeholder after the live animal is renamed.",
             file: file,
             line: line
         )
@@ -507,8 +507,8 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(openFinding.animalID, animal.id, file: file, line: line)
         XCTAssertEqual(
             openFinding.animalDisplayTagNumber,
-            "Original Untagged Name",
-            "Open-finding history must not join the renamed live animal when the historical tag is empty.",
+            "UT",
+            "Open-finding history must preserve the captured untagged display placeholder rather than joining renamed live metadata.",
             file: file,
             line: line
         )
