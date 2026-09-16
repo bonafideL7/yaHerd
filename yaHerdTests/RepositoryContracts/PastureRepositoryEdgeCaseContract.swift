@@ -289,6 +289,27 @@ enum PastureRepositoryEdgeCaseContract {
             line: line
         )
         XCTAssertEqual(groupDetail.pastures.map(\.id), [third.id], file: file, line: line)
+
+        let missingID = UUID()
+        XCTAssertThrowsError(
+            try reloadedRepository.reorder(ids: [third.id, missingID]),
+            file: file,
+            line: line
+        ) { error in
+            XCTAssertEqual(
+                error as? PastureRepositoryError,
+                .pastureIDsNotFound([missingID]),
+                file: file,
+                line: line
+            )
+        }
+        XCTAssertEqual(
+            try fixture.makePastureRepository().fetchPastures().map(\.id),
+            [third.id, first.id, second.id],
+            "A reorder containing a missing ID must not publish a partial order.",
+            file: file,
+            line: line
+        )
     }
 
     static func assertNameLookupExcludesOnlyRequestedPasture(
@@ -369,6 +390,14 @@ enum PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.5
             )
         )
+        let existingDestinationPasture = try repository.create(
+            input: PastureInput(
+                name: "Existing Destination Pasture",
+                acreage: 22,
+                usableAcreage: 20,
+                targetAcresPerHead: 1.5
+            )
+        )
         let sourceGroup = try repository.createGroup(
             input: PastureGroupInput(name: "Source Rotation", grazeDays: 5, restDays: 20)
         )
@@ -376,6 +405,7 @@ enum PastureRepositoryEdgeCaseContract {
             input: PastureGroupInput(name: "Destination Rotation", grazeDays: 7, restDays: 28)
         )
 
+        try repository.assignPasture(id: existingDestinationPasture.id, toGroupID: destinationGroup.id)
         try repository.assignPasture(id: pasture.id, toGroupID: sourceGroup.id)
         try repository.assignPasture(id: pasture.id, toGroupID: destinationGroup.id)
 
@@ -388,14 +418,32 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(reloadedPasture.groupID, destinationGroup.id, file: file, line: line)
         XCTAssertEqual(reloadedPasture.groupName, "Destination Rotation", file: file, line: line)
 
+        let existingDestinationDetail = try XCTUnwrap(
+            reloadedRepository.fetchPastureDetail(id: existingDestinationPasture.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(existingDestinationDetail.groupID, destinationGroup.id, file: file, line: line)
+        XCTAssertEqual(existingDestinationDetail.groupName, "Destination Rotation", file: file, line: line)
+
+        let pastureSummaries = try reloadedRepository.fetchPastures()
         let pastureSummary = try XCTUnwrap(
-            reloadedRepository.fetchPastures().first { $0.id == pasture.id },
+            pastureSummaries.first { $0.id == pasture.id },
             file: file,
             line: line
         )
         XCTAssertEqual(pastureSummary.groupID, destinationGroup.id, file: file, line: line)
         XCTAssertEqual(pastureSummary.groupName, "Destination Rotation", file: file, line: line)
         XCTAssertEqual(pastureSummary.restDays, 28, file: file, line: line)
+
+        let existingDestinationSummary = try XCTUnwrap(
+            pastureSummaries.first { $0.id == existingDestinationPasture.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(existingDestinationSummary.groupID, destinationGroup.id, file: file, line: line)
+        XCTAssertEqual(existingDestinationSummary.groupName, "Destination Rotation", file: file, line: line)
+        XCTAssertEqual(existingDestinationSummary.restDays, 28, file: file, line: line)
 
         let sourceDetail = try XCTUnwrap(
             reloadedRepository.fetchPastureGroupDetail(id: sourceGroup.id),
@@ -414,13 +462,19 @@ enum PastureRepositoryEdgeCaseContract {
             file: file,
             line: line
         )
-        XCTAssertEqual(destinationDetail.pastures.map(\.id), [pasture.id], file: file, line: line)
+        XCTAssertEqual(
+            Set(destinationDetail.pastures.map(\.id)),
+            Set([pasture.id, existingDestinationPasture.id]),
+            "Direct reassignment must preserve pastures already assigned to the destination group.",
+            file: file,
+            line: line
+        )
 
         let groups = try reloadedRepository.fetchPastureGroups()
         let sourceSummary = try XCTUnwrap(groups.first { $0.id == sourceGroup.id }, file: file, line: line)
         let destinationSummary = try XCTUnwrap(groups.first { $0.id == destinationGroup.id }, file: file, line: line)
         XCTAssertEqual(sourceSummary.pastureCount, 0, file: file, line: line)
-        XCTAssertEqual(destinationSummary.pastureCount, 1, file: file, line: line)
+        XCTAssertEqual(destinationSummary.pastureCount, 2, file: file, line: line)
     }
 
     static func assertUpdatingGroupPreservesPastureMembership(
