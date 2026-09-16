@@ -635,6 +635,24 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(controlAnimalSummary.pastureID, controlPasture.id, file: file, line: line)
         XCTAssertEqual(controlAnimalSummary.pastureName, "Delete Workflow Control", file: file, line: line)
 
+        for (animalID, expectedStatus, expectedArchived) in [
+            (soldAnimal.id, AnimalStatus.sold, false),
+            (deadAnimal.id, AnimalStatus.dead, false),
+            (archivedAnimal.id, AnimalStatus.active, true)
+        ] {
+            let summary = try XCTUnwrap(
+                animalSummaries.first { $0.id == animalID },
+                "Inactive animals must remain visible through the animal-list reader after pasture deletion.",
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(summary.status, expectedStatus, file: file, line: line)
+            XCTAssertEqual(summary.isArchived, expectedArchived, file: file, line: line)
+            XCTAssertEqual(summary.location, .pasture, file: file, line: line)
+            XCTAssertNil(summary.pastureID, file: file, line: line)
+            XCTAssertNil(summary.pastureName, file: file, line: line)
+        }
+
         try assertAnimalMovedToUnassigned(
             animalID: firstAnimal.id,
             pastureName: "Delete Workflow North",
@@ -795,6 +813,8 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(workingEditor.id, workingQueueItemID, file: file, line: line)
+        XCTAssertEqual(workingEditor.sessionID, workingSessionID, file: file, line: line)
         XCTAssertEqual(workingEditor.sessionDate, workingSessionBeforeDeletion.date, file: file, line: line)
         XCTAssertEqual(workingEditor.sessionStatus, .active, file: file, line: line)
         XCTAssertEqual(workingEditor.sessionSourcePastureName, "Delete Workflow North", file: file, line: line)
