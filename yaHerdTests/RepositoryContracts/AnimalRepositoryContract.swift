@@ -759,6 +759,7 @@ enum AnimalRepositoryContract {
         let pregnancyResult = PregnancyResult.pregnant
         let technician = "Contract Tech"
         let pregnancyDueDate = date(year: 2026, month: 9, day: 1)
+
         _ = try repository.addHealthRecord(
             animalID: animal.id,
             input: HealthRecordInput(
