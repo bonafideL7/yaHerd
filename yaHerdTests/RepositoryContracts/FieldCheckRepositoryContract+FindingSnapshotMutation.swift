@@ -170,8 +170,8 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(untaggedFinding.animalID, untagged.id, file: file, line: line)
         XCTAssertEqual(
             untaggedFinding.animalDisplayTagNumber,
-            "Mutation Snapshot Untagged",
-            "A finding added after the live animal gains a tag must still use the original untagged roster name fallback.",
+            "UT",
+            "A finding added after the live animal gains a tag must still render the original untagged roster snapshot.",
             file: file,
             line: line
         )
@@ -193,7 +193,7 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
-        XCTAssertEqual(untaggedCheckAfterAdd.displayTagNumber, "", file: file, line: line)
+        XCTAssertEqual(untaggedCheckAfterAdd.displayTagNumber, "UT", file: file, line: line)
         XCTAssertEqual(untaggedCheckAfterAdd.animalName, "Mutation Snapshot Untagged", file: file, line: line)
 
         _ = try fixture.makePastureRepository().update(
@@ -276,7 +276,7 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(updatedTaggedFinding.pastureName, "Mutation Snapshot North", file: file, line: line)
         XCTAssertEqual(updatedUntaggedFinding.note, "Updated post-change untagged finding", file: file, line: line)
         XCTAssertEqual(updatedUntaggedFinding.animalID, untagged.id, file: file, line: line)
-        XCTAssertEqual(updatedUntaggedFinding.animalDisplayTagNumber, "Mutation Snapshot Untagged", file: file, line: line)
+        XCTAssertEqual(updatedUntaggedFinding.animalDisplayTagNumber, "UT", file: file, line: line)
         XCTAssertEqual(updatedUntaggedFinding.animalDisplayTagColorID, originalColorID, file: file, line: line)
         XCTAssertEqual(updatedUntaggedFinding.pastureName, "Mutation Snapshot North", file: file, line: line)
 
@@ -294,7 +294,7 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(openTaggedFinding.animalDisplayTagNumber, "C70", file: file, line: line)
         XCTAssertEqual(openTaggedFinding.animalDisplayTagColorID, originalColorID, file: file, line: line)
         XCTAssertEqual(openTaggedFinding.pastureName, "Mutation Snapshot North", file: file, line: line)
-        XCTAssertEqual(openUntaggedFinding.animalDisplayTagNumber, "Mutation Snapshot Untagged", file: file, line: line)
+        XCTAssertEqual(openUntaggedFinding.animalDisplayTagNumber, "UT", file: file, line: line)
         XCTAssertEqual(openUntaggedFinding.animalDisplayTagColorID, originalColorID, file: file, line: line)
         XCTAssertEqual(openUntaggedFinding.pastureName, "Mutation Snapshot North", file: file, line: line)
     }
