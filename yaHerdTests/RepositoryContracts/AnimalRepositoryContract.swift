@@ -29,6 +29,9 @@ enum AnimalRepositoryContract {
         let updatedDamTagColorID = TagColorDefaults.blueID
         let createdStatusReference = try fixture.makeStatusReference("Contract Deceased", .dead)
         let updatedStatusReference = try fixture.makeStatusReference("Contract Sold", .sold)
+        let createdDistinguishingFeatures = [
+            DistinguishingFeature(description: "White blaze", order: 0)
+        ]
 
         let statusReferenceOptions = try fixture.makeAnimalRepository().fetchStatusReferenceOptions()
         let reloadedCreatedStatusReference = try XCTUnwrap(
@@ -71,9 +74,7 @@ enum AnimalRepositoryContract {
                 deathDate: createdDeathDate,
                 causeOfDeath: createdCauseOfDeath,
                 statusReferenceID: createdStatusReference.id,
-                distinguishingFeatures: [
-                    DistinguishingFeature(description: "White blaze", order: 0)
-                ]
+                distinguishingFeatures: createdDistinguishingFeatures
             )
         )
 
@@ -102,7 +103,13 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(created.causeOfDeath, createdCauseOfDeath, file: file, line: line)
         XCTAssertEqual(created.statusReferenceID, createdStatusReference.id, file: file, line: line)
         XCTAssertEqual(created.statusReferenceName, createdStatusReference.name, file: file, line: line)
-        XCTAssertEqual(created.distinguishingFeatures.map(\.description), ["White blaze"], file: file, line: line)
+        XCTAssertEqual(
+            created.distinguishingFeatures,
+            createdDistinguishingFeatures,
+            "Creating distinguishing features must preserve their UUIDs and ordering.",
+            file: file,
+            line: line
+        )
 
         let reloadedCreated = try XCTUnwrap(
             fixture.makeAnimalRepository().fetchAnimalDetail(id: created.id),
@@ -166,7 +173,13 @@ enum AnimalRepositoryContract {
             line: line
         )
         XCTAssertEqual(reloadedCreated.statusReferenceName, createdStatusReference.name, file: file, line: line)
-        XCTAssertEqual(reloadedCreated.distinguishingFeatures.map(\.description), ["White blaze"], file: file, line: line)
+        XCTAssertEqual(
+            reloadedCreated.distinguishingFeatures,
+            createdDistinguishingFeatures,
+            "Reloading after creation must preserve exact distinguishing-feature identities and order.",
+            file: file,
+            line: line
+        )
 
         let updatedBirthDate = date(year: 2019, month: 12, day: 15)
         let saleDate = date(year: 2026, month: 1, day: 15)
