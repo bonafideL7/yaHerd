@@ -4,15 +4,19 @@ import XCTest
 
 /// Permanent recovery probe for the coordinated missing-finding rollback contract.
 ///
-/// Each fault-injected operation may use its own write context. After the operation throws, the
-/// `saveFailureContextWithoutReset` closure must attempt a normal save on the exact context that
-/// staged that failed operation. The closure must not call `rollback()`, `reset()`, recreate the
-/// context, or otherwise discard pending changes before saving. Recovery belongs to the production
-/// operation under test; this probe deliberately tries to flush anything it accidentally left staged.
+/// Each fault-injected operation may use its own write context. After the operation throws,
+/// `saveProbeNotesThroughFailureContext` must perform the supplied probe-session notes mutation and
+/// save it through the exact context that staged the failed operation. It must not call `rollback()`,
+/// `reset()`, recreate the context, or otherwise discard pending changes first. Recovery belongs to
+/// the production operation under test; the observable probe save deliberately flushes anything the
+/// failed operation accidentally left staged.
 @MainActor
 struct FieldCheckMissingFindingRollbackContextRecoveryInjection {
     let rollback: FieldCheckMissingFindingRollbackFailureInjection
-    let saveFailureContextWithoutReset: () throws -> Void
+    let saveProbeNotesThroughFailureContext: (
+        _ probeSessionID: UUID,
+        _ notes: String
+    ) throws -> Void
 }
 
 @MainActor
@@ -54,6 +58,13 @@ extension FieldCheckRepositoryContract {
                 notes: "Failure-context recovery contract"
             )
         )
+        let probeSessionID = try repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.id,
+                startedAt: failureContextDate(year: 2026, month: 9, day: 29, hour: 8),
+                notes: "Failure-context save probe"
+            )
+        )
 
         let initialDetail = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
@@ -91,7 +102,14 @@ extension FieldCheckRepositoryContract {
                 addInput
             )
         }
-        try failureInjection.saveFailureContextWithoutReset()
+        try assertFailureContextProbeSave(
+            probeSessionID: probeSessionID,
+            notes: "Probe after add failure",
+            failureInjection: failureInjection,
+            using: fixture,
+            file: file,
+            line: line
+        )
 
         let afterAddFailure = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
@@ -100,7 +118,7 @@ extension FieldCheckRepositoryContract {
         )
         XCTAssertFalse(
             afterAddFailure.findings.contains { $0.id == failedAddFindingID },
-            "A later save on the failed write context must not flush the staged finding.",
+            "A later successful save on the failed write context must not flush the staged finding.",
             file: file,
             line: line
         )
@@ -113,9 +131,11 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
-        XCTAssertTrue(
-            try fixture.makeFieldCheckRepository().fetchOpenFindings(limit: 0).isEmpty,
-            "A later save on the failed write context must not publish the staged finding.",
+        XCTAssertFalse(
+            try fixture.makeFieldCheckRepository().fetchOpenFindings(limit: 0).contains {
+                $0.sessionID == sessionID
+            },
+            "A later successful save on the failed write context must not publish the staged finding.",
             file: file,
             line: line
         )
@@ -126,15 +146,16 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
-        let findingID = try XCTUnwrap(
+        let findingBeforeFailures = try XCTUnwrap(
             persistedBaseline.findings.first {
                 $0.type == .missingAnimal &&
                 $0.animalID == sourceAnimal.id &&
                 $0.note == addInput.note
-            }?.id,
+            },
             file: file,
             line: line
         )
+        let findingID = findingBeforeFailures.id
         try assertFailureContextRosterState(
             persistedBaseline,
             sourceCheckID: sourceCheckID,
@@ -165,15 +186,19 @@ extension FieldCheckRepositoryContract {
                 reassignmentInput
             )
         }
-        try failureInjection.saveFailureContextWithoutReset()
+        try assertFailureContextProbeSave(
+            probeSessionID: probeSessionID,
+            notes: "Probe after update failure",
+            failureInjection: failureInjection,
+            using: fixture,
+            file: file,
+            line: line
+        )
         try assertFailureContextBaselineSurvivesFlush(
             sessionID: sessionID,
-            findingID: findingID,
-            sourceAnimalID: sourceAnimal.id,
+            expectedFinding: findingBeforeFailures,
             sourceCheckID: sourceCheckID,
             targetCheckID: targetCheckID,
-            expectedNote: addInput.note,
-            expectedStatus: .open,
             using: fixture,
             file: file,
             line: line
@@ -191,15 +216,19 @@ extension FieldCheckRepositoryContract {
                 .resolved
             )
         }
-        try failureInjection.saveFailureContextWithoutReset()
+        try assertFailureContextProbeSave(
+            probeSessionID: probeSessionID,
+            notes: "Probe after status failure",
+            failureInjection: failureInjection,
+            using: fixture,
+            file: file,
+            line: line
+        )
         try assertFailureContextBaselineSurvivesFlush(
             sessionID: sessionID,
-            findingID: findingID,
-            sourceAnimalID: sourceAnimal.id,
+            expectedFinding: findingBeforeFailures,
             sourceCheckID: sourceCheckID,
             targetCheckID: targetCheckID,
-            expectedNote: addInput.note,
-            expectedStatus: .open,
             using: fixture,
             file: file,
             line: line
@@ -216,16 +245,44 @@ extension FieldCheckRepositoryContract {
                 findingID
             )
         }
-        try failureInjection.saveFailureContextWithoutReset()
+        try assertFailureContextProbeSave(
+            probeSessionID: probeSessionID,
+            notes: "Probe after delete failure",
+            failureInjection: failureInjection,
+            using: fixture,
+            file: file,
+            line: line
+        )
         try assertFailureContextBaselineSurvivesFlush(
             sessionID: sessionID,
-            findingID: findingID,
-            sourceAnimalID: sourceAnimal.id,
+            expectedFinding: findingBeforeFailures,
             sourceCheckID: sourceCheckID,
             targetCheckID: targetCheckID,
-            expectedNote: addInput.note,
-            expectedStatus: .open,
             using: fixture,
+            file: file,
+            line: line
+        )
+    }
+
+    private static func assertFailureContextProbeSave(
+        probeSessionID: UUID,
+        notes: String,
+        failureInjection: FieldCheckMissingFindingRollbackContextRecoveryInjection,
+        using fixture: FieldCheckRepositoryContractFixture,
+        file: StaticString,
+        line: UInt
+    ) throws {
+        try failureInjection.saveProbeNotesThroughFailureContext(probeSessionID, notes)
+        let probeDetail = try XCTUnwrap(
+            fixture.makeFieldCheckRepository().fetchSessionDetail(id: probeSessionID),
+            "The same-context recovery probe session must remain readable after the save.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            probeDetail.notes,
+            notes,
+            "The recovery hook must execute an observable successful save through the context that just failed.",
             file: file,
             line: line
         )
@@ -275,12 +332,9 @@ extension FieldCheckRepositoryContract {
 
     private static func assertFailureContextBaselineSurvivesFlush(
         sessionID: UUID,
-        findingID: UUID,
-        sourceAnimalID: UUID,
+        expectedFinding: FieldCheckFindingSnapshot,
         sourceCheckID: UUID,
         targetCheckID: UUID,
-        expectedNote: String,
-        expectedStatus: FieldCheckFindingStatus,
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString,
         line: UInt
@@ -292,15 +346,18 @@ extension FieldCheckRepositoryContract {
             line: line
         )
         let finding = try XCTUnwrap(
-            detail.findings.first { $0.id == findingID },
+            detail.findings.first { $0.id == expectedFinding.id },
             "The original finding must remain after the failed context is saved.",
             file: file,
             line: line
         )
-        XCTAssertEqual(finding.type, .missingAnimal, file: file, line: line)
-        XCTAssertEqual(finding.animalID, sourceAnimalID, file: file, line: line)
-        XCTAssertEqual(finding.note, expectedNote, file: file, line: line)
-        XCTAssertEqual(finding.status, expectedStatus, file: file, line: line)
+        XCTAssertEqual(
+            finding,
+            expectedFinding,
+            "A later successful save on the failed context must not flush any staged finding edits.",
+            file: file,
+            line: line
+        )
         try assertFailureContextRosterState(
             detail,
             sourceCheckID: sourceCheckID,
@@ -312,14 +369,18 @@ extension FieldCheckRepositoryContract {
         )
 
         let openFinding = try XCTUnwrap(
-            repository.fetchOpenFindings(limit: 0).first { $0.id == findingID },
+            repository.fetchOpenFindings(limit: 0).first { $0.id == expectedFinding.id },
             "The original open finding must remain visible after the failed context is saved.",
             file: file,
             line: line
         )
-        XCTAssertEqual(openFinding.animalID, sourceAnimalID, file: file, line: line)
-        XCTAssertEqual(openFinding.note, expectedNote, file: file, line: line)
-        XCTAssertEqual(openFinding.status, expectedStatus, file: file, line: line)
+        XCTAssertEqual(
+            openFinding,
+            expectedFinding,
+            "The open-finding projection must remain at its pre-failure snapshot after the recovery save.",
+            file: file,
+            line: line
+        )
 
         let summary = try XCTUnwrap(
             repository.fetchSessions().first { $0.id == sessionID },
