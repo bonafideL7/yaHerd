@@ -681,8 +681,42 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(withReplacement.displayTagNumber, "402", file: file, line: line)
         XCTAssertTrue(withReplacement.activeTags.contains { $0.id == originalTag.id }, file: file, line: line)
 
+        let addedTagRepository = fixture.makeAnimalRepository()
+        let reloadedAfterAdd = try XCTUnwrap(
+            addedTagRepository.fetchAnimalDetail(id: created.id),
+            "Adding a tag must persist before any later tag mutation occurs.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedAfterAdd.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            "Reloading immediately after addTag must preserve exactly one active primary tag.",
+            file: file,
+            line: line
+        )
+        let reloadedReplacementAfterAdd = try XCTUnwrap(
+            reloadedAfterAdd.activeTags.first { $0.id == replacementTag.id },
+            "The newly added tag must survive a fresh-repository reload before any subsequent mutation.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedReplacementAfterAdd.number, "402", file: file, line: line)
+        XCTAssertEqual(reloadedReplacementAfterAdd.colorID, replacementColorID, file: file, line: line)
+        XCTAssertTrue(reloadedReplacementAfterAdd.isPrimary, file: file, line: line)
+        XCTAssertTrue(reloadedReplacementAfterAdd.isActive, file: file, line: line)
+        XCTAssertEqual(reloadedReplacementAfterAdd.assignedAt, replacementTag.assignedAt, file: file, line: line)
+        let reloadedOriginalAfterAdd = try XCTUnwrap(
+            reloadedAfterAdd.activeTags.first { $0.id == originalTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(reloadedOriginalAfterAdd.isPrimary, file: file, line: line)
+        XCTAssertTrue(reloadedOriginalAfterAdd.isActive, file: file, line: line)
+        XCTAssertEqual(reloadedAfterAdd.displayTagNumber, "402", file: file, line: line)
+
         let updatedOriginalColorID = TagColorDefaults.blueID
-        let withUpdatedOriginal = try repository.updateTag(
+        let withUpdatedOriginal = try addedTagRepository.updateTag(
             animalID: created.id,
             tagID: originalTag.id,
             input: AnimalTagInput(number: "403", colorID: updatedOriginalColorID, isPrimary: true)
@@ -731,7 +765,93 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloadedReplacementBeforeRetire.number, "402", file: file, line: line)
         XCTAssertEqual(reloadedReplacementBeforeRetire.colorID, replacementColorID, file: file, line: line)
 
-        _ = try updatedTagRepository.retireTag(animalID: created.id, tagID: originalTag.id)
+        let withPromotedReplacement = try updatedTagRepository.promoteTag(
+            animalID: created.id,
+            tagID: replacementTag.id
+        )
+        XCTAssertEqual(
+            withPromotedReplacement.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            "The standalone promoteTag mutation must leave exactly one active primary tag.",
+            file: file,
+            line: line
+        )
+        let promotedReplacement = try XCTUnwrap(
+            withPromotedReplacement.activeTags.first { $0.id == replacementTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(promotedReplacement.isPrimary, file: file, line: line)
+        XCTAssertTrue(promotedReplacement.isActive, file: file, line: line)
+        XCTAssertEqual(promotedReplacement.number, "402", file: file, line: line)
+        XCTAssertEqual(promotedReplacement.colorID, replacementColorID, file: file, line: line)
+        XCTAssertEqual(withPromotedReplacement.displayTagNumber, "402", file: file, line: line)
+        let demotedOriginal = try XCTUnwrap(
+            withPromotedReplacement.activeTags.first { $0.id == originalTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(demotedOriginal.isPrimary, file: file, line: line)
+        XCTAssertTrue(demotedOriginal.isActive, file: file, line: line)
+
+        let promotedTagRepository = fixture.makeAnimalRepository()
+        let reloadedAfterPromotion = try XCTUnwrap(
+            promotedTagRepository.fetchAnimalDetail(id: created.id),
+            "Promoting a tag through the dedicated repository method must survive a fresh-repository reload.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedAfterPromotion.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            "Reloading after promoteTag must preserve exactly one active primary tag.",
+            file: file,
+            line: line
+        )
+        let reloadedPromotedReplacement = try XCTUnwrap(
+            reloadedAfterPromotion.activeTags.first { $0.id == replacementTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(reloadedPromotedReplacement.isPrimary, file: file, line: line)
+        XCTAssertTrue(reloadedPromotedReplacement.isActive, file: file, line: line)
+        XCTAssertEqual(reloadedPromotedReplacement.number, "402", file: file, line: line)
+        XCTAssertEqual(reloadedPromotedReplacement.colorID, replacementColorID, file: file, line: line)
+        XCTAssertEqual(reloadedPromotedReplacement.assignedAt, replacementTag.assignedAt, file: file, line: line)
+        let reloadedDemotedOriginal = try XCTUnwrap(
+            reloadedAfterPromotion.activeTags.first { $0.id == originalTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(reloadedDemotedOriginal.isPrimary, file: file, line: line)
+        XCTAssertTrue(reloadedDemotedOriginal.isActive, file: file, line: line)
+        XCTAssertEqual(reloadedDemotedOriginal.number, "403", file: file, line: line)
+        XCTAssertEqual(reloadedDemotedOriginal.colorID, updatedOriginalColorID, file: file, line: line)
+        XCTAssertEqual(reloadedAfterPromotion.displayTagNumber, "402", file: file, line: line)
+
+        let restoredOriginalPrimary = try promotedTagRepository.promoteTag(
+            animalID: created.id,
+            tagID: originalTag.id
+        )
+        XCTAssertEqual(
+            restoredOriginalPrimary.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            "Restoring the updated original tag as primary must preserve the single-primary invariant before retirement.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            restoredOriginalPrimary.activeTags.contains { $0.id == originalTag.id && $0.isPrimary && $0.isActive },
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            restoredOriginalPrimary.activeTags.contains { $0.id == replacementTag.id && !$0.isPrimary && $0.isActive },
+            file: file,
+            line: line
+        )
+
+        _ = try promotedTagRepository.retireTag(animalID: created.id, tagID: originalTag.id)
 
         let reloadedRepository = fixture.makeAnimalRepository()
         let reloaded = try XCTUnwrap(
