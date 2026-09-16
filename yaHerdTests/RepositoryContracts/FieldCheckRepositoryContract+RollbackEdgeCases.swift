@@ -3,12 +3,12 @@ import XCTest
 @testable import yaHerd
 
 enum FieldCheckRosterStateRollbackInjectedError: Error, Equatable {
-    case afterMissingStateStaged(sessionID: UUID, animalCheckID: UUID)
+    case afterMissingStateAndQuickCountNormalizationStaged(sessionID: UUID, animalCheckID: UUID)
 }
 
-/// Permanent fault-injection hook for persistence implementations that can fail after a roster
-/// missing-state mutation has been staged but before its coordinated quick-count normalization
-/// commits.
+/// Permanent fault-injection hook for persistence implementations that can fail after both a roster
+/// missing-state mutation and its associated quick-count normalization have been staged but before
+/// the logical operation commits.
 ///
 /// The raw quick-count accessor intentionally bypasses repository projection normalization so the
 /// final persistence runner can prove both durable values roll back together.
@@ -17,7 +17,7 @@ struct FieldCheckRosterStateRollbackFailureInjection {
     let rawQuickCowCount: (
         _ sessionID: UUID
     ) throws -> Int?
-    let setAnimalCheckMissingFailingAfterRosterStateStaged: (
+    let setAnimalCheckMissingFailingAfterRosterStateAndNormalizationStaged: (
         _ sessionID: UUID,
         _ animalCheckID: UUID,
         _ isMissing: Bool
@@ -262,18 +262,21 @@ extension FieldCheckRepositoryContract {
         )
 
         XCTAssertThrowsError(
-            try failureInjection.setAnimalCheckMissingFailingAfterRosterStateStaged(
+            try failureInjection.setAnimalCheckMissingFailingAfterRosterStateAndNormalizationStaged(
                 sessionID,
                 checkBeforeFailure.id,
                 true
             ),
-            "The fault-injected roster mutation must fail after missing state is staged and before the coordinated normalization commits.",
+            "The fault-injected roster mutation must fail after both missing state and quick-count normalization have been staged.",
             file: file,
             line: line
         ) { error in
             XCTAssertEqual(
                 error as? FieldCheckRosterStateRollbackInjectedError,
-                .afterMissingStateStaged(sessionID: sessionID, animalCheckID: checkBeforeFailure.id),
+                .afterMissingStateAndQuickCountNormalizationStaged(
+                    sessionID: sessionID,
+                    animalCheckID: checkBeforeFailure.id
+                ),
                 "The operation must surface the roster-state rollback sentinel rather than an unrelated early failure.",
                 file: file,
                 line: line
@@ -289,7 +292,7 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(
             rawQuickCowCountAfterFailure,
             rawQuickCowCountBeforeFailure,
-            "A failed roster-state write must not commit its coordinated raw quick-count normalization.",
+            "A failed roster-state write must roll back the staged raw quick-count normalization.",
             file: file,
             line: line
         )
