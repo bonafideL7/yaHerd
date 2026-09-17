@@ -137,7 +137,7 @@ enum FieldCheckRepositoryContract {
         XCTAssertEqual(calfCheck.displayTagNumber, "C10", file: file, line: line)
         XCTAssertEqual(calfCheck.displayTagColorID, colorID, file: file, line: line)
         XCTAssertEqual(calfCheck.damDisplayTagNumber, "D10", file: file, line: line)
-        XCTAssertEqual(calfCheck.damDisplayTagColorID, originalColorID, file: file, line: line)
+        XCTAssertEqual(calfCheck.damDisplayTagColorID, colorID, file: file, line: line)
         XCTAssertTrue(calfCheck.wasExpectedAtStart, file: file, line: line)
 
         let summary = try XCTUnwrap(
