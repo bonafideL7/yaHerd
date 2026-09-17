@@ -902,10 +902,31 @@ enum PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.75
             )
         )
-        let animal = try fixture.makeAnimalRepository().create(
+        let animalRepository = fixture.makeAnimalRepository()
+        let animal = try animalRepository.create(
             input: AnimalInput(
                 name: "Writable Working Cow",
                 tagNumber: "WW-1",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSince1970: 1_577_836_800),
+                status: .active,
+                pastureID: sourcePasture.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+        let queuedAnimal = try animalRepository.create(
+            input: AnimalInput(
+                name: "Writable Working Queued Cow",
+                tagNumber: "WW-2",
                 tagColorID: nil,
                 sex: .female,
                 birthDate: Date(timeIntervalSince1970: 1_577_836_800),
@@ -930,7 +951,7 @@ enum PastureRepositoryEdgeCaseContract {
                 sourcePastureID: sourcePasture.id,
                 treatmentTemplateName: "Writable Working Contract",
                 plannedTreatments: [],
-                animalIDs: [animal.id]
+                animalIDs: [animal.id, queuedAnimal.id]
             )
         )
         let startedSession = try XCTUnwrap(
@@ -938,12 +959,27 @@ enum PastureRepositoryEdgeCaseContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(startedSession.queueItems.count, 2, file: file, line: line)
         let queueItemID = try XCTUnwrap(
-            startedSession.queueItems.first?.id,
-            "The Working fixture must contain its selected animal.",
+            startedSession.queueItems.first { $0.animalID == animal.id }?.id,
+            "The Working fixture must contain the completed-path animal.",
             file: file,
             line: line
         )
+        let queuedItemID = try XCTUnwrap(
+            startedSession.queueItems.first { $0.animalID == queuedAnimal.id }?.id,
+            "The Working fixture must contain the animal that remains queued through pasture deletion.",
+            file: file,
+            line: line
+        )
+        let queuedItemAtStart = try XCTUnwrap(
+            startedSession.queueItems.first { $0.id == queuedItemID },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(queuedItemAtStart.status, .queued, file: file, line: line)
+        XCTAssertNil(queuedItemAtStart.completedAt, file: file, line: line)
+
         try working.complete(
             queueItemID: queueItemID,
             inSessionID: sessionID,
@@ -953,7 +989,7 @@ enum PastureRepositoryEdgeCaseContract {
             observationNotes: "Before pasture deletion"
         )
         let completedQueueItem = try XCTUnwrap(
-            working.fetchSessionDetail(id: sessionID)?.queueItems.first,
+            working.fetchSessionDetail(id: sessionID)?.queueItems.first { $0.id == queueItemID },
             file: file,
             line: line
         )
@@ -972,6 +1008,20 @@ enum PastureRepositoryEdgeCaseContract {
             )
         )
 
+        let beforeDeletion = try XCTUnwrap(
+            working.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(beforeDeletion.queueItems.count, 2, file: file, line: line)
+        XCTAssertEqual(
+            beforeDeletion.queueItems.first { $0.id == queuedItemID }?.status,
+            .queued,
+            "The second source animal must still be waiting when the source pasture is deleted.",
+            file: file,
+            line: line
+        )
+
         let archivedAt = Date(timeIntervalSince1970: 1_781_400_000)
         try fixture.deletePastures([sourcePasture.id, deletedDestination.id], archivedAt)
 
@@ -985,7 +1035,21 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(workingAnimalAfterDeletion.location, .workingPen, file: file, line: line)
         XCTAssertNil(workingAnimalAfterDeletion.pastureID, file: file, line: line)
         XCTAssertNil(workingAnimalAfterDeletion.pastureName, file: file, line: line)
+        let queuedAnimalAfterDeletion = try XCTUnwrap(
+            animalsAfterDeletion.fetchAnimalDetail(id: queuedAnimal.id),
+            "A queued animal must survive deletion of the active Working session's source pasture.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(queuedAnimalAfterDeletion.location, .workingPen, file: file, line: line)
+        XCTAssertNil(queuedAnimalAfterDeletion.pastureID, file: file, line: line)
+        XCTAssertNil(queuedAnimalAfterDeletion.pastureName, file: file, line: line)
+
         let movementsBeforeCompletion = try animalsAfterDeletion.fetchTimeline(id: animal.id).compactMap { event -> String? in
+            guard case .movement = event.type else { return nil }
+            return event.details
+        }
+        let queuedMovementsBeforeCompletion = try animalsAfterDeletion.fetchTimeline(id: queuedAnimal.id).compactMap { event -> String? in
             guard case .movement = event.type else { return nil }
             return event.details
         }
@@ -1000,6 +1064,40 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(sessionAfterDeletion.status, .active, file: file, line: line)
         XCTAssertEqual(sessionAfterDeletion.sourcePastureID, sourcePasture.id, file: file, line: line)
         XCTAssertEqual(sessionAfterDeletion.sourcePastureName, "Writable Working Source", file: file, line: line)
+        XCTAssertEqual(sessionAfterDeletion.queueItems.count, 2, file: file, line: line)
+        let queuedItemAfterDeletion = try XCTUnwrap(
+            sessionAfterDeletion.queueItems.first { $0.id == queuedItemID },
+            "The queued item must remain in the affected Working session after its source pasture is deleted.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(queuedItemAfterDeletion.id, queuedItemID, file: file, line: line)
+        XCTAssertEqual(queuedItemAfterDeletion.status, .queued, file: file, line: line)
+        XCTAssertNil(queuedItemAfterDeletion.completedAt, file: file, line: line)
+        XCTAssertEqual(queuedItemAfterDeletion.animalID, queuedAnimal.id, file: file, line: line)
+        XCTAssertEqual(queuedItemAfterDeletion.animalDisplayTagNumber, "WW-2", file: file, line: line)
+        XCTAssertEqual(queuedItemAfterDeletion.collectedFromPastureName, "Writable Working Source", file: file, line: line)
+        XCTAssertNil(queuedItemAfterDeletion.destinationPastureID, file: file, line: line)
+        XCTAssertNil(queuedItemAfterDeletion.destinationPastureName, file: file, line: line)
+
+        let queuedEditorAfterDeletion = try XCTUnwrap(
+            postDeletionWorking.fetchQueueItemEditor(
+                sessionID: sessionID,
+                queueItemID: queuedItemID
+            ),
+            "A queued item must remain addressable in the Working editor after its source pasture is deleted.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(queuedEditorAfterDeletion.id, queuedItemID, file: file, line: line)
+        XCTAssertEqual(queuedEditorAfterDeletion.sessionID, sessionID, file: file, line: line)
+        XCTAssertEqual(queuedEditorAfterDeletion.sessionStatus, .active, file: file, line: line)
+        XCTAssertEqual(queuedEditorAfterDeletion.status, .queued, file: file, line: line)
+        XCTAssertNil(queuedEditorAfterDeletion.completedAt, file: file, line: line)
+        XCTAssertEqual(queuedEditorAfterDeletion.animalID, queuedAnimal.id, file: file, line: line)
+        XCTAssertEqual(queuedEditorAfterDeletion.animalDisplayTagNumber, "WW-2", file: file, line: line)
+        XCTAssertEqual(queuedEditorAfterDeletion.sessionSourcePastureName, "Writable Working Source", file: file, line: line)
+        XCTAssertNil(queuedEditorAfterDeletion.destinationPastureID, file: file, line: line)
 
         let postDeletionNotes = "Updated after pasture deletion"
         try postDeletionWorking.saveEdits(
@@ -1029,11 +1127,41 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(editorAfterPostDeletionWrite.destinationPastureID, controlPasture.id, file: file, line: line)
         XCTAssertEqual(editorAfterPostDeletionWrite.observationNotes, postDeletionNotes, file: file, line: line)
 
+        let queuedPostDeletionNotes = "Queued completion after pasture deletion"
+        try postDeletionWorking.complete(
+            queueItemID: queuedItemID,
+            inSessionID: sessionID,
+            treatmentEntries: [],
+            pregnancyCheck: nil,
+            markCastrated: false,
+            observationNotes: queuedPostDeletionNotes
+        )
+        let queuedEditorAfterCompletion = try XCTUnwrap(
+            fixture.makeWorkingRepository().fetchQueueItemEditor(
+                sessionID: sessionID,
+                queueItemID: queuedItemID
+            ),
+            "The queued item must remain writable after source-pasture deletion.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(queuedEditorAfterCompletion.id, queuedItemID, file: file, line: line)
+        XCTAssertEqual(queuedEditorAfterCompletion.sessionID, sessionID, file: file, line: line)
+        XCTAssertEqual(queuedEditorAfterCompletion.sessionStatus, .active, file: file, line: line)
+        XCTAssertEqual(queuedEditorAfterCompletion.status, .done, file: file, line: line)
+        XCTAssertNotNil(queuedEditorAfterCompletion.completedAt, file: file, line: line)
+        XCTAssertEqual(queuedEditorAfterCompletion.animalID, queuedAnimal.id, file: file, line: line)
+        XCTAssertEqual(queuedEditorAfterCompletion.observationNotes, queuedPostDeletionNotes, file: file, line: line)
+
         try postDeletionWorking.completeSession(
             id: sessionID,
             assignments: [
                 WorkingQueueDestinationAssignment(
                     queueItemID: queueItemID,
+                    destinationPastureID: controlPasture.id
+                ),
+                WorkingQueueDestinationAssignment(
+                    queueItemID: queuedItemID,
                     destinationPastureID: controlPasture.id
                 )
             ]
@@ -1049,11 +1177,27 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(finalSession.status, .finished, file: file, line: line)
         XCTAssertEqual(finalSession.sourcePastureID, sourcePasture.id, file: file, line: line)
         XCTAssertEqual(finalSession.sourcePastureName, "Writable Working Source", file: file, line: line)
-        let finalQueueItem = try XCTUnwrap(finalSession.queueItems.first, file: file, line: line)
-        XCTAssertEqual(finalQueueItem.id, queueItemID, file: file, line: line)
+        XCTAssertEqual(finalSession.queueItems.count, 2, file: file, line: line)
+        let finalQueueItem = try XCTUnwrap(
+            finalSession.queueItems.first { $0.id == queueItemID },
+            file: file,
+            line: line
+        )
         XCTAssertEqual(finalQueueItem.status, .done, file: file, line: line)
         XCTAssertEqual(finalQueueItem.destinationPastureID, controlPasture.id, file: file, line: line)
         XCTAssertEqual(finalQueueItem.destinationPastureName, "Writable Working Control", file: file, line: line)
+        let finalQueuedItem = try XCTUnwrap(
+            finalSession.queueItems.first { $0.id == queuedItemID },
+            "The formerly queued item must remain in the finished session.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(finalQueuedItem.id, queuedItemID, file: file, line: line)
+        XCTAssertEqual(finalQueuedItem.status, .done, file: file, line: line)
+        XCTAssertNotNil(finalQueuedItem.completedAt, file: file, line: line)
+        XCTAssertEqual(finalQueuedItem.animalID, queuedAnimal.id, file: file, line: line)
+        XCTAssertEqual(finalQueuedItem.destinationPastureID, controlPasture.id, file: file, line: line)
+        XCTAssertEqual(finalQueuedItem.destinationPastureName, "Writable Working Control", file: file, line: line)
 
         let finalSummary = try XCTUnwrap(
             finalWorking.fetchSessions().first { $0.id == sessionID },
@@ -1063,8 +1207,8 @@ enum PastureRepositoryEdgeCaseContract {
         )
         XCTAssertEqual(finalSummary.status, .finished, file: file, line: line)
         XCTAssertEqual(finalSummary.sourcePastureName, "Writable Working Source", file: file, line: line)
-        XCTAssertEqual(finalSummary.totalQueueItems, 1, file: file, line: line)
-        XCTAssertEqual(finalSummary.completedQueueItems, 1, file: file, line: line)
+        XCTAssertEqual(finalSummary.totalQueueItems, 2, file: file, line: line)
+        XCTAssertEqual(finalSummary.completedQueueItems, 2, file: file, line: line)
 
         let finalEditor = try XCTUnwrap(
             finalWorking.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueItemID),
@@ -1074,6 +1218,19 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(finalEditor.sessionStatus, .finished, file: file, line: line)
         XCTAssertEqual(finalEditor.destinationPastureID, controlPasture.id, file: file, line: line)
         XCTAssertEqual(finalEditor.observationNotes, postDeletionNotes, file: file, line: line)
+
+        let finalQueuedEditor = try XCTUnwrap(
+            finalWorking.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queuedItemID),
+            "The formerly queued item's editor state must survive through session completion.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(finalQueuedEditor.id, queuedItemID, file: file, line: line)
+        XCTAssertEqual(finalQueuedEditor.sessionID, sessionID, file: file, line: line)
+        XCTAssertEqual(finalQueuedEditor.sessionStatus, .finished, file: file, line: line)
+        XCTAssertEqual(finalQueuedEditor.status, .done, file: file, line: line)
+        XCTAssertEqual(finalQueuedEditor.destinationPastureID, controlPasture.id, file: file, line: line)
+        XCTAssertEqual(finalQueuedEditor.observationNotes, queuedPostDeletionNotes, file: file, line: line)
 
         let finalAnimals = fixture.makeAnimalRepository()
         let finalAnimal = try XCTUnwrap(
@@ -1085,9 +1242,19 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(finalAnimal.location, .pasture, file: file, line: line)
         XCTAssertEqual(finalAnimal.pastureID, controlPasture.id, file: file, line: line)
         XCTAssertEqual(finalAnimal.pastureName, "Writable Working Control", file: file, line: line)
+        let finalQueuedAnimal = try XCTUnwrap(
+            finalAnimals.fetchAnimalDetail(id: queuedAnimal.id),
+            "Completing the surviving Working session must move the formerly queued animal out of the working pen.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(finalQueuedAnimal.location, .pasture, file: file, line: line)
+        XCTAssertEqual(finalQueuedAnimal.pastureID, controlPasture.id, file: file, line: line)
+        XCTAssertEqual(finalQueuedAnimal.pastureName, "Writable Working Control", file: file, line: line)
 
+        let finalAnimalSummaries = try finalAnimals.fetchAnimals()
         let finalAnimalSummary = try XCTUnwrap(
-            finalAnimals.fetchAnimals().first { $0.id == animal.id },
+            finalAnimalSummaries.first { $0.id == animal.id },
             "The animal-list reader must reflect the post-deletion Working completion destination.",
             file: file,
             line: line
@@ -1095,6 +1262,15 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(finalAnimalSummary.location, .pasture, file: file, line: line)
         XCTAssertEqual(finalAnimalSummary.pastureID, controlPasture.id, file: file, line: line)
         XCTAssertEqual(finalAnimalSummary.pastureName, "Writable Working Control", file: file, line: line)
+        let finalQueuedAnimalSummary = try XCTUnwrap(
+            finalAnimalSummaries.first { $0.id == queuedAnimal.id },
+            "The animal-list reader must reflect the formerly queued animal's post-deletion destination.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(finalQueuedAnimalSummary.location, .pasture, file: file, line: line)
+        XCTAssertEqual(finalQueuedAnimalSummary.pastureID, controlPasture.id, file: file, line: line)
+        XCTAssertEqual(finalQueuedAnimalSummary.pastureName, "Writable Working Control", file: file, line: line)
 
         let movementsAfterCompletion = try finalAnimals.fetchTimeline(id: animal.id).compactMap { event -> String? in
             guard case .movement = event.type else { return nil }
@@ -1117,6 +1293,31 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertTrue(
             movementsAfterCompletion.last?.hasSuffix("→ Writable Working Control") == true,
             "The appended movement must end in the surviving destination pasture.",
+            file: file,
+            line: line
+        )
+
+        let queuedMovementsAfterCompletion = try finalAnimals.fetchTimeline(id: queuedAnimal.id).compactMap { event -> String? in
+            guard case .movement = event.type else { return nil }
+            return event.details
+        }
+        XCTAssertEqual(
+            Array(queuedMovementsAfterCompletion.dropLast()),
+            queuedMovementsBeforeCompletion,
+            "Completing the formerly queued item must preserve its prior movement history.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            queuedMovementsAfterCompletion.count,
+            queuedMovementsBeforeCompletion.count + 1,
+            "Finishing the session must append exactly one movement for the formerly queued animal.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            queuedMovementsAfterCompletion.last?.hasSuffix("→ Writable Working Control") == true,
+            "The formerly queued animal's appended movement must end in the surviving destination pasture.",
             file: file,
             line: line
         )
