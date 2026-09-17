@@ -104,6 +104,24 @@ extension AnimalRepositoryContract {
                 targetAcresPerHead: 1.5
             )
         )
+        let otherBullPasture = try fixture.makePastureRepository().create(
+            input: PastureInput(
+                name: "Offspring Draft Other Bull Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let offPastureSire = try repository.create(
+            input: readModelAnimalInput(
+                name: "Offspring Draft Off-Pasture Sire",
+                tagNumber: "OS02",
+                tagColorID: TagColorDefaults.whiteID,
+                sex: .male,
+                birthDate: contractDate(year: 2017, month: 1, day: 2),
+                pastureID: otherBullPasture.id
+            )
+        )
         let inferredSire = try repository.create(
             input: readModelAnimalInput(
                 name: "Offspring Draft Contract Sire",
@@ -171,7 +189,20 @@ extension AnimalRepositoryContract {
         XCTAssertEqual(seed.damDisplayName, "OD01", file: file, line: line)
         XCTAssertEqual(seed.pastureID, offspringPasture.id, file: file, line: line)
         XCTAssertEqual(seed.pastureName, offspringPasture.name, file: file, line: line)
-        XCTAssertEqual(seed.inferredSireID, inferredSire.id, file: file, line: line)
+        XCTAssertEqual(
+            seed.inferredSireID,
+            inferredSire.id,
+            "Sire inference must choose the sole eligible bull in the dam's pasture even when another eligible bull exists elsewhere.",
+            file: file,
+            line: line
+        )
+        XCTAssertNotEqual(
+            seed.inferredSireID,
+            offPastureSire.id,
+            "An eligible bull from another pasture must not be inferred as the sire.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(seed.inferredSireDisplayName, "OS01", file: file, line: line)
         XCTAssertEqual(
             seed.defaultBirthDate,
