@@ -14,6 +14,8 @@ extension AnimalRepositoryContract {
         let createdBirthDate = contractDate(year: 2020, month: 1, day: 2)
         let createdDeathDate = contractDate(year: 2026, month: 1, day: 3)
         let createdTagColorID = TagColorDefaults.whiteID
+        let createdStatusReference = try fixture.makeStatusReference("Create Summary Contract Deceased", .dead)
+        let editedStatusReference = try fixture.makeStatusReference("Edited Summary Contract Deceased", .dead)
         let createdDistinguishingFeatures = [
             DistinguishingFeature(description: "White blaze", order: 0),
             DistinguishingFeature(description: "Black tail switch", order: 1)
@@ -29,6 +31,7 @@ extension AnimalRepositoryContract {
                 status: .dead,
                 deathDate: createdDeathDate,
                 causeOfDeath: "Create summary contract",
+                statusReferenceID: createdStatusReference.id,
                 distinguishingFeatures: createdDistinguishingFeatures
             )
         )
@@ -55,6 +58,42 @@ extension AnimalRepositoryContract {
         XCTAssertNil(createdSummary.pastureID, file: file, line: line)
         XCTAssertNil(createdSummary.pastureName, file: file, line: line)
         XCTAssertEqual(createdSummary.location, .pasture, file: file, line: line)
+
+        let editedDeathDate = contractDate(year: 2026, month: 2, day: 14)
+        let editedCauseOfDeath = "Edited same-status cause"
+        let sameStatusUpdated = try createdSummaryRepository.update(
+            id: created.id,
+            input: readModelAnimalInput(
+                name: "Create Summary Contract Heifer",
+                tagNumber: "CS01",
+                tagColorID: createdTagColorID,
+                sex: .female,
+                birthDate: createdBirthDate,
+                status: .dead,
+                deathDate: editedDeathDate,
+                causeOfDeath: editedCauseOfDeath,
+                statusReferenceID: editedStatusReference.id,
+                distinguishingFeatures: createdDistinguishingFeatures
+            )
+        )
+        XCTAssertEqual(sameStatusUpdated.status.rawValue, AnimalStatus.dead.rawValue, file: file, line: line)
+        XCTAssertEqual(sameStatusUpdated.deathDate, editedDeathDate, file: file, line: line)
+        XCTAssertEqual(sameStatusUpdated.causeOfDeath, editedCauseOfDeath, file: file, line: line)
+        XCTAssertEqual(sameStatusUpdated.statusReferenceID, editedStatusReference.id, file: file, line: line)
+        XCTAssertEqual(sameStatusUpdated.statusReferenceName, editedStatusReference.name, file: file, line: line)
+
+        let sameStatusReloadRepository = fixture.makeAnimalRepository()
+        let reloadedSameStatusUpdate = try XCTUnwrap(
+            sameStatusReloadRepository.fetchAnimalDetail(id: created.id),
+            "Metadata edits made without changing the base status must survive a fresh repository reload.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedSameStatusUpdate.status.rawValue, AnimalStatus.dead.rawValue, file: file, line: line)
+        XCTAssertEqual(reloadedSameStatusUpdate.deathDate, editedDeathDate, file: file, line: line)
+        XCTAssertEqual(reloadedSameStatusUpdate.causeOfDeath, editedCauseOfDeath, file: file, line: line)
+        XCTAssertEqual(reloadedSameStatusUpdate.statusReferenceID, editedStatusReference.id, file: file, line: line)
+        XCTAssertEqual(reloadedSameStatusUpdate.statusReferenceName, editedStatusReference.name, file: file, line: line)
 
         let offspringPasture = try fixture.makePastureRepository().create(
             input: PastureInput(
@@ -85,6 +124,7 @@ extension AnimalRepositoryContract {
             )
         )
 
+        let expectedDefaultBirthDate = Calendar.current.startOfDay(for: .now)
         let offspringDraftRepository = fixture.makeAnimalRepository()
         let seed = try XCTUnwrap(
             offspringDraftRepository.fetchOffspringDraftSeed(forDamID: dam.id),
@@ -98,6 +138,13 @@ extension AnimalRepositoryContract {
         XCTAssertEqual(seed.pastureName, offspringPasture.name, file: file, line: line)
         XCTAssertEqual(seed.inferredSireID, inferredSire.id, file: file, line: line)
         XCTAssertEqual(seed.inferredSireDisplayName, "OS01", file: file, line: line)
+        XCTAssertEqual(
+            seed.defaultBirthDate,
+            expectedDefaultBirthDate,
+            "The offspring draft must default the birth date to the start of the current day.",
+            file: file,
+            line: line
+        )
     }
 
     private static func readModelAnimalInput(
@@ -110,6 +157,7 @@ extension AnimalRepositoryContract {
         pastureID: UUID? = nil,
         deathDate: Date? = nil,
         causeOfDeath: String? = nil,
+        statusReferenceID: UUID? = nil,
         distinguishingFeatures: [DistinguishingFeature] = []
     ) -> AnimalInput {
         AnimalInput(
@@ -128,7 +176,7 @@ extension AnimalRepositoryContract {
             reasonSold: nil,
             deathDate: deathDate,
             causeOfDeath: causeOfDeath,
-            statusReferenceID: nil
+            statusReferenceID: statusReferenceID
         )
     }
 
