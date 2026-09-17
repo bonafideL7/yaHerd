@@ -6,12 +6,10 @@
 import Foundation
 import SwiftData
 
-/// Top-level ownership/scope record for future CloudKit sharing.
+/// Top-level ownership and query scope for the local herd data graph.
 ///
-/// CloudKit sharing needs a single root object that represents the thing being
-/// shared. In yaHerd, that root is the herd/ranch workspace. Existing records
-/// remain optional so current local/iCloud stores can migrate without requiring
-/// every row to be rewritten before the app opens.
+/// Every herd-owned record points back to this root so repositories can keep
+/// data consistently scoped without exposing persistence-specific identity.
 extension YaHerdSchemaV1 {
     @Model
     final class Herd {
@@ -19,6 +17,9 @@ extension YaHerdSchemaV1 {
         var name: String = ""
         var createdAt: Date = Date.now
         var updatedAt: Date = Date.now
+
+        // Legacy SwiftData V1 storage field retained to keep the persisted schema stable.
+        // It is not Domain state and must not be carried into the Core Data model.
         var schemaVersion: Int = 1
 
         @Relationship(deleteRule: .nullify, inverse: \Animal.herd)

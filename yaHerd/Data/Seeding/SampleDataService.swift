@@ -234,16 +234,16 @@ struct SampleDataService {
         let spring = WorkingProtocolTemplate(
             name: "Spring Working",
             items: [
-                WorkingProtocolItem(name: "7-way", defaultQuantity: nil),
-                WorkingProtocolItem(name: "Respiratory", defaultQuantity: nil),
-                WorkingProtocolItem(name: "Dewormer", defaultQuantity: nil)
+                WorkingProtocolItem(name: "7-way"),
+                WorkingProtocolItem(name: "Respiratory"),
+                WorkingProtocolItem(name: "Dewormer")
             ]
         )
         
         let fall = WorkingProtocolTemplate(
             name: "Fall Booster",
             items: [
-                WorkingProtocolItem(name: "Booster", defaultQuantity: nil)
+                WorkingProtocolItem(name: "Booster")
             ]
         )
         

@@ -10,7 +10,6 @@ struct HerdSummary: Identifiable, Equatable, Sendable {
     let name: String
     let createdAt: Date
     let updatedAt: Date
-    let schemaVersion: Int
 
     var id: UUID { publicID }
 }

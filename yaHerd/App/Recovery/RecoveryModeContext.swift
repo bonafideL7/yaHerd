@@ -7,16 +7,13 @@ import Foundation
 import SwiftUI
 
 struct RecoveryModeContext: Equatable, Sendable {
-  let requestedSyncMode: SyncMode
   let startupError: String
   let enteredAt: Date
 
   init(
-    requestedSyncMode: SyncMode,
     startupError: String,
     enteredAt: Date = .now
   ) {
-    self.requestedSyncMode = requestedSyncMode
     self.startupError = startupError
     self.enteredAt = enteredAt
   }

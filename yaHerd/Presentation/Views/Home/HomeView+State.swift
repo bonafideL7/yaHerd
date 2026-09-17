@@ -176,7 +176,6 @@ extension HomeView {
     var setupSuggestionContext: HomeSetupSuggestionContext {
         HomeSetupSuggestionContext(
             isDashboardEnabled: applicationSettings.isDashboardEnabled,
-            syncMode: syncMode,
             customTagColorCount: customTagColorCount,
             dismissedIDs: dismissedSetupSuggestionIDs
         )
@@ -188,9 +187,5 @@ extension HomeView {
 
     var customTagColorCount: Int {
         tagColorLibrary.colors.filter { !TagColorDefaults.defaultColorIDs.contains($0.id) }.count
-    }
-
-    var syncMode: SyncMode {
-        applicationSettings.syncMode
     }
 }

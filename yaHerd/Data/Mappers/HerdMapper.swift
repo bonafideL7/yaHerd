@@ -9,8 +9,7 @@ extension Herd {
             publicID: publicID,
             name: name,
             createdAt: createdAt,
-            updatedAt: updatedAt,
-            schemaVersion: schemaVersion
+            updatedAt: updatedAt
         )
     }
 }

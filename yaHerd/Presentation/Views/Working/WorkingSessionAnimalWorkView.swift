@@ -212,11 +212,6 @@ struct WorkingSessionAnimalWorkView: View {
             guard !Task.isCancelled else { return }
 
             switch event.source {
-            case .sharedStoreImport:
-                guard !presentedQueueItemWasInvalidatedBySharedImport() else { return }
-                guard !refreshSessionSourcePastureAfterMutation() else { return }
-                refreshDestinationPasturesAfterMutation()
-                revalidateSelectedSireAfterMutation()
             case .local(.sampleData):
                 guard !refreshSessionSourcePastureAfterMutation() else { return }
                 refreshDestinationPasturesAfterMutation()
@@ -226,42 +221,9 @@ struct WorkingSessionAnimalWorkView: View {
                 refreshDestinationPasturesAfterMutation()
             case .local(.animal):
                 revalidateSelectedSireAfterMutation()
-            case .publicIDRepair:
-                // Duplicate-ID repair can preserve a public UUID while replacing the underlying
-                // local queue object. Every presentation of this editor must therefore tear down
-                // its transient draft rather than remaining bound to an indeterminate identity.
-                guard snapshot != nil else { continue }
-                dismiss()
-                return
-            case .collaborationStateChange, .local:
+            case .local:
                 break
             }
-        }
-    }
-
-    @MainActor
-    private func presentedQueueItemWasInvalidatedBySharedImport() -> Bool {
-        guard let presentedSnapshot = snapshot else { return false }
-
-        do {
-            let refreshedSnapshot = try repository.fetchQueueItemEditor(
-                sessionID: presentedSnapshot.sessionID,
-                queueItemID: presentedSnapshot.id
-            )
-
-            guard !WorkingQueueEditorIdentity.invalidates(
-                presented: presentedSnapshot,
-                refreshed: refreshedSnapshot
-            ) else {
-                dismiss()
-                return true
-            }
-
-            return false
-        } catch {
-            // A transient read failure is not evidence that the identity changed. Keep the draft;
-            // persistence still validates explicit references and fails closed on a later save.
-            return false
         }
     }
 

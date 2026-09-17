@@ -114,11 +114,9 @@ extension AppNavigationState {
                 validatedFocusedFindingID = nil
             }
 
-            // Keep the existing launch token when its identity-bound targets still resolve. The
-            // isolated field-check flow observes mutation events and only tears down transient
-            // editor state when an identity it already depended on is removed/rekeyed, or when a
-            // public-ID repair occurs. Rebuilding every valid configuration here would dismiss
-            // unsaved editors even for no-op or field-only shared imports.
+            // Keep the existing launch token when its identity-bound targets still resolve.
+            // Rebuilding every valid configuration after an unrelated local mutation would
+            // unnecessarily dismiss transient editors with unsaved work.
             guard validatedFocusedFindingID != configuration.focusedFindingID else {
                 return .unchanged
             }

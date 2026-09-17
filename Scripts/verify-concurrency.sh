@@ -29,12 +29,7 @@ if grep -R --line-number --include='*.swift' 'Task\.detached' yaHerd; then
   exit 1
 fi
 
-if grep -R --line-number --include='*.swift' -E '\[[^]]*cloudStore[^]]*\]' yaHerd/App; then
-  echo 'NSUbiquitousKeyValueStore must not be captured by a Task because its Sendable conformance is unavailable.' >&2
-  exit 1
-fi
-
-actor_default_arguments="$(grep -R --line-number --include='*.swift' -E 'ApplicationSettings[[:space:]]*=[[:space:]]*ApplicationSettings\(|AppSettingsSyncing[[:space:]]*=[[:space:]]*AppSettingsSynchronizer\(|CloudKitSchemaChecking[[:space:]]*=[[:space:]]*CloudKitSchemaChecker\(' yaHerd || true)"
+actor_default_arguments="$(grep -R --line-number --include='*.swift' -E 'ApplicationSettings[[:space:]]*=[[:space:]]*ApplicationSettings\(' yaHerd || true)"
 if [[ -n "$actor_default_arguments" ]]; then
   echo "$actor_default_arguments" >&2
   echo 'Main-actor dependencies must not be constructed in default argument expressions; use an explicit @MainActor convenience initializer.' >&2
@@ -98,41 +93,6 @@ for path in environment_root.glob('*.swift'):
             failures.append(
                 f'{path}:{line}: {match.group(1)} must provide nonisolated init() for EnvironmentKey default construction'
             )
-
-# Recovery mutations deliberately store only scalar/value mutation coordinates. Keeping a
-# SwiftData-backed AggregateNode or TreatmentItemLocation inside an escaping stored closure lets
-# newer Swift compilers diagnose a transfer that older CI toolchains can miss entirely.
-recovery_path = Path(
-    'yaHerd/Data/Repositories/DeterministicSwiftDataPublicIDRepairRecovery.swift'
-)
-recovery_text = recovery_path.read_text()
-if 'private enum RecoveryMutationTarget' not in recovery_text:
-    failures.append(
-        f'{recovery_path}: recovery mutations must use value-only RecoveryMutationTarget coordinates'
-    )
-for forbidden in ('applyFinal:', 'applyBackup:', 'let applyFinal:', 'let applyBackup:'):
-    if forbidden in recovery_text:
-        failures.append(
-            f'{recovery_path}: RecoveryMutation must not store escaping mutation closures ({forbidden})'
-        )
-
-mutation_struct = re.search(
-    r'private struct RecoveryMutation\s*\{(?P<body>.*?)^\s*\}',
-    recovery_text,
-    re.DOTALL | re.MULTILINE,
-)
-if mutation_struct is None:
-    failures.append(f'{recovery_path}: RecoveryMutation declaration was not found')
-else:
-    mutation_body = mutation_struct.group('body')
-    if 'target: RecoveryMutationTarget' not in mutation_body:
-        failures.append(
-            f'{recovery_path}: RecoveryMutation must store a RecoveryMutationTarget rather than an escaping closure'
-        )
-    if '-> Void' in mutation_body or '@isolated(any)' in mutation_body:
-        failures.append(
-            f'{recovery_path}: RecoveryMutation stored properties must not erase model-actor ownership into closures'
-        )
 
 if failures:
     print('Swift concurrency architecture checks failed:', file=sys.stderr)

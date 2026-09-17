@@ -2,7 +2,6 @@ import Foundation
 
 struct HomeSetupSuggestionContext: Equatable {
     let isDashboardEnabled: Bool
-    let syncMode: SyncMode
     let customTagColorCount: Int
     let dismissedIDs: Set<String>
 }
@@ -15,7 +14,6 @@ enum HomeSetupSuggestionID: String, CaseIterable, Hashable {
     case enableDashboard
     case customizeTagColors
     case completePastureStockingData
-    case reviewSyncSetup
 }
 
 struct HomeSetupSuggestionPolicy {
@@ -28,11 +26,12 @@ struct HomeSetupSuggestionPolicy {
         if !snapshot.hasPastures { ids.append(.addFirstPasture) }
         if !snapshot.hasActiveAnimals { ids.append(.addFirstAnimal) }
         if snapshot.hasPastures && !snapshot.hasFieldCheckHistory { ids.append(.startFirstPastureCheck) }
-        if !snapshot.hasWorkingTreatmentTemplates && snapshot.hasPastures && snapshot.hasActiveAnimals { ids.append(.createWorkingTreatmentTemplate) }
+        if !snapshot.hasWorkingTreatmentTemplates && snapshot.hasPastures && snapshot.hasActiveAnimals {
+            ids.append(.createWorkingTreatmentTemplate)
+        }
         if !context.isDashboardEnabled { ids.append(.enableDashboard) }
         if context.customTagColorCount == 0 { ids.append(.customizeTagColors) }
         if !snapshot.pasturesMissingStockingData.isEmpty { ids.append(.completePastureStockingData) }
-        if context.syncMode == .localOnly { ids.append(.reviewSyncSetup) }
 
         return ids.filter { !context.dismissedIDs.contains($0.rawValue) }
     }

@@ -8,14 +8,10 @@ enum ApplicationFeatureArea: String, CaseIterable, Hashable, Sendable {
     case pastures
     case fieldChecks
     case workingSessions
-    case collaboration
 }
 
 enum ApplicationMutationSource: Equatable, Sendable {
-    case local(SharedDataMutationReason)
-    case collaborationStateChange
-    case sharedStoreImport
-    case publicIDRepair
+    case local(DataMutationReason)
 }
 
 struct ApplicationMutationEvent: Equatable, Sendable {
@@ -32,8 +28,6 @@ protocol ApplicationMutationStreaming {
     var pastureRevision: UInt64 { get }
     var fieldCheckRevision: UInt64 { get }
     var workingSessionRevision: UInt64 { get }
-    var collaborationRevision: UInt64 { get }
-    var identityRevision: UInt64 { get }
 
     func revision(for area: ApplicationFeatureArea) -> UInt64
     func revisions(
@@ -50,12 +44,11 @@ protocol ApplicationMutationStreamProviding {
 
 @MainActor
 protocol SuccessfulMutationRecording {
-    func recordSuccessfulMutation(reason: SharedDataMutationReason)
+    func recordSuccessfulMutation(reason: DataMutationReason)
 }
 
-/// Central application change stream. Repository decorators publish only after a command succeeds.
-/// Existing event replay remains available while per-feature revisions make invalidation durable
-/// for screens that begin listening after a mutation.
+/// Central application change stream. Repository decorators publish only after a local command
+/// succeeds so dependent screens can invalidate stale read models without persistence coupling.
 @MainActor
 @Observable
 final class ApplicationMutationCenter: ApplicationMutationStreaming {
@@ -68,8 +61,6 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
     private(set) var pastureRevision: UInt64 = 0
     private(set) var fieldCheckRevision: UInt64 = 0
     private(set) var workingSessionRevision: UInt64 = 0
-    private(set) var collaborationRevision: UInt64 = 0
-    private(set) var identityRevision: UInt64 = 0
 
     private var nextSequence: UInt64 = 0
     private var retainedEvents: [ApplicationMutationEvent] = []
@@ -82,20 +73,8 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
         nextSequence
     }
 
-    func recordSuccessfulMutation(reason: SharedDataMutationReason) {
-        publish(source: .local(reason))
-    }
-
-    func recordCollaborationStateChange() {
-        publish(source: .collaborationStateChange)
-    }
-
-    func recordSharedStoreImport() {
-        publish(source: .sharedStoreImport)
-    }
-
-    func recordPublicIDRepair() {
-        publish(source: .publicIDRepair)
+    func recordSuccessfulMutation(reason: DataMutationReason) {
+        publish(reason: reason)
     }
 
     func revision(for area: ApplicationFeatureArea) -> UInt64 {
@@ -112,8 +91,6 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
             return fieldCheckRevision
         case .workingSessions:
             return workingSessionRevision
-        case .collaboration:
-            return collaborationRevision
         }
     }
 
@@ -154,15 +131,14 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
         return stream
     }
 
-    private func publish(source: ApplicationMutationSource) {
-        let affectedAreas = affectedAreas(for: source)
+    private func publish(reason: DataMutationReason) {
+        let affectedAreas = affectedAreas(for: reason)
         incrementRevisions(for: affectedAreas)
-        incrementIdentityRevisionIfNeeded(for: source)
 
         nextSequence &+= 1
         let event = ApplicationMutationEvent(
             sequence: nextSequence,
-            source: source,
+            source: .local(reason),
             affectedAreas: affectedAreas
         )
         latestEvent = event
@@ -197,45 +173,26 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
         if affectedAreas.contains(.workingSessions) {
             workingSessionRevision &+= 1
         }
-        if affectedAreas.contains(.collaboration) {
-            collaborationRevision &+= 1
-        }
     }
 
-    private func incrementIdentityRevisionIfNeeded(for source: ApplicationMutationSource) {
-        switch source {
-        case .sharedStoreImport, .publicIDRepair:
-            identityRevision &+= 1
-        case .local, .collaborationStateChange:
-            break
-        }
-    }
-
-    private func affectedAreas(for source: ApplicationMutationSource) -> Set<ApplicationFeatureArea> {
-        switch source {
-        case .collaborationStateChange:
-            return [.collaboration]
-        case .sharedStoreImport, .publicIDRepair:
+    private func affectedAreas(for reason: DataMutationReason) -> Set<ApplicationFeatureArea> {
+        switch reason {
+        case .herd:
+            return [.home]
+        case .animal:
+            return [.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions]
+        case .pasture:
+            return [.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions]
+        case .dashboard:
+            return [.home, .dashboard, .pastures]
+        case .fieldCheck:
+            return [.home, .dashboard, .pastures, .fieldChecks]
+        case .working:
+            return [.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions]
+        case .tagColor:
+            return [.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions]
+        case .sampleData:
             return Set(ApplicationFeatureArea.allCases)
-        case .local(let reason):
-            switch reason {
-            case .herd:
-                return [.home, .collaboration]
-            case .animal:
-                return [.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions]
-            case .pasture:
-                return [.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions]
-            case .dashboard:
-                return [.home, .dashboard, .pastures]
-            case .fieldCheck:
-                return [.home, .dashboard, .pastures, .fieldChecks]
-            case .working:
-                return [.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions]
-            case .tagColor:
-                return [.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions]
-            case .sampleData:
-                return Set(ApplicationFeatureArea.allCases)
-            }
         }
     }
 }
@@ -250,8 +207,6 @@ struct InactiveApplicationMutationStream: ApplicationMutationStreaming {
     var pastureRevision: UInt64 { 0 }
     var fieldCheckRevision: UInt64 { 0 }
     var workingSessionRevision: UInt64 { 0 }
-    var collaborationRevision: UInt64 { 0 }
-    var identityRevision: UInt64 { 0 }
 
     func revision(for area: ApplicationFeatureArea) -> UInt64 {
         0
@@ -273,112 +228,22 @@ struct InactiveApplicationMutationStream: ApplicationMutationStreaming {
     }
 }
 
-/// Publishes after each transactional SwiftData public-ID repair commit, including intermediate
-/// recovery boundaries, before later verification or bridge convergence can fail.
-actor MutationPublishingPublicIDRepairTransactionalService:
-    PublicIDRepairTransactionalService,
-    PublicIDRepairTransactionalRecovering
-{
-    private let base: any PublicIDRepairTransactionalService
-    private let mutationCenter: ApplicationMutationCenter
-
-    init(
-        base: any PublicIDRepairTransactionalService,
-        mutationCenter: ApplicationMutationCenter
-    ) {
-        self.base = base
-        self.mutationCenter = mutationCenter
-    }
-
-    func scan() async throws -> PublicIDRepairAssessment {
-        try await base.scan()
-    }
-
-    func repair(
-        resolutions: [PublicIDRepairReferenceResolution],
-        willCommit: PublicIDRepairWillCommit
-    ) async throws -> PublicIDRepairReport {
-        let report = try await base.repair(
-            resolutions: resolutions,
-            willCommit: willCommit
-        )
-        await mutationCenter.recordPublicIDRepair()
-        return report
-    }
-
-    func commitState(for report: PublicIDRepairReport) async throws -> PublicIDRepairCommitState {
-        try await base.commitState(for: report)
-    }
-
-    func assessIndeterminateRecovery(
-        for report: PublicIDRepairReport
-    ) async throws -> PublicIDRepairIndeterminateRecoveryAssessment {
-        try await base.assessIndeterminateRecovery(for: report)
-    }
-
-    func recoverIndeterminateRepair(
-        report: PublicIDRepairReport,
-        action: PublicIDRepairRecoveryChoice,
-        willCommit: PublicIDRepairWillCommit,
-        didCommit: PublicIDRepairDidCommit
-    ) async throws -> PublicIDRepairReport {
-        try await base.recoverIndeterminateRepair(
-            report: report,
-            action: action,
-            willCommit: willCommit,
-            didCommit: { [mutationCenter] in
-                mutationCenter.recordPublicIDRepair()
-                await didCommit()
-            }
-        )
-    }
-
-    func resolveIndeterminateRecovery(
-        report: PublicIDRepairReport,
-        resolutions: [PublicIDRepairReferenceResolution],
-        willCommit: PublicIDRepairWillCommit,
-        didCommit: PublicIDRepairDidCommit
-    ) async throws -> PublicIDRepairReport {
-        try await base.resolveIndeterminateRecovery(
-            report: report,
-            resolutions: resolutions,
-            willCommit: willCommit,
-            didCommit: { [mutationCenter] in
-                mutationCenter.recordPublicIDRepair()
-                await didCommit()
-            }
-        )
-    }
-}
-
-/// Records successful local commands into the central application mutation stream. Collaboration
-/// synchronization observes that stream independently so repository save completion is not coupled
-/// to a sharing side effect.
 @MainActor
 final class ApplicationMutationPipeline:
     SuccessfulMutationRecording,
     ApplicationMutationStreamProviding
 {
     private let center: ApplicationMutationCenter
-    private let syncObserver: ApplicationMutationSyncObserver
 
-    init(
-        center: ApplicationMutationCenter,
-        sharingScheduler: HerdSharingMutationSyncScheduler
-    ) {
+    init(center: ApplicationMutationCenter) {
         self.center = center
-        self.syncObserver = ApplicationMutationSyncObserver(
-            mutationStream: center
-        ) { reason in
-            sharingScheduler.requestSharedDataSyncAfterMutation(reason: reason)
-        }
     }
 
     var applicationMutationStream: any ApplicationMutationStreaming {
         center
     }
 
-    func recordSuccessfulMutation(reason: SharedDataMutationReason) {
+    func recordSuccessfulMutation(reason: DataMutationReason) {
         center.recordSuccessfulMutation(reason: reason)
     }
 }
