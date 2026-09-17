@@ -668,10 +668,17 @@ enum FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        let sourceAnimalCheckAfterResolvedCreation = try XCTUnwrap(
+            afterResolvedCreation.animalChecks.first { $0.id == sourceAnimalCheck.id },
+            "A missing-animal finding created already resolved must preserve the original roster row and application UUID.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(resolvedAtCreation.type, .missingAnimal, file: file, line: line)
         XCTAssertEqual(resolvedAtCreation.status, .resolved, file: file, line: line)
+        XCTAssertEqual(sourceAnimalCheckAfterResolvedCreation.animalID, animal.id, file: file, line: line)
         XCTAssertFalse(
-            afterResolvedCreation.animalChecks.first { $0.animalID == animal.id }?.isMissing == true,
+            sourceAnimalCheckAfterResolvedCreation.isMissing,
             "A missing-animal finding created already resolved must not mark the roster animal missing.",
             file: file,
             line: line
