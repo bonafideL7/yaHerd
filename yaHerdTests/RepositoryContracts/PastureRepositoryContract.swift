@@ -355,6 +355,12 @@ enum PastureRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertFalse(
+            try postDeleteRepository.groupNameExists("  ROTATION UPDATED  ", excluding: nil),
+            "Deleting a group must release its normalized name for reuse.",
+            file: file,
+            line: line
+        )
         let pastureAfterGroupDelete = try XCTUnwrap(
             postDeleteRepository.fetchPastureDetail(id: pasture.id),
             file: file,
@@ -623,6 +629,12 @@ enum PastureRepositoryContract {
         XCTAssertNil(try reloadedRepository.fetchPastureDetail(id: pasture.id), file: file, line: line)
         XCTAssertFalse(try reloadedRepository.fetchPastures().contains { $0.id == pasture.id }, file: file, line: line)
         XCTAssertFalse(try reloadedRepository.fetchPastureOptions().contains { $0.id == pasture.id }, file: file, line: line)
+        XCTAssertFalse(
+            try reloadedRepository.nameExists("  DELETE PASTURE  ", excluding: nil),
+            "Deleting a pasture must release its normalized name for reuse.",
+            file: file,
+            line: line
+        )
     }
 
     private static func makePastureInput(name: String) -> PastureInput {
