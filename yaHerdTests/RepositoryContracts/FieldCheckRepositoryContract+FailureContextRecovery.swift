@@ -204,6 +204,44 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
+        let typeTransitionInput = FieldCheckFindingInput(
+            recordedAt: failureContextDate(year: 2026, month: 9, day: 29, hour: 11),
+            type: .limping,
+            severity: .critical,
+            status: .monitoring,
+            note: "Leaked missing-to-limping transition must not persist",
+            animalID: sourceAnimal.id
+        )
+        _ = try assertFailureContextSentinel(
+            expectedOperation: .update,
+            expectedFindingID: findingID,
+            file: file,
+            line: line
+        ) {
+            try failureInjection.rollback.updateMissingFindingFailingBetweenFindingAndMissingState(
+                sessionID,
+                findingID,
+                typeTransitionInput
+            )
+        }
+        try assertFailureContextProbeSave(
+            probeSessionID: probeSessionID,
+            notes: "Probe after type-transition failure",
+            failureInjection: failureInjection,
+            using: fixture,
+            file: file,
+            line: line
+        )
+        try assertFailureContextBaselineSurvivesFlush(
+            sessionID: sessionID,
+            expectedFinding: findingBeforeFailures,
+            sourceCheckID: sourceCheckID,
+            targetCheckID: targetCheckID,
+            using: fixture,
+            file: file,
+            line: line
+        )
+
         _ = try assertFailureContextSentinel(
             expectedOperation: .updateStatus,
             expectedFindingID: findingID,
