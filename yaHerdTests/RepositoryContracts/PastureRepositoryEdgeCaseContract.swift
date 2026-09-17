@@ -540,12 +540,24 @@ enum PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.5
             )
         )
+        let unrelatedPasture = try repository.create(
+            input: PastureInput(
+                name: "Unrelated Group Member",
+                acreage: 26,
+                usableAcreage: 23,
+                targetAcresPerHead: 1.75
+            )
+        )
         let group = try repository.createGroup(
             input: PastureGroupInput(name: "Group Before Update", grazeDays: 5, restDays: 20)
+        )
+        let unrelatedGroup = try repository.createGroup(
+            input: PastureGroupInput(name: "Unrelated Rotation", grazeDays: 4, restDays: 16)
         )
 
         try repository.assignPasture(id: firstPasture.id, toGroupID: group.id)
         try repository.assignPasture(id: secondPasture.id, toGroupID: group.id)
+        try repository.assignPasture(id: unrelatedPasture.id, toGroupID: unrelatedGroup.id)
 
         let updated = try repository.updateGroup(
             id: group.id,
@@ -576,6 +588,17 @@ enum PastureRepositoryEdgeCaseContract {
             line: line
         )
 
+        let unrelatedGroupDetail = try XCTUnwrap(
+            reloadedRepository.fetchPastureGroupDetail(id: unrelatedGroup.id),
+            "Updating one group must not mutate an unrelated group.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(unrelatedGroupDetail.name, "Unrelated Rotation", file: file, line: line)
+        XCTAssertEqual(unrelatedGroupDetail.grazeDays, 4, file: file, line: line)
+        XCTAssertEqual(unrelatedGroupDetail.restDays, 16, file: file, line: line)
+        XCTAssertEqual(unrelatedGroupDetail.pastures.map(\.id), [unrelatedPasture.id], file: file, line: line)
+
         let pastureSummaries = try reloadedRepository.fetchPastures()
         for pasture in [firstPasture, secondPasture] {
             let pastureDetail = try XCTUnwrap(
@@ -596,8 +619,28 @@ enum PastureRepositoryEdgeCaseContract {
             XCTAssertEqual(pastureSummary.restDays, 28, file: file, line: line)
         }
 
+        let unrelatedPastureDetail = try XCTUnwrap(
+            reloadedRepository.fetchPastureDetail(id: unrelatedPasture.id),
+            "Updating another group must preserve this pasture's assignment.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(unrelatedPastureDetail.groupID, unrelatedGroup.id, file: file, line: line)
+        XCTAssertEqual(unrelatedPastureDetail.groupName, "Unrelated Rotation", file: file, line: line)
+
+        let unrelatedPastureSummary = try XCTUnwrap(
+            pastureSummaries.first { $0.id == unrelatedPasture.id },
+            "The pasture-list projection must preserve unrelated group membership.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(unrelatedPastureSummary.groupID, unrelatedGroup.id, file: file, line: line)
+        XCTAssertEqual(unrelatedPastureSummary.groupName, "Unrelated Rotation", file: file, line: line)
+        XCTAssertEqual(unrelatedPastureSummary.restDays, 16, file: file, line: line)
+
+        let groupSummaries = try reloadedRepository.fetchPastureGroups()
         let groupSummary = try XCTUnwrap(
-            reloadedRepository.fetchPastureGroups().first { $0.id == group.id },
+            groupSummaries.first { $0.id == group.id },
             file: file,
             line: line
         )
@@ -605,6 +648,17 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(groupSummary.grazeDays, 7, file: file, line: line)
         XCTAssertEqual(groupSummary.restDays, 28, file: file, line: line)
         XCTAssertEqual(groupSummary.pastureCount, 2, file: file, line: line)
+
+        let unrelatedGroupSummary = try XCTUnwrap(
+            groupSummaries.first { $0.id == unrelatedGroup.id },
+            "The group-list projection must leave unrelated groups unchanged.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(unrelatedGroupSummary.name, "Unrelated Rotation", file: file, line: line)
+        XCTAssertEqual(unrelatedGroupSummary.grazeDays, 4, file: file, line: line)
+        XCTAssertEqual(unrelatedGroupSummary.restDays, 16, file: file, line: line)
+        XCTAssertEqual(unrelatedGroupSummary.pastureCount, 1, file: file, line: line)
     }
 
     static func assertArchivedAnimalTimestampSurvivesPastureDeletion(
