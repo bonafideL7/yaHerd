@@ -718,16 +718,19 @@ extension FieldCheckRepositoryContract {
         file: StaticString,
         line: UInt
     ) throws {
+        let actualByID = actual.sorted(by: rollbackSnapshotIDOrder)
+        let expectedByID = expected.sorted(by: rollbackSnapshotIDOrder)
+
         XCTAssertEqual(
-            actual.map(\.id),
-            expected.map(\.id),
-            "A failed coordinated finding write must preserve the repository-defined session-summary ordering.",
+            actualByID.map(\.id),
+            expectedByID.map(\.id),
+            "A failed coordinated finding write must preserve the same session-summary application IDs regardless of incidental ordering among tied start times.",
             file: file,
             line: line
         )
-        guard actual.count == expected.count else { return }
+        guard actualByID.count == expectedByID.count else { return }
 
-        for (actualSummary, expectedSummary) in zip(actual, expected) {
+        for (actualSummary, expectedSummary) in zip(actualByID, expectedByID) {
             XCTAssertEqual(actualSummary.id, expectedSummary.id, file: file, line: line)
             XCTAssertEqual(actualSummary.startedAt, expectedSummary.startedAt, file: file, line: line)
             XCTAssertEqual(actualSummary.completedAt, expectedSummary.completedAt, file: file, line: line)
