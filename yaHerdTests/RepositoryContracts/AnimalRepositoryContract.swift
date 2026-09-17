@@ -342,6 +342,26 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloaded.statusReferenceName, updatedStatusReference.name, file: file, line: line)
         XCTAssertEqual(reloaded.distinguishingFeatures, updatedDistinguishingFeatures, file: file, line: line)
 
+        let reloadedUpdatedDam = try XCTUnwrap(
+            reloadedRepository.fetchAnimalDetail(id: updatedDam.id),
+            "Updating a dam relationship must update the dam's inverse offspring relationship.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedUpdatedDam.maternalOffspringCountIncludingArchived,
+            1,
+            "Assigning the dam through update must add the child to the dam's offspring count.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            reloadedUpdatedDam.maternalOffspring.contains { $0.id == created.id },
+            "Assigning the dam through update must add the child to the dam's offspring collection.",
+            file: file,
+            line: line
+        )
+
         let reloadedSummary = try XCTUnwrap(
             reloadedRepository.fetchAnimals().first { $0.id == created.id },
             file: file,
@@ -449,6 +469,26 @@ enum AnimalRepositoryContract {
             reloadedCleared.distinguishingFeatures,
             updatedDistinguishingFeatures,
             "Reloading after clearing unrelated fields must preserve exact distinguishing-feature identities and order.",
+            file: file,
+            line: line
+        )
+
+        let reloadedDamAfterClear = try XCTUnwrap(
+            clearedRepository.fetchAnimalDetail(id: updatedDam.id),
+            "Clearing a dam relationship must update the former dam's inverse offspring relationship.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedDamAfterClear.maternalOffspringCountIncludingArchived,
+            0,
+            "Clearing the dam through update must remove the child from the former dam's offspring count.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            reloadedDamAfterClear.maternalOffspring.contains { $0.id == created.id },
+            "Clearing the dam through update must remove the child from the former dam's offspring collection.",
             file: file,
             line: line
         )
@@ -610,65 +650,90 @@ enum AnimalRepositoryContract {
                 pastureID: north.id
             )
         )
+        let secondAnimal = try animalRepository.create(
+            input: makeAnimalInput(
+                name: "Movement Contract Cow Two",
+                tagNumber: "302",
+                sex: .female,
+                birthDate: date(year: 2021, month: 3, day: 5),
+                pastureID: north.id
+            )
+        )
+        let movedAnimals = [animal, secondAnimal]
+        let movedAnimalIDs = movedAnimals.map(\.id)
 
-        try animalRepository.move(ids: [animal.id], toPastureID: south.id)
+        try animalRepository.move(ids: movedAnimalIDs, toPastureID: south.id)
 
         let reloadedRepository = fixture.makeAnimalRepository()
-        let reloaded = try XCTUnwrap(
-            reloadedRepository.fetchAnimalDetail(id: animal.id),
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(reloaded.pastureID, south.id, file: file, line: line)
-        XCTAssertEqual(reloaded.pastureName, south.name, file: file, line: line)
-        XCTAssertTrue(
-            try reloadedRepository.fetchTimeline(id: animal.id).contains {
-                isMovementEvent($0, from: north.name, to: south.name)
-            },
-            "Moving an animal must create durable history for the specific source and destination pastures.",
-            file: file,
-            line: line
-        )
+        for movedAnimal in movedAnimals {
+            let reloaded = try XCTUnwrap(
+                reloadedRepository.fetchAnimalDetail(id: movedAnimal.id),
+                "Every animal in a batch move must persist the destination pasture.",
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(reloaded.pastureID, south.id, file: file, line: line)
+            XCTAssertEqual(reloaded.pastureName, south.name, file: file, line: line)
+            XCTAssertTrue(
+                try reloadedRepository.fetchTimeline(id: movedAnimal.id).contains {
+                    isMovementEvent($0, from: north.name, to: south.name)
+                },
+                "Every animal in a batch move must create durable history for the exact source and destination.",
+                file: file,
+                line: line
+            )
+        }
 
         let reloadedPastures = fixture.makePastureRepository()
-        XCTAssertFalse(
-            try reloadedPastures.fetchResidentAnimals(pastureID: north.id).contains { $0.id == animal.id },
-            file: file,
-            line: line
-        )
-        XCTAssertTrue(
-            try reloadedPastures.fetchResidentAnimals(pastureID: south.id).contains { $0.id == animal.id },
-            file: file,
-            line: line
-        )
+        let northResidents = try reloadedPastures.fetchResidentAnimals(pastureID: north.id)
+        let southResidents = try reloadedPastures.fetchResidentAnimals(pastureID: south.id)
+        for movedAnimal in movedAnimals {
+            XCTAssertFalse(
+                northResidents.contains { $0.id == movedAnimal.id },
+                "Every animal in a batch move must leave the source pasture resident lookup.",
+                file: file,
+                line: line
+            )
+            XCTAssertTrue(
+                southResidents.contains { $0.id == movedAnimal.id },
+                "Every animal in a batch move must appear in the destination pasture resident lookup.",
+                file: file,
+                line: line
+            )
+        }
 
-        try reloadedRepository.move(ids: [animal.id], toPastureID: nil)
+        try reloadedRepository.move(ids: movedAnimalIDs, toPastureID: nil)
 
         let unassignedRepository = fixture.makeAnimalRepository()
-        let unassigned = try XCTUnwrap(
-            unassignedRepository.fetchAnimalDetail(id: animal.id),
-            "Moving to a nil destination must durably unassign the animal from its pasture.",
-            file: file,
-            line: line
-        )
-        XCTAssertNil(unassigned.pastureID, file: file, line: line)
-        XCTAssertNil(unassigned.pastureName, file: file, line: line)
-        XCTAssertTrue(
-            try unassignedRepository.fetchTimeline(id: animal.id).contains {
-                isMovementEvent($0, from: south.name, to: "—")
-            },
-            "Moving to a nil destination must create durable history from the prior pasture to unassigned.",
-            file: file,
-            line: line
-        )
+        for movedAnimal in movedAnimals {
+            let unassigned = try XCTUnwrap(
+                unassignedRepository.fetchAnimalDetail(id: movedAnimal.id),
+                "Moving a batch to a nil destination must durably unassign every animal from its pasture.",
+                file: file,
+                line: line
+            )
+            XCTAssertNil(unassigned.pastureID, file: file, line: line)
+            XCTAssertNil(unassigned.pastureName, file: file, line: line)
+            XCTAssertTrue(
+                try unassignedRepository.fetchTimeline(id: movedAnimal.id).contains {
+                    isMovementEvent($0, from: south.name, to: "—")
+                },
+                "Every animal in a nil-destination batch move must create durable history from the prior pasture to unassigned.",
+                file: file,
+                line: line
+            )
+        }
 
         let unassignedPastures = fixture.makePastureRepository()
-        XCTAssertFalse(
-            try unassignedPastures.fetchResidentAnimals(pastureID: south.id).contains { $0.id == animal.id },
-            "An animal moved to a nil destination must no longer appear in the prior pasture's resident lookup.",
-            file: file,
-            line: line
-        )
+        let remainingSouthResidents = try unassignedPastures.fetchResidentAnimals(pastureID: south.id)
+        for movedAnimal in movedAnimals {
+            XCTAssertFalse(
+                remainingSouthResidents.contains { $0.id == movedAnimal.id },
+                "Every animal moved to a nil destination must leave the prior pasture's resident lookup.",
+                file: file,
+                line: line
+            )
+        }
     }
 
     static func assertTagLifecyclePreservesHistory(
@@ -1201,46 +1266,144 @@ enum AnimalRepositoryContract {
                 birthDate: date(year: 2020, month: 6, day: 7)
             )
         )
-        let treatmentDate = date(year: 2026, month: 3, day: 1)
-        let treatment = "Contract treatment"
-        let treatmentNotes = "Repository contract"
-        let pregnancyDate = date(year: 2026, month: 3, day: 2)
-        let pregnancyResult = PregnancyResult.pregnant
-        let technician = "Contract Tech"
-        let pregnancyDueDate = date(year: 2026, month: 9, day: 1)
+        let firstTreatmentDate = date(year: 2026, month: 3, day: 1)
+        let firstTreatment = "Contract initial treatment"
+        let firstTreatmentNotes = "Initial repository contract"
+        let latestTreatmentDate = date(year: 2026, month: 3, day: 5)
+        let latestTreatment = "Contract follow-up treatment"
+        let latestTreatmentNotes = "Latest repository contract"
+        let firstPregnancyDate = date(year: 2026, month: 3, day: 2)
+        let firstPregnancyResult = PregnancyResult.open
+        let firstTechnician = "Contract Tech A"
+        let latestPregnancyDate = date(year: 2026, month: 3, day: 6)
+        let latestPregnancyResult = PregnancyResult.pregnant
+        let latestTechnician = "Contract Tech B"
+        let latestPregnancyDueDate = date(year: 2026, month: 9, day: 6)
 
         _ = try repository.addHealthRecord(
             animalID: animal.id,
             input: HealthRecordInput(
-                date: treatmentDate,
-                treatment: treatment,
-                notes: treatmentNotes
+                date: firstTreatmentDate,
+                treatment: firstTreatment,
+                notes: firstTreatmentNotes
             )
         )
 
-        let healthReloadRepository = fixture.makeAnimalRepository()
+        let firstHealthReloadRepository = fixture.makeAnimalRepository()
         XCTAssertTrue(
-            try healthReloadRepository.fetchTimeline(id: animal.id).contains {
+            try firstHealthReloadRepository.fetchTimeline(id: animal.id).contains {
                 isHealthEvent(
                     $0,
-                    date: treatmentDate,
-                    treatment: treatment,
-                    notes: treatmentNotes
+                    date: firstTreatmentDate,
+                    treatment: firstTreatment,
+                    notes: firstTreatmentNotes
                 )
             },
-            "Adding a health record must durably persist it before any later mutation occurs.",
+            "Adding the first health record must durably persist it before any later mutation occurs.",
             file: file,
             line: line
         )
 
-        _ = try repository.addPregnancyCheck(
+        _ = try firstHealthReloadRepository.addHealthRecord(
+            animalID: animal.id,
+            input: HealthRecordInput(
+                date: latestTreatmentDate,
+                treatment: latestTreatment,
+                notes: latestTreatmentNotes
+            )
+        )
+
+        let secondHealthReloadRepository = fixture.makeAnimalRepository()
+        let healthTimeline = try secondHealthReloadRepository.fetchTimeline(id: animal.id)
+        XCTAssertTrue(
+            healthTimeline.contains {
+                isHealthEvent(
+                    $0,
+                    date: firstTreatmentDate,
+                    treatment: firstTreatment,
+                    notes: firstTreatmentNotes
+                )
+            },
+            "Adding a later health record must preserve the earlier health history.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            healthTimeline.contains {
+                isHealthEvent(
+                    $0,
+                    date: latestTreatmentDate,
+                    treatment: latestTreatment,
+                    notes: latestTreatmentNotes
+                )
+            },
+            "Adding a later health record must durably persist its exact payload.",
+            file: file,
+            line: line
+        )
+
+        _ = try secondHealthReloadRepository.addPregnancyCheck(
             animalID: animal.id,
             input: PregnancyCheckInput(
-                date: pregnancyDate,
-                result: pregnancyResult,
-                technician: technician,
+                date: firstPregnancyDate,
+                result: firstPregnancyResult,
+                technician: firstTechnician,
+                estimatedDaysPregnant: nil,
+                dueDate: nil,
+                sireAnimalID: nil
+            )
+        )
+
+        let firstPregnancyReloadRepository = fixture.makeAnimalRepository()
+        let firstPregnancyTimeline = try firstPregnancyReloadRepository.fetchTimeline(id: animal.id)
+        XCTAssertTrue(
+            firstPregnancyTimeline.contains {
+                isPregnancyEvent(
+                    $0,
+                    date: firstPregnancyDate,
+                    result: firstPregnancyResult,
+                    technician: firstTechnician
+                )
+            },
+            "Adding the first pregnancy check must durably persist it before any later pregnancy mutation occurs.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            firstPregnancyTimeline.contains {
+                isHealthEvent(
+                    $0,
+                    date: firstTreatmentDate,
+                    treatment: firstTreatment,
+                    notes: firstTreatmentNotes
+                )
+            },
+            "Adding pregnancy data must retain the earlier health history.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            firstPregnancyTimeline.contains {
+                isHealthEvent(
+                    $0,
+                    date: latestTreatmentDate,
+                    treatment: latestTreatment,
+                    notes: latestTreatmentNotes
+                )
+            },
+            "Adding pregnancy data must retain the latest health history.",
+            file: file,
+            line: line
+        )
+
+        _ = try firstPregnancyReloadRepository.addPregnancyCheck(
+            animalID: animal.id,
+            input: PregnancyCheckInput(
+                date: latestPregnancyDate,
+                result: latestPregnancyResult,
+                technician: latestTechnician,
                 estimatedDaysPregnant: 90,
-                dueDate: pregnancyDueDate,
+                dueDate: latestPregnancyDueDate,
                 sireAnimalID: nil
             )
         )
@@ -1251,12 +1414,25 @@ enum AnimalRepositoryContract {
             timeline.contains {
                 isHealthEvent(
                     $0,
-                    date: treatmentDate,
-                    treatment: treatment,
-                    notes: treatmentNotes
+                    date: firstTreatmentDate,
+                    treatment: firstTreatment,
+                    notes: firstTreatmentNotes
                 )
             },
-            "Reloading must preserve the complete health record exposed through the timeline.",
+            "Reloading must preserve the earlier health record exposed through the timeline.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            timeline.contains {
+                isHealthEvent(
+                    $0,
+                    date: latestTreatmentDate,
+                    treatment: latestTreatment,
+                    notes: latestTreatmentNotes
+                )
+            },
+            "Reloading must preserve the latest health record exposed through the timeline.",
             file: file,
             line: line
         )
@@ -1264,12 +1440,25 @@ enum AnimalRepositoryContract {
             timeline.contains {
                 isPregnancyEvent(
                     $0,
-                    date: pregnancyDate,
-                    result: pregnancyResult,
-                    technician: technician
+                    date: firstPregnancyDate,
+                    result: firstPregnancyResult,
+                    technician: firstTechnician
                 )
             },
-            "Reloading must preserve the pregnancy result and technician exposed through the timeline.",
+            "Reloading must preserve the earlier pregnancy check exposed through the timeline.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            timeline.contains {
+                isPregnancyEvent(
+                    $0,
+                    date: latestPregnancyDate,
+                    result: latestPregnancyResult,
+                    technician: latestTechnician
+                )
+            },
+            "Reloading must preserve the latest pregnancy check exposed through the timeline.",
             file: file,
             line: line
         )
@@ -1279,19 +1468,31 @@ enum AnimalRepositoryContract {
             file: file,
             line: line
         )
-        XCTAssertEqual(summary.lastTreatmentDate, treatmentDate, file: file, line: line)
-        XCTAssertEqual(summary.lastPregnancyCheckDate, pregnancyDate, file: file, line: line)
+        XCTAssertEqual(
+            summary.lastTreatmentDate,
+            latestTreatmentDate,
+            "The summary must select the newest health record by date rather than the first stored record.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            summary.lastPregnancyCheckDate,
+            latestPregnancyDate,
+            "The summary must select the newest pregnancy check by date rather than the first stored record.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(
             summary.lastPregnancyStatus,
             AnimalPregnancyStatus.pregnant,
-            "Reloading must preserve the latest pregnancy result exposed through the animal summary.",
+            "The summary must expose the result from the newest pregnancy check.",
             file: file,
             line: line
         )
         XCTAssertEqual(
             summary.expectedCalvingDate,
-            pregnancyDueDate,
-            "Reloading must preserve the explicit pregnancy due date exposed through the animal summary.",
+            latestPregnancyDueDate,
+            "The summary must expose the explicit due date from the newest pregnancy check.",
             file: file,
             line: line
         )
