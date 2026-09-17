@@ -963,7 +963,44 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(withSecondaryTag.displayTagNumber, "411", file: file, line: line)
         XCTAssertEqual(withSecondaryTag.displayTagColorID, secondaryPrimaryColorID, file: file, line: line)
 
-        let withEditedSecondaryTag = try secondaryMutationRepository.updateTag(
+        let secondaryAddReloadRepository = fixture.makeAnimalRepository()
+        let reloadedAfterSecondaryAdd = try XCTUnwrap(
+            secondaryAddReloadRepository.fetchAnimalDetail(id: secondaryMutationAnimal.id),
+            "Adding a secondary tag must persist before any later tag mutation occurs.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedAfterSecondaryAdd.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            "Reloading immediately after adding a secondary tag must preserve exactly one active primary tag.",
+            file: file,
+            line: line
+        )
+        let reloadedPrimaryAfterSecondaryAdd = try XCTUnwrap(
+            reloadedAfterSecondaryAdd.activeTags.first { $0.id == secondaryPrimaryTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(reloadedPrimaryAfterSecondaryAdd.isPrimary, file: file, line: line)
+        XCTAssertTrue(reloadedPrimaryAfterSecondaryAdd.isActive, file: file, line: line)
+        XCTAssertEqual(reloadedPrimaryAfterSecondaryAdd.number, "411", file: file, line: line)
+        XCTAssertEqual(reloadedPrimaryAfterSecondaryAdd.colorID, secondaryPrimaryColorID, file: file, line: line)
+        let reloadedSecondaryAfterAdd = try XCTUnwrap(
+            reloadedAfterSecondaryAdd.activeTags.first { $0.id == secondaryTag.id },
+            "The secondary tag must survive a fresh-repository reload before it is edited.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedSecondaryAfterAdd.number, "412", file: file, line: line)
+        XCTAssertEqual(reloadedSecondaryAfterAdd.colorID, replacementColorID, file: file, line: line)
+        XCTAssertFalse(reloadedSecondaryAfterAdd.isPrimary, file: file, line: line)
+        XCTAssertTrue(reloadedSecondaryAfterAdd.isActive, file: file, line: line)
+        XCTAssertEqual(reloadedSecondaryAfterAdd.assignedAt, secondaryTag.assignedAt, file: file, line: line)
+        XCTAssertEqual(reloadedAfterSecondaryAdd.displayTagNumber, "411", file: file, line: line)
+        XCTAssertEqual(reloadedAfterSecondaryAdd.displayTagColorID, secondaryPrimaryColorID, file: file, line: line)
+
+        let withEditedSecondaryTag = try secondaryAddReloadRepository.updateTag(
             animalID: secondaryMutationAnimal.id,
             tagID: secondaryTag.id,
             input: AnimalTagInput(number: "413", colorID: secondaryUpdatedColorID, isPrimary: false)
