@@ -865,6 +865,7 @@ enum FieldCheckRepositoryContract {
         line: UInt = #line
     ) throws {
         let pasture = try makePasture(named: "Completion North", using: fixture)
+        let sourcePasture = try makePasture(named: "Completion Source", using: fixture)
         let animal = try makeAnimal(
             name: "Completion Animal",
             tagNumber: "601",
@@ -872,6 +873,14 @@ enum FieldCheckRepositoryContract {
             pastureID: pasture.id,
             using: fixture
         )
+        let outsideTrackedAnimal = try makeAnimal(
+            name: "Completion Outside Animal",
+            tagNumber: "699",
+            sex: .female,
+            pastureID: sourcePasture.id,
+            using: fixture
+        )
+        let outsideTimelineBaseline = try fixture.makeAnimalRepository().fetchTimeline(id: outsideTrackedAnimal.id)
         let repository = fixture.makeFieldCheckRepository()
         let sessionID = try repository.createSession(
             input: FieldCheckSessionStartInput(
@@ -900,6 +909,7 @@ enum FieldCheckRepositoryContract {
         let completedRepository = fixture.makeFieldCheckRepository()
         let completed = try XCTUnwrap(completedRepository.fetchSessionDetail(id: sessionID), file: file, line: line)
         let completedAt = try XCTUnwrap(completed.completedAt, file: file, line: line)
+        let openFindingsBaseline = try completedRepository.fetchOpenFindings(limit: 0)
         XCTAssertEqual(completed.notes, "Completion notes", file: file, line: line)
         XCTAssertEqual(completed.findings.first?.id, findingID, file: file, line: line)
         let summary = try XCTUnwrap(
@@ -932,7 +942,7 @@ enum FieldCheckRepositoryContract {
         assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
             try completedRepository.addTrackedAnimalToSession(
                 sessionID: sessionID,
-                animalID: animal.id,
+                animalID: outsideTrackedAnimal.id,
                 checkedAt: date(year: 2026, month: 6, day: 10, hour: 10)
             )
         }
@@ -967,6 +977,26 @@ enum FieldCheckRepositoryContract {
             try completedRepository.deleteFinding(sessionID: sessionID, findingID: findingID)
         }
 
+        let postRejectionRepository = fixture.makeFieldCheckRepository()
+        let postRejection = try XCTUnwrap(
+            postRejectionRepository.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        assertSessionDetailsEqualIgnoringRelationshipOrder(
+            postRejection,
+            expected: completed,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try postRejectionRepository.fetchOpenFindings(limit: 0),
+            openFindingsBaseline,
+            "Rejected completed-session mutations must not change durable open-finding state before the next allowed save.",
+            file: file,
+            line: line
+        )
+
         try completedRepository.updateFindingStatus(
             sessionID: sessionID,
             findingID: findingID,
@@ -978,16 +1008,85 @@ enum FieldCheckRepositoryContract {
             file: file,
             line: line
         )
-        XCTAssertNotNil(statusUpdated.completedAt, file: file, line: line)
-        XCTAssertEqual(
-            statusUpdated.findings.first { $0.id == findingID }?.status,
-            .resolved,
-            "Finding status remains intentionally editable after session completion.",
+        XCTAssertEqual(statusUpdated.completedAt, completed.completedAt, file: file, line: line)
+        XCTAssertEqual(statusUpdated.startedAt, completed.startedAt, file: file, line: line)
+        XCTAssertEqual(statusUpdated.notes, completed.notes, file: file, line: line)
+        XCTAssertEqual(statusUpdated.pastureID, completed.pastureID, file: file, line: line)
+        XCTAssertEqual(statusUpdated.pastureName, completed.pastureName, file: file, line: line)
+        XCTAssertEqual(statusUpdated.pastureArchivedAt, completed.pastureArchivedAt, file: file, line: line)
+        XCTAssertEqual(statusUpdated.isPastureArchived, completed.isPastureArchived, file: file, line: line)
+        XCTAssertEqual(statusUpdated.expectedHeadCountSnapshot, completed.expectedHeadCountSnapshot, file: file, line: line)
+        XCTAssertEqual(statusUpdated.quickCowCount, completed.quickCowCount, file: file, line: line)
+        XCTAssertEqual(statusUpdated.quickHeiferCount, completed.quickHeiferCount, file: file, line: line)
+        XCTAssertEqual(statusUpdated.quickCalfCount, completed.quickCalfCount, file: file, line: line)
+        XCTAssertEqual(statusUpdated.quickBullCount, completed.quickBullCount, file: file, line: line)
+        XCTAssertEqual(statusUpdated.quickSteerCount, completed.quickSteerCount, file: file, line: line)
+        XCTAssertEqual(statusUpdated.animalChecks.count, completed.animalChecks.count, file: file, line: line)
+        XCTAssertFalse(statusUpdated.animalChecks.contains { $0.animalID == outsideTrackedAnimal.id }, file: file, line: line)
+
+        let baselineCheck = try XCTUnwrap(
+            completed.animalChecks.first { $0.id == animalCheckID },
             file: file,
             line: line
         )
+        let statusUpdatedCheck = try XCTUnwrap(
+            statusUpdated.animalChecks.first { $0.id == animalCheckID },
+            "The allowed finding-status save must preserve the completed session's roster row.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(statusUpdatedCheck.animalID, baselineCheck.animalID, file: file, line: line)
+        XCTAssertEqual(statusUpdatedCheck.displayTagNumber, baselineCheck.displayTagNumber, file: file, line: line)
+        XCTAssertEqual(statusUpdatedCheck.displayTagColorID, baselineCheck.displayTagColorID, file: file, line: line)
+        XCTAssertEqual(statusUpdatedCheck.damDisplayTagNumber, baselineCheck.damDisplayTagNumber, file: file, line: line)
+        XCTAssertEqual(statusUpdatedCheck.damDisplayTagColorID, baselineCheck.damDisplayTagColorID, file: file, line: line)
+        XCTAssertEqual(statusUpdatedCheck.animalName, baselineCheck.animalName, file: file, line: line)
+        XCTAssertEqual(statusUpdatedCheck.animalSex, baselineCheck.animalSex, file: file, line: line)
+        XCTAssertEqual(statusUpdatedCheck.animalType, baselineCheck.animalType, file: file, line: line)
+        XCTAssertEqual(statusUpdatedCheck.wasExpectedAtStart, baselineCheck.wasExpectedAtStart, file: file, line: line)
+        XCTAssertEqual(statusUpdatedCheck.wasCounted, baselineCheck.wasCounted, file: file, line: line)
+        XCTAssertEqual(statusUpdatedCheck.isMissing, baselineCheck.isMissing, file: file, line: line)
+        XCTAssertTrue(baselineCheck.needsAttention, file: file, line: line)
+        XCTAssertFalse(statusUpdatedCheck.needsAttention, file: file, line: line)
+        XCTAssertEqual(statusUpdated.flaggedAnimalCount, 0, file: file, line: line)
+
+        let baselineFinding = try XCTUnwrap(completed.findings.first { $0.id == findingID }, file: file, line: line)
+        let resolvedFinding = try XCTUnwrap(statusUpdated.findings.first { $0.id == findingID }, file: file, line: line)
+        XCTAssertEqual(statusUpdated.findings.count, completed.findings.count, file: file, line: line)
+        XCTAssertEqual(resolvedFinding.recordedAt, baselineFinding.recordedAt, file: file, line: line)
+        XCTAssertEqual(resolvedFinding.type, baselineFinding.type, file: file, line: line)
+        XCTAssertEqual(resolvedFinding.severity, baselineFinding.severity, file: file, line: line)
+        XCTAssertEqual(resolvedFinding.note, baselineFinding.note, file: file, line: line)
+        XCTAssertEqual(resolvedFinding.animalID, baselineFinding.animalID, file: file, line: line)
+        XCTAssertEqual(resolvedFinding.animalDisplayTagNumber, baselineFinding.animalDisplayTagNumber, file: file, line: line)
+        XCTAssertEqual(resolvedFinding.animalDisplayTagColorID, baselineFinding.animalDisplayTagColorID, file: file, line: line)
+        XCTAssertEqual(resolvedFinding.pastureName, baselineFinding.pastureName, file: file, line: line)
+        XCTAssertEqual(resolvedFinding.sessionID, baselineFinding.sessionID, file: file, line: line)
+        XCTAssertEqual(resolvedFinding.status, .resolved, file: file, line: line)
         XCTAssertFalse(
             try statusUpdatedRepository.fetchOpenFindings(limit: 0).contains { $0.id == findingID },
+            file: file,
+            line: line
+        )
+
+        let statusUpdatedAnimalRepository = fixture.makeAnimalRepository()
+        let outsideAfterAllowedSave = try XCTUnwrap(
+            statusUpdatedAnimalRepository.fetchAnimalDetail(id: outsideTrackedAnimal.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            outsideAfterAllowedSave.pastureID,
+            sourcePasture.id,
+            "A blocked tracked-animal mutation on a completed session must not leak its staged cross-pasture move through the next allowed same-context save.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(outsideAfterAllowedSave.pastureName, sourcePasture.name, file: file, line: line)
+        XCTAssertEqual(
+            try statusUpdatedAnimalRepository.fetchTimeline(id: outsideTrackedAnimal.id),
+            outsideTimelineBaseline,
+            "A blocked tracked-animal mutation on a completed session must not leak movement history through the next allowed same-context save.",
             file: file,
             line: line
         )
@@ -1087,6 +1186,40 @@ enum FieldCheckRepositoryContract {
                 checkedAt: date(year: 2026, month: 7, day: 10, hour: 11)
             )
         }
+    }
+
+    private static func assertSessionDetailsEqualIgnoringRelationshipOrder(
+        _ actual: FieldCheckSessionDetailSnapshot,
+        expected: FieldCheckSessionDetailSnapshot,
+        file: StaticString,
+        line: UInt
+    ) {
+        XCTAssertEqual(actual.id, expected.id, file: file, line: line)
+        XCTAssertEqual(actual.startedAt, expected.startedAt, file: file, line: line)
+        XCTAssertEqual(actual.completedAt, expected.completedAt, file: file, line: line)
+        XCTAssertEqual(actual.notes, expected.notes, file: file, line: line)
+        XCTAssertEqual(actual.pastureID, expected.pastureID, file: file, line: line)
+        XCTAssertEqual(actual.pastureName, expected.pastureName, file: file, line: line)
+        XCTAssertEqual(actual.pastureArchivedAt, expected.pastureArchivedAt, file: file, line: line)
+        XCTAssertEqual(actual.isPastureArchived, expected.isPastureArchived, file: file, line: line)
+        XCTAssertEqual(actual.expectedHeadCountSnapshot, expected.expectedHeadCountSnapshot, file: file, line: line)
+        XCTAssertEqual(actual.quickCowCount, expected.quickCowCount, file: file, line: line)
+        XCTAssertEqual(actual.quickHeiferCount, expected.quickHeiferCount, file: file, line: line)
+        XCTAssertEqual(actual.quickCalfCount, expected.quickCalfCount, file: file, line: line)
+        XCTAssertEqual(actual.quickBullCount, expected.quickBullCount, file: file, line: line)
+        XCTAssertEqual(actual.quickSteerCount, expected.quickSteerCount, file: file, line: line)
+        XCTAssertEqual(
+            actual.animalChecks.sorted { $0.id.uuidString < $1.id.uuidString },
+            expected.animalChecks.sorted { $0.id.uuidString < $1.id.uuidString },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            actual.findings.sorted { $0.id.uuidString < $1.id.uuidString },
+            expected.findings.sorted { $0.id.uuidString < $1.id.uuidString },
+            file: file,
+            line: line
+        )
     }
 
     private static func makePasture(
