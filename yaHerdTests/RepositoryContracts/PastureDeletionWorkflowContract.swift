@@ -573,6 +573,36 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
+        let finishedWorkingAnimalDetailBeforeDeletion = try XCTUnwrap(
+            preDeletionAnimals.fetchAnimalDetail(id: finishedWorkingAnimal.id),
+            "The finished Working animal must remain readable after completing its session.",
+            file: file,
+            line: line
+        )
+        let finishedWorkingAnimalSummaryBeforeDeletion = try XCTUnwrap(
+            preDeletionAnimals.fetchAnimals().first { $0.id == finishedWorkingAnimal.id },
+            "The finished Working animal must remain visible after completing its session.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(finishedWorkingAnimalDetailBeforeDeletion.status, .active, file: file, line: line)
+        XCTAssertEqual(finishedWorkingAnimalDetailBeforeDeletion.location, .pasture, file: file, line: line)
+        XCTAssertNil(finishedWorkingAnimalDetailBeforeDeletion.pastureID, file: file, line: line)
+        XCTAssertNil(finishedWorkingAnimalDetailBeforeDeletion.pastureName, file: file, line: line)
+        XCTAssertEqual(finishedWorkingAnimalSummaryBeforeDeletion.status, .active, file: file, line: line)
+        XCTAssertEqual(finishedWorkingAnimalSummaryBeforeDeletion.location, .pasture, file: file, line: line)
+        XCTAssertNil(finishedWorkingAnimalSummaryBeforeDeletion.pastureID, file: file, line: line)
+        XCTAssertNil(finishedWorkingAnimalSummaryBeforeDeletion.pastureName, file: file, line: line)
+        let finishedWorkingMovementDetailsBeforeDeletion = try movementDetails(
+            animalID: finishedWorkingAnimal.id,
+            repository: preDeletionAnimals
+        )
+        XCTAssertTrue(
+            finishedWorkingMovementDetailsBeforeDeletion.contains("Delete Workflow South → —"),
+            "Completing the finished Working session must record the animal's move out of South before pasture deletion.",
+            file: file,
+            line: line
+        )
         let controlWorkingAnimalDetailBeforeDeletion = try XCTUnwrap(
             preDeletionAnimals.fetchAnimalDetail(id: controlWorkingAnimal.id),
             "The unrelated Working animal must remain readable while its session is active.",
@@ -725,6 +755,19 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(firstAnimalSummaryAfterDeletion.birthDate, firstAnimalSummaryBeforeDeletion.birthDate, file: file, line: line)
         XCTAssertEqual(firstAnimalSummaryAfterDeletion.status, firstAnimalSummaryBeforeDeletion.status, file: file, line: line)
         XCTAssertEqual(firstAnimalSummaryAfterDeletion.isArchived, firstAnimalSummaryBeforeDeletion.isArchived, file: file, line: line)
+        let finishedWorkingAnimalSummaryAfterDeletion = try XCTUnwrap(
+            animalSummaries.first { $0.id == finishedWorkingAnimal.id },
+            "The animal from a finished Working session must remain visible after its source pasture is deleted.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            finishedWorkingAnimalSummaryAfterDeletion,
+            finishedWorkingAnimalSummaryBeforeDeletion,
+            "Pasture deletion must not rewrite the finished Working animal's list state.",
+            file: file,
+            line: line
+        )
         let controlAnimalSummary = try XCTUnwrap(
             animalSummaries.first { $0.id == controlAnimal.id },
             "Residents of an unselected pasture must remain visible through the animal-list reader.",
@@ -827,6 +870,26 @@ enum PastureDeletionWorkflowContract {
                     && event.details == "Delete Workflow South → Delete Workflow North"
             },
             "Pasture deletion must preserve movement history recorded before the deletion workflow.",
+            file: file,
+            line: line
+        )
+        let reloadedFinishedWorkingAnimal = try XCTUnwrap(
+            reloadedAnimals.fetchAnimalDetail(id: finishedWorkingAnimal.id),
+            "Deleting a finished Working session's source pasture must preserve its animal.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedFinishedWorkingAnimal,
+            finishedWorkingAnimalDetailBeforeDeletion,
+            "Pasture deletion must not rewrite the finished Working animal's post-completion state.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try movementDetails(animalID: finishedWorkingAnimal.id, repository: reloadedAnimals),
+            finishedWorkingMovementDetailsBeforeDeletion,
+            "Pasture deletion must preserve the finished Working animal's existing movement history.",
             file: file,
             line: line
         )
