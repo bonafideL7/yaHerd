@@ -755,6 +755,15 @@ enum PastureDeletionWorkflowContract {
         XCTAssertEqual(firstAnimalSummaryAfterDeletion.birthDate, firstAnimalSummaryBeforeDeletion.birthDate, file: file, line: line)
         XCTAssertEqual(firstAnimalSummaryAfterDeletion.status, firstAnimalSummaryBeforeDeletion.status, file: file, line: line)
         XCTAssertEqual(firstAnimalSummaryAfterDeletion.isArchived, firstAnimalSummaryBeforeDeletion.isArchived, file: file, line: line)
+        let workingAnimalSummaryAfterDeletion = try XCTUnwrap(
+            animalSummaries.first { $0.id == workingAnimal.id },
+            "The animal from the active Working session must remain visible after its source pasture is deleted.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(workingAnimalSummaryAfterDeletion.location, .workingPen, file: file, line: line)
+        XCTAssertNil(workingAnimalSummaryAfterDeletion.pastureID, file: file, line: line)
+        XCTAssertNil(workingAnimalSummaryAfterDeletion.pastureName, file: file, line: line)
         let finishedWorkingAnimalSummaryAfterDeletion = try XCTUnwrap(
             animalSummaries.first { $0.id == finishedWorkingAnimal.id },
             "The animal from a finished Working session must remain visible after its source pasture is deleted.",
