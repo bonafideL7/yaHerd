@@ -216,11 +216,19 @@ extension FieldCheckRepositoryContract {
         )
         XCTAssertEqual(firstAfter.findings.count, 1, file: file, line: line)
         XCTAssertEqual(secondAfter.findings.count, 1, file: file, line: line)
-        XCTAssertEqual(firstFindingAfter.sessionID, firstSessionID, file: file, line: line)
-        XCTAssertEqual(secondFindingAfter.sessionID, secondSessionID, file: file, line: line)
-        XCTAssertEqual(firstFindingAfter.status, .open, file: file, line: line)
-        XCTAssertEqual(secondFindingAfter.status, .open, file: file, line: line)
-        XCTAssertEqual(firstFindingAfter.note, "First scoped finding", file: file, line: line)
-        XCTAssertEqual(secondFindingAfter.note, "Second scoped finding", file: file, line: line)
+        XCTAssertEqual(
+            firstFindingAfter,
+            firstFinding,
+            "A rejected cross-session finding mutation must not leak any mutable finding fields when the original context later saves.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            secondFindingAfter,
+            secondFinding,
+            "A rejected cross-session finding mutation must not leak any mutable finding fields when the original context later saves.",
+            file: file,
+            line: line
+        )
     }
 }
