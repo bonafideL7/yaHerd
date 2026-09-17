@@ -45,7 +45,26 @@ For every materially distinct affected production operation or behavior, evaluat
 | Identity / metadata | Stable IDs, timestamps, ordering, status metadata, and other invariants that must survive |
 | Contract owner | This PR, an existing permanent contract, or an explicitly identified other PR/work item |
 
-Use `N/A` where a dimension genuinely does not apply. `N/A` is a deliberate decision, not an omitted check.
+### Matrix cell semantics
+
+The matrix has descriptive scope columns and evaluation columns. They are not interchangeable.
+
+Descriptive scope columns must contain concrete values:
+
+- `Production operation / behavior`: name the concrete operation or behavior. Never use `Covered`, `N/A`, `Delegated`, `Unverified`, or another status token here.
+- `Production callers`: name the concrete production caller(s), use case(s), repository entry point(s), view model(s), or workflow(s). If there is genuinely no production caller, use `None: <reason>` only after tracing production code. Never substitute a status token for the caller list.
+- `Contract owner`: identify `This PR`, a named permanent contract, or a specific PR/work item. Do not use an unqualified status token.
+
+Evaluation columns are `Success path` through `Identity / metadata`. Every evaluation cell must use one of these forms:
+
+- `Covered: <specific evidence, production path, or contract>`
+- `N/A: <why the dimension does not apply>`
+- `Delegated: <specific owner>`
+- `Unverified: <specific reason>`
+
+Bare `Covered`, `N/A`, `Delegated`, or `Unverified` tokens are invalid because they do not show what was evaluated, why a dimension does not apply, or who owns it.
+
+A matrix with blank descriptive scope cells, status tokens in descriptive cells, or unexplained bare status tokens in evaluation cells is incomplete and must be corrected as a matrix-level issue before behavioral review proceeds. Do not generate a separate review finding for every row that shares the same schema defect.
 
 ### Matrix rules
 
@@ -77,7 +96,9 @@ A finding such as "completed Field Check state is lost after pasture deletion" r
 A PR is behaviorally complete when:
 
 - every materially distinct affected production behavior appears in the matrix
-- every applicable matrix cell is implemented, covered by its declared contract owner, explicitly delegated, or marked `N/A`
+- every descriptive scope cell is concrete and valid under the matrix cell semantics
+- every applicable evaluation cell contains a qualified status with evidence, rationale, or a specific owner
+- every applicable matrix cell is implemented, covered by its declared contract owner, explicitly delegated, or marked `N/A` with rationale
 - production callers and read projections have been traced against the final implementation
 - no material matrix row or cell remains incorrect or unexplained
 
@@ -146,7 +167,7 @@ A lack of executed verification is expected under this policy and must not by it
 Before pushing a completed change:
 
 1. Inspect the full diff against the PR base.
-2. Reconcile the final diff against every row and applicable cell in the coverage matrix.
+2. Validate the matrix schema, then reconcile the final diff against every row and applicable cell in the coverage matrix.
 3. Trace affected production callers and mutation paths again.
 4. Trace every production read projection listed in the matrix.
 5. Look specifically for missed paths, duplicated logic, unnecessary abstractions, stale code, persistence/sync divergence, races, missing failure handling, identity/timestamp/order regressions, and unintended changes to control records.
@@ -165,6 +186,7 @@ Code review must converge. The goal is to validate the declared behavioral surfa
 
 Review the complete diff against the complete coverage matrix.
 
+- Validate matrix schema first. If a schema defect affects multiple rows/cells, report the schema defect once at the matrix level rather than producing repeated row-level findings.
 - Inspect the entire declared surface before submitting findings.
 - Report all currently identifiable material findings in the same review rather than intentionally stopping after the first few.
 - A finding must identify a concrete defect, an incorrect matrix cell, or a materially distinct production path/invariant missing from the matrix.
