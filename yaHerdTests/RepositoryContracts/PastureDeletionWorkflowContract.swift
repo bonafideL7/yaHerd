@@ -32,6 +32,11 @@ enum PastureDeletionWorkflowContract {
         let isMissing: Bool
     }
 
+    private struct MovementSnapshot: Hashable {
+        let date: Date
+        let details: String
+    }
+
     static func assertDeleteMovesResidentsAndArchivesFieldCheckHistory(
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
@@ -615,19 +620,19 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
-        let firstAnimalMovementDetailsBeforeDeletion = try movementDetails(
+        let firstAnimalMovementsBeforeDeletion = try movementSnapshots(
             animalID: firstAnimal.id,
             repository: preDeletionAnimals
         )
-        let firstPastureSecondAnimalMovementDetailsBeforeDeletion = try movementDetails(
+        let firstPastureSecondAnimalMovementsBeforeDeletion = try movementSnapshots(
             animalID: firstPastureSecondAnimal.id,
             repository: preDeletionAnimals
         )
-        let secondAnimalMovementDetailsBeforeDeletion = try movementDetails(
+        let secondAnimalMovementsBeforeDeletion = try movementSnapshots(
             animalID: secondAnimal.id,
             repository: preDeletionAnimals
         )
-        let trackedAnimalMovementDetailsBeforeDeletion = try movementDetails(
+        let trackedAnimalMovementsBeforeDeletion = try movementSnapshots(
             animalID: trackedAnimal.id,
             repository: preDeletionAnimals
         )
@@ -840,7 +845,7 @@ enum PastureDeletionWorkflowContract {
         try assertAnimalMovedToUnassigned(
             animalID: firstAnimal.id,
             pastureName: "Delete Workflow North",
-            expectedMovementDetailsBeforeDeletion: firstAnimalMovementDetailsBeforeDeletion,
+            expectedMovementsBeforeDeletion: firstAnimalMovementsBeforeDeletion,
             repository: reloadedAnimals,
             file: file,
             line: line
@@ -870,7 +875,7 @@ enum PastureDeletionWorkflowContract {
         try assertAnimalMovedToUnassigned(
             animalID: firstPastureSecondAnimal.id,
             pastureName: "Delete Workflow North",
-            expectedMovementDetailsBeforeDeletion: firstPastureSecondAnimalMovementDetailsBeforeDeletion,
+            expectedMovementsBeforeDeletion: firstPastureSecondAnimalMovementsBeforeDeletion,
             repository: reloadedAnimals,
             file: file,
             line: line
@@ -878,7 +883,7 @@ enum PastureDeletionWorkflowContract {
         try assertAnimalMovedToUnassigned(
             animalID: secondAnimal.id,
             pastureName: "Delete Workflow South",
-            expectedMovementDetailsBeforeDeletion: secondAnimalMovementDetailsBeforeDeletion,
+            expectedMovementsBeforeDeletion: secondAnimalMovementsBeforeDeletion,
             repository: reloadedAnimals,
             file: file,
             line: line
@@ -886,7 +891,7 @@ enum PastureDeletionWorkflowContract {
         try assertAnimalMovedToUnassigned(
             animalID: trackedAnimal.id,
             pastureName: "Delete Workflow North",
-            expectedMovementDetailsBeforeDeletion: trackedAnimalMovementDetailsBeforeDeletion,
+            expectedMovementsBeforeDeletion: trackedAnimalMovementsBeforeDeletion,
             repository: reloadedAnimals,
             file: file,
             line: line
@@ -1536,10 +1541,20 @@ enum PastureDeletionWorkflowContract {
         }
     }
 
+    private static func movementSnapshots(
+        animalID: UUID,
+        repository: any AnimalRepository
+    ) throws -> [MovementSnapshot] {
+        try repository.fetchTimeline(id: animalID).compactMap { event -> MovementSnapshot? in
+            guard case .movement = event.type else { return nil }
+            return MovementSnapshot(date: event.date, details: event.details)
+        }
+    }
+
     private static func assertAnimalMovedToUnassigned(
         animalID: UUID,
         pastureName: String,
-        expectedMovementDetailsBeforeDeletion: [String],
+        expectedMovementsBeforeDeletion: [MovementSnapshot],
         repository: any AnimalRepository,
         file: StaticString,
         line: UInt
@@ -1553,31 +1568,43 @@ enum PastureDeletionWorkflowContract {
         XCTAssertNil(reloadedAnimal.pastureName, file: file, line: line)
 
         let deletionMovement = "\(pastureName) → —"
-        let movementDetailsAfterDeletion = try movementDetails(
+        let movementsAfterDeletion = try movementSnapshots(
             animalID: animalID,
             repository: repository
         )
-        let expectedMovementDetailsAfterDeletion = expectedMovementDetailsBeforeDeletion + [deletionMovement]
-        let actualMovementCounts = Dictionary(
-            grouping: movementDetailsAfterDeletion,
-            by: { $0 }
-        ).mapValues { $0.count }
-        let expectedMovementCounts = Dictionary(
-            grouping: expectedMovementDetailsAfterDeletion,
-            by: { $0 }
-        ).mapValues { $0.count }
 
         XCTAssertEqual(
-            movementDetailsAfterDeletion.count,
-            expectedMovementDetailsBeforeDeletion.count + 1,
+            movementsAfterDeletion.count,
+            expectedMovementsBeforeDeletion.count + 1,
             "Deleting a populated pasture must append exactly one movement for each active resident.",
             file: file,
             line: line
         )
+
+        var unmatchedMovements = movementsAfterDeletion
+        for expectedMovement in expectedMovementsBeforeDeletion {
+            guard let index = unmatchedMovements.firstIndex(of: expectedMovement) else {
+                XCTFail(
+                    "Pasture deletion must preserve each prior movement's timestamp and details.",
+                    file: file,
+                    line: line
+                )
+                return
+            }
+            unmatchedMovements.remove(at: index)
+        }
+
         XCTAssertEqual(
-            actualMovementCounts,
-            expectedMovementCounts,
-            "Pasture deletion must preserve every prior movement and add exactly one \(deletionMovement) transition.",
+            unmatchedMovements.count,
+            1,
+            "Pasture deletion must preserve prior movement history and append exactly one deletion movement.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            unmatchedMovements.first?.details,
+            deletionMovement,
+            "Pasture deletion must append the expected \(deletionMovement) transition.",
             file: file,
             line: line
         )
