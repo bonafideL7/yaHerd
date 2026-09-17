@@ -410,6 +410,7 @@ enum FieldCheckRepositoryContract {
         XCTAssertEqual(afterRepeat.expectedHeadCountSnapshot, 2, "Rechecking an existing tracked animal must not duplicate the roster or head-count snapshot.", file: file, line: line)
         XCTAssertEqual(afterRepeat.animalChecks.filter { $0.animalID == tracked.id }.count, 1, file: file, line: line)
         XCTAssertEqual(afterRepeat.animalChecks.first { $0.animalID == tracked.id }?.id, trackedCheck.id, file: file, line: line)
+        let rosterIDsBeforeInactiveAttempts = Set(afterRepeat.animalChecks.map(\.id))
 
         assertThrowsRepositoryError(.animalNotActive, file: file, line: line) {
             try repository.addTrackedAnimalToSession(
@@ -425,15 +426,50 @@ enum FieldCheckRepositoryContract {
                 checkedAt: date(year: 2026, month: 3, day: 10, hour: 12)
             )
         }
+
+        try repository.updateNotes(
+            sessionID: sessionID,
+            notes: "Inactive rejection recovery probe"
+        )
+
         let afterInactiveAttempts = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
             file: file,
             line: line
         )
+        XCTAssertEqual(
+            afterInactiveAttempts.notes,
+            "Inactive rejection recovery probe",
+            "The valid same-context save must commit so rejected tracked-animal mutations cannot hide behind an unsaved context.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(afterInactiveAttempts.expectedHeadCountSnapshot, afterRepeat.expectedHeadCountSnapshot, file: file, line: line)
+        XCTAssertEqual(Set(afterInactiveAttempts.animalChecks.map(\.id)), rosterIDsBeforeInactiveAttempts, file: file, line: line)
+        XCTAssertEqual(afterInactiveAttempts.animalChecks.count, afterRepeat.animalChecks.count, file: file, line: line)
+        XCTAssertEqual(afterInactiveAttempts.animalChecks.first { $0.animalID == tracked.id }?.id, trackedCheck.id, file: file, line: line)
         XCTAssertFalse(afterInactiveAttempts.animalChecks.contains { $0.animalID == soldTracked.id }, file: file, line: line)
         XCTAssertFalse(afterInactiveAttempts.animalChecks.contains { $0.animalID == deceasedTracked.id }, file: file, line: line)
-        XCTAssertEqual(try animalRepository.fetchAnimalDetail(id: soldTracked.id)?.pastureID, source.id, file: file, line: line)
-        XCTAssertEqual(try animalRepository.fetchAnimalDetail(id: deceasedTracked.id)?.pastureID, source.id, file: file, line: line)
+
+        let afterInactiveAnimalRepository = fixture.makeAnimalRepository()
+        XCTAssertEqual(try afterInactiveAnimalRepository.fetchAnimalDetail(id: soldTracked.id)?.pastureID, source.id, file: file, line: line)
+        XCTAssertEqual(try afterInactiveAnimalRepository.fetchAnimalDetail(id: deceasedTracked.id)?.pastureID, source.id, file: file, line: line)
+        XCTAssertFalse(
+            try afterInactiveAnimalRepository.fetchTimeline(id: soldTracked.id).contains {
+                isMovementEvent($0, from: source.name, to: destination.name)
+            },
+            "Rejecting a sold tracked animal must not leak a staged movement when the same write context later saves.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            try afterInactiveAnimalRepository.fetchTimeline(id: deceasedTracked.id).contains {
+                isMovementEvent($0, from: source.name, to: destination.name)
+            },
+            "Rejecting a deceased tracked animal must not leak a staged movement when the same write context later saves.",
+            file: file,
+            line: line
+        )
     }
 
     static func assertFindingLifecycleAndOpenFindingReader(
