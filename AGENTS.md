@@ -170,11 +170,26 @@ Review the complete diff against the complete coverage matrix.
 - A finding must identify a concrete defect, an incorrect matrix cell, or a materially distinct production path/invariant missing from the matrix.
 - Map each behavioral finding to the affected matrix row or identify the new row that is materially required.
 - Do not create a finding solely because another fixture permutation, identifier combination, ordering example, or adjacent assertion can be imagined when the same production path and invariant are already covered.
+- Before filing a finding that crosses feature or PR boundaries, verify the ownership/delegation declarations and existing permanent contract ownership. Do not request duplicate implementation or coverage until ownership has been checked.
 - Do not require duplicate coverage for behavior owned by another declared contract or PR unless the current PR changes that behavior.
 - Do not report verification as missing when execution is prohibited by the verification policy.
 - Do not require temporary SwiftData infrastructure prohibited by the persistence-direction policy.
 
 If no material finding meets these criteria, return a clean review. A review with zero findings is a successful and expected outcome.
+
+### Finding severity and blocking criteria
+
+Blocking findings, including P1/P2 findings, require at least one concrete material impact:
+
+- a production regression or broken production path
+- a data-integrity or persistence-consistency risk
+- an incorrect required invariant or state transition
+- a materially uncovered production caller, lifecycle state, read projection, relationship, or failure/recovery path
+- a security, privacy, concurrency, crash, or user-data-loss risk
+
+Do not block completion for speculative hardening, defense-in-depth ideas without a concrete failure path, additional representative fixtures, theoretical input permutations, stylistic preferences, or future architecture improvements that are outside the declared matrix.
+
+A severity label does not make an otherwise non-material finding blocking. The reviewer must explain the concrete production path and impact that justify the severity.
 
 ### Re-review after fixes
 
@@ -190,6 +205,19 @@ On re-review:
 If a fix reveals a broader category-level flaw, report the entire identifiable category in one review. Do not expose one sibling case per subsequent review cycle.
 
 Do not repeat an already-decided architecture or ownership disagreement as a new finding. If repository instructions conflict, identify the conflict once as a blocking instruction issue and resolve the instruction/ownership decision before continuing code review.
+
+### Non-convergence escalation
+
+After two corrective review cycles, a newly raised finding in unchanged or previously reviewed behavior must explicitly state:
+
+- which matrix row/cell is wrong or missing
+- why the behavior is materially distinct from previously reviewed coverage
+- why the finding could not reasonably have been identified during the prior comprehensive review
+- the concrete production impact that makes the finding blocking, if it is blocking
+
+If those conditions cannot be met, the finding is not blocking.
+
+Repeated non-convergence after two corrective cycles must be treated as a scope, design, ownership, or instruction problem rather than continuing ordinary defect discovery. Resolve that underlying problem before another code-review cycle. Do not continue a one-comment-at-a-time review loop.
 
 ### Review stopping rule
 
@@ -213,7 +241,7 @@ A behavior must not be repeatedly reimplemented or retested in multiple PRs mere
 
 When an integration behavior crosses boundaries, assign one owner for the integration contract and reference that owner from the other matrices.
 
-Reviewers must respect declared ownership unless the current PR directly changes the owned behavior or the ownership declaration is demonstrably incorrect.
+Before filing a cross-boundary review finding, the reviewer must inspect these ownership declarations and any referenced permanent contract owner. Reviewers must respect declared ownership unless the current PR directly changes the owned behavior or the ownership declaration is demonstrably incorrect.
 
 ## 10. Delivery
 
