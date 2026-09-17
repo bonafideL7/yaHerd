@@ -762,6 +762,8 @@ enum AnimalRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(withUpdatedOriginal.displayTagNumber, "403", file: file, line: line)
+        XCTAssertEqual(withUpdatedOriginal.displayTagColorID, updatedOriginalColorID, file: file, line: line)
         let updatedOriginalTag = try XCTUnwrap(
             withUpdatedOriginal.activeTags.first { $0.id == originalTag.id },
             file: file,
@@ -780,6 +782,8 @@ enum AnimalRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(reloadedAfterTagUpdate.displayTagNumber, "403", file: file, line: line)
+        XCTAssertEqual(reloadedAfterTagUpdate.displayTagColorID, updatedOriginalColorID, file: file, line: line)
         let reloadedUpdatedOriginalTag = try XCTUnwrap(
             reloadedAfterTagUpdate.activeTags.first { $0.id == originalTag.id },
             file: file,
