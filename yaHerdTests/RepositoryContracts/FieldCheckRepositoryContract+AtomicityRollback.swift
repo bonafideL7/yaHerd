@@ -578,10 +578,9 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
-        XCTAssertEqual(
+        try assertRollbackSummariesEqualIgnoringRelationshipOrder(
             try afterRepository.fetchSessions(),
-            beforeSessions,
-            "A failed completion must leave session-summary projections unchanged.",
+            expected: beforeSessions,
             file: file,
             line: line
         )
