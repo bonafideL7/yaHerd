@@ -4,7 +4,8 @@ import XCTest
 @MainActor
 extension AnimalRepositoryContract {
     /// Permanent future-state coverage for repository read models that are consumed immediately
-    /// after creation and while preparing the Add Offspring editor.
+    /// after creation, while selecting parents, while preparing the Add Offspring editor, and when
+    /// presenting pregnancy summary state.
     static func assertCreateSummaryAndOffspringDraftReadModels(
         using fixture: AnimalRepositoryContractFixture,
         file: StaticString = #filePath,
@@ -124,6 +125,40 @@ extension AnimalRepositoryContract {
             )
         )
 
+        let parentOptionsRepository = fixture.makeAnimalRepository()
+        let parentOptions = try parentOptionsRepository.fetchParentOptions(excluding: created.id)
+        XCTAssertFalse(
+            parentOptions.contains { $0.id == created.id },
+            "The explicitly excluded animal must not be returned by the parent-options read API.",
+            file: file,
+            line: line
+        )
+        let sireOption = try XCTUnwrap(
+            parentOptions.first { $0.id == inferredSire.id },
+            "Persisted sire candidates must be returned through the parent-options read API.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(sireOption.name, "Offspring Draft Contract Sire", file: file, line: line)
+        XCTAssertEqual(sireOption.displayTagNumber, "OS01", file: file, line: line)
+        XCTAssertEqual(sireOption.displayTagColorID, TagColorDefaults.yellowID, file: file, line: line)
+        XCTAssertEqual(sireOption.sex.rawValue, Sex.male.rawValue, file: file, line: line)
+        XCTAssertFalse(sireOption.isArchived, file: file, line: line)
+        XCTAssertEqual(sireOption.displayName, "OS01", file: file, line: line)
+
+        let damOption = try XCTUnwrap(
+            parentOptions.first { $0.id == dam.id },
+            "Persisted dam candidates must be returned through the parent-options read API.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(damOption.name, "Offspring Draft Contract Dam", file: file, line: line)
+        XCTAssertEqual(damOption.displayTagNumber, "OD01", file: file, line: line)
+        XCTAssertEqual(damOption.displayTagColorID, TagColorDefaults.blueID, file: file, line: line)
+        XCTAssertEqual(damOption.sex.rawValue, Sex.female.rawValue, file: file, line: line)
+        XCTAssertFalse(damOption.isArchived, file: file, line: line)
+        XCTAssertEqual(damOption.displayName, "OD01", file: file, line: line)
+
         let expectedDefaultBirthDate = Calendar.current.startOfDay(for: .now)
         let offspringDraftRepository = fixture.makeAnimalRepository()
         let seed = try XCTUnwrap(
@@ -142,6 +177,80 @@ extension AnimalRepositoryContract {
             seed.defaultBirthDate,
             expectedDefaultBirthDate,
             "The offspring draft must default the birth date to the start of the current day.",
+            file: file,
+            line: line
+        )
+
+        let pregnancySummaryAnimal = try offspringDraftRepository.create(
+            input: readModelAnimalInput(
+                name: "Pregnancy Summary Contract Cow",
+                tagNumber: "PS01",
+                sex: .female,
+                birthDate: contractDate(year: 2020, month: 5, day: 6)
+            )
+        )
+        let pregnantCheckDate = contractDate(year: 2026, month: 5, day: 1)
+        let pregnantDueDate = contractDate(year: 2027, month: 2, day: 8)
+        _ = try offspringDraftRepository.addPregnancyCheck(
+            animalID: pregnancySummaryAnimal.id,
+            input: PregnancyCheckInput(
+                date: pregnantCheckDate,
+                result: .pregnant,
+                technician: "Pregnancy Summary Contract Tech",
+                estimatedDaysPregnant: nil,
+                dueDate: pregnantDueDate,
+                sireAnimalID: nil
+            )
+        )
+
+        let pregnantSummaryRepository = fixture.makeAnimalRepository()
+        let pregnantSummary = try XCTUnwrap(
+            pregnantSummaryRepository.fetchAnimals().first { $0.id == pregnancySummaryAnimal.id },
+            "The pregnant summary state must survive a fresh repository reload before a later check is recorded.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(pregnantSummary.lastPregnancyCheckDate, pregnantCheckDate, file: file, line: line)
+        XCTAssertEqual(pregnantSummary.lastPregnancyStatus, .pregnant, file: file, line: line)
+        XCTAssertEqual(pregnantSummary.expectedCalvingDate, pregnantDueDate, file: file, line: line)
+
+        let openCheckDate = contractDate(year: 2026, month: 6, day: 1)
+        _ = try pregnantSummaryRepository.addPregnancyCheck(
+            animalID: pregnancySummaryAnimal.id,
+            input: PregnancyCheckInput(
+                date: openCheckDate,
+                result: .open,
+                technician: "Pregnancy Summary Follow-up Tech",
+                estimatedDaysPregnant: nil,
+                dueDate: nil,
+                sireAnimalID: nil
+            )
+        )
+
+        let openSummaryRepository = fixture.makeAnimalRepository()
+        let openSummary = try XCTUnwrap(
+            openSummaryRepository.fetchAnimals().first { $0.id == pregnancySummaryAnimal.id },
+            "A newer open pregnancy check must replace the prior pregnant summary state after reload.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            openSummary.lastPregnancyCheckDate,
+            openCheckDate,
+            "Pregnancy summary state must select the newest check by date regardless of result.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            openSummary.lastPregnancyStatus,
+            .open,
+            "A newer open check must clear the prior pregnant summary status.",
+            file: file,
+            line: line
+        )
+        XCTAssertNil(
+            openSummary.expectedCalvingDate,
+            "A newer open check must clear the prior expected calving date.",
             file: file,
             line: line
         )
