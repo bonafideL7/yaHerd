@@ -165,10 +165,9 @@ extension FieldCheckRepositoryContract {
         )
 
         let afterRepository = fixture.makeFieldCheckRepository()
-        XCTAssertEqual(
+        try assertRollbackSummariesEqualIgnoringRelationshipOrder(
             try afterRepository.fetchSessions(),
-            beforeSessions,
-            "A failed session-creation boundary must leave the persisted session list unchanged.",
+            expected: beforeSessions,
             file: file,
             line: line
         )
@@ -724,7 +723,7 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(
             actualByID.map(\.id),
             expectedByID.map(\.id),
-            "A failed coordinated finding write must preserve the same session-summary application IDs regardless of incidental ordering among tied start times.",
+            "A fault-injected write must preserve the same session-summary application IDs regardless of incidental ordering among tied start times.",
             file: file,
             line: line
         )
@@ -753,7 +752,7 @@ extension FieldCheckRepositoryContract {
             XCTAssertEqual(
                 actualSummary.animalChecks.sorted(by: rollbackSnapshotIDOrder),
                 expectedSummary.animalChecks.sorted(by: rollbackSnapshotIDOrder),
-                "A failed coordinated finding write must preserve summary roster snapshots regardless of relationship iteration order.",
+                "A fault-injected write must preserve summary roster snapshots regardless of relationship iteration order.",
                 file: file,
                 line: line
             )
