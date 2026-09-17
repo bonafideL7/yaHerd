@@ -641,6 +641,34 @@ enum AnimalRepositoryContract {
             file: file,
             line: line
         )
+
+        try reloadedRepository.move(ids: [animal.id], toPastureID: nil)
+
+        let unassignedRepository = fixture.makeAnimalRepository()
+        let unassigned = try XCTUnwrap(
+            unassignedRepository.fetchAnimalDetail(id: animal.id),
+            "Moving to a nil destination must durably unassign the animal from its pasture.",
+            file: file,
+            line: line
+        )
+        XCTAssertNil(unassigned.pastureID, file: file, line: line)
+        XCTAssertNil(unassigned.pastureName, file: file, line: line)
+        XCTAssertTrue(
+            try unassignedRepository.fetchTimeline(id: animal.id).contains {
+                isMovementEvent($0, from: south.name, to: "—")
+            },
+            "Moving to a nil destination must create durable history from the prior pasture to unassigned.",
+            file: file,
+            line: line
+        )
+
+        let unassignedPastures = fixture.makePastureRepository()
+        XCTAssertFalse(
+            try unassignedPastures.fetchResidentAnimals(pastureID: south.id).contains { $0.id == animal.id },
+            "An animal moved to a nil destination must no longer appear in the prior pasture's resident lookup.",
+            file: file,
+            line: line
+        )
     }
 
     static func assertTagLifecyclePreservesHistory(
@@ -683,6 +711,7 @@ enum AnimalRepositoryContract {
         XCTAssertTrue(replacementTag.isPrimary, file: file, line: line)
         XCTAssertEqual(replacementTag.colorID, replacementColorID, file: file, line: line)
         XCTAssertEqual(withReplacement.displayTagNumber, "402", file: file, line: line)
+        XCTAssertEqual(withReplacement.displayTagColorID, replacementColorID, file: file, line: line)
         XCTAssertTrue(withReplacement.activeTags.contains { $0.id == originalTag.id }, file: file, line: line)
 
         let addedTagRepository = fixture.makeAnimalRepository()
@@ -718,6 +747,7 @@ enum AnimalRepositoryContract {
         XCTAssertFalse(reloadedOriginalAfterAdd.isPrimary, file: file, line: line)
         XCTAssertTrue(reloadedOriginalAfterAdd.isActive, file: file, line: line)
         XCTAssertEqual(reloadedAfterAdd.displayTagNumber, "402", file: file, line: line)
+        XCTAssertEqual(reloadedAfterAdd.displayTagColorID, replacementColorID, file: file, line: line)
 
         let updatedOriginalColorID = TagColorDefaults.blueID
         let withUpdatedOriginal = try addedTagRepository.updateTag(
