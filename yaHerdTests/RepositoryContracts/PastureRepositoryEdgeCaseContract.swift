@@ -305,6 +305,9 @@ enum PastureRepositoryEdgeCaseContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(summary.acreage, 24, file: file, line: line)
+        XCTAssertEqual(summary.usableAcreage, 21, file: file, line: line)
+        XCTAssertEqual(summary.targetAcresPerHead, 1.75, file: file, line: line)
         XCTAssertEqual(summary.groupID, group.id, file: file, line: line)
         XCTAssertEqual(summary.groupName, "Reorder Rotation", file: file, line: line)
         XCTAssertEqual(summary.restDays, 24, file: file, line: line)
@@ -316,6 +319,9 @@ enum PastureRepositoryEdgeCaseContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(detail.acreage, 24, file: file, line: line)
+        XCTAssertEqual(detail.usableAcreage, 21, file: file, line: line)
+        XCTAssertEqual(detail.targetAcresPerHead, 1.75, file: file, line: line)
         XCTAssertEqual(detail.groupID, group.id, file: file, line: line)
         XCTAssertEqual(detail.groupName, "Reorder Rotation", file: file, line: line)
         XCTAssertEqual(detail.lastGrazedDate, grazedAt, file: file, line: line)
