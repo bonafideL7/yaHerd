@@ -1277,7 +1277,7 @@ enum PastureRepositoryEdgeCaseContract {
             return event.details
         }
         XCTAssertEqual(
-            Array(movementsAfterCompletion.dropLast()),
+            Array(movementsAfterCompletion.dropFirst()),
             movementsBeforeCompletion,
             "Finishing the session must preserve movement history recorded before the post-deletion write.",
             file: file,
@@ -1291,7 +1291,7 @@ enum PastureRepositoryEdgeCaseContract {
             line: line
         )
         XCTAssertTrue(
-            movementsAfterCompletion.last?.hasSuffix("→ Writable Working Control") == true,
+            movementsAfterCompletion.first?.hasSuffix("→ Writable Working Control") == true,
             "The appended movement must end in the surviving destination pasture.",
             file: file,
             line: line
@@ -1302,7 +1302,7 @@ enum PastureRepositoryEdgeCaseContract {
             return event.details
         }
         XCTAssertEqual(
-            Array(queuedMovementsAfterCompletion.dropLast()),
+            Array(queuedMovementsAfterCompletion.dropFirst()),
             queuedMovementsBeforeCompletion,
             "Completing the formerly queued item must preserve its prior movement history.",
             file: file,
@@ -1316,7 +1316,7 @@ enum PastureRepositoryEdgeCaseContract {
             line: line
         )
         XCTAssertTrue(
-            queuedMovementsAfterCompletion.last?.hasSuffix("→ Writable Working Control") == true,
+            queuedMovementsAfterCompletion.first?.hasSuffix("→ Writable Working Control") == true,
             "The formerly queued animal's appended movement must end in the surviving destination pasture.",
             file: file,
             line: line
