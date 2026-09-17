@@ -137,7 +137,7 @@ enum FieldCheckRepositoryContract {
         XCTAssertEqual(calfCheck.displayTagNumber, "C10", file: file, line: line)
         XCTAssertEqual(calfCheck.displayTagColorID, colorID, file: file, line: line)
         XCTAssertEqual(calfCheck.damDisplayTagNumber, "D10", file: file, line: line)
-        XCTAssertEqual(calfCheck.damDisplayTagColorID, colorID, file: file, line: line)
+        XCTAssertEqual(calfCheck.damDisplayTagColorID, originalColorID, file: file, line: line)
         XCTAssertTrue(calfCheck.wasExpectedAtStart, file: file, line: line)
 
         let summary = try XCTUnwrap(
@@ -483,6 +483,18 @@ enum FieldCheckRepositoryContract {
             line: line
         )
         let finding = try XCTUnwrap(afterAdd.findings.first, file: file, line: line)
+        let sourceAnimalCheck = try XCTUnwrap(
+            afterAdd.animalChecks.first { $0.animalID == animal.id },
+            "The source roster row must exist before missing-finding reassignment.",
+            file: file,
+            line: line
+        )
+        let destinationAnimalCheckBeforeReassignment = try XCTUnwrap(
+            afterAdd.animalChecks.first { $0.animalID == reassignedAnimal.id },
+            "The destination roster row must exist before missing-finding reassignment.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(finding.recordedAt, originalDate, file: file, line: line)
         XCTAssertEqual(finding.type, .missingAnimal, file: file, line: line)
         XCTAssertEqual(finding.severity, .warning, file: file, line: line)
@@ -492,8 +504,8 @@ enum FieldCheckRepositoryContract {
         XCTAssertEqual(finding.animalDisplayTagNumber, "401", file: file, line: line)
         XCTAssertEqual(finding.pastureName, "Finding North", file: file, line: line)
         XCTAssertEqual(finding.sessionID, sessionID, file: file, line: line)
-        XCTAssertTrue(afterAdd.animalChecks.first { $0.animalID == animal.id }?.isMissing == true, "An open missing-animal finding must synchronize the roster missing state.", file: file, line: line)
-        XCTAssertFalse(afterAdd.animalChecks.first { $0.animalID == reassignedAnimal.id }?.isMissing == true, file: file, line: line)
+        XCTAssertTrue(sourceAnimalCheck.isMissing, "An open missing-animal finding must synchronize the roster missing state.", file: file, line: line)
+        XCTAssertFalse(destinationAnimalCheckBeforeReassignment.isMissing, file: file, line: line)
 
         let reassignedDate = date(year: 2026, month: 4, day: 10, hour: 10)
         try repository.updateFinding(
@@ -518,21 +530,29 @@ enum FieldCheckRepositoryContract {
             file: file,
             line: line
         )
+        let sourceAnimalCheckAfterReassignment = try XCTUnwrap(
+            afterReassignment.animalChecks.first { $0.id == sourceAnimalCheck.id },
+            "Reassigning the only unresolved missing finding must preserve the source roster row and application UUID.",
+            file: file,
+            line: line
+        )
         let reassignedAnimalCheck = try XCTUnwrap(
-            afterReassignment.animalChecks.first { $0.animalID == reassignedAnimal.id },
-            "Reassigning an unresolved missing finding must preserve the linked animal's roster row.",
+            afterReassignment.animalChecks.first { $0.id == destinationAnimalCheckBeforeReassignment.id },
+            "Reassigning an unresolved missing finding must preserve the linked animal's roster row and application UUID.",
             file: file,
             line: line
         )
         XCTAssertEqual(reassignedFinding.id, finding.id, "Finding application UUID must survive reassignment.", file: file, line: line)
         XCTAssertEqual(reassignedFinding.animalID, reassignedAnimal.id, file: file, line: line)
         XCTAssertEqual(reassignedFinding.animalDisplayTagNumber, "402", file: file, line: line)
+        XCTAssertEqual(sourceAnimalCheckAfterReassignment.animalID, animal.id, file: file, line: line)
         XCTAssertFalse(
-            afterReassignment.animalChecks.first { $0.animalID == animal.id }?.isMissing == true,
-            "Reassigning the only unresolved missing finding must clear the previous roster animal's missing state.",
+            sourceAnimalCheckAfterReassignment.isMissing,
+            "Reassigning the only unresolved missing finding must clear the previous roster animal's missing state without removing its row.",
             file: file,
             line: line
         )
+        XCTAssertEqual(reassignedAnimalCheck.animalID, reassignedAnimal.id, file: file, line: line)
         XCTAssertTrue(
             reassignedAnimalCheck.isMissing,
             "Reassigning an unresolved missing finding must mark the newly linked roster animal missing.",
