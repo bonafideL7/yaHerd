@@ -924,6 +924,156 @@ enum AnimalRepositoryContract {
             file: file,
             line: line
         )
+
+        let secondaryMutationRepository = fixture.makeAnimalRepository()
+        let secondaryPrimaryColorID = TagColorDefaults.whiteID
+        let secondaryUpdatedColorID = TagColorDefaults.blueID
+        let secondaryMutationAnimal = try secondaryMutationRepository.create(
+            input: makeAnimalInput(
+                name: "Secondary Tag Contract Cow",
+                tagNumber: "411",
+                tagColorID: secondaryPrimaryColorID,
+                sex: .female,
+                birthDate: date(year: 2020, month: 5, day: 7)
+            )
+        )
+        let secondaryPrimaryTag = try XCTUnwrap(
+            secondaryMutationAnimal.activeTags.first { $0.isPrimary && $0.isActive },
+            file: file,
+            line: line
+        )
+        let withSecondaryTag = try secondaryMutationRepository.addTag(
+            animalID: secondaryMutationAnimal.id,
+            input: AnimalTagInput(number: "412", colorID: replacementColorID, isPrimary: false)
+        )
+        let secondaryTag = try XCTUnwrap(
+            withSecondaryTag.activeTags.first { $0.number == "412" },
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(secondaryTag.isPrimary, file: file, line: line)
+        XCTAssertEqual(withSecondaryTag.displayTagNumber, "411", file: file, line: line)
+        XCTAssertEqual(withSecondaryTag.displayTagColorID, secondaryPrimaryColorID, file: file, line: line)
+
+        let withEditedSecondaryTag = try secondaryMutationRepository.updateTag(
+            animalID: secondaryMutationAnimal.id,
+            tagID: secondaryTag.id,
+            input: AnimalTagInput(number: "413", colorID: secondaryUpdatedColorID, isPrimary: false)
+        )
+        XCTAssertEqual(
+            withEditedSecondaryTag.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            "Editing a secondary tag without promotion must preserve exactly one active primary tag.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            withEditedSecondaryTag.activeTags.contains {
+                $0.id == secondaryPrimaryTag.id && $0.isPrimary && $0.isActive
+            },
+            "Editing a secondary tag with isPrimary false must not replace the existing primary tag.",
+            file: file,
+            line: line
+        )
+        let editedSecondaryTag = try XCTUnwrap(
+            withEditedSecondaryTag.activeTags.first { $0.id == secondaryTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(editedSecondaryTag.number, "413", file: file, line: line)
+        XCTAssertEqual(editedSecondaryTag.colorID, secondaryUpdatedColorID, file: file, line: line)
+        XCTAssertFalse(editedSecondaryTag.isPrimary, file: file, line: line)
+        XCTAssertTrue(editedSecondaryTag.isActive, file: file, line: line)
+        XCTAssertEqual(editedSecondaryTag.assignedAt, secondaryTag.assignedAt, file: file, line: line)
+        XCTAssertEqual(withEditedSecondaryTag.displayTagNumber, "411", file: file, line: line)
+        XCTAssertEqual(withEditedSecondaryTag.displayTagColorID, secondaryPrimaryColorID, file: file, line: line)
+
+        let secondaryReloadRepository = fixture.makeAnimalRepository()
+        let reloadedAfterSecondaryEdit = try XCTUnwrap(
+            secondaryReloadRepository.fetchAnimalDetail(id: secondaryMutationAnimal.id),
+            "Editing a secondary tag without promotion must persist without changing the primary tag.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedAfterSecondaryEdit.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            file: file,
+            line: line
+        )
+        let reloadedSecondaryPrimary = try XCTUnwrap(
+            reloadedAfterSecondaryEdit.activeTags.first { $0.id == secondaryPrimaryTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(reloadedSecondaryPrimary.isPrimary, file: file, line: line)
+        XCTAssertTrue(reloadedSecondaryPrimary.isActive, file: file, line: line)
+        XCTAssertEqual(reloadedSecondaryPrimary.number, "411", file: file, line: line)
+        XCTAssertEqual(reloadedSecondaryPrimary.colorID, secondaryPrimaryColorID, file: file, line: line)
+        let reloadedEditedSecondary = try XCTUnwrap(
+            reloadedAfterSecondaryEdit.activeTags.first { $0.id == secondaryTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedEditedSecondary.number, "413", file: file, line: line)
+        XCTAssertEqual(reloadedEditedSecondary.colorID, secondaryUpdatedColorID, file: file, line: line)
+        XCTAssertFalse(reloadedEditedSecondary.isPrimary, file: file, line: line)
+        XCTAssertTrue(reloadedEditedSecondary.isActive, file: file, line: line)
+        XCTAssertEqual(reloadedEditedSecondary.assignedAt, secondaryTag.assignedAt, file: file, line: line)
+        XCTAssertEqual(reloadedAfterSecondaryEdit.displayTagNumber, "411", file: file, line: line)
+        XCTAssertEqual(reloadedAfterSecondaryEdit.displayTagColorID, secondaryPrimaryColorID, file: file, line: line)
+
+        _ = try secondaryReloadRepository.retireTag(
+            animalID: secondaryMutationAnimal.id,
+            tagID: secondaryTag.id
+        )
+
+        let retiredSecondaryRepository = fixture.makeAnimalRepository()
+        let reloadedAfterSecondaryRetire = try XCTUnwrap(
+            retiredSecondaryRepository.fetchAnimalDetail(id: secondaryMutationAnimal.id),
+            "Retiring a nonprimary tag must persist without changing the existing primary tag.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedAfterSecondaryRetire.activeTags.filter { $0.isPrimary && $0.isActive }.count,
+            1,
+            file: file,
+            line: line
+        )
+        let primaryAfterSecondaryRetire = try XCTUnwrap(
+            reloadedAfterSecondaryRetire.activeTags.first { $0.id == secondaryPrimaryTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(primaryAfterSecondaryRetire.isPrimary, file: file, line: line)
+        XCTAssertTrue(primaryAfterSecondaryRetire.isActive, file: file, line: line)
+        XCTAssertEqual(primaryAfterSecondaryRetire.number, "411", file: file, line: line)
+        XCTAssertEqual(primaryAfterSecondaryRetire.colorID, secondaryPrimaryColorID, file: file, line: line)
+        XCTAssertEqual(reloadedAfterSecondaryRetire.displayTagNumber, "411", file: file, line: line)
+        XCTAssertEqual(reloadedAfterSecondaryRetire.displayTagColorID, secondaryPrimaryColorID, file: file, line: line)
+        XCTAssertFalse(
+            reloadedAfterSecondaryRetire.activeTags.contains { $0.id == secondaryTag.id },
+            file: file,
+            line: line
+        )
+        let retiredSecondaryTag = try XCTUnwrap(
+            reloadedAfterSecondaryRetire.inactiveTags.first { $0.id == secondaryTag.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(retiredSecondaryTag.number, "413", file: file, line: line)
+        XCTAssertEqual(retiredSecondaryTag.colorID, secondaryUpdatedColorID, file: file, line: line)
+        XCTAssertEqual(retiredSecondaryTag.assignedAt, secondaryTag.assignedAt, file: file, line: line)
+        XCTAssertNotNil(retiredSecondaryTag.removedAt, file: file, line: line)
+        XCTAssertTrue(
+            try retiredSecondaryRepository.fetchTimeline(id: secondaryMutationAnimal.id).contains {
+                isTagEvent($0, title: "Tag Retired", number: "413")
+            },
+            "Retiring a nonprimary tag must create retirement history without changing the current primary.",
+            file: file,
+            line: line
+        )
     }
 
     static func assertParentRelationshipsSurviveReload(
