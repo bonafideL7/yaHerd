@@ -738,4 +738,137 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertNil(archivedAfterDeletion.pastureID, file: file, line: line)
         XCTAssertNil(archivedAfterDeletion.pastureName, file: file, line: line)
     }
+
+    static func assertArchivedFieldCheckRemainsWritableAfterPastureDeletion(
+        using fixture: PastureDeletionWorkflowContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let pastureRepository = fixture.makePastureRepository()
+        let pasture = try pastureRepository.create(
+            input: PastureInput(
+                name: "Writable Archived Check Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animal = try fixture.makeAnimalRepository().create(
+            input: AnimalInput(
+                name: "Writable Archived Check Cow",
+                tagNumber: "WA-1",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSince1970: 1_577_836_800),
+                status: .active,
+                pastureID: pasture.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+        let fieldChecks = fixture.makeFieldCheckRepository()
+        let sessionID = try fieldChecks.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.id,
+                startedAt: Date(timeIntervalSince1970: 1_781_100_000),
+                notes: "Before pasture deletion"
+            )
+        )
+        let sessionBeforeDeletion = try XCTUnwrap(
+            fieldChecks.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        let animalCheck = try XCTUnwrap(
+            sessionBeforeDeletion.animalChecks.first { $0.animalID == animal.id },
+            "The Field Check fixture must contain the pasture resident before deletion.",
+            file: file,
+            line: line
+        )
+        XCTAssertNil(sessionBeforeDeletion.completedAt, file: file, line: line)
+
+        let archivedAt = Date(timeIntervalSince1970: 1_781_200_000)
+        try fixture.deletePastures([pasture.id], archivedAt)
+
+        let archivedFieldChecks = fixture.makeFieldCheckRepository()
+        let archivedBeforeWrite = try XCTUnwrap(
+            archivedFieldChecks.fetchSessionDetail(id: sessionID),
+            "Deleting the pasture must preserve the still-open Field Check.",
+            file: file,
+            line: line
+        )
+        XCTAssertNil(archivedBeforeWrite.completedAt, file: file, line: line)
+        XCTAssertEqual(archivedBeforeWrite.pastureID, pasture.id, file: file, line: line)
+        XCTAssertEqual(archivedBeforeWrite.pastureName, "Writable Archived Check Pasture", file: file, line: line)
+        XCTAssertEqual(archivedBeforeWrite.pastureArchivedAt, archivedAt, file: file, line: line)
+        XCTAssertTrue(archivedBeforeWrite.isPastureArchived, file: file, line: line)
+        XCTAssertEqual(
+            archivedBeforeWrite.animalChecks.first { $0.animalID == animal.id }?.id,
+            animalCheck.id,
+            "Pasture deletion must preserve the child UUID used for later Field Check writes.",
+            file: file,
+            line: line
+        )
+
+        let updatedNotes = "Updated after pasture deletion"
+        try archivedFieldChecks.setAnimalCheckCounted(
+            sessionID: sessionID,
+            animalCheckID: animalCheck.id,
+            isCounted: true
+        )
+        try archivedFieldChecks.updateNotes(sessionID: sessionID, notes: updatedNotes)
+        try archivedFieldChecks.completeSession(id: sessionID)
+
+        let reloadedFieldChecks = fixture.makeFieldCheckRepository()
+        let reloadedSession = try XCTUnwrap(
+            reloadedFieldChecks.fetchSessionDetail(id: sessionID),
+            "An archived Field Check must remain writable after its pasture has been deleted.",
+            file: file,
+            line: line
+        )
+        let completedAt = try XCTUnwrap(
+            reloadedSession.completedAt,
+            "Completing the archived Field Check must persist after reload.",
+            file: file,
+            line: line
+        )
+        let reloadedAnimalCheck = try XCTUnwrap(
+            reloadedSession.animalChecks.first { $0.id == animalCheck.id },
+            "The mutated archived roster entry must remain addressable by its application UUID.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedAnimalCheck.animalID, animal.id, file: file, line: line)
+        XCTAssertTrue(reloadedAnimalCheck.wasCounted, file: file, line: line)
+        XCTAssertEqual(reloadedSession.notes, updatedNotes, file: file, line: line)
+        XCTAssertEqual(reloadedSession.pastureID, pasture.id, file: file, line: line)
+        XCTAssertEqual(reloadedSession.pastureName, "Writable Archived Check Pasture", file: file, line: line)
+        XCTAssertEqual(reloadedSession.pastureArchivedAt, archivedAt, file: file, line: line)
+        XCTAssertTrue(reloadedSession.isPastureArchived, file: file, line: line)
+
+        let reloadedSummary = try XCTUnwrap(
+            reloadedFieldChecks.fetchSessions().first { $0.id == sessionID },
+            "The Field Check list reader must reflect writes made after pasture deletion.",
+            file: file,
+            line: line
+        )
+        let summaryAnimalCheck = try XCTUnwrap(
+            reloadedSummary.animalChecks.first { $0.id == animalCheck.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedSummary.completedAt, completedAt, file: file, line: line)
+        XCTAssertTrue(summaryAnimalCheck.wasCounted, file: file, line: line)
+        XCTAssertEqual(reloadedSummary.pastureID, pasture.id, file: file, line: line)
+        XCTAssertEqual(reloadedSummary.pastureName, "Writable Archived Check Pasture", file: file, line: line)
+        XCTAssertEqual(reloadedSummary.pastureArchivedAt, archivedAt, file: file, line: line)
+        XCTAssertTrue(reloadedSummary.isPastureArchived, file: file, line: line)
+    }
 }
