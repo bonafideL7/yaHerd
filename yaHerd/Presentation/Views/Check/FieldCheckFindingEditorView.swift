@@ -2,7 +2,6 @@ import SwiftUI
 
 struct FieldCheckFindingEditorView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.fieldCheckPresentedFindingIdentityDidChange) private var presentedFindingIdentityDidChange
 
     let suggestedTypes: [FieldCheckFindingType]
     let animals: [FieldCheckAnimalCheckSnapshot]
@@ -50,12 +49,6 @@ struct FieldCheckFindingEditorView: View {
 
     private var navigationTitle: String {
         finding == nil ? "Add Finding" : "Edit Finding"
-    }
-
-    private var presentedFindingIdentity: FieldCheckIdentityReference? {
-        finding.map {
-            FieldCheckIdentityReference(id: $0.id, relatedAnimalID: $0.animalID)
-        }
     }
 
     private func animalSortKey(for animal: FieldCheckAnimalCheckSnapshot) -> String {
@@ -132,7 +125,6 @@ struct FieldCheckFindingEditorView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 ToolbarCancelButton {
-                    endIdentityTracking()
                     dismiss()
                 }
             }
@@ -149,16 +141,9 @@ struct FieldCheckFindingEditorView: View {
                             animalID: selectedAnimalID
                         )
                     )
-                    endIdentityTracking()
                     dismiss()
                 }
                 .disabled(!canSave)
-            }
-        }
-        .interactiveDismissDisabled(presentedFindingIdentity != nil)
-        .onAppear {
-            if let presentedFindingIdentity {
-                presentedFindingIdentityDidChange(presentedFindingIdentity)
             }
         }
         .onChange(of: type) { _, newType in
@@ -170,11 +155,6 @@ struct FieldCheckFindingEditorView: View {
             else { return }
             self.selectedAnimalID = nil
         }
-    }
-
-    private func endIdentityTracking() {
-        guard presentedFindingIdentity != nil else { return }
-        presentedFindingIdentityDidChange(nil)
     }
 
     private var animalLinkSection: some View {

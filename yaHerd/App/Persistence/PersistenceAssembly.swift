@@ -1,8 +1,6 @@
 @MainActor
 protocol PersistenceAssembly {
     func makeDependencies(
-        tagColorDuplicateResolutionPolicy: TagColorDuplicateResolutionPolicy,
-        dataAccessMode: AppDataAccessMode,
-        storageMode: HerdStorageMode
+        dataAccessMode: AppDataAccessMode
     ) -> AppDependencies
 }

@@ -44,12 +44,6 @@ extension YaHerdSchemaV1 {
             }
         }
 
-        /// Transitional V1 source compatibility. New code uses `dose`.
-        var quantity: Double? {
-            get { doseAmount }
-            set { doseAmount = newValue }
-        }
-
         init(
             publicID: UUID = UUID(),
             date: Date = Date.now,
@@ -70,35 +64,6 @@ extension YaHerdSchemaV1 {
             self.administrationRoute = dose.route
             self.animal = animal
             self.session = session
-        }
-
-        /// Transitional V1 source compatibility. The stable identity and route/unit
-        /// are recovered from the session treatment plan when older callers provide
-        /// only the treatment name and amount.
-        convenience init(
-            publicID: UUID = UUID(),
-            date: Date = Date.now,
-            itemName: String,
-            given: Bool,
-            quantity: Double? = nil,
-            animal: Animal,
-            session: WorkingSession
-        ) {
-            let plannedTreatment = session.protocolItems.first { $0.name == itemName }
-            self.init(
-                publicID: publicID,
-                date: date,
-                treatmentItemID: plannedTreatment?.id ?? UUID(),
-                itemName: itemName,
-                given: given,
-                dose: WorkingTreatmentDose(
-                    amount: quantity,
-                    unit: plannedTreatment?.suggestedDose.unit,
-                    route: plannedTreatment?.suggestedDose.route
-                ),
-                animal: animal,
-                session: session
-            )
         }
     }
 }

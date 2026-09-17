@@ -1,13 +1,4 @@
-import Foundation
-
-nonisolated enum ApplicationSettingScope: String, Sendable {
-    case local
-    case synchronized
-}
-
 nonisolated enum ApplicationSettingKey: String, CaseIterable, Sendable {
-    case syncMode = "settings.syncMode"
-    case allowHardDelete = "settings.allowHardDelete"
     case dashboardEnabled = "settings.dashboardEnabled"
     case targetAcresPerHeadDefault = "settings.targetAcresPerHeadDefault"
     case usableAcreagePercentDefault = "settings.usableAcreagePercentDefault"
@@ -16,29 +7,8 @@ nonisolated enum ApplicationSettingKey: String, CaseIterable, Sendable {
     case homeSetupSuggestionsExpanded = "settings.homeSetupSuggestionsExpanded"
     case legacyRecentPastureNames = "settings.legacy.recentPastureNames"
 
-    var scope: ApplicationSettingScope {
-        switch self {
-        case .dashboardEnabled,
-             .targetAcresPerHeadDefault,
-             .usableAcreagePercentDefault,
-             .homeDismissedSetupSuggestionIDs:
-            .synchronized
-
-        case .syncMode,
-             .allowHardDelete,
-             .recentPastureIDs,
-             .homeSetupSuggestionsExpanded,
-             .legacyRecentPastureNames:
-            .local
-        }
-    }
-
     var legacyKeys: [String] {
         switch self {
-        case .syncMode:
-            ["syncMode"]
-        case .allowHardDelete:
-            ["allowHardDelete"]
         case .dashboardEnabled:
             ["isDashboardEnabled"]
         case .targetAcresPerHeadDefault:
@@ -60,23 +30,4 @@ nonisolated enum ApplicationSettingKey: String, CaseIterable, Sendable {
 nonisolated enum ApplicationSettingsCatalog {
     static let currentSchemaVersion = 1
     static let schemaVersionKey = "settings.schemaVersion"
-
-    static let synchronizedKeys = ApplicationSettingKey.allCases.filter {
-        $0.scope == .synchronized
-    }
-
-    static let localKeys = ApplicationSettingKey.allCases.filter {
-        $0.scope == .local
-    }
-
-    // Canonical retired keys can remain in iCloud temporarily as forced-safe
-    // values so older supported releases cannot revive destructive behavior.
-    static let compatibilityCloudBooleanTombstones = [
-        ApplicationSettingKey.allowHardDelete.rawValue: false,
-    ]
-
-    static let deprecatedCloudKeys = [
-        "allowHardDelete",
-        "recentPastureNames",
-    ]
 }

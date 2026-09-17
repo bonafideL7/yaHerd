@@ -7,13 +7,12 @@ import Foundation
 import SwiftData
 
 /// Creates the single local herd scope used by the current app and attaches
-/// existing unscoped records to it. This is the first migration step toward
-/// sharing a herd as one CloudKit collaboration unit.
+/// existing unscoped records to it.
 @MainActor
 enum DefaultHerdBootstrapper {
     nonisolated static let defaultHerdName = "My Herd"
     private static let currentMigrationVersion = 1
-    private static let migrationVersionKeyPrefix = "DefaultHerdBootstrapper.completedMigrationVersion"
+    private static let migrationVersionKey = "DefaultHerdBootstrapper.completedMigrationVersion.localOnly"
 
     static func ensureDefaultHerd(in context: ModelContext) throws {
         let herd = try defaultHerd(in: context)
@@ -23,34 +22,10 @@ enum DefaultHerdBootstrapper {
 
     static func ensureDefaultHerdForAppLaunch(
         in context: ModelContext,
-        storageScope: String,
-        migrationState: UserDefaults = .standard,
-        mutationGate: HerdDataMutationGate = HerdDataMutationGate()
+        migrationState: UserDefaults = .standard
     ) throws {
-        // The durable repair gate must be loaded before this startup writer does anything.
-        // A pending or unreadable repair journal means public IDs may be between the local
-        // commit and shared-bridge convergence phases, so creating/re-scoping records here
-        // would mutate the graph outside the repair transaction. Defer until a later launch.
-        guard !mutationGate.requiresBridgeConvergence else { return }
-
-        let migrationVersionKey = "\(migrationVersionKeyPrefix).\(storageScope)"
         let shouldRunMigration = migrationState.integer(forKey: migrationVersionKey) < currentMigrationVersion
-
-        // A pristine installation must stay physically empty. Creating a Herd here used to
-        // manufacture a new CloudKit-backed row before an existing iCloud store had time to
-        // import. Reinstalling the app therefore accumulated one extra bootstrap Herd per install.
-        // Only create the migration Herd when there is actual legacy data that needs a scope.
-        let herd: Herd
-        if let existingHerd = try existingDefaultHerd(in: context) {
-            herd = existingHerd
-        } else {
-            guard try hasAnyHerdScopedRecords(in: context) else {
-                // Do not mark the migration complete. An iCloud import can still deliver legacy
-                // unscoped rows later in this launch; the next launch must be allowed to migrate them.
-                return
-            }
-            herd = try defaultHerd(in: context)
-        }
+        let herd = try defaultHerd(in: context)
 
         var changed = false
         if shouldRunMigration {
@@ -80,35 +55,6 @@ enum DefaultHerdBootstrapper {
         let herd = Herd(name: defaultHerdName)
         context.insert(herd)
         return herd
-    }
-
-    private static func hasAnyHerdScopedRecords(in context: ModelContext) throws -> Bool {
-        try hasAnyRecord(Animal.self, in: context)
-            || hasAnyRecord(AnimalTag.self, in: context)
-            || hasAnyRecord(AnimalStatusReference.self, in: context)
-            || hasAnyRecord(StatusRecord.self, in: context)
-            || hasAnyRecord(HealthRecord.self, in: context)
-            || hasAnyRecord(PregnancyCheck.self, in: context)
-            || hasAnyRecord(MovementRecord.self, in: context)
-            || hasAnyRecord(Pasture.self, in: context)
-            || hasAnyRecord(PastureGroup.self, in: context)
-            || hasAnyRecord(TagColorDefinition.self, in: context)
-            || hasAnyRecord(WorkingSession.self, in: context)
-            || hasAnyRecord(WorkingQueueItem.self, in: context)
-            || hasAnyRecord(WorkingTreatmentRecord.self, in: context)
-            || hasAnyRecord(WorkingProtocolTemplate.self, in: context)
-            || hasAnyRecord(FieldCheckSession.self, in: context)
-            || hasAnyRecord(FieldCheckAnimalCheck.self, in: context)
-            || hasAnyRecord(FieldCheckFinding.self, in: context)
-    }
-
-    private static func hasAnyRecord<Model: PersistentModel>(
-        _ type: Model.Type,
-        in context: ModelContext
-    ) throws -> Bool {
-        var descriptor = FetchDescriptor<Model>()
-        descriptor.fetchLimit = 1
-        return try !context.fetch(descriptor).isEmpty
     }
 
     private static func attachAllUnscopedRecords(in context: ModelContext, to herd: Herd) throws -> Bool {

@@ -5,28 +5,18 @@
 //  Created by mm on 11/28/25.
 //
 
-import CloudKit
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 @main
 struct yaHerdApp: App {
-    @UIApplicationDelegateAdaptor(CloudKitShareAppDelegate.self) private var cloudKitShareAppDelegate
-
     private let bootstrapState: AppBootstrapState
     private let applicationSettings: ApplicationSettings
-    private let appSettingsSynchronizer: AppSettingsSynchronizer
 
     init() {
         let applicationSettings = ApplicationSettings()
-        let appSettingsSynchronizer = AppSettingsSynchronizer(settings: applicationSettings)
-
         self.applicationSettings = applicationSettings
-        self.appSettingsSynchronizer = appSettingsSynchronizer
-        self.bootstrapState = Self.bootstrap(
-            applicationSettings: applicationSettings,
-            appSettingsSynchronizer: appSettingsSynchronizer
-        )
+        self.bootstrapState = Self.bootstrap()
     }
 
     var body: some Scene {
@@ -35,8 +25,7 @@ struct yaHerdApp: App {
             case .ready(let runtime):
                 RunningAppView(
                     runtime: runtime,
-                    applicationSettings: applicationSettings,
-                    appSettingsSynchronizer: appSettingsSynchronizer
+                    applicationSettings: applicationSettings
                 )
 
             case .storageUnavailable(let message):
@@ -45,35 +34,21 @@ struct yaHerdApp: App {
         }
     }
 
-    private static func bootstrap(
-        applicationSettings: ApplicationSettings,
-        appSettingsSynchronizer: AppSettingsSynchronizer
-    ) -> AppBootstrapState {
-        let syncMode = applicationSettings.syncMode
-
+    private static func bootstrap() -> AppBootstrapState {
         do {
-            let container = try ModelContainerFactory.makeContainer(
-                syncMode: syncMode
-            )
-            try Self.runStartupDataMigrations(in: container.mainContext, syncMode: syncMode)
+            let container = try ModelContainerFactory.makeContainer()
+            try Self.runStartupDataMigrations(in: container.mainContext)
 
-            AppLaunchDiagnostics.record(
-                requestedSyncMode: syncMode,
-                actualStorageMode: syncMode == .iCloud ? .iCloud : .localOnly,
-                cloudKitOpened: syncMode == .iCloud
-            )
+            AppLaunchDiagnostics.record(actualStorageMode: .local)
 
-            appSettingsSynchronizer.startIfNeeded(syncMode: syncMode)
             let persistence = Self.makePersistenceRuntime(
-                modelContainer: container,
-                syncMode: syncMode
+                modelContainer: container
             )
 
             return .ready(
                 AppRuntime(
                     persistenceLifetime: persistence.assembly,
                     dependencies: persistence.dependencies,
-                    syncMode: syncMode,
                     dataAccessMode: .readWrite,
                     recoveryContext: nil,
                     storageError: nil
@@ -81,102 +56,6 @@ struct yaHerdApp: App {
             )
         } catch {
             let primaryError = error
-
-            if syncMode == .iCloud {
-                applicationSettings.syncMode = .localOnly
-                appSettingsSynchronizer.stop()
-
-                do {
-                    let localContainer = try ModelContainerFactory.makeContainer(
-                        syncMode: .localOnly
-                    )
-                    try Self.runStartupDataMigrations(in: localContainer.mainContext, syncMode: .localOnly)
-
-                    let startupMessage = """
-                    iCloud Sync could not be enabled, so yaHerd returned to Local Only mode. Your local data is still on this device. Original error: \(primaryError.localizedDescription)
-                    """
-
-                    AppLaunchDiagnostics.record(
-                        requestedSyncMode: syncMode,
-                        actualStorageMode: .localOnly,
-                        cloudKitOpened: false,
-                        startupError: startupMessage
-                    )
-
-                    let persistence = Self.makePersistenceRuntime(
-                        modelContainer: localContainer,
-                        syncMode: .localOnly
-                    )
-                    return .ready(
-                        AppRuntime(
-                            persistenceLifetime: persistence.assembly,
-                            dependencies: persistence.dependencies,
-                            syncMode: .localOnly,
-                            dataAccessMode: .readWrite,
-                            recoveryContext: nil,
-                            storageError: startupMessage
-                        )
-                    )
-                } catch {
-                    let localRecoveryError = error
-
-                    do {
-                        let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer()
-
-                        let startupMessage = """
-                        Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved.
-
-                        iCloud container error: \(primaryError.localizedDescription)
-                        Local recovery error: \(localRecoveryError.localizedDescription)
-                        """
-
-                        AppLaunchDiagnostics.record(
-                            requestedSyncMode: syncMode,
-                            actualStorageMode: .recovery,
-                            cloudKitOpened: false,
-                            startupError: startupMessage
-                        )
-
-                        let persistence = Self.makePersistenceRuntime(
-                            modelContainer: fallbackContainer,
-                            syncMode: .localOnly,
-                            dataAccessMode: .recoveryReadOnly
-                        )
-                        return .ready(
-                            AppRuntime(
-                                persistenceLifetime: persistence.assembly,
-                                dependencies: persistence.dependencies,
-                                syncMode: .localOnly,
-                                dataAccessMode: .recoveryReadOnly,
-                                recoveryContext: RecoveryModeContext(
-                                    requestedSyncMode: syncMode,
-                                    startupError: startupMessage
-                                ),
-                                storageError: startupMessage
-                            )
-                        )
-                    } catch {
-                        let startupMessage = """
-                        Persistent storage could not be opened, and the in-memory recovery store could not be started. No data was loaded and changes are disabled.
-
-                        iCloud container error: \(primaryError.localizedDescription)
-                        Local recovery error: \(localRecoveryError.localizedDescription)
-                        In-memory recovery error: \(error.localizedDescription)
-                        """
-
-                        AppLaunchDiagnostics.record(
-                            requestedSyncMode: syncMode,
-                            actualStorageMode: .unavailable,
-                            cloudKitOpened: false,
-                            startupError: startupMessage
-                        )
-
-                        return .storageUnavailable(startupMessage)
-                    }
-                }
-            }
-
-            appSettingsSynchronizer.stop()
 
             do {
                 let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer()
@@ -186,25 +65,20 @@ struct yaHerdApp: App {
                 """
 
                 AppLaunchDiagnostics.record(
-                    requestedSyncMode: syncMode,
                     actualStorageMode: .recovery,
-                    cloudKitOpened: false,
                     startupError: startupMessage
                 )
 
                 let persistence = Self.makePersistenceRuntime(
                     modelContainer: fallbackContainer,
-                    syncMode: .localOnly,
                     dataAccessMode: .recoveryReadOnly
                 )
                 return .ready(
                     AppRuntime(
                         persistenceLifetime: persistence.assembly,
                         dependencies: persistence.dependencies,
-                        syncMode: .localOnly,
                         dataAccessMode: .recoveryReadOnly,
                         recoveryContext: RecoveryModeContext(
-                            requestedSyncMode: syncMode,
                             startupError: startupMessage
                         ),
                         storageError: startupMessage
@@ -219,9 +93,7 @@ struct yaHerdApp: App {
                 """
 
                 AppLaunchDiagnostics.record(
-                    requestedSyncMode: syncMode,
                     actualStorageMode: .unavailable,
-                    cloudKitOpened: false,
                     startupError: startupMessage
                 )
 
@@ -232,16 +104,13 @@ struct yaHerdApp: App {
 
     private static func makePersistenceRuntime(
         modelContainer: ModelContainer,
-        syncMode: SyncMode,
         dataAccessMode: AppDataAccessMode = .readWrite
     ) -> AppPersistenceRuntime {
         let persistenceAssembly: any PersistenceAssembly = SwiftDataPersistenceAssembly(
             modelContainer: modelContainer
         )
         let dependencies = persistenceAssembly.makeDependencies(
-            tagColorDuplicateResolutionPolicy: syncMode.tagColorDuplicateResolutionPolicy,
-            dataAccessMode: dataAccessMode,
-            storageMode: syncMode.herdStorageMode
+            dataAccessMode: dataAccessMode
         )
         return AppPersistenceRuntime(
             assembly: persistenceAssembly,
@@ -249,30 +118,18 @@ struct yaHerdApp: App {
         )
     }
 
-    private static func runStartupDataMigrations(in context: ModelContext, syncMode: SyncMode) throws {
-        try DefaultHerdBootstrapper.ensureDefaultHerdForAppLaunch(
-            in: context,
-            storageScope: syncMode.rawValue
-        )
-        try FieldCheckHistoricalSnapshotMigrator.runIfNeeded(
-            in: context,
-            storageScope: syncMode.rawValue
-        )
+    private static func runStartupDataMigrations(in context: ModelContext) throws {
+        try DefaultHerdBootstrapper.ensureDefaultHerdForAppLaunch(in: context)
+        try FieldCheckHistoricalSnapshotMigrator.runIfNeeded(in: context)
 
         try SwiftDataTagColorRepository(
             context: context,
-            duplicateResolutionPolicy: syncMode.tagColorDuplicateResolutionPolicy
+            duplicateResolutionPolicy: .stableSortOrderWins
         ).prepareLibraryForWritableUse()
     }
 
     static func makeSchema() -> Schema {
         ModelContainerFactory.schema
-    }
-}
-
-private extension SyncMode {
-    var tagColorDuplicateResolutionPolicy: TagColorDuplicateResolutionPolicy {
-        self == .iCloud ? .newestNonDefaultWins : .stableSortOrderWins
     }
 }
 
@@ -291,7 +148,6 @@ private struct AppRuntime {
     // exposing its concrete container to SwiftUI or Presentation.
     let persistenceLifetime: any PersistenceAssembly
     let dependencies: AppDependencies
-    let syncMode: SyncMode
     let dataAccessMode: AppDataAccessMode
     let recoveryContext: RecoveryModeContext?
     let storageError: String?
@@ -301,76 +157,28 @@ private struct RunningAppView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var tagColorLibrary: TagColorLibraryStore
     @StateObject private var recoveryModeController: RecoveryModeController
-    @State private var cloudKitShareInvitationCoordinator: CloudKitShareInvitationCoordinator
-    @State private var herdSharingSyncCoordinator: HerdSharingSyncCoordinator
-    @State private var tagColorMutationSequence: UInt64
-    @State private var showsPendingCloudKitShareInvitation = false
 
     private let runtime: AppRuntime
     private let applicationSettings: ApplicationSettings
-    private let appSettingsSynchronizer: AppSettingsSynchronizer
 
     init(
         runtime: AppRuntime,
-        applicationSettings: ApplicationSettings,
-        appSettingsSynchronizer: AppSettingsSynchronizer
+        applicationSettings: ApplicationSettings
     ) {
         self.runtime = runtime
         self.applicationSettings = applicationSettings
-        self.appSettingsSynchronizer = appSettingsSynchronizer
         self._tagColorLibrary = StateObject(
             wrappedValue: TagColorLibraryStore(
                 repository: runtime.dependencies.tagColorRepository
             )
         )
-        self._tagColorMutationSequence = State(
-            initialValue: runtime.dependencies.applicationMutationCenter.currentSequence
-        )
-        self._cloudKitShareInvitationCoordinator = State(
-            initialValue: CloudKitShareInvitationCoordinator(
-                shareAdapter: runtime.dependencies.cloudKitShareAdapter
-            )
-        )
         self._recoveryModeController = StateObject(
             wrappedValue: RecoveryModeController(
                 context: runtime.recoveryContext ?? RecoveryModeContext(
-                    requestedSyncMode: runtime.syncMode,
                     startupError: "Recovery mode is not active."
                 ),
-                diagnosticsRepository: runtime.dependencies.syncDiagnosticsRepository,
                 automaticallyRefreshDiagnostics: false
             )
-        )
-        let sharingSyncCoordinator = HerdSharingSyncCoordinator(
-            herdRepository: runtime.dependencies.herdRepository,
-            sharingRepository: runtime.dependencies.herdSharingRepository,
-            storageMode: runtime.syncMode.herdStorageMode,
-            writePolicy: runtime.dependencies.herdCollaborationWritePolicy,
-            mutationGate: runtime.dependencies.herdDataMutationGate,
-            conflictReviewStore: runtime.dependencies.herdSharingConflictReviewStore
-        )
-        if runtime.dataAccessMode.allowsDataMutations {
-            runtime.dependencies.herdSharingMutationSyncScheduler.attach(
-                coordinator: sharingSyncCoordinator
-            )
-            runtime.dependencies.herdCollaborationWritePolicy.setAccessRefreshRequestHandler { [weak sharingSyncCoordinator] reason in
-                sharingSyncCoordinator?.requestSharingAccessRefreshForMutationPreflight(reason: reason)
-            }
-        }
-        self._herdSharingSyncCoordinator = State(initialValue: sharingSyncCoordinator)
-    }
-
-    private var collaborationDependencies: CollaborationDependencies {
-        CollaborationDependencies(
-            herdRepository: runtime.dependencies.herdRepository,
-            sharingRepository: runtime.dependencies.herdSharingRepository,
-            invitationCoordinator: cloudKitShareInvitationCoordinator,
-            shareAdapter: runtime.dependencies.cloudKitShareAdapter,
-            syncCoordinator: herdSharingSyncCoordinator,
-            writePolicy: runtime.dependencies.herdCollaborationWritePolicy,
-            conflictReviewStore: runtime.dependencies.herdSharingConflictReviewStore,
-            diagnosticsRepository: runtime.dependencies.syncDiagnosticsRepository,
-            settingsSynchronizer: appSettingsSynchronizer
         )
     }
 
@@ -389,56 +197,26 @@ private struct RunningAppView: View {
             storageError: runtime.storageError,
             dataAccessMode: runtime.dataAccessMode,
             navigationRestorationValidator: navigationRestorationValidator,
-            identityMutationRevision: runtime.dependencies.applicationMutationCenter.identityRevision
+            navigationMutationRevision: runtime.dependencies.applicationMutationCenter.currentSequence
         )
             .environment(applicationSettings)
             .environmentObject(tagColorLibrary)
             .environment(\.appDataAccessMode, runtime.dataAccessMode)
-            .environment(\.recoveryModeController, runtime.dataAccessMode.isRecoveryMode ? recoveryModeController : nil)
+            .environment(
+                \.recoveryModeController,
+                runtime.dataAccessMode.isRecoveryMode ? recoveryModeController : nil
+            )
             .environment(\.homeFeatureDependencies, runtime.dependencies.homeFeatureDependencies)
             .environment(\.animalFeatureDependencies, runtime.dependencies.animalFeatureDependencies)
             .environment(\.pastureFeatureDependencies, runtime.dependencies.pastureFeatureDependencies)
             .environment(\.fieldCheckFeatureDependencies, runtime.dependencies.fieldCheckFeatureDependencies)
-            .environment(\.workingSessionFeatureDependencies, runtime.dependencies.workingSessionFeatureDependencies)
-            .environment(\.collaborationDependencies, collaborationDependencies)
+            .environment(
+                \.workingSessionFeatureDependencies,
+                runtime.dependencies.workingSessionFeatureDependencies
+            )
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
-                    guard runtime.dataAccessMode.allowsDataMutations else { return }
-                    appSettingsSynchronizer.refreshFromICloudIfStarted()
                     tagColorLibrary.refresh()
-                }
-            }
-            .task {
-                let mutationStream = runtime.dependencies.applicationMutationCenter.events(
-                    after: tagColorMutationSequence
-                )
-                for await event in mutationStream {
-                    tagColorMutationSequence = event.sequence
-                    if event.source == .sharedStoreImport {
-                        tagColorLibrary.refresh()
-                    }
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .yaHerdCloudKitShareAccepted)) { notification in
-                guard runtime.dataAccessMode.allowsDataMutations else { return }
-                if let metadata = notification.userInfo?[CloudKitShareNotificationUserInfoKey.metadata] as? CKShare.Metadata {
-                    cloudKitShareInvitationCoordinator.recordAcceptedShare(metadata: metadata)
-                }
-                Task { @MainActor in
-                    await herdSharingSyncCoordinator.refreshSharingAccessNow(
-                        trigger: .shareInvitationAccepted,
-                        minimumInterval: 0
-                    )
-                }
-                showsPendingCloudKitShareInvitation = true
-            }
-            .alert("Herd Share Invitation Received", isPresented: $showsPendingCloudKitShareInvitation) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                if let summary = cloudKitShareInvitationCoordinator.pendingSummary {
-                    Text("yaHerd received a CloudKit share invitation from \(summary.displayOwnerName). Open Settings > Herd Collaboration to accept it into the Core Data sharing bridge.")
-                } else {
-                    Text("yaHerd received a CloudKit share invitation. Open Settings > Herd Collaboration to accept it into the Core Data sharing bridge.")
                 }
             }
     }
@@ -448,7 +226,7 @@ private struct RootAppView: View {
     let storageError: String?
     let dataAccessMode: AppDataAccessMode
     let navigationRestorationValidator: any AppNavigationRestorationValidating
-    let identityMutationRevision: UInt64
+    let navigationMutationRevision: UInt64
 
     @State private var showsStorageError: Bool
     @State private var navigation = AppNavigationState()
@@ -460,12 +238,12 @@ private struct RootAppView: View {
         storageError: String?,
         dataAccessMode: AppDataAccessMode,
         navigationRestorationValidator: any AppNavigationRestorationValidating,
-        identityMutationRevision: UInt64
+        navigationMutationRevision: UInt64
     ) {
         self.storageError = storageError
         self.dataAccessMode = dataAccessMode
         self.navigationRestorationValidator = navigationRestorationValidator
-        self.identityMutationRevision = identityMutationRevision
+        self.navigationMutationRevision = navigationMutationRevision
         self._showsStorageError = State(
             initialValue: storageError != nil && !dataAccessMode.isRecoveryMode
         )
@@ -495,7 +273,7 @@ private struct RootAppView: View {
                 guard let payload = navigation.restorationPayload() else { return }
                 navigationRestorationPayload = payload
             }
-            .onChange(of: identityMutationRevision) { _, _ in
+            .onChange(of: navigationMutationRevision) { _, _ in
                 guard hasRestoredNavigation else { return }
 
                 if navigationRestorationDeferred {
@@ -515,14 +293,10 @@ private struct RootAppView: View {
             .onOpenURL { url in
                 navigation.handle(url: url)
             }
-            .onReceive(NotificationCenter.default.publisher(for: .yaHerdNavigationRequest)) { notification in
-                guard let request = notification.object as? AppNavigationRequest else { return }
-                navigation.handle(request)
-            }
-            .alert("Storage Mode Changed", isPresented: $showsStorageError) {
+            .alert("Storage Error", isPresented: $showsStorageError) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(storageError ?? "The requested storage mode could not be opened.")
+                Text(storageError ?? "Persistent storage could not be opened.")
             }
     }
 }

@@ -7,7 +7,7 @@ enum WorkingMapper {
             date: session.date,
             status: session.status,
             sourcePastureName: session.sourcePasture?.name,
-            protocolName: session.protocolName,
+            treatmentTemplateName: session.protocolName,
             totalQueueItems: session.queueItems.count,
             completedQueueItems: session.queueItems.filter { $0.status == .done }.count
         )
@@ -20,8 +20,8 @@ enum WorkingMapper {
             status: session.status,
             sourcePastureID: session.sourcePasture?.publicID,
             sourcePastureName: session.sourcePasture?.name,
-            protocolName: session.protocolName,
-            protocolItems: session.protocolItems,
+            treatmentTemplateName: session.protocolName,
+            plannedTreatments: session.protocolItems,
             queueItems: session.queueItems.map(makeQueueItemSnapshot)
         )
     }
@@ -43,19 +43,19 @@ enum WorkingMapper {
         )
     }
 
-    static func makeTemplateSummary(from template: WorkingProtocolTemplate) -> WorkingProtocolTemplateSummary {
-        WorkingProtocolTemplateSummary(
+    static func makeTemplateSummary(from template: WorkingProtocolTemplate) -> WorkingTreatmentTemplateSummary {
+        WorkingTreatmentTemplateSummary(
             id: template.publicID,
             name: template.name,
-            itemCount: template.items.count
+            treatmentCount: template.items.count
         )
     }
 
-    static func makeTemplateDetail(from template: WorkingProtocolTemplate) -> WorkingProtocolTemplateDetailSnapshot {
-        WorkingProtocolTemplateDetailSnapshot(
+    static func makeTemplateDetail(from template: WorkingProtocolTemplate) -> WorkingTreatmentTemplateDetailSnapshot {
+        WorkingTreatmentTemplateDetailSnapshot(
             id: template.publicID,
             name: template.name,
-            items: template.items
+            plannedTreatments: template.items
         )
     }
 
@@ -104,7 +104,7 @@ enum WorkingMapper {
             sessionDate: session.date,
             sessionStatus: session.status,
             sessionSourcePastureName: session.sourcePasture?.name,
-            protocolItems: session.protocolItems,
+            plannedTreatments: session.protocolItems,
             status: queueItem.status,
             completedAt: queueItem.completedAt,
             collectedFromPastureName: queueItem.collectedFromPasture?.name,

@@ -29,31 +29,6 @@ final class UserDefaultsApplicationSettingsStore: ApplicationSettingsStore {
 }
 
 @MainActor
-final class InMemoryApplicationSettingsStore: ApplicationSettingsStore {
-    private var values: [String: Any]
-
-    init(values: [String: Any] = [:]) {
-        self.values = values
-    }
-
-    func object(forKey key: String) -> Any? {
-        values[key]
-    }
-
-    func set(_ value: Any, forKey key: String) {
-        values[key] = value
-    }
-
-    func removeObject(forKey key: String) {
-        values.removeValue(forKey: key)
-    }
-
-    func snapshot() -> [String: Any] {
-        values
-    }
-}
-
-@MainActor
 enum ApplicationSettingsKeyMigrator {
     static func migrate(store: any ApplicationSettingsStore) {
         migrate(
@@ -88,40 +63,5 @@ enum ApplicationSettingsKeyMigrator {
             ApplicationSettingsCatalog.schemaVersionKey,
             ApplicationSettingsCatalog.currentSchemaVersion
         )
-    }
-}
-
-@MainActor
-protocol ApplicationSettingsCloudStore: AnyObject {
-    func object(forKey key: String) -> Any?
-    func set(_ value: Any, forKey key: String)
-    func removeObject(forKey key: String)
-    func synchronize()
-}
-
-@MainActor
-final class InMemoryApplicationSettingsCloudStore: ApplicationSettingsCloudStore {
-    private var values: [String: Any]
-
-    init(values: [String: Any] = [:]) {
-        self.values = values
-    }
-
-    func object(forKey key: String) -> Any? {
-        values[key]
-    }
-
-    func set(_ value: Any, forKey key: String) {
-        values[key] = value
-    }
-
-    func removeObject(forKey key: String) {
-        values.removeValue(forKey: key)
-    }
-
-    func synchronize() {}
-
-    func snapshot() -> [String: Any] {
-        values
     }
 }

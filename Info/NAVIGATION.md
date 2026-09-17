@@ -27,7 +27,7 @@ The navigation boundary uses Codable route values:
   - working-session list
   - working-session detail
 - `AppNavigationRequest`
-  - neutral input for deep links, notifications, widgets, shortcuts, and tests
+  - neutral input for deep links, widgets, shortcuts, and tests
 
 A new route must remain `Hashable` and `Codable`. Only durable route state should be represented in `AppNavigationSnapshot`.
 
@@ -48,7 +48,7 @@ Restoration does not preserve app sheets, confirmation dialogs, temporary menus,
 
 Before restoring a record route, the app queries the corresponding repository. Missing animal and pasture destinations fall back to their existing list context. A full-screen field-check or working workflow is restored only when its session still exists and remains active. Missing, deleted, completed, finished, or cancelled sessions fall back to the relevant session list.
 
-While the app is running, shared-store imports and successful local public-ID repair commits advance a dedicated identity revision. Each scene then refreshes the current herd identifier and revalidates its animal and pasture paths, pasture-ID filter, active field-check or working-session destination, and any focused field-check finding before persisting the updated snapshot. Invalid routes are reduced to their valid prefix, invalid filters are cleared, invalid active sessions fall back to the relevant list, and an invalid focused finding is cleared with a fresh field-check launch identity so any stale finding editor state is discarded. Valid active workflows keep their current-launch transient presentation details.
+While the app is running, successful local mutations advance the application mutation sequence. Each scene then revalidates its current herd identifier, animal and pasture paths, pasture-ID filter, active field-check or working-session destination, and any focused field-check finding before persisting the updated snapshot. Invalid routes are reduced to their valid prefix, invalid filters are cleared, invalid active sessions fall back to the relevant list, and an invalid focused finding is cleared. Valid active workflows keep their current transient presentation details so unrelated local mutations do not dismiss unsaved editor state.
 
 ## Deep links
 
@@ -68,7 +68,3 @@ Invalid UUIDs and unknown destinations are rejected without mutating navigation 
 ## Search ownership
 
 Search remains a permanent tab-bar destination. Search and YaHerd share the same herd mode, search text, sort order, filters, and other list criteria, matching the original feature. Each tab keeps its own typed navigation stack, so opening a Search result stays in Search without replacing the YaHerd tab's navigation state. Only the Search tab owns the system `.searchable` field. Selecting Search switches the shared herd mode to animals without automatically opening the keyboard; leaving Search dismisses keyboard focus. Dismissing Search clears the search and filters and returns to YaHerd.
-
-## Notification routing
-
-App-level notification handlers may post `.yaHerdNavigationRequest` with an `AppNavigationRequest` as the notification object. `RootAppView` routes it through the same navigation model used by URLs and in-app actions.

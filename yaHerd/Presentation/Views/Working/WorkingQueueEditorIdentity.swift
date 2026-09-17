@@ -17,26 +17,7 @@ struct WorkingQueueEditorSourcePastureReference: Equatable {
     }
 }
 
-struct WorkingQueueEditorIdentity: Equatable {
-    let id: UUID
-    let animalID: UUID?
-    let destinationPastureID: UUID?
-
-    init(snapshot: WorkingQueueItemEditorSnapshot) {
-        id = snapshot.id
-        animalID = snapshot.animalID
-        destinationPastureID = snapshot.destinationPastureID
-    }
-
-    static func invalidates(
-        presented: WorkingQueueItemEditorSnapshot,
-        refreshed: WorkingQueueItemEditorSnapshot?
-    ) -> Bool {
-        guard let refreshed else { return true }
-        return WorkingQueueEditorIdentity(snapshot: presented)
-            != WorkingQueueEditorIdentity(snapshot: refreshed)
-    }
-
+enum WorkingQueueEditorIdentity {
     static func sourcePastureChangeRequiresReview(
         presented: WorkingQueueEditorSourcePastureReference?,
         refreshed: WorkingQueueEditorSourcePastureReference,

@@ -75,7 +75,7 @@ enum DashboardMapper {
             date: session.date,
             isActive: session.status == .active,
             sourcePastureName: session.sourcePasture?.name,
-            protocolName: session.protocolName,
+            treatmentTemplateName: session.protocolName,
             totalQueueItems: session.queueItems.count,
             completedQueueItems: session.queueItems.filter { $0.status == .done }.count
         )

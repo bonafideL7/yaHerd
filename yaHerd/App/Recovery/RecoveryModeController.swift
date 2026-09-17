@@ -25,17 +25,14 @@ final class RecoveryModeController: ObservableObject {
   @Published private(set) var repairResult: RepairResult?
   @Published private(set) var diagnostics = RecoveryStorageDiagnostics.empty
 
-  private let diagnosticsRepository: (any SyncDiagnosticsRepository)?
   private let fileManager: FileManager
 
   init(
     context: RecoveryModeContext,
-    diagnosticsRepository: (any SyncDiagnosticsRepository)?,
     fileManager: FileManager = .default,
     automaticallyRefreshDiagnostics: Bool = true
   ) {
     self.context = context
-    self.diagnosticsRepository = diagnosticsRepository
     self.fileManager = fileManager
 
     if automaticallyRefreshDiagnostics {
@@ -77,21 +74,8 @@ final class RecoveryModeController: ObservableObject {
   }
 
   func refreshDiagnostics() {
-    let counts: SyncDiagnosticsCounts
-    let countError: String?
-
-    do {
-      counts = try diagnosticsRepository?.fetchCounts() ?? .empty
-      countError = nil
-    } catch {
-      counts = .empty
-      countError = UserVisibleErrorMessage.make(error)
-    }
-
     diagnostics = RecoveryStorageDiagnostics(
       generatedAt: .now,
-      recoveryStoreCounts: counts,
-      recoveryStoreCountError: countError,
       recoverableStoreFiles: recoverableStoreFiles().map { file in
         RecoveryStoreFileDiagnostic(
           archiveName: file.archiveName,
@@ -110,10 +94,10 @@ final class RecoveryModeController: ObservableObject {
     repairResult = nil
 
     do {
-      let container = try ModelContainerFactory.makeContainer(syncMode: .localOnly)
+      let container = try ModelContainerFactory.makeContainer()
       _ = try container.mainContext.fetchCount(FetchDescriptor<Herd>())
       repairResult = .succeeded(
-        "The persistent store opened successfully using the local-only repair probe. Recovery mode remains read-only for this launch. Force quit and reopen yaHerd to return to normal storage."
+        "The persistent store opened successfully using the production migration plan. Recovery mode remains read-only for this launch. Force quit and reopen yaHerd to return to normal storage."
       )
     } catch {
       repairResult = .failed(
@@ -137,8 +121,8 @@ final class RecoveryModeController: ObservableObject {
       Data changes were disabled and were not written to the in-memory recovery store.
 
       Contents:
-      - RecoveryDiagnostics.json: launch, build, record-count, and file inventory details.
-      - Storage/: copies of discoverable yaHerd SwiftData and sharing-bridge store files.
+      - RecoveryDiagnostics.json: launch, build, and local store file inventory details.
+      - Storage/: copies of discoverable yaHerd SwiftData store files.
 
       Keep this archive private. Store files may contain herd and animal records.
       """
@@ -178,18 +162,13 @@ final class RecoveryModeController: ObservableObject {
     let payload: [String: Any] = [
       "generatedAt": ISO8601DateFormatter().string(from: snapshot.generatedAt),
       "recoveryEnteredAt": ISO8601DateFormatter().string(from: context.enteredAt),
-      "requestedSyncMode": context.requestedSyncMode.rawValue,
       "actualStorageMode": launchSnapshot.actualStorageMode.rawValue,
-      "cloudKitOpened": launchSnapshot.cloudKitOpened,
       "startupError": context.startupError,
       "bundleIdentifier": Bundle.main.bundleIdentifier ?? "Unknown",
       "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown",
       "build": Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown",
       "recoveryStoreIsInMemory": true,
       "dataMutationsAllowed": false,
-      "sharingAndSynchronizationAllowed": false,
-      "recoveryStoreCounts": countsDictionary(snapshot.recoveryStoreCounts),
-      "recoveryStoreCountError": snapshot.recoveryStoreCountError as Any? ?? NSNull(),
       "recoverableStoreFiles": storeFiles.map { file in
         [
           "archiveName": file.archiveName,
@@ -201,26 +180,9 @@ final class RecoveryModeController: ObservableObject {
     ]
 
     return try JSONSerialization.data(
-      withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
-  }
-
-  private func countsDictionary(_ counts: SyncDiagnosticsCounts) -> [String: Int] {
-    [
-      "herds": counts.herds,
-      "animals": counts.animals,
-      "pastures": counts.pastures,
-      "pastureGroups": counts.pastureGroups,
-      "healthRecords": counts.healthRecords,
-      "pregnancyChecks": counts.pregnancyChecks,
-      "movementRecords": counts.movementRecords,
-      "statusRecords": counts.statusRecords,
-      "workingSessions": counts.workingSessions,
-      "workingQueueItems": counts.workingQueueItems,
-      "workingTreatmentRecords": counts.workingTreatmentRecords,
-      "fieldCheckSessions": counts.fieldCheckSessions,
-      "fieldCheckAnimalChecks": counts.fieldCheckAnimalChecks,
-      "fieldCheckFindings": counts.fieldCheckFindings,
-    ]
+      withJSONObject: payload,
+      options: [.prettyPrinted, .sortedKeys]
+    )
   }
 
   private func recoverableStoreFiles() -> [RecoverableStoreFile] {
@@ -233,7 +195,6 @@ final class RecoveryModeController: ObservableObject {
       return []
     }
 
-    let bridgeDirectoryURL = HerdSharingCoreDataStore.defaultStoreDirectoryURL()
     let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
     guard
       let enumerator = fileManager.enumerator(
@@ -250,7 +211,7 @@ final class RecoveryModeController: ObservableObject {
     for case let url as URL in enumerator {
       guard let values = try? url.resourceValues(forKeys: Set(keys)),
         values.isRegularFile == true,
-        shouldIncludeStoreFile(url, bridgeDirectoryURL: bridgeDirectoryURL)
+        shouldIncludeStoreFile(url)
       else {
         continue
       }
@@ -272,11 +233,7 @@ final class RecoveryModeController: ObservableObject {
     return results.sorted { $0.archiveName < $1.archiveName }
   }
 
-  private func shouldIncludeStoreFile(_ url: URL, bridgeDirectoryURL: URL) -> Bool {
-    if url.path.hasPrefix(bridgeDirectoryURL.path + "/") {
-      return true
-    }
-
+  private func shouldIncludeStoreFile(_ url: URL) -> Bool {
     let name = url.lastPathComponent.lowercased()
     let configuredName = ModelContainerFactory.storeName.lowercased()
     return name.contains(configuredName)

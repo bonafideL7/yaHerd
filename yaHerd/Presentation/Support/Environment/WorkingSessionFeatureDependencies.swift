@@ -8,7 +8,6 @@ nonisolated struct WorkingSessionFeatureDependencies {
     let collectAnimalsRepository: any WorkingCollectAnimalsRepository
     let queueRepository: any WorkingQueueRepository
     let queueItemEditingRepository: any WorkingQueueItemEditingRepository
-    let chuteRepository: any WorkingChuteRepository
     let finishSessionRepository: any WorkingFinishSessionRepository
     let treatmentTemplatesRepository: any WorkingTreatmentTemplatesRepository
     let treatmentTemplateCreator: any WorkingTreatmentTemplateCreating
@@ -24,7 +23,6 @@ nonisolated struct WorkingSessionFeatureDependencies {
         collectAnimalsRepository: any WorkingCollectAnimalsRepository,
         queueRepository: any WorkingQueueRepository,
         queueItemEditingRepository: any WorkingQueueItemEditingRepository,
-        chuteRepository: any WorkingChuteRepository,
         finishSessionRepository: any WorkingFinishSessionRepository,
         treatmentTemplatesRepository: any WorkingTreatmentTemplatesRepository,
         treatmentTemplateCreator: any WorkingTreatmentTemplateCreating,
@@ -39,7 +37,6 @@ nonisolated struct WorkingSessionFeatureDependencies {
         self.collectAnimalsRepository = collectAnimalsRepository
         self.queueRepository = queueRepository
         self.queueItemEditingRepository = queueItemEditingRepository
-        self.chuteRepository = chuteRepository
         self.finishSessionRepository = finishSessionRepository
         self.treatmentTemplatesRepository = treatmentTemplatesRepository
         self.treatmentTemplateCreator = treatmentTemplateCreator
@@ -63,7 +60,6 @@ nonisolated struct WorkingSessionFeatureDependencies {
             collectAnimalsRepository: repository,
             queueRepository: repository,
             queueItemEditingRepository: repository,
-            chuteRepository: repository,
             finishSessionRepository: repository,
             treatmentTemplatesRepository: repository,
             treatmentTemplateCreator: repository,
@@ -82,7 +78,6 @@ nonisolated struct WorkingSessionFeatureDependencies {
         collectAnimalsRepository: (any WorkingCollectAnimalsRepository)? = nil,
         queueRepository: (any WorkingQueueRepository)? = nil,
         queueItemEditingRepository: (any WorkingQueueItemEditingRepository)? = nil,
-        chuteRepository: (any WorkingChuteRepository)? = nil,
         finishSessionRepository: (any WorkingFinishSessionRepository)? = nil,
         treatmentTemplatesRepository: (any WorkingTreatmentTemplatesRepository)? = nil,
         treatmentTemplateCreator: (any WorkingTreatmentTemplateCreating)? = nil,
@@ -99,7 +94,6 @@ nonisolated struct WorkingSessionFeatureDependencies {
             collectAnimalsRepository: collectAnimalsRepository ?? missingRepository,
             queueRepository: queueRepository ?? missingRepository,
             queueItemEditingRepository: queueItemEditingRepository ?? missingRepository,
-            chuteRepository: chuteRepository ?? missingRepository,
             finishSessionRepository: finishSessionRepository ?? missingRepository,
             treatmentTemplatesRepository: treatmentTemplatesRepository ?? missingRepository,
             treatmentTemplateCreator: treatmentTemplateCreator ?? missingRepository,
@@ -228,7 +222,6 @@ private struct WorkingSessionFeatureDependenciesKey: EnvironmentKey {
             collectAnimalsRepository: MissingWorkingRepository(),
             queueRepository: MissingWorkingRepository(),
             queueItemEditingRepository: MissingWorkingRepository(),
-            chuteRepository: MissingWorkingRepository(),
             finishSessionRepository: MissingWorkingRepository(),
             treatmentTemplatesRepository: MissingWorkingRepository(),
             treatmentTemplateCreator: MissingWorkingRepository(),

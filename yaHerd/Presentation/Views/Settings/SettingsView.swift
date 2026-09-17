@@ -24,11 +24,12 @@ struct SettingsView: View {
                         )
                     }
 
-                    Text("Data editing, sharing, and synchronization are disabled for this launch.")
+                    Text("Data editing is disabled for this launch.")
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
             }
+
             Section("Setup") {
                 NavigationLink {
                     DashboardRulesView()
@@ -57,28 +58,6 @@ struct SettingsView: View {
                         title: "Pasture",
                         subtitle: "Set default stocking and usable acreage assumptions.",
                         systemImage: "leaf"
-                    )
-                }
-            }
-
-            Section("Sharing") {
-                NavigationLink {
-                    SyncSettingsView()
-                } label: {
-                    SettingsRow(
-                        title: "Sync",
-                        subtitle: "View storage mode and iCloud sync status.",
-                        systemImage: "icloud"
-                    )
-                }
-
-                NavigationLink {
-                    HerdCollaborationView()
-                } label: {
-                    SettingsRow(
-                        title: "Herd Collaboration",
-                        subtitle: "Prepare the herd for sharing and review incoming invitations.",
-                        systemImage: "person.2"
                     )
                 }
             }
@@ -242,7 +221,7 @@ private struct AboutYaHerdView: View {
             }
 
             Section("Data & Privacy") {
-                Text("Herd records are stored in yaHerd app data and may be synchronized through your iCloud account when iCloud storage is enabled.")
+                Text("Herd records are stored locally in yaHerd app data on this device.")
 
                 Text("This build does not include advertising or third-party analytics tracking.")
                     .foregroundStyle(.secondary)

@@ -34,8 +34,7 @@ enum YaHerdSchemaV1: VersionedSchema {
             WorkingProtocolTemplate.self,
             FieldCheckSession.self,
             FieldCheckAnimalCheck.self,
-            FieldCheckFinding.self,
-            CollaborationRevisionRecord.self
+            FieldCheckFinding.self
         ]
     }
 }

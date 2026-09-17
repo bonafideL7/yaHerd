@@ -40,7 +40,6 @@ struct MainTabView: View {
             HerdTabBottomAccessory()
         }
         .appNavigationPresentations()
-        .sharingAccessRefreshesForNavigation()
         .onChange(of: applicationSettings.isDashboardEnabled) { _, isEnabled in
             if !isEnabled && navigation.selectedTab == .dashboard {
                 navigation.selectedTab = .home

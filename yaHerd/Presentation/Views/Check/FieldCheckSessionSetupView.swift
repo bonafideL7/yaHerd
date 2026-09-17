@@ -68,9 +68,7 @@ struct FieldCheckSessionSetupView: View {
             }
         }
         .navigationDestination(item: $startedRoute) { route in
-            IdentityAwareFieldCheckSessionView(
-                configuration: FieldCheckSessionLaunchConfiguration(sessionID: route.id)
-            )
+            FieldCheckSessionDetailView(sessionID: route.id)
         }
         .safeAreaInset(edge: .bottom) {
             FieldCheckStartBar(

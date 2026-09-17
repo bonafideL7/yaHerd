@@ -36,22 +36,6 @@ struct WorkingTreatmentEntryInput: Hashable {
         self.given = given
         self.dose = dose
     }
-
-    /// Transitional V1 source compatibility. New code passes stable item identity and dose.
-    init(
-        date: Date,
-        itemName: String,
-        given: Bool,
-        quantity: Double?
-    ) {
-        self.init(
-            date: date,
-            treatmentItemID: UUID(),
-            itemName: itemName,
-            given: given,
-            dose: WorkingTreatmentDose(amount: quantity)
-        )
-    }
 }
 
 struct WorkingPregnancyCheckInput: Hashable {
