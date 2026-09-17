@@ -659,6 +659,16 @@ enum AnimalRepositoryContract {
                 pastureID: north.id
             )
         )
+        let unselectedAnimal = try animalRepository.create(
+            input: makeAnimalInput(
+                name: "Movement Contract Cow Unselected",
+                tagNumber: "303",
+                sex: .female,
+                birthDate: date(year: 2021, month: 3, day: 6),
+                pastureID: north.id
+            )
+        )
+        let unselectedTimelineCountBeforeMove = try animalRepository.fetchTimeline(id: unselectedAnimal.id).count
         let movedAnimals = [animal, secondAnimal]
         let movedAnimalIDs = movedAnimals.map(\.id)
 
@@ -684,6 +694,29 @@ enum AnimalRepositoryContract {
             )
         }
 
+        let reloadedUnselected = try XCTUnwrap(
+            reloadedRepository.fetchAnimalDetail(id: unselectedAnimal.id),
+            "A batch move must not alter a source-pasture resident whose ID was not requested.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(reloadedUnselected.pastureID, north.id, file: file, line: line)
+        XCTAssertEqual(reloadedUnselected.pastureName, north.name, file: file, line: line)
+        let unselectedTimelineAfterMove = try reloadedRepository.fetchTimeline(id: unselectedAnimal.id)
+        XCTAssertEqual(
+            unselectedTimelineAfterMove.count,
+            unselectedTimelineCountBeforeMove,
+            "Moving a selected subset must not add timeline events for an unselected resident.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            unselectedTimelineAfterMove.contains { isMovementEvent($0, from: north.name, to: south.name) },
+            "Moving a selected subset must not create source-to-destination movement history for an unselected resident.",
+            file: file,
+            line: line
+        )
+
         let reloadedPastures = fixture.makePastureRepository()
         let northResidents = try reloadedPastures.fetchResidentAnimals(pastureID: north.id)
         let southResidents = try reloadedPastures.fetchResidentAnimals(pastureID: south.id)
@@ -701,6 +734,18 @@ enum AnimalRepositoryContract {
                 line: line
             )
         }
+        XCTAssertTrue(
+            northResidents.contains { $0.id == unselectedAnimal.id },
+            "An unselected animal must remain in the source pasture resident lookup.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            southResidents.contains { $0.id == unselectedAnimal.id },
+            "An unselected animal must not appear in the destination pasture resident lookup.",
+            file: file,
+            line: line
+        )
 
         try reloadedRepository.move(ids: movedAnimalIDs, toPastureID: nil)
 
@@ -724,7 +769,34 @@ enum AnimalRepositoryContract {
             )
         }
 
+        let unselectedAfterUnassignment = try XCTUnwrap(
+            unassignedRepository.fetchAnimalDetail(id: unselectedAnimal.id),
+            "Unassigning a selected subset must not alter an unselected source-pasture resident.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(unselectedAfterUnassignment.pastureID, north.id, file: file, line: line)
+        XCTAssertEqual(unselectedAfterUnassignment.pastureName, north.name, file: file, line: line)
+        let unselectedTimelineAfterUnassignment = try unassignedRepository.fetchTimeline(id: unselectedAnimal.id)
+        XCTAssertEqual(
+            unselectedTimelineAfterUnassignment.count,
+            unselectedTimelineCountBeforeMove,
+            "Unassigning a selected subset must not add timeline events for an unselected resident.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            unselectedTimelineAfterUnassignment.contains {
+                isMovementEvent($0, from: north.name, to: south.name)
+                    || isMovementEvent($0, from: south.name, to: "—")
+            },
+            "An unselected resident must not receive movement history from either batch operation.",
+            file: file,
+            line: line
+        )
+
         let unassignedPastures = fixture.makePastureRepository()
+        let remainingNorthResidents = try unassignedPastures.fetchResidentAnimals(pastureID: north.id)
         let remainingSouthResidents = try unassignedPastures.fetchResidentAnimals(pastureID: south.id)
         for movedAnimal in movedAnimals {
             XCTAssertFalse(
@@ -734,6 +806,18 @@ enum AnimalRepositoryContract {
                 line: line
             )
         }
+        XCTAssertTrue(
+            remainingNorthResidents.contains { $0.id == unselectedAnimal.id },
+            "An unselected animal must remain in the source pasture after the selected batch is unassigned.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            remainingSouthResidents.contains { $0.id == unselectedAnimal.id },
+            "An unselected animal must remain absent from the destination pasture after the selected batch is unassigned.",
+            file: file,
+            line: line
+        )
     }
 
     static func assertTagLifecyclePreservesHistory(
