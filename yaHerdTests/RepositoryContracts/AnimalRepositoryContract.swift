@@ -824,6 +824,7 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(promotedReplacement.number, "402", file: file, line: line)
         XCTAssertEqual(promotedReplacement.colorID, replacementColorID, file: file, line: line)
         XCTAssertEqual(withPromotedReplacement.displayTagNumber, "402", file: file, line: line)
+        XCTAssertEqual(withPromotedReplacement.displayTagColorID, replacementColorID, file: file, line: line)
         let demotedOriginal = try XCTUnwrap(
             withPromotedReplacement.activeTags.first { $0.id == originalTag.id },
             file: file,
@@ -866,6 +867,7 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloadedDemotedOriginal.number, "403", file: file, line: line)
         XCTAssertEqual(reloadedDemotedOriginal.colorID, updatedOriginalColorID, file: file, line: line)
         XCTAssertEqual(reloadedAfterPromotion.displayTagNumber, "402", file: file, line: line)
+        XCTAssertEqual(reloadedAfterPromotion.displayTagColorID, replacementColorID, file: file, line: line)
 
         let restoredOriginalPrimary = try promotedTagRepository.promoteTag(
             animalID: created.id,
@@ -905,6 +907,8 @@ enum AnimalRepositoryContract {
         XCTAssertTrue(reloadedReplacement.isPrimary, file: file, line: line)
         XCTAssertEqual(reloadedReplacement.number, "402", file: file, line: line)
         XCTAssertEqual(reloadedReplacement.colorID, replacementColorID, file: file, line: line)
+        XCTAssertEqual(reloaded.displayTagNumber, "402", file: file, line: line)
+        XCTAssertEqual(reloaded.displayTagColorID, replacementColorID, file: file, line: line)
         XCTAssertFalse(reloaded.activeTags.contains { $0.id == originalTag.id }, file: file, line: line)
         let retiredTag = try XCTUnwrap(
             reloaded.inactiveTags.first { $0.id == originalTag.id },
