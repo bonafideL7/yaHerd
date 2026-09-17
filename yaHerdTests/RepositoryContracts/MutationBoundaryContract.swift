@@ -156,9 +156,10 @@ struct MutationBoundaryContractPublication: Equatable, Sendable {
 /// not remain in `publications`; clear any setup traffic before returning the control.
 ///
 /// Success probes must execute the real public repository/transaction entry point represented by `operation` and make
-/// a durable business-state change. Failure probes must execute that same entry point with valid Domain input but
-/// inject a persistence failure after the write reaches persistence and before commit completes. A validation-only
-/// failure is not sufficient for the failure probe.
+/// a durable business-state change. Failure probes must execute that same entry point with valid Domain input and
+/// inject a persistence failure after the write reaches persistence so the logical command throws instead of reporting
+/// success. A validation-only failure is not sufficient. Detailed rollback behavior remains owned by the corresponding
+/// feature repository/transaction contract and is intentionally not duplicated here.
 ///
 /// `durableStateFingerprint()` must be persistence-neutral and deterministic. It must describe the durable business
 /// state affected by the operation and be read from committed backing storage through a fresh access scope; it must
@@ -256,7 +257,7 @@ enum MutationBoundaryContract {
         }
     }
 
-    static func assertFailedPersistenceWritesPublishNothingAndDoNotCommit(
+    static func assertFailedPersistenceWritesPublishNoSuccessEvent(
         using fixture: MutationBoundaryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
@@ -277,19 +278,9 @@ enum MutationBoundaryContract {
                 line: line
             )
 
-            let before = try control.durableStateFingerprint()
             XCTAssertThrowsError(
                 try control.performFailingMutation(),
                 "The failure probe for \(operation.rawValue) must surface its injected persistence failure.",
-                file: file,
-                line: line
-            )
-            let after = try control.durableStateFingerprint()
-
-            XCTAssertEqual(
-                after,
-                before,
-                "A failed \(operation.rawValue) persistence operation must not commit a durable state change.",
                 file: file,
                 line: line
             )
