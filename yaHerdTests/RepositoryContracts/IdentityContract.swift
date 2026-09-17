@@ -95,9 +95,8 @@ enum IdentityContract {
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
-        let control = fixture.makeTestControl()
-
         for kind in IdentityContractEntityKind.allCases {
+            let control = fixture.makeTestControl()
             let applicationID = UUID()
 
             try control.seedEntity(
