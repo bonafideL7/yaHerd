@@ -21,7 +21,7 @@ extension AnimalRepositoryContract {
 
         let created = try repository.create(
             input: readModelAnimalInput(
-                name: "Create Summary Contract Cow",
+                name: "Create Summary Contract Heifer",
                 tagNumber: "CS01",
                 tagColorID: createdTagColorID,
                 sex: .female,
@@ -41,13 +41,13 @@ extension AnimalRepositoryContract {
             line: line
         )
         XCTAssertEqual(createdSummary.id, created.id, file: file, line: line)
-        XCTAssertEqual(createdSummary.name, "Create Summary Contract Cow", file: file, line: line)
+        XCTAssertEqual(createdSummary.name, "Create Summary Contract Heifer", file: file, line: line)
         XCTAssertEqual(createdSummary.displayTagNumber, "CS01", file: file, line: line)
         XCTAssertEqual(createdSummary.displayTagColorID, createdTagColorID, file: file, line: line)
         XCTAssertNil(createdSummary.damDisplayTagNumber, file: file, line: line)
         XCTAssertNil(createdSummary.damDisplayTagColorID, file: file, line: line)
         XCTAssertEqual(createdSummary.sex.rawValue, Sex.female.rawValue, file: file, line: line)
-        XCTAssertEqual(createdSummary.animalType, .cow, file: file, line: line)
+        XCTAssertEqual(createdSummary.animalType, .heifer, file: file, line: line)
         XCTAssertEqual(createdSummary.firstDistinguishingFeature, "White blaze", file: file, line: line)
         XCTAssertEqual(createdSummary.birthDate, createdBirthDate, file: file, line: line)
         XCTAssertEqual(createdSummary.status.rawValue, AnimalStatus.dead.rawValue, file: file, line: line)
