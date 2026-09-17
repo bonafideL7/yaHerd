@@ -1283,53 +1283,15 @@ enum AnimalRepositoryContract {
         _ = try repository.addHealthRecord(
             animalID: animal.id,
             input: HealthRecordInput(
-                date: firstTreatmentDate,
-                treatment: firstTreatment,
-                notes: firstTreatmentNotes
-            )
-        )
-
-        let firstHealthReloadRepository = fixture.makeAnimalRepository()
-        XCTAssertTrue(
-            try firstHealthReloadRepository.fetchTimeline(id: animal.id).contains {
-                isHealthEvent(
-                    $0,
-                    date: firstTreatmentDate,
-                    treatment: firstTreatment,
-                    notes: firstTreatmentNotes
-                )
-            },
-            "Adding the first health record must durably persist it before any later mutation occurs.",
-            file: file,
-            line: line
-        )
-
-        _ = try firstHealthReloadRepository.addHealthRecord(
-            animalID: animal.id,
-            input: HealthRecordInput(
                 date: latestTreatmentDate,
                 treatment: latestTreatment,
                 notes: latestTreatmentNotes
             )
         )
 
-        let secondHealthReloadRepository = fixture.makeAnimalRepository()
-        let healthTimeline = try secondHealthReloadRepository.fetchTimeline(id: animal.id)
+        let latestHealthReloadRepository = fixture.makeAnimalRepository()
         XCTAssertTrue(
-            healthTimeline.contains {
-                isHealthEvent(
-                    $0,
-                    date: firstTreatmentDate,
-                    treatment: firstTreatment,
-                    notes: firstTreatmentNotes
-                )
-            },
-            "Adding a later health record must preserve the earlier health history.",
-            file: file,
-            line: line
-        )
-        XCTAssertTrue(
-            healthTimeline.contains {
+            try latestHealthReloadRepository.fetchTimeline(id: animal.id).contains {
                 isHealthEvent(
                     $0,
                     date: latestTreatmentDate,
@@ -1337,53 +1299,24 @@ enum AnimalRepositoryContract {
                     notes: latestTreatmentNotes
                 )
             },
-            "Adding a later health record must durably persist its exact payload.",
+            "Adding the newest health record must durably persist it before any backdated mutation occurs.",
             file: file,
             line: line
         )
 
-        _ = try secondHealthReloadRepository.addPregnancyCheck(
+        _ = try latestHealthReloadRepository.addHealthRecord(
             animalID: animal.id,
-            input: PregnancyCheckInput(
-                date: firstPregnancyDate,
-                result: firstPregnancyResult,
-                technician: firstTechnician,
-                estimatedDaysPregnant: nil,
-                dueDate: nil,
-                sireAnimalID: nil
+            input: HealthRecordInput(
+                date: firstTreatmentDate,
+                treatment: firstTreatment,
+                notes: firstTreatmentNotes
             )
         )
 
-        let firstPregnancyReloadRepository = fixture.makeAnimalRepository()
-        let firstPregnancyTimeline = try firstPregnancyReloadRepository.fetchTimeline(id: animal.id)
+        let backdatedHealthReloadRepository = fixture.makeAnimalRepository()
+        let healthTimeline = try backdatedHealthReloadRepository.fetchTimeline(id: animal.id)
         XCTAssertTrue(
-            firstPregnancyTimeline.contains {
-                isPregnancyEvent(
-                    $0,
-                    date: firstPregnancyDate,
-                    result: firstPregnancyResult,
-                    technician: firstTechnician
-                )
-            },
-            "Adding the first pregnancy check must durably persist it before any later pregnancy mutation occurs.",
-            file: file,
-            line: line
-        )
-        XCTAssertTrue(
-            firstPregnancyTimeline.contains {
-                isHealthEvent(
-                    $0,
-                    date: firstTreatmentDate,
-                    treatment: firstTreatment,
-                    notes: firstTreatmentNotes
-                )
-            },
-            "Adding pregnancy data must retain the earlier health history.",
-            file: file,
-            line: line
-        )
-        XCTAssertTrue(
-            firstPregnancyTimeline.contains {
+            healthTimeline.contains {
                 isHealthEvent(
                     $0,
                     date: latestTreatmentDate,
@@ -1391,12 +1324,25 @@ enum AnimalRepositoryContract {
                     notes: latestTreatmentNotes
                 )
             },
-            "Adding pregnancy data must retain the latest health history.",
+            "Adding a backdated health record must preserve the newer health history.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            healthTimeline.contains {
+                isHealthEvent(
+                    $0,
+                    date: firstTreatmentDate,
+                    treatment: firstTreatment,
+                    notes: firstTreatmentNotes
+                )
+            },
+            "Adding a backdated health record must durably persist its exact payload.",
             file: file,
             line: line
         )
 
-        _ = try firstPregnancyReloadRepository.addPregnancyCheck(
+        _ = try backdatedHealthReloadRepository.addPregnancyCheck(
             animalID: animal.id,
             input: PregnancyCheckInput(
                 date: latestPregnancyDate,
@@ -1404,6 +1350,74 @@ enum AnimalRepositoryContract {
                 technician: latestTechnician,
                 estimatedDaysPregnant: 90,
                 dueDate: latestPregnancyDueDate,
+                sireAnimalID: nil
+            )
+        )
+
+        let latestPregnancyReloadRepository = fixture.makeAnimalRepository()
+        let latestPregnancyTimeline = try latestPregnancyReloadRepository.fetchTimeline(id: animal.id)
+        XCTAssertTrue(
+            latestPregnancyTimeline.contains {
+                isPregnancyEvent(
+                    $0,
+                    date: latestPregnancyDate,
+                    result: latestPregnancyResult,
+                    technician: latestTechnician
+                )
+            },
+            "Adding the newest pregnancy check must durably persist it before any backdated mutation occurs.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            latestPregnancyTimeline.contains {
+                isHealthEvent(
+                    $0,
+                    date: firstTreatmentDate,
+                    treatment: firstTreatment,
+                    notes: firstTreatmentNotes
+                )
+            },
+            "Adding pregnancy data must retain the backdated health history.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            latestPregnancyTimeline.contains {
+                isHealthEvent(
+                    $0,
+                    date: latestTreatmentDate,
+                    treatment: latestTreatment,
+                    notes: latestTreatmentNotes
+                )
+            },
+            "Adding pregnancy data must retain the newest health history.",
+            file: file,
+            line: line
+        )
+        let latestPregnancySummary = try XCTUnwrap(
+            latestPregnancyReloadRepository.fetchAnimals().first { $0.id == animal.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(latestPregnancySummary.lastPregnancyCheckDate, latestPregnancyDate, file: file, line: line)
+        XCTAssertEqual(latestPregnancySummary.lastPregnancyStatus, .pregnant, file: file, line: line)
+        XCTAssertEqual(
+            latestPregnancySummary.expectedCalvingDate,
+            latestPregnancyDueDate,
+            "The newest pregnancy check must expose its explicit due date before any backdated check is inserted.",
+            file: file,
+            line: line
+        )
+
+        _ = try latestPregnancyReloadRepository.addPregnancyCheck(
+            animalID: animal.id,
+            input: PregnancyCheckInput(
+                date: firstPregnancyDate,
+                result: firstPregnancyResult,
+                technician: firstTechnician,
+                estimatedDaysPregnant: nil,
+                dueDate: nil,
                 sireAnimalID: nil
             )
         )
@@ -1445,7 +1459,7 @@ enum AnimalRepositoryContract {
                     technician: firstTechnician
                 )
             },
-            "Reloading must preserve the earlier pregnancy check exposed through the timeline.",
+            "Reloading must preserve the backdated pregnancy check exposed through the timeline.",
             file: file,
             line: line
         )
@@ -1458,7 +1472,7 @@ enum AnimalRepositoryContract {
                     technician: latestTechnician
                 )
             },
-            "Reloading must preserve the latest pregnancy check exposed through the timeline.",
+            "Reloading must preserve the newest pregnancy check exposed through the timeline.",
             file: file,
             line: line
         )
@@ -1471,28 +1485,74 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(
             summary.lastTreatmentDate,
             latestTreatmentDate,
-            "The summary must select the newest health record by date rather than the first stored record.",
+            "The summary must select the newest health record by date even when a backdated record was inserted later.",
             file: file,
             line: line
         )
         XCTAssertEqual(
             summary.lastPregnancyCheckDate,
             latestPregnancyDate,
-            "The summary must select the newest pregnancy check by date rather than the first stored record.",
+            "The summary must select the newest pregnancy check by date even when a backdated check was inserted later.",
             file: file,
             line: line
         )
         XCTAssertEqual(
             summary.lastPregnancyStatus,
             AnimalPregnancyStatus.pregnant,
-            "The summary must expose the result from the newest pregnancy check.",
+            "The summary must expose the result from the newest pregnancy check rather than the last inserted check.",
             file: file,
             line: line
         )
         XCTAssertEqual(
             summary.expectedCalvingDate,
             latestPregnancyDueDate,
-            "The summary must expose the explicit due date from the newest pregnancy check.",
+            "The summary must expose the explicit due date from the newest pregnancy check after a backdated check is inserted.",
+            file: file,
+            line: line
+        )
+
+        let computedDueAnimal = try reloadedRepository.create(
+            input: makeAnimalInput(
+                name: "Computed Calving Contract Cow",
+                tagNumber: "502",
+                sex: .female,
+                birthDate: date(year: 2021, month: 6, day: 7)
+            )
+        )
+        let computedPregnancyDate = date(year: 2026, month: 4, day: 1)
+        _ = try reloadedRepository.addPregnancyCheck(
+            animalID: computedDueAnimal.id,
+            input: PregnancyCheckInput(
+                date: computedPregnancyDate,
+                result: .pregnant,
+                technician: "Contract Tech C",
+                estimatedDaysPregnant: nil,
+                dueDate: nil,
+                sireAnimalID: nil
+            )
+        )
+
+        let computedDueReloadRepository = fixture.makeAnimalRepository()
+        let computedDueSummary = try XCTUnwrap(
+            computedDueReloadRepository.fetchAnimals().first { $0.id == computedDueAnimal.id },
+            file: file,
+            line: line
+        )
+        let expectedComputedDueDate = try XCTUnwrap(
+            Calendar.current.date(
+                byAdding: .day,
+                value: CattleReproductionRules.gestationDays,
+                to: computedPregnancyDate
+            ),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(computedDueSummary.lastPregnancyCheckDate, computedPregnancyDate, file: file, line: line)
+        XCTAssertEqual(computedDueSummary.lastPregnancyStatus, .pregnant, file: file, line: line)
+        XCTAssertEqual(
+            computedDueSummary.expectedCalvingDate,
+            expectedComputedDueDate,
+            "A pregnant check without an explicit due date must expose the gestation-rule fallback after reload.",
             file: file,
             line: line
         )
