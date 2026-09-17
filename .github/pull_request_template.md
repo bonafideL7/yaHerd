@@ -70,4 +70,18 @@ Add detail below the table when a cell cannot be explained briefly.
 
 ## Review instructions
 
-Review the complete diff against the matrix in one pass. A finding should identify a concrete defect, an incorrect matrix cell, or a materially distinct missing production path/invariant. Do not add findings solely for additional permutations of behavior already represented by the same production path and invariant. On re-review, verify prior fixes and changed code; do not restart an unrestricted edge-case search in unchanged code unless a fix demonstrates a broader category-level flaw.
+Review the complete diff against the complete matrix in one pass and report all currently identifiable material findings together.
+
+A finding must identify a concrete defect, an incorrect matrix cell, or a materially distinct missing production path/invariant. Do not add findings solely for additional fixture permutations, identifier combinations, ordering examples, adjacent assertions, speculative hardening, or future architecture improvements when the same production path and invariant are already represented.
+
+Before raising any cross-feature or cross-PR finding, verify the ownership/delegation sections above and any referenced permanent contract owner. Do not request duplicate implementation or coverage for behavior owned elsewhere unless this PR directly changes that behavior or the ownership declaration is demonstrably incorrect.
+
+Blocking/P1/P2 findings require a concrete material production impact such as a regression, data-integrity/persistence risk, materially uncovered production path or invariant, failure/recovery defect, crash, concurrency defect, security/privacy issue, or user-data-loss risk. A severity label alone does not make a finding blocking.
+
+On re-review, verify prior fixes and changed code; do not restart an unrestricted edge-case search in unchanged code unless a fix demonstrates a broader category-level flaw. If a broader flaw is exposed, report the complete identifiable category in that review rather than one sibling case at a time.
+
+After two corrective review cycles, any new finding in unchanged or previously reviewed behavior must identify the wrong/missing matrix row or cell, explain why it is materially distinct, explain why it could not reasonably have been identified in the prior comprehensive review, and state the concrete production impact if blocking. Otherwise it is non-blocking.
+
+Repeated non-convergence after two corrective cycles is a scope, design, ownership, or instruction problem. Resolve that underlying problem before continuing ordinary code review.
+
+If no material finding meets these rules, return a clean review. Zero findings is the expected successful stopping condition.
