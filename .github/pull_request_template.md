@@ -29,13 +29,24 @@
 <!--
 Create the matrix before implementation. Add one row per materially distinct production behavior, not one row per review comment or fixture permutation.
 
-Use: Covered / N/A / Delegated: <owner> / Unverified: <reason>
+Descriptive columns define scope and MUST contain concrete values:
+- Production behavior: name the concrete operation/behavior. Never use a status token here.
+- Production callers: name the concrete caller(s), use case(s), repository entry point(s), view model(s), or workflow(s). If there is genuinely no production caller, write `None: <reason>` after tracing production code. Never use `Covered`, `N/A`, or another status token as the caller list.
+- Contract owner: write `This PR`, a named permanent contract, or a specific PR/work item.
+
+Evaluation columns are Success through Identity / metadata. Each evaluation cell must use one of these forms:
+- `Covered: <specific evidence/path/contract>`
+- `N/A: <why this dimension does not apply>`
+- `Delegated: <specific owner>`
+- `Unverified: <specific reason>`
+
+Bare tokens such as `Covered` or `N/A` are invalid because they do not show what was evaluated or why.
 Add detail below the table when a cell cannot be explained briefly.
 -->
 
 | Production behavior | Production callers | Success | Error / rollback | Clear / reset | Batch / mixed input | Same context | Fresh reload | Read projections | Relationships / history | Cross-feature effects | Unrelated controls | Identity / metadata | Contract owner |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-|  |  |  |  |  |  |  |  |  |  |  |  |  | This PR |
+| Concrete behavior | Concrete caller(s) | Covered: ... | N/A: ... | N/A: ... | N/A: ... | Covered: ... | Covered: ... | Covered: ... | Covered: ... | Covered: ... | Covered: ... | Covered: ... | This PR |
 
 ## Matrix notes
 
@@ -71,6 +82,8 @@ Add detail below the table when a cell cannot be explained briefly.
 ## Review instructions
 
 Review the complete diff against the complete matrix in one pass and report all currently identifiable material findings together.
+
+First validate the matrix schema itself. `Production behavior`, `Production callers`, and `Contract owner` are descriptive scope fields and must contain concrete values. Status tokens belong only in evaluation columns, and evaluation cells must include evidence or rationale rather than a bare token. Treat schema ambiguity as one matrix-level finding, not as a sequence of row-by-row comments.
 
 A finding must identify a concrete defect, an incorrect matrix cell, or a materially distinct missing production path/invariant. Do not add findings solely for additional fixture permutations, identifier combinations, ordering examples, adjacent assertions, speculative hardening, or future architecture improvements when the same production path and invariant are already represented.
 
