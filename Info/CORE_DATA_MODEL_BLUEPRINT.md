@@ -374,6 +374,8 @@ Relationships:
 
 Do not create live relationships from movement history to pastures. Movement history must survive pasture deletion and must describe what occurred even after pasture names change.
 
+For Working completion, when the Animal is still in the working pen, `fromPastureIDSnapshot` / `fromPastureNameSnapshot` come from that queue item's captured collected-from snapshots. The `toPastureIDSnapshot` / `toPastureNameSnapshot` values come from the live destination resolved for the final completion assignment. If the Animal was already released from Working ownership and is currently in a pasture, the movement origin comes from that current live pasture instead.
+
 ### StatusRecord
 
 Attributes:
@@ -539,7 +541,6 @@ Attributes:
 - `statusRawValue: String`
 - `treatmentTemplateNameSnapshot: String`
 - `plannedTreatmentsData: Data`
-- `notes: String?`
 - `sourcePastureIDSnapshot: UUID?`
 - `sourcePastureNameSnapshot: String?`
 
@@ -560,11 +561,19 @@ Delete behavior:
 - `activeAnimals` nullify;
 - source pasture deletion only nullifies the live link; snapshots remain.
 
+Projection rule:
+
+- `WorkingSessionDetailSnapshot.sourcePastureID` / `sourcePastureName` come from the captured snapshot attributes, not from the live relationship;
+- `WorkingSessionDetailSnapshot.isSourcePastureAvailable` is derived from whether the live `sourcePasture` relationship still resolves. A historical non-nil source UUID must never imply that the deleted pasture is still selectable for collection or finish fallback;
+- session summary display uses the captured source-pasture name so later live renames/deletion do not rewrite Working history.
+
 Important differences from SwiftData:
 
 - do not persist deprecated `currentQueueIndex`;
+- do not port legacy SwiftData `notes`; there is no Domain Working-session notes contract or production caller;
 - use treatment terminology rather than `protocolName` / `protocolItems` persistence names;
-- planned treatment items remain an ordered encoded value snapshot because they are session/template-owned values, while `WorkingTreatmentRecord.treatmentItemID` references the stable item UUID inside the session snapshot.
+- planned treatment items remain an ordered encoded value snapshot because they are session/template-owned values. `WorkingTreatmentRecord.treatmentItemID` is a stable treatment-entry UUID that may match a planned item or represent a valid one-off treatment; do not enforce current-plan membership;
+- preserve all declared `WorkingSessionStatus` raw values, including read-compatible `cancelled`, even though current production flows do not create new cancelled sessions.
 
 ### WorkingQueueItem
 
@@ -573,7 +582,6 @@ Attributes:
 - `id: UUID`
 - `statusRawValue: String`
 - `completedAt: Date?`
-- `workNotes: String?`
 - `animalIDSnapshot: UUID`
 - `animalTagNumberSnapshot: String`
 - `animalTagColorIDSnapshot: UUID?`
@@ -597,9 +605,14 @@ Relationships:
 Important differences from SwiftData:
 
 - do not persist deprecated `queueOrder`; presentation sorting is based on the product's animal/tag rules;
-- the animal identity/display snapshots are captured when the queue item is created and remain the historical source for the Working session;
+- do not port legacy SwiftData `workNotes`; Working work notes are represented by the session-linked generated observation record exposed through `WorkingQueueItemEditorSnapshot.observationNotes`;
+- the animal identity/display snapshots and collected-from pasture UUID/name snapshots are captured when the queue item is created and remain historical values for that animal's collection event. If the live source pasture is renamed mid-session, animals collected afterward capture the new live name while the session source snapshot and earlier queue rows retain their original names;
+- an explicit primary-tag replacement performed through the Working queue is part of that session's work and updates the queue's captured animal tag number/color snapshots in the same logical transaction; unrelated later Animal edits do not rewrite those snapshots;
 - preserve animal sex and dam tag number/color in addition to the animal's own tag so completed-session history still satisfies `WorkingQueueItemSnapshot` after the live Animal relationship is nullified;
-- snapshots preserve session history if an animal or pasture later disappears or its current display relationships change.
+- snapshots preserve session history if an animal or pasture later disappears or its current display relationships change;
+- queue destination/collected-from snapshot UUIDs remain historical values after live pasture deletion. Editor/finish workflows must revalidate those UUIDs against live pasture reference data before allowing a new mutation;
+- destination selection may be provisional while a session is active. `completeSession` resolves the final live destination for every queue item and writes the final destination UUID/name snapshots in the same transaction as movement/session completion. A pasture rename before finish is therefore reflected in the committed destination snapshot; later renames do not rewrite finished history;
+- preserve all declared `WorkingQueueStatus` raw values, including read-compatible `skipped`. Current production flows do not create new skipped rows, but persisted skipped history remains Not Worked and must continue decoding after cutover.
 
 ### WorkingTreatmentRecord
 
@@ -621,7 +634,7 @@ Relationships:
 - `animal -> Animal?`
 - `session -> WorkingSession`
 
-`treatmentItemID` references an item UUID from the session's `plannedTreatmentsData`. Do not create a relationship to the reusable template; the session owns the treatment-plan snapshot used for actual work.
+`treatmentItemID` is the stable logical identifier captured for the treatment entry. It may match a session planned-treatment item, may refer to an item that was later removed from/replaced in the session plan, or may represent a valid one-off treatment that was never in the plan. Do not enforce membership in `plannedTreatmentsData`, and do not create a relationship to the reusable template. `itemNameSnapshot`, `given`, dose, and route remain historical event values independent of later plan/template edits.
 
 Deleting a session cascades its treatment records. Animal hard deletion nullifies the working-history relationship rather than deleting the session record; the animal UUID snapshot remains available for historical diagnostics.
 

@@ -142,7 +142,10 @@ struct WorkingSessionDetailView: View {
     private var deleteConfirmationMessage: String {
         guard let session = viewModel.session else { return "" }
         if session.status == .active {
-            return "Animals in the working pen will return to their source pasture. The session and its recorded work will be deleted."
+            if session.isSourcePastureAvailable {
+                return "Animals still owned by this session will return to their source pasture. The session and its recorded work will be deleted."
+            }
+            return "Animals still owned by this session will leave the working pen without a pasture assignment because the original source pasture is no longer available. The session and its recorded work will be deleted."
         }
         return "The completed session and its recorded work will be deleted."
     }
@@ -320,6 +323,7 @@ struct WorkingSessionDetailView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .buttonStyle(.bordered)
+                .disabled(!session.isSourcePastureAvailable)
             }
         } else {
             ContentUnavailableView(
@@ -374,7 +378,11 @@ struct WorkingSessionDetailView: View {
                     Label("Add Animals", systemImage: "tag.badge.plus")
                 }
                 .accessibilityLabel("Add Animals")
-                .disabled(session.sourcePastureID == nil || !dataAccessMode.allowsDataMutations)
+                .disabled(
+                    !session.isSourcePastureAvailable
+                        || session.sourcePastureID == nil
+                        || !dataAccessMode.allowsDataMutations
+                )
 
                 Button {
                     showingFinish = true
