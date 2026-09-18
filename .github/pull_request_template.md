@@ -27,7 +27,7 @@
 ## Comprehensive behavioral coverage matrix
 
 <!--
-Create the matrix before implementation. Add one row per materially distinct production behavior, not one row per review comment or fixture permutation.
+Create the matrix before implementation. Add one row per materially distinct production behavior, not one row per review comment or fixture permutation. The matrix is a living inventory, not a ceiling: if tracing, implementation, or review discovers a materially distinct affected behavior, expand the matrix before addressing it.
 
 Descriptive columns define scope and MUST contain concrete values:
 - Production behavior: name the concrete operation/behavior. Never use a status token here.
@@ -81,11 +81,11 @@ Add detail below the table when a cell cannot be explained briefly.
 
 ## Review instructions
 
-Review the complete diff against the complete matrix in one pass and report all currently identifiable material findings together.
+Review the complete diff against the complete matrix, actual affected production call graph, and every affected production read projection in one pass, and report all currently identifiable material findings together. If a materially distinct affected behavior or projection is missing from the matrix, expand the matrix rather than treating the omission as out of scope.
 
 First validate the matrix schema itself. `Production behavior`, `Production callers`, and `Contract owner` are descriptive scope fields and must contain concrete values. Status tokens belong only in evaluation columns, and evaluation cells must include evidence or rationale rather than a bare token. Treat schema ambiguity as one matrix-level finding, not as a sequence of row-by-row comments.
 
-A finding must identify a concrete defect, an incorrect matrix cell, or a materially distinct missing production path/invariant. Do not add findings solely for additional fixture permutations, identifier combinations, ordering examples, adjacent assertions, speculative hardening, or future architecture improvements when the same production path and invariant are already represented.
+A finding must identify a concrete defect, an incorrect matrix cell, or a materially distinct missing production path/invariant. The matrix must expand for real missing production behavior; it must not be used to suppress such a finding. Do not add findings solely for additional equivalent fixture permutations, identifier combinations, ordering examples, adjacent assertions, speculative hardening, or future architecture improvements when the same production path and invariant are already represented.
 
 Before raising any cross-feature or cross-PR finding, verify the ownership/delegation sections above and any referenced permanent contract owner. Do not request duplicate implementation or coverage for behavior owned elsewhere unless this PR directly changes that behavior or the ownership declaration is demonstrably incorrect.
 
