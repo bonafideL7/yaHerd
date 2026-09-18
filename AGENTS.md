@@ -22,7 +22,7 @@ Do not preserve previously generated code merely because it already exists. Repl
 
 Every substantive change must begin with a comprehensive behavioral coverage matrix before production code is edited.
 
-The matrix is the finite definition of implementation and review completeness for the PR. It must describe materially distinct production behavior, not individual review comments or every imaginable fixture permutation.
+The matrix is the current explicit inventory of implementation and review coverage for the PR. It must describe materially distinct production behavior, not individual review comments or every imaginable fixture permutation. It is not a ceiling on implementation or review: if production tracing, implementation, or review exposes a materially distinct behavior that is not represented, expand the matrix before addressing that behavior.
 
 ### Required matrix dimensions
 
@@ -72,6 +72,7 @@ A matrix with blank descriptive scope cells, status tokens in descriptive cells,
 - Columns represent behavioral dimensions that must be consciously evaluated.
 - Create the matrix before implementation and keep it current as understanding changes.
 - Trace production code to populate the matrix; do not infer coverage solely from existing tests.
+- Omission from the matrix never makes a real affected production behavior out of scope. If a materially distinct caller, lifecycle state, persistence boundary, failure mode, read projection, relationship, cross-feature effect, or invariant is discovered, expand the matrix and then address the full category.
 - Every applicable matrix cell must be implemented and protected by an appropriate existing or new contract, explicitly delegated to another owner, or intentionally documented as unverified when execution is prohibited by these instructions.
 - One invariant must have one permanent contract owner. Do not duplicate coverage across PRs merely because the same state appears in multiple features.
 - Representative cases are sufficient for equivalent fixture permutations. Do not create Cartesian-product test suites when the same production path and invariant are already exercised.
@@ -102,11 +103,11 @@ A PR is behaviorally complete when:
 - production callers and read projections have been traced against the final implementation
 - no material matrix row or cell remains incorrect or unexplained
 
-The matrix is finite. Completeness does not require proving that no additional test input can be imagined.
+The matrix may be finite at any given review point, but it must expand whenever a materially distinct affected production behavior is discovered. Completeness does not require proving that no additional equivalent test input can be imagined; it does require that discovered real production behavior is not excluded merely because it was absent from an earlier matrix.
 
 ## 3. Keep implementation scope intentional
 
-Change only files required by the design and coverage matrix.
+Change only files required by the design and the actual affected production behavior represented or discovered through the coverage-matrix process.
 
 Do not introduce unrelated cleanup, new abstractions, new state mechanisms, or new persistence/synchronization behavior unless required for correctness.
 
@@ -169,7 +170,7 @@ Before pushing a completed change:
 1. Inspect the full diff against the PR base.
 2. Validate the matrix schema, then reconcile the final diff against every row and applicable cell in the coverage matrix.
 3. Trace affected production callers and mutation paths again.
-4. Trace every production read projection listed in the matrix.
+4. Trace every affected production read projection, including any discovered projection not yet represented in the matrix; expand the matrix before addressing newly discovered behavior.
 5. Look specifically for missed paths, duplicated logic, unnecessary abstractions, stale code, persistence/sync divergence, races, missing failure handling, identity/timestamp/order regressions, and unintended changes to control records.
 6. If one defect reveals a category-level omission, audit and fix the entire category before pushing.
 7. Review the corrected full diff and matrix again.
@@ -180,11 +181,11 @@ GitHub review is the independent final check, not the mechanism used to discover
 
 ## 8. Review convergence
 
-Code review must converge. The goal is to validate the declared behavioral surface, not to generate an unlimited sequence of additional permutations.
+Code review must converge. The goal is to validate the actual affected production surface, using the matrix as a living inventory, not to generate an unlimited sequence of equivalent permutations.
 
 ### Initial review
 
-Review the complete diff against the complete coverage matrix.
+Review the complete diff against the complete coverage matrix and the actual affected production call graph/read projections. If tracing exposes materially distinct behavior not yet represented, expand the matrix before continuing.
 
 - Validate matrix schema first. If a schema defect affects multiple rows/cells, report the schema defect once at the matrix level rather than producing repeated row-level findings.
 - Inspect the entire declared surface before submitting findings.
@@ -209,7 +210,7 @@ Blocking findings, including P1/P2 findings, require at least one concrete mater
 - a materially uncovered production caller, lifecycle state, read projection, relationship, or failure/recovery path
 - a security, privacy, concurrency, crash, or user-data-loss risk
 
-Do not block completion for speculative hardening, defense-in-depth ideas without a concrete failure path, additional representative fixtures, theoretical input permutations, stylistic preferences, or future architecture improvements that are outside the declared matrix.
+Do not block completion for speculative hardening, defense-in-depth ideas without a concrete failure path, additional representative fixtures, theoretical input permutations, stylistic preferences, or future architecture improvements outside the actual affected production scope. Absence from the matrix alone is not evidence that a real affected production behavior is out of scope.
 
 A severity label does not make an otherwise non-material finding blocking. The reviewer must explain the concrete production path and impact that justify the severity.
 
@@ -243,9 +244,9 @@ Repeated non-convergence after two corrective cycles must be treated as a scope,
 
 ### Review stopping rule
 
-Review is complete when all prior material findings are resolved and the reviewer cannot identify an incorrect matrix cell or a materially distinct missing production behavior/invariant.
+Review is complete when all prior material findings are resolved and the reviewer cannot identify an incorrect matrix cell or a materially distinct missing production behavior/invariant after tracing the actual affected production surface.
 
-The existence of additional conceivable edge-case inputs is not grounds to continue review.
+If a materially distinct affected behavior is discovered during review, add it to the matrix rather than disregarding it because the current matrix omitted it. The existence of additional conceivable equivalent edge-case inputs is not grounds to continue review.
 
 ## 9. Cross-PR and contract ownership
 
