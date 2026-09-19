@@ -280,11 +280,13 @@ struct WorkingFinishSessionView: View {
 
             if selectedExceptionItems.isEmpty {
                 Text(
-                    otherPastures.isEmpty
-                        ? "No live destination pastures are available."
-                        : (requiresExplicitDestinationForEveryItem
-                            ? "Every animal needs a destination."
-                            : "No destination exceptions.")
+                    !viewModel.hasLoadedPastureOptions
+                        ? "Pasture destinations are unavailable until loading succeeds."
+                        : (otherPastures.isEmpty
+                            ? "No live destination pastures are available."
+                            : (requiresExplicitDestinationForEveryItem
+                                ? "Every animal needs a destination."
+                                : "No destination exceptions."))
                 )
                 .foregroundStyle(.secondary)
             } else {
