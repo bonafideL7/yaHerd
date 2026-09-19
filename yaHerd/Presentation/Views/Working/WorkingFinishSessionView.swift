@@ -69,6 +69,7 @@ struct WorkingFinishSessionView: View {
 
     private var canFinish: Bool {
         guard dataAccessMode.allowsDataMutations,
+              viewModel.hasLoadedPastureOptions,
               let session,
               session.status == .active,
               !orderedItems.isEmpty else {
@@ -91,6 +92,9 @@ struct WorkingFinishSessionView: View {
         guard let session else { return "Loading session…" }
         guard session.status == .active else {
             return "This session is already completed."
+        }
+        guard viewModel.hasLoadedPastureOptions else {
+            return "Pasture destinations couldn’t be loaded. Retry before finishing."
         }
 
         if requiresExplicitDestinationForEveryItem {
@@ -125,6 +129,11 @@ struct WorkingFinishSessionView: View {
             Form {
                 summarySection
                 defaultDestinationSection
+
+                if viewModel.needsPastureOptionsRetry {
+                    pastureLoadRecoverySection
+                }
+
                 exceptionSection
 
                 if !unfinishedItems.isEmpty {
@@ -151,6 +160,11 @@ struct WorkingFinishSessionView: View {
             }
             .onChange(of: viewModel.session?.id) { _, _ in
                 seedExceptions(force: true)
+            }
+            .onChange(of: viewModel.hasLoadedPastureOptions) { _, loaded in
+                if loaded {
+                    revalidateExceptionDestinationsAgainstLivePastures()
+                }
             }
             .onChange(of: exceptionAnimalIDs) { _, _ in
                 synchronizeExceptionDestinations()
@@ -293,6 +307,18 @@ struct WorkingFinishSessionView: View {
         }
     }
 
+    private var pastureLoadRecoverySection: some View {
+        Section {
+            Button {
+                viewModel.retryPastureOptions()
+            } label: {
+                Label("Retry Loading Pastures", systemImage: "arrow.clockwise")
+            }
+        } footer: {
+            Text("Saved destination assignments are preserved until live pasture data can be loaded.")
+        }
+    }
+
     private var unfinishedSection: some View {
         Section {
             ForEach(unfinishedItems) { item in
@@ -325,13 +351,14 @@ struct WorkingFinishSessionView: View {
         if !force && !exceptionAnimalIDs.isEmpty { return }
 
         let livePastureIDs = Set(viewModel.pastures.map(\.id))
+        let pastureOptionsAreAuthoritative = viewModel.hasLoadedPastureOptions
 
         if requiresExplicitDestinationForEveryItem {
             exceptionAnimalIDs = Set(session.queueItems.map(\.id))
             exceptionDestinationIDs = Dictionary(
                 uniqueKeysWithValues: session.queueItems.compactMap { item in
                     guard let destinationID = item.destinationPastureID,
-                          livePastureIDs.contains(destinationID) else {
+                          !pastureOptionsAreAuthoritative || livePastureIDs.contains(destinationID) else {
                         return nil
                     }
                     return (item.id, destinationID)
@@ -349,7 +376,7 @@ struct WorkingFinishSessionView: View {
         exceptionDestinationIDs = Dictionary(
             uniqueKeysWithValues: existingExceptions.compactMap { item in
                 guard let destinationID = item.destinationPastureID,
-                      livePastureIDs.contains(destinationID) else {
+                      !pastureOptionsAreAuthoritative || livePastureIDs.contains(destinationID) else {
                     return nil
                 }
                 return (item.id, destinationID)
@@ -368,10 +395,20 @@ struct WorkingFinishSessionView: View {
         {
             if let existingDestination = item.destinationPastureID,
                existingDestination != liveSourcePastureID,
-               livePastureIDs.contains(existingDestination) {
+               (!viewModel.hasLoadedPastureOptions || livePastureIDs.contains(existingDestination)) {
                 exceptionDestinationIDs[item.id] = existingDestination
             }
         }
+    }
+
+    private func revalidateExceptionDestinationsAgainstLivePastures() {
+        guard viewModel.hasLoadedPastureOptions else { return }
+
+        let livePastureIDs = Set(viewModel.pastures.map(\.id))
+        exceptionDestinationIDs = exceptionDestinationIDs.filter {
+            exceptionAnimalIDs.contains($0.key) && livePastureIDs.contains($0.value)
+        }
+        synchronizeExceptionDestinations()
     }
 
     private func destinationBinding(for itemID: UUID) -> Binding<UUID?> {
