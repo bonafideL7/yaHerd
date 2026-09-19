@@ -79,8 +79,10 @@ extension WorkingSessionAnimalWorkView {
     }
 
     func loadPastures() {
+        pastureReferencesLoaded = false
         do {
             availablePastures = try pastureRepository.fetchPastureOptions()
+            pastureReferencesLoaded = true
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
             showingError = true

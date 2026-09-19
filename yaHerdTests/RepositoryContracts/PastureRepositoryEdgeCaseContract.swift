@@ -1064,7 +1064,37 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(sessionAfterDeletion.status, .active, file: file, line: line)
         XCTAssertEqual(sessionAfterDeletion.sourcePastureID, sourcePasture.id, file: file, line: line)
         XCTAssertEqual(sessionAfterDeletion.sourcePastureName, "Writable Working Source", file: file, line: line)
+        XCTAssertFalse(sessionAfterDeletion.isSourcePastureAvailable, file: file, line: line)
         XCTAssertEqual(sessionAfterDeletion.queueItems.count, 2, file: file, line: line)
+
+        let completedItemAfterDeletion = try XCTUnwrap(
+            sessionAfterDeletion.queueItems.first { $0.id == queueItemID },
+            "The completed item must retain its historical destination snapshot after the live pasture is deleted.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(completedItemAfterDeletion.animalID, animal.id, file: file, line: line)
+        XCTAssertEqual(completedItemAfterDeletion.animalName, "Writable Working Cow", file: file, line: line)
+        XCTAssertEqual(completedItemAfterDeletion.collectedFromPastureID, sourcePasture.id, file: file, line: line)
+        XCTAssertEqual(completedItemAfterDeletion.collectedFromPastureName, "Writable Working Source", file: file, line: line)
+        XCTAssertEqual(completedItemAfterDeletion.destinationPastureID, deletedDestination.id, file: file, line: line)
+        XCTAssertEqual(
+            completedItemAfterDeletion.destinationPastureName,
+            "Writable Working Deleted Destination",
+            file: file,
+            line: line
+        )
+
+        let completedEditorAfterDeletion = try XCTUnwrap(
+            postDeletionWorking.fetchQueueItemEditor(
+                sessionID: sessionID,
+                queueItemID: queueItemID
+            ),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(completedEditorAfterDeletion.destinationPastureID, deletedDestination.id, file: file, line: line)
+
         let queuedItemAfterDeletion = try XCTUnwrap(
             sessionAfterDeletion.queueItems.first { $0.id == queuedItemID },
             "The queued item must remain in the affected Working session after its source pasture is deleted.",
@@ -1075,7 +1105,9 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(queuedItemAfterDeletion.status, .queued, file: file, line: line)
         XCTAssertNil(queuedItemAfterDeletion.completedAt, file: file, line: line)
         XCTAssertEqual(queuedItemAfterDeletion.animalID, queuedAnimal.id, file: file, line: line)
+        XCTAssertEqual(queuedItemAfterDeletion.animalName, "Writable Working Queued Cow", file: file, line: line)
         XCTAssertEqual(queuedItemAfterDeletion.animalDisplayTagNumber, "WW-2", file: file, line: line)
+        XCTAssertEqual(queuedItemAfterDeletion.collectedFromPastureID, sourcePasture.id, file: file, line: line)
         XCTAssertEqual(queuedItemAfterDeletion.collectedFromPastureName, "Writable Working Source", file: file, line: line)
         XCTAssertNil(queuedItemAfterDeletion.destinationPastureID, file: file, line: line)
         XCTAssertNil(queuedItemAfterDeletion.destinationPastureName, file: file, line: line)
@@ -1177,6 +1209,7 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(finalSession.status, .finished, file: file, line: line)
         XCTAssertEqual(finalSession.sourcePastureID, sourcePasture.id, file: file, line: line)
         XCTAssertEqual(finalSession.sourcePastureName, "Writable Working Source", file: file, line: line)
+        XCTAssertFalse(finalSession.isSourcePastureAvailable, file: file, line: line)
         XCTAssertEqual(finalSession.queueItems.count, 2, file: file, line: line)
         let finalQueueItem = try XCTUnwrap(
             finalSession.queueItems.first { $0.id == queueItemID },
@@ -1323,3 +1356,266 @@ enum PastureRepositoryEdgeCaseContract {
         )
     }
 }
+
+@MainActor
+extension PastureRepositoryEdgeCaseContract {
+    static func assertDeletingActiveWorkingSessionAfterSourcePastureDeletionLeavesAnimalUnassigned(
+        using fixture: PastureDeletionWorkflowContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let pastureRepository = fixture.makePastureRepository()
+        let source = try pastureRepository.create(
+            input: PastureInput(
+                name: "Deleted Working Source Before Session Delete",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animal = try fixture.makeAnimalRepository().create(
+            input: AnimalInput(
+                name: "Working Source Deleted Cow",
+                tagNumber: "WSD-1",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSince1970: 1_577_836_800),
+                status: .active,
+                pastureID: source.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+
+        let working = fixture.makeWorkingRepository()
+        let sessionID = try working.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSince1970: 1_781_500_000),
+                sourcePastureID: source.id,
+                treatmentTemplateName: "Deleted Source Session Delete",
+                plannedTreatments: [],
+                animalIDs: [animal.id]
+            )
+        )
+        let beforePastureDeletion = try XCTUnwrap(
+            working.fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        let queueItem = try XCTUnwrap(
+            beforePastureDeletion.queueItems.first,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(beforePastureDeletion.sourcePastureID, source.id, file: file, line: line)
+        XCTAssertTrue(beforePastureDeletion.isSourcePastureAvailable, file: file, line: line)
+        XCTAssertEqual(queueItem.collectedFromPastureID, source.id, file: file, line: line)
+
+        let archivedAt = Date(timeIntervalSince1970: 1_781_500_100)
+        try fixture.deletePastures([source.id], archivedAt)
+
+        let afterPastureDeletion = try XCTUnwrap(
+            fixture.makeWorkingRepository().fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(afterPastureDeletion.sourcePastureID, source.id, file: file, line: line)
+        XCTAssertEqual(afterPastureDeletion.sourcePastureName, "Deleted Working Source Before Session Delete", file: file, line: line)
+        XCTAssertFalse(afterPastureDeletion.isSourcePastureAvailable, file: file, line: line)
+        XCTAssertEqual(afterPastureDeletion.queueItems.first?.collectedFromPastureID, source.id, file: file, line: line)
+        XCTAssertEqual(afterPastureDeletion.queueItems.first?.collectedFromPastureName, "Deleted Working Source Before Session Delete", file: file, line: line)
+
+        let inWorkingPen = try XCTUnwrap(
+            fixture.makeAnimalRepository().fetchAnimalDetail(id: animal.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(inWorkingPen.location, .workingPen, file: file, line: line)
+        XCTAssertNil(inWorkingPen.pastureID, file: file, line: line)
+
+        try fixture.makeWorkingRepository().deleteSession(id: sessionID)
+
+        XCTAssertNil(
+            try fixture.makeWorkingRepository().fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        let restored = try XCTUnwrap(
+            fixture.makeAnimalRepository().fetchAnimalDetail(id: animal.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            restored.location,
+            .pasture,
+            "Deleting the active session must release the animal from Working ownership even when its historical source pasture no longer exists.",
+            file: file,
+            line: line
+        )
+        XCTAssertNil(
+            restored.pastureID,
+            "A deleted historical source pasture must not be recreated or reattached during active-session deletion.",
+            file: file,
+            line: line
+        )
+        XCTAssertNil(restored.pastureName, file: file, line: line)
+    }
+}
+
+@MainActor
+extension PastureRepositoryEdgeCaseContract {
+    static func assertWorkingFinishRequiresLiveDestinationAfterSourcePastureDeletion(
+        using fixture: PastureDeletionWorkflowContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let pastures = fixture.makePastureRepository()
+        let source = try pastures.create(
+            input: PastureInput(
+                name: "Deleted Source Finish Contract",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let survivingDestination = try pastures.create(
+            input: PastureInput(
+                name: "Surviving Finish Destination",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animal = try fixture.makeAnimalRepository().create(
+            input: AnimalInput(
+                name: "Deleted Source Finish Cow",
+                tagNumber: "DSF-1",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSince1970: 1_577_836_800),
+                status: .active,
+                pastureID: source.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+
+        let working = fixture.makeWorkingRepository()
+        let sessionID = try working.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSince1970: 1_781_600_000),
+                sourcePastureID: source.id,
+                treatmentTemplateName: "Deleted Source Finish",
+                plannedTreatments: [],
+                animalIDs: [animal.id]
+            )
+        )
+        let queueItemID = try XCTUnwrap(
+            working.fetchSessionDetail(id: sessionID)?.queueItems.first?.id,
+            file: file,
+            line: line
+        )
+
+        try fixture.deletePastures(
+            [source.id],
+            Date(timeIntervalSince1970: 1_781_600_100)
+        )
+
+        let beforeFailure = try XCTUnwrap(
+            fixture.makeWorkingRepository().fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(beforeFailure.sourcePastureID, source.id, file: file, line: line)
+        XCTAssertFalse(beforeFailure.isSourcePastureAvailable, file: file, line: line)
+        let animalBeforeFailure = try XCTUnwrap(
+            fixture.makeAnimalRepository().fetchAnimalDetail(id: animal.id),
+            file: file,
+            line: line
+        )
+        let timelineBeforeFailure = Set(
+            try fixture.makeAnimalRepository().fetchTimeline(id: animal.id)
+        )
+
+        XCTAssertThrowsError(
+            try fixture.makeWorkingRepository().completeSession(
+                id: sessionID,
+                assignments: [
+                    WorkingQueueDestinationAssignment(
+                        queueItemID: queueItemID,
+                        destinationPastureID: nil
+                    )
+                ]
+            ),
+            file: file,
+            line: line
+        ) { error in
+            XCTAssertEqual(error as? WorkingRepositoryError, .pastureNotFound, file: file, line: line)
+        }
+
+        XCTAssertEqual(
+            try fixture.makeWorkingRepository().fetchSessionDetail(id: sessionID),
+            beforeFailure,
+            "A deleted source cannot satisfy nil/source fallback and must fail before finishing.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try fixture.makeAnimalRepository().fetchAnimalDetail(id: animal.id),
+            animalBeforeFailure,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            Set(try fixture.makeAnimalRepository().fetchTimeline(id: animal.id)),
+            timelineBeforeFailure,
+            file: file,
+            line: line
+        )
+
+        try fixture.makeWorkingRepository().completeSession(
+            id: sessionID,
+            assignments: [
+                WorkingQueueDestinationAssignment(
+                    queueItemID: queueItemID,
+                    destinationPastureID: survivingDestination.id
+                )
+            ]
+        )
+
+        let finished = try XCTUnwrap(
+            fixture.makeWorkingRepository().fetchSessionDetail(id: sessionID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(finished.status, .finished, file: file, line: line)
+        XCTAssertEqual(
+            finished.queueItems.first { $0.id == queueItemID }?.destinationPastureID,
+            survivingDestination.id,
+            file: file,
+            line: line
+        )
+        let returned = try XCTUnwrap(
+            fixture.makeAnimalRepository().fetchAnimalDetail(id: animal.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(returned.location, .pasture, file: file, line: line)
+        XCTAssertEqual(returned.pastureID, survivingDestination.id, file: file, line: line)
+    }
+}
+

@@ -22,7 +22,7 @@ struct WorkingCollectAnimalsView: View {
     @State private var searchText: String = ""
 
     private var eligibleAnimals: [AnimalSummary] {
-        guard let session else { return [] }
+        guard let session, session.isSourcePastureAvailable else { return [] }
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let existingAnimalIDs = Set(session.queueItems.compactMap(\.animalID))
         return WorkingCollectAnimalsEligibility.candidates(
@@ -82,7 +82,10 @@ struct WorkingCollectAnimalsView: View {
                     Button("Move") {
                         collectSelected()
                     }
-                    .disabled(selectedAnimalIDs.isEmpty || session == nil)
+                    .disabled(
+                        selectedAnimalIDs.isEmpty
+                            || session?.isSourcePastureAvailable != true
+                    )
                     .disabledWhenDataReadOnly()
                 }
                 ToolbarItem(placement: .cancellationAction) {
@@ -109,7 +112,7 @@ struct WorkingCollectAnimalsView: View {
     }
 
     private func collectSelected() {
-        guard session != nil else { return }
+        guard session?.isSourcePastureAvailable == true else { return }
         do {
             try repository.collectAnimals(sessionID: sessionID, animalIDs: Array(selectedAnimalIDs))
             dismiss()
