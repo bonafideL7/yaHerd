@@ -34,6 +34,9 @@ struct PregnancyCheckContractSnapshot: Equatable {
 protocol HealthRepositoryContractTestControl {
     func healthRecords(forAnimalID animalID: UUID) throws -> [HealthRecordContractSnapshot]
     func pregnancyChecks(forAnimalID animalID: UUID) throws -> [PregnancyCheckContractSnapshot]
+
+    /// These unscoped probes must return every persisted row, including rows whose owner relationship is nil,
+    /// so the permanent contract can detect orphaned children instead of allowing a runner to filter them away.
     func allHealthRecords() throws -> [HealthRecordContractSnapshot]
     func allPregnancyChecks() throws -> [PregnancyCheckContractSnapshot]
 }
@@ -54,8 +57,9 @@ struct HealthRepositoryContractFixture {
 /// Ownership boundaries:
 /// - This contract owns direct Animal health-record and pregnancy-check child identity, complete persisted payload,
 ///   sire-nullification behavior, orphan prevention, and animal hard-delete cascading.
-/// - `AnimalRepositoryContract` owns Animal projections/timeline ordering, archive/restore preservation, and summary
-///   calculations such as latest treatment/pregnancy and expected-calving-date behavior.
+/// - This contract also owns the Animal type projection specifically derived from castration/banding health history.
+/// - `AnimalRepositoryContract` owns timeline ordering, archive/restore preservation, and summary calculations such
+///   as latest treatment/pregnancy and expected-calving-date behavior.
 /// - `WorkingRepositoryContract` owns health/pregnancy rows generated from Working, their session linkage, editing,
 ///   cleanup, and transaction rollback semantics.
 /// - Generic mutation publication and broad duplicate-identity enforcement remain separate Milestone 0 slices.
@@ -594,6 +598,8 @@ enum HealthRepositoryContract {
 
         let beforeHealth = sortedHealth(try fixture.makeTestControl().allHealthRecords())
         let beforePregnancy = sortedPregnancy(try fixture.makeTestControl().allPregnancyChecks())
+        let beforeControlHealthCount = try fixture.makeTestControl().healthRecords(forAnimalID: controlAnimal.id).count
+        let beforeControlPregnancyCount = try fixture.makeTestControl().pregnancyChecks(forAnimalID: controlAnimal.id).count
         let missingAnimalID = UUID()
 
         assertAnimalNotFound(file: file, line: line) {
@@ -634,7 +640,7 @@ enum HealthRepositoryContract {
         let recoveredHealth = try fixture.makeTestControl().healthRecords(forAnimalID: controlAnimal.id)
         XCTAssertEqual(
             recoveredHealth.count,
-            beforeHealth.count + 1,
+            beforeControlHealthCount + 1,
             "The same repository instance must remain usable for a successful health write after a failed write.",
             file: file,
             line: line
@@ -686,7 +692,7 @@ enum HealthRepositoryContract {
         let recoveredPregnancy = try fixture.makeTestControl().pregnancyChecks(forAnimalID: controlAnimal.id)
         XCTAssertEqual(
             recoveredPregnancy.count,
-            beforePregnancy.count + 1,
+            beforeControlPregnancyCount + 1,
             "The same repository instance must remain usable for a successful pregnancy write after a failed write.",
             file: file,
             line: line
