@@ -11,7 +11,6 @@ enum WorkingRepositoryError: LocalizedError, Equatable {
     case templateNotFound
     case duplicateTemplateName(String)
     case duplicateTreatmentItemIdentifiers
-    case treatmentItemNotInSession
     case invalidTreatmentDose
     case pastureNotFound
     case animalNotFound
@@ -47,8 +46,6 @@ enum WorkingRepositoryError: LocalizedError, Equatable {
             return "A vaccination named \(name) already exists. Names must be unique."
         case .duplicateTreatmentItemIdentifiers:
             return "Each vaccination or treatment must have a unique identifier."
-        case .treatmentItemNotInSession:
-            return "A treatment entry does not belong to this working session’s treatment plan."
         case .invalidTreatmentDose:
             return "Treatment dose amounts cannot be negative."
         case .pastureNotFound:

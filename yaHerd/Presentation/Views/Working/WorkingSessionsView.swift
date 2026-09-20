@@ -117,7 +117,7 @@ struct WorkingSessionsView: View {
             Button("Cancel", role: .cancel) {}
         } message: { session in
             if session.status == .active {
-                Text("Deleting an active session will return any animals currently in the working pen back to the source/collected pasture and remove the session records.")
+                Text("Deleting an active session removes its records and releases animals still owned by it from the working pen. They return to their collected/source pasture when it still exists; otherwise they remain without a pasture assignment.")
             } else {
                 Text("This will delete the session and its recorded work data.")
             }

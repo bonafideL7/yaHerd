@@ -30,27 +30,21 @@ Create a reusable persistence contract-test structure under something like:
 
 ```text
 yaHerdTests/
-  PersistenceContracts/
-    PersistenceContractHarness.swift
-    AnimalRepositoryContractTests.swift
-    AnimalAggregateTransactionContractTests.swift
-    PastureRepositoryContractTests.swift
-    PastureDeletionTransactionContractTests.swift
-    FieldCheckRepositoryContractTests.swift
-    WorkingRepositoryContractTests.swift
-    HerdRepositoryContractTests.swift
-    TagColorRepositoryContractTests.swift
-    HealthRepositoryContractTests.swift
-    IdentityContractTests.swift
-    MutationBoundaryContractTests.swift
-
-  SwiftDataPersistenceContracts/
-    SwiftDataContractHarness.swift
+  RepositoryContracts/
+    AnimalRepositoryContract.swift
+    PastureRepositoryContract.swift
+    FieldCheckRepositoryContract.swift
+    WorkingRepositoryContract.swift
+    HerdRepositoryContract.swift
+    TagColorRepositoryContract.swift
+    HealthRepositoryContract.swift
+    IdentityContract.swift
+    MutationBoundaryContract.swift
 ```
 
 The reusable tests operate through Domain repository and transaction protocols. They should not import SwiftData, use `ModelContext`, inspect SwiftData models, or depend on fetch implementation.
 
-The SwiftData harness exists only to instantiate the current implementation and prove the contracts describe actual intended behavior. Later a Core Data harness runs the same tests. Once Core Data passes them and SwiftData is removed, only the small SwiftData harness disappears; the contract tests remain permanently.
+Do **not** add or restore a SwiftData contract harness. SwiftData is the outgoing implementation and repository-wide instructions prohibit investing in new SwiftData verification infrastructure. Persistence-neutral contracts may remain without an executable persistence runner during Milestone 0 when the only available runner would be SwiftData-specific. As the corresponding Core Data repositories are implemented, a Core Data harness runs the permanent contract suites and supplies target-only rollback/historical inspection hooks.
 
 Coverage must include at least:
 
@@ -63,7 +57,7 @@ Coverage must include at least:
 - **Reference/support data:** tag colors, animal status references, treatment templates, Herd scoping, sorting and visibility behavior used by Presentation.
 - **Mutation semantics:** failed persistence operations do not publish successful mutation events; successful logical operations publish only after commit.
 
-**Gate to leave Milestone 0:** important current workflows are represented by reusable contracts and we can point to a contract for every high-risk behavior Core Data must preserve. Do not add new target-only production behavior to SwiftData solely to make a future Core Data contract pass.
+**Gate to leave Milestone 0:** important current workflows are represented by reusable contracts and we can point to a contract for every high-risk behavior Core Data must preserve. Contracts that require Core Data-only historical storage or fault injection may remain unexecuted until their Core Data runner exists. Do not add new target-only production behavior, adapters, or verification infrastructure to SwiftData solely to make a future Core Data contract pass.
 
 ## Milestone 1 — Finalize the Core Data model blueprint
 
@@ -208,7 +202,6 @@ Remove:
 - SwiftData schema/migration infrastructure;
 - SwiftData-specific public-ID repair machinery that has no local Core Data requirement;
 - obsolete migration/repair diagnostics;
-- the temporary SwiftData contract-test harness.
 
 Sync/share/CloudKit bridge infrastructure is already outside the target architecture and must not be recreated during the Core Data cutover.
 
