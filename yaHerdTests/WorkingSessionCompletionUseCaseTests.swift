@@ -68,6 +68,35 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
         XCTAssertTrue(repository.completionCalls.isEmpty)
     }
 
+    func testFinishViewModelPreservesSessionAndRecoversFromTransientPastureReadFailure() {
+        let sessionID = UUID()
+        let pasture = PastureOption(id: UUID(), name: "Recovery Pasture")
+        let workingRepository = WorkingSessionCompletionRepositorySpy(
+            session: makeSession(id: sessionID, queueItemIDs: [UUID()])
+        )
+        let pastureRepository = FlakyPastureReferenceDataReader(options: [pasture])
+        let viewModel = WorkingFinishSessionViewModel(
+            sessionID: sessionID,
+            workingRepository: workingRepository,
+            pastureRepository: pastureRepository
+        )
+
+        viewModel.load()
+
+        XCTAssertEqual(viewModel.session?.id, sessionID)
+        XCTAssertFalse(viewModel.hasLoadedPastureOptions)
+        XCTAssertTrue(viewModel.needsPastureOptionsRetry)
+        XCTAssertTrue(viewModel.pastures.isEmpty)
+        XCTAssertNotNil(viewModel.errorMessage)
+
+        viewModel.retryPastureOptions()
+
+        XCTAssertEqual(viewModel.pastures, [pasture])
+        XCTAssertTrue(viewModel.hasLoadedPastureOptions)
+        XCTAssertFalse(viewModel.needsPastureOptionsRetry)
+        XCTAssertNil(viewModel.errorMessage)
+    }
+
     func testRejectsFinishedSessionBeforeMutation() {
         let sessionID = UUID()
         let repository = WorkingSessionCompletionRepositorySpy(
@@ -145,4 +174,28 @@ private final class WorkingSessionCompletionRepositorySpy: WorkingFinishSessionR
     ) throws {
         completionCalls.append(CompletionCall(sessionID: id, assignments: assignments))
     }
+}
+
+
+@MainActor
+private final class FlakyPastureReferenceDataReader: PastureReferenceDataReader {
+    private let options: [PastureOption]
+    private var shouldFail = true
+
+    init(options: [PastureOption]) {
+        self.options = options
+    }
+
+    func fetchPastureOptions() throws -> [PastureOption] {
+        if shouldFail {
+            shouldFail = false
+            throw WorkingSessionCompletionTestError.pastureReadFailed
+        }
+
+        return options
+    }
+}
+
+private enum WorkingSessionCompletionTestError: Error {
+    case pastureReadFailed
 }
