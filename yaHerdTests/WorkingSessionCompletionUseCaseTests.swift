@@ -176,7 +176,6 @@ private final class WorkingSessionCompletionRepositorySpy: WorkingFinishSessionR
     }
 }
 
-
 @MainActor
 private final class FlakyPastureReferenceDataReader: PastureReferenceDataReader {
     private let options: [PastureOption]
