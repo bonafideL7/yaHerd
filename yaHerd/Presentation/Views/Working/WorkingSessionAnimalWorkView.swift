@@ -25,6 +25,7 @@ struct WorkingSessionAnimalWorkView: View {
     @StateObject var viewModel: WorkingQueueItemEditorViewModel
     @State var treatmentEntries: [WorkingAnimalTreatmentEntry] = []
     @State var availablePastures: [PastureOption] = []
+    @State var pastureReferencesLoaded = false
     @State var selectedDestinationPastureID: UUID?
     @State var sourcePastureReference: WorkingQueueEditorSourcePastureReference?
     @State var destinationSelectionRequiresReview = false
@@ -213,12 +214,12 @@ struct WorkingSessionAnimalWorkView: View {
 
             switch event.source {
             case .local(.sampleData):
-                guard !refreshSessionSourcePastureAfterMutation() else { return }
                 refreshDestinationPasturesAfterMutation()
+                guard !refreshSessionSourcePastureAfterMutation() else { return }
                 revalidateSelectedSireAfterMutation()
             case .local(.pasture):
-                guard !refreshSessionSourcePastureAfterMutation() else { return }
                 refreshDestinationPasturesAfterMutation()
+                guard !refreshSessionSourcePastureAfterMutation() else { return }
             case .local(.animal):
                 revalidateSelectedSireAfterMutation()
             case .local:
@@ -237,16 +238,28 @@ struct WorkingSessionAnimalWorkView: View {
             ) else {
                 return
             }
-            let sourceReference = WorkingQueueEditorSourcePastureReference(session: session)
-            sourcePastureReference = sourceReference
-            selectedDestinationPastureID = WorkingQueueEditorIdentity.destinationPastureSelection(
-                persistedDestinationPastureID: snapshot.destinationPastureID,
-                sourcePasture: sourceReference
+            let sourceReference = WorkingQueueEditorSourcePastureReference(
+                session: session,
+                livePastures: pastureReferencesLoaded ? availablePastures : nil
             )
+            sourcePastureReference = sourceReference
 
-            if selectedDestinationPastureID == nil,
-               !WorkingQueueEditorIdentity.canUseSourcePasture(sourceReference) {
-                destinationSelectionRequiresReview = true
+            let destinationState = WorkingQueueEditorIdentity.validatedDestinationPastureSelection(
+                persistedDestinationPastureID: snapshot.destinationPastureID,
+                sourcePasture: sourceReference,
+                historicalSourcePastureID: session.sourcePastureID,
+                availablePastureIDs: pastureReferencesLoaded
+                    ? Set(availablePastures.map(\.id))
+                    : nil
+            )
+            selectedDestinationPastureID = destinationState.selection
+            destinationSelectionRequiresReview = destinationState.requiresReview
+
+            if destinationState.requiresReview {
+                errorMessage = WorkingQueueEditorIdentity.canUseSourcePasture(sourceReference)
+                    ? "The saved destination pasture is no longer available. Choose another pasture or confirm the source pasture before saving."
+                    : "The source pasture is no longer available. Choose another pasture before saving."
+                showingError = true
             }
         } catch {
             // The editor snapshot still provides the source-pasture label. If a later mutation
@@ -266,7 +279,10 @@ struct WorkingSessionAnimalWorkView: View {
                 return true
             }
 
-            let refreshedReference = WorkingQueueEditorSourcePastureReference(session: session)
+            let refreshedReference = WorkingQueueEditorSourcePastureReference(
+                session: session,
+                livePastures: availablePastures
+            )
             let requiresReview = WorkingQueueEditorIdentity.sourcePastureChangeRequiresReview(
                 presented: sourcePastureReference,
                 refreshed: refreshedReference,
