@@ -18,7 +18,7 @@ struct PregnancyCheckContractSnapshot: Equatable {
     let id: UUID
     let animalID: UUID
     let date: Date
-    let result: PregnancyResult
+    let resultRawValue: String
     let technician: String?
     let estimatedDaysPregnant: Int?
     let dueDate: Date?
@@ -67,7 +67,6 @@ enum HealthRepositoryContract {
         line: UInt = #line
     ) throws {
         let repository = fixture.makeAnimalRepository()
-        let testControl = fixture.makeTestControl()
         let animal = try repository.create(
             input: makeAnimalInput(
                 name: "Health Contract Cow",
@@ -119,7 +118,7 @@ enum HealthRepositoryContract {
             line: line
         )
         XCTAssertTrue(
-            try testControl.healthRecords(forAnimalID: controlAnimal.id).isEmpty,
+            try fixture.makeTestControl().healthRecords(forAnimalID: controlAnimal.id).isEmpty,
             "Adding health history to one animal must not create history for an unrelated animal.",
             file: file,
             line: line
@@ -226,7 +225,7 @@ enum HealthRepositoryContract {
         let firstPersisted = try XCTUnwrap(firstReloadRecords.first, file: file, line: line)
         XCTAssertEqual(firstPersisted.animalID, cow.id, file: file, line: line)
         XCTAssertEqual(firstPersisted.date, pregnancyDate, file: file, line: line)
-        XCTAssertEqual(firstPersisted.result, .pregnant, file: file, line: line)
+        XCTAssertEqual(firstPersisted.resultRawValue, PregnancyResult.pregnant.rawValue, file: file, line: line)
         XCTAssertEqual(firstPersisted.technician, technician, file: file, line: line)
         XCTAssertEqual(firstPersisted.estimatedDaysPregnant, 110, file: file, line: line)
         XCTAssertEqual(firstPersisted.dueDate, dueDate, file: file, line: line)
@@ -274,7 +273,7 @@ enum HealthRepositoryContract {
         )
         XCTAssertEqual(reloadedFirst.animalID, cow.id, file: file, line: line)
         XCTAssertEqual(reloadedFirst.date, pregnancyDate, file: file, line: line)
-        XCTAssertEqual(reloadedFirst.result, .pregnant, file: file, line: line)
+        XCTAssertEqual(reloadedFirst.resultRawValue, PregnancyResult.pregnant.rawValue, file: file, line: line)
         XCTAssertEqual(reloadedFirst.technician, technician, file: file, line: line)
         XCTAssertEqual(reloadedFirst.estimatedDaysPregnant, 110, file: file, line: line)
         XCTAssertEqual(reloadedFirst.dueDate, dueDate, file: file, line: line)
@@ -288,7 +287,7 @@ enum HealthRepositoryContract {
         )
         XCTAssertEqual(reloadedBackdated.animalID, cow.id, file: file, line: line)
         XCTAssertEqual(reloadedBackdated.date, backdatedDate, file: file, line: line)
-        XCTAssertEqual(reloadedBackdated.result, .open, file: file, line: line)
+        XCTAssertEqual(reloadedBackdated.resultRawValue, PregnancyResult.open.rawValue, file: file, line: line)
         XCTAssertNil(reloadedBackdated.technician, file: file, line: line)
         XCTAssertNil(reloadedBackdated.estimatedDaysPregnant, file: file, line: line)
         XCTAssertNil(reloadedBackdated.dueDate, file: file, line: line)
@@ -358,7 +357,7 @@ enum HealthRepositoryContract {
         )
         XCTAssertEqual(afterDelete.animalID, cow.id, file: file, line: line)
         XCTAssertEqual(afterDelete.date, checkDate, file: file, line: line)
-        XCTAssertEqual(afterDelete.result, .pregnant, file: file, line: line)
+        XCTAssertEqual(afterDelete.resultRawValue, PregnancyResult.pregnant.rawValue, file: file, line: line)
         XCTAssertNil(
             afterDelete.sireAnimalID,
             "A deleted breeding sire must leave the historical pregnancy check intact with a nil live sire relationship.",
@@ -497,8 +496,8 @@ enum HealthRepositoryContract {
             )
         )
 
-        let beforeHealth = try fixture.makeTestControl().allHealthRecords()
-        let beforePregnancy = try fixture.makeTestControl().allPregnancyChecks()
+        let beforeHealth = sortedHealth(try fixture.makeTestControl().allHealthRecords())
+        let beforePregnancy = sortedPregnancy(try fixture.makeTestControl().allPregnancyChecks())
         let missingAnimalID = UUID()
 
         assertAnimalNotFound(file: file, line: line) {
@@ -525,8 +524,8 @@ enum HealthRepositoryContract {
             )
         }
 
-        let afterHealth = try fixture.makeTestControl().allHealthRecords()
-        let afterPregnancy = try fixture.makeTestControl().allPregnancyChecks()
+        let afterHealth = sortedHealth(try fixture.makeTestControl().allHealthRecords())
+        let afterPregnancy = sortedPregnancy(try fixture.makeTestControl().allPregnancyChecks())
         XCTAssertEqual(
             afterHealth,
             beforeHealth,
@@ -577,6 +576,18 @@ enum HealthRepositoryContract {
         components.month = month
         components.day = day
         return components.date!
+    }
+
+    private static func sortedHealth(
+        _ records: [HealthRecordContractSnapshot]
+    ) -> [HealthRecordContractSnapshot] {
+        records.sorted { $0.id.uuidString < $1.id.uuidString }
+    }
+
+    private static func sortedPregnancy(
+        _ records: [PregnancyCheckContractSnapshot]
+    ) -> [PregnancyCheckContractSnapshot] {
+        records.sorted { $0.id.uuidString < $1.id.uuidString }
     }
 
     private static func assertAnimalNotFound(
