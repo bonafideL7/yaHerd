@@ -368,6 +368,16 @@ enum HealthRepositoryContract {
         )
         let allBeforeDelete = sortedPregnancy(try beforeControl.allPregnancyChecks())
         XCTAssertEqual(beforeDelete.sireAnimalID, sire.id, file: file, line: line)
+        let cowBeforeDelete = try XCTUnwrap(
+            repository.fetchAnimalDetail(id: cow.id),
+            file: file,
+            line: line
+        )
+        let controlAnimalBeforeDelete = try XCTUnwrap(
+            repository.fetchAnimalDetail(id: controlAnimal.id),
+            file: file,
+            line: line
+        )
 
         try fixture.makeAnimalRepository().delete(ids: [sire.id])
 
@@ -425,9 +435,44 @@ enum HealthRepositoryContract {
             file: file,
             line: line
         )
-        XCTAssertNotNil(
-            try fixture.makeAnimalRepository().fetchAnimalDetail(id: cow.id),
-            "Deleting the sire must not delete or archive the pregnancy-check owner.",
+        let survivorRepository = fixture.makeAnimalRepository()
+        let cowAfterDelete = try XCTUnwrap(
+            survivorRepository.fetchAnimalDetail(id: cow.id),
+            "Deleting the sire must not delete the pregnancy-check owner.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            cowAfterDelete.isArchived,
+            cowBeforeDelete.isArchived,
+            "Deleting the sire must preserve the pregnancy-check owner's archive state.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            cowAfterDelete.archivedAt,
+            cowBeforeDelete.archivedAt,
+            "Deleting the sire must preserve the pregnancy-check owner's archive timestamp.",
+            file: file,
+            line: line
+        )
+        let controlAnimalAfterDelete = try XCTUnwrap(
+            survivorRepository.fetchAnimalDetail(id: controlAnimal.id),
+            "Deleting the sire must not delete the unrelated control animal.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            controlAnimalAfterDelete.isArchived,
+            controlAnimalBeforeDelete.isArchived,
+            "Deleting the sire must preserve the unrelated control animal's archive state.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            controlAnimalAfterDelete.archivedAt,
+            controlAnimalBeforeDelete.archivedAt,
+            "Deleting the sire must preserve the unrelated control animal's archive timestamp.",
             file: file,
             line: line
         )
@@ -517,6 +562,16 @@ enum HealthRepositoryContract {
         let ownedPregnancyIDs = Set(ownedPregnancy.map(\.id))
         let allHealthBeforeDelete = sortedHealth(try beforeControl.allHealthRecords())
         let allPregnancyBeforeDelete = sortedPregnancy(try beforeControl.allPregnancyChecks())
+        let sireBeforeDelete = try XCTUnwrap(
+            repository.fetchAnimalDetail(id: sire.id),
+            file: file,
+            line: line
+        )
+        let controlAnimalBeforeDelete = try XCTUnwrap(
+            repository.fetchAnimalDetail(id: controlAnimal.id),
+            file: file,
+            line: line
+        )
 
         try fixture.makeAnimalRepository().delete(ids: [animal.id])
 
@@ -576,15 +631,44 @@ enum HealthRepositoryContract {
             file: file,
             line: line
         )
-        XCTAssertNotNil(
-            try fixture.makeAnimalRepository().fetchAnimalDetail(id: sire.id),
+        let survivorRepository = fixture.makeAnimalRepository()
+        let sireAfterDelete = try XCTUnwrap(
+            survivorRepository.fetchAnimalDetail(id: sire.id),
             "Deleting the pregnancy-check owner must not delete the referenced breeding sire.",
             file: file,
             line: line
         )
-        XCTAssertNotNil(
-            try fixture.makeAnimalRepository().fetchAnimalDetail(id: controlAnimal.id),
+        XCTAssertEqual(
+            sireAfterDelete.isArchived,
+            sireBeforeDelete.isArchived,
+            "Deleting the pregnancy-check owner must preserve the referenced sire's archive state.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            sireAfterDelete.archivedAt,
+            sireBeforeDelete.archivedAt,
+            "Deleting the pregnancy-check owner must preserve the referenced sire's archive timestamp.",
+            file: file,
+            line: line
+        )
+        let controlAnimalAfterDelete = try XCTUnwrap(
+            survivorRepository.fetchAnimalDetail(id: controlAnimal.id),
             "Deleting one animal must not delete the unrelated control animal.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            controlAnimalAfterDelete.isArchived,
+            controlAnimalBeforeDelete.isArchived,
+            "Deleting one animal must preserve the unrelated control animal's archive state.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            controlAnimalAfterDelete.archivedAt,
+            controlAnimalBeforeDelete.archivedAt,
+            "Deleting one animal must preserve the unrelated control animal's archive timestamp.",
             file: file,
             line: line
         )
