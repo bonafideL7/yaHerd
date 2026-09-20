@@ -5,7 +5,7 @@ import XCTest
 /// identity and fields that are not currently exposed by the public Animal read models.
 struct HealthRecordContractSnapshot: Equatable {
     let id: UUID
-    let animalID: UUID
+    let animalID: UUID?
     let date: Date
     let treatment: String
     let notes: String?
@@ -16,7 +16,7 @@ struct HealthRecordContractSnapshot: Equatable {
 /// identity, optional payload, and relationships that are not currently exposed by the public Animal read models.
 struct PregnancyCheckContractSnapshot: Equatable {
     let id: UUID
-    let animalID: UUID
+    let animalID: UUID?
     let date: Date
     let resultRawValue: String
     let technician: String?
@@ -454,9 +454,105 @@ enum HealthRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertFalse(
+            try reloadedControl.allHealthRecords().contains { $0.animalID == nil },
+            "A hard-deleted animal must not leave ownerless health rows behind.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            try reloadedControl.allPregnancyChecks().contains { $0.animalID == nil },
+            "A hard-deleted animal must not leave ownerless pregnancy rows behind.",
+            file: file,
+            line: line
+        )
         XCTAssertNotNil(
             try fixture.makeAnimalRepository().fetchAnimalDetail(id: sire.id),
             "Deleting the pregnancy-check owner must not delete the referenced breeding sire.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertCastrationHealthRecordUpdatesAnimalReadModels(
+        using fixture: HealthRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeAnimalRepository()
+        let animal = try repository.create(
+            input: makeAnimalInput(
+                name: "Health Classification Contract Bull",
+                tagNumber: "H450",
+                sex: .male,
+                birthDate: date(year: 2022, month: 1, day: 10)
+            )
+        )
+        let controlAnimal = try repository.create(
+            input: makeAnimalInput(
+                name: "Health Classification Control Bull",
+                tagNumber: "H451",
+                sex: .male,
+                birthDate: date(year: 2022, month: 1, day: 11)
+            )
+        )
+
+        XCTAssertEqual(animal.animalType, .bull, file: file, line: line)
+        XCTAssertEqual(controlAnimal.animalType, .bull, file: file, line: line)
+
+        let updated = try repository.addHealthRecord(
+            animalID: animal.id,
+            input: HealthRecordInput(
+                date: date(year: 2026, month: 6, day: 23),
+                treatment: "Castration",
+                notes: nil
+            )
+        )
+
+        XCTAssertEqual(
+            updated.animalType,
+            .steer,
+            "A persisted castration health record must immediately affect the Animal detail projection.",
+            file: file,
+            line: line
+        )
+
+        let reloadedRepository = fixture.makeAnimalRepository()
+        let reloadedDetail = try XCTUnwrap(
+            reloadedRepository.fetchAnimalDetail(id: animal.id),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedDetail.animalType,
+            .steer,
+            "Health-derived Animal type must survive a fresh repository reload.",
+            file: file,
+            line: line
+        )
+
+        let reloadedSummary = try XCTUnwrap(
+            reloadedRepository.fetchAnimals().first { $0.id == animal.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloadedSummary.animalType,
+            .steer,
+            "The Animal summary projection must derive steer status from persisted castration history.",
+            file: file,
+            line: line
+        )
+
+        let controlSummary = try XCTUnwrap(
+            reloadedRepository.fetchAnimals().first { $0.id == controlAnimal.id },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            controlSummary.animalType,
+            .bull,
+            "Adding castration history to one animal must not change an unrelated male animal's type.",
             file: file,
             line: line
         )
@@ -501,7 +597,7 @@ enum HealthRepositoryContract {
         let missingAnimalID = UUID()
 
         assertAnimalNotFound(file: file, line: line) {
-            _ = try fixture.makeAnimalRepository().addHealthRecord(
+            _ = try repository.addHealthRecord(
                 animalID: missingAnimalID,
                 input: HealthRecordInput(
                     date: date(year: 2026, month: 7, day: 1),
@@ -510,8 +606,51 @@ enum HealthRepositoryContract {
                 )
             )
         }
+
+        XCTAssertEqual(
+            sortedHealth(try fixture.makeTestControl().allHealthRecords()),
+            beforeHealth,
+            "A failed health mutation for a missing animal must not create an orphan or alter existing health history.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            sortedPregnancy(try fixture.makeTestControl().allPregnancyChecks()),
+            beforePregnancy,
+            "A failed health mutation must not alter pregnancy history.",
+            file: file,
+            line: line
+        )
+
+        let recoveryHealthDate = date(year: 2026, month: 7, day: 3)
+        _ = try repository.addHealthRecord(
+            animalID: controlAnimal.id,
+            input: HealthRecordInput(
+                date: recoveryHealthDate,
+                treatment: "Post-failure recovery treatment",
+                notes: "Same repository instance"
+            )
+        )
+        let recoveredHealth = try fixture.makeTestControl().healthRecords(forAnimalID: controlAnimal.id)
+        XCTAssertEqual(
+            recoveredHealth.count,
+            beforeHealth.count + 1,
+            "The same repository instance must remain usable for a successful health write after a failed write.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            recoveredHealth.contains {
+                $0.date == recoveryHealthDate
+                    && $0.treatment == "Post-failure recovery treatment"
+                    && $0.animalID == controlAnimal.id
+            },
+            file: file,
+            line: line
+        )
+
         assertAnimalNotFound(file: file, line: line) {
-            _ = try fixture.makeAnimalRepository().addPregnancyCheck(
+            _ = try repository.addPregnancyCheck(
                 animalID: missingAnimalID,
                 input: PregnancyCheckInput(
                     date: date(year: 2026, month: 7, day: 2),
@@ -524,19 +663,53 @@ enum HealthRepositoryContract {
             )
         }
 
-        let afterHealth = sortedHealth(try fixture.makeTestControl().allHealthRecords())
-        let afterPregnancy = sortedPregnancy(try fixture.makeTestControl().allPregnancyChecks())
         XCTAssertEqual(
-            afterHealth,
-            beforeHealth,
-            "A failed health mutation for a missing animal must not create an orphan or alter existing health history.",
+            sortedPregnancy(try fixture.makeTestControl().allPregnancyChecks()),
+            beforePregnancy,
+            "A failed pregnancy mutation for a missing animal must not create an orphan or alter existing pregnancy history.",
             file: file,
             line: line
         )
+
+        let recoveryPregnancyDate = date(year: 2026, month: 7, day: 4)
+        _ = try repository.addPregnancyCheck(
+            animalID: controlAnimal.id,
+            input: PregnancyCheckInput(
+                date: recoveryPregnancyDate,
+                result: .unknown,
+                technician: "Recovery Tech",
+                estimatedDaysPregnant: nil,
+                dueDate: nil,
+                sireAnimalID: nil
+            )
+        )
+        let recoveredPregnancy = try fixture.makeTestControl().pregnancyChecks(forAnimalID: controlAnimal.id)
         XCTAssertEqual(
-            afterPregnancy,
-            beforePregnancy,
-            "A failed pregnancy mutation for a missing animal must not create an orphan or alter existing pregnancy history.",
+            recoveredPregnancy.count,
+            beforePregnancy.count + 1,
+            "The same repository instance must remain usable for a successful pregnancy write after a failed write.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            recoveredPregnancy.contains {
+                $0.date == recoveryPregnancyDate
+                    && $0.resultRawValue == PregnancyResult.unknown.rawValue
+                    && $0.animalID == controlAnimal.id
+            },
+            file: file,
+            line: line
+        )
+
+        XCTAssertFalse(
+            try fixture.makeTestControl().allHealthRecords().contains { $0.animalID == nil },
+            "Failure recovery must not leave ownerless health rows behind.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            try fixture.makeTestControl().allPregnancyChecks().contains { $0.animalID == nil },
+            "Failure recovery must not leave ownerless pregnancy rows behind.",
             file: file,
             line: line
         )
