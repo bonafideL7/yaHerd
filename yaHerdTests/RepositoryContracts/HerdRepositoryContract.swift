@@ -6,7 +6,8 @@ import XCTest
 ///
 /// The production repository remains persistence-neutral. A Core Data contract runner supplies
 /// these hooks so the permanent contract can prove that the selected/current Herd is resolved by
-/// application UUID instead of by arbitrary persistence fetch order.
+/// application UUID instead of by arbitrary persistence fetch order. The current-Herd hook accepts
+/// both nil and stale UUIDs so missing-selection recovery behavior can be characterized explicitly.
 @MainActor
 struct HerdRepositorySelectionTestControl {
     let seedHerd: (
@@ -15,7 +16,7 @@ struct HerdRepositorySelectionTestControl {
         _ createdAt: Date,
         _ updatedAt: Date
     ) throws -> Void
-    let selectCurrentHerd: (_ id: UUID) throws -> Void
+    let setCurrentHerdID: (_ id: UUID?) throws -> Void
 }
 
 /// Permanent persistence-neutral behavioral contract for `HerdRepository` implementations.
@@ -49,6 +50,13 @@ enum HerdRepositoryContract {
             line: line
         )
 
+        // A failed rename must leave the same repository usable and empty.
+        assertMissingHerd(
+            try repository.fetchCurrentHerd(),
+            file: file,
+            line: line
+        )
+
         // Herd creation belongs to the explicit bootstrap/onboarding boundary. Repository reads or
         // ordinary rename mutations must not invent a root merely because persistence is empty.
         assertMissingHerd(
@@ -72,24 +80,41 @@ enum HerdRepositoryContract {
             createdAt,
             updatedAt
         )
-        try fixture.selectionControl.selectCurrentHerd(herdID)
+        try fixture.selectionControl.setCurrentHerdID(herdID)
 
-        let before = try fixture.makeHerdRepository().fetchCurrentHerd()
+        let repository = fixture.makeHerdRepository()
+        let before = try repository.fetchCurrentHerd()
         XCTAssertEqual(before.publicID, herdID, file: file, line: line)
         XCTAssertEqual(before.id, herdID, file: file, line: line)
         XCTAssertEqual(before.name, "Existing Contract Herd", file: file, line: line)
         XCTAssertEqual(before.createdAt, createdAt, file: file, line: line)
         XCTAssertEqual(before.updatedAt, updatedAt, file: file, line: line)
 
-        let renamed = try fixture.makeHerdRepository().renameCurrentHerd(
-            to: "  Contract Herd Renamed\n"
+        let renamed = try repository.renameCurrentHerd(
+            to: "  Contract   Herd Renamed\n"
         )
         XCTAssertEqual(renamed.publicID, herdID, "Rename must preserve application identity.", file: file, line: line)
         XCTAssertEqual(renamed.createdAt, createdAt, "Rename must preserve creation metadata.", file: file, line: line)
-        XCTAssertEqual(renamed.name, "Contract Herd Renamed", file: file, line: line)
-        XCTAssertTrue(
-            renamed.updatedAt >= updatedAt,
-            "Rename must advance or preserve update metadata rather than moving it backward.",
+        XCTAssertEqual(
+            renamed.name,
+            "Contract   Herd Renamed",
+            "Rename trims surrounding whitespace without rewriting meaningful internal whitespace.",
+            file: file,
+            line: line
+        )
+        XCTAssertGreaterThan(
+            renamed.updatedAt,
+            updatedAt,
+            "A successful rename must advance update metadata.",
+            file: file,
+            line: line
+        )
+
+        let sameRepository = try repository.fetchCurrentHerd()
+        XCTAssertEqual(
+            sameRepository,
+            renamed,
+            "The successful rename must be immediately observable through the same repository.",
             file: file,
             line: line
         )
@@ -109,14 +134,21 @@ enum HerdRepositoryContract {
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
+        let repository = fixture.makeHerdRepository()
+
         XCTAssertThrowsError(
-            try fixture.makeHerdRepository().renameCurrentHerd(to: " \n\t "),
+            try repository.renameCurrentHerd(to: " \n\t "),
             file: file,
             line: line
         ) { error in
             XCTAssertEqual(error as? HerdRepositoryError, .emptyName, file: file, line: line)
         }
 
+        assertMissingHerd(
+            try repository.fetchCurrentHerd(),
+            file: file,
+            line: line
+        )
         assertMissingHerd(
             try fixture.makeHerdRepository().fetchCurrentHerd(),
             file: file,
@@ -138,23 +170,33 @@ enum HerdRepositoryContract {
             createdAt,
             updatedAt
         )
-        try fixture.selectionControl.selectCurrentHerd(herdID)
+        try fixture.selectionControl.setCurrentHerdID(herdID)
 
-        let before = try fixture.makeHerdRepository().fetchCurrentHerd()
+        let repository = fixture.makeHerdRepository()
+        let before = try repository.fetchCurrentHerd()
 
         XCTAssertThrowsError(
-            try fixture.makeHerdRepository().renameCurrentHerd(to: "   "),
+            try repository.renameCurrentHerd(to: "   "),
             file: file,
             line: line
         ) { error in
             XCTAssertEqual(error as? HerdRepositoryError, .emptyName, file: file, line: line)
         }
 
-        let after = try fixture.makeHerdRepository().fetchCurrentHerd()
+        let sameRepository = try repository.fetchCurrentHerd()
         XCTAssertEqual(
-            after,
+            sameRepository,
             before,
-            "Validation failure must leave persisted Herd state unchanged.",
+            "Validation failure must leave same-repository Herd state unchanged and readable.",
+            file: file,
+            line: line
+        )
+
+        let reloaded = try fixture.makeHerdRepository().fetchCurrentHerd()
+        XCTAssertEqual(
+            reloaded,
+            before,
+            "Validation failure must leave durable Herd state unchanged.",
             file: file,
             line: line
         )
@@ -186,7 +228,7 @@ enum HerdRepositoryContract {
             selectedCreatedAt,
             selectedUpdatedAt
         )
-        try fixture.selectionControl.selectCurrentHerd(selectedID)
+        try fixture.selectionControl.setCurrentHerdID(selectedID)
 
         let selected = try fixture.makeHerdRepository().fetchCurrentHerd()
         XCTAssertEqual(selected.publicID, selectedID, file: file, line: line)
@@ -200,8 +242,9 @@ enum HerdRepositoryContract {
         XCTAssertEqual(renamedSelected.publicID, selectedID, file: file, line: line)
         XCTAssertEqual(renamedSelected.createdAt, selectedCreatedAt, file: file, line: line)
         XCTAssertEqual(renamedSelected.name, "Selected Herd Renamed", file: file, line: line)
+        XCTAssertGreaterThan(renamedSelected.updatedAt, selectedUpdatedAt, file: file, line: line)
 
-        try fixture.selectionControl.selectCurrentHerd(olderID)
+        try fixture.selectionControl.setCurrentHerdID(olderID)
         let older = try fixture.makeHerdRepository().fetchCurrentHerd()
         XCTAssertEqual(older.publicID, olderID, file: file, line: line)
         XCTAssertEqual(
@@ -214,7 +257,7 @@ enum HerdRepositoryContract {
         XCTAssertEqual(older.createdAt, olderCreatedAt, file: file, line: line)
         XCTAssertEqual(older.updatedAt, olderUpdatedAt, file: file, line: line)
 
-        try fixture.selectionControl.selectCurrentHerd(selectedID)
+        try fixture.selectionControl.setCurrentHerdID(selectedID)
         let selectedReload = try fixture.makeHerdRepository().fetchCurrentHerd()
         XCTAssertEqual(selectedReload.publicID, selectedID, file: file, line: line)
         XCTAssertEqual(selectedReload.name, "Selected Herd Renamed", file: file, line: line)
@@ -222,7 +265,43 @@ enum HerdRepositoryContract {
         XCTAssertEqual(selectedReload.updatedAt, renamedSelected.updatedAt, file: file, line: line)
     }
 
-    static func assertMissingSelectedHerdDoesNotFallBackToAnotherStoredHerd(
+    static func assertMissingCurrentHerdSelectionDoesNotInferStoredHerd(
+        using fixture: HerdRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let storedID = UUID()
+        let createdAt = fixedDate(1_700_150_000)
+        let updatedAt = fixedDate(1_700_150_100)
+        try fixture.selectionControl.seedHerd(
+            storedID,
+            "Stored Without Selection",
+            createdAt,
+            updatedAt
+        )
+        try fixture.selectionControl.setCurrentHerdID(nil)
+
+        let repository = fixture.makeHerdRepository()
+        assertMissingHerd(
+            try repository.fetchCurrentHerd(),
+            file: file,
+            line: line
+        )
+        assertMissingHerd(
+            try repository.renameCurrentHerd(to: "Must Not Infer"),
+            file: file,
+            line: line
+        )
+
+        try fixture.selectionControl.setCurrentHerdID(storedID)
+        let stored = try fixture.makeHerdRepository().fetchCurrentHerd()
+        XCTAssertEqual(stored.publicID, storedID, file: file, line: line)
+        XCTAssertEqual(stored.name, "Stored Without Selection", file: file, line: line)
+        XCTAssertEqual(stored.createdAt, createdAt, file: file, line: line)
+        XCTAssertEqual(stored.updatedAt, updatedAt, file: file, line: line)
+    }
+
+    static func assertStaleCurrentHerdSelectionDoesNotFallBackToAnotherStoredHerd(
         using fixture: HerdRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
@@ -236,7 +315,7 @@ enum HerdRepositoryContract {
             storedCreatedAt,
             storedUpdatedAt
         )
-        try fixture.selectionControl.selectCurrentHerd(UUID())
+        try fixture.selectionControl.setCurrentHerdID(UUID())
 
         let repository = fixture.makeHerdRepository()
         assertMissingHerd(
@@ -250,7 +329,7 @@ enum HerdRepositoryContract {
             line: line
         )
 
-        try fixture.selectionControl.selectCurrentHerd(storedID)
+        try fixture.selectionControl.setCurrentHerdID(storedID)
         let stored = try fixture.makeHerdRepository().fetchCurrentHerd()
         XCTAssertEqual(stored.publicID, storedID, file: file, line: line)
         XCTAssertEqual(stored.name, "Stored But Not Selected", file: file, line: line)
