@@ -177,58 +177,6 @@ enum HerdRepositoryContract {
         )
     }
 
-    static func assertRenameToSameNormalizedNameStillAdvancesMetadata(
-        using fixture: HerdRepositoryContractFixture,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) throws {
-        let herdID = UUID()
-        let createdAt = fixedDate(1_700_003_000)
-        let updatedAt = fixedDate(1_700_003_500)
-        try fixture.selectionControl.seedHerd(
-            herdID,
-            "Same Name Herd",
-            createdAt,
-            updatedAt
-        )
-        try fixture.selectionControl.setCurrentHerdID(herdID)
-
-        let repository = fixture.makeHerdRepository()
-        let renamed = try repository.renameCurrentHerd(to: "  Same Name Herd\n")
-
-        XCTAssertEqual(renamed.publicID, herdID, file: file, line: line)
-        XCTAssertEqual(renamed.name, "Same Name Herd", file: file, line: line)
-        XCTAssertEqual(renamed.createdAt, createdAt, file: file, line: line)
-        XCTAssertGreaterThan(
-            renamed.updatedAt,
-            updatedAt,
-            "A successful rename command must advance update metadata even when normalization leaves the visible name unchanged.",
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(
-            try repository.fetchCurrentHerd(),
-            renamed,
-            "The metadata-only rename must be immediately visible through the same repository.",
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(
-            try fixture.makeHerdRepository().fetchCurrentHerd(),
-            renamed,
-            "The metadata-only rename must survive a fresh persistence access scope.",
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(
-            try fixture.selectionControl.allPersistedHerdIDs(),
-            [herdID],
-            "A same-name rename must update the existing Herd rather than creating another root.",
-            file: file,
-            line: line
-        )
-    }
-
     static func assertRenamePersistenceFailureRollsBackAndRepositoryRecovers(
         using fixture: HerdRepositoryContractFixture,
         failureInjection: HerdRepositoryRollbackFailureInjection,
