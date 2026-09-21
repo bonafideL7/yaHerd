@@ -24,7 +24,7 @@ struct HerdRepositorySelectionTestControl {
     /// share one application UUID — cannot be filtered away or collapsed by the test control.
     ///
     /// Generic rejection of intentionally seeded duplicate application UUIDs remains owned by
-    /// `IdentityContract`; this probe only proves Herd operations preserve the physical root set.
+    /// `IdentityContract`; this probe only proves Herd operations preserve durable row multiplicity keyed by application UUID.
     let persistedHerdRowCountsByID: () throws -> [UUID: Int]
 }
 
@@ -254,7 +254,7 @@ enum HerdRepositoryContract {
         XCTAssertEqual(
             try fixture.selectionControl.persistedHerdRowCountsByID(),
             [selectedID: 1, controlID: 1],
-            "A failed rename must not create, replace, or delete a Herd root.",
+            "A failed rename must not change the durable Herd UUIDs or their physical row multiplicity.",
             file: file,
             line: line
         )
@@ -394,7 +394,7 @@ enum HerdRepositoryContract {
         XCTAssertEqual(
             try fixture.selectionControl.persistedHerdRowCountsByID(),
             [herdID: 1],
-            "Validation failure must not create, replace, or delete a Herd root.",
+            "Validation failure must not change the durable Herd UUIDs or their physical row multiplicity.",
             file: file,
             line: line
         )
@@ -447,7 +447,7 @@ enum HerdRepositoryContract {
         XCTAssertEqual(
             try fixture.selectionControl.persistedHerdRowCountsByID(),
             [olderID: 1, selectedID: 1, newerID: 1],
-            "Resolving the selected Herd must not create, replace, or delete any Herd root.",
+            "Resolving the selected Herd must not change durable Herd UUIDs or physical row multiplicity.",
             file: file,
             line: line
         )
@@ -509,7 +509,7 @@ enum HerdRepositoryContract {
         XCTAssertEqual(
             try fixture.selectionControl.persistedHerdRowCountsByID(),
             [olderID: 1, selectedID: 1, newerID: 1],
-            "Selected-Herd rename must preserve the complete durable Herd identity set.",
+            "Selected-Herd rename must preserve the complete durable Herd UUID-to-row-count snapshot.",
             file: file,
             line: line
         )
@@ -540,7 +540,7 @@ enum HerdRepositoryContract {
         XCTAssertEqual(
             try fixture.selectionControl.persistedHerdRowCountsByID(),
             [storedID: 1],
-            "A missing-selection read must not create, replace, or delete a Herd root.",
+            "A missing-selection read must not change durable Herd UUIDs or physical row multiplicity.",
             file: file,
             line: line
         )
@@ -600,7 +600,7 @@ enum HerdRepositoryContract {
         XCTAssertEqual(
             try fixture.selectionControl.persistedHerdRowCountsByID(),
             [storedID: 1],
-            "A stale-selection read must not create, replace, delete, or fall back to another Herd root.",
+            "A stale-selection read must not change durable Herd UUIDs or physical row multiplicity, or fall back to another Herd.",
             file: file,
             line: line
         )
