@@ -481,7 +481,8 @@ enum HerdRepositoryContract {
         )
         try fixture.selectionControl.setCurrentHerdID(selectedID)
 
-        let selected = try fixture.makeHerdRepository().fetchCurrentHerd()
+        let selectedRepository = fixture.makeHerdRepository()
+        let selected = try selectedRepository.fetchCurrentHerd()
         XCTAssertEqual(selected.publicID, selectedID, file: file, line: line)
         XCTAssertEqual(selected.name, "Selected Herd", file: file, line: line)
         XCTAssertEqual(selected.createdAt, selectedCreatedAt, file: file, line: line)
@@ -494,13 +495,27 @@ enum HerdRepositoryContract {
             line: line
         )
 
-        let renamedSelected = try fixture.makeHerdRepository().renameCurrentHerd(
+        let renamedSelected = try selectedRepository.renameCurrentHerd(
             to: "  Selected Herd Renamed  "
         )
         XCTAssertEqual(renamedSelected.publicID, selectedID, file: file, line: line)
         XCTAssertEqual(renamedSelected.createdAt, selectedCreatedAt, file: file, line: line)
         XCTAssertEqual(renamedSelected.name, "Selected Herd Renamed", file: file, line: line)
         XCTAssertGreaterThan(renamedSelected.updatedAt, selectedUpdatedAt, file: file, line: line)
+        XCTAssertEqual(
+            try selectedRepository.fetchCurrentHerd(),
+            renamedSelected,
+            "Renaming the selected Herd must not redirect the same repository to another stored Herd.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try fixture.makeHerdRepository().fetchCurrentHerd(),
+            renamedSelected,
+            "Renaming the selected Herd must leave application selection resolving that same Herd in a fresh repository.",
+            file: file,
+            line: line
+        )
 
         try fixture.selectionControl.setCurrentHerdID(olderID)
         let older = try fixture.makeHerdRepository().fetchCurrentHerd()
