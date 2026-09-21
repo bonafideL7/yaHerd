@@ -48,11 +48,16 @@ struct HerdRepositoryRollbackFailureInjection {
 /// The assertions below protect the Domain-visible Herd workspace behavior that must survive the
 /// Core Data cutover. The contract intentionally has no SwiftData runner. The production Core Data
 /// repository will execute it once Herd persistence and current-workspace selection are implemented.
+///
+/// A runner must create a newly isolated backing store and selection source for each top-level
+/// contract assertion. Assertions intentionally seed exact Herd sets and are not designed to run
+/// sequentially against persistence left behind by another assertion.
 @MainActor
 struct HerdRepositoryContractFixture {
-    /// Every invocation must return a new repository backed by a fresh persistence access scope
-    /// over the same test store and current-Herd selection source. This makes fresh-reload
-    /// assertions independent from the context used by an earlier repository instance.
+    /// Every invocation within one top-level assertion must return a new repository backed by a
+    /// fresh persistence access scope over that assertion's same isolated test store and current-Herd
+    /// selection source. This makes fresh-reload assertions independent from an earlier context
+    /// without changing the durable scenario established by the assertion.
     let makeHerdRepository: () -> any HerdRepository
     let selectionControl: HerdRepositorySelectionTestControl
 }
