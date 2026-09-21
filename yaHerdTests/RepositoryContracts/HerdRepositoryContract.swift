@@ -24,6 +24,24 @@ struct HerdRepositorySelectionTestControl {
 /// These assertions protect the Domain-visible Herd workspace behavior that must survive the
 /// Core Data cutover. The contract intentionally has no SwiftData runner. The production Core Data
 /// repository will execute it once Herd persistence and current-workspace selection are implemented.
+enum HerdRepositoryRollbackInjectedError: Error, Equatable {
+    case afterRenameStaged
+}
+
+/// Target-only fault-injection hook for the future Core Data Herd repository.
+///
+/// The runner must configure the supplied repository so `renameCurrentHerd(to:)` stages the normalized
+/// name and update timestamp, then fails at the final persistence commit and surfaces
+/// `HerdRepositoryRollbackInjectedError.afterRenameStaged`. The failpoint must be removed before the
+/// closure returns so the same repository can be used to prove post-rollback recovery.
+@MainActor
+struct HerdRepositoryRollbackFailureInjection {
+    let renameCurrentHerdFailingAfterMutationStaged: (
+        _ repository: any HerdRepository,
+        _ name: String
+    ) throws -> Void
+}
+
 @MainActor
 struct HerdRepositoryContractFixture {
     let makeHerdRepository: () -> any HerdRepository
@@ -124,6 +142,105 @@ enum HerdRepositoryContract {
             reloaded,
             renamed,
             "The same Herd UUID, normalized name, and metadata must survive repository reload.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertRenamePersistenceFailureRollsBackAndRepositoryRecovers(
+        using fixture: HerdRepositoryContractFixture,
+        failureInjection: HerdRepositoryRollbackFailureInjection,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let selectedID = UUID()
+        let controlID = UUID()
+        let selectedCreatedAt = fixedDate(1_700_005_000)
+        let selectedUpdatedAt = fixedDate(1_700_005_500)
+        let controlCreatedAt = fixedDate(1_700_006_000)
+        let controlUpdatedAt = fixedDate(1_700_006_500)
+
+        try fixture.selectionControl.seedHerd(
+            selectedID,
+            "Rollback Contract Herd",
+            selectedCreatedAt,
+            selectedUpdatedAt
+        )
+        try fixture.selectionControl.seedHerd(
+            controlID,
+            "Unrelated Rollback Control Herd",
+            controlCreatedAt,
+            controlUpdatedAt
+        )
+        try fixture.selectionControl.setCurrentHerdID(selectedID)
+
+        let repository = fixture.makeHerdRepository()
+        let before = try repository.fetchCurrentHerd()
+
+        XCTAssertThrowsError(
+            try failureInjection.renameCurrentHerdFailingAfterMutationStaged(
+                repository,
+                "  Must Roll Back  "
+            ),
+            "The injected rename must reach the post-mutation persistence failpoint.",
+            file: file,
+            line: line
+        ) { error in
+            XCTAssertEqual(
+                error as? HerdRepositoryRollbackInjectedError,
+                .afterRenameStaged,
+                "The rename must fail at the configured post-mutation failpoint rather than during unrelated validation or lookup.",
+                file: file,
+                line: line
+            )
+        }
+
+        let sameRepositoryAfterFailure = try repository.fetchCurrentHerd()
+        XCTAssertEqual(
+            sameRepositoryAfterFailure,
+            before,
+            "A failed persistence commit must roll back the staged Herd name and update timestamp in the same repository.",
+            file: file,
+            line: line
+        )
+
+        let freshRepositoryAfterFailure = try fixture.makeHerdRepository().fetchCurrentHerd()
+        XCTAssertEqual(
+            freshRepositoryAfterFailure,
+            before,
+            "A failed persistence commit must leave durable Herd state unchanged.",
+            file: file,
+            line: line
+        )
+
+        let recovered = try repository.renameCurrentHerd(to: "  Recovered Herd  ")
+        XCTAssertEqual(recovered.publicID, selectedID, file: file, line: line)
+        XCTAssertEqual(recovered.createdAt, selectedCreatedAt, file: file, line: line)
+        XCTAssertEqual(recovered.name, "Recovered Herd", file: file, line: line)
+        XCTAssertGreaterThan(
+            recovered.updatedAt,
+            selectedUpdatedAt,
+            "The same repository must remain usable for a later successful rename after rollback.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try fixture.makeHerdRepository().fetchCurrentHerd(),
+            recovered,
+            "The recovery rename must commit normally after the injected failure is cleared.",
+            file: file,
+            line: line
+        )
+
+        try fixture.selectionControl.setCurrentHerdID(controlID)
+        let control = try fixture.makeHerdRepository().fetchCurrentHerd()
+        XCTAssertEqual(control.publicID, controlID, file: file, line: line)
+        XCTAssertEqual(control.name, "Unrelated Rollback Control Herd", file: file, line: line)
+        XCTAssertEqual(control.createdAt, controlCreatedAt, file: file, line: line)
+        XCTAssertEqual(
+            control.updatedAt,
+            controlUpdatedAt,
+            "Neither the failed rename nor recovery of the selected Herd may mutate an unrelated stored Herd.",
             file: file,
             line: line
         )
