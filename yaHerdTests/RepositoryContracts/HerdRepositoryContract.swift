@@ -180,7 +180,7 @@ enum HerdRepositoryContract {
         XCTAssertEqual(
             try fixture.selectionControl.persistedHerdRowCountsByID(),
             [herdID: 1],
-            "Rename must update the selected Herd in place rather than creating another Herd root.",
+            "Rename must leave exactly one durable Herd row for the selected application UUID.",
             file: file,
             line: line
         )
@@ -294,7 +294,7 @@ enum HerdRepositoryContract {
         XCTAssertEqual(
             try fixture.selectionControl.persistedHerdRowCountsByID(),
             [selectedID: 1, controlID: 1],
-            "Recovery must still rename in place without creating or deleting Herd roots.",
+            "Recovery must preserve the exact durable Herd UUID-to-row-count snapshot.",
             file: file,
             line: line
         )
