@@ -17,6 +17,11 @@ struct HerdRepositorySelectionTestControl {
         _ updatedAt: Date
     ) throws -> Void
     let setCurrentHerdID: (_ id: UUID?) throws -> Void
+
+    /// Returns every durably persisted Herd application UUID regardless of current selection.
+    /// The future Core Data runner must read this through a fresh unscoped persistence access
+    /// scope so hidden/unselected roots created by a failed operation cannot be filtered away.
+    let allPersistedHerdIDs: () throws -> Set<UUID>
 }
 
 /// Distinguishes the intended post-mutation commit failpoint from validation or lookup failures.
@@ -75,6 +80,13 @@ enum HerdRepositoryContract {
         // A failed rename must leave the same repository usable and empty.
         assertMissingHerd(
             try repository.fetchCurrentHerd(),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try fixture.selectionControl.allPersistedHerdIDs(),
+            [],
+            "Failed reads/rename on an empty store must not create a hidden or unselected Herd root.",
             file: file,
             line: line
         )
@@ -149,6 +161,13 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(
+            try fixture.selectionControl.allPersistedHerdIDs(),
+            [herdID],
+            "Rename must update the selected Herd in place rather than creating another Herd root.",
+            file: file,
+            line: line
+        )
     }
 
     static func assertRenamePersistenceFailureRollsBackAndRepositoryRecovers(
@@ -216,6 +235,13 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(
+            try fixture.selectionControl.allPersistedHerdIDs(),
+            [selectedID, controlID],
+            "A failed rename must not create, replace, or delete a Herd root.",
+            file: file,
+            line: line
+        )
 
         try fixture.selectionControl.setCurrentHerdID(controlID)
         let controlAfterFailure = try fixture.makeHerdRepository().fetchCurrentHerd()
@@ -246,6 +272,13 @@ enum HerdRepositoryContract {
             try fixture.makeHerdRepository().fetchCurrentHerd(),
             recovered,
             "The recovery rename must commit normally after the injected failure is cleared.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try fixture.selectionControl.allPersistedHerdIDs(),
+            [selectedID, controlID],
+            "Recovery must still rename in place without creating or deleting Herd roots.",
             file: file,
             line: line
         )
@@ -286,6 +319,13 @@ enum HerdRepositoryContract {
         )
         assertMissingHerd(
             try fixture.makeHerdRepository().fetchCurrentHerd(),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try fixture.selectionControl.allPersistedHerdIDs(),
+            [],
+            "Whitespace-only rename on an empty store must not bootstrap a hidden Herd.",
             file: file,
             line: line
         )
@@ -332,6 +372,13 @@ enum HerdRepositoryContract {
             reloaded,
             before,
             "Validation failure must leave durable Herd state unchanged.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try fixture.selectionControl.allPersistedHerdIDs(),
+            [herdID],
+            "Validation failure must not create, replace, or delete a Herd root.",
             file: file,
             line: line
         )
@@ -421,6 +468,13 @@ enum HerdRepositoryContract {
         XCTAssertEqual(selectedReload.name, "Selected Herd Renamed", file: file, line: line)
         XCTAssertEqual(selectedReload.createdAt, selectedCreatedAt, file: file, line: line)
         XCTAssertEqual(selectedReload.updatedAt, renamedSelected.updatedAt, file: file, line: line)
+        XCTAssertEqual(
+            try fixture.selectionControl.allPersistedHerdIDs(),
+            [olderID, selectedID, newerID],
+            "Selected-Herd rename must preserve the complete durable Herd identity set.",
+            file: file,
+            line: line
+        )
     }
 
     static func assertMissingCurrentHerdSelectionDoesNotInferStoredHerd(
@@ -457,6 +511,13 @@ enum HerdRepositoryContract {
         )
         assertMissingHerd(
             try fixture.makeHerdRepository().fetchCurrentHerd(),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try fixture.selectionControl.allPersistedHerdIDs(),
+            [storedID],
+            "Missing selection must not cause rename to bootstrap another Herd root.",
             file: file,
             line: line
         )
@@ -503,6 +564,13 @@ enum HerdRepositoryContract {
         )
         assertMissingHerd(
             try fixture.makeHerdRepository().fetchCurrentHerd(),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try fixture.selectionControl.allPersistedHerdIDs(),
+            [storedID],
+            "Stale selection must not cause rename to bootstrap or fall back by creating another Herd root.",
             file: file,
             line: line
         )
