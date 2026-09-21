@@ -19,11 +19,7 @@ struct HerdRepositorySelectionTestControl {
     let setCurrentHerdID: (_ id: UUID?) throws -> Void
 }
 
-/// Permanent persistence-neutral behavioral contract for `HerdRepository` implementations.
-///
-/// These assertions protect the Domain-visible Herd workspace behavior that must survive the
-/// Core Data cutover. The contract intentionally has no SwiftData runner. The production Core Data
-/// repository will execute it once Herd persistence and current-workspace selection are implemented.
+/// Distinguishes the intended post-mutation commit failpoint from validation or lookup failures.
 enum HerdRepositoryRollbackInjectedError: Error, Equatable {
     case afterRenameStaged
 }
@@ -42,6 +38,11 @@ struct HerdRepositoryRollbackFailureInjection {
     ) throws -> Void
 }
 
+/// Permanent persistence-neutral behavioral contract fixture for `HerdRepository` implementations.
+///
+/// The assertions below protect the Domain-visible Herd workspace behavior that must survive the
+/// Core Data cutover. The contract intentionally has no SwiftData runner. The production Core Data
+/// repository will execute it once Herd persistence and current-workspace selection are implemented.
 @MainActor
 struct HerdRepositoryContractFixture {
     let makeHerdRepository: () -> any HerdRepository
