@@ -28,6 +28,31 @@ struct HerdRepositorySelectionTestControl {
     let persistedHerdRowCountsByID: () throws -> [UUID: Int]
 }
 
+/// Persistence-neutral snapshot for one representative Herd-owned record.
+///
+/// The future Core Data runner should back this with a real persisted Pasture row because Pasture is
+/// directly Herd-owned in the target model. The contract observes only application UUID ownership:
+/// it does not expose managed objects, object IDs, or Pasture feature behavior.
+struct HerdRepositoryOwnedPastureContractSnapshot: Equatable {
+    let id: UUID
+    let herdID: UUID?
+}
+
+/// Target-only control used to prove Herd mutations preserve the owned graph.
+///
+/// This is intentionally representative rather than a duplicate of the complete Core Data
+/// relationship/delete-rule matrix. Phase 1 model validation remains responsible for every Herd
+/// relationship and delete rule; this control proves that the Herd rename lifecycle does not
+/// destructively replace the scope root while leaving only matching Herd scalars behind.
+@MainActor
+struct HerdRepositoryOwnershipTestControl {
+    let seedPasture: (_ id: UUID, _ herdID: UUID) throws -> Void
+
+    /// Reads through a fresh unscoped persistence access scope. A nil result means the Pasture row
+    /// was deleted; a snapshot with `herdID == nil` means its required Herd ownership was detached.
+    let persistedPasture: (_ id: UUID) throws -> HerdRepositoryOwnedPastureContractSnapshot?
+}
+
 /// Distinguishes the intended post-mutation commit failpoint from validation or lookup failures.
 enum HerdRepositoryRollbackInjectedError: Error, Equatable {
     case afterRenameStaged
@@ -64,6 +89,7 @@ struct HerdRepositoryContractFixture {
     /// without changing the durable scenario established by the assertion.
     let makeHerdRepository: () -> any HerdRepository
     let selectionControl: HerdRepositorySelectionTestControl
+    let ownershipControl: HerdRepositoryOwnershipTestControl
 }
 
 @MainActor
@@ -130,6 +156,16 @@ enum HerdRepositoryContract {
             createdAt,
             updatedAt
         )
+        let ownedPastureID = UUID()
+        try fixture.ownershipControl.seedPasture(ownedPastureID, herdID)
+        try assertOwnedPasture(
+            ownedPastureID,
+            belongsTo: herdID,
+            using: fixture,
+            message: "The representative owned Pasture must begin attached to the selected Herd.",
+            file: file,
+            line: line
+        )
         try fixture.selectionControl.setCurrentHerdID(herdID)
 
         let repository = fixture.makeHerdRepository()
@@ -184,6 +220,14 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
+        try assertOwnedPasture(
+            ownedPastureID,
+            belongsTo: herdID,
+            using: fixture,
+            message: "Renaming the Herd must preserve its representative owned Pasture and ownership relationship.",
+            file: file,
+            line: line
+        )
     }
 
     static func assertRenamePersistenceFailureRollsBackAndRepositoryRecovers(
@@ -194,6 +238,8 @@ enum HerdRepositoryContract {
     ) throws {
         let selectedID = UUID()
         let controlID = UUID()
+        let selectedOwnedPastureID = UUID()
+        let controlOwnedPastureID = UUID()
         let selectedCreatedAt = fixedDate(1_700_005_000)
         let selectedUpdatedAt = fixedDate(1_700_005_500)
         let controlCreatedAt = fixedDate(1_700_006_000)
@@ -210,6 +256,24 @@ enum HerdRepositoryContract {
             "Unrelated Rollback Control Herd",
             controlCreatedAt,
             controlUpdatedAt
+        )
+        try fixture.ownershipControl.seedPasture(selectedOwnedPastureID, selectedID)
+        try fixture.ownershipControl.seedPasture(controlOwnedPastureID, controlID)
+        try assertOwnedPasture(
+            selectedOwnedPastureID,
+            belongsTo: selectedID,
+            using: fixture,
+            message: "The selected Herd's representative owned Pasture must be established before fault injection.",
+            file: file,
+            line: line
+        )
+        try assertOwnedPasture(
+            controlOwnedPastureID,
+            belongsTo: controlID,
+            using: fixture,
+            message: "The unrelated Herd's representative owned Pasture must be established before fault injection.",
+            file: file,
+            line: line
         )
         try fixture.selectionControl.setCurrentHerdID(selectedID)
 
@@ -258,6 +322,22 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
+        try assertOwnedPasture(
+            selectedOwnedPastureID,
+            belongsTo: selectedID,
+            using: fixture,
+            message: "Rollback must preserve the selected Herd's representative owned Pasture.",
+            file: file,
+            line: line
+        )
+        try assertOwnedPasture(
+            controlOwnedPastureID,
+            belongsTo: controlID,
+            using: fixture,
+            message: "A failed selected-Herd rename must not disturb an unrelated Herd's owned Pasture.",
+            file: file,
+            line: line
+        )
 
         try fixture.selectionControl.setCurrentHerdID(controlID)
         let controlAfterFailure = try fixture.makeHerdRepository().fetchCurrentHerd()
@@ -295,6 +375,22 @@ enum HerdRepositoryContract {
             try fixture.selectionControl.persistedHerdRowCountsByID(),
             [selectedID: 1, controlID: 1],
             "Recovery must preserve the exact durable Herd UUID-to-row-count snapshot.",
+            file: file,
+            line: line
+        )
+        try assertOwnedPasture(
+            selectedOwnedPastureID,
+            belongsTo: selectedID,
+            using: fixture,
+            message: "The recovery rename must preserve the selected Herd's owned Pasture.",
+            file: file,
+            line: line
+        )
+        try assertOwnedPasture(
+            controlOwnedPastureID,
+            belongsTo: controlID,
+            using: fixture,
+            message: "Recovery of the selected Herd must leave the unrelated Herd's owned Pasture unchanged.",
             file: file,
             line: line
         )
@@ -361,6 +457,8 @@ enum HerdRepositoryContract {
             createdAt,
             updatedAt
         )
+        let ownedPastureID = UUID()
+        try fixture.ownershipControl.seedPasture(ownedPastureID, herdID)
         try fixture.selectionControl.setCurrentHerdID(herdID)
 
         let repository = fixture.makeHerdRepository()
@@ -398,6 +496,14 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
+        try assertOwnedPasture(
+            ownedPastureID,
+            belongsTo: herdID,
+            using: fixture,
+            message: "Rejected rename validation must preserve the Herd's representative owned Pasture.",
+            file: file,
+            line: line
+        )
     }
 
     static func assertCurrentHerdSelectionUsesApplicationIdentityAndScopesRename(
@@ -408,6 +514,9 @@ enum HerdRepositoryContract {
         let olderID = UUID()
         let selectedID = UUID()
         let newerID = UUID()
+        let olderOwnedPastureID = UUID()
+        let selectedOwnedPastureID = UUID()
+        let newerOwnedPastureID = UUID()
         let olderCreatedAt = fixedDate(1_650_000_000)
         let olderUpdatedAt = fixedDate(1_650_000_100)
         let selectedCreatedAt = fixedDate(1_700_100_000)
@@ -436,6 +545,9 @@ enum HerdRepositoryContract {
             newerCreatedAt,
             newerUpdatedAt
         )
+        try fixture.ownershipControl.seedPasture(olderOwnedPastureID, olderID)
+        try fixture.ownershipControl.seedPasture(selectedOwnedPastureID, selectedID)
+        try fixture.ownershipControl.seedPasture(newerOwnedPastureID, newerID)
         try fixture.selectionControl.setCurrentHerdID(selectedID)
 
         let selectedRepository = fixture.makeHerdRepository()
@@ -448,6 +560,14 @@ enum HerdRepositoryContract {
             try fixture.selectionControl.persistedHerdRowCountsByID(),
             [olderID: 1, selectedID: 1, newerID: 1],
             "Resolving the selected Herd must not change durable Herd UUIDs or physical row multiplicity.",
+            file: file,
+            line: line
+        )
+        try assertOwnedPasture(
+            selectedOwnedPastureID,
+            belongsTo: selectedID,
+            using: fixture,
+            message: "Resolving the selected Herd must not detach its representative owned Pasture.",
             file: file,
             line: line
         )
@@ -513,6 +633,30 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
+        try assertOwnedPasture(
+            olderOwnedPastureID,
+            belongsTo: olderID,
+            using: fixture,
+            message: "Selected-Herd rename must preserve the older unrelated Herd's owned Pasture.",
+            file: file,
+            line: line
+        )
+        try assertOwnedPasture(
+            selectedOwnedPastureID,
+            belongsTo: selectedID,
+            using: fixture,
+            message: "Selected-Herd rename must preserve the selected Herd's owned Pasture.",
+            file: file,
+            line: line
+        )
+        try assertOwnedPasture(
+            newerOwnedPastureID,
+            belongsTo: newerID,
+            using: fixture,
+            message: "Selected-Herd rename must preserve the newer unrelated Herd's owned Pasture.",
+            file: file,
+            line: line
+        )
     }
 
     static func assertMissingCurrentHerdSelectionDoesNotInferStoredHerd(
@@ -529,6 +673,8 @@ enum HerdRepositoryContract {
             createdAt,
             updatedAt
         )
+        let ownedPastureID = UUID()
+        try fixture.ownershipControl.seedPasture(ownedPastureID, storedID)
         try fixture.selectionControl.setCurrentHerdID(nil)
 
         let repository = fixture.makeHerdRepository()
@@ -566,6 +712,14 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
+        try assertOwnedPasture(
+            ownedPastureID,
+            belongsTo: storedID,
+            using: fixture,
+            message: "Missing-selection reads and failed rename must preserve the stored Herd's owned Pasture.",
+            file: file,
+            line: line
+        )
 
         try fixture.selectionControl.setCurrentHerdID(storedID)
         let stored = try fixture.makeHerdRepository().fetchCurrentHerd()
@@ -589,6 +743,8 @@ enum HerdRepositoryContract {
             storedCreatedAt,
             storedUpdatedAt
         )
+        let ownedPastureID = UUID()
+        try fixture.ownershipControl.seedPasture(ownedPastureID, storedID)
         try fixture.selectionControl.setCurrentHerdID(UUID())
 
         let repository = fixture.makeHerdRepository()
@@ -626,6 +782,14 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
+        try assertOwnedPasture(
+            ownedPastureID,
+            belongsTo: storedID,
+            using: fixture,
+            message: "Stale-selection reads and failed rename must preserve the stored Herd's owned Pasture.",
+            file: file,
+            line: line
+        )
 
         try fixture.selectionControl.setCurrentHerdID(storedID)
         let stored = try fixture.makeHerdRepository().fetchCurrentHerd()
@@ -633,6 +797,23 @@ enum HerdRepositoryContract {
         XCTAssertEqual(stored.name, "Stored But Not Selected", file: file, line: line)
         XCTAssertEqual(stored.createdAt, storedCreatedAt, file: file, line: line)
         XCTAssertEqual(stored.updatedAt, storedUpdatedAt, file: file, line: line)
+    }
+
+    private static func assertOwnedPasture(
+        _ pastureID: UUID,
+        belongsTo herdID: UUID,
+        using fixture: HerdRepositoryContractFixture,
+        message: String,
+        file: StaticString,
+        line: UInt
+    ) throws {
+        XCTAssertEqual(
+            try fixture.ownershipControl.persistedPasture(pastureID),
+            HerdRepositoryOwnedPastureContractSnapshot(id: pastureID, herdID: herdID),
+            message,
+            file: file,
+            line: line
+        )
     }
 
     private static func assertMissingHerd(
