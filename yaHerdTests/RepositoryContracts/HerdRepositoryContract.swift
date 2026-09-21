@@ -71,6 +71,13 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(
+            try fixture.selectionControl.allPersistedHerdIDs(),
+            [],
+            "A failed current-Herd read on an empty store must not create a hidden Herd root.",
+            file: file,
+            line: line
+        )
         assertMissingHerd(
             try repository.renameCurrentHerd(to: "Contract Herd"),
             file: file,
@@ -427,6 +434,13 @@ enum HerdRepositoryContract {
         XCTAssertEqual(selected.name, "Selected Herd", file: file, line: line)
         XCTAssertEqual(selected.createdAt, selectedCreatedAt, file: file, line: line)
         XCTAssertEqual(selected.updatedAt, selectedUpdatedAt, file: file, line: line)
+        XCTAssertEqual(
+            try fixture.selectionControl.allPersistedHerdIDs(),
+            [olderID, selectedID, newerID],
+            "Resolving the selected Herd must not create, replace, or delete any Herd root.",
+            file: file,
+            line: line
+        )
 
         let renamedSelected = try fixture.makeHerdRepository().renameCurrentHerd(
             to: "  Selected Herd Renamed  "
@@ -499,6 +513,13 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(
+            try fixture.selectionControl.allPersistedHerdIDs(),
+            [storedID],
+            "A missing-selection read must not create, replace, or delete a Herd root.",
+            file: file,
+            line: line
+        )
         assertMissingHerd(
             try repository.renameCurrentHerd(to: "Must Not Infer"),
             file: file,
@@ -549,6 +570,13 @@ enum HerdRepositoryContract {
         let repository = fixture.makeHerdRepository()
         assertMissingHerd(
             try repository.fetchCurrentHerd(),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try fixture.selectionControl.allPersistedHerdIDs(),
+            [storedID],
+            "A stale-selection read must not create, replace, delete, or fall back to another Herd root.",
             file: file,
             line: line
         )
