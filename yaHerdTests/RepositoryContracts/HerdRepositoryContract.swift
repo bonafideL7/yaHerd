@@ -18,10 +18,14 @@ struct HerdRepositorySelectionTestControl {
     ) throws -> Void
     let setCurrentHerdID: (_ id: UUID?) throws -> Void
 
-    /// Returns every durably persisted Herd application UUID regardless of current selection.
-    /// The future Core Data runner must read this through a fresh unscoped persistence access
-    /// scope so hidden/unselected roots created by a failed operation cannot be filtered away.
-    let allPersistedHerdIDs: () throws -> Set<UUID>
+    /// Returns physical persisted Herd-row multiplicity grouped by application UUID regardless of
+    /// current selection. The future Core Data runner must read this through a fresh unscoped
+    /// persistence access scope so hidden/unselected roots — including duplicate physical rows that
+    /// share one application UUID — cannot be filtered away or collapsed by the test control.
+    ///
+    /// Generic rejection of intentionally seeded duplicate application UUIDs remains owned by
+    /// `IdentityContract`; this probe only proves Herd operations preserve the physical root set.
+    let persistedHerdRowCountsByID: () throws -> [UUID: Int]
 }
 
 /// Distinguishes the intended post-mutation commit failpoint from validation or lookup failures.
@@ -77,8 +81,8 @@ enum HerdRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try fixture.selectionControl.allPersistedHerdIDs(),
-            [],
+            try fixture.selectionControl.persistedHerdRowCountsByID(),
+            [:],
             "A failed current-Herd read on an empty store must not create a hidden Herd root.",
             file: file,
             line: line
@@ -96,8 +100,8 @@ enum HerdRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try fixture.selectionControl.allPersistedHerdIDs(),
-            [],
+            try fixture.selectionControl.persistedHerdRowCountsByID(),
+            [:],
             "Failed reads/rename on an empty store must not create a hidden or unselected Herd root.",
             file: file,
             line: line
@@ -174,8 +178,8 @@ enum HerdRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try fixture.selectionControl.allPersistedHerdIDs(),
-            [herdID],
+            try fixture.selectionControl.persistedHerdRowCountsByID(),
+            [herdID: 1],
             "Rename must update the selected Herd in place rather than creating another Herd root.",
             file: file,
             line: line
@@ -248,8 +252,8 @@ enum HerdRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try fixture.selectionControl.allPersistedHerdIDs(),
-            [selectedID, controlID],
+            try fixture.selectionControl.persistedHerdRowCountsByID(),
+            [selectedID: 1, controlID: 1],
             "A failed rename must not create, replace, or delete a Herd root.",
             file: file,
             line: line
@@ -288,8 +292,8 @@ enum HerdRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try fixture.selectionControl.allPersistedHerdIDs(),
-            [selectedID, controlID],
+            try fixture.selectionControl.persistedHerdRowCountsByID(),
+            [selectedID: 1, controlID: 1],
             "Recovery must still rename in place without creating or deleting Herd roots.",
             file: file,
             line: line
@@ -335,8 +339,8 @@ enum HerdRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try fixture.selectionControl.allPersistedHerdIDs(),
-            [],
+            try fixture.selectionControl.persistedHerdRowCountsByID(),
+            [:],
             "Whitespace-only rename on an empty store must not bootstrap a hidden Herd.",
             file: file,
             line: line
@@ -388,8 +392,8 @@ enum HerdRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try fixture.selectionControl.allPersistedHerdIDs(),
-            [herdID],
+            try fixture.selectionControl.persistedHerdRowCountsByID(),
+            [herdID: 1],
             "Validation failure must not create, replace, or delete a Herd root.",
             file: file,
             line: line
@@ -441,8 +445,8 @@ enum HerdRepositoryContract {
         XCTAssertEqual(selected.createdAt, selectedCreatedAt, file: file, line: line)
         XCTAssertEqual(selected.updatedAt, selectedUpdatedAt, file: file, line: line)
         XCTAssertEqual(
-            try fixture.selectionControl.allPersistedHerdIDs(),
-            [olderID, selectedID, newerID],
+            try fixture.selectionControl.persistedHerdRowCountsByID(),
+            [olderID: 1, selectedID: 1, newerID: 1],
             "Resolving the selected Herd must not create, replace, or delete any Herd root.",
             file: file,
             line: line
@@ -503,8 +507,8 @@ enum HerdRepositoryContract {
         XCTAssertEqual(selectedReload.createdAt, selectedCreatedAt, file: file, line: line)
         XCTAssertEqual(selectedReload.updatedAt, renamedSelected.updatedAt, file: file, line: line)
         XCTAssertEqual(
-            try fixture.selectionControl.allPersistedHerdIDs(),
-            [olderID, selectedID, newerID],
+            try fixture.selectionControl.persistedHerdRowCountsByID(),
+            [olderID: 1, selectedID: 1, newerID: 1],
             "Selected-Herd rename must preserve the complete durable Herd identity set.",
             file: file,
             line: line
@@ -534,8 +538,8 @@ enum HerdRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try fixture.selectionControl.allPersistedHerdIDs(),
-            [storedID],
+            try fixture.selectionControl.persistedHerdRowCountsByID(),
+            [storedID: 1],
             "A missing-selection read must not create, replace, or delete a Herd root.",
             file: file,
             line: line
@@ -556,8 +560,8 @@ enum HerdRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try fixture.selectionControl.allPersistedHerdIDs(),
-            [storedID],
+            try fixture.selectionControl.persistedHerdRowCountsByID(),
+            [storedID: 1],
             "Missing selection must not cause rename to bootstrap another Herd root.",
             file: file,
             line: line
@@ -594,8 +598,8 @@ enum HerdRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try fixture.selectionControl.allPersistedHerdIDs(),
-            [storedID],
+            try fixture.selectionControl.persistedHerdRowCountsByID(),
+            [storedID: 1],
             "A stale-selection read must not create, replace, delete, or fall back to another Herd root.",
             file: file,
             line: line
@@ -616,8 +620,8 @@ enum HerdRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try fixture.selectionControl.allPersistedHerdIDs(),
-            [storedID],
+            try fixture.selectionControl.persistedHerdRowCountsByID(),
+            [storedID: 1],
             "Stale selection must not cause rename to bootstrap or fall back by creating another Herd root.",
             file: file,
             line: line
