@@ -330,13 +330,17 @@ enum HerdRepositoryContract {
     ) throws {
         let olderID = UUID()
         let selectedID = UUID()
+        let newerID = UUID()
         let olderCreatedAt = fixedDate(1_650_000_000)
         let olderUpdatedAt = fixedDate(1_650_000_100)
         let selectedCreatedAt = fixedDate(1_700_100_000)
         let selectedUpdatedAt = fixedDate(1_700_100_100)
+        let newerCreatedAt = fixedDate(1_750_000_000)
+        let newerUpdatedAt = fixedDate(1_750_000_100)
 
-        // Seed the older Herd first so an implementation that simply returns the first/oldest
-        // persistence row cannot accidentally satisfy the contract.
+        // Select the middle Herd by application UUID. With both an older/first-inserted and a
+        // newer/last-inserted control, implementations that choose first, last, oldest, or newest
+        // persistence rows cannot accidentally satisfy the contract.
         try fixture.selectionControl.seedHerd(
             olderID,
             "Older Noncurrent Herd",
@@ -348,6 +352,12 @@ enum HerdRepositoryContract {
             "Selected Herd",
             selectedCreatedAt,
             selectedUpdatedAt
+        )
+        try fixture.selectionControl.seedHerd(
+            newerID,
+            "Newer Noncurrent Herd",
+            newerCreatedAt,
+            newerUpdatedAt
         )
         try fixture.selectionControl.setCurrentHerdID(selectedID)
 
@@ -377,6 +387,19 @@ enum HerdRepositoryContract {
         )
         XCTAssertEqual(older.createdAt, olderCreatedAt, file: file, line: line)
         XCTAssertEqual(older.updatedAt, olderUpdatedAt, file: file, line: line)
+
+        try fixture.selectionControl.setCurrentHerdID(newerID)
+        let newer = try fixture.makeHerdRepository().fetchCurrentHerd()
+        XCTAssertEqual(newer.publicID, newerID, file: file, line: line)
+        XCTAssertEqual(
+            newer.name,
+            "Newer Noncurrent Herd",
+            "Renaming the selected Herd must not mutate a newer/last-inserted Herd.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(newer.createdAt, newerCreatedAt, file: file, line: line)
+        XCTAssertEqual(newer.updatedAt, newerUpdatedAt, file: file, line: line)
 
         try fixture.selectionControl.setCurrentHerdID(selectedID)
         let selectedReload = try fixture.makeHerdRepository().fetchCurrentHerd()
