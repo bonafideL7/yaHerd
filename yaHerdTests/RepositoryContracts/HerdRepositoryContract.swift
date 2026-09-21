@@ -217,6 +217,20 @@ enum HerdRepositoryContract {
             line: line
         )
 
+        try fixture.selectionControl.setCurrentHerdID(controlID)
+        let controlAfterFailure = try fixture.makeHerdRepository().fetchCurrentHerd()
+        XCTAssertEqual(controlAfterFailure.publicID, controlID, file: file, line: line)
+        XCTAssertEqual(controlAfterFailure.name, "Unrelated Rollback Control Herd", file: file, line: line)
+        XCTAssertEqual(controlAfterFailure.createdAt, controlCreatedAt, file: file, line: line)
+        XCTAssertEqual(
+            controlAfterFailure.updatedAt,
+            controlUpdatedAt,
+            "The failed selected-Herd rename must not mutate an unrelated stored Herd.",
+            file: file,
+            line: line
+        )
+
+        try fixture.selectionControl.setCurrentHerdID(selectedID)
         let recovered = try repository.renameCurrentHerd(to: "  Recovered Herd  ")
         XCTAssertEqual(recovered.publicID, selectedID, file: file, line: line)
         XCTAssertEqual(recovered.createdAt, selectedCreatedAt, file: file, line: line)
