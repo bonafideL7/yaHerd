@@ -292,6 +292,16 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
+        assertMissingHerd(
+            try repository.fetchCurrentHerd(),
+            file: file,
+            line: line
+        )
+        assertMissingHerd(
+            try fixture.makeHerdRepository().fetchCurrentHerd(),
+            file: file,
+            line: line
+        )
 
         try fixture.selectionControl.setCurrentHerdID(storedID)
         let stored = try fixture.makeHerdRepository().fetchCurrentHerd()
@@ -325,6 +335,16 @@ enum HerdRepositoryContract {
         )
         assertMissingHerd(
             try repository.renameCurrentHerd(to: "Must Not Fall Back"),
+            file: file,
+            line: line
+        )
+        assertMissingHerd(
+            try repository.fetchCurrentHerd(),
+            file: file,
+            line: line
+        )
+        assertMissingHerd(
+            try fixture.makeHerdRepository().fetchCurrentHerd(),
             file: file,
             line: line
         )
