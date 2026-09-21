@@ -45,6 +45,9 @@ struct HerdRepositoryRollbackFailureInjection {
 /// repository will execute it once Herd persistence and current-workspace selection are implemented.
 @MainActor
 struct HerdRepositoryContractFixture {
+    /// Every invocation must return a new repository backed by a fresh persistence access scope
+    /// over the same test store and current-Herd selection source. This makes fresh-reload
+    /// assertions independent from the context used by an earlier repository instance.
     let makeHerdRepository: () -> any HerdRepository
     let selectionControl: HerdRepositorySelectionTestControl
 }
