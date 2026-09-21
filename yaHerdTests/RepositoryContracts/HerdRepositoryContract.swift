@@ -31,8 +31,10 @@ struct HerdRepositorySelectionTestControl {
 /// Persistence-neutral snapshot for one representative Herd-owned record.
 ///
 /// The future Core Data runner should back this with a real persisted Pasture row because Pasture is
-/// directly Herd-owned in the target model. The contract observes only application UUID ownership:
-/// it does not expose managed objects, object IDs, or Pasture feature behavior.
+/// directly Herd-owned in the target model. The runner must seed/read that row through test persistence
+/// infrastructure, not through `PastureRepository`, because the Herd repository is implemented earlier
+/// in the Core Data sequence. The contract observes only application UUID ownership: it does not expose
+/// managed objects, object IDs, or Pasture feature behavior.
 struct HerdRepositoryOwnedPastureContractSnapshot: Equatable {
     let id: UUID
     let herdID: UUID?
@@ -41,9 +43,10 @@ struct HerdRepositoryOwnedPastureContractSnapshot: Equatable {
 /// Target-only control used to prove Herd mutations preserve the owned graph.
 ///
 /// This is intentionally representative rather than a duplicate of the complete Core Data
-/// relationship/delete-rule matrix. Phase 1 model validation remains responsible for every Herd
-/// relationship and delete rule; this control proves that the Herd rename lifecycle does not
-/// destructively replace the scope root while leaving only matching Herd scalars behind.
+/// relationship/delete-rule matrix. It is also independent of the production Pasture repository.
+/// Phase 1 model validation remains responsible for every Herd relationship and delete rule; this
+/// control proves that the Herd rename lifecycle does not destructively replace the scope root while
+/// leaving only matching Herd scalars behind.
 @MainActor
 struct HerdRepositoryOwnershipTestControl {
     let seedPasture: (_ id: UUID, _ herdID: UUID) throws -> Void
