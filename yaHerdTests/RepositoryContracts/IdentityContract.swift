@@ -74,6 +74,9 @@ protocol IdentityContractTestControl {
 }
 
 /// Permanent persistence-neutral fixture for cross-cutting application identity integrity.
+///
+/// Each `makeTestControl` call must return a fresh access object over the same isolated backing
+/// persistence so the contract can distinguish durable state from one context's in-memory state.
 @MainActor
 struct IdentityContractFixture {
     let makeTestControl: () -> any IdentityContractTestControl
@@ -96,20 +99,20 @@ enum IdentityContract {
         line: UInt = #line
     ) throws {
         for kind in IdentityContractEntityKind.allCases {
-            let control = fixture.makeTestControl()
             let applicationID = UUID()
 
-            try control.seedEntity(
+            try fixture.makeTestControl().seedEntity(
                 kind,
                 id: applicationID,
                 variant: .original
             )
 
-            let before = try control.snapshots(for: kind, id: applicationID)
+            let baselineControl = fixture.makeTestControl()
+            let before = try baselineControl.snapshots(for: kind, id: applicationID)
             XCTAssertEqual(
                 before.count,
                 1,
-                "Identity contract setup must create exactly one \(kind.rawValue) with the requested application UUID.",
+                "Identity contract setup must durably create exactly one \(kind.rawValue) with the requested application UUID.",
                 file: file,
                 line: line
             )
@@ -122,7 +125,7 @@ enum IdentityContract {
                 line: line
             )
 
-            let idsBeforeDuplicateAttempt = try control.allEntityIDs(for: kind)
+            let idsBeforeDuplicateAttempt = try baselineControl.allEntityIDs(for: kind)
             XCTAssertEqual(
                 idsBeforeDuplicateAttempt.filter { $0 == applicationID }.count,
                 1,
@@ -132,7 +135,7 @@ enum IdentityContract {
             )
 
             XCTAssertThrowsError(
-                try control.seedEntity(
+                try fixture.makeTestControl().seedEntity(
                     kind,
                     id: applicationID,
                     variant: .conflictingDuplicate
@@ -142,20 +145,21 @@ enum IdentityContract {
                 line: line
             )
 
-            let after = try control.snapshots(for: kind, id: applicationID)
+            let reloadControl = fixture.makeTestControl()
+            let after = try reloadControl.snapshots(for: kind, id: applicationID)
             XCTAssertEqual(
                 after,
                 [original],
-                "A rejected duplicate \(kind.rawValue) must not merge into, replace, or mutate the established entity.",
+                "A rejected duplicate \(kind.rawValue) must not merge into, replace, or mutate the established entity after reload.",
                 file: file,
                 line: line
             )
 
-            let idsAfterDuplicateAttempt = try control.allEntityIDs(for: kind)
+            let idsAfterDuplicateAttempt = try reloadControl.allEntityIDs(for: kind)
             XCTAssertEqual(
                 idsAfterDuplicateAttempt,
                 idsBeforeDuplicateAttempt,
-                "Rejecting a duplicate \(kind.rawValue) must not silently mint a replacement UUID or otherwise change the entity set.",
+                "Rejecting a duplicate \(kind.rawValue) must not silently mint a replacement UUID or otherwise change the durable entity set.",
                 file: file,
                 line: line
             )
