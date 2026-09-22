@@ -13,6 +13,8 @@ struct TagColorReferenceSnapshot: Equatable {
     let fieldCheckRosterTagColorID: UUID?
     let fieldCheckDamRosterTagColorID: UUID?
     let fieldCheckFindingTagColorIDSnapshot: UUID?
+    let workingQueueTagColorIDSnapshot: UUID?
+    let workingQueueDamTagColorIDSnapshot: UUID?
 }
 
 /// Target-only hooks used to establish and inspect tag-color UUID references.
@@ -455,7 +457,9 @@ enum TagColorRepositoryContract {
                 historicalTagColorID: canonicalID,
                 fieldCheckRosterTagColorID: canonicalID,
                 fieldCheckDamRosterTagColorID: canonicalID,
-                fieldCheckFindingTagColorIDSnapshot: canonicalID
+                fieldCheckFindingTagColorIDSnapshot: canonicalID,
+                workingQueueTagColorIDSnapshot: canonicalID,
+                workingQueueDamTagColorIDSnapshot: canonicalID
             ),
             "Merging duplicate tag-color identities must remap every persisted UUID reference.",
             file: file,
@@ -502,6 +506,9 @@ enum TagColorRepositoryContract {
             file: file,
             line: line
         )
+        XCTAssertEqual(merged.name, "blue", file: file, line: line)
+        XCTAssertEqual(merged.prefix, "CUSTOM-BLUE", file: file, line: line)
+        XCTAssertEqual(merged.rgba, incoming.rgba, file: file, line: line)
         XCTAssertFalse(reloaded.contains { $0.id == incomingID }, file: file, line: line)
 
         XCTAssertEqual(
@@ -511,7 +518,9 @@ enum TagColorRepositoryContract {
                 historicalTagColorID: TagColorDefaults.blueID,
                 fieldCheckRosterTagColorID: TagColorDefaults.blueID,
                 fieldCheckDamRosterTagColorID: TagColorDefaults.blueID,
-                fieldCheckFindingTagColorIDSnapshot: TagColorDefaults.blueID
+                fieldCheckFindingTagColorIDSnapshot: TagColorDefaults.blueID,
+                workingQueueTagColorIDSnapshot: TagColorDefaults.blueID,
+                workingQueueDamTagColorIDSnapshot: TagColorDefaults.blueID
             ),
             "Built-in collision repair must remap every persisted UUID reference to the stable built-in identity.",
             file: file,
@@ -550,7 +559,9 @@ enum TagColorRepositoryContract {
                 historicalTagColorID: colorID,
                 fieldCheckRosterTagColorID: colorID,
                 fieldCheckDamRosterTagColorID: colorID,
-                fieldCheckFindingTagColorIDSnapshot: colorID
+                fieldCheckFindingTagColorIDSnapshot: colorID,
+                workingQueueTagColorIDSnapshot: colorID,
+                workingQueueDamTagColorIDSnapshot: colorID
             ),
             "Removing a visible tag color must not rewrite or nullify persisted historical color identity.",
             file: file,
@@ -685,7 +696,7 @@ enum TagColorRepositoryContract {
         )
     }
 
-    static func assertMissingOrStaleCurrentHerdDoesNotFallbackOrBootstrapOnWrite(
+    static func assertMissingOrStaleCurrentHerdDoesNotFallbackOrBootstrapOnReadOrWrite(
         using fixture: TagColorRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
@@ -714,6 +725,13 @@ enum TagColorRepositoryContract {
         try fixture.herdSelectionControl.setCurrentHerdID(UUID())
 
         XCTAssertThrowsError(
+            try fixture.makeTagColorRepository().fetchColors(),
+            "A stale current-Herd UUID must reject a Herd-owned tag-color read.",
+            file: file,
+            line: line
+        )
+
+        XCTAssertThrowsError(
             try fixture.makeTagColorRepository().upsert(
                 TagColorSnapshot(
                     id: staleColorID,
@@ -729,6 +747,13 @@ enum TagColorRepositoryContract {
 
         let missingColorID = UUID()
         try fixture.herdSelectionControl.setCurrentHerdID(nil)
+
+        XCTAssertThrowsError(
+            try fixture.makeTagColorRepository().fetchColors(),
+            "A missing current-Herd selection must reject a Herd-owned tag-color read.",
+            file: file,
+            line: line
+        )
 
         XCTAssertThrowsError(
             try fixture.makeTagColorRepository().upsert(
