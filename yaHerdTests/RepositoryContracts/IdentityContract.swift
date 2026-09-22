@@ -193,6 +193,21 @@ enum IdentityContract {
 
             let supportStateBeforeDuplicateAttempt = try baselineControl
                 .supportStateSnapshot(for: kind)
+            if kind == .herd {
+                XCTAssertTrue(
+                    supportStateBeforeDuplicateAttempt.records.isEmpty,
+                    "The Herd identity probe must not invent owning-Herd or parent support records.",
+                    file: file,
+                    line: line
+                )
+            } else {
+                XCTAssertTrue(
+                    supportStateBeforeDuplicateAttempt.records.contains { $0.kind == .herd },
+                    "Every herd-owned identity probe must expose its owning Herd in the support-state snapshot.",
+                    file: file,
+                    line: line
+                )
+            }
 
             let idsBeforeDuplicateAttempt = try baselineControl
                 .allEntityIDsInIdentityScope(for: kind)
