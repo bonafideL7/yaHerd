@@ -27,23 +27,24 @@ enum IdentityContractEntityKind: String, CaseIterable, Sendable {
     case workingTreatmentRecord
 }
 
-/// Two valid payload variants used by the target runner when probing duplicate application IDs.
+/// Valid payload variants used by the target runner when probing duplicate application IDs.
 ///
-/// The conflicting duplicate must differ from the original in at least one persisted business
-/// value so the contract can detect an implementation that silently merges or overwrites the
-/// established entity instead of rejecting the duplicate identity.
+/// `.original` and `.unrelatedControl` must both create valid independent records with distinct
+/// business payload. `.conflictingDuplicate` must differ from `.original` in at least one persisted
+/// business value while reusing the supplied application UUID so the contract can detect silent
+/// merge/overwrite behavior.
 enum IdentityContractSeedVariant: Sendable {
     case original
+    case unrelatedControl
     case conflictingDuplicate
 }
 
 /// Persistence-neutral value snapshot used to prove a failed duplicate insert did not replace or
-/// mutate the established entity.
+/// mutate the established entity or an unrelated same-kind control.
 ///
 /// `payloadFingerprint` is produced by the concrete runner from stable persisted business values.
-/// It must include the value that differs between `.original` and `.conflictingDuplicate` for the
-/// corresponding entity kind. It must not contain framework object IDs, store identifiers, or other
-/// persistence-native identity.
+/// It must distinguish the three seed variants for the corresponding entity kind. It must not
+/// contain framework object IDs, store identifiers, or other persistence-native identity.
 struct IdentityContractEntitySnapshot: Equatable, Sendable {
     let id: UUID
     let payloadFingerprint: String
@@ -55,7 +56,7 @@ struct IdentityContractEntitySnapshot: Equatable, Sendable {
 ///
 /// A future Core Data runner should create valid records, including any required owning Herd or
 /// parent relationships, without exposing managed objects or contexts to this permanent contract.
-/// For herd-owned entity kinds, both seed variants must be created under the same contract Herd so
+/// For herd-owned entity kinds, all seed variants must be created under the same contract Herd so
 /// this probe cannot accidentally test feature-specific cross-Herd identity semantics.
 /// `seedEntity` must surface duplicate-identity persistence failure rather than translating it into
 /// an update, silently deleting/replacing the original, or minting a different UUID.
@@ -92,7 +93,7 @@ struct IdentityContractFixture {
 ///   flows, Herd scoping, and feature-specific relationship resolution by application UUID.
 /// - This contract owns duplicate application UUID rejection inside one repository identity scope
 ///   across every independently persisted entity and proves a failed duplicate cannot overwrite,
-///   merge, or remint the logical entity.
+///   merge, delete unrelated same-kind state, or remint the logical entity.
 /// - Phase 2 Core Data model-structure tests own physical UUID attribute requiredness, indexes, and
 ///   uniqueness-constraint declarations. Physical constraints must not be stronger than permanent
 ///   feature contracts such as Herd-scoped stable built-in Tag Color identities.
@@ -105,11 +106,17 @@ enum IdentityContract {
     ) throws {
         for kind in IdentityContractEntityKind.allCases {
             let applicationID = UUID()
+            let unrelatedControlID = UUID()
 
             try fixture.makeTestControl().seedEntity(
                 kind,
                 id: applicationID,
                 variant: .original
+            )
+            try fixture.makeTestControl().seedEntity(
+                kind,
+                id: unrelatedControlID,
+                variant: .unrelatedControl
             )
 
             let baselineControl = fixture.makeTestControl()
@@ -133,12 +140,39 @@ enum IdentityContract {
                 line: line
             )
 
+            let controlBefore = try baselineControl.snapshotsInIdentityScope(
+                for: kind,
+                id: unrelatedControlID
+            )
+            XCTAssertEqual(
+                controlBefore.count,
+                1,
+                "Identity contract setup must create one unrelated \(kind.rawValue) control record.",
+                file: file,
+                line: line
+            )
+            let unrelatedControl = try XCTUnwrap(controlBefore.first, file: file, line: line)
+            XCTAssertEqual(unrelatedControl.id, unrelatedControlID, file: file, line: line)
+            XCTAssertNotEqual(
+                unrelatedControl.payloadFingerprint,
+                original.payloadFingerprint,
+                "The unrelated \(kind.rawValue) control must have distinct business payload.",
+                file: file,
+                line: line
+            )
+
             let idsBeforeDuplicateAttempt = try baselineControl
                 .allEntityIDsInIdentityScope(for: kind)
             XCTAssertEqual(
                 idsBeforeDuplicateAttempt.filter { $0 == applicationID }.count,
                 1,
                 "Exactly one \(kind.rawValue) may own an established application UUID inside one repository identity scope.",
+                file: file,
+                line: line
+            )
+            XCTAssertTrue(
+                idsBeforeDuplicateAttempt.contains(unrelatedControlID),
+                "The unrelated \(kind.rawValue) control must exist before the duplicate attempt.",
                 file: file,
                 line: line
             )
@@ -163,6 +197,18 @@ enum IdentityContract {
                 after,
                 [original],
                 "A rejected duplicate \(kind.rawValue) must not merge into, replace, or mutate the established entity after reload.",
+                file: file,
+                line: line
+            )
+
+            let controlAfter = try reloadControl.snapshotsInIdentityScope(
+                for: kind,
+                id: unrelatedControlID
+            )
+            XCTAssertEqual(
+                controlAfter,
+                [unrelatedControl],
+                "A rejected duplicate \(kind.rawValue) must not mutate or remove an unrelated same-kind record.",
                 file: file,
                 line: line
             )
