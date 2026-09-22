@@ -25,8 +25,6 @@ enum IdentityContractEntityKind: String, CaseIterable, Hashable, Sendable {
     case workingSession
     case workingQueueItem
     case workingTreatmentRecord
-
-
 }
 
 /// Valid payload variants used by the target runner when probing duplicate application IDs.
