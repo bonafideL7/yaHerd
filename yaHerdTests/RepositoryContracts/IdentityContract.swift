@@ -26,29 +26,7 @@ enum IdentityContractEntityKind: String, CaseIterable, Hashable, Sendable {
     case workingQueueItem
     case workingTreatmentRecord
 
-    /// Minimum durable support graph required for a valid first save in the approved Core Data
-    /// blueprint. Optional live relationships are intentionally excluded.
-    var requiredSupportKinds: Set<IdentityContractEntityKind> {
-        switch self {
-        case .herd:
-            return []
-        case .animalTag, .movementRecord, .statusRecord, .healthRecord, .pregnancyCheck:
-            return [.herd, .animal]
-        case .fieldCheckAnimalCheck, .fieldCheckFinding:
-            return [.herd, .fieldCheckSession]
-        case .workingQueueItem, .workingTreatmentRecord:
-            return [.herd, .workingSession]
-        case .tagColorDefinition,
-             .animalStatusReference,
-             .pastureGroup,
-             .pasture,
-             .animal,
-             .fieldCheckSession,
-             .workingTreatmentTemplate,
-             .workingSession:
-            return [.herd]
-        }
-    }
+
 }
 
 /// Valid payload variants used by the target runner when probing duplicate application IDs.
@@ -88,10 +66,11 @@ struct IdentityContractSupportRecordSnapshot: Hashable, Sendable {
 
 /// Persistence-neutral snapshot of the complete non-target state required by one identity probe.
 ///
-/// The Core Data runner must include the owning Herd plus every parent/support record created or
-/// reused to make the target entity valid. The target entity rows themselves are excluded because
-/// they are asserted separately. For `Herd`, where no owning/parent support exists, `records` is
-/// an empty set.
+/// The Core Data runner must include every owning/parent/support record it creates or reuses to make
+/// the target entity valid. Exact required relationship kinds remain owned by Core Data model
+/// structure tests; this identity contract compares the complete runner-declared support state before
+/// and after the duplicate failure. The target entity rows themselves are excluded because they are
+/// asserted separately. For `Herd`, where no owning/parent support exists, `records` is empty.
 struct IdentityContractSupportStateSnapshot: Equatable, Sendable {
     let records: Set<IdentityContractSupportRecordSnapshot>
 }
@@ -108,8 +87,9 @@ struct IdentityContractSupportStateSnapshot: Equatable, Sendable {
 /// `seedEntity` must ensure every non-ID constraint is satisfied, then surface duplicate-identity
 /// persistence failure rather than translating it into an update, silently deleting/replacing the
 /// original, or minting a different UUID. A conflicting seed must reuse the same support graph
-/// represented by `supportStateSnapshot`; it must not manufacture throwaway parents whose cleanup
-/// could hide partial persistence after the expected failure.
+/// represented by `supportStateSnapshot`; every support row used by the probe must be represented,
+/// and the runner must not manufacture unreported throwaway parents whose cleanup could hide partial
+/// persistence after the expected failure.
 @MainActor
 protocol IdentityContractTestControl {
     /// Returns the persisted Herd UUID that defines this probe's repository identity scope.
@@ -268,16 +248,6 @@ enum IdentityContract {
 
             let supportStateBeforeDuplicateAttempt = try baselineControl
                 .supportStateSnapshot(for: kind)
-            let supportKinds = Set(
-                supportStateBeforeDuplicateAttempt.records.map(\.kind)
-            )
-            let missingRequiredSupportKinds = kind.requiredSupportKinds.subtracting(supportKinds)
-            XCTAssertTrue(
-                missingRequiredSupportKinds.isEmpty,
-                "The \(kind.rawValue) identity probe is missing required support kinds: \(missingRequiredSupportKinds.map(\.rawValue).sorted().joined(separator: ", ")).",
-                file: file,
-                line: line
-            )
             if kind == .herd {
                 XCTAssertTrue(
                     supportStateBeforeDuplicateAttempt.records.isEmpty,
