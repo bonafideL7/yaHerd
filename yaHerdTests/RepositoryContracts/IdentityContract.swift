@@ -105,10 +105,11 @@ struct IdentityContractFixture {
 /// Permanent cross-cutting application identity contract.
 ///
 /// Ownership boundaries:
-/// - Feature repository contracts own UUID preservation through ordinary create/read/update/reload
-///   flows, Herd scoping, and feature-specific relationship resolution by application UUID.
-/// - This contract owns duplicate application UUID rejection inside one repository identity scope
-///   across every independently persisted entity and proves a failed duplicate cannot overwrite,
+/// - This contract owns first durable save/fresh-reload UUID preservation for every independently
+///   persisted entity plus duplicate application UUID rejection inside one repository identity scope.
+/// - Feature repository contracts own subsequent feature-visible edits/reloads, Herd scoping, and
+///   feature-specific relationship resolution by application UUID.
+/// - Duplicate rejection proves a failed duplicate cannot overwrite,
 ///   merge, delete unrelated same-kind state, or remint the logical entity.
 /// - Phase 2 Core Data model-structure tests own physical UUID attribute requiredness, indexes, and
 ///   uniqueness-constraint declarations. Physical constraints must not be stronger than permanent
