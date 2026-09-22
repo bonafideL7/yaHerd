@@ -25,6 +25,30 @@ enum IdentityContractEntityKind: String, CaseIterable, Hashable, Sendable {
     case workingSession
     case workingQueueItem
     case workingTreatmentRecord
+
+    /// Minimum durable support graph required for a valid first save in the approved Core Data
+    /// blueprint. Optional live relationships are intentionally excluded.
+    var requiredSupportKinds: Set<IdentityContractEntityKind> {
+        switch self {
+        case .herd:
+            return []
+        case .animalTag, .movementRecord, .statusRecord, .healthRecord, .pregnancyCheck:
+            return [.herd, .animal]
+        case .fieldCheckAnimalCheck, .fieldCheckFinding:
+            return [.herd, .fieldCheckSession]
+        case .workingQueueItem, .workingTreatmentRecord:
+            return [.herd, .workingSession]
+        case .tagColorDefinition,
+             .animalStatusReference,
+             .pastureGroup,
+             .pasture,
+             .animal,
+             .fieldCheckSession,
+             .workingTreatmentTemplate,
+             .workingSession:
+            return [.herd]
+        }
+    }
 }
 
 /// Valid payload variants used by the target runner when probing duplicate application IDs.
@@ -193,17 +217,20 @@ enum IdentityContract {
 
             let supportStateBeforeDuplicateAttempt = try baselineControl
                 .supportStateSnapshot(for: kind)
+            let supportKinds = Set(
+                supportStateBeforeDuplicateAttempt.records.map(\.kind)
+            )
+            let missingRequiredSupportKinds = kind.requiredSupportKinds.subtracting(supportKinds)
+            XCTAssertTrue(
+                missingRequiredSupportKinds.isEmpty,
+                "The \(kind.rawValue) identity probe is missing required support kinds: \(missingRequiredSupportKinds.map(\.rawValue).sorted().joined(separator: \", \")).",
+                file: file,
+                line: line
+            )
             if kind == .herd {
                 XCTAssertTrue(
                     supportStateBeforeDuplicateAttempt.records.isEmpty,
                     "The Herd identity probe must not invent owning-Herd or parent support records.",
-                    file: file,
-                    line: line
-                )
-            } else {
-                XCTAssertTrue(
-                    supportStateBeforeDuplicateAttempt.records.contains { $0.kind == .herd },
-                    "Every herd-owned identity probe must expose its owning Herd in the support-state snapshot.",
                     file: file,
                     line: line
                 )
