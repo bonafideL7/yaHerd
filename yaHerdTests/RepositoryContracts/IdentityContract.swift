@@ -106,12 +106,13 @@ protocol IdentityContractTestControl {
 
 /// Permanent persistence-neutral fixture for cross-cutting application identity integrity.
 ///
-/// Each `makeTestControl` call must return a fresh access object over the same isolated backing
-/// persistence and the same repository identity/ownership scope so the contract can distinguish
-/// durable state from one context's in-memory state.
+/// Calls for the same entity kind must return fresh access objects over the same isolated backing
+/// persistence and repository identity/ownership scope so the contract can distinguish durable state
+/// from one context's in-memory state. Different entity kinds must use independent backing stores so
+/// one probe's parent/support graph cannot contaminate another entity kind's baseline.
 @MainActor
 struct IdentityContractFixture {
-    let makeTestControl: () -> any IdentityContractTestControl
+    let makeTestControl: (_ kind: IdentityContractEntityKind) -> any IdentityContractTestControl
 }
 
 /// Permanent cross-cutting application identity contract.
@@ -137,18 +138,18 @@ enum IdentityContract {
             let applicationID = UUID()
             let unrelatedControlID = UUID()
 
-            try fixture.makeTestControl().seedEntity(
+            try fixture.makeTestControl(kind).seedEntity(
                 kind,
                 id: applicationID,
                 variant: .original
             )
-            try fixture.makeTestControl().seedEntity(
+            try fixture.makeTestControl(kind).seedEntity(
                 kind,
                 id: unrelatedControlID,
                 variant: .unrelatedControl
             )
 
-            let baselineControl = fixture.makeTestControl()
+            let baselineControl = fixture.makeTestControl(kind)
             let before = try baselineControl.snapshotsInIdentityScope(
                 for: kind,
                 id: applicationID
@@ -210,7 +211,7 @@ enum IdentityContract {
             )
 
             XCTAssertThrowsError(
-                try fixture.makeTestControl().seedEntity(
+                try fixture.makeTestControl(kind).seedEntity(
                     kind,
                     id: applicationID,
                     variant: .conflictingDuplicate
@@ -220,7 +221,7 @@ enum IdentityContract {
                 line: line
             )
 
-            let reloadControl = fixture.makeTestControl()
+            let reloadControl = fixture.makeTestControl(kind)
             let after = try reloadControl.snapshotsInIdentityScope(
                 for: kind,
                 id: applicationID
