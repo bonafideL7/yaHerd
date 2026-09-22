@@ -11,12 +11,14 @@ struct TagColorReferenceSnapshot: Equatable {
     let animalTagColorID: UUID?
     let historicalTagColorID: UUID?
     let fieldCheckRosterTagColorID: UUID?
+    let fieldCheckDamRosterTagColorID: UUID?
+    let fieldCheckFindingTagColorIDSnapshot: UUID?
 }
 
 /// Target-only hooks used to establish and inspect tag-color UUID references.
 ///
-/// A Core Data contract runner should seed representative records for all three reference locations
-/// and return their current UUID values after repository mutations.
+/// A Core Data contract runner should seed representative records for every persisted tag-color
+/// reference category and return their current UUID values after repository mutations.
 @MainActor
 struct TagColorReferenceTestControl {
     /// Seeds a physical color row directly through test persistence infrastructure. This bypasses
@@ -451,9 +453,67 @@ enum TagColorRepositoryContract {
             TagColorReferenceSnapshot(
                 animalTagColorID: canonicalID,
                 historicalTagColorID: canonicalID,
-                fieldCheckRosterTagColorID: canonicalID
+                fieldCheckRosterTagColorID: canonicalID,
+                fieldCheckDamRosterTagColorID: canonicalID,
+                fieldCheckFindingTagColorIDSnapshot: canonicalID
             ),
             "Merging duplicate tag-color identities must remap every persisted UUID reference.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertBuiltInNameCollisionPreservesBuiltInIdentityAndRemapsReferences(
+        using fixture: TagColorRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let incomingID = UUID()
+        var incoming = TagColorSnapshot(
+            id: incomingID,
+            name: "Placeholder",
+            prefix: "X",
+            rgba: RGBAColor(r: 0.1, g: 0.25, b: 0.85),
+            sortOrder: 99
+        )
+        incoming.name = "  blue  "
+        incoming.prefix = " custom-blue "
+
+        // Built-ins are application constants even when no physical row exists yet. Seed a
+        // conflicting persisted row so the repository must reconcile the duplicate against the
+        // stable built-in application UUID instead of allowing the custom UUID to replace Blue.
+        try fixture.referenceControl.seedPersistedColor(incoming)
+        try fixture.referenceControl.seedReferences(incomingID)
+
+        try fixture.makeTagColorRepository().upsert(incoming)
+
+        let reloaded = try fixture.makeTagColorRepository().fetchColors()
+        let matching = reloaded.filter {
+            TagColorLibraryRules.normalizedNameKey($0.name)
+                == TagColorLibraryRules.normalizedNameKey("Blue")
+        }
+        XCTAssertEqual(matching.count, 1, "A built-in normalized name must remain unique.", file: file, line: line)
+
+        let merged = try XCTUnwrap(matching.first, file: file, line: line)
+        XCTAssertEqual(
+            merged.id,
+            TagColorDefaults.blueID,
+            "A normalized-name collision with a built-in must preserve the built-in application UUID.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(reloaded.contains { $0.id == incomingID }, file: file, line: line)
+
+        XCTAssertEqual(
+            try fixture.referenceControl.fetchReferences(),
+            TagColorReferenceSnapshot(
+                animalTagColorID: TagColorDefaults.blueID,
+                historicalTagColorID: TagColorDefaults.blueID,
+                fieldCheckRosterTagColorID: TagColorDefaults.blueID,
+                fieldCheckDamRosterTagColorID: TagColorDefaults.blueID,
+                fieldCheckFindingTagColorIDSnapshot: TagColorDefaults.blueID
+            ),
+            "Built-in collision repair must remap every persisted UUID reference to the stable built-in identity.",
             file: file,
             line: line
         )
@@ -488,7 +548,9 @@ enum TagColorRepositoryContract {
             TagColorReferenceSnapshot(
                 animalTagColorID: colorID,
                 historicalTagColorID: colorID,
-                fieldCheckRosterTagColorID: colorID
+                fieldCheckRosterTagColorID: colorID,
+                fieldCheckDamRosterTagColorID: colorID,
+                fieldCheckFindingTagColorIDSnapshot: colorID
             ),
             "Removing a visible tag color must not rewrite or nullify persisted historical color identity.",
             file: file,
@@ -579,6 +641,45 @@ enum TagColorRepositoryContract {
             TagColorLibraryRules.normalizedNameKey(secondScopedColor.name),
             TagColorLibraryRules.normalizedNameKey(firstScopedColor.name),
             "Normalized-name uniqueness is scoped to a Herd, not global across Herd workspaces.",
+            file: file,
+            line: line
+        )
+
+        // Capture Herd A as the unrelated control, then exercise every remaining library mutation
+        // from Herd B. Returning to Herd A must reproduce the same Domain-visible library exactly.
+        try fixture.herdSelectionControl.setCurrentHerdID(firstHerdID)
+        for builtIn in TagColorDefaults.seedDefaultColors() {
+            try fixture.makeTagColorRepository().upsert(builtIn)
+        }
+        let firstControlProjection = stableProjection(try fixture.makeTagColorRepository().fetchColors())
+
+        try fixture.herdSelectionControl.setCurrentHerdID(secondHerdID)
+        for builtIn in TagColorDefaults.seedDefaultColors() {
+            try fixture.makeTagColorRepository().upsert(builtIn)
+        }
+        let secondExtraID = UUID()
+        try fixture.makeTagColorRepository().upsert(
+            TagColorSnapshot(
+                id: secondExtraID,
+                name: "Second Herd Disposable",
+                prefix: "SHD",
+                rgba: RGBAColor(r: 0.55, g: 0.25, b: 0.65)
+            )
+        )
+
+        let secondVisibleIDs = try fixture.makeTagColorRepository().fetchColors().map(\.id)
+        let reorderedSecondIDs = [secondColorID]
+            + secondVisibleIDs.filter { $0 != secondColorID && $0 != secondExtraID }
+            + [secondExtraID]
+        try fixture.makeTagColorRepository().reorder(colorIDs: reorderedSecondIDs)
+        try fixture.makeTagColorRepository().deleteColors(ids: [secondExtraID])
+        try fixture.makeTagColorRepository().restoreDefaultColors()
+
+        try fixture.herdSelectionControl.setCurrentHerdID(firstHerdID)
+        XCTAssertEqual(
+            stableProjection(try fixture.makeTagColorRepository().fetchColors()),
+            firstControlProjection,
+            "Upsert, default selection, reorder, delete, and restore in another Herd must leave the unrelated Herd unchanged.",
             file: file,
             line: line
         )
