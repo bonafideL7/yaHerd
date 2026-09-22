@@ -6,7 +6,7 @@ import XCTest
 ///
 /// The identity contract intentionally covers every durable entity because application UUID
 /// uniqueness is a cross-cutting persistence invariant, not a feature-specific behavior.
-enum IdentityContractEntityKind: String, CaseIterable, Sendable {
+enum IdentityContractEntityKind: String, CaseIterable, Hashable, Sendable {
     case herd
     case tagColorDefinition
     case animalStatusReference
