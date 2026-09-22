@@ -584,6 +584,80 @@ enum TagColorRepositoryContract {
         )
     }
 
+    static func assertMissingOrStaleCurrentHerdDoesNotFallbackOrBootstrapOnWrite(
+        using fixture: TagColorRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let storedHerdID = UUID()
+        try fixture.herdSelectionControl.seedHerd(
+            storedHerdID,
+            "Stored Tag Color Contract Herd",
+            fixedDate(1_730_000_000),
+            fixedDate(1_730_000_100)
+        )
+        try fixture.herdSelectionControl.setCurrentHerdID(storedHerdID)
+
+        let existingColorID = UUID()
+        try fixture.makeTagColorRepository().upsert(
+            TagColorSnapshot(
+                id: existingColorID,
+                name: "Existing Scoped Color",
+                prefix: "ESC",
+                rgba: RGBAColor(r: 0.2, g: 0.5, b: 0.7)
+            )
+        )
+
+        let herdRowsBeforeFailure = try fixture.herdSelectionControl.persistedHerdRowCountsByID()
+        let staleColorID = UUID()
+        try fixture.herdSelectionControl.setCurrentHerdID(UUID())
+
+        XCTAssertThrowsError(
+            try fixture.makeTagColorRepository().upsert(
+                TagColorSnapshot(
+                    id: staleColorID,
+                    name: "Must Not Fall Back",
+                    prefix: "MNFB",
+                    rgba: RGBAColor(r: 0.7, g: 0.2, b: 0.5)
+                )
+            ),
+            "A stale current-Herd UUID must reject a Herd-owned tag-color write.",
+            file: file,
+            line: line
+        )
+
+        let missingColorID = UUID()
+        try fixture.herdSelectionControl.setCurrentHerdID(nil)
+
+        XCTAssertThrowsError(
+            try fixture.makeTagColorRepository().upsert(
+                TagColorSnapshot(
+                    id: missingColorID,
+                    name: "Must Not Bootstrap",
+                    prefix: "MNB",
+                    rgba: RGBAColor(r: 0.5, g: 0.7, b: 0.2)
+                )
+            ),
+            "A missing current-Herd selection must reject a Herd-owned tag-color write.",
+            file: file,
+            line: line
+        )
+
+        XCTAssertEqual(
+            try fixture.herdSelectionControl.persistedHerdRowCountsByID(),
+            herdRowsBeforeFailure,
+            "Failed tag-color writes must not create or duplicate Herd roots.",
+            file: file,
+            line: line
+        )
+
+        try fixture.herdSelectionControl.setCurrentHerdID(storedHerdID)
+        let storedHerdColors = try fixture.makeTagColorRepository().fetchColors()
+        XCTAssertTrue(storedHerdColors.contains { $0.id == existingColorID }, file: file, line: line)
+        XCTAssertFalse(storedHerdColors.contains { $0.id == staleColorID }, file: file, line: line)
+        XCTAssertFalse(storedHerdColors.contains { $0.id == missingColorID }, file: file, line: line)
+    }
+
     private struct StableColorProjection: Equatable {
         let id: UUID
         let name: String
