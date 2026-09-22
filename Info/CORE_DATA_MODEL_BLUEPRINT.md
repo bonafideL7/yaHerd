@@ -873,4 +873,4 @@ The Core Data replacement is test-first at the persistence boundary. The model b
 12. strengthen final architecture verification and delete this cutover documentation when complete
 ```
 
-Do not add a temporary SwiftData implementation of any **new production behavior** just to keep both systems symmetrical during this sequence. The only temporary SwiftData work justified by step 0 is the thin harness needed to run persistence-neutral characterization contracts against the current implementation.
+Do not add temporary SwiftData production behavior or a SwiftData contract harness just to keep both systems symmetrical during this sequence. Inspect existing SwiftData only to understand current behavior; persistence-neutral contracts may remain unexecuted until their Core Data runner exists.
