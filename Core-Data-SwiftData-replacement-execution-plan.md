@@ -48,7 +48,7 @@ Do **not** add or restore a SwiftData contract harness. SwiftData is the outgoin
 
 Coverage must include at least:
 
-- **Identity:** UUID survives create/read/update/reload; relationships resolve by application UUID; IDs never change during edits; duplicate application IDs fail rather than silently producing a second logical entity.
+- **Identity:** UUID survives create/read/update/reload; relationships resolve by application UUID within the applicable repository/Herd scope; IDs never change during edits; duplicate application IDs inside the same identity scope fail rather than silently producing a second logical entity; cross-Herd reuse remains feature-contract-owned rather than assumed globally valid or invalid.
 - **Animal aggregate:** create tagged and untagged animals; update scalar fields; sire/dam relationships; pasture assignment; active/retired tags; exactly-one-primary-tag rules; tag retirement history; stale aggregate revision rejection; failed aggregate update leaves the original aggregate unchanged.
 - **Animal state/history:** active/sold/deceased/archive behavior; status changes create appropriate history; movement changes current pasture and records movement history; historical data remains readable after related live records disappear where that is product behavior.
 - **Pastures:** create/update/order/group behavior; resident queries; movement into/out of pasture; pasture deletion moves residents according to the Domain plan; field-check history retains pasture snapshots after deletion; target Core Data contracts cover full rollback of the delete workflow.
