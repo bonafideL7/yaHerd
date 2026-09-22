@@ -546,12 +546,22 @@ enum TagColorRepositoryContract {
         try fixture.referenceControl.seedReferences(colorID)
         try repository.deleteColors(ids: [colorID])
 
+        let reloadedRepository = fixture.makeTagColorRepository()
         XCTAssertFalse(
-            try fixture.makeTagColorRepository().fetchColors().contains { $0.id == colorID },
+            try reloadedRepository.fetchColors().contains { $0.id == colorID },
             "Removing a custom color must remove it from the visible library.",
             file: file,
             line: line
         )
+
+        let historicalDefinition = try XCTUnwrap(
+            reloadedRepository.fetchColor(id: colorID),
+            "A referenced removed color must remain resolvable by application UUID for historical display.",
+            file: file,
+            line: line
+        )
+        assertSameDefinition(historicalDefinition, color, file: file, line: line)
+
         XCTAssertEqual(
             try fixture.referenceControl.fetchReferences(),
             TagColorReferenceSnapshot(
@@ -604,8 +614,15 @@ enum TagColorRepositoryContract {
         try fixture.makeTagColorRepository().setDefaultColor(id: firstColorID)
 
         try fixture.herdSelectionControl.setCurrentHerdID(secondHerdID)
-        let secondBeforeWrite = try fixture.makeTagColorRepository().fetchColors()
+        let secondRepositoryBeforeWrite = fixture.makeTagColorRepository()
+        let secondBeforeWrite = try secondRepositoryBeforeWrite.fetchColors()
         XCTAssertFalse(secondBeforeWrite.contains { $0.id == firstColorID }, file: file, line: line)
+        XCTAssertNil(
+            try secondRepositoryBeforeWrite.fetchColor(id: firstColorID),
+            "Direct tag-color lookup must not resolve a definition owned by another Herd.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(
             defaultColorIDs(in: secondBeforeWrite),
             [TagColorDefaults.whiteID],
@@ -720,51 +737,27 @@ enum TagColorRepositoryContract {
             )
         )
 
+        let storedProjectionBeforeFailure = stableProjection(
+            try fixture.makeTagColorRepository().fetchColors()
+        )
         let herdRowsBeforeFailure = try fixture.herdSelectionControl.persistedHerdRowCountsByID()
-        let staleColorID = UUID()
+
         try fixture.herdSelectionControl.setCurrentHerdID(UUID())
-
-        XCTAssertThrowsError(
-            try fixture.makeTagColorRepository().fetchColors(),
-            "A stale current-Herd UUID must reject a Herd-owned tag-color read.",
+        assertAllOperationsRejectMissingHerd(
+            using: fixture,
+            existingColorID: existingColorID,
+            attemptedColorID: UUID(),
+            selectionDescription: "stale current-Herd UUID",
             file: file,
             line: line
         )
 
-        XCTAssertThrowsError(
-            try fixture.makeTagColorRepository().upsert(
-                TagColorSnapshot(
-                    id: staleColorID,
-                    name: "Must Not Fall Back",
-                    prefix: "MNFB",
-                    rgba: RGBAColor(r: 0.7, g: 0.2, b: 0.5)
-                )
-            ),
-            "A stale current-Herd UUID must reject a Herd-owned tag-color write.",
-            file: file,
-            line: line
-        )
-
-        let missingColorID = UUID()
         try fixture.herdSelectionControl.setCurrentHerdID(nil)
-
-        XCTAssertThrowsError(
-            try fixture.makeTagColorRepository().fetchColors(),
-            "A missing current-Herd selection must reject a Herd-owned tag-color read.",
-            file: file,
-            line: line
-        )
-
-        XCTAssertThrowsError(
-            try fixture.makeTagColorRepository().upsert(
-                TagColorSnapshot(
-                    id: missingColorID,
-                    name: "Must Not Bootstrap",
-                    prefix: "MNB",
-                    rgba: RGBAColor(r: 0.5, g: 0.7, b: 0.2)
-                )
-            ),
-            "A missing current-Herd selection must reject a Herd-owned tag-color write.",
+        assertAllOperationsRejectMissingHerd(
+            using: fixture,
+            existingColorID: existingColorID,
+            attemptedColorID: UUID(),
+            selectionDescription: "missing current-Herd selection",
             file: file,
             line: line
         )
@@ -772,16 +765,78 @@ enum TagColorRepositoryContract {
         XCTAssertEqual(
             try fixture.herdSelectionControl.persistedHerdRowCountsByID(),
             herdRowsBeforeFailure,
-            "Failed tag-color writes must not create or duplicate Herd roots.",
+            "Rejected tag-color operations must not create or duplicate Herd roots.",
             file: file,
             line: line
         )
 
         try fixture.herdSelectionControl.setCurrentHerdID(storedHerdID)
-        let storedHerdColors = try fixture.makeTagColorRepository().fetchColors()
-        XCTAssertTrue(storedHerdColors.contains { $0.id == existingColorID }, file: file, line: line)
-        XCTAssertFalse(storedHerdColors.contains { $0.id == staleColorID }, file: file, line: line)
-        XCTAssertFalse(storedHerdColors.contains { $0.id == missingColorID }, file: file, line: line)
+        XCTAssertEqual(
+            stableProjection(try fixture.makeTagColorRepository().fetchColors()),
+            storedProjectionBeforeFailure,
+            "Rejected tag-color operations must leave the stored Herd's library unchanged.",
+            file: file,
+            line: line
+        )
+    }
+
+    private static func assertAllOperationsRejectMissingHerd(
+        using fixture: TagColorRepositoryContractFixture,
+        existingColorID: UUID,
+        attemptedColorID: UUID,
+        selectionDescription: String,
+        file: StaticString,
+        line: UInt
+    ) {
+        XCTAssertThrowsError(
+            try fixture.makeTagColorRepository().fetchColors(),
+            "Tag-color library reads must reject a \(selectionDescription).",
+            file: file,
+            line: line
+        )
+        XCTAssertThrowsError(
+            try fixture.makeTagColorRepository().fetchColor(id: existingColorID),
+            "Direct tag-color reads must reject a \(selectionDescription).",
+            file: file,
+            line: line
+        )
+        XCTAssertThrowsError(
+            try fixture.makeTagColorRepository().upsert(
+                TagColorSnapshot(
+                    id: attemptedColorID,
+                    name: "Must Not Fall Back",
+                    prefix: "MNFB",
+                    rgba: RGBAColor(r: 0.7, g: 0.2, b: 0.5)
+                )
+            ),
+            "Tag-color upsert must reject a \(selectionDescription).",
+            file: file,
+            line: line
+        )
+        XCTAssertThrowsError(
+            try fixture.makeTagColorRepository().setDefaultColor(id: existingColorID),
+            "Default selection must reject a \(selectionDescription).",
+            file: file,
+            line: line
+        )
+        XCTAssertThrowsError(
+            try fixture.makeTagColorRepository().deleteColors(ids: [existingColorID]),
+            "Tag-color deletion must reject a \(selectionDescription).",
+            file: file,
+            line: line
+        )
+        XCTAssertThrowsError(
+            try fixture.makeTagColorRepository().reorder(colorIDs: [existingColorID]),
+            "Tag-color reorder must reject a \(selectionDescription).",
+            file: file,
+            line: line
+        )
+        XCTAssertThrowsError(
+            try fixture.makeTagColorRepository().restoreDefaultColors(),
+            "Restore-defaults must reject a \(selectionDescription).",
+            file: file,
+            line: line
+        )
     }
 
     private struct StableColorProjection: Equatable {
