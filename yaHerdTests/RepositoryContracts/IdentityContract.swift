@@ -223,7 +223,7 @@ enum IdentityContract {
             let missingRequiredSupportKinds = kind.requiredSupportKinds.subtracting(supportKinds)
             XCTAssertTrue(
                 missingRequiredSupportKinds.isEmpty,
-                "The \(kind.rawValue) identity probe is missing required support kinds: \(missingRequiredSupportKinds.map(\.rawValue).sorted().joined(separator: \", \")).",
+                "The \(kind.rawValue) identity probe is missing required support kinds: \(missingRequiredSupportKinds.map(\.rawValue).sorted().joined(separator: ", ")).",
                 file: file,
                 line: line
             )
