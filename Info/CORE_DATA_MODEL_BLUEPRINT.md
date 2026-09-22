@@ -814,7 +814,7 @@ The Core Data model must **not** reproduce these current or historical implement
 
 Before creating `yaHerdModel.xcdatamodeld`, establish permanent persistence-neutral **characterization contracts for behavior the current application already implements**. These tests define product behavior through Domain repository/transaction protocols rather than SwiftData types.
 
-The existing SwiftData implementation is the first runner for this characterization subset. The runner is temporary; the contract definitions are permanent and later run unchanged against Core Data. A characterization contract must not require adding new production behavior to SwiftData merely so the old implementation can pass a target-architecture requirement.
+Existing SwiftData code may be inspected to understand current behavior, but repository policy intentionally does not add or restore a SwiftData contract runner. The contract definitions are permanent and run against Core Data when the corresponding persistence surface exists. A characterization contract must not require adding new production behavior to SwiftData merely so the old implementation can pass a target-architecture requirement.
 
 At minimum the pre-model characterization milestone should lock down current behavior that is observable through today's Domain ports, including:
 
@@ -858,7 +858,7 @@ As Core Data repositories are implemented, point the same permanent characteriza
 The Core Data replacement is test-first at the persistence boundary. The model blueprint is established, but physical model/runtime implementation begins only after the permanent characterization contracts for existing behavior are in place.
 
 ```text
-0. persistence-neutral characterization contracts for current behavior + temporary SwiftData runner
+0. persistence-neutral characterization contracts for current behavior; no new SwiftData runner
 1. reconcile this blueprint with behavior exposed by those characterization tests
 2. yaHerdModel.xcdatamodeld + CD managed-object classes + model-structure tests
 3. CoreDataPersistenceController / NSPersistentContainer local store setup + Core Data contract harness
@@ -869,7 +869,7 @@ The Core Data replacement is test-first at the persistence boundary. The model b
 8. Working repositories + expanded historical-snapshot contracts
 9. Dashboard/Home read models
 10. switch PersistenceAssembly to Core Data
-11. delete SwiftData models/repositories/bootstrap/obsolete repair code and temporary SwiftData contract runner
+11. delete SwiftData models/repositories/bootstrap/obsolete repair code
 12. strengthen final architecture verification and delete this cutover documentation when complete
 ```
 
