@@ -21,6 +21,7 @@ final class TagColorLibraryStore: ObservableObject {
     @Published private(set) var lastErrorMessage: String?
 
     private let repository: any TagColorRepository
+    private var historicalDefinitionsByID: [UUID: TagColorSnapshot] = [:]
 
     init(repository: any TagColorRepository) {
         self.repository = repository
@@ -48,7 +49,23 @@ final class TagColorLibraryStore: ObservableObject {
 
     func definition(for id: UUID?) -> TagColorSnapshot? {
         guard let id else { return nil }
-        return colors.first(where: { $0.id == id })
+
+        if let visible = colors.first(where: { $0.id == id }) {
+            return visible
+        }
+
+        if let cached = historicalDefinitionsByID[id] {
+            return cached
+        }
+
+        guard let historical = try? repository.fetchColor(id: id) else {
+            return nil
+        }
+
+        if let historical {
+            historicalDefinitionsByID[id] = historical
+        }
+        return historical
     }
 
     func resolvedDefinition(tagColorID: UUID?) -> TagColorSnapshot {
@@ -113,6 +130,7 @@ final class TagColorLibraryStore: ObservableObject {
 
     private func load() {
         do {
+            historicalDefinitionsByID.removeAll()
             colors = try repository.fetchColors()
             lastErrorMessage = nil
         } catch {
@@ -123,6 +141,7 @@ final class TagColorLibraryStore: ObservableObject {
     private func performRepositoryWrite(_ failureMessage: String, operation: () throws -> Void) {
         do {
             try operation()
+            historicalDefinitionsByID.removeAll()
             colors = try repository.fetchColors()
             lastErrorMessage = nil
         } catch {
