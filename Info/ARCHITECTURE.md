@@ -98,7 +98,10 @@ For every durable application entity:
 - Core Data stores that UUID in a dedicated required application-identity attribute assigned before first save;
 - `NSManagedObjectID`, object URI representations, and store identifiers are Data-layer implementation details and never become Domain identity;
 - stringifying a UUID is allowed only at serialization boundaries such as URLs, logs, diagnostics, or provider APIs; Domain models should retain the UUID type;
-- a duplicate application UUID is a persistence integrity error. Production code must reject it before exposing ambiguous Domain state; it must not silently mint a replacement for an already-established entity identity.
+- application identity is interpreted within the repository identity scope. `Herd` is store-global; herd-owned entities are addressed within their owning/current Herd unless a feature contract explicitly defines a broader scope;
+- a duplicate application UUID inside the same entity type and repository identity scope is a persistence integrity error. Production code must reject it before exposing ambiguous Domain state; it must not silently mint a replacement for an already-established entity identity;
+- the same UUID appearing in two different Herd scopes is not automatically corruption. Permanent feature contracts decide whether cross-Herd reuse is valid; built-in Tag Color identities are the current intentional example;
+- a raw herd-owned UUID must never be resolved across the whole store without Herd scope. The scope may be implicit in the repository/owning aggregate or explicit at a true cross-Herd boundary.
 
 Derived UI/chart identifiers may use strings, dates, enums, or composite keys when they do not represent a durable entity. They must not be passed to repository APIs as entity identity.
 
