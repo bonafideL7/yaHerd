@@ -123,7 +123,7 @@ struct IdentityContractFixture {
 ///   feature-specific relationship resolution by application UUID.
 /// - Duplicate rejection proves a failed duplicate cannot overwrite,
 ///   merge, delete unrelated same-kind state, or remint the logical entity.
-/// - Phase 2 Core Data model-structure tests own physical UUID attribute requiredness, indexes, and
+/// - Core Data model-structure tests own physical UUID attribute requiredness, indexes, and
 ///   uniqueness-constraint declarations. Physical constraints must not be stronger than permanent
 ///   feature contracts such as Herd-scoped stable built-in Tag Color identities.
 @MainActor
