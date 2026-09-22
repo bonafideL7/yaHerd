@@ -32,6 +32,7 @@ struct TagColorReferenceTestControl {
 struct TagColorRepositoryContractFixture {
     let makeTagColorRepository: () -> any TagColorRepository
     let referenceControl: TagColorReferenceTestControl
+    let herdSelectionControl: HerdRepositorySelectionTestControl
 }
 
 @MainActor
@@ -444,6 +445,131 @@ enum TagColorRepositoryContract {
                 fieldCheckRosterTagColorID: canonicalID
             ),
             "Merging duplicate tag-color identities must remap every persisted UUID reference.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertReferencedCustomColorRemovalPreservesHistoricalReferenceIdentity(
+        using fixture: TagColorRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeTagColorRepository()
+        let colorID = UUID()
+        let color = TagColorSnapshot(
+            id: colorID,
+            name: "Contract Historical Color",
+            prefix: "CHC",
+            rgba: RGBAColor(r: 0.35, g: 0.55, b: 0.75)
+        )
+
+        try repository.upsert(color)
+        try fixture.referenceControl.seedReferences(colorID)
+        try repository.deleteColors(ids: [colorID])
+
+        XCTAssertFalse(
+            try fixture.makeTagColorRepository().fetchColors().contains { $0.id == colorID },
+            "Removing a custom color must remove it from the visible library.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try fixture.referenceControl.fetchReferences(),
+            TagColorReferenceSnapshot(
+                animalTagColorID: colorID,
+                historicalTagColorID: colorID,
+                fieldCheckRosterTagColorID: colorID
+            ),
+            "Removing a visible tag color must not rewrite or nullify persisted historical color identity.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertReadsWritesDefaultsAndNameUniquenessAreHerdScoped(
+        using fixture: TagColorRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let firstHerdID = UUID()
+        let secondHerdID = UUID()
+        try fixture.herdSelectionControl.seedHerd(
+            firstHerdID,
+            "Tag Color Contract Herd A",
+            fixedDate(1_710_000_000),
+            fixedDate(1_710_000_100)
+        )
+        try fixture.herdSelectionControl.seedHerd(
+            secondHerdID,
+            "Tag Color Contract Herd B",
+            fixedDate(1_720_000_000),
+            fixedDate(1_720_000_100)
+        )
+
+        let firstColorID = UUID()
+        let secondColorID = UUID()
+
+        try fixture.herdSelectionControl.selectCurrentHerd(firstHerdID)
+        try fixture.makeTagColorRepository().upsert(
+            TagColorSnapshot(
+                id: firstColorID,
+                name: "Scoped Contract Color",
+                prefix: "A",
+                rgba: RGBAColor(r: 0.15, g: 0.45, b: 0.75)
+            )
+        )
+        try fixture.makeTagColorRepository().setDefaultColor(id: firstColorID)
+
+        try fixture.herdSelectionControl.selectCurrentHerd(secondHerdID)
+        let secondBeforeWrite = try fixture.makeTagColorRepository().fetchColors()
+        XCTAssertFalse(secondBeforeWrite.contains { $0.id == firstColorID }, file: file, line: line)
+        XCTAssertEqual(
+            defaultColorIDs(in: secondBeforeWrite),
+            [TagColorDefaults.whiteID],
+            "A default preference selected in another Herd must not leak into the current Herd.",
+            file: file,
+            line: line
+        )
+
+        var secondColor = TagColorSnapshot(
+            id: secondColorID,
+            name: "Placeholder",
+            prefix: "B",
+            rgba: RGBAColor(r: 0.75, g: 0.45, b: 0.15)
+        )
+        secondColor.name = "  scoped contract color  "
+        try fixture.makeTagColorRepository().upsert(secondColor)
+        try fixture.makeTagColorRepository().setDefaultColor(id: secondColorID)
+
+        let secondReloaded = try fixture.makeTagColorRepository().fetchColors()
+        XCTAssertTrue(secondReloaded.contains { $0.id == secondColorID }, file: file, line: line)
+        XCTAssertFalse(secondReloaded.contains { $0.id == firstColorID }, file: file, line: line)
+        XCTAssertEqual(defaultColorIDs(in: secondReloaded), [secondColorID], file: file, line: line)
+
+        try fixture.herdSelectionControl.selectCurrentHerd(firstHerdID)
+        let firstReloaded = try fixture.makeTagColorRepository().fetchColors()
+        XCTAssertTrue(firstReloaded.contains { $0.id == firstColorID }, file: file, line: line)
+        XCTAssertFalse(firstReloaded.contains { $0.id == secondColorID }, file: file, line: line)
+        XCTAssertEqual(defaultColorIDs(in: firstReloaded), [firstColorID], file: file, line: line)
+
+        let firstScopedColor = try XCTUnwrap(
+            firstReloaded.first { $0.id == firstColorID },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(firstScopedColor.name, "Scoped Contract Color", file: file, line: line)
+
+        try fixture.herdSelectionControl.selectCurrentHerd(secondHerdID)
+        let secondScopedColor = try XCTUnwrap(
+            fixture.makeTagColorRepository().fetchColors().first { $0.id == secondColorID },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            TagColorLibraryRules.normalizedNameKey(secondScopedColor.name),
+            TagColorLibraryRules.normalizedNameKey(firstScopedColor.name),
+            "Normalized-name uniqueness is scoped to a Herd, not global across Herd workspaces.",
             file: file,
             line: line
         )
