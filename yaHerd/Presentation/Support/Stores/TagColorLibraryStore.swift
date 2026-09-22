@@ -62,9 +62,7 @@ final class TagColorLibraryStore: ObservableObject {
             return nil
         }
 
-        if let historical {
-            historicalDefinitionsByID[id] = historical
-        }
+        historicalDefinitionsByID[id] = historical
         return historical
     }
 
