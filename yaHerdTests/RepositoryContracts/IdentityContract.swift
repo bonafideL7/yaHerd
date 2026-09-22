@@ -51,6 +51,16 @@ struct IdentityContractEntitySnapshot: Equatable, Sendable {
     let payloadFingerprint: String
 }
 
+/// Persistence-neutral snapshot of the non-target records required to make an identity probe valid.
+///
+/// The Core Data runner should include the owning Herd plus any required parent/support records for
+/// the entity kind. The snapshot must exclude the target entity rows themselves because those are
+/// asserted separately. For `Herd`, where no owning/parent support exists, return a stable empty
+/// fingerprint rather than exposing persistence-native state.
+struct IdentityContractSupportStateSnapshot: Equatable, Sendable {
+    let payloadFingerprint: String
+}
+
 /// Target-runner control for the one identity invariant that ordinary Domain repository APIs cannot
 /// directly exercise: attempting to persist two independently managed entities with the same
 /// application UUID inside one repository identity/ownership scope.
@@ -76,6 +86,10 @@ protocol IdentityContractTestControl {
     ) throws -> [IdentityContractEntitySnapshot]
 
     func allEntityIDsInIdentityScope(for kind: IdentityContractEntityKind) throws -> Set<UUID>
+
+    func supportStateSnapshot(
+        for kind: IdentityContractEntityKind
+    ) throws -> IdentityContractSupportStateSnapshot
 }
 
 /// Permanent persistence-neutral fixture for cross-cutting application identity integrity.
@@ -163,6 +177,9 @@ enum IdentityContract {
                 line: line
             )
 
+            let supportStateBeforeDuplicateAttempt = try baselineControl
+                .supportStateSnapshot(for: kind)
+
             let idsBeforeDuplicateAttempt = try baselineControl
                 .allEntityIDsInIdentityScope(for: kind)
             XCTAssertEqual(
@@ -211,6 +228,16 @@ enum IdentityContract {
                 controlAfter,
                 [unrelatedControl],
                 "A rejected duplicate \(kind.rawValue) must not mutate or remove an unrelated same-kind record.",
+                file: file,
+                line: line
+            )
+
+            let supportStateAfterDuplicateAttempt = try reloadControl
+                .supportStateSnapshot(for: kind)
+            XCTAssertEqual(
+                supportStateAfterDuplicateAttempt,
+                supportStateBeforeDuplicateAttempt,
+                "A rejected duplicate \(kind.rawValue) must not mutate, delete, or leak required owning-Herd/parent support state.",
                 file: file,
                 line: line
             )
