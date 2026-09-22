@@ -51,14 +51,24 @@ struct IdentityContractEntitySnapshot: Equatable, Sendable {
     let payloadFingerprint: String
 }
 
-/// Persistence-neutral snapshot of the non-target records required to make an identity probe valid.
+/// Persistence-neutral snapshot of one non-target record required to make an identity probe valid.
 ///
-/// The Core Data runner should include the owning Herd plus any required parent/support records for
-/// the entity kind. The snapshot must exclude the target entity rows themselves because those are
-/// asserted separately. For `Herd`, where no owning/parent support exists, return a stable empty
-/// fingerprint rather than exposing persistence-native state.
-struct IdentityContractSupportStateSnapshot: Equatable, Sendable {
+/// Support records are identified with the same application identity vocabulary as production data,
+/// never with managed-object IDs or store identifiers.
+struct IdentityContractSupportRecordSnapshot: Hashable, Sendable {
+    let kind: IdentityContractEntityKind
+    let id: UUID
     let payloadFingerprint: String
+}
+
+/// Persistence-neutral snapshot of the complete non-target state required by one identity probe.
+///
+/// The Core Data runner must include the owning Herd plus every parent/support record created or
+/// reused to make the target entity valid. The target entity rows themselves are excluded because
+/// they are asserted separately. For `Herd`, where no owning/parent support exists, `records` is
+/// an empty set.
+struct IdentityContractSupportStateSnapshot: Equatable, Sendable {
+    let records: Set<IdentityContractSupportRecordSnapshot>
 }
 
 /// Target-runner control for the one identity invariant that ordinary Domain repository APIs cannot
@@ -71,7 +81,9 @@ struct IdentityContractSupportStateSnapshot: Equatable, Sendable {
 /// this probe cannot accidentally test feature-specific cross-Herd identity semantics.
 /// `seedEntity` must ensure every non-ID constraint is satisfied, then surface duplicate-identity
 /// persistence failure rather than translating it into an update, silently deleting/replacing the
-/// original, or minting a different UUID.
+/// original, or minting a different UUID. A conflicting seed must reuse the same support graph
+/// represented by `supportStateSnapshot`; it must not manufacture throwaway parents whose cleanup
+/// could hide partial persistence after the expected failure.
 @MainActor
 protocol IdentityContractTestControl {
     func seedEntity(
