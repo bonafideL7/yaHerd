@@ -510,7 +510,7 @@ enum TagColorRepositoryContract {
         let firstColorID = UUID()
         let secondColorID = UUID()
 
-        try fixture.herdSelectionControl.selectCurrentHerd(firstHerdID)
+        try fixture.herdSelectionControl.setCurrentHerdID(firstHerdID)
         try fixture.makeTagColorRepository().upsert(
             TagColorSnapshot(
                 id: firstColorID,
@@ -521,7 +521,7 @@ enum TagColorRepositoryContract {
         )
         try fixture.makeTagColorRepository().setDefaultColor(id: firstColorID)
 
-        try fixture.herdSelectionControl.selectCurrentHerd(secondHerdID)
+        try fixture.herdSelectionControl.setCurrentHerdID(secondHerdID)
         let secondBeforeWrite = try fixture.makeTagColorRepository().fetchColors()
         XCTAssertFalse(secondBeforeWrite.contains { $0.id == firstColorID }, file: file, line: line)
         XCTAssertEqual(
@@ -547,7 +547,7 @@ enum TagColorRepositoryContract {
         XCTAssertFalse(secondReloaded.contains { $0.id == firstColorID }, file: file, line: line)
         XCTAssertEqual(defaultColorIDs(in: secondReloaded), [secondColorID], file: file, line: line)
 
-        try fixture.herdSelectionControl.selectCurrentHerd(firstHerdID)
+        try fixture.herdSelectionControl.setCurrentHerdID(firstHerdID)
         let firstReloaded = try fixture.makeTagColorRepository().fetchColors()
         XCTAssertTrue(firstReloaded.contains { $0.id == firstColorID }, file: file, line: line)
         XCTAssertFalse(firstReloaded.contains { $0.id == secondColorID }, file: file, line: line)
@@ -560,7 +560,7 @@ enum TagColorRepositoryContract {
         )
         XCTAssertEqual(firstScopedColor.name, "Scoped Contract Color", file: file, line: line)
 
-        try fixture.herdSelectionControl.selectCurrentHerd(secondHerdID)
+        try fixture.herdSelectionControl.setCurrentHerdID(secondHerdID)
         let secondScopedColor = try XCTUnwrap(
             fixture.makeTagColorRepository().fetchColors().first { $0.id == secondColorID },
             file: file,
