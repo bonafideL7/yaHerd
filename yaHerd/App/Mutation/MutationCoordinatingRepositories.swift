@@ -386,6 +386,7 @@ final class MutationPublishingTagColorRepository: TagColorRepository {
     }
 
     func fetchColors() throws -> [TagColorSnapshot] { try base.fetchColors() }
+    func fetchColor(id: UUID) throws -> TagColorSnapshot? { try base.fetchColor(id: id) }
 
     func upsert(_ color: TagColorSnapshot) throws {
         try writePolicy.validateCanWrite()
