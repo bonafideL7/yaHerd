@@ -72,6 +72,7 @@ enum IdentityContractSeedVariant: Sendable {
 /// contain framework object IDs, store identifiers, or other persistence-native identity.
 struct IdentityContractEntitySnapshot: Equatable, Sendable {
     let id: UUID
+    let owningHerdID: UUID?
     let payloadFingerprint: String
 }
 
@@ -101,8 +102,9 @@ struct IdentityContractSupportStateSnapshot: Equatable, Sendable {
 ///
 /// A future Core Data runner should create valid records, including any required owning Herd or
 /// parent relationships, without exposing managed objects or contexts to this permanent contract.
-/// For herd-owned entity kinds, all seed variants must be created under the same contract Herd so
-/// this probe cannot accidentally test feature-specific cross-Herd identity semantics.
+/// For herd-owned entity kinds, `identityScopeHerdID` defines the one contract Herd and every seed
+/// receives that exact UUID so this probe cannot accidentally test feature-specific cross-Herd
+/// identity semantics. Entity snapshots must report the same owning Herd UUID back after reload.
 /// `seedEntity` must ensure every non-ID constraint is satisfied, then surface duplicate-identity
 /// persistence failure rather than translating it into an update, silently deleting/replacing the
 /// original, or minting a different UUID. A conflicting seed must reuse the same support graph
@@ -110,10 +112,18 @@ struct IdentityContractSupportStateSnapshot: Equatable, Sendable {
 /// could hide partial persistence after the expected failure.
 @MainActor
 protocol IdentityContractTestControl {
+    /// Returns the persisted Herd UUID that defines this probe's repository identity scope.
+    /// Returns nil only for the store-global Herd entity itself. Fresh controls for the same entity
+    /// kind must return the same value.
+    func identityScopeHerdID(
+        for kind: IdentityContractEntityKind
+    ) throws -> UUID?
+
     func seedEntity(
         _ kind: IdentityContractEntityKind,
         id: UUID,
-        variant: IdentityContractSeedVariant
+        variant: IdentityContractSeedVariant,
+        owningHerdID: UUID?
     ) throws
 
     func snapshotsInIdentityScope(
@@ -162,18 +172,45 @@ enum IdentityContract {
             let applicationID = UUID()
             let unrelatedControlID = UUID()
 
+            let scopeControl = fixture.makeTestControl(kind)
+            let owningHerdID = try scopeControl.identityScopeHerdID(for: kind)
+            if kind == .herd {
+                XCTAssertNil(
+                    owningHerdID,
+                    "The store-global Herd entity must not have an owning-Herd identity scope.",
+                    file: file,
+                    line: line
+                )
+            } else {
+                XCTAssertNotNil(
+                    owningHerdID,
+                    "Every herd-owned entity kind must expose the Herd UUID that defines its repository identity scope.",
+                    file: file,
+                    line: line
+                )
+            }
+
             try fixture.makeTestControl(kind).seedEntity(
                 kind,
                 id: applicationID,
-                variant: .original
+                variant: .original,
+                owningHerdID: owningHerdID
             )
             try fixture.makeTestControl(kind).seedEntity(
                 kind,
                 id: unrelatedControlID,
-                variant: .unrelatedControl
+                variant: .unrelatedControl,
+                owningHerdID: owningHerdID
             )
 
             let baselineControl = fixture.makeTestControl(kind)
+            XCTAssertEqual(
+                try baselineControl.identityScopeHerdID(for: kind),
+                owningHerdID,
+                "Fresh controls for \(kind.rawValue) must resolve the same repository identity scope.",
+                file: file,
+                line: line
+            )
             let before = try baselineControl.snapshotsInIdentityScope(
                 for: kind,
                 id: applicationID
@@ -193,6 +230,13 @@ enum IdentityContract {
                 file: file,
                 line: line
             )
+            XCTAssertEqual(
+                original.owningHerdID,
+                owningHerdID,
+                "The persisted \(kind.rawValue) must remain in the repository identity scope used for its first save.",
+                file: file,
+                line: line
+            )
 
             let controlBefore = try baselineControl.snapshotsInIdentityScope(
                 for: kind,
@@ -207,6 +251,13 @@ enum IdentityContract {
             )
             let unrelatedControl = try XCTUnwrap(controlBefore.first, file: file, line: line)
             XCTAssertEqual(unrelatedControl.id, unrelatedControlID, file: file, line: line)
+            XCTAssertEqual(
+                unrelatedControl.owningHerdID,
+                owningHerdID,
+                "The unrelated \(kind.rawValue) control must use the same repository identity scope as the duplicate probe.",
+                file: file,
+                line: line
+            )
             XCTAssertNotEqual(
                 unrelatedControl.payloadFingerprint,
                 original.payloadFingerprint,
@@ -234,6 +285,15 @@ enum IdentityContract {
                     file: file,
                     line: line
                 )
+            } else if let owningHerdID {
+                XCTAssertTrue(
+                    supportStateBeforeDuplicateAttempt.records.contains {
+                        $0.kind == .herd && $0.id == owningHerdID
+                    },
+                    "The support graph for \(kind.rawValue) must contain the exact Herd UUID that defines the repository identity scope.",
+                    file: file,
+                    line: line
+                )
             }
 
             let idsBeforeDuplicateAttempt = try baselineControl
@@ -252,11 +312,20 @@ enum IdentityContract {
                 line: line
             )
 
+            let duplicateControl = fixture.makeTestControl(kind)
+            XCTAssertEqual(
+                try duplicateControl.identityScopeHerdID(for: kind),
+                owningHerdID,
+                "The conflicting \(kind.rawValue) seed must execute in the same repository identity scope as the original.",
+                file: file,
+                line: line
+            )
             XCTAssertThrowsError(
-                try fixture.makeTestControl(kind).seedEntity(
+                try duplicateControl.seedEntity(
                     kind,
                     id: applicationID,
-                    variant: .conflictingDuplicate
+                    variant: .conflictingDuplicate,
+                    owningHerdID: owningHerdID
                 ),
                 "Persisting a second \(kind.rawValue) with an established application UUID in the same repository identity scope must fail.",
                 file: file,
@@ -264,6 +333,13 @@ enum IdentityContract {
             )
 
             let reloadControl = fixture.makeTestControl(kind)
+            XCTAssertEqual(
+                try reloadControl.identityScopeHerdID(for: kind),
+                owningHerdID,
+                "Reloaded controls for \(kind.rawValue) must remain in the same repository identity scope.",
+                file: file,
+                line: line
+            )
             let after = try reloadControl.snapshotsInIdentityScope(
                 for: kind,
                 id: applicationID
