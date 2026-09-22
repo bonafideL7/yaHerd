@@ -81,7 +81,7 @@ The cutover is **test-first at the persistence boundary**. Tests are divided del
 
 Before creating `yaHerdModel.xcdatamodeld`, add persistence-neutral characterization contracts for behavior the current application already implements.
 
-The contracts must exercise Domain repository/transaction behavior rather than SwiftData types. A thin SwiftData test harness may instantiate the current repositories so these contracts characterize intended behavior before the persistence implementation changes. The contract definitions survive the cutover; only the SwiftData runner is temporary.
+The contracts must exercise Domain repository/transaction behavior rather than SwiftData types. Existing SwiftData code may be inspected to characterize current behavior, but do not add or restore a SwiftData contract harness. Permanent contracts may remain unexecuted until the corresponding Core Data runner exists.
 
 Characterize current behavior such as:
 
@@ -185,10 +185,9 @@ Expected deletion candidates include:
 - SwiftData-specific sample-data persistence code that cannot be reused cleanly;
 - SwiftData public-ID repair/recovery machinery that has no final-product requirement;
 - SwiftData-specific diagnostics and reliability documentation;
-- SwiftData migration documentation and fixture stores;
-- the temporary SwiftData contract runner.
+- SwiftData migration documentation and fixture stores.
 
-Permanent persistence-neutral contracts remain and now run only against production Core Data.
+Permanent persistence-neutral contracts remain and run against production Core Data as the corresponding Core Data persistence surfaces are implemented.
 
 Do not retain dead compatibility code because it might be useful later.
 
