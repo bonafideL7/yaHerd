@@ -19,6 +19,10 @@ struct TagColorReferenceSnapshot: Equatable {
 /// and return their current UUID values after repository mutations.
 @MainActor
 struct TagColorReferenceTestControl {
+    /// Seeds a physical color row directly through test persistence infrastructure. This bypasses
+    /// repository name reconciliation so a runner can establish duplicate physical rows deliberately
+    /// and then prove the repository repairs them through application UUID semantics.
+    let seedPersistedColor: (_ color: TagColorSnapshot) throws -> Void
     let seedReferences: (_ colorID: UUID) throws -> Void
     let fetchReferences: () throws -> TagColorReferenceSnapshot
 }
@@ -401,17 +405,22 @@ enum TagColorRepositoryContract {
                 rgba: RGBAColor(r: 0.2, g: 0.3, b: 0.4)
             )
         )
-        try fixture.referenceControl.seedReferences(incomingID)
 
         var incoming = TagColorSnapshot(
             id: incomingID,
             name: "Placeholder",
             prefix: "X",
             rgba: RGBAColor(r: 0.75, g: 0.35, b: 0.15),
+            sortOrder: 99,
             isDefault: true
         )
         incoming.name = "  contract merge  "
         incoming.prefix = " new "
+
+        // Seed the duplicate through target-only persistence control so references point at a real
+        // physical color row before the repository is asked to reconcile the name collision.
+        try fixture.referenceControl.seedPersistedColor(incoming)
+        try fixture.referenceControl.seedReferences(incomingID)
 
         try fixture.makeTagColorRepository().upsert(incoming)
 
