@@ -30,9 +30,10 @@ enum IdentityContractEntityKind: String, CaseIterable, Sendable {
 /// Valid payload variants used by the target runner when probing duplicate application IDs.
 ///
 /// `.original` and `.unrelatedControl` must both create valid independent records with distinct
-/// business payload. `.conflictingDuplicate` must differ from `.original` in at least one persisted
-/// business value while reusing the supplied application UUID so the contract can detect silent
-/// merge/overwrite behavior.
+/// business payload. `.conflictingDuplicate` must also be valid under every non-ID invariant and
+/// must differ from `.original` in at least one persisted business value while reusing the supplied
+/// application UUID. The duplicated UUID must be the sole intended invalid condition so a thrown
+/// error cannot be satisfied by an unrelated uniqueness or validation failure.
 enum IdentityContractSeedVariant: Sendable {
     case original
     case unrelatedControl
@@ -58,8 +59,9 @@ struct IdentityContractEntitySnapshot: Equatable, Sendable {
 /// parent relationships, without exposing managed objects or contexts to this permanent contract.
 /// For herd-owned entity kinds, all seed variants must be created under the same contract Herd so
 /// this probe cannot accidentally test feature-specific cross-Herd identity semantics.
-/// `seedEntity` must surface duplicate-identity persistence failure rather than translating it into
-/// an update, silently deleting/replacing the original, or minting a different UUID.
+/// `seedEntity` must ensure every non-ID constraint is satisfied, then surface duplicate-identity
+/// persistence failure rather than translating it into an update, silently deleting/replacing the
+/// original, or minting a different UUID.
 @MainActor
 protocol IdentityContractTestControl {
     func seedEntity(
