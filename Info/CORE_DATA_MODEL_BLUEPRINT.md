@@ -115,10 +115,12 @@ Rules:
 - `id` is the persisted `ApplicationEntityID`.
 - The application assigns it before the first save.
 - It never changes during ordinary updates or store reloads.
-- Every repository resolves entities by `id`, not `NSManagedObjectID`.
-- Add a local fetch index for `id` on every entity.
-- Duplicate UUIDs are persistence integrity failures.
-- A Core Data unique constraint on `id` is allowed and generally preferred when it composes safely with the entity's lifecycle and tests; repository/transaction code must still translate constraint failures into meaningful application errors rather than relying on silent merge behavior.
+- `Herd` identity is store-global.
+- Herd-owned entity identity is resolved inside the owning/current Herd scope. Repositories must query by Herd plus `id`, not search the whole store by `id` alone.
+- Add a local fetch index for `id` on every entity and structure Herd-scoped queries so the owning-Herd predicate is always part of lookup.
+- Duplicate UUIDs inside the same entity type and identity scope are persistence integrity failures.
+- The same UUID in different Herd scopes is not automatically corruption. Permanent feature contracts own any intentional cross-Herd reuse; stable built-in Tag Color IDs are the current required case.
+- A global Core Data unique constraint on `id` is appropriate only when the entity's identity is actually store-global. Do not add a global `id` constraint to a herd-owned entity when it would reject valid feature behavior. Repository/transaction code must enforce the applicable identity scope and translate any physical constraint failures into meaningful application errors rather than relying on silent merge behavior.
 
 Embedded value objects may also contain UUIDs without becoming managed entities. Their IDs are scoped to the value object contract and are not independently repository-addressable entities.
 
