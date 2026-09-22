@@ -25,20 +25,6 @@ enum IdentityContractEntityKind: String, CaseIterable, Sendable {
     case workingSession
     case workingQueueItem
     case workingTreatmentRecord
-
-    var isHerdOwned: Bool {
-        self != .herd
-    }
-}
-
-/// Synthetic ownership scopes used only by the future Core Data identity-contract runner.
-///
-/// Fresh controls for one fixture must resolve `.primaryHerd` and `.secondaryHerd` to the same
-/// two persisted Herd application UUIDs. `.unscoped` is valid only for `Herd` itself.
-enum IdentityContractOwningHerdScope: Equatable, Sendable {
-    case unscoped
-    case primaryHerd
-    case secondaryHerd
 }
 
 /// Two valid payload variants used by the target runner when probing duplicate application IDs.
@@ -51,8 +37,8 @@ enum IdentityContractSeedVariant: Sendable {
     case conflictingDuplicate
 }
 
-/// Persistence-neutral value snapshot used to prove a failed duplicate insert did not replace,
-/// re-home, or mutate the established entity.
+/// Persistence-neutral value snapshot used to prove a failed duplicate insert did not replace or
+/// mutate the established entity.
 ///
 /// `payloadFingerprint` is produced by the concrete runner from stable persisted business values.
 /// It must include the value that differs between `.original` and `.conflictingDuplicate` for the
@@ -60,43 +46,40 @@ enum IdentityContractSeedVariant: Sendable {
 /// persistence-native identity.
 struct IdentityContractEntitySnapshot: Equatable, Sendable {
     let id: UUID
-    let owningHerdScope: IdentityContractOwningHerdScope
     let payloadFingerprint: String
 }
 
 /// Target-runner control for the one identity invariant that ordinary Domain repository APIs cannot
 /// directly exercise: attempting to persist two independently managed entities with the same
-/// application UUID.
+/// application UUID inside one repository identity/ownership scope.
 ///
-/// A future Core Data runner should create valid records, including any required parent
-/// relationships, without exposing managed objects or contexts to this permanent contract.
+/// A future Core Data runner should create valid records, including any required owning Herd or
+/// parent relationships, without exposing managed objects or contexts to this permanent contract.
+/// For herd-owned entity kinds, both seed variants must be created under the same contract Herd so
+/// this probe cannot accidentally test feature-specific cross-Herd identity semantics.
 /// `seedEntity` must surface duplicate-identity persistence failure rather than translating it into
 /// an update, silently deleting/replacing the original, or minting a different UUID.
-///
-/// For herd-owned entity kinds, the runner must persist the requested ownership relationship to the
-/// fixture Herd represented by `owningHerdScope`. The same application UUID must remain invalid even
-/// when the conflicting record is assigned to the other Herd.
 @MainActor
 protocol IdentityContractTestControl {
     func seedEntity(
         _ kind: IdentityContractEntityKind,
         id: UUID,
-        variant: IdentityContractSeedVariant,
-        owningHerdScope: IdentityContractOwningHerdScope
+        variant: IdentityContractSeedVariant
     ) throws
 
-    func snapshots(
+    func snapshotsInIdentityScope(
         for kind: IdentityContractEntityKind,
         id: UUID
     ) throws -> [IdentityContractEntitySnapshot]
 
-    func allEntityIDs(for kind: IdentityContractEntityKind) throws -> Set<UUID>
+    func allEntityIDsInIdentityScope(for kind: IdentityContractEntityKind) throws -> Set<UUID>
 }
 
 /// Permanent persistence-neutral fixture for cross-cutting application identity integrity.
 ///
 /// Each `makeTestControl` call must return a fresh access object over the same isolated backing
-/// persistence so the contract can distinguish durable state from one context's in-memory state.
+/// persistence and the same repository identity/ownership scope so the contract can distinguish
+/// durable state from one context's in-memory state.
 @MainActor
 struct IdentityContractFixture {
     let makeTestControl: () -> any IdentityContractTestControl
@@ -106,12 +89,13 @@ struct IdentityContractFixture {
 ///
 /// Ownership boundaries:
 /// - Feature repository contracts own UUID preservation through ordinary create/read/update/reload
-///   flows and feature-specific relationship resolution by application UUID.
-/// - This contract owns duplicate application UUID rejection across every independently persisted
-///   entity, including duplicates placed under different Herd roots, and proves a failed duplicate
-///   cannot overwrite, merge, re-home, or remint the logical entity.
+///   flows, Herd scoping, and feature-specific relationship resolution by application UUID.
+/// - This contract owns duplicate application UUID rejection inside one repository identity scope
+///   across every independently persisted entity and proves a failed duplicate cannot overwrite,
+///   merge, or remint the logical entity.
 /// - Phase 2 Core Data model-structure tests own physical UUID attribute requiredness, indexes, and
-///   uniqueness-constraint declarations. This contract protects observable persistence behavior.
+///   uniqueness-constraint declarations. Physical constraints must not be stronger than permanent
+///   feature contracts such as Herd-scoped stable built-in Tag Color identities.
 @MainActor
 enum IdentityContract {
     static func assertDuplicateApplicationIDsFailWithoutReplacingMergingOrReminting(
@@ -121,21 +105,22 @@ enum IdentityContract {
     ) throws {
         for kind in IdentityContractEntityKind.allCases {
             let applicationID = UUID()
-            let originalScope = owningScope(for: kind)
 
             try fixture.makeTestControl().seedEntity(
                 kind,
                 id: applicationID,
-                variant: .original,
-                owningHerdScope: originalScope
+                variant: .original
             )
 
             let baselineControl = fixture.makeTestControl()
-            let before = try baselineControl.snapshots(for: kind, id: applicationID)
+            let before = try baselineControl.snapshotsInIdentityScope(
+                for: kind,
+                id: applicationID
+            )
             XCTAssertEqual(
                 before.count,
                 1,
-                "Identity contract setup must durably create exactly one \(kind.rawValue) with the requested application UUID.",
+                "Identity contract setup must durably create exactly one \(kind.rawValue) with the requested application UUID in the contract identity scope.",
                 file: file,
                 line: line
             )
@@ -147,19 +132,13 @@ enum IdentityContract {
                 file: file,
                 line: line
             )
-            XCTAssertEqual(
-                original.owningHerdScope,
-                originalScope,
-                "Identity contract setup must persist \(kind.rawValue) in the requested owning Herd scope.",
-                file: file,
-                line: line
-            )
 
-            let idsBeforeDuplicateAttempt = try baselineControl.allEntityIDs(for: kind)
+            let idsBeforeDuplicateAttempt = try baselineControl
+                .allEntityIDsInIdentityScope(for: kind)
             XCTAssertEqual(
                 idsBeforeDuplicateAttempt.filter { $0 == applicationID }.count,
                 1,
-                "Exactly one \(kind.rawValue) may own an established application UUID.",
+                "Exactly one \(kind.rawValue) may own an established application UUID inside one repository identity scope.",
                 file: file,
                 line: line
             )
@@ -168,87 +147,35 @@ enum IdentityContract {
                 try fixture.makeTestControl().seedEntity(
                     kind,
                     id: applicationID,
-                    variant: .conflictingDuplicate,
-                    owningHerdScope: originalScope
+                    variant: .conflictingDuplicate
                 ),
-                "Persisting a second \(kind.rawValue) with an established application UUID must fail.",
+                "Persisting a second \(kind.rawValue) with an established application UUID in the same repository identity scope must fail.",
                 file: file,
                 line: line
             )
 
-            try assertOriginalRemainsUnchanged(
-                kind: kind,
-                applicationID: applicationID,
-                original: original,
-                idsBeforeDuplicateAttempt: idsBeforeDuplicateAttempt,
-                fixture: fixture,
-                failureDescription: "same-Herd duplicate rejection",
+            let reloadControl = fixture.makeTestControl()
+            let after = try reloadControl.snapshotsInIdentityScope(
+                for: kind,
+                id: applicationID
+            )
+            XCTAssertEqual(
+                after,
+                [original],
+                "A rejected duplicate \(kind.rawValue) must not merge into, replace, or mutate the established entity after reload.",
                 file: file,
                 line: line
             )
 
-            guard kind.isHerdOwned else {
-                continue
-            }
-
-            XCTAssertThrowsError(
-                try fixture.makeTestControl().seedEntity(
-                    kind,
-                    id: applicationID,
-                    variant: .conflictingDuplicate,
-                    owningHerdScope: .secondaryHerd
-                ),
-                "Persisting duplicate \(kind.rawValue) identity in a different Herd must fail; application UUIDs are not Herd-namespaced.",
-                file: file,
-                line: line
-            )
-
-            try assertOriginalRemainsUnchanged(
-                kind: kind,
-                applicationID: applicationID,
-                original: original,
-                idsBeforeDuplicateAttempt: idsBeforeDuplicateAttempt,
-                fixture: fixture,
-                failureDescription: "cross-Herd duplicate rejection",
+            let idsAfterDuplicateAttempt = try reloadControl
+                .allEntityIDsInIdentityScope(for: kind)
+            XCTAssertEqual(
+                idsAfterDuplicateAttempt,
+                idsBeforeDuplicateAttempt,
+                "Rejecting a duplicate \(kind.rawValue) must not silently mint a replacement UUID or otherwise change the durable entity set in the contract identity scope.",
                 file: file,
                 line: line
             )
         }
-    }
-
-    private static func owningScope(
-        for kind: IdentityContractEntityKind
-    ) -> IdentityContractOwningHerdScope {
-        kind.isHerdOwned ? .primaryHerd : .unscoped
-    }
-
-    private static func assertOriginalRemainsUnchanged(
-        kind: IdentityContractEntityKind,
-        applicationID: UUID,
-        original: IdentityContractEntitySnapshot,
-        idsBeforeDuplicateAttempt: Set<UUID>,
-        fixture: IdentityContractFixture,
-        failureDescription: String,
-        file: StaticString,
-        line: UInt
-    ) throws {
-        let reloadControl = fixture.makeTestControl()
-        let after = try reloadControl.snapshots(for: kind, id: applicationID)
-        XCTAssertEqual(
-            after,
-            [original],
-            "A rejected \(kind.rawValue) \(failureDescription) must not merge into, replace, re-home, or mutate the established entity after reload.",
-            file: file,
-            line: line
-        )
-
-        let idsAfterDuplicateAttempt = try reloadControl.allEntityIDs(for: kind)
-        XCTAssertEqual(
-            idsAfterDuplicateAttempt,
-            idsBeforeDuplicateAttempt,
-            "A rejected \(kind.rawValue) \(failureDescription) must not silently mint a replacement UUID or otherwise change the durable entity set.",
-            file: file,
-            line: line
-        )
     }
 }
