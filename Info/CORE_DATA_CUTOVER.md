@@ -50,12 +50,13 @@ When introducing every Core Data entity:
 1. Add a dedicated UUID application-ID attribute.
 2. Generate the UUID before or when the application creates the entity and before its first save.
 3. Never change an established entity UUID during ordinary updates.
-4. Resolve repository requests by application UUID, not `NSManagedObjectID`.
+4. Resolve repository requests by application UUID within the repository's identity scope, not by `NSManagedObjectID`. Herd-owned repositories must constrain lookup to the owning/current Herd rather than searching the store by UUID alone.
 5. Map the same UUID back into Domain snapshots; missing application identity is invalid persisted state, not permission to invent a replacement UUID.
 6. Keep `NSManagedObjectID`, object URI strings, and persistent-store identifiers inside Data/App implementation code.
-7. Treat duplicate UUIDs as an integrity failure; do not silently mint a new identity for an established record.
-8. Use UUIDs for relationship references that cross architectural or serialization boundaries. Use native Core Data relationships inside the managed graph.
-9. Do not stringify UUIDs in Domain merely for convenience. Convert to/from strings only at true serialization boundaries.
+7. Treat duplicate UUIDs inside the same entity type and identity scope as an integrity failure; do not silently mint a new identity for an established record. `Herd` identity is store-global. Herd-owned identity is scoped by Herd unless a permanent feature contract explicitly defines broader semantics.
+8. Do not assume a global Core Data unique constraint on a herd-owned `id` is valid. Physical constraints must compose with permanent feature behavior, including stable built-in Tag Color IDs that can exist independently in different Herd scopes.
+9. Use UUIDs for relationship references that cross architectural or serialization boundaries. Use native Core Data relationships inside the managed graph. A herd-owned UUID reference is interpreted under the enclosing/selected Herd unless a true cross-Herd boundary explicitly carries Herd identity as well.
+10. Do not stringify UUIDs in Domain merely for convenience. Convert to/from strings only at true serialization boundaries.
 
 Existing Domain types that already use `UUID` are compliant even if they have not been mechanically changed to the `ApplicationEntityID` alias.
 
