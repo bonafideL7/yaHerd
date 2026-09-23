@@ -323,8 +323,16 @@ enum IdentityContract {
                 file: file,
                 line: line
             ) { error in
+                guard let identityError = error as? IdentityContractSeedError else {
+                    XCTFail(
+                        "The \(kind.rawValue) duplicate probe surfaced \(type(of: error)) instead of IdentityContractSeedError.",
+                        file: file,
+                        line: line
+                    )
+                    return
+                }
                 XCTAssertEqual(
-                    error as? IdentityContractSeedError,
+                    identityError,
                     .duplicateApplicationID(
                         kind: kind,
                         id: applicationID,
