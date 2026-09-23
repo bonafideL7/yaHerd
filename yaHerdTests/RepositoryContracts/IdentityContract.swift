@@ -68,12 +68,15 @@ struct IdentityContractEntitySnapshot: Equatable, Sendable {
 
 /// Persistence-neutral snapshot of one non-target record required to make an identity probe valid.
 ///
-/// Support records are identified with the same application identity vocabulary as production data,
-/// never with managed-object IDs or store identifiers.
+/// `owningHerdID` makes repository identity scope observable for support rows just as it is for the
+/// target entity. `stateFingerprint` must represent stable persisted business values plus persisted
+/// application-UUID relationship targets for this support record. It must not contain managed-object
+/// IDs, store identifiers, or other persistence-native identity.
 struct IdentityContractSupportRecordSnapshot: Hashable, Sendable {
     let kind: IdentityContractEntityKind
     let id: UUID
-    let payloadFingerprint: String
+    let owningHerdID: UUID?
+    let stateFingerprint: String
 }
 
 /// Persistence-neutral snapshot of the complete non-target state required by one identity probe.
@@ -81,11 +84,13 @@ struct IdentityContractSupportRecordSnapshot: Hashable, Sendable {
 /// The Core Data runner must include every owning/parent/support record it creates or reuses to make
 /// the target entity valid. Exact required relationship kinds remain owned by Core Data model
 /// structure tests; this identity contract compares the complete runner-declared support state before
-/// and after the duplicate failure. The target entity rows themselves are excluded because they are
-/// asserted separately. `recordCounts` is a multiset: identical support snapshots retain their
-/// persisted multiplicity so an accidentally duplicated/leaked parent cannot collapse during
-/// before/after comparison. Counts must be positive. For `Herd`, where no owning/parent support
-/// exists, `recordCounts` is empty.
+/// and after the duplicate failure. Because each support key includes entity identity, Herd scope,
+/// business state, and application-UUID relationship state, re-homing or relationship mutation
+/// changes the multiset even when application UUID and scalar payload remain otherwise identical.
+/// The target entity rows themselves are excluded because they are asserted separately.
+/// `recordCounts` is a multiset: identical support snapshots retain their persisted multiplicity so
+/// an accidentally duplicated/leaked parent cannot collapse during before/after comparison. Counts
+/// must be positive. For `Herd`, where no owning/parent support exists, `recordCounts` is empty.
 struct IdentityContractSupportStateSnapshot: Equatable, Sendable {
     let recordCounts: [IdentityContractSupportRecordSnapshot: Int]
 }
@@ -280,7 +285,10 @@ enum IdentityContract {
             } else if let owningHerdID {
                 XCTAssertTrue(
                     supportStateBeforeDuplicateAttempt.recordCounts.contains {
-                        $0.key.kind == .herd && $0.key.id == owningHerdID && $0.value > 0
+                        $0.key.kind == .herd
+                            && $0.key.id == owningHerdID
+                            && $0.key.owningHerdID == nil
+                            && $0.value > 0
                     },
                     "The support graph for \(kind.rawValue) must contain the exact Herd UUID that defines the repository identity scope.",
                     file: file,
