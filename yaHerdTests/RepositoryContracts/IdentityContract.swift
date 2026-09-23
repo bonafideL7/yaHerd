@@ -40,6 +40,20 @@ enum IdentityContractSeedVariant: Sendable {
     case conflictingDuplicate
 }
 
+/// Persistence-neutral failure surfaced by the future Core Data identity runner.
+///
+/// The runner must translate the framework-specific constraint/integrity failure into this error only
+/// after the conflicting row has otherwise satisfied every non-ID validation and relationship rule.
+/// This lets the permanent contract distinguish actual duplicate-application-identity enforcement
+/// from an unrelated validation, relationship, or unsupported-entity failure.
+enum IdentityContractSeedError: Error, Equatable, Sendable {
+    case duplicateApplicationID(
+        kind: IdentityContractEntityKind,
+        id: UUID,
+        owningHerdID: UUID?
+    )
+}
+
 /// Persistence-neutral value snapshot used to prove a failed duplicate insert did not replace or
 /// mutate the established entity or an unrelated same-kind control.
 ///
@@ -68,9 +82,12 @@ struct IdentityContractSupportRecordSnapshot: Hashable, Sendable {
 /// the target entity valid. Exact required relationship kinds remain owned by Core Data model
 /// structure tests; this identity contract compares the complete runner-declared support state before
 /// and after the duplicate failure. The target entity rows themselves are excluded because they are
-/// asserted separately. For `Herd`, where no owning/parent support exists, `records` is empty.
+/// asserted separately. `recordCounts` is a multiset: identical support snapshots retain their
+/// persisted multiplicity so an accidentally duplicated/leaked parent cannot collapse during
+/// before/after comparison. Counts must be positive. For `Herd`, where no owning/parent support
+/// exists, `recordCounts` is empty.
 struct IdentityContractSupportStateSnapshot: Equatable, Sendable {
-    let records: Set<IdentityContractSupportRecordSnapshot>
+    let recordCounts: [IdentityContractSupportRecordSnapshot: Int]
 }
 
 /// Target-runner control for the one identity invariant that ordinary Domain repository APIs cannot
@@ -82,9 +99,10 @@ struct IdentityContractSupportStateSnapshot: Equatable, Sendable {
 /// For herd-owned entity kinds, `identityScopeHerdID` defines the one contract Herd and every seed
 /// receives that exact UUID so this probe cannot accidentally test feature-specific cross-Herd
 /// identity semantics. Entity snapshots must report the same owning Herd UUID back after reload.
-/// `seedEntity` must ensure every non-ID constraint is satisfied, then surface duplicate-identity
-/// persistence failure rather than translating it into an update, silently deleting/replacing the
-/// original, or minting a different UUID. A conflicting seed must reuse the same support graph
+/// `seedEntity` must ensure every non-ID constraint is satisfied, then translate the
+/// duplicate-identity rejection to `IdentityContractSeedError.duplicateApplicationID` rather than
+/// surfacing an unrelated error, translating the conflict into an update, silently deleting/replacing
+/// the original, or minting a different UUID. A conflicting seed must reuse the same support graph
 /// represented by `supportStateSnapshot`; every support row used by the probe must be represented,
 /// and the runner must not manufacture unreported throwaway parents whose cleanup could hide partial
 /// persistence after the expected failure.
@@ -246,17 +264,23 @@ enum IdentityContract {
 
             let supportStateBeforeDuplicateAttempt = try baselineControl
                 .supportStateSnapshot(for: kind)
+            XCTAssertTrue(
+                supportStateBeforeDuplicateAttempt.recordCounts.values.allSatisfy { $0 > 0 },
+                "Identity support-state multiplicities must be positive for \(kind.rawValue).",
+                file: file,
+                line: line
+            )
             if kind == .herd {
                 XCTAssertTrue(
-                    supportStateBeforeDuplicateAttempt.records.isEmpty,
+                    supportStateBeforeDuplicateAttempt.recordCounts.isEmpty,
                     "The Herd identity probe must not invent owning-Herd or parent support records.",
                     file: file,
                     line: line
                 )
             } else if let owningHerdID {
                 XCTAssertTrue(
-                    supportStateBeforeDuplicateAttempt.records.contains {
-                        $0.kind == .herd && $0.id == owningHerdID
+                    supportStateBeforeDuplicateAttempt.recordCounts.contains {
+                        $0.key.kind == .herd && $0.key.id == owningHerdID && $0.value > 0
                     },
                     "The support graph for \(kind.rawValue) must contain the exact Herd UUID that defines the repository identity scope.",
                     file: file,
@@ -298,7 +322,19 @@ enum IdentityContract {
                 "Persisting a second \(kind.rawValue) with an established application UUID in the same repository identity scope must fail.",
                 file: file,
                 line: line
-            )
+            ) { error in
+                XCTAssertEqual(
+                    error as? IdentityContractSeedError,
+                    .duplicateApplicationID(
+                        kind: kind,
+                        id: applicationID,
+                        owningHerdID: owningHerdID
+                    ),
+                    "The \(kind.rawValue) duplicate probe must fail specifically because its application UUID already exists in this identity scope.",
+                    file: file,
+                    line: line
+                )
+            }
 
             let reloadControl = fixture.makeTestControl(kind)
             XCTAssertEqual(
@@ -334,10 +370,16 @@ enum IdentityContract {
 
             let supportStateAfterDuplicateAttempt = try reloadControl
                 .supportStateSnapshot(for: kind)
+            XCTAssertTrue(
+                supportStateAfterDuplicateAttempt.recordCounts.values.allSatisfy { $0 > 0 },
+                "Reloaded identity support-state multiplicities must remain positive for \(kind.rawValue).",
+                file: file,
+                line: line
+            )
             XCTAssertEqual(
                 supportStateAfterDuplicateAttempt,
                 supportStateBeforeDuplicateAttempt,
-                "A rejected duplicate \(kind.rawValue) must not mutate, delete, or leak required owning-Herd/parent support state.",
+                "A rejected duplicate \(kind.rawValue) must not mutate, delete, duplicate, or leak owning-Herd/parent support state.",
                 file: file,
                 line: line
             )
