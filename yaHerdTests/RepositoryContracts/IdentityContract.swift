@@ -30,10 +30,11 @@ enum IdentityContractEntityKind: String, CaseIterable, Hashable, Sendable {
 /// Valid payload variants used by the target runner when probing duplicate application IDs.
 ///
 /// `.original` and `.unrelatedControl` must both create valid independent records with distinct
-/// business payload. `.conflictingDuplicate` must also be valid under every non-ID invariant and
-/// must differ from `.original` in at least one persisted business value while reusing the supplied
-/// application UUID. The duplicated UUID must be the sole intended invalid condition so a thrown
-/// error cannot be satisfied by an unrelated uniqueness or validation failure.
+/// persisted state. `.conflictingDuplicate` must also be valid under every non-ID invariant and
+/// must differ from `.original` in at least one persisted business value or application-UUID
+/// relationship while reusing the supplied application UUID. The duplicated UUID must be the sole
+/// intended invalid condition so a thrown error cannot be satisfied by an unrelated uniqueness or
+/// validation failure.
 enum IdentityContractSeedVariant: Sendable {
     case original
     case unrelatedControl
@@ -57,13 +58,15 @@ enum IdentityContractSeedError: Error, Equatable, Sendable {
 /// Persistence-neutral value snapshot used to prove a failed duplicate insert did not replace or
 /// mutate the established entity or an unrelated same-kind control.
 ///
-/// `payloadFingerprint` is produced by the concrete runner from stable persisted business values.
-/// It must distinguish the three seed variants for the corresponding entity kind. It must not
-/// contain framework object IDs, store identifiers, or other persistence-native identity.
+/// `stateFingerprint` is produced by the concrete runner from stable persisted business values plus
+/// persisted application-UUID relationship targets. It must distinguish the three seed variants for
+/// the corresponding entity kind and make relationship mutation observable after a failed duplicate
+/// attempt. It must not contain framework object IDs, store identifiers, or other persistence-native
+/// identity.
 struct IdentityContractEntitySnapshot: Equatable, Sendable {
     let id: UUID
     let owningHerdID: UUID?
-    let payloadFingerprint: String
+    let stateFingerprint: String
 }
 
 /// Persistence-neutral snapshot of one non-target record required to make an identity probe valid.
@@ -260,8 +263,8 @@ enum IdentityContract {
                 line: line
             )
             XCTAssertNotEqual(
-                unrelatedControl.payloadFingerprint,
-                original.payloadFingerprint,
+                unrelatedControl.stateFingerprint,
+                original.stateFingerprint,
                 "The unrelated \(kind.rawValue) control must have distinct business payload.",
                 file: file,
                 line: line
@@ -291,6 +294,16 @@ enum IdentityContract {
                             && $0.value > 0
                     },
                     "The support graph for \(kind.rawValue) must contain the exact Herd UUID that defines the repository identity scope.",
+                    file: file,
+                    line: line
+                )
+                XCTAssertTrue(
+                    supportStateBeforeDuplicateAttempt.recordCounts.keys.allSatisfy { support in
+                        support.kind == .herd
+                            ? support.id == owningHerdID && support.owningHerdID == nil
+                            : support.owningHerdID == owningHerdID
+                    },
+                    "Every support record for \(kind.rawValue) must remain inside the probe's repository identity scope.",
                     file: file,
                     line: line
                 )
