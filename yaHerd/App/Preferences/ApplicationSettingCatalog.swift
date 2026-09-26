@@ -13,7 +13,7 @@ nonisolated enum ApplicationSettingKey: String, CaseIterable, Sendable {
         case .dashboardEnabled:
             ["isDashboardEnabled"]
         case .hardDeleteAnimals:
-            ["allowHardDelete", "hardDeleteAnimals", "hardDeleteEnabled", "useHardDelete"]
+            []
         case .targetAcresPerHeadDefault:
             ["targetAcresPerHeadDefault"]
         case .usableAcreagePercentDefault:
@@ -31,6 +31,6 @@ nonisolated enum ApplicationSettingKey: String, CaseIterable, Sendable {
 }
 
 nonisolated enum ApplicationSettingsCatalog {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 1
     static let schemaVersionKey = "settings.schemaVersion"
 }
