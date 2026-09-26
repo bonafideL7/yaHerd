@@ -41,6 +41,27 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         XCTAssertEqual(viewModel.items, [freshAnimal])
     }
 
+    func testHardDeleteRemovesAnimalFromCurrentList() async {
+        let animal = makeAnimal(name: "Animal", tagNumber: "103")
+        let repository = RecordingAnimalListRepository(animals: [animal])
+        let pastureRepository = EmptyPastureReferenceDataReader()
+        let viewModel = AnimalListViewModel()
+
+        viewModel.load(using: repository, pastureRepository: pastureRepository)
+        XCTAssertEqual(viewModel.items.map(\.id), [animal.id])
+
+        viewModel.performPrimarySwipeAction(
+            animalID: animal.id,
+            hardDelete: true,
+            using: repository,
+            pastureRepository: pastureRepository
+        )
+
+        XCTAssertEqual(repository.deletedIDs, [animal.id])
+        XCTAssertTrue(repository.archivedIDs.isEmpty)
+        XCTAssertTrue(viewModel.items.isEmpty)
+    }
+
     func testArchiveSupersedesCancellationInsensitiveInFlightReload() async {
         let animal = makeAnimal(name: "Animal", tagNumber: "102")
         let queryReader = MutationRaceAnimalListQueryReader(animal: animal)
@@ -248,4 +269,25 @@ private final class EmptyPastureReferenceDataReader: PastureReferenceDataReader 
     func fetchPastureOptions() throws -> [PastureOption] {
         []
     }
+}
+
+
+@MainActor
+private final class RecordingAnimalListRepository: AnimalListRepository {
+    private let animals: [AnimalSummary]
+    private(set) var deletedIDs: [UUID] = []
+    private(set) var archivedIDs: [UUID] = []
+
+    init(animals: [AnimalSummary]) {
+        self.animals = animals
+    }
+
+    func fetchAnimals() throws -> [AnimalSummary] { animals }
+    func fetchAnimalDetail(id _: UUID) throws -> AnimalDetailSnapshot? { nil }
+    func create(input _: AnimalInput) throws -> AnimalDetailSnapshot { fatalError("Not used by this test.") }
+    func update(id _: UUID, input _: AnimalInput) throws -> AnimalDetailSnapshot { fatalError("Not used by this test.") }
+    func delete(ids: [UUID]) throws { deletedIDs.append(contentsOf: ids) }
+    func archive(ids: [UUID]) throws { archivedIDs.append(contentsOf: ids) }
+    func restore(ids _: [UUID]) throws {}
+    func move(ids _: [UUID], toPastureID _: UUID?) throws {}
 }
