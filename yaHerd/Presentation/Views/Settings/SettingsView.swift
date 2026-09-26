@@ -8,9 +8,11 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(ApplicationSettings.self) private var applicationSettings
     @Environment(\.recoveryModeController) private var recoveryModeController
 
     var body: some View {
+        @Bindable var applicationSettings = applicationSettings
         List {
             if dataAccessMode.isRecoveryMode {
                 Section("Storage Recovery") {
@@ -60,6 +62,15 @@ struct SettingsView: View {
                         systemImage: "leaf"
                     )
                 }
+            }
+
+            Section("Animal Records") {
+                Toggle("Hard Delete Animals", isOn: $applicationSettings.hardDeleteAnimals)
+                    .disabled(dataAccessMode.isRecoveryMode)
+
+                Text("When enabled, swiping an active animal deletes it permanently instead of archiving it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("About") {
