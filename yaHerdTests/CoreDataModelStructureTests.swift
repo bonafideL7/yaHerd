@@ -61,28 +61,15 @@ final class CoreDataModelStructureTests: XCTestCase {
         }
     }
 
-    func testOnlyHerdUsesGlobalApplicationIDUniquenessConstraint() throws {
+    func testApplicationIDUniquenessIsRepositoryEnforced() throws {
         let model = try loadModel()
 
         for entityName in Self.expectedEntities {
             let entity = try entity(named: entityName, in: model)
-            let constraintNames = Set(
-                entity.uniquenessConstraints
-                    .flatMap { $0 }
-                    .compactMap { value -> String? in
-                        if let name = value as? String { return name }
-                        return (value as? NSPropertyDescription)?.name
-                    }
+            XCTAssertTrue(
+                entity.uniquenessConstraints.isEmpty,
+                "\(entityName) must not use a Core Data uniqueness constraint. Application UUID uniqueness is enforced by repository/transaction validation."
             )
-
-            if entityName == "Herd" {
-                XCTAssertEqual(constraintNames, ["id"])
-            } else {
-                XCTAssertTrue(
-                    constraintNames.isEmpty,
-                    "\(entityName) must not use a store-global ID uniqueness constraint because identity is Herd-scoped."
-                )
-            }
         }
     }
 
