@@ -284,7 +284,6 @@ Attributes:
 - `id: UUID`
 - `name: String`
 - `baseStatusRawValue: String`
-- `createdAt: Date`
 
 Relationships:
 
@@ -442,15 +441,13 @@ Attributes:
 - `date: Date`
 - `oldStatusRawValue: String`
 - `newStatusRawValue: String`
-- `oldStatusReferenceIDSnapshot: UUID?`
-- `newStatusReferenceIDSnapshot: UUID?`
 
 Relationships:
 
 - `herd -> Herd`
 - `animal -> Animal`
 
-Status history belongs to the animal and cascades only on explicit animal hard deletion.
+Status history belongs to the animal and cascades only on explicit animal hard deletion. Milestone 0 exposes historical base-status transitions but no historical status-reference projection, so the final model does not carry the outgoing store's old/new status-reference UUID copies.
 
 ### HealthRecord
 
@@ -541,7 +538,6 @@ Attributes:
 - `wasExpectedAtStart: Bool`
 - `countedAt: Date?`
 - `missingConfirmedAt: Date?`
-- `note: String`
 
 Relationships:
 
@@ -743,7 +739,7 @@ Required snapshot cases:
 - movement from/to pasture UUID and name;
 - field-check pasture UUID/name;
 - field-check animal/tag/name/sex/type;
-- field-check finding animal/session/pasture display state;
+- field-check finding animal/pasture display state, with session identity supplied by its required owning relationship;
 - working-session source pasture UUID/name;
 - working queue animal UUID/name/tag/color/sex/dam-tag identity plus source/destination pasture identity/display;
 - working treatment item name/ID and animal UUID.
@@ -883,6 +879,9 @@ The Core Data model must **not** reproduce these current or historical implement
 - `Animal.locationRawValue` when location can be derived from active working-session state;
 - `Animal.statusReferenceID` alongside a real status-reference relationship;
 - `Herd.schemaVersion`;
+- `AnimalStatusReference.createdAt` when no product ordering/history behavior consumes it;
+- `FieldCheckAnimalCheck.note` because roster/check notes are not part of the Domain or production presentation contract;
+- `StatusRecord.oldStatusReferenceID` / `newStatusReferenceID` because Milestone 0 status history exposes base-status transitions, not historical status-reference identity;
 - `WorkingSession.currentQueueIndex`;
 - `WorkingQueueItem.queueOrder`;
 - legacy persistence naming based on "protocol" where the product now uses treatment-template terminology;
