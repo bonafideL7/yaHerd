@@ -34,6 +34,52 @@ Do not use this work to add:
 - managed-object IDs as application identity;
 - app preferences/settings to Core Data.
 
+## Milestone 1 reconciliation against Milestone 0
+
+Milestone 0 is now the behavioral source of truth for this blueprint. The permanent repository, read-model, identity, mutation-boundary, transaction-precondition, and rollback contracts were reconciled against the physical design before creating the Core Data model.
+
+### Reconciliation result
+
+The **18-entity inventory remains sufficient**. Milestone 0 did not expose a product behavior that requires another managed entity. The reconciliation instead tightens relationship semantics, historical snapshot ownership, reference-data lifecycle, and transaction/concurrency rules.
+
+Key changes confirmed by the contracts:
+
+- current-Herd selection remains local application state outside the Core Data business graph; repository reads/writes never bootstrap a Herd as a side effect of nil or stale selection;
+- Tag Color removal is not equivalent to physical deletion when historical references still need the definition; hidden referenced definitions remain resolvable by application UUID;
+- normalized Tag Color identity collisions are graph-wide reconciliation transactions because color UUIDs exist in both live relationships and historical snapshot attributes;
+- Animal `editorRevision` rotates for **every** successful public mutation that changes editor-owned scalar, relationship, or tag state, regardless of which feature initiated the write;
+- health/pregnancy child insertion alone does **not** rotate `editorRevision`, because those children are outside the Animal editor aggregate;
+- deleting a parent Animal nullifies surviving offspring parent relationships and rotates the surviving offspring aggregate revisions;
+- deleting a Pregnancy Check's referenced sire nullifies only the live sire relationship; it does not delete or rewrite the pregnancy row's historical payload;
+- Pasture deletion moves active residents transactionally, but sold/dead/archived Animals that still reference the deleted Pasture are also affected by relationship nullification and revision rotation;
+- deleting the final Pasture in a PastureGroup does not implicitly delete the now-empty group;
+- Field Check findings source animal/pasture display identity from the session's captured roster/session snapshots, including on later finding edits or reassignment after live records change;
+- Working and Field Check historical rows remain readable after related live Animal/Pasture deletion according to their snapshot contracts;
+- failed Core Data transaction scopes must be rolled back/reset before reuse or explicitly discarded; no staged state may leak through a later save;
+- successful application mutation publication occurs only after durable commit, and throwing writes publish no success event.
+
+### Domain contract -> Core Data entity mapping
+
+This mapping is the Milestone 1 handoff to physical model implementation. It identifies the managed entities each permanent contract depends on; it does not move contract ownership into persistence.
+
+| Permanent contract / behavior slice | Core Data entities and physical concerns |
+| --- | --- |
+| `IdentityContract` | All 18 entities; required application UUID, Herd ownership scope, scoped duplicate rejection, no persistence-native identity leakage |
+| `HerdRepositoryContract` | `Herd` plus representative owned graph; selected-Herd lookup by UUID, rename metadata preservation, rollback, no read-side bootstrap |
+| `TagColorRepositoryContract` | `TagColorDefinition`, `AnimalTag`, Field Check color snapshot attributes, Working queue color snapshot attributes; hidden-definition lookup and collision remapping |
+| `AnimalRepositoryContract` / `AnimalRepositoryReadModelContract` | `Animal`, `AnimalTag`, `MovementRecord`, `StatusRecord`, `HealthRecord`, `PregnancyCheck`, status/pasture/parent relationships and list/detail/timeline projections |
+| `AnimalAggregateTransactionContract` | `Animal`, `AnimalTag`, `MovementRecord`, `StatusRecord`; one aggregate write transaction with revision validation/rotation |
+| `AnimalAggregateCrossFeatureRevisionContract` | `Animal.editorRevision` plus every relationship/tag mutation path that can alter editor-owned state, including parent/pasture nullification and Tag Color remap |
+| `PastureRepositoryContract` / edge-case contracts | `Pasture`, `PastureGroup`, Animal current-pasture relationships, Working live pasture links, Field Check live pasture links |
+| `PastureDeletionTransactionContract` / workflow contract | `Pasture`, `Animal`, `MovementRecord`, `FieldCheckSession`, PastureGroup membership, Working live pasture links; stale-state validation and atomic delete plan |
+| `FieldCheckRepositoryContract` family | `FieldCheckSession`, `FieldCheckAnimalCheck`, `FieldCheckFinding`; roster/session snapshots, finding reassignment/orphan edits, missing/attention synchronization, completed-session locking |
+| `HealthRepositoryContract` | `HealthRecord`, `PregnancyCheck`, Animal ownership, optional Working-session linkage, Pregnancy sire nullification, archive preservation, hard-delete cascade |
+| `WorkingRepositoryContract` family | `WorkingSession`, `WorkingQueueItem`, `WorkingTreatmentRecord`, session-generated `HealthRecord` / `PregnancyCheck`, Animal/Pasture live links and historical snapshots |
+| Dashboard/Home read-model contracts | Existing Animal/Pasture/Working/Field Check entities only; no dashboard/home persistence entities |
+| `PersistenceTransactionPreconditionContract` | `Animal.editorRevision`; Pasture existence and resident-set revalidation immediately before mutation |
+| `PersistenceTransactionRollbackContract` | Complete 18-entity graph observability for fault-injected Animal aggregate and Pasture-delete rollback; write-scope recovery/disposal |
+| `MutationBoundaryContract` | No additional entity; all throwing write entry points must publish only after their final Core Data commit |
+
 ## Physical model decisions
 
 ### Model file and generated classes
@@ -223,8 +269,13 @@ Relationships:
 
 Rules:
 
+- application built-ins are stable application constants and may be visible even when no physical override row exists; materializing a built-in in one Herd must not force materialization in another Herd;
 - default/visible-color uniqueness is a Domain/repository invariant; add a database constraint only if it precisely represents the intended rule;
-- normal removal should continue to prefer hiding a color when historical tag display must remain meaningful.
+- `deleteColors(ids:)` is a visible-library removal operation, not unconditional physical deletion. A referenced custom definition must remain persisted as hidden and resolvable by UUID so retired tags, Field Check history, and Working history retain the original prefix/RGBA definition;
+- deleting a materialized built-in removes/resets the Herd-specific override and exposes the canonical application definition again; it must not erase the built-in application identity;
+- normalized-name collision reconciliation preserves the canonical application UUID and must atomically remap every affected color reference in the Herd: live/retired `AnimalTag.color`, Field Check roster and dam-color snapshots, Field Check finding color snapshots, and Working queue animal/dam-color snapshots;
+- if collision reconciliation changes any AnimalTag color UUID, rotate each affected Animal's `editorRevision` in that same logical transaction;
+- ordinary hide/remove operations do not rewrite historical snapshot UUIDs merely because the definition is no longer visible.
 
 ### AnimalStatusReference
 
@@ -277,8 +328,11 @@ Relationships:
 Delete behavior:
 
 - deleting a pasture nullifies non-owning relationships;
-- the Domain-authored pasture deletion transaction must move residents and write movement history before the pasture is deleted;
-- field-check sessions are archived/snapshotted before deletion and survive pasture deletion.
+- the Domain-authored pasture deletion transaction must move the Domain-selected active, unarchived resident set and write movement history before the pasture is deleted;
+- sold, dead, or archived Animals may still retain a live `currentPasture` relationship before deletion even though they are outside that active resident move set. Deleting the Pasture nullifies those relationships and rotates every affected surviving Animal's `editorRevision`;
+- deleting a Pasture never implicitly deletes its `PastureGroup`; an empty group remains a valid persisted group;
+- field-check sessions are archived/snapshotted before deletion and survive pasture deletion;
+- Working source/collected-from/destination live Pasture relationships nullify as applicable while their historical UUID/name snapshots remain unchanged. An active Working session remains readable, but any future collection/destination mutation must revalidate historical UUIDs against live Pasture reference data.
 
 ### Animal
 
@@ -329,7 +383,9 @@ Important differences from SwiftData:
 - **Do not persist `locationRawValue`.** Location is derived: an animal with `activeWorkingSession` is in the working pen; otherwise it is in pasture context, with `currentPasture == nil` representing pasture-unassigned.
 - Archive state uses the final names `isArchived`, `archivedAt`, and `archiveReason`; do not carry the SwiftData `isSoftDeleted` naming forward.
 
-`editorRevision` implements `AnimalAggregateRevision`. Generate it on create and rotate it whenever editor-owned animal fields or any tag state changes. An update transaction compares the expected UUID before mutation so a stale editor cannot overwrite newer local persisted state.
+`editorRevision` implements `AnimalAggregateRevision`. Generate it on create and rotate it whenever editor-owned animal scalar state, editor-owned relationships, or tag state changes **through any public mutation path**, not only through `AnimalAggregateTransactionWriting`. This includes direct Animal update/move/tag APIs, Working operations that change pasture/working ownership or replace the primary tag, Field Check operations that materially change editor-owned Animal state, Tag Color collision reconciliation that remaps an AnimalTag color UUID, parent deletion that nullifies sire/dam relationships on surviving offspring, and Pasture deletion that moves or nullifies `currentPasture`. A multi-Animal operation rotates every affected surviving aggregate. Adding standalone health or pregnancy child rows does not rotate the revision because those child collections are outside the editor-owned aggregate state.
+
+An update transaction compares the expected UUID before **any** staged mutation so a stale editor cannot overwrite newer local persisted state. If the Animal was hard-deleted after the editor loaded it, the update fails as a missing aggregate rather than recreating it or converting the failure into a generic stale-revision success path.
 
 `distinguishingFeaturesData` contains the encoded `[DistinguishingFeature]` value collection. The Data layer owns the codec; Domain and Presentation continue to use `[DistinguishingFeature]`.
 
@@ -434,7 +490,9 @@ Relationships:
 - `sire -> Animal?`
 - `workingSession -> WorkingSession?`
 
-Delete behavior mirrors HealthRecord: animal hard deletion removes the animal-owned check, and deleting the working session removes checks generated as work data for that session.
+Delete behavior mirrors HealthRecord for the owning Animal and Working session: animal hard deletion removes the animal-owned check, and deleting the Working session removes checks generated as work data for that session.
+
+The `sire` relationship has independent semantics from the owning `animal` relationship. Hard deleting the referenced sire **nullifies only `PregnancyCheck.sire`**. The pregnancy row, owning Animal relationship, UUID, date/result/technician/days/due-date payload, and Working-session linkage remain unchanged.
 
 ### FieldCheckSession
 
@@ -517,6 +575,14 @@ Relationships:
 - `animal -> Animal?`
 
 A finding belongs to the session but must remain understandable if its linked animal is hard-deleted.
+
+Finding snapshot mutation rules:
+
+- adding a finding for a tracked animal copies display tag/color and pasture display state from the session's captured roster/session snapshots, never from the animal's or pasture's later live values;
+- updating a finding without changing its animal preserves the session-time historical identity rather than refreshing from live records;
+- reassigning a finding to another tracked animal replaces the finding's animal snapshot fields from that target animal's **session roster snapshot**, even if the live target has since been renamed/retagged;
+- editing an orphaned finding after the live Animal has been hard-deleted preserves its stored historical snapshot fields;
+- unresolved finding reassignment/deletion must keep the associated roster `needsAttention` / missing projection synchronized through the existing persisted check/finding state; do not introduce a redundant persisted `needsAttention` flag merely for presentation.
 
 ### WorkingTreatmentTemplate
 
@@ -654,7 +720,8 @@ The parent-side behavior is the important rule.
 | Pasture -> Working/Field Check references | Nullify | Historical/work records survive pasture deletion |
 | Animal -> tags | Cascade | Tags are part of the animal aggregate |
 | Animal -> status/movement/health/pregnancy history | Cascade | These records are animal-owned history |
-| Animal -> offspring parent links | Nullify | Deleting a parent must not delete offspring |
+| Animal -> offspring parent links | Nullify | Deleting a parent must not delete offspring; surviving offspring revisions rotate because editor-owned parent state changed |
+| Animal (as PregnancyCheck sire) -> PregnancyCheck.sire | Nullify | Deleting a referenced sire preserves the pregnancy row and complete historical payload |
 | Animal -> Working/Field Check historical references | Nullify | Session/check history survives animal deletion |
 | WorkingSession -> queue items | Cascade | Queue is session-owned |
 | WorkingSession -> treatment records | Cascade | Treatment completion is session work data |
@@ -669,7 +736,7 @@ Use `Deny` only when a final local product invariant is clearer and safer with i
 
 Live relationships answer "what is this linked to now?" Snapshots answer "what was true when this event occurred?"
 
-Persist snapshots when the historical record must remain understandable after the linked object can be renamed or deleted.
+Persist snapshots when the historical record must remain understandable after the linked object can be renamed or deleted. Snapshot attributes are historical data, not cached mirrors of live relationships: later ordinary edits to the live Animal/Pasture/Tag must not rewrite them unless the feature contract explicitly defines the current mutation as replacing that historical association (for example, Field Check finding reassignment or Working primary-tag replacement inside the session).
 
 Required snapshot cases:
 
@@ -713,6 +780,21 @@ Live Working references to a deleted pasture nullify automatically while their s
 ### Working and Field Check
 
 Existing one-call Domain ports that represent transaction boundaries remain one Core Data save boundary. In particular, queue completion/edit, session completion/deletion, Field Check session setup, tracked-animal changes, and finding writes must not be decomposed into separately saving repositories.
+
+Working deletion must distinguish session-generated work data from independent Animal history. Deleting a Working session removes only that session's queue/treatment graph and session-generated health/pregnancy rows; unrelated standalone Animal health/pregnancy history survives. Conversely, hard deleting the Animal cascades its generated health/pregnancy rows but leaves Working queue/treatment history readable through its captured Animal snapshots.
+
+Field Check completion/reopen and finding writes may update more than one persisted row (for example completion normalization or finding-driven missing/attention state). Each public call remains atomic.
+
+### Cross-cutting failure recovery and mutation publication
+
+For every Core Data write boundary:
+
+- validation that can become stale is rechecked in the write transaction before mutation;
+- a throwing operation commits no partial business state;
+- a reusable failed write context is rolled back/reset before the operation returns, or a one-shot transaction context is explicitly discarded;
+- saving the same reusable context again after the failure must not leak previously staged objects, relationship changes, or deletes;
+- application mutation publication occurs only after the final durable save succeeds;
+- a thrown persistence/validation/precondition error publishes no successful mutation event.
 
 ## Archive versus delete semantics
 
