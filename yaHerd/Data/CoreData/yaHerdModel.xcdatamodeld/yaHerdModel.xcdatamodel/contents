@@ -21,13 +21,7 @@
         <relationship name="workingTreatmentTemplates" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WorkingTreatmentTemplate" inverseName="herd" inverseEntity="WorkingTreatmentTemplate"/>
         <relationship name="workingSessions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WorkingSession" inverseName="herd" inverseEntity="WorkingSession"/>
         <relationship name="workingQueueItems" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WorkingQueueItem" inverseName="herd" inverseEntity="WorkingQueueItem"/>
-        <relationship name="workingTreatmentRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WorkingTreatmentRecord" inverseName="herd" inverseEntity="WorkingTreatmentRecord"/>
-        <uniquenessConstraints>
-            <uniquenessConstraint>
-                <constraint value="id"/>
-            </uniquenessConstraint>
-        </uniquenessConstraints>
-            <fetchIndex name="by_id">
+        <relationship name="workingTreatmentRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WorkingTreatmentRecord" inverseName="herd" inverseEntity="WorkingTreatmentRecord"/>            <fetchIndex name="by_id">
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
