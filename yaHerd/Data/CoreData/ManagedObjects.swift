@@ -8,23 +8,23 @@ final class CDHerd: NSManagedObject {
     @NSManaged var createdAt: Date
     @NSManaged var updatedAt: Date
 
-    @NSManaged var tagColors: NSSet
-    @NSManaged var statusReferences: NSSet
-    @NSManaged var pastureGroups: NSSet
-    @NSManaged var pastures: NSSet
-    @NSManaged var animals: NSSet
-    @NSManaged var animalTags: NSSet
-    @NSManaged var movementRecords: NSSet
-    @NSManaged var statusRecords: NSSet
-    @NSManaged var healthRecords: NSSet
-    @NSManaged var pregnancyChecks: NSSet
-    @NSManaged var fieldCheckSessions: NSSet
-    @NSManaged var fieldCheckAnimalChecks: NSSet
-    @NSManaged var fieldCheckFindings: NSSet
-    @NSManaged var workingTreatmentTemplates: NSSet
-    @NSManaged var workingSessions: NSSet
-    @NSManaged var workingQueueItems: NSSet
-    @NSManaged var workingTreatmentRecords: NSSet
+    @NSManaged var tagColors: NSSet?
+    @NSManaged var statusReferences: NSSet?
+    @NSManaged var pastureGroups: NSSet?
+    @NSManaged var pastures: NSSet?
+    @NSManaged var animals: NSSet?
+    @NSManaged var animalTags: NSSet?
+    @NSManaged var movementRecords: NSSet?
+    @NSManaged var statusRecords: NSSet?
+    @NSManaged var healthRecords: NSSet?
+    @NSManaged var pregnancyChecks: NSSet?
+    @NSManaged var fieldCheckSessions: NSSet?
+    @NSManaged var fieldCheckAnimalChecks: NSSet?
+    @NSManaged var fieldCheckFindings: NSSet?
+    @NSManaged var workingTreatmentTemplates: NSSet?
+    @NSManaged var workingSessions: NSSet?
+    @NSManaged var workingQueueItems: NSSet?
+    @NSManaged var workingTreatmentRecords: NSSet?
 }
 
 @objc(CDTagColorDefinition)
@@ -42,7 +42,7 @@ final class CDTagColorDefinition: NSManagedObject {
     @NSManaged var createdAt: Date
     @NSManaged var updatedAt: Date
     @NSManaged var herd: CDHerd
-    @NSManaged var tags: NSSet
+    @NSManaged var tags: NSSet?
 }
 
 @objc(CDAnimalStatusReference)
@@ -51,7 +51,7 @@ final class CDAnimalStatusReference: NSManagedObject {
     @NSManaged var name: String
     @NSManaged var baseStatusRawValue: String
     @NSManaged var herd: CDHerd
-    @NSManaged var animals: NSSet
+    @NSManaged var animals: NSSet?
 }
 
 @objc(CDPastureGroup)
@@ -61,7 +61,7 @@ final class CDPastureGroup: NSManagedObject {
     @NSManaged var grazeDays: Int64
     @NSManaged var restDays: Int64
     @NSManaged var herd: CDHerd
-    @NSManaged var pastures: NSSet
+    @NSManaged var pastures: NSSet?
 }
 
 @objc(CDPasture)
@@ -75,11 +75,11 @@ final class CDPasture: NSManagedObject {
     @NSManaged var lastGrazedDate: Date?
     @NSManaged var herd: CDHerd
     @NSManaged var group: CDPastureGroup?
-    @NSManaged var animals: NSSet
-    @NSManaged var workingSourceSessions: NSSet
-    @NSManaged var workingCollectedQueueItems: NSSet
-    @NSManaged var workingDestinationQueueItems: NSSet
-    @NSManaged var fieldCheckSessions: NSSet
+    @NSManaged var animals: NSSet?
+    @NSManaged var workingSourceSessions: NSSet?
+    @NSManaged var workingCollectedQueueItems: NSSet?
+    @NSManaged var workingDestinationQueueItems: NSSet?
+    @NSManaged var fieldCheckSessions: NSSet?
 }
 
 @objc(CDAnimal)
@@ -105,18 +105,18 @@ final class CDAnimal: NSManagedObject {
     @NSManaged var sire: CDAnimal?
     @NSManaged var dam: CDAnimal?
     @NSManaged var activeWorkingSession: CDWorkingSession?
-    @NSManaged var tags: NSSet
-    @NSManaged var healthRecords: NSSet
-    @NSManaged var pregnancyChecks: NSSet
-    @NSManaged var movementRecords: NSSet
-    @NSManaged var statusRecords: NSSet
-    @NSManaged var sireOffspring: NSSet
-    @NSManaged var damOffspring: NSSet
-    @NSManaged var pregnancyChecksAsSire: NSSet
-    @NSManaged var fieldCheckAnimalChecks: NSSet
-    @NSManaged var fieldCheckFindings: NSSet
-    @NSManaged var workingQueueItems: NSSet
-    @NSManaged var workingTreatmentRecords: NSSet
+    @NSManaged var tags: NSSet?
+    @NSManaged var healthRecords: NSSet?
+    @NSManaged var pregnancyChecks: NSSet?
+    @NSManaged var movementRecords: NSSet?
+    @NSManaged var statusRecords: NSSet?
+    @NSManaged var sireOffspring: NSSet?
+    @NSManaged var damOffspring: NSSet?
+    @NSManaged var pregnancyChecksAsSire: NSSet?
+    @NSManaged var fieldCheckAnimalChecks: NSSet?
+    @NSManaged var fieldCheckFindings: NSSet?
+    @NSManaged var workingQueueItems: NSSet?
+    @NSManaged var workingTreatmentRecords: NSSet?
 }
 
 @objc(CDAnimalTag)
@@ -196,8 +196,8 @@ final class CDFieldCheckSession: NSManagedObject {
     @NSManaged var pastureArchivedAt: Date?
     @NSManaged var herd: CDHerd
     @NSManaged var pasture: CDPasture?
-    @NSManaged var animalChecks: NSSet
-    @NSManaged var findings: NSSet
+    @NSManaged var animalChecks: NSSet?
+    @NSManaged var findings: NSSet?
 }
 
 @objc(CDFieldCheckAnimalCheck)
@@ -256,11 +256,11 @@ final class CDWorkingSession: NSManagedObject {
     @NSManaged var sourcePastureNameSnapshot: String
     @NSManaged var herd: CDHerd
     @NSManaged var sourcePasture: CDPasture?
-    @NSManaged var queueItems: NSSet
-    @NSManaged var activeAnimals: NSSet
-    @NSManaged var treatmentRecords: NSSet
-    @NSManaged var healthRecords: NSSet
-    @NSManaged var pregnancyChecks: NSSet
+    @NSManaged var queueItems: NSSet?
+    @NSManaged var activeAnimals: NSSet?
+    @NSManaged var treatmentRecords: NSSet?
+    @NSManaged var healthRecords: NSSet?
+    @NSManaged var pregnancyChecks: NSSet?
 }
 
 @objc(CDWorkingQueueItem)
