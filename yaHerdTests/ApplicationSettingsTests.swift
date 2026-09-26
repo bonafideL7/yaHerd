@@ -7,6 +7,7 @@ final class ApplicationSettingsTests: XCTestCase {
         let settings = ApplicationSettings(store: InMemoryApplicationSettingsStore())
 
         XCTAssertFalse(settings.isDashboardEnabled)
+        XCTAssertTrue(settings.hardDeleteAnimals)
         XCTAssertEqual(settings.targetAcresPerHeadDefault, 3.0)
         XCTAssertEqual(settings.usableAcreagePercentDefault, 100)
         XCTAssertEqual(settings.recentPastureIDs, [])
@@ -18,6 +19,7 @@ final class ApplicationSettingsTests: XCTestCase {
         let pastureID = UUID()
         let store = InMemoryApplicationSettingsStore(values: [
             "isDashboardEnabled": true,
+            "hardDeleteAnimals": false,
             "targetAcresPerHeadDefault": 4.5,
             "usableAcreagePercentDefault": 85,
             "recentPastureIDs": pastureID.uuidString,
@@ -30,6 +32,7 @@ final class ApplicationSettingsTests: XCTestCase {
         let storedValues = store.snapshot()
 
         XCTAssertTrue(settings.isDashboardEnabled)
+        XCTAssertFalse(settings.hardDeleteAnimals)
         XCTAssertEqual(settings.targetAcresPerHeadDefault, 4.5)
         XCTAssertEqual(settings.usableAcreagePercentDefault, 85)
         XCTAssertEqual(settings.recentPastureIDs, [pastureID])
@@ -95,6 +98,7 @@ final class ApplicationSettingsTests: XCTestCase {
     func testResetToDefaultsRestoresLocalPreferences() {
         let settings = ApplicationSettings(store: InMemoryApplicationSettingsStore())
         settings.isDashboardEnabled = true
+        settings.hardDeleteAnimals = false
         settings.targetAcresPerHeadDefault = 8.0
         settings.usableAcreagePercentDefault = 60
         settings.recentPastureIDs = [UUID()]
@@ -104,6 +108,7 @@ final class ApplicationSettingsTests: XCTestCase {
         settings.resetToDefaults()
 
         XCTAssertFalse(settings.isDashboardEnabled)
+        XCTAssertTrue(settings.hardDeleteAnimals)
         XCTAssertEqual(settings.targetAcresPerHeadDefault, 3.0)
         XCTAssertEqual(settings.usableAcreagePercentDefault, 100)
         XCTAssertEqual(settings.recentPastureIDs, [])
