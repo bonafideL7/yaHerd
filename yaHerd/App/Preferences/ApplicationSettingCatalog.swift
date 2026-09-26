@@ -13,7 +13,7 @@ nonisolated enum ApplicationSettingKey: String, CaseIterable, Sendable {
         case .dashboardEnabled:
             ["isDashboardEnabled"]
         case .hardDeleteAnimals:
-            ["hardDeleteAnimals", "hardDeleteEnabled", "useHardDelete"]
+            ["allowHardDelete", "hardDeleteAnimals", "hardDeleteEnabled", "useHardDelete"]
         case .targetAcresPerHeadDefault:
             ["targetAcresPerHeadDefault"]
         case .usableAcreagePercentDefault:
