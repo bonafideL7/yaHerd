@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="26300" systemVersion="26A" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
-    <entity name="Herd" representedClassName="CDHerd" syncable="YES">
+    <entity name="Herd" representedClassName="CDHerd" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="name" optional="NO" attributeType="String"/>
         <attribute name="createdAt" optional="NO" attributeType="Date"/>
@@ -31,7 +31,7 @@
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="TagColorDefinition" representedClassName="CDTagColorDefinition" syncable="YES">
+    <entity name="TagColorDefinition" representedClassName="CDTagColorDefinition" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="name" optional="NO" attributeType="String"/>
         <attribute name="prefix" optional="NO" attributeType="String"/>
@@ -50,7 +50,7 @@
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="AnimalStatusReference" representedClassName="CDAnimalStatusReference" syncable="YES">
+    <entity name="AnimalStatusReference" representedClassName="CDAnimalStatusReference" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="name" optional="NO" attributeType="String"/>
         <attribute name="baseStatusRawValue" optional="NO" attributeType="String"/>
@@ -60,7 +60,7 @@
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="PastureGroup" representedClassName="CDPastureGroup" syncable="YES">
+    <entity name="PastureGroup" representedClassName="CDPastureGroup" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="name" optional="NO" attributeType="String"/>
         <attribute name="grazeDays" optional="NO" attributeType="Integer 64" usesScalarValueType="YES"/>
@@ -71,7 +71,7 @@
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="Pasture" representedClassName="CDPasture" syncable="YES">
+    <entity name="Pasture" representedClassName="CDPasture" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="name" optional="NO" attributeType="String"/>
         <attribute name="sortOrder" optional="NO" attributeType="Integer 64" usesScalarValueType="YES"/>
@@ -93,7 +93,7 @@
             <fetchIndexElement property="sortOrder" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="Animal" representedClassName="CDAnimal" syncable="YES">
+    <entity name="Animal" representedClassName="CDAnimal" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="editorRevision" optional="NO" attributeType="UUID"/>
         <attribute name="name" optional="NO" attributeType="String"/>
@@ -140,7 +140,7 @@
             <fetchIndexElement property="isArchived" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="AnimalTag" representedClassName="CDAnimalTag" syncable="YES">
+    <entity name="AnimalTag" representedClassName="CDAnimalTag" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="number" optional="NO" attributeType="String"/>
         <attribute name="isPrimary" optional="NO" attributeType="Boolean" usesScalarValueType="YES"/>
@@ -163,7 +163,7 @@
             <fetchIndexElement property="isPrimary" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="MovementRecord" representedClassName="CDMovementRecord" syncable="YES">
+    <entity name="MovementRecord" representedClassName="CDMovementRecord" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="date" optional="NO" attributeType="Date"/>
         <attribute name="fromPastureIDSnapshot" optional="YES" attributeType="UUID"/>
@@ -176,7 +176,7 @@
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="StatusRecord" representedClassName="CDStatusRecord" syncable="YES">
+    <entity name="StatusRecord" representedClassName="CDStatusRecord" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="date" optional="NO" attributeType="Date"/>
         <attribute name="oldStatusRawValue" optional="NO" attributeType="String"/>
@@ -187,7 +187,7 @@
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="HealthRecord" representedClassName="CDHealthRecord" syncable="YES">
+    <entity name="HealthRecord" representedClassName="CDHealthRecord" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="date" optional="NO" attributeType="Date"/>
         <attribute name="treatment" optional="NO" attributeType="String"/>
@@ -199,7 +199,7 @@
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="PregnancyCheck" representedClassName="CDPregnancyCheck" syncable="YES">
+    <entity name="PregnancyCheck" representedClassName="CDPregnancyCheck" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="date" optional="NO" attributeType="Date"/>
         <attribute name="resultRawValue" optional="NO" attributeType="String"/>
@@ -214,7 +214,7 @@
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="FieldCheckSession" representedClassName="CDFieldCheckSession" syncable="YES">
+    <entity name="FieldCheckSession" representedClassName="CDFieldCheckSession" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="startedAt" optional="NO" attributeType="Date"/>
         <attribute name="completedAt" optional="YES" attributeType="Date"/>
@@ -242,7 +242,7 @@
             <fetchIndexElement property="completedAt" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="FieldCheckAnimalCheck" representedClassName="CDFieldCheckAnimalCheck" syncable="YES">
+    <entity name="FieldCheckAnimalCheck" representedClassName="CDFieldCheckAnimalCheck" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="animalIDSnapshot" optional="NO" attributeType="UUID"/>
         <attribute name="rosterTagNumberSnapshot" optional="NO" attributeType="String"/>
@@ -262,7 +262,7 @@
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="FieldCheckFinding" representedClassName="CDFieldCheckFinding" syncable="YES">
+    <entity name="FieldCheckFinding" representedClassName="CDFieldCheckFinding" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="recordedAt" optional="NO" attributeType="Date"/>
         <attribute name="typeRawValue" optional="NO" attributeType="String"/>
@@ -287,7 +287,7 @@
             <fetchIndexElement property="recordedAt" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="WorkingTreatmentTemplate" representedClassName="CDWorkingTreatmentTemplate" syncable="YES">
+    <entity name="WorkingTreatmentTemplate" representedClassName="CDWorkingTreatmentTemplate" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="name" optional="NO" attributeType="String"/>
         <attribute name="itemsData" optional="NO" attributeType="Binary"/>
@@ -296,7 +296,7 @@
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="WorkingSession" representedClassName="CDWorkingSession" syncable="YES">
+    <entity name="WorkingSession" representedClassName="CDWorkingSession" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="date" optional="NO" attributeType="Date"/>
         <attribute name="statusRawValue" optional="NO" attributeType="String"/>
@@ -321,7 +321,7 @@
             <fetchIndexElement property="date" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="WorkingQueueItem" representedClassName="CDWorkingQueueItem" syncable="YES">
+    <entity name="WorkingQueueItem" representedClassName="CDWorkingQueueItem" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="statusRawValue" optional="NO" attributeType="String"/>
         <attribute name="completedAt" optional="YES" attributeType="Date"/>
@@ -345,7 +345,7 @@
             <fetchIndexElement property="id" type="Binary" order="ascending"/>
         </fetchIndex>
 </entity>
-    <entity name="WorkingTreatmentRecord" representedClassName="CDWorkingTreatmentRecord" syncable="YES">
+    <entity name="WorkingTreatmentRecord" representedClassName="CDWorkingTreatmentRecord" syncable="NO">
         <attribute name="id" optional="NO" attributeType="UUID"/>
         <attribute name="date" optional="NO" attributeType="Date"/>
         <attribute name="treatmentItemID" optional="NO" attributeType="UUID"/>
