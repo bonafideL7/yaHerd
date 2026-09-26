@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="26300" systemVersion="26A" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="Herd" representedClassName="CDHerd" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="name" optional="NO" attributeType="String"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date"/>
+        <attribute name="updatedAt" optional="NO" attributeType="Date"/>
+        <relationship name="tagColors" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="TagColorDefinition" inverseName="herd" inverseEntity="TagColorDefinition"/>
+        <relationship name="statusReferences" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AnimalStatusReference" inverseName="herd" inverseEntity="AnimalStatusReference"/>
+        <relationship name="pastureGroups" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PastureGroup" inverseName="herd" inverseEntity="PastureGroup"/>
+        <relationship name="pastures" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Pasture" inverseName="herd" inverseEntity="Pasture"/>
+        <relationship name="animals" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Animal" inverseName="herd" inverseEntity="Animal"/>
+        <relationship name="animalTags" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AnimalTag" inverseName="herd" inverseEntity="AnimalTag"/>
+        <relationship name="movementRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="MovementRecord" inverseName="herd" inverseEntity="MovementRecord"/>
+        <relationship name="statusRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="StatusRecord" inverseName="herd" inverseEntity="StatusRecord"/>
+        <relationship name="healthRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="HealthRecord" inverseName="herd" inverseEntity="HealthRecord"/>
+        <relationship name="pregnancyChecks" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PregnancyCheck" inverseName="herd" inverseEntity="PregnancyCheck"/>
+        <relationship name="fieldCheckSessions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="FieldCheckSession" inverseName="herd" inverseEntity="FieldCheckSession"/>
+        <relationship name="fieldCheckAnimalChecks" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="FieldCheckAnimalCheck" inverseName="herd" inverseEntity="FieldCheckAnimalCheck"/>
+        <relationship name="fieldCheckFindings" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="FieldCheckFinding" inverseName="herd" inverseEntity="FieldCheckFinding"/>
+        <relationship name="workingTreatmentTemplates" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WorkingTreatmentTemplate" inverseName="herd" inverseEntity="WorkingTreatmentTemplate"/>
+        <relationship name="workingSessions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WorkingSession" inverseName="herd" inverseEntity="WorkingSession"/>
+        <relationship name="workingQueueItems" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WorkingQueueItem" inverseName="herd" inverseEntity="WorkingQueueItem"/>
+        <relationship name="workingTreatmentRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WorkingTreatmentRecord" inverseName="herd" inverseEntity="WorkingTreatmentRecord"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="id"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+    <entity name="TagColorDefinition" representedClassName="CDTagColorDefinition" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="name" optional="NO" attributeType="String"/>
+        <attribute name="prefix" optional="NO" attributeType="String"/>
+        <attribute name="red" optional="NO" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="green" optional="NO" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="blue" optional="NO" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="alpha" optional="NO" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="sortOrder" optional="NO" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="isHidden" optional="NO" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="isDefault" optional="NO" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date"/>
+        <attribute name="updatedAt" optional="NO" attributeType="Date"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="tagColors" inverseEntity="Herd"/>
+        <relationship name="tags" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="AnimalTag" inverseName="color" inverseEntity="AnimalTag"/>
+    </entity>
+    <entity name="AnimalStatusReference" representedClassName="CDAnimalStatusReference" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="name" optional="NO" attributeType="String"/>
+        <attribute name="baseStatusRawValue" optional="NO" attributeType="String"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="statusReferences" inverseEntity="Herd"/>
+        <relationship name="animals" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Animal" inverseName="statusReference" inverseEntity="Animal"/>
+    </entity>
+    <entity name="PastureGroup" representedClassName="CDPastureGroup" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="name" optional="NO" attributeType="String"/>
+        <attribute name="grazeDays" optional="NO" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="restDays" optional="NO" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="pastureGroups" inverseEntity="Herd"/>
+        <relationship name="pastures" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Pasture" inverseName="group" inverseEntity="Pasture"/>
+    </entity>
+    <entity name="Pasture" representedClassName="CDPasture" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="name" optional="NO" attributeType="String"/>
+        <attribute name="sortOrder" optional="NO" attributeType="Integer 64" usesScalarValueType="YES" indexed="YES"/>
+        <attribute name="acreage" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="usableAcreage" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="targetAcresPerHead" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="lastGrazedDate" optional="YES" attributeType="Date"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="pastures" inverseEntity="Herd"/>
+        <relationship name="group" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PastureGroup" inverseName="pastures" inverseEntity="PastureGroup"/>
+        <relationship name="animals" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Animal" inverseName="currentPasture" inverseEntity="Animal"/>
+        <relationship name="workingSourceSessions" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="WorkingSession" inverseName="sourcePasture" inverseEntity="WorkingSession"/>
+        <relationship name="workingCollectedQueueItems" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="WorkingQueueItem" inverseName="collectedFromPasture" inverseEntity="WorkingQueueItem"/>
+        <relationship name="workingDestinationQueueItems" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="WorkingQueueItem" inverseName="destinationPasture" inverseEntity="WorkingQueueItem"/>
+        <relationship name="fieldCheckSessions" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="FieldCheckSession" inverseName="pasture" inverseEntity="FieldCheckSession"/>
+    </entity>
+    <entity name="Animal" representedClassName="CDAnimal" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="editorRevision" optional="NO" attributeType="UUID"/>
+        <attribute name="name" optional="NO" attributeType="String"/>
+        <attribute name="sexRawValue" optional="NO" attributeType="String"/>
+        <attribute name="birthDate" optional="NO" attributeType="Date" indexed="YES"/>
+        <attribute name="statusRawValue" optional="NO" attributeType="String" indexed="YES"/>
+        <attribute name="saleDate" optional="YES" attributeType="Date"/>
+        <attribute name="salePrice" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="reasonSold" optional="YES" attributeType="String"/>
+        <attribute name="deathDate" optional="YES" attributeType="Date"/>
+        <attribute name="causeOfDeath" optional="YES" attributeType="String"/>
+        <attribute name="isArchived" optional="NO" attributeType="Boolean" usesScalarValueType="YES" indexed="YES"/>
+        <attribute name="archivedAt" optional="YES" attributeType="Date"/>
+        <attribute name="archiveReason" optional="YES" attributeType="String"/>
+        <attribute name="distinguishingFeaturesData" optional="NO" attributeType="Binary"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="animals" inverseEntity="Herd"/>
+        <relationship name="statusReference" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="AnimalStatusReference" inverseName="animals" inverseEntity="AnimalStatusReference"/>
+        <relationship name="currentPasture" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Pasture" inverseName="animals" inverseEntity="Pasture"/>
+        <relationship name="sire" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="sireOffspring" inverseEntity="Animal"/>
+        <relationship name="sireOffspring" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Animal" inverseName="sire" inverseEntity="Animal"/>
+        <relationship name="dam" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="damOffspring" inverseEntity="Animal"/>
+        <relationship name="damOffspring" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Animal" inverseName="dam" inverseEntity="Animal"/>
+        <relationship name="activeWorkingSession" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="WorkingSession" inverseName="activeAnimals" inverseEntity="WorkingSession"/>
+        <relationship name="tags" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AnimalTag" inverseName="animal" inverseEntity="AnimalTag"/>
+        <relationship name="movementRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="MovementRecord" inverseName="animal" inverseEntity="MovementRecord"/>
+        <relationship name="statusRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="StatusRecord" inverseName="animal" inverseEntity="StatusRecord"/>
+        <relationship name="healthRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="HealthRecord" inverseName="animal" inverseEntity="HealthRecord"/>
+        <relationship name="pregnancyChecks" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PregnancyCheck" inverseName="animal" inverseEntity="PregnancyCheck"/>
+        <relationship name="pregnancyChecksAsSire" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="PregnancyCheck" inverseName="sire" inverseEntity="PregnancyCheck"/>
+        <relationship name="fieldCheckAnimalChecks" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="FieldCheckAnimalCheck" inverseName="animal" inverseEntity="FieldCheckAnimalCheck"/>
+        <relationship name="fieldCheckFindings" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="FieldCheckFinding" inverseName="animal" inverseEntity="FieldCheckFinding"/>
+        <relationship name="workingQueueItems" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="WorkingQueueItem" inverseName="animal" inverseEntity="WorkingQueueItem"/>
+        <relationship name="workingTreatmentRecords" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="WorkingTreatmentRecord" inverseName="animal" inverseEntity="WorkingTreatmentRecord"/>
+    </entity>
+    <entity name="AnimalTag" representedClassName="CDAnimalTag" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="number" optional="NO" attributeType="String" indexed="YES"/>
+        <attribute name="isPrimary" optional="NO" attributeType="Boolean" usesScalarValueType="YES" indexed="YES"/>
+        <attribute name="isActive" optional="NO" attributeType="Boolean" usesScalarValueType="YES" indexed="YES"/>
+        <attribute name="assignedAt" optional="NO" attributeType="Date"/>
+        <attribute name="removedAt" optional="YES" attributeType="Date"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="animalTags" inverseEntity="Herd"/>
+        <relationship name="color" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="TagColorDefinition" inverseName="tags" inverseEntity="TagColorDefinition"/>
+        <relationship name="animal" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="tags" inverseEntity="Animal"/>
+    </entity>
+    <entity name="MovementRecord" representedClassName="CDMovementRecord" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="date" optional="NO" attributeType="Date"/>
+        <attribute name="fromPastureIDSnapshot" optional="YES" attributeType="UUID"/>
+        <attribute name="fromPastureNameSnapshot" optional="YES" attributeType="String"/>
+        <attribute name="toPastureIDSnapshot" optional="YES" attributeType="UUID"/>
+        <attribute name="toPastureNameSnapshot" optional="YES" attributeType="String"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="movementRecords" inverseEntity="Herd"/>
+        <relationship name="animal" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="movementRecords" inverseEntity="Animal"/>
+    </entity>
+    <entity name="StatusRecord" representedClassName="CDStatusRecord" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="date" optional="NO" attributeType="Date"/>
+        <attribute name="oldStatusRawValue" optional="NO" attributeType="String"/>
+        <attribute name="newStatusRawValue" optional="NO" attributeType="String"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="statusRecords" inverseEntity="Herd"/>
+        <relationship name="animal" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="statusRecords" inverseEntity="Animal"/>
+    </entity>
+    <entity name="HealthRecord" representedClassName="CDHealthRecord" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="date" optional="NO" attributeType="Date"/>
+        <attribute name="treatment" optional="NO" attributeType="String"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="healthRecords" inverseEntity="Herd"/>
+        <relationship name="animal" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="healthRecords" inverseEntity="Animal"/>
+        <relationship name="workingSession" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="WorkingSession" inverseName="healthRecords" inverseEntity="WorkingSession"/>
+    </entity>
+    <entity name="PregnancyCheck" representedClassName="CDPregnancyCheck" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="date" optional="NO" attributeType="Date"/>
+        <attribute name="resultRawValue" optional="NO" attributeType="String"/>
+        <attribute name="technician" optional="YES" attributeType="String"/>
+        <attribute name="estimatedDaysPregnant" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="dueDate" optional="YES" attributeType="Date"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="pregnancyChecks" inverseEntity="Herd"/>
+        <relationship name="animal" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="pregnancyChecks" inverseEntity="Animal"/>
+        <relationship name="sire" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="pregnancyChecksAsSire" inverseEntity="Animal"/>
+        <relationship name="workingSession" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="WorkingSession" inverseName="pregnancyChecks" inverseEntity="WorkingSession"/>
+    </entity>
+    <entity name="FieldCheckSession" representedClassName="CDFieldCheckSession" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="startedAt" optional="NO" attributeType="Date" indexed="YES"/>
+        <attribute name="completedAt" optional="YES" attributeType="Date" indexed="YES"/>
+        <attribute name="notes" optional="NO" attributeType="String"/>
+        <attribute name="expectedHeadCountSnapshot" optional="NO" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="quickCowCount" optional="NO" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="quickHeiferCount" optional="NO" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="quickCalfCount" optional="NO" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="quickBullCount" optional="NO" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="quickSteerCount" optional="NO" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="pastureIDSnapshot" optional="NO" attributeType="UUID"/>
+        <attribute name="pastureNameSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="pastureArchivedAt" optional="YES" attributeType="Date"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="fieldCheckSessions" inverseEntity="Herd"/>
+        <relationship name="pasture" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Pasture" inverseName="fieldCheckSessions" inverseEntity="Pasture"/>
+        <relationship name="animalChecks" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="FieldCheckAnimalCheck" inverseName="session" inverseEntity="FieldCheckAnimalCheck"/>
+        <relationship name="findings" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="FieldCheckFinding" inverseName="session" inverseEntity="FieldCheckFinding"/>
+    </entity>
+    <entity name="FieldCheckAnimalCheck" representedClassName="CDFieldCheckAnimalCheck" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="animalIDSnapshot" optional="NO" attributeType="UUID"/>
+        <attribute name="rosterTagNumberSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="rosterTagColorIDSnapshot" optional="YES" attributeType="UUID"/>
+        <attribute name="damRosterTagNumberSnapshot" optional="YES" attributeType="String"/>
+        <attribute name="damRosterTagColorIDSnapshot" optional="YES" attributeType="UUID"/>
+        <attribute name="animalNameSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="animalSexRawValueSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="animalTypeRawValueSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="wasExpectedAtStart" optional="NO" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="countedAt" optional="YES" attributeType="Date"/>
+        <attribute name="missingConfirmedAt" optional="YES" attributeType="Date"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="fieldCheckAnimalChecks" inverseEntity="Herd"/>
+        <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="fieldCheckAnimalChecks" inverseEntity="Animal"/>
+        <relationship name="session" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="FieldCheckSession" inverseName="animalChecks" inverseEntity="FieldCheckSession"/>
+    </entity>
+    <entity name="FieldCheckFinding" representedClassName="CDFieldCheckFinding" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="recordedAt" optional="NO" attributeType="Date" indexed="YES"/>
+        <attribute name="typeRawValue" optional="NO" attributeType="String"/>
+        <attribute name="severityRawValue" optional="NO" attributeType="String"/>
+        <attribute name="statusRawValue" optional="NO" attributeType="String" indexed="YES"/>
+        <attribute name="note" optional="NO" attributeType="String"/>
+        <attribute name="animalIDSnapshot" optional="YES" attributeType="UUID"/>
+        <attribute name="animalDisplayTagNumberSnapshot" optional="YES" attributeType="String"/>
+        <attribute name="animalDisplayTagColorIDSnapshot" optional="YES" attributeType="UUID"/>
+        <attribute name="animalNameSnapshot" optional="YES" attributeType="String"/>
+        <attribute name="pastureNameSnapshot" optional="NO" attributeType="String"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="fieldCheckFindings" inverseEntity="Herd"/>
+        <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="fieldCheckFindings" inverseEntity="Animal"/>
+        <relationship name="session" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="FieldCheckSession" inverseName="findings" inverseEntity="FieldCheckSession"/>
+    </entity>
+    <entity name="WorkingTreatmentTemplate" representedClassName="CDWorkingTreatmentTemplate" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="name" optional="NO" attributeType="String"/>
+        <attribute name="itemsData" optional="NO" attributeType="Binary"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="workingTreatmentTemplates" inverseEntity="Herd"/>
+    </entity>
+    <entity name="WorkingSession" representedClassName="CDWorkingSession" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="date" optional="NO" attributeType="Date" indexed="YES"/>
+        <attribute name="statusRawValue" optional="NO" attributeType="String" indexed="YES"/>
+        <attribute name="treatmentTemplateNameSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="plannedTreatmentsData" optional="NO" attributeType="Binary"/>
+        <attribute name="sourcePastureIDSnapshot" optional="NO" attributeType="UUID"/>
+        <attribute name="sourcePastureNameSnapshot" optional="NO" attributeType="String"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="workingSessions" inverseEntity="Herd"/>
+        <relationship name="sourcePasture" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Pasture" inverseName="workingSourceSessions" inverseEntity="Pasture"/>
+        <relationship name="activeAnimals" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Animal" inverseName="activeWorkingSession" inverseEntity="Animal"/>
+        <relationship name="queueItems" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WorkingQueueItem" inverseName="session" inverseEntity="WorkingQueueItem"/>
+        <relationship name="treatmentRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="WorkingTreatmentRecord" inverseName="session" inverseEntity="WorkingTreatmentRecord"/>
+        <relationship name="healthRecords" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="HealthRecord" inverseName="workingSession" inverseEntity="HealthRecord"/>
+        <relationship name="pregnancyChecks" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PregnancyCheck" inverseName="workingSession" inverseEntity="PregnancyCheck"/>
+    </entity>
+    <entity name="WorkingQueueItem" representedClassName="CDWorkingQueueItem" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="statusRawValue" optional="NO" attributeType="String"/>
+        <attribute name="completedAt" optional="YES" attributeType="Date"/>
+        <attribute name="animalIDSnapshot" optional="NO" attributeType="UUID"/>
+        <attribute name="animalTagNumberSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="animalTagColorIDSnapshot" optional="YES" attributeType="UUID"/>
+        <attribute name="animalNameSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="animalSexRawValueSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="animalDamDisplayTagNumberSnapshot" optional="YES" attributeType="String"/>
+        <attribute name="animalDamDisplayTagColorIDSnapshot" optional="YES" attributeType="UUID"/>
+        <attribute name="collectedFromPastureIDSnapshot" optional="YES" attributeType="UUID"/>
+        <attribute name="collectedFromPastureNameSnapshot" optional="YES" attributeType="String"/>
+        <attribute name="destinationPastureIDSnapshot" optional="YES" attributeType="UUID"/>
+        <attribute name="destinationPastureNameSnapshot" optional="YES" attributeType="String"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="workingQueueItems" inverseEntity="Herd"/>
+        <relationship name="collectedFromPasture" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Pasture" inverseName="workingCollectedQueueItems" inverseEntity="Pasture"/>
+        <relationship name="destinationPasture" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Pasture" inverseName="workingDestinationQueueItems" inverseEntity="Pasture"/>
+        <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="workingQueueItems" inverseEntity="Animal"/>
+        <relationship name="session" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="WorkingSession" inverseName="queueItems" inverseEntity="WorkingSession"/>
+    </entity>
+    <entity name="WorkingTreatmentRecord" representedClassName="CDWorkingTreatmentRecord" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES"/>
+        <attribute name="date" optional="NO" attributeType="Date"/>
+        <attribute name="treatmentItemID" optional="NO" attributeType="UUID"/>
+        <attribute name="itemNameSnapshot" optional="NO" attributeType="String"/>
+        <attribute name="given" optional="NO" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="doseAmount" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="doseUnitRawValue" optional="YES" attributeType="String"/>
+        <attribute name="administrationRouteRawValue" optional="YES" attributeType="String"/>
+        <attribute name="animalIDSnapshot" optional="NO" attributeType="UUID"/>
+        <relationship name="herd" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="Herd" inverseName="workingTreatmentRecords" inverseEntity="Herd"/>
+        <relationship name="animal" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Animal" inverseName="workingTreatmentRecords" inverseEntity="Animal"/>
+        <relationship name="session" optional="NO" maxCount="1" deletionRule="Nullify" destinationEntity="WorkingSession" inverseName="treatmentRecords" inverseEntity="WorkingSession"/>
+    </entity>
+</model>
