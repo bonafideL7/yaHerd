@@ -31,6 +31,6 @@ nonisolated enum ApplicationSettingKey: String, CaseIterable, Sendable {
 }
 
 nonisolated enum ApplicationSettingsCatalog {
-    static let currentSchemaVersion = 1
+    static let currentSchemaVersion = 2
     static let schemaVersionKey = "settings.schemaVersion"
 }
