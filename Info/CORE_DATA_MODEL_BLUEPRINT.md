@@ -862,7 +862,7 @@ Start with indexes that match existing query patterns:
 - FieldCheckSession: `startedAt`, `completedAt`;
 - FieldCheckFinding: `statusRawValue`, `recordedAt`.
 
-For store-global entities such as `Herd`, add a unique constraint on application `id` when model validation confirms it matches the permanent contract. Do not add a global `id` uniqueness constraint to a herd-owned entity. Herd-owned identity must remain compatible with the owning-Herd scope; enforce that scope in repository/transaction validation and use a physical constraint only if the final Core Data model can express the same scoped invariant without rejecting valid cross-Herd feature behavior. Domain/repository validation remains authoritative for business rules such as active tag uniqueness and default-color policy.
+Do not add Core Data uniqueness constraints for application UUIDs in the initial model. Model compilation rejects a uniqueness constraint on `Herd.id` when Herd is the destination of the required inverse ownership relationships used by every herd-owned entity, and herd-owned UUID identity is scoped rather than store-global. Enforce application-ID uniqueness and Herd scope in repository/transaction validation, as required by `IdentityContract`. Domain/repository validation also remains authoritative for business rules such as active tag uniqueness and default-color policy.
 
 Add further indexes only when actual Core Data query behavior justifies them.
 
