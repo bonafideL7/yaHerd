@@ -108,6 +108,7 @@ if missing_feature_dependency_keys:
 settings_catalog_path = Path("yaHerd/App/Preferences/ApplicationSettingCatalog.swift")
 known_setting_literals = {
     "isDashboardEnabled",
+    "hardDeleteAnimals",
     "targetAcresPerHeadDefault",
     "usableAcreagePercentDefault",
     "recentPastureIDs",
