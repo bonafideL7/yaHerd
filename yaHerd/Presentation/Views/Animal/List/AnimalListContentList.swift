@@ -18,6 +18,7 @@ struct AnimalListContentList: View {
     let pastureOptions: [PastureOption]
     let inlineHelperText: String
     let inlineFocusRequestID: UUID
+    let usesHardDelete: Bool
     let onStartNewInlineEntry: () -> Void
     let onStartEditingAnimal: (AnimalSummary) -> Void
     let onSubmitInlineEntry: () -> Void
@@ -180,9 +181,13 @@ struct AnimalListContentList: View {
             Button {
                 onPrimarySwipeAction(animal)
             } label: {
-                Label("Archive", systemImage: "archivebox")
+                if usesHardDelete {
+                    Label("Delete", systemImage: "trash")
+                } else {
+                    Label("Archive", systemImage: "archivebox")
+                }
             }
-            .tint(.orange)
+            .tint(usesHardDelete ? .red : .orange)
         }
     }
 
