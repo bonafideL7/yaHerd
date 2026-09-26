@@ -80,6 +80,21 @@ This mapping is the Milestone 1 handoff to physical model implementation. It ide
 | `PersistenceTransactionRollbackContract` | Complete 18-entity graph observability for fault-injected Animal aggregate and Pasture-delete rollback; write-scope recovery/disposal |
 | `MutationBoundaryContract` | No additional entity; all throwing write entry points must publish only after their final Core Data commit |
 
+### Read-model implications
+
+Milestone 0 read-model contracts do not require additional persistence entities. Dashboard, Home, Animal list/detail, Pasture dashboard, and Working dashboard are projections over the same business graph.
+
+The physical model must therefore support these queries without introducing persisted presentation caches:
+
+- active/unarchived Animal filtering, status/age/tag ordering, parent and Pasture display projections;
+- Pasture/group ordering, resident counts, stocking/rotation inputs, and last-grazed state;
+- latest health/pregnancy projections used by Animal list and Dashboard;
+- active Working session/queue counts and status projections;
+- recent/open Field Check sessions/findings, including open-finding status/date filtering;
+- Home aggregation from the same Animal, Working, Field Check, Pasture, and treatment-template state.
+
+Milestone 2 model indexes should begin from the query keys already listed later in this blueprint. Repository/read-model implementation may add measured indexes later, but must not create a Dashboard/Home managed entity or persist derived counts merely to avoid a query.
+
 ## Physical model decisions
 
 ### Model file and generated classes
