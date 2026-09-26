@@ -19,7 +19,6 @@ final class ApplicationSettingsTests: XCTestCase {
         let pastureID = UUID()
         let store = InMemoryApplicationSettingsStore(values: [
             "isDashboardEnabled": true,
-            "hardDeleteAnimals": false,
             "targetAcresPerHeadDefault": 4.5,
             "usableAcreagePercentDefault": 85,
             "recentPastureIDs": pastureID.uuidString,
@@ -32,7 +31,6 @@ final class ApplicationSettingsTests: XCTestCase {
         let storedValues = store.snapshot()
 
         XCTAssertTrue(settings.isDashboardEnabled)
-        XCTAssertFalse(settings.hardDeleteAnimals)
         XCTAssertEqual(settings.targetAcresPerHeadDefault, 4.5)
         XCTAssertEqual(settings.usableAcreagePercentDefault, 85)
         XCTAssertEqual(settings.recentPastureIDs, [pastureID])
