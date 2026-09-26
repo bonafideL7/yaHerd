@@ -18,13 +18,13 @@ struct AnimalListContentList: View {
     let pastureOptions: [PastureOption]
     let inlineHelperText: String
     let inlineFocusRequestID: UUID
-    let usesHardDelete: Bool
     let onStartNewInlineEntry: () -> Void
     let onStartEditingAnimal: (AnimalSummary) -> Void
     let onSubmitInlineEntry: () -> Void
     let onCommitInlineEntryFocusLoss: () -> Void
     let onCancelInlineEntry: () -> Void
     let onOpenInlineDetails: (UUID) -> Void
+    let usesHardDelete: Bool
     let onPrimarySwipeAction: (AnimalSummary) -> Void
     let onRestoreArchivedRecord: (AnimalSummary) -> Void
 
