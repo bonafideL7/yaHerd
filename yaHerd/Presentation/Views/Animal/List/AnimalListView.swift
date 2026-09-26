@@ -18,6 +18,7 @@ struct AnimalListView: View {
     private var sampleDataSeeder: any SampleDataSeeding { animalDependencies.sampleDataSeeder }
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @Environment(ApplicationSettings.self) private var applicationSettings
     @Environment(AppNavigationState.self) private var navigation
 
     @State private var viewModel = AnimalListViewModel()
@@ -377,6 +378,7 @@ struct AnimalListView: View {
             onCommitInlineEntryFocusLoss: commitInlineEntryFromFocusLoss,
             onCancelInlineEntry: cancelInlineEntry,
             onOpenInlineDetails: openInlineDetails,
+            usesHardDelete: applicationSettings.hardDeleteAnimals,
             onPrimarySwipeAction: performPrimarySwipeAction,
             onRestoreArchivedRecord: restoreArchivedRecord
         )
@@ -652,7 +654,7 @@ struct AnimalListView: View {
     private func performPrimarySwipeAction(for animal: AnimalSummary) {
         viewModel.performPrimarySwipeAction(
             animalID: animal.id,
-            hardDelete: false,
+            hardDelete: applicationSettings.hardDeleteAnimals,
             using: repository,
             pastureRepository: pastureReferenceDataReader
         )
