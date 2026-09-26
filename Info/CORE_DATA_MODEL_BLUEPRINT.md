@@ -508,7 +508,7 @@ Attributes:
 - `quickCalfCount: Int64`
 - `quickBullCount: Int64`
 - `quickSteerCount: Int64`
-- `pastureIDSnapshot: UUID?`
+- `pastureIDSnapshot: UUID`
 - `pastureNameSnapshot: String`
 - `pastureArchivedAt: Date?`
 
@@ -530,10 +530,10 @@ Delete behavior:
 Attributes:
 
 - `id: UUID`
-- `animalIDSnapshot: UUID?`
+- `animalIDSnapshot: UUID`
 - `rosterTagNumberSnapshot: String`
 - `rosterTagColorIDSnapshot: UUID?`
-- `damRosterTagNumberSnapshot: String`
+- `damRosterTagNumberSnapshot: String?`
 - `damRosterTagColorIDSnapshot: UUID?`
 - `animalNameSnapshot: String`
 - `animalSexRawValueSnapshot: String`
@@ -549,7 +549,7 @@ Relationships:
 - `session -> FieldCheckSession`
 - `animal -> Animal?`
 
-The live animal link may disappear. Snapshots are the historical source of display identity for the check.
+Every roster/check row is created for a concrete Animal, so the target Core Data `animalIDSnapshot` is required even though the live `animal` relationship is optional and may later nullify on hard delete. `rosterTagNumberSnapshot` stores the product display identity captured at check creation, including the untagged display value when applicable. Dam tag snapshots are optional because many animals have no dam/displayable dam tag. Snapshots are the historical source of display identity for the check.
 
 ### FieldCheckFinding
 
@@ -562,11 +562,10 @@ Attributes:
 - `statusRawValue: String`
 - `note: String`
 - `animalIDSnapshot: UUID?`
-- `animalDisplayTagNumberSnapshot: String`
+- `animalDisplayTagNumberSnapshot: String?`
 - `animalDisplayTagColorIDSnapshot: UUID?`
-- `animalNameSnapshot: String`
+- `animalNameSnapshot: String?`
 - `pastureNameSnapshot: String`
-- `sessionIDSnapshot: UUID?`
 
 Relationships:
 
@@ -574,7 +573,7 @@ Relationships:
 - `session -> FieldCheckSession`
 - `animal -> Animal?`
 
-A finding belongs to the session but must remain understandable if its linked animal is hard-deleted.
+A finding belongs to the session but must remain understandable if its linked animal is hard-deleted. Pasture-level findings are a valid product state and have no Animal association, so Animal identity/name/tag snapshot fields are physically optional. The session relationship is required and owns the finding; do **not** duplicate the session UUID as a `sessionIDSnapshot` in the final Core Data model because the finding is deleted with its session and has no independent historical lifetime that requires a second session identity copy. `FieldCheckFindingSnapshot.sessionID` maps from the required session relationship.
 
 Finding snapshot mutation rules:
 
@@ -609,8 +608,8 @@ Attributes:
 - `statusRawValue: String`
 - `treatmentTemplateNameSnapshot: String`
 - `plannedTreatmentsData: Data`
-- `sourcePastureIDSnapshot: UUID?`
-- `sourcePastureNameSnapshot: String?`
+- `sourcePastureIDSnapshot: UUID`
+- `sourcePastureNameSnapshot: String`
 
 Relationships:
 
@@ -631,6 +630,7 @@ Delete behavior:
 
 Projection rule:
 
+- every Working session starts from a required source Pasture, so the Core Data source UUID/name snapshots are required at creation and survive later Pasture deletion; the Domain projection remains optional only for compatibility with the outgoing persistence implementation;
 - `WorkingSessionDetailSnapshot.sourcePastureID` / `sourcePastureName` come from the captured snapshot attributes, not from the live relationship;
 - `WorkingSessionDetailSnapshot.isSourcePastureAvailable` is derived from whether the live `sourcePasture` relationship still resolves. A historical non-nil source UUID must never imply that the deleted pasture is still selectable for collection or finish fallback;
 - session summary display uses the captured source-pasture name so later live renames/deletion do not rewrite Working history.
@@ -924,13 +924,18 @@ After the pre-model characterization milestone, the Core Data foundation PR that
 - the model loads successfully;
 - every durable entity has an `id` UUID attribute;
 - required relationships and inverses match this blueprint;
-- delete rules match product semantics;
+- snapshot optionality matches product creation semantics: Field Check session/roster identity snapshots and Working source-pasture snapshots are required, while pasture-level Field Check finding Animal snapshots are optional;
+- `FieldCheckFinding` has no redundant session-ID snapshot attribute and maps its required Domain session ID through the required session relationship;
+- delete rules match product semantics, including PregnancyCheck sire nullification independent of its owning Animal relationship;
 - entity application-ID uniqueness constraints are present where the final model intentionally uses them;
 - every herd-owned entity has a Herd relationship;
 - an animal aggregate create/update preserves UUIDs and rotates `editorRevision` correctly;
-- pasture deletion preserves Movement and Field Check history as specified;
+- pasture deletion preserves Movement and Field Check history as specified, leaves empty PastureGroups intact, nullifies inactive-survivor/Working links correctly, and rotates affected Animal revisions;
+- Tag Color visible removal keeps referenced custom definitions historically resolvable, while normalized-name collision reconciliation remaps every declared live/snapshot UUID reference to the canonical identity;
 - Working queue history retains animal tag/color, sex, and dam tag/color after the live animal relationship disappears;
+- Field Check finding add/update/reassignment/orphan-edit mapping uses captured session/roster snapshots rather than later live values;
 - invalid cross-Herd relationships are rejected by persistence code;
+- failed write scopes cannot leak staged state into a later save, and mutation publication occurs only after durable commit;
 - required attributes cannot silently map to invented values.
 
 As Core Data repositories are implemented, point the same permanent characterization contracts at the Core Data harness feature by feature and add target-only contracts as their required production capabilities become available. Do not rewrite existing contracts to accommodate persistence-specific behavior.
