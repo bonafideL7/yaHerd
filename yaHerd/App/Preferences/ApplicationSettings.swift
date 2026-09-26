@@ -13,6 +13,7 @@ final class ApplicationSettings {
     @ObservationIgnored private let store: any ApplicationSettingsStore
 
     private var dashboardEnabledValue: Bool
+    private var hardDeleteAnimalsValue: Bool
     private var targetAcresPerHeadDefaultValue: Double
     private var usableAcreagePercentDefaultValue: Int
     private var recentPastureIDsValue: [UUID]
@@ -31,6 +32,10 @@ final class ApplicationSettings {
         self.dashboardEnabledValue = Self.decodeBool(
             store.object(forKey: ApplicationSettingKey.dashboardEnabled.rawValue),
             defaultValue: false
+        )
+        self.hardDeleteAnimalsValue = Self.decodeBool(
+            store.object(forKey: ApplicationSettingKey.hardDeleteAnimals.rawValue),
+            defaultValue: true
         )
         self.targetAcresPerHeadDefaultValue = Self.validatedTargetAcresPerHead(
             Self.decodeDouble(
@@ -71,6 +76,15 @@ final class ApplicationSettings {
             guard dashboardEnabledValue != newValue else { return }
             dashboardEnabledValue = newValue
             persistChange(key: .dashboardEnabled, encodedValue: newValue)
+        }
+    }
+
+    var hardDeleteAnimals: Bool {
+        get { hardDeleteAnimalsValue }
+        set {
+            guard hardDeleteAnimalsValue != newValue else { return }
+            hardDeleteAnimalsValue = newValue
+            persistChange(key: .hardDeleteAnimals, encodedValue: newValue)
         }
     }
 
@@ -150,6 +164,7 @@ final class ApplicationSettings {
 
     func resetToDefaults() {
         isDashboardEnabled = false
+        hardDeleteAnimals = true
         targetAcresPerHeadDefault = Self.defaultTargetAcresPerHead
         usableAcreagePercentDefault = Self.defaultUsableAcreagePercent
         recentPastureIDs = []
@@ -176,6 +191,8 @@ final class ApplicationSettings {
         switch key {
         case .dashboardEnabled:
             isDashboardEnabled
+        case .hardDeleteAnimals:
+            hardDeleteAnimals
         case .targetAcresPerHeadDefault:
             targetAcresPerHeadDefault
         case .usableAcreagePercentDefault:
