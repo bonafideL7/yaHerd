@@ -124,9 +124,14 @@ Add the final Core Data container/infrastructure that will survive launch:
 - `NSPersistentContainer` local store setup;
 - context creation and queue-confinement policy;
 - mapper location and conventions;
+  - keep feature mapping in the existing `Data/Mappers` boundary;
+  - add Core Data-backed mapping paths to the existing feature mapper types as repositories are implemented rather than creating a parallel `CoreData*Mapper` family;
+  - map managed objects to Domain snapshots/summaries while still inside Data/context scope; managed objects, contexts, object IDs, and store identifiers never leave Data;
+  - do not keep duplicate SwiftData/Core Data mapping implementations after the corresponding SwiftData repository is removed;
 - deterministic Herd scoping;
 - explicit store-load failure handling and recovery-mode integration;
 - a Core Data contract harness.
+- transaction work submitted to private Core Data contexts is `@Sendable`; repository implementations normalize/copy the immutable value data they need before entering that closure and must not capture Presentation/ViewModel state, actor-isolated UI objects, or managed objects from another context.
 
 Run the applicable permanent characterization contracts against Core Data as soon as the required repository surface exists. Add target-only Core Data contracts as their production capability is introduced.
 
