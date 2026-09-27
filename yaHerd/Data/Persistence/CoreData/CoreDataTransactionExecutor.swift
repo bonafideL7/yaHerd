@@ -1,0 +1,39 @@
+@preconcurrency import CoreData
+
+final class CoreDataTransactionExecutor {
+    private let contextFactory: CoreDataContextFactory
+
+    init(contextFactory: CoreDataContextFactory) {
+        self.contextFactory = contextFactory
+    }
+
+    func performWrite<Result>(
+        _ operation: @Sendable (NSManagedObjectContext) throws -> Result
+    ) throws -> Result {
+        let context = try contextFactory.makeWriteContext()
+
+        return try context.performAndWait {
+            do {
+                let result = try operation(context)
+                guard context.hasChanges else {
+                    return result
+                }
+
+                do {
+                    try context.save()
+                    return result
+                } catch {
+                    context.rollback()
+                    throw CoreDataPersistenceError.saveFailed(
+                        description: error.localizedDescription
+                    )
+                }
+            } catch {
+                if context.hasChanges {
+                    context.rollback()
+                }
+                throw error
+            }
+        }
+    }
+}
