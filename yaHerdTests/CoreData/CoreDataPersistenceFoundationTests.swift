@@ -13,7 +13,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let herdID = UUID()
         let pastureID = UUID()
 
-        try assembly.transactionExecutor.performWrite { context in
+        try await assembly.transactionExecutor.performWrite { context in
             let herd = CDHerd(context: context)
             herd.id = herdID
             herd.name = "Foundation Herd"
@@ -70,7 +70,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let duplicateHerdID = UUID()
 
-        try assembly.transactionExecutor.performWrite { context in
+        try await assembly.transactionExecutor.performWrite { context in
             _ = Self.makeHerd(id: duplicateHerdID, name: "Duplicate Herd A", in: context)
             _ = Self.makeHerd(id: duplicateHerdID, name: "Duplicate Herd B", in: context)
         }
@@ -98,7 +98,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let herdBID = UUID()
         let sharedPastureID = UUID()
 
-        try assembly.transactionExecutor.performWrite { context in
+        try await assembly.transactionExecutor.performWrite { context in
             let herdA = Self.makeHerd(id: herdAID, name: "Herd A", in: context)
             let herdB = Self.makeHerd(id: herdBID, name: "Herd B", in: context)
 
@@ -146,7 +146,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let duplicateHerdID = UUID()
         let pastureID = UUID()
 
-        try assembly.transactionExecutor.performWrite { context in
+        try await assembly.transactionExecutor.performWrite { context in
             let herdA = Self.makeHerd(
                 id: duplicateHerdID,
                 name: "Duplicate Root A",
@@ -192,7 +192,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let herdID = UUID()
         let duplicatePastureID = UUID()
 
-        try assembly.transactionExecutor.performWrite { context in
+        try await assembly.transactionExecutor.performWrite { context in
             let herd = Self.makeHerd(id: herdID, name: "Duplicate Herd", in: context)
 
             for name in ["Duplicate A", "Duplicate B"] {
@@ -231,12 +231,12 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let herdID = UUID()
         let failedPastureID = UUID()
 
-        try assembly.transactionExecutor.performWrite { context in
+        try await assembly.transactionExecutor.performWrite { context in
             _ = Self.makeHerd(id: herdID, name: "Control Herd", in: context)
         }
 
         XCTAssertThrowsError(
-            try assembly.transactionExecutor.performWrite { context in
+            try await assembly.transactionExecutor.performWrite { context in
                 let herd = try XCTUnwrap(
                     CoreDataLookup().herd(id: herdID, in: context)
                 )
@@ -271,7 +271,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let invalidHerdID = UUID()
 
         do {
-            try assembly.transactionExecutor.performWrite { context in
+            try await assembly.transactionExecutor.performWrite { context in
                 let invalidHerd = CDHerd(context: context)
                 invalidHerd.id = invalidHerdID
                 invalidHerd.createdAt = Date(timeIntervalSince1970: 100)
@@ -300,7 +300,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         let writer = try await harness.makeAssembly()
         let herdID = UUID()
 
-        try writer.transactionExecutor.performWrite { context in
+        try await writer.transactionExecutor.performWrite { context in
             _ = Self.makeHerd(id: herdID, name: "Read Only Herd", in: context)
         }
 
@@ -315,7 +315,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         }
 
         XCTAssertThrowsError(
-            try readOnly.transactionExecutor.performWrite { _ in
+            try await readOnly.transactionExecutor.performWrite { _ in
                 XCTFail("A read-only transaction must be rejected before its mutation block executes.")
             }
         ) { error in
