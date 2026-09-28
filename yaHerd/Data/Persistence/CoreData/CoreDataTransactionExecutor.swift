@@ -8,6 +8,7 @@ final class CoreDataTransactionExecutor {
     }
 
     func performWrite<Result: Sendable>(
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil,
         _ operation: @escaping @Sendable (NSManagedObjectContext) throws -> Result
     ) async throws -> Result {
         let context = try contextFactory.makeWriteContext()
@@ -18,6 +19,8 @@ final class CoreDataTransactionExecutor {
                 guard context.hasChanges else {
                     return result
                 }
+
+                try beforeSave?(context)
 
                 do {
                     try context.save()

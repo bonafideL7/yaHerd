@@ -6,12 +6,17 @@
 import Foundation
 
 @MainActor
-protocol HerdRepository: AnyObject {
-    func fetchCurrentHerd() throws -> HerdSummary
-    func renameCurrentHerd(to name: String) throws -> HerdSummary
+protocol CurrentHerdSelectionReading: AnyObject {
+    var currentHerdID: UUID? { get }
 }
 
-enum HerdRepositoryError: LocalizedError, Equatable {
+@MainActor
+protocol HerdRepository: AnyObject {
+    func fetchCurrentHerd() throws -> HerdSummary
+    func renameCurrentHerd(to name: String) async throws -> HerdSummary
+}
+
+enum HerdRepositoryError: LocalizedError, Equatable, Sendable {
     case emptyName
     case missingHerd
 
