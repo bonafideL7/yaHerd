@@ -55,23 +55,23 @@ protocol PastureNameChecking {
 @MainActor
 protocol PastureCreating {
     @discardableResult
-    func create(input: PastureInput) throws -> PastureDetailSnapshot
+    func create(input: PastureInput) async throws -> PastureDetailSnapshot
 }
 
 @MainActor
 protocol PastureUpdating {
     @discardableResult
-    func update(id: UUID, input: PastureInput) throws -> PastureDetailSnapshot
+    func update(id: UUID, input: PastureInput) async throws -> PastureDetailSnapshot
 }
 
 @MainActor
 protocol PastureOrdering {
-    func reorder(ids: [UUID]) throws
+    func reorder(ids: [UUID]) async throws
 }
 
 @MainActor
 protocol PastureDeleting {
-    func delete(ids: [UUID]) throws
+    func delete(ids: [UUID]) async throws
 }
 
 @MainActor
@@ -97,23 +97,23 @@ protocol PastureGroupNameChecking {
 @MainActor
 protocol PastureGroupCreating {
     @discardableResult
-    func createGroup(input: PastureGroupInput) throws -> PastureGroupDetailSnapshot
+    func createGroup(input: PastureGroupInput) async throws -> PastureGroupDetailSnapshot
 }
 
 @MainActor
 protocol PastureGroupUpdating {
     @discardableResult
-    func updateGroup(id: UUID, input: PastureGroupInput) throws -> PastureGroupDetailSnapshot
+    func updateGroup(id: UUID, input: PastureGroupInput) async throws -> PastureGroupDetailSnapshot
 }
 
 @MainActor
 protocol PastureGroupDeleting {
-    func deleteGroups(ids: [UUID]) throws
+    func deleteGroups(ids: [UUID]) async throws
 }
 
 @MainActor
 protocol PastureGroupAssignmentWriting {
-    func assignPasture(id pastureID: UUID, toGroupID groupID: UUID?) throws
+    func assignPasture(id pastureID: UUID, toGroupID groupID: UUID?) async throws
 }
 
 @MainActor
