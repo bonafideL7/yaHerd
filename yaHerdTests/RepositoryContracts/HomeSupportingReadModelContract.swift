@@ -292,14 +292,14 @@ enum HomeSupportingReadModelContract {
     ) async throws {
         let working = fixture.workingFixture.makeWorkingRepository()
 
-        let controlID = try working.createTemplate(
+        let controlID = try await working.createTemplate(
             name: "Zulu Home Control",
             items: [
                 WorkingTreatmentPlanItem(id: UUID(), name: "Control Vaccine"),
                 WorkingTreatmentPlanItem(id: UUID(), name: "Control Mineral")
             ]
         )
-        let targetID = try working.createTemplate(
+        let targetID = try await working.createTemplate(
             name: "Bravo Home Target",
             items: [
                 WorkingTreatmentPlanItem(id: UUID(), name: "Target Vaccine")
@@ -322,7 +322,7 @@ enum HomeSupportingReadModelContract {
             line: line
         )
 
-        try working.updateTemplate(
+        try await working.updateTemplate(
             id: targetID,
             name: "Alpha Home Target Updated",
             items: [
@@ -353,7 +353,7 @@ enum HomeSupportingReadModelContract {
             .fetchHomeTreatmentTemplates(limit: 1)
         XCTAssertEqual(firstOnly, [updatedTarget], file: file, line: line)
 
-        try working.deleteTemplates(ids: [targetID])
+        try await working.deleteTemplates(ids: [targetID])
         try await assertTreatmentTemplateHomeState(
             expectedTemplateIDs: [controlID],
             immediateRepository: working,
@@ -377,7 +377,7 @@ enum HomeSupportingReadModelContract {
             line: line
         )
 
-        try working.deleteTemplates(ids: [controlID])
+        try await working.deleteTemplates(ids: [controlID])
         try await assertTreatmentTemplateHomeState(
             expectedTemplateIDs: [],
             immediateRepository: working,
