@@ -64,7 +64,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.items, [second, third, first])
     }
 
-    func testCommitPastureOrderRollsBackOnFailure() {
+    func testCommitPastureOrderRollsBackOnFailure() async {
         let first = PastureTestSupport.makeSummary(name: "First")
         let second = PastureTestSupport.makeSummary(name: "Second")
         let loadRepository = PastureListReaderStub(result: .success([first, second]))
@@ -74,13 +74,13 @@ final class PastureTileListViewModelTests: XCTestCase {
         viewModel.load(using: loadRepository)
         viewModel.movePasturesInMemory(from: IndexSet(integer: 0), to: 2)
 
-        viewModel.commitPastureOrder(using: orderingRepository, rollbackTo: [first, second])
+        await viewModel.commitPastureOrder(using: orderingRepository, rollbackTo: [first, second])
 
         XCTAssertEqual(viewModel.items, [first, second])
         XCTAssertEqual(viewModel.errorMessage, "Forced test error.")
     }
 
-    func testDeletePastureRemovesItemAndCoordinatesUseCase() {
+    func testDeletePastureRemovesItemAndCoordinatesUseCase() async {
         let pasture = PastureTestSupport.makeSummary(id: UUID(), name: "North")
         let loadRepository = PastureListReaderStub(result: .success([pasture]))
         let pastureRepository = PastureDeleteRepositorySpy()
@@ -91,7 +91,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         viewModel.load(using: loadRepository)
         viewModel.requestDelete(pasture)
 
-        viewModel.deletePasture(
+        await viewModel.deletePasture(
             id: pasture.id,
             pastureRepository: pastureRepository,
             animalRepository: animalRepository,
@@ -104,7 +104,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertEqual(fieldCheckRepository.archiveCalls.map(\.pastureIDs), [[pasture.id]])
     }
 
-    func testDeletePastureRollsBackOnFailure() {
+    func testDeletePastureRollsBackOnFailure() async {
         let pasture = PastureTestSupport.makeSummary(id: UUID(), name: "North")
         let loadRepository = PastureListReaderStub(result: .success([pasture]))
         let pastureRepository = PastureDeleteRepositorySpy()
@@ -114,7 +114,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         let viewModel = PastureTileListViewModel()
         viewModel.load(using: loadRepository)
 
-        viewModel.deletePasture(
+        await viewModel.deletePasture(
             id: pasture.id,
             pastureRepository: pastureRepository,
             animalRepository: animalRepository,
