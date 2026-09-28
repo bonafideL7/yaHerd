@@ -192,15 +192,17 @@ extension WorkingSessionAnimalWorkView {
         let items = snapshot.plannedTreatments
         guard !name.isEmpty, !items.isEmpty else { return }
 
-        do {
-            _ = try vaccinationRepository.createTemplate(
-                name: name,
-                items: items
-            )
-            savedVaccinationName = name
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-            showingError = true
+        Task { @MainActor in
+            do {
+                _ = try await vaccinationRepository.createTemplate(
+                    name: name,
+                    items: items
+                )
+                savedVaccinationName = name
+            } catch {
+                errorMessage = UserVisibleErrorMessage.make(error)
+                showingError = true
+            }
         }
     }
 
