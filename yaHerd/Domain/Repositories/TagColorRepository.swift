@@ -18,11 +18,11 @@ protocol TagColorRepository: AnyObject {
     /// the visible library.
     func fetchColor(id: UUID) throws -> TagColorSnapshot?
 
-    func upsert(_ color: TagColorSnapshot) throws
-    func setDefaultColor(id: UUID) throws
-    func deleteColors(ids: [UUID]) throws
-    func reorder(colorIDs: [UUID]) throws
-    func restoreDefaultColors() throws
+    func upsert(_ color: TagColorSnapshot) async throws
+    func setDefaultColor(id: UUID) async throws
+    func deleteColors(ids: [UUID]) async throws
+    func reorder(colorIDs: [UUID]) async throws
+    func restoreDefaultColors() async throws
 }
 
 extension TagColorRepository {
