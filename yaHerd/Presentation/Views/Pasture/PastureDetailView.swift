@@ -42,7 +42,7 @@ struct PastureDetailView: View {
             if model.isEditing {
                 ToolbarItem(placement: .confirmationAction) {
                     ToolbarSaveButton {
-                        model.save(pastureID: pastureID, using: repository)
+                        Task { await model.save(pastureID: pastureID, using: repository) }
                     }
                 }
 
