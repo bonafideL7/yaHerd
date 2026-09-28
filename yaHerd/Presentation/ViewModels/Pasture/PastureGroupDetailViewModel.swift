@@ -61,14 +61,14 @@ final class PastureGroupDetailViewModel {
         load(groupID: groupID, using: repository)
     }
 
-    func toggleAssignment(_ row: PastureGroupAssignmentRow, using repository: any PastureGroupAssignRepository & PastureGroupDetailReader & PastureListReader) {
+    func toggleAssignment(_ row: PastureGroupAssignmentRow, using repository: any PastureGroupAssignRepository & PastureGroupDetailReader & PastureListReader) async {
         let destinationGroupID = row.isAssignedToCurrentGroup ? nil : detail?.id
-        assign(row.pasture.id, to: destinationGroupID, using: repository)
+        await assign(row.pasture.id, to: destinationGroupID, using: repository)
     }
 
-    func assign(_ pastureID: UUID, to groupID: UUID?, using repository: any PastureGroupAssignRepository & PastureGroupDetailReader & PastureListReader) {
+    func assign(_ pastureID: UUID, to groupID: UUID?, using repository: any PastureGroupAssignRepository & PastureGroupDetailReader & PastureListReader) async {
         do {
-            try AssignPastureToGroupUseCase(repository: repository).execute(
+            try await AssignPastureToGroupUseCase(repository: repository).execute(
                 pastureID: pastureID,
                 groupID: groupID
             )
