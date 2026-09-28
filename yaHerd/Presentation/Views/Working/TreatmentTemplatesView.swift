@@ -79,12 +79,15 @@ struct TreatmentTemplatesView: View {
     }
 
     private func delete(at offsets: IndexSet) {
-        do {
-            try repository.deleteTemplates(ids: offsets.map { viewModel.templates[$0].id })
-            viewModel.load()
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-            showingError = true
+        let ids = offsets.map { viewModel.templates[$0].id }
+        Task { @MainActor in
+            do {
+                try await repository.deleteTemplates(ids: ids)
+                viewModel.load()
+            } catch {
+                errorMessage = UserVisibleErrorMessage.make(error)
+                showingError = true
+            }
         }
     }
 }
@@ -158,12 +161,14 @@ private struct TreatmentTemplateAddView: View {
             .filter { !$0.name.isEmpty }
         guard !cleanedTreatments.isEmpty else { return }
 
-        do {
-            _ = try repository.createTemplate(name: trimmedName, items: cleanedTreatments)
-            dismiss()
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-            showingError = true
+        Task { @MainActor in
+            do {
+                _ = try await repository.createTemplate(name: trimmedName, items: cleanedTreatments)
+                dismiss()
+            } catch {
+                errorMessage = UserVisibleErrorMessage.make(error)
+                showingError = true
+            }
         }
     }
 }
@@ -263,16 +268,18 @@ private struct TreatmentTemplateDetailView: View {
             .filter { !$0.name.isEmpty }
         guard !cleanedTreatments.isEmpty else { return }
 
-        do {
-            try repository.updateTemplate(
-                id: template.id,
-                name: trimmedName,
-                items: cleanedTreatments
-            )
-            dismiss()
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-            showingError = true
+        Task { @MainActor in
+            do {
+                try await repository.updateTemplate(
+                    id: template.id,
+                    name: trimmedName,
+                    items: cleanedTreatments
+                )
+                dismiss()
+            } catch {
+                errorMessage = UserVisibleErrorMessage.make(error)
+                showingError = true
+            }
         }
     }
 }
