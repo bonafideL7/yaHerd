@@ -51,21 +51,21 @@ struct MutationPublishingAnimalRepository: AnimalRepository {
 
     func create(input: AnimalInput) throws -> AnimalDetailSnapshot {
         try writePolicy.validateCanWrite()
-        let result = try base.create(input: input)
+        let result = try await base.create(input: input)
         mutationRecorder.recordSuccessfulMutation(reason: .animal)
         return result
     }
 
     func update(id: UUID, input: AnimalInput) throws -> AnimalDetailSnapshot {
         try writePolicy.validateCanWrite()
-        let result = try base.update(id: id, input: input)
+        let result = try await base.update(id: id, input: input)
         mutationRecorder.recordSuccessfulMutation(reason: .animal)
         return result
     }
 
-    func delete(ids: [UUID]) throws {
+    func delete(ids: [UUID]) async throws {
         try writePolicy.validateCanWrite()
-        try base.delete(ids: ids)
+        try await base.delete(ids: ids)
         mutationRecorder.recordSuccessfulMutation(reason: .animal)
     }
 
@@ -159,23 +159,23 @@ struct MutationPublishingPastureRepository: PastureRepository {
         try base.groupNameExists(name, excluding: id)
     }
 
-    func create(input: PastureInput) throws -> PastureDetailSnapshot {
+    func create(input: PastureInput) async throws -> PastureDetailSnapshot {
         try writePolicy.validateCanWrite()
         let result = try base.create(input: input)
         mutationRecorder.recordSuccessfulMutation(reason: .pasture)
         return result
     }
 
-    func update(id: UUID, input: PastureInput) throws -> PastureDetailSnapshot {
+    func update(id: UUID, input: PastureInput) async throws -> PastureDetailSnapshot {
         try writePolicy.validateCanWrite()
         let result = try base.update(id: id, input: input)
         mutationRecorder.recordSuccessfulMutation(reason: .pasture)
         return result
     }
 
-    func reorder(ids: [UUID]) throws {
+    func reorder(ids: [UUID]) async throws {
         try writePolicy.validateCanWrite()
-        try base.reorder(ids: ids)
+        try await base.reorder(ids: ids)
         mutationRecorder.recordSuccessfulMutation(reason: .pasture)
     }
 
@@ -185,29 +185,29 @@ struct MutationPublishingPastureRepository: PastureRepository {
         mutationRecorder.recordSuccessfulMutation(reason: .pasture)
     }
 
-    func createGroup(input: PastureGroupInput) throws -> PastureGroupDetailSnapshot {
+    func createGroup(input: PastureGroupInput) async throws -> PastureGroupDetailSnapshot {
         try writePolicy.validateCanWrite()
-        let result = try base.createGroup(input: input)
+        let result = try await base.createGroup(input: input)
         mutationRecorder.recordSuccessfulMutation(reason: .pasture)
         return result
     }
 
-    func updateGroup(id: UUID, input: PastureGroupInput) throws -> PastureGroupDetailSnapshot {
+    func updateGroup(id: UUID, input: PastureGroupInput) async throws -> PastureGroupDetailSnapshot {
         try writePolicy.validateCanWrite()
-        let result = try base.updateGroup(id: id, input: input)
+        let result = try await base.updateGroup(id: id, input: input)
         mutationRecorder.recordSuccessfulMutation(reason: .pasture)
         return result
     }
 
-    func deleteGroups(ids: [UUID]) throws {
+    func deleteGroups(ids: [UUID]) async throws {
         try writePolicy.validateCanWrite()
-        try base.deleteGroups(ids: ids)
+        try await base.deleteGroups(ids: ids)
         mutationRecorder.recordSuccessfulMutation(reason: .pasture)
     }
 
-    func assignPasture(id pastureID: UUID, toGroupID groupID: UUID?) throws {
+    func assignPasture(id pastureID: UUID, toGroupID groupID: UUID?) async throws {
         try writePolicy.validateCanWrite()
-        try base.assignPasture(id: pastureID, toGroupID: groupID)
+        try await base.assignPasture(id: pastureID, toGroupID: groupID)
         mutationRecorder.recordSuccessfulMutation(reason: .pasture)
     }
 }
@@ -388,33 +388,33 @@ final class MutationPublishingTagColorRepository: TagColorRepository {
     func fetchColors() throws -> [TagColorSnapshot] { try base.fetchColors() }
     func fetchColor(id: UUID) throws -> TagColorSnapshot? { try base.fetchColor(id: id) }
 
-    func upsert(_ color: TagColorSnapshot) throws {
+    func upsert(_ color: TagColorSnapshot) async throws {
         try writePolicy.validateCanWrite()
-        try base.upsert(color)
+        try await base.upsert(color)
         mutationRecorder.recordSuccessfulMutation(reason: .tagColor)
     }
 
-    func setDefaultColor(id: UUID) throws {
+    func setDefaultColor(id: UUID) async throws {
         try writePolicy.validateCanWrite()
-        try base.setDefaultColor(id: id)
+        try await base.setDefaultColor(id: id)
         mutationRecorder.recordSuccessfulMutation(reason: .tagColor)
     }
 
-    func deleteColors(ids: [UUID]) throws {
+    func deleteColors(ids: [UUID]) async throws {
         try writePolicy.validateCanWrite()
-        try base.deleteColors(ids: ids)
+        try await base.deleteColors(ids: ids)
         mutationRecorder.recordSuccessfulMutation(reason: .tagColor)
     }
 
-    func reorder(colorIDs: [UUID]) throws {
+    func reorder(colorIDs: [UUID]) async throws {
         try writePolicy.validateCanWrite()
-        try base.reorder(colorIDs: colorIDs)
+        try await base.reorder(colorIDs: colorIDs)
         mutationRecorder.recordSuccessfulMutation(reason: .tagColor)
     }
 
-    func restoreDefaultColors() throws {
+    func restoreDefaultColors() async throws {
         try writePolicy.validateCanWrite()
-        try base.restoreDefaultColors()
+        try await base.restoreDefaultColors()
         mutationRecorder.recordSuccessfulMutation(reason: .tagColor)
     }
 }
@@ -531,22 +531,22 @@ struct MutationPublishingWorkingRepository: WorkingRepository {
         mutationRecorder.recordSuccessfulMutation(reason: .working)
     }
 
-    func createTemplate(name: String, items: [WorkingTreatmentPlanItem]) throws -> UUID {
+    func createTemplate(name: String, items: [WorkingTreatmentPlanItem]) async throws -> UUID {
         try writePolicy.validateCanWrite()
-        let result = try base.createTemplate(name: name, items: items)
+        let result = try await base.createTemplate(name: name, items: items)
         mutationRecorder.recordSuccessfulMutation(reason: .working)
         return result
     }
 
-    func updateTemplate(id: UUID, name: String, items: [WorkingTreatmentPlanItem]) throws {
+    func updateTemplate(id: UUID, name: String, items: [WorkingTreatmentPlanItem]) async throws {
         try writePolicy.validateCanWrite()
-        try base.updateTemplate(id: id, name: name, items: items)
+        try await base.updateTemplate(id: id, name: name, items: items)
         mutationRecorder.recordSuccessfulMutation(reason: .working)
     }
 
-    func deleteTemplates(ids: [UUID]) throws {
+    func deleteTemplates(ids: [UUID]) async throws {
         try writePolicy.validateCanWrite()
-        try base.deleteTemplates(ids: ids)
+        try await base.deleteTemplates(ids: ids)
         mutationRecorder.recordSuccessfulMutation(reason: .working)
     }
 }
