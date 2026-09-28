@@ -30,9 +30,9 @@ final class PastureGroupListViewModel {
         groupPendingDeletion = nil
     }
 
-    func deleteGroup(id: UUID, using repository: any PastureGroupDeleteRepository & PastureGroupListReader) {
+    func deleteGroup(id: UUID, using repository: any PastureGroupDeleteRepository & PastureGroupListReader) async {
         do {
-            try DeletePastureGroupsUseCase(repository: repository).execute(ids: [id])
+            try await DeletePastureGroupsUseCase(repository: repository).execute(ids: [id])
             groupPendingDeletion = nil
             load(using: repository)
         } catch {
