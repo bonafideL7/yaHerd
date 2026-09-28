@@ -3,20 +3,14 @@ import Foundation
 
 @MainActor
 final class CoreDataTagColorRepository: TagColorRepository {
-    private let selection: any CurrentHerdSelectionReading
-    private let contextFactory: CoreDataContextFactory
-    private let transactionExecutor: CoreDataTransactionExecutor
+    private let repositoryContext: CoreDataSynchronousRepositoryContext
     nonisolated private let lookup: CoreDataLookup
 
     init(
-        selection: any CurrentHerdSelectionReading,
-        contextFactory: CoreDataContextFactory,
-        transactionExecutor: CoreDataTransactionExecutor,
+        repositoryContext: CoreDataSynchronousRepositoryContext,
         lookup: CoreDataLookup
     ) {
-        self.selection = selection
-        self.contextFactory = contextFactory
-        self.transactionExecutor = transactionExecutor
+        self.repositoryContext = repositoryContext
         self.lookup = lookup
     }
 
@@ -25,9 +19,10 @@ final class CoreDataTagColorRepository: TagColorRepository {
         assembly: CoreDataPersistenceAssembly
     ) {
         self.init(
-            selection: selection,
-            contextFactory: assembly.contextFactory,
-            transactionExecutor: assembly.transactionExecutor,
+            repositoryContext: CoreDataSynchronousRepositoryContext(
+                selection: selection,
+                assembly: assembly
+            ),
             lookup: assembly.lookup
         )
     }
@@ -307,31 +302,13 @@ final class CoreDataTagColorRepository: TagColorRepository {
     private func read<Result>(
         _ operation: @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
     ) throws -> Result {
-        guard let herdID = selection.currentHerdID else {
-            throw HerdRepositoryError.missingHerd
-        }
-        let context = contextFactory.makeReadContext()
-        return try context.performAndWait {
-            guard let herd = try lookup.herd(id: herdID, in: context) else {
-                throw HerdRepositoryError.missingHerd
-            }
-            return try operation(context, herd)
-        }
+        try repositoryContext.read(operation)
     }
 
     private func write<Result>(
         _ operation: @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
     ) throws -> Result {
-        guard let herdID = selection.currentHerdID else {
-            throw HerdRepositoryError.missingHerd
-        }
-        let lookup = self.lookup
-        return try transactionExecutor.performWriteAndWait { context in
-            guard let herd = try lookup.herd(id: herdID, in: context) else {
-                throw HerdRepositoryError.missingHerd
-            }
-            return try operation(context, herd)
-        }
+        try repositoryContext.write(operation)
     }
 
     private nonisolated func persistedColors(
