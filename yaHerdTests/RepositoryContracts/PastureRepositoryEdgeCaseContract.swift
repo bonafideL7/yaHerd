@@ -9,9 +9,9 @@ enum PastureRepositoryEdgeCaseContract {
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let pasture = try repository.create(
+        let pasture = try await repository.create(
             input: PastureInput(
                 name: "Clear Stocking Data",
                 acreage: 40,
@@ -20,7 +20,7 @@ enum PastureRepositoryEdgeCaseContract {
             )
         )
 
-        let updated = try repository.update(
+        let updated = try await repository.update(
             id: pasture.id,
             input: PastureInput(
                 name: "Clear Stocking Data",
@@ -58,9 +58,9 @@ enum PastureRepositoryEdgeCaseContract {
         markPastureGrazed: (UUID, Date) throws -> Void,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let pasture = try repository.create(
+        let pasture = try await repository.create(
             input: PastureInput(
                 name: "Grazing Date Pasture",
                 acreage: 32,
@@ -93,9 +93,9 @@ enum PastureRepositoryEdgeCaseContract {
         markPastureGrazed: (UUID, Date) throws -> Void,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let pasture = try repository.create(
+        let pasture = try await repository.create(
             input: PastureInput(
                 name: "Preserve State Pasture",
                 acreage: 24,
@@ -103,7 +103,7 @@ enum PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let orderAnchor = try repository.create(
+        let orderAnchor = try await repository.create(
             input: PastureInput(
                 name: "Order Anchor",
                 acreage: 18,
@@ -111,16 +111,16 @@ enum PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.25
             )
         )
-        let group = try repository.createGroup(
+        let group = try await repository.createGroup(
             input: PastureGroupInput(name: "Preserve State Rotation", grazeDays: 6, restDays: 24)
         )
         let grazedAt = Date(timeIntervalSince1970: 1_780_259_200)
 
-        try repository.assignPasture(id: pasture.id, toGroupID: group.id)
-        try repository.reorder(ids: [orderAnchor.id, pasture.id])
+        try await repository.assignPasture(id: pasture.id, toGroupID: group.id)
+        try await repository.reorder(ids: [orderAnchor.id, pasture.id])
         try markPastureGrazed(pasture.id, grazedAt)
 
-        let resident = try fixture.makeAnimalRepository().create(
+        let resident = try await fixture.makeAnimalRepository().create(
             input: AnimalInput(
                 name: "Update Preserve Resident",
                 tagNumber: "U-401",
@@ -142,7 +142,7 @@ enum PastureRepositoryEdgeCaseContract {
         )
 
         let updateRepository = fixture.makePastureRepository()
-        let updated = try updateRepository.update(
+        let updated = try await updateRepository.update(
             id: pasture.id,
             input: PastureInput(
                 name: "Updated Preserve State Pasture",
@@ -253,26 +253,26 @@ enum PastureRepositoryEdgeCaseContract {
         markPastureGrazed: (UUID, Date) throws -> Void,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let first = try repository.create(
+        let first = try await repository.create(
             input: PastureInput(name: "Reorder First", acreage: 20, usableAcreage: 18, targetAcresPerHead: 1.5)
         )
-        let second = try repository.create(
+        let second = try await repository.create(
             input: PastureInput(name: "Reorder Second", acreage: 22, usableAcreage: 19, targetAcresPerHead: 1.5)
         )
-        let third = try repository.create(
+        let third = try await repository.create(
             input: PastureInput(name: "Reorder Stateful", acreage: 24, usableAcreage: 21, targetAcresPerHead: 1.75)
         )
-        let group = try repository.createGroup(
+        let group = try await repository.createGroup(
             input: PastureGroupInput(name: "Reorder Rotation", grazeDays: 6, restDays: 24)
         )
         let grazedAt = Date(timeIntervalSince1970: 1_780_345_600)
 
-        try repository.assignPasture(id: third.id, toGroupID: group.id)
+        try await repository.assignPasture(id: third.id, toGroupID: group.id)
         try markPastureGrazed(third.id, grazedAt)
 
-        let resident = try fixture.makeAnimalRepository().create(
+        let resident = try await fixture.makeAnimalRepository().create(
             input: AnimalInput(
                 name: "Reorder Resident",
                 tagNumber: "R-301",
@@ -293,7 +293,7 @@ enum PastureRepositoryEdgeCaseContract {
             )
         )
 
-        try repository.reorder(ids: [third.id, first.id])
+        try await repository.reorder(ids: [third.id, first.id])
 
         let reloadedRepository = fixture.makePastureRepository()
         let summaries = try reloadedRepository.fetchPastures()
@@ -338,8 +338,8 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(groupDetail.pastures.map(\.id), [third.id], file: file, line: line)
 
         let missingID = UUID()
-        XCTAssertThrowsError(
-            try reloadedRepository.reorder(ids: [third.id, missingID]),
+        await assertAsyncThrowsError(
+            try await reloadedRepository.reorder(ids: [third.id, missingID]),
             file: file,
             line: line
         ) { error in
@@ -363,9 +363,9 @@ enum PastureRepositoryEdgeCaseContract {
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let alpha = try repository.create(
+        let alpha = try await repository.create(
             input: PastureInput(
                 name: "Alpha",
                 acreage: 20,
@@ -373,7 +373,7 @@ enum PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let bravo = try repository.create(
+        let bravo = try await repository.create(
             input: PastureInput(
                 name: "Bravo",
                 acreage: 24,
@@ -400,12 +400,12 @@ enum PastureRepositoryEdgeCaseContract {
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let north = try repository.createGroup(
+        let north = try await repository.createGroup(
             input: PastureGroupInput(name: "North Rotation", grazeDays: 7, restDays: 21)
         )
-        let south = try repository.createGroup(
+        let south = try await repository.createGroup(
             input: PastureGroupInput(name: "South Rotation", grazeDays: 5, restDays: 25)
         )
 
@@ -427,9 +427,9 @@ enum PastureRepositoryEdgeCaseContract {
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let pasture = try repository.create(
+        let pasture = try await repository.create(
             input: PastureInput(
                 name: "Reassignment Pasture",
                 acreage: 20,
@@ -437,7 +437,7 @@ enum PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let existingDestinationPasture = try repository.create(
+        let existingDestinationPasture = try await repository.create(
             input: PastureInput(
                 name: "Existing Destination Pasture",
                 acreage: 22,
@@ -445,16 +445,16 @@ enum PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let sourceGroup = try repository.createGroup(
+        let sourceGroup = try await repository.createGroup(
             input: PastureGroupInput(name: "Source Rotation", grazeDays: 5, restDays: 20)
         )
-        let destinationGroup = try repository.createGroup(
+        let destinationGroup = try await repository.createGroup(
             input: PastureGroupInput(name: "Destination Rotation", grazeDays: 7, restDays: 28)
         )
 
-        try repository.assignPasture(id: existingDestinationPasture.id, toGroupID: destinationGroup.id)
-        try repository.assignPasture(id: pasture.id, toGroupID: sourceGroup.id)
-        try repository.assignPasture(id: pasture.id, toGroupID: destinationGroup.id)
+        try await repository.assignPasture(id: existingDestinationPasture.id, toGroupID: destinationGroup.id)
+        try await repository.assignPasture(id: pasture.id, toGroupID: sourceGroup.id)
+        try await repository.assignPasture(id: pasture.id, toGroupID: destinationGroup.id)
 
         let reloadedRepository = fixture.makePastureRepository()
         let reloadedPasture = try XCTUnwrap(
@@ -528,9 +528,9 @@ enum PastureRepositoryEdgeCaseContract {
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let firstPasture = try repository.create(
+        let firstPasture = try await repository.create(
             input: PastureInput(
                 name: "Group Update Member One",
                 acreage: 20,
@@ -538,7 +538,7 @@ enum PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let secondPasture = try repository.create(
+        let secondPasture = try await repository.create(
             input: PastureInput(
                 name: "Group Update Member Two",
                 acreage: 22,
@@ -546,7 +546,7 @@ enum PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let unrelatedPasture = try repository.create(
+        let unrelatedPasture = try await repository.create(
             input: PastureInput(
                 name: "Unrelated Group Member",
                 acreage: 26,
@@ -554,18 +554,18 @@ enum PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.75
             )
         )
-        let group = try repository.createGroup(
+        let group = try await repository.createGroup(
             input: PastureGroupInput(name: "Group Before Update", grazeDays: 5, restDays: 20)
         )
-        let unrelatedGroup = try repository.createGroup(
+        let unrelatedGroup = try await repository.createGroup(
             input: PastureGroupInput(name: "Unrelated Rotation", grazeDays: 4, restDays: 16)
         )
 
-        try repository.assignPasture(id: firstPasture.id, toGroupID: group.id)
-        try repository.assignPasture(id: secondPasture.id, toGroupID: group.id)
-        try repository.assignPasture(id: unrelatedPasture.id, toGroupID: unrelatedGroup.id)
+        try await repository.assignPasture(id: firstPasture.id, toGroupID: group.id)
+        try await repository.assignPasture(id: secondPasture.id, toGroupID: group.id)
+        try await repository.assignPasture(id: unrelatedPasture.id, toGroupID: unrelatedGroup.id)
 
-        let updated = try repository.updateGroup(
+        let updated = try await repository.updateGroup(
             id: group.id,
             input: PastureGroupInput(name: "Group After Update", grazeDays: 7, restDays: 28)
         )
@@ -671,9 +671,9 @@ enum PastureRepositoryEdgeCaseContract {
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pastureRepository = fixture.makePastureRepository()
-        let pasture = try pastureRepository.create(
+        let pasture = try await pastureRepository.create(
             input: PastureInput(
                 name: "Archived Timestamp Pasture",
                 acreage: 20,
@@ -682,7 +682,7 @@ enum PastureRepositoryEdgeCaseContract {
             )
         )
         let animalRepository = fixture.makeAnimalRepository()
-        let archivedAnimal = try animalRepository.create(
+        let archivedAnimal = try await animalRepository.create(
             input: AnimalInput(
                 name: "Archived Timestamp Cow",
                 tagNumber: "AT-1",
@@ -743,9 +743,9 @@ enum PastureRepositoryEdgeCaseContract {
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pastureRepository = fixture.makePastureRepository()
-        let pasture = try pastureRepository.create(
+        let pasture = try await pastureRepository.create(
             input: PastureInput(
                 name: "Writable Archived Check Pasture",
                 acreage: 20,
@@ -753,7 +753,7 @@ enum PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let animal = try fixture.makeAnimalRepository().create(
+        let animal = try await fixture.makeAnimalRepository().create(
             input: AnimalInput(
                 name: "Writable Archived Check Cow",
                 tagNumber: "WA-1",
@@ -876,9 +876,9 @@ enum PastureRepositoryEdgeCaseContract {
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pastures = fixture.makePastureRepository()
-        let sourcePasture = try pastures.create(
+        let sourcePasture = try await pastures.create(
             input: PastureInput(
                 name: "Writable Working Source",
                 acreage: 20,
@@ -886,7 +886,7 @@ enum PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let deletedDestination = try pastures.create(
+        let deletedDestination = try await pastures.create(
             input: PastureInput(
                 name: "Writable Working Deleted Destination",
                 acreage: 22,
@@ -894,7 +894,7 @@ enum PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let controlPasture = try pastures.create(
+        let controlPasture = try await pastures.create(
             input: PastureInput(
                 name: "Writable Working Control",
                 acreage: 24,
@@ -903,7 +903,7 @@ enum PastureRepositoryEdgeCaseContract {
             )
         )
         let animalRepository = fixture.makeAnimalRepository()
-        let animal = try animalRepository.create(
+        let animal = try await animalRepository.create(
             input: AnimalInput(
                 name: "Writable Working Cow",
                 tagNumber: "WW-1",
@@ -923,7 +923,7 @@ enum PastureRepositoryEdgeCaseContract {
                 statusReferenceID: nil
             )
         )
-        let queuedAnimal = try animalRepository.create(
+        let queuedAnimal = try await animalRepository.create(
             input: AnimalInput(
                 name: "Writable Working Queued Cow",
                 tagNumber: "WW-2",
@@ -1363,9 +1363,9 @@ extension PastureRepositoryEdgeCaseContract {
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pastureRepository = fixture.makePastureRepository()
-        let source = try pastureRepository.create(
+        let source = try await pastureRepository.create(
             input: PastureInput(
                 name: "Deleted Working Source Before Session Delete",
                 acreage: 20,
@@ -1373,7 +1373,7 @@ extension PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let animal = try fixture.makeAnimalRepository().create(
+        let animal = try await fixture.makeAnimalRepository().create(
             input: AnimalInput(
                 name: "Working Source Deleted Cow",
                 tagNumber: "WSD-1",
@@ -1475,9 +1475,9 @@ extension PastureRepositoryEdgeCaseContract {
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pastures = fixture.makePastureRepository()
-        let source = try pastures.create(
+        let source = try await pastures.create(
             input: PastureInput(
                 name: "Deleted Source Finish Contract",
                 acreage: 20,
@@ -1485,7 +1485,7 @@ extension PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let survivingDestination = try pastures.create(
+        let survivingDestination = try await pastures.create(
             input: PastureInput(
                 name: "Surviving Finish Destination",
                 acreage: 20,
@@ -1493,7 +1493,7 @@ extension PastureRepositoryEdgeCaseContract {
                 targetAcresPerHead: 1.5
             )
         )
-        let animal = try fixture.makeAnimalRepository().create(
+        let animal = try await fixture.makeAnimalRepository().create(
             input: AnimalInput(
                 name: "Deleted Source Finish Cow",
                 tagNumber: "DSF-1",
@@ -1551,7 +1551,7 @@ extension PastureRepositoryEdgeCaseContract {
             try fixture.makeAnimalRepository().fetchTimeline(id: animal.id)
         )
 
-        XCTAssertThrowsError(
+        await assertAsyncThrowsError(
             try fixture.makeWorkingRepository().completeSession(
                 id: sessionID,
                 assignments: [
@@ -1617,5 +1617,21 @@ extension PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(returned.location, .pasture, file: file, line: line)
         XCTAssertEqual(returned.pastureID, survivingDestination.id, file: file, line: line)
     }
+
+    private static func assertAsyncThrowsError<Value>(
+        _ expression: @autoclosure () async throws -> Value,
+        _ message: @autoclosure () -> String = "",
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        _ errorHandler: (Error) -> Void = { _ in }
+    ) async {
+        do {
+            _ = try await expression()
+            XCTFail(message(), file: file, line: line)
+        } catch {
+            errorHandler(error)
+        }
+    }
+
 }
 
