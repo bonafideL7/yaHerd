@@ -4,11 +4,11 @@ import Foundation
 struct AssignPastureToGroupUseCase {
     let repository: any PastureGroupAssignRepository
 
-    func execute(pastureID: UUID, groupID: UUID?) throws {
+    func execute(pastureID: UUID, groupID: UUID?) async throws {
         try repository.validatePastureIDsExist([pastureID])
         if let groupID {
             try repository.validatePastureGroupIDsExist([groupID])
         }
-        try repository.assignPasture(id: pastureID, toGroupID: groupID)
+        try await repository.assignPasture(id: pastureID, toGroupID: groupID)
     }
 }
