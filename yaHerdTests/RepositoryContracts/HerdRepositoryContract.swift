@@ -57,7 +57,7 @@ struct HerdRepositoryOwnershipTestControl {
 }
 
 /// Distinguishes the intended post-mutation commit failpoint from validation or lookup failures.
-enum HerdRepositoryRollbackInjectedError: Error, Equatable {
+enum HerdRepositoryRollbackInjectedError: Error, Equatable, Sendable {
     case afterRenameStaged
 }
 
@@ -72,7 +72,7 @@ struct HerdRepositoryRollbackFailureInjection {
     let renameCurrentHerdFailingAfterMutationStaged: (
         _ repository: any HerdRepository,
         _ name: String
-    ) throws -> Void
+    ) async throws -> Void
 }
 
 /// Permanent persistence-neutral behavioral contract fixture for `HerdRepository` implementations.
@@ -101,10 +101,10 @@ enum HerdRepositoryContract {
         using fixture: HerdRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeHerdRepository()
 
-        assertMissingHerd(
+        await assertMissingHerd(
             try repository.fetchCurrentHerd(),
             file: file,
             line: line
@@ -116,14 +116,14 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
-        assertMissingHerd(
-            try repository.renameCurrentHerd(to: "Contract Herd"),
+        await assertMissingHerd(
+            try await repository.renameCurrentHerd(to: "Contract Herd"),
             file: file,
             line: line
         )
 
         // A failed rename must leave the same repository usable and empty.
-        assertMissingHerd(
+        await assertMissingHerd(
             try repository.fetchCurrentHerd(),
             file: file,
             line: line
@@ -138,7 +138,7 @@ enum HerdRepositoryContract {
 
         // Herd creation belongs to the explicit bootstrap/onboarding boundary. Repository reads or
         // ordinary rename mutations must not invent a root merely because persistence is empty.
-        assertMissingHerd(
+        await assertMissingHerd(
             try fixture.makeHerdRepository().fetchCurrentHerd(),
             file: file,
             line: line
@@ -149,7 +149,7 @@ enum HerdRepositoryContract {
         using fixture: HerdRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let herdID = UUID()
         let createdAt = fixedDate(1_700_000_000)
         let updatedAt = fixedDate(1_700_000_500)
@@ -179,7 +179,7 @@ enum HerdRepositoryContract {
         XCTAssertEqual(before.createdAt, createdAt, file: file, line: line)
         XCTAssertEqual(before.updatedAt, updatedAt, file: file, line: line)
 
-        let renamed = try repository.renameCurrentHerd(
+        let renamed = try await repository.renameCurrentHerd(
             to: "  Contract   Herd Renamed\n"
         )
         XCTAssertEqual(renamed.publicID, herdID, "Rename must preserve application identity.", file: file, line: line)
@@ -238,7 +238,7 @@ enum HerdRepositoryContract {
         failureInjection: HerdRepositoryRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let selectedID = UUID()
         let controlID = UUID()
         let selectedOwnedPastureID = UUID()
@@ -283,15 +283,17 @@ enum HerdRepositoryContract {
         let repository = fixture.makeHerdRepository()
         let before = try repository.fetchCurrentHerd()
 
-        XCTAssertThrowsError(
-            try failureInjection.renameCurrentHerdFailingAfterMutationStaged(
+        do {
+            try await failureInjection.renameCurrentHerdFailingAfterMutationStaged(
                 repository,
                 "  Must Roll Back  "
-            ),
-            "The injected rename must reach the post-mutation persistence failpoint.",
-            file: file,
-            line: line
-        ) { error in
+            )
+            XCTFail(
+                "The injected rename must reach the post-mutation persistence failpoint.",
+                file: file,
+                line: line
+            )
+        } catch {
             XCTAssertEqual(
                 error as? HerdRepositoryRollbackInjectedError,
                 .afterRenameStaged,
@@ -356,7 +358,7 @@ enum HerdRepositoryContract {
         )
 
         try fixture.selectionControl.setCurrentHerdID(selectedID)
-        let recovered = try repository.renameCurrentHerd(to: "  Recovered Herd  ")
+        let recovered = try await repository.renameCurrentHerd(to: "  Recovered Herd  ")
         XCTAssertEqual(recovered.publicID, selectedID, file: file, line: line)
         XCTAssertEqual(recovered.createdAt, selectedCreatedAt, file: file, line: line)
         XCTAssertEqual(recovered.name, "Recovered Herd", file: file, line: line)
@@ -416,23 +418,22 @@ enum HerdRepositoryContract {
         using fixture: HerdRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeHerdRepository()
 
-        XCTAssertThrowsError(
-            try repository.renameCurrentHerd(to: " \n\t "),
-            file: file,
-            line: line
-        ) { error in
+        do {
+            _ = try await repository.renameCurrentHerd(to: " \n\t ")
+            XCTFail("Expected HerdRepositoryError.emptyName.", file: file, line: line)
+        } catch {
             XCTAssertEqual(error as? HerdRepositoryError, .emptyName, file: file, line: line)
         }
 
-        assertMissingHerd(
+        await assertMissingHerd(
             try repository.fetchCurrentHerd(),
             file: file,
             line: line
         )
-        assertMissingHerd(
+        await assertMissingHerd(
             try fixture.makeHerdRepository().fetchCurrentHerd(),
             file: file,
             line: line
@@ -450,7 +451,7 @@ enum HerdRepositoryContract {
         using fixture: HerdRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let herdID = UUID()
         let createdAt = fixedDate(1_700_010_000)
         let updatedAt = fixedDate(1_700_010_500)
@@ -467,11 +468,10 @@ enum HerdRepositoryContract {
         let repository = fixture.makeHerdRepository()
         let before = try repository.fetchCurrentHerd()
 
-        XCTAssertThrowsError(
-            try repository.renameCurrentHerd(to: "   "),
-            file: file,
-            line: line
-        ) { error in
+        do {
+            _ = try await repository.renameCurrentHerd(to: "   ")
+            XCTFail("Expected HerdRepositoryError.emptyName.", file: file, line: line)
+        } catch {
             XCTAssertEqual(error as? HerdRepositoryError, .emptyName, file: file, line: line)
         }
 
@@ -513,7 +513,7 @@ enum HerdRepositoryContract {
         using fixture: HerdRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let olderID = UUID()
         let selectedID = UUID()
         let newerID = UUID()
@@ -575,7 +575,7 @@ enum HerdRepositoryContract {
             line: line
         )
 
-        let renamedSelected = try selectedRepository.renameCurrentHerd(
+        let renamedSelected = try await selectedRepository.renameCurrentHerd(
             to: "  Selected Herd Renamed  "
         )
         XCTAssertEqual(renamedSelected.publicID, selectedID, file: file, line: line)
@@ -666,7 +666,7 @@ enum HerdRepositoryContract {
         using fixture: HerdRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let storedID = UUID()
         let createdAt = fixedDate(1_700_150_000)
         let updatedAt = fixedDate(1_700_150_100)
@@ -681,7 +681,7 @@ enum HerdRepositoryContract {
         try fixture.selectionControl.setCurrentHerdID(nil)
 
         let repository = fixture.makeHerdRepository()
-        assertMissingHerd(
+        await assertMissingHerd(
             try repository.fetchCurrentHerd(),
             file: file,
             line: line
@@ -693,17 +693,17 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
-        assertMissingHerd(
-            try repository.renameCurrentHerd(to: "Must Not Infer"),
+        await assertMissingHerd(
+            try await repository.renameCurrentHerd(to: "Must Not Infer"),
             file: file,
             line: line
         )
-        assertMissingHerd(
+        await assertMissingHerd(
             try repository.fetchCurrentHerd(),
             file: file,
             line: line
         )
-        assertMissingHerd(
+        await assertMissingHerd(
             try fixture.makeHerdRepository().fetchCurrentHerd(),
             file: file,
             line: line
@@ -736,7 +736,7 @@ enum HerdRepositoryContract {
         using fixture: HerdRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let storedID = UUID()
         let storedCreatedAt = fixedDate(1_700_200_000)
         let storedUpdatedAt = fixedDate(1_700_200_100)
@@ -751,7 +751,7 @@ enum HerdRepositoryContract {
         try fixture.selectionControl.setCurrentHerdID(UUID())
 
         let repository = fixture.makeHerdRepository()
-        assertMissingHerd(
+        await assertMissingHerd(
             try repository.fetchCurrentHerd(),
             file: file,
             line: line
@@ -763,17 +763,17 @@ enum HerdRepositoryContract {
             file: file,
             line: line
         )
-        assertMissingHerd(
-            try repository.renameCurrentHerd(to: "Must Not Fall Back"),
+        await assertMissingHerd(
+            try await repository.renameCurrentHerd(to: "Must Not Fall Back"),
             file: file,
             line: line
         )
-        assertMissingHerd(
+        await assertMissingHerd(
             try repository.fetchCurrentHerd(),
             file: file,
             line: line
         )
-        assertMissingHerd(
+        await assertMissingHerd(
             try fixture.makeHerdRepository().fetchCurrentHerd(),
             file: file,
             line: line
@@ -820,11 +820,14 @@ enum HerdRepositoryContract {
     }
 
     private static func assertMissingHerd(
-        _ expression: @autoclosure () throws -> HerdSummary,
+        _ expression: @autoclosure () async throws -> HerdSummary,
         file: StaticString,
         line: UInt
-    ) {
-        XCTAssertThrowsError(try expression(), file: file, line: line) { error in
+    ) async {
+        do {
+            _ = try await expression()
+            XCTFail("Expected HerdRepositoryError.missingHerd.", file: file, line: line)
+        } catch {
             XCTAssertEqual(error as? HerdRepositoryError, .missingHerd, file: file, line: line)
         }
     }

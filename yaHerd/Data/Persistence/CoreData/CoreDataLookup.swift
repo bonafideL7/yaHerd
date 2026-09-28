@@ -13,7 +13,7 @@ protocol CoreDataHerdOwnedManagedObject: CoreDataApplicationIdentifiedManagedObj
     var herd: CDHerd { get }
 }
 
-struct CoreDataLookup {
+struct CoreDataLookup: Sendable {
     func herd(
         id: UUID,
         in context: NSManagedObjectContext

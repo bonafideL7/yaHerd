@@ -187,8 +187,8 @@ protocol MutationBoundaryContractTestControl {
     var didReachInjectedPersistenceFailure: Bool { get }
 
     func durableStateFingerprint() throws -> String
-    func performSuccessfulMutation() throws
-    func performFailingMutation() throws
+    func performSuccessfulMutation() async throws
+    func performFailingMutation() async throws
 }
 
 /// Permanent fixture for mutation publication semantics.
@@ -222,7 +222,7 @@ enum MutationBoundaryContract {
         using fixture: MutationBoundaryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         for operation in MutationBoundaryContractOperation.allCases {
             let control = try fixture.makeTestControl(operation)
             XCTAssertEqual(
@@ -246,7 +246,7 @@ enum MutationBoundaryContract {
             )
 
             let before = try control.durableStateFingerprint()
-            try control.performSuccessfulMutation()
+            try await control.performSuccessfulMutation()
             let after = try control.durableStateFingerprint()
 
             XCTAssertNotEqual(
@@ -292,7 +292,7 @@ enum MutationBoundaryContract {
         using fixture: MutationBoundaryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         for operation in MutationBoundaryContractOperation.allCases {
             let control = try fixture.makeTestControl(operation)
             XCTAssertEqual(
@@ -315,12 +315,17 @@ enum MutationBoundaryContract {
                 line: line
             )
 
-            XCTAssertThrowsError(
-                try control.performFailingMutation(),
-                "The failure probe for \(operation.rawValue) must surface its injected persistence failure.",
-                file: file,
-                line: line
-            )
+            do {
+                try await control.performFailingMutation()
+                XCTFail(
+                    "The failure probe for \(operation.rawValue) must surface its injected persistence failure.",
+                    file: file,
+                    line: line
+                )
+            } catch {
+                // Feature contracts own the exact error. This contract only requires failure after
+                // the injected persistence boundary is reached.
+            }
             XCTAssertTrue(
                 control.didReachInjectedPersistenceFailure,
                 "The failure probe for \(operation.rawValue) must prove execution reached the injected persistence fault rather than failing earlier.",
