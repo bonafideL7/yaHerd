@@ -53,7 +53,7 @@ struct PastureGroupListView: View {
         ) {
             if let group = model.groupPendingDeletion {
                 Button("Delete \(group.name)", role: .destructive) {
-                    model.deleteGroup(id: group.id, using: repository)
+                    Task { await model.deleteGroup(id: group.id, using: repository) }
                 }
             }
             Button("Cancel", role: .cancel) {}
