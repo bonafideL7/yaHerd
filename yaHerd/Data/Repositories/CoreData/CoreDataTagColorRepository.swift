@@ -515,7 +515,6 @@ final class CoreDataTagColorRepository: TagColorRepository {
                   let replacementID = remaps[oldID],
                   let replacement = colorByID[replacementID] else { continue }
             tag.color = replacement
-            tag.animal.editorRevision = UUID()
         }
 
         let checkRequest = NSFetchRequest<CDFieldCheckAnimalCheck>(
