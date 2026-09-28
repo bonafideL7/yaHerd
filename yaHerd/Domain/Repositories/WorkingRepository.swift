@@ -138,17 +138,17 @@ extension WorkingSessionReopening {
 @MainActor
 protocol WorkingTreatmentTemplateCreating {
     @discardableResult
-    func createTemplate(name: String, items: [WorkingTreatmentPlanItem]) throws -> UUID
+    func createTemplate(name: String, items: [WorkingTreatmentPlanItem]) async throws -> UUID
 }
 
 @MainActor
 protocol WorkingTreatmentTemplateUpdating {
-    func updateTemplate(id: UUID, name: String, items: [WorkingTreatmentPlanItem]) throws
+    func updateTemplate(id: UUID, name: String, items: [WorkingTreatmentPlanItem]) async throws
 }
 
 @MainActor
 protocol WorkingTreatmentTemplateDeleting {
-    func deleteTemplates(ids: [UUID]) throws
+    func deleteTemplates(ids: [UUID]) async throws
 }
 
 @MainActor
