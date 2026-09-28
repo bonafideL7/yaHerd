@@ -3,14 +3,20 @@ import Foundation
 
 @MainActor
 final class CoreDataPastureRepository: PastureRepository {
-    private let repositoryContext: CoreDataSynchronousRepositoryContext
+    private let selection: any CurrentHerdSelectionReading
+    private let contextFactory: CoreDataContextFactory
+    private let transactionExecutor: CoreDataTransactionExecutor
     nonisolated private let lookup: CoreDataLookup
 
     init(
-        repositoryContext: CoreDataSynchronousRepositoryContext,
+        selection: any CurrentHerdSelectionReading,
+        contextFactory: CoreDataContextFactory,
+        transactionExecutor: CoreDataTransactionExecutor,
         lookup: CoreDataLookup
     ) {
-        self.repositoryContext = repositoryContext
+        self.selection = selection
+        self.contextFactory = contextFactory
+        self.transactionExecutor = transactionExecutor
         self.lookup = lookup
     }
 
@@ -19,10 +25,9 @@ final class CoreDataPastureRepository: PastureRepository {
         assembly: CoreDataPersistenceAssembly
     ) {
         self.init(
-            repositoryContext: CoreDataSynchronousRepositoryContext(
-                selection: selection,
-                assembly: assembly
-            ),
+            selection: selection,
+            contextFactory: assembly.contextFactory,
+            transactionExecutor: assembly.transactionExecutor,
             lookup: assembly.lookup
         )
     }
@@ -86,9 +91,9 @@ final class CoreDataPastureRepository: PastureRepository {
         }
     }
 
-    func create(input: PastureInput) throws -> PastureDetailSnapshot {
+    func create(input: PastureInput) async throws -> PastureDetailSnapshot {
         let normalizedInput = input.normalized
-        return try write { context, herd in
+        return try await write { context, herd in
             if try self.pastureNameExists(
                 normalizedInput.name,
                 excluding: nil,
@@ -111,9 +116,9 @@ final class CoreDataPastureRepository: PastureRepository {
         }
     }
 
-    func update(id: UUID, input: PastureInput) throws -> PastureDetailSnapshot {
+    func update(id: UUID, input: PastureInput) async throws -> PastureDetailSnapshot {
         let normalizedInput = input.normalized
-        return try write { context, herd in
+        return try await write { context, herd in
             guard let pasture = try self.lookup.herdOwned(
                 CDPasture.self,
                 id: id,
@@ -141,10 +146,10 @@ final class CoreDataPastureRepository: PastureRepository {
         }
     }
 
-    func reorder(ids: [UUID]) throws {
+    func reorder(ids: [UUID]) async throws {
         guard !ids.isEmpty else { return }
 
-        try write { context, herd in
+        try await write { context, herd in
             let requested = try self.fetchPastures(ids: ids, in: context, herd: herd)
             let requestedIDs = Set(ids)
 
@@ -162,10 +167,10 @@ final class CoreDataPastureRepository: PastureRepository {
         }
     }
 
-    func delete(ids: [UUID]) throws {
+    func delete(ids: [UUID]) async throws {
         guard !ids.isEmpty else { return }
 
-        try write { context, herd in
+        try await write { context, herd in
             for pasture in try self.fetchPastures(ids: ids, in: context, herd: herd) {
                 context.delete(pasture)
             }
@@ -205,9 +210,9 @@ final class CoreDataPastureRepository: PastureRepository {
         }
     }
 
-    func createGroup(input: PastureGroupInput) throws -> PastureGroupDetailSnapshot {
+    func createGroup(input: PastureGroupInput) async throws -> PastureGroupDetailSnapshot {
         let normalizedInput = input.normalized
-        return try write { context, herd in
+        return try await write { context, herd in
             if try self.groupNameExists(
                 normalizedInput.name,
                 excluding: nil,
@@ -228,9 +233,9 @@ final class CoreDataPastureRepository: PastureRepository {
         }
     }
 
-    func updateGroup(id: UUID, input: PastureGroupInput) throws -> PastureGroupDetailSnapshot {
+    func updateGroup(id: UUID, input: PastureGroupInput) async throws -> PastureGroupDetailSnapshot {
         let normalizedInput = input.normalized
-        return try write { context, herd in
+        return try await write { context, herd in
             guard let group = try self.lookup.herdOwned(
                 CDPastureGroup.self,
                 id: id,
@@ -257,18 +262,18 @@ final class CoreDataPastureRepository: PastureRepository {
         }
     }
 
-    func deleteGroups(ids: [UUID]) throws {
+    func deleteGroups(ids: [UUID]) async throws {
         guard !ids.isEmpty else { return }
 
-        try write { context, herd in
+        try await write { context, herd in
             for group in try self.fetchGroups(ids: ids, in: context, herd: herd) {
                 context.delete(group)
             }
         }
     }
 
-    func assignPasture(id pastureID: UUID, toGroupID groupID: UUID?) throws {
-        try write { context, herd in
+    func assignPasture(id pastureID: UUID, toGroupID groupID: UUID?) async throws {
+        try await write { context, herd in
             guard let pasture = try self.lookup.herdOwned(
                 CDPasture.self,
                 id: pastureID,
@@ -297,13 +302,34 @@ final class CoreDataPastureRepository: PastureRepository {
     private func read<Result>(
         _ operation: @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
     ) throws -> Result {
-        try repositoryContext.read(operation)
+        guard let herdID = selection.currentHerdID else {
+            throw HerdRepositoryError.missingHerd
+        }
+
+        let context = contextFactory.makeReadContext()
+        let lookup = self.lookup
+        return try context.performAndWait {
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            return try operation(context, herd)
+        }
     }
 
-    private func write<Result>(
-        _ operation: @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
-    ) throws -> Result {
-        try repositoryContext.write(operation)
+    private func write<Result: Sendable>(
+        _ operation: @escaping @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
+    ) async throws -> Result {
+        guard let herdID = selection.currentHerdID else {
+            throw HerdRepositoryError.missingHerd
+        }
+
+        let lookup = self.lookup
+        return try await transactionExecutor.performWrite { context in
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            return try operation(context, herd)
+        }
     }
 
     private nonisolated func fetchPastures(
