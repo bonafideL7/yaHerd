@@ -6,7 +6,7 @@ struct DeletePasturesUseCase {
     let animalRepository: any AnimalPastureMoving
     let fieldCheckRepository: any FieldCheckPastureArchiveWriter
 
-    func execute(ids: [UUID], archivedAt: Date = .now) throws {
+    func execute(ids: [UUID], archivedAt: Date = .now) async throws {
         guard !ids.isEmpty else { return }
         try validateUnique(ids)
         try pastureRepository.validatePastureIDsExist(ids)
@@ -20,7 +20,7 @@ struct DeletePasturesUseCase {
         }
 
         try fieldCheckRepository.archiveSessionsForDeletedPastures(ids, archivedAt: archivedAt)
-        try pastureRepository.delete(ids: ids)
+        try await pastureRepository.delete(ids: ids)
     }
 
     private func validateUnique(_ ids: [UUID]) throws {
