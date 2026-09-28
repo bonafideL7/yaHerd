@@ -7,20 +7,14 @@ final class CoreDataWorkingTreatmentTemplateRepository:
     WorkingTreatmentTemplateCreating,
     WorkingTreatmentTemplateEditorRepository
 {
-    private let selection: any CurrentHerdSelectionReading
-    private let contextFactory: CoreDataContextFactory
-    private let transactionExecutor: CoreDataTransactionExecutor
+    private let repositoryContext: CoreDataSynchronousRepositoryContext
     nonisolated private let lookup: CoreDataLookup
 
     init(
-        selection: any CurrentHerdSelectionReading,
-        contextFactory: CoreDataContextFactory,
-        transactionExecutor: CoreDataTransactionExecutor,
+        repositoryContext: CoreDataSynchronousRepositoryContext,
         lookup: CoreDataLookup
     ) {
-        self.selection = selection
-        self.contextFactory = contextFactory
-        self.transactionExecutor = transactionExecutor
+        self.repositoryContext = repositoryContext
         self.lookup = lookup
     }
 
@@ -29,9 +23,10 @@ final class CoreDataWorkingTreatmentTemplateRepository:
         assembly: CoreDataPersistenceAssembly
     ) {
         self.init(
-            selection: selection,
-            contextFactory: assembly.contextFactory,
-            transactionExecutor: assembly.transactionExecutor,
+            repositoryContext: CoreDataSynchronousRepositoryContext(
+                selection: selection,
+                assembly: assembly
+            ),
             lookup: assembly.lookup
         )
     }
@@ -92,7 +87,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
             let template = CDWorkingTreatmentTemplate(context: context)
             template.id = try self.uniqueID(in: context, herdID: herd.id)
             template.name = normalizedName
-            template.itemsData = try CoreDataValueCodec.encode(items)
+            template.itemsData = try JSONEncoder().encode(items)
             template.herd = herd
             return template.id
         }
@@ -126,7 +121,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
             }
 
             template.name = normalizedName
-            template.itemsData = try CoreDataValueCodec.encode(items)
+            template.itemsData = try JSONEncoder().encode(items)
         }
     }
 
@@ -170,36 +165,17 @@ final class CoreDataWorkingTreatmentTemplateRepository:
     private func read<Result>(
         _ operation: @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
     ) throws -> Result {
-        guard let herdID = selection.currentHerdID else {
-            throw HerdRepositoryError.missingHerd
-        }
-
-        let context = contextFactory.makeReadContext()
-        return try context.performAndWait {
-            guard let herd = try lookup.herd(id: herdID, in: context) else {
-                throw HerdRepositoryError.missingHerd
-            }
-            return try operation(context, herd)
-        }
+        try repositoryContext.read(operation)
     }
 
     private func write<Result>(
         beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil,
         _ operation: @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
     ) throws -> Result {
-        guard let herdID = selection.currentHerdID else {
-            throw HerdRepositoryError.missingHerd
-        }
-
-        let lookup = self.lookup
-        return try transactionExecutor.performWriteAndWait(
-            beforeSave: beforeSave
-        ) { context in
-            guard let herd = try lookup.herd(id: herdID, in: context) else {
-                throw HerdRepositoryError.missingHerd
-            }
-            return try operation(context, herd)
-        }
+        try repositoryContext.write(
+            beforeSave: beforeSave,
+            operation
+        )
     }
 
     private nonisolated func fetchTemplates(
@@ -242,6 +218,6 @@ final class CoreDataWorkingTreatmentTemplateRepository:
     }
 
     private nonisolated func decodeItems(_ data: Data) throws -> [WorkingTreatmentPlanItem] {
-        try CoreDataValueCodec.decode([WorkingTreatmentPlanItem].self, from: data)
+        try JSONDecoder().decode([WorkingTreatmentPlanItem].self, from: data)
     }
 }
