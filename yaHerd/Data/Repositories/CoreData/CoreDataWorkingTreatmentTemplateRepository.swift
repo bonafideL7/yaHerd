@@ -7,14 +7,20 @@ final class CoreDataWorkingTreatmentTemplateRepository:
     WorkingTreatmentTemplateCreating,
     WorkingTreatmentTemplateEditorRepository
 {
-    private let repositoryContext: CoreDataSynchronousRepositoryContext
+    private let selection: any CurrentHerdSelectionReading
+    private let contextFactory: CoreDataContextFactory
+    private let transactionExecutor: CoreDataTransactionExecutor
     nonisolated private let lookup: CoreDataLookup
 
     init(
-        repositoryContext: CoreDataSynchronousRepositoryContext,
+        selection: any CurrentHerdSelectionReading,
+        contextFactory: CoreDataContextFactory,
+        transactionExecutor: CoreDataTransactionExecutor,
         lookup: CoreDataLookup
     ) {
-        self.repositoryContext = repositoryContext
+        self.selection = selection
+        self.contextFactory = contextFactory
+        self.transactionExecutor = transactionExecutor
         self.lookup = lookup
     }
 
@@ -23,10 +29,9 @@ final class CoreDataWorkingTreatmentTemplateRepository:
         assembly: CoreDataPersistenceAssembly
     ) {
         self.init(
-            repositoryContext: CoreDataSynchronousRepositoryContext(
-                selection: selection,
-                assembly: assembly
-            ),
+            selection: selection,
+            contextFactory: assembly.contextFactory,
+            transactionExecutor: assembly.transactionExecutor,
             lookup: assembly.lookup
         )
     }
@@ -70,11 +75,11 @@ final class CoreDataWorkingTreatmentTemplateRepository:
     func createTemplate(
         name: String,
         items: [WorkingTreatmentPlanItem]
-    ) throws -> UUID {
+    ) async throws -> UUID {
         try WorkingTreatmentPlanRules.validate(items)
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        return try write { context, herd in
+        return try await write { context, herd in
             if try self.templateNameExists(
                 normalizedName,
                 excluding: nil,
@@ -97,11 +102,11 @@ final class CoreDataWorkingTreatmentTemplateRepository:
         id: UUID,
         name: String,
         items: [WorkingTreatmentPlanItem]
-    ) throws {
+    ) async throws {
         try WorkingTreatmentPlanRules.validate(items)
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        try write { context, herd in
+        try await write { context, herd in
             guard let template = try self.lookup.herdOwned(
                 CDWorkingTreatmentTemplate.self,
                 id: id,
@@ -125,14 +130,14 @@ final class CoreDataWorkingTreatmentTemplateRepository:
         }
     }
 
-    func deleteTemplates(ids: [UUID]) throws {
-        try deleteTemplates(ids: ids, beforeSave: nil)
+    func deleteTemplates(ids: [UUID]) async throws {
+        try await deleteTemplates(ids: ids, beforeSave: nil)
     }
 
     func deleteTemplates(
         ids: [UUID],
         beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)?
-    ) throws {
+    ) async throws {
         guard !ids.isEmpty else { return }
 
         try write(beforeSave: beforeSave) { context, herd in
@@ -165,17 +170,37 @@ final class CoreDataWorkingTreatmentTemplateRepository:
     private func read<Result>(
         _ operation: @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
     ) throws -> Result {
-        try repositoryContext.read(operation)
+        guard let herdID = selection.currentHerdID else {
+            throw HerdRepositoryError.missingHerd
+        }
+
+        let context = contextFactory.makeReadContext()
+        let lookup = self.lookup
+        return try context.performAndWait {
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            return try operation(context, herd)
+        }
     }
 
-    private func write<Result>(
+    private func write<Result: Sendable>(
         beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil,
-        _ operation: @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
-    ) throws -> Result {
-        try repositoryContext.write(
-            beforeSave: beforeSave,
-            operation
-        )
+        _ operation: @escaping @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
+    ) async throws -> Result {
+        guard let herdID = selection.currentHerdID else {
+            throw HerdRepositoryError.missingHerd
+        }
+
+        let lookup = self.lookup
+        return try await transactionExecutor.performWrite(
+            beforeSave: beforeSave
+        ) { context in
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            return try operation(context, herd)
+        }
     }
 
     private nonisolated func fetchTemplates(
