@@ -7,12 +7,12 @@ final class CoreDataTransactionExecutor {
         self.contextFactory = contextFactory
     }
 
-    func performWrite<Result>(
-        _ operation: @Sendable (NSManagedObjectContext) throws -> Result
-    ) throws -> Result {
+    func performWrite<Result: Sendable>(
+        _ operation: @escaping @Sendable (NSManagedObjectContext) throws -> Result
+    ) async throws -> Result {
         let context = try contextFactory.makeWriteContext()
 
-        return try context.performAndWait {
+        return try await context.perform {
             do {
                 let result = try operation(context)
                 guard context.hasChanges else {
