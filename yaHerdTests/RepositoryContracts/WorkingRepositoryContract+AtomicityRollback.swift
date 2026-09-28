@@ -85,7 +85,7 @@ struct WorkingRollbackFailureInjection {
     ) throws -> Void
     let deleteTemplatesFailingAfterDeletionStaged: (
         _ templateIDs: [UUID]
-    ) throws -> Void
+    ) async throws -> Void
     let persistedQueueItemIDs: () throws -> Set<UUID>
     let persistedWorkDataIDs: (
         _ sessionID: UUID,
@@ -691,17 +691,17 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeWorkingRepository()
-        let firstID = try repository.createTemplate(
+        let firstID = try await repository.createTemplate(
             name: "Working Delete Rollback Alpha",
             items: [WorkingTreatmentPlanItem(id: UUID(), name: "Alpha Treatment")]
         )
-        let secondID = try repository.createTemplate(
+        let secondID = try await repository.createTemplate(
             name: "Working Delete Rollback Beta",
             items: [WorkingTreatmentPlanItem(id: UUID(), name: "Beta Treatment")]
         )
-        let controlID = try repository.createTemplate(
+        let controlID = try await repository.createTemplate(
             name: "Working Delete Rollback Control",
             items: []
         )
@@ -720,13 +720,16 @@ extension WorkingRepositoryContract {
         let beforeRawIDs = try failureInjection.persistedTemplateIDs()
         var stagedIDs = Set<UUID>()
 
-        XCTAssertThrowsError(
-            try failureInjection.deleteTemplatesFailingAfterDeletionStaged(
+        do {
+            try await failureInjection.deleteTemplatesFailingAfterDeletionStaged(
                 [firstID, secondID]
-            ),
-            file: file,
-            line: line
-        ) { error in
+            )
+            XCTFail(
+                "The template-delete failpoint must throw after staging requested deletes.",
+                file: file,
+                line: line
+            )
+        } catch {
             guard case let WorkingRollbackInjectedError.afterTemplateDeletionStaged(templateIDs) = error else {
                 XCTFail(
                     "The template-delete failpoint must fire after at least one requested delete is staged: \(error)",
