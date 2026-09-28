@@ -70,16 +70,18 @@ struct PastureGroupEditorView: View {
     }
 
     private func save() {
-        do {
+        Task { @MainActor in
+            do {
             if let group {
-                try model.update(id: group.id, using: repository)
+                try await model.update(id: group.id, using: repository)
             } else {
-                try model.create(using: repository)
+                try await model.create(using: repository)
             }
             onSave?()
             dismiss()
-        } catch {
-            model.errorMessage = UserVisibleErrorMessage.make(error)
+            } catch {
+                model.errorMessage = UserVisibleErrorMessage.make(error)
+            }
         }
     }
 
