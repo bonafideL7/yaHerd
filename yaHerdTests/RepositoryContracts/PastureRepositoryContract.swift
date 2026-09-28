@@ -18,9 +18,9 @@ enum PastureRepositoryContract {
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let created = try repository.create(
+        let created = try await repository.create(
             input: PastureInput(
                 name: "  Contract North  ",
                 acreage: 25,
@@ -34,7 +34,7 @@ enum PastureRepositoryContract {
         XCTAssertEqual(created.usableAcreage, 22, file: file, line: line)
         XCTAssertEqual(created.targetAcresPerHead, 1.5, file: file, line: line)
 
-        let updated = try repository.update(
+        let updated = try await repository.update(
             id: created.id,
             input: PastureInput(
                 name: "  Updated Contract North  ",
@@ -84,11 +84,11 @@ enum PastureRepositoryContract {
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let first = try repository.create(input: makePastureInput(name: "First"))
-        let second = try repository.create(input: makePastureInput(name: "Second"))
-        let third = try repository.create(input: makePastureInput(name: "Third"))
+        let first = try await repository.create(input: makePastureInput(name: "First"))
+        let second = try await repository.create(input: makePastureInput(name: "Second"))
+        let third = try await repository.create(input: makePastureInput(name: "Third"))
 
         XCTAssertEqual(
             try repository.fetchPastures().map(\.id),
@@ -98,7 +98,7 @@ enum PastureRepositoryContract {
             line: line
         )
 
-        try repository.reorder(ids: [third.id, first.id])
+        try await repository.reorder(ids: [third.id, first.id])
 
         let reloaded = try fixture.makePastureRepository().fetchPastures()
         XCTAssertEqual(reloaded.map(\.id), [third.id, first.id, second.id], file: file, line: line)
@@ -113,10 +113,10 @@ enum PastureRepositoryContract {
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let bravo = try repository.create(input: makePastureInput(name: "Bravo"))
-        let alpha = try repository.create(input: makePastureInput(name: "Alpha"))
+        let bravo = try await repository.create(input: makePastureInput(name: "Bravo"))
+        let alpha = try await repository.create(input: makePastureInput(name: "Alpha"))
 
         let options = try fixture.makePastureRepository().fetchPastureOptions()
         XCTAssertEqual(options.map(\.id), [alpha.id, bravo.id], file: file, line: line)
@@ -125,8 +125,8 @@ enum PastureRepositoryContract {
         XCTAssertTrue(try repository.nameExists("  alpha  ", excluding: nil), file: file, line: line)
         XCTAssertFalse(try repository.nameExists(" alpha ", excluding: alpha.id), file: file, line: line)
 
-        XCTAssertThrowsError(
-            try repository.create(input: makePastureInput(name: "  ALPHA  ")),
+        await assertAsyncThrowsError(
+            try await repository.create(input: makePastureInput(name: "  ALPHA  ")),
             file: file,
             line: line
         ) { error in
@@ -143,10 +143,10 @@ enum PastureRepositoryContract {
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pastureRepository = fixture.makePastureRepository()
-        let pasture = try pastureRepository.create(input: makePastureInput(name: "Residents"))
-        let otherPasture = try pastureRepository.create(input: makePastureInput(name: "Other"))
+        let pasture = try await pastureRepository.create(input: makePastureInput(name: "Residents"))
+        let otherPasture = try await pastureRepository.create(input: makePastureInput(name: "Other"))
         let animalRepository = fixture.makeAnimalRepository()
         let tagColorRepository = fixture.makeTagColorRepository()
         let damColor = TagColorSnapshot(
@@ -162,7 +162,7 @@ enum PastureRepositoryContract {
         try tagColorRepository.upsert(damColor)
         try tagColorRepository.upsert(tag3Color)
 
-        let dam = try animalRepository.create(
+        let dam = try await animalRepository.create(
             input: makeAnimalInput(
                 name: "Resident Dam",
                 tagNumber: "D3",
@@ -170,10 +170,10 @@ enum PastureRepositoryContract {
                 tagColorID: damColor.id
             )
         )
-        let tag20 = try animalRepository.create(
+        let tag20 = try await animalRepository.create(
             input: makeAnimalInput(name: "Tag 20", tagNumber: "20", pastureID: pasture.id)
         )
-        let tag3 = try animalRepository.create(
+        let tag3 = try await animalRepository.create(
             input: makeAnimalInput(
                 name: "Tag 3",
                 tagNumber: "3",
@@ -182,16 +182,16 @@ enum PastureRepositoryContract {
                 damID: dam.id
             )
         )
-        let archived = try animalRepository.create(
+        let archived = try await animalRepository.create(
             input: makeAnimalInput(name: "Archived", tagNumber: "99", pastureID: pasture.id)
         )
-        let sold = try animalRepository.create(
+        let sold = try await animalRepository.create(
             input: makeAnimalInput(name: "Sold", tagNumber: "98", pastureID: pasture.id, status: .sold)
         )
-        let dead = try animalRepository.create(
+        let dead = try await animalRepository.create(
             input: makeAnimalInput(name: "Dead", tagNumber: "97", pastureID: pasture.id, status: .dead)
         )
-        _ = try animalRepository.create(
+        _ = try await animalRepository.create(
             input: makeAnimalInput(name: "Other Pasture", tagNumber: "1", pastureID: otherPasture.id)
         )
         try animalRepository.archive(ids: [archived.id])
@@ -246,23 +246,23 @@ enum PastureRepositoryContract {
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let pasture = try repository.create(input: makePastureInput(name: "Grouped Pasture"))
-        let survivingPasture = try repository.create(input: makePastureInput(name: "Surviving Group Pasture"))
-        let createdGroup = try repository.createGroup(
+        let pasture = try await repository.create(input: makePastureInput(name: "Grouped Pasture"))
+        let survivingPasture = try await repository.create(input: makePastureInput(name: "Surviving Group Pasture"))
+        let createdGroup = try await repository.createGroup(
             input: PastureGroupInput(name: "  Rotation A  ", grazeDays: 5, restDays: 25)
         )
-        let survivingGroup = try repository.createGroup(
+        let survivingGroup = try await repository.createGroup(
             input: PastureGroupInput(name: "Surviving Rotation", grazeDays: 4, restDays: 18)
         )
-        try repository.assignPasture(id: survivingPasture.id, toGroupID: survivingGroup.id)
+        try await repository.assignPasture(id: survivingPasture.id, toGroupID: survivingGroup.id)
 
         XCTAssertEqual(createdGroup.name, "Rotation A", file: file, line: line)
         XCTAssertEqual(createdGroup.grazeDays, 5, file: file, line: line)
         XCTAssertEqual(createdGroup.restDays, 25, file: file, line: line)
 
-        let updatedGroup = try repository.updateGroup(
+        let updatedGroup = try await repository.updateGroup(
             id: createdGroup.id,
             input: PastureGroupInput(name: "Rotation Updated", grazeDays: 7, restDays: 30)
         )
@@ -271,7 +271,7 @@ enum PastureRepositoryContract {
         XCTAssertEqual(updatedGroup.grazeDays, 7, file: file, line: line)
         XCTAssertEqual(updatedGroup.restDays, 30, file: file, line: line)
 
-        try repository.assignPasture(id: pasture.id, toGroupID: createdGroup.id)
+        try await repository.assignPasture(id: pasture.id, toGroupID: createdGroup.id)
 
         let reloadedRepository = fixture.makePastureRepository()
         let groupedPasture = try XCTUnwrap(
@@ -313,7 +313,7 @@ enum PastureRepositoryContract {
         XCTAssertEqual(groupedSummary.groupName, "Rotation Updated", file: file, line: line)
         XCTAssertEqual(groupedSummary.restDays, 30, file: file, line: line)
 
-        try reloadedRepository.assignPasture(id: pasture.id, toGroupID: nil)
+        try await reloadedRepository.assignPasture(id: pasture.id, toGroupID: nil)
 
         let unassignedRepository = fixture.makePastureRepository()
         let unassignedPasture = try XCTUnwrap(
@@ -339,7 +339,7 @@ enum PastureRepositoryContract {
         XCTAssertNil(unassignedSummary.groupName, file: file, line: line)
         XCTAssertNil(unassignedSummary.restDays, file: file, line: line)
 
-        try unassignedRepository.assignPasture(id: pasture.id, toGroupID: createdGroup.id)
+        try await unassignedRepository.assignPasture(id: pasture.id, toGroupID: createdGroup.id)
         let reassignedPasture = try XCTUnwrap(
             fixture.makePastureRepository().fetchPastureDetail(id: pasture.id),
             file: file,
@@ -347,7 +347,7 @@ enum PastureRepositoryContract {
         )
         XCTAssertEqual(reassignedPasture.groupID, createdGroup.id, file: file, line: line)
 
-        try unassignedRepository.deleteGroups(ids: [createdGroup.id])
+        try await unassignedRepository.deleteGroups(ids: [createdGroup.id])
 
         let postDeleteRepository = fixture.makePastureRepository()
         XCTAssertNil(
@@ -430,22 +430,22 @@ enum PastureRepositoryContract {
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let north = try repository.create(input: makePastureInput(name: "North Pasture"))
-        let south = try repository.create(input: makePastureInput(name: "South Pasture"))
-        let east = try repository.create(input: makePastureInput(name: "East Pasture"))
+        let north = try await repository.create(input: makePastureInput(name: "North Pasture"))
+        let south = try await repository.create(input: makePastureInput(name: "South Pasture"))
+        let east = try await repository.create(input: makePastureInput(name: "East Pasture"))
 
-        let zulu = try repository.createGroup(
+        let zulu = try await repository.createGroup(
             input: PastureGroupInput(name: "Zulu Rotation", grazeDays: 4, restDays: 16)
         )
-        let alpha = try repository.createGroup(
+        let alpha = try await repository.createGroup(
             input: PastureGroupInput(name: "Alpha Rotation", grazeDays: 6, restDays: 24)
         )
 
-        try repository.assignPasture(id: north.id, toGroupID: alpha.id)
-        try repository.assignPasture(id: south.id, toGroupID: alpha.id)
-        try repository.assignPasture(id: east.id, toGroupID: zulu.id)
+        try await repository.assignPasture(id: north.id, toGroupID: alpha.id)
+        try await repository.assignPasture(id: south.id, toGroupID: alpha.id)
+        try await repository.assignPasture(id: east.id, toGroupID: zulu.id)
 
         let groups = try fixture.makePastureRepository().fetchPastureGroups()
         XCTAssertEqual(groups.map(\.id), [alpha.id, zulu.id], file: file, line: line)
@@ -466,17 +466,17 @@ enum PastureRepositoryContract {
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let group = try repository.createGroup(
+        let group = try await repository.createGroup(
             input: PastureGroupInput(name: "North Rotation", grazeDays: 7, restDays: 21)
         )
 
         XCTAssertTrue(try repository.groupNameExists(" north rotation ", excluding: nil), file: file, line: line)
         XCTAssertFalse(try repository.groupNameExists("NORTH ROTATION", excluding: group.id), file: file, line: line)
 
-        XCTAssertThrowsError(
-            try repository.createGroup(
+        await assertAsyncThrowsError(
+            try await repository.createGroup(
                 input: PastureGroupInput(name: " NORTH ROTATION ", grazeDays: 4, restDays: 18)
             ),
             file: file,
@@ -495,10 +495,10 @@ enum PastureRepositoryContract {
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let pasture = try repository.create(input: makePastureInput(name: "Validation Pasture"))
-        let group = try repository.createGroup(
+        let pasture = try await repository.create(input: makePastureInput(name: "Validation Pasture"))
+        let group = try await repository.createGroup(
             input: PastureGroupInput(name: "Validation Group", grazeDays: 7, restDays: 21)
         )
 
@@ -509,7 +509,7 @@ enum PastureRepositoryContract {
             line: line
         )
 
-        XCTAssertThrowsError(
+        await assertAsyncThrowsError(
             try repository.validatePastureIDsExist([pasture.id, pasture.id]),
             file: file,
             line: line
@@ -518,7 +518,7 @@ enum PastureRepositoryContract {
         }
 
         let missingPastureID = UUID()
-        XCTAssertThrowsError(
+        await assertAsyncThrowsError(
             try repository.validatePastureIDsExist([missingPastureID]),
             file: file,
             line: line
@@ -530,7 +530,7 @@ enum PastureRepositoryContract {
                 line: line
             )
         }
-        XCTAssertThrowsError(
+        await assertAsyncThrowsError(
             try repository.validatePastureIDsExist([pasture.id, missingPastureID]),
             file: file,
             line: line
@@ -542,8 +542,8 @@ enum PastureRepositoryContract {
                 line: line
             )
         }
-        XCTAssertThrowsError(
-            try repository.update(
+        await assertAsyncThrowsError(
+            try await repository.update(
                 id: missingPastureID,
                 input: makePastureInput(name: "Missing Update Pasture")
             ),
@@ -565,7 +565,7 @@ enum PastureRepositoryContract {
             line: line
         )
 
-        XCTAssertThrowsError(
+        await assertAsyncThrowsError(
             try repository.validatePastureGroupIDsExist([group.id, group.id]),
             file: file,
             line: line
@@ -574,7 +574,7 @@ enum PastureRepositoryContract {
         }
 
         let missingGroupID = UUID()
-        XCTAssertThrowsError(
+        await assertAsyncThrowsError(
             try repository.validatePastureGroupIDsExist([missingGroupID]),
             file: file,
             line: line
@@ -586,7 +586,7 @@ enum PastureRepositoryContract {
                 line: line
             )
         }
-        XCTAssertThrowsError(
+        await assertAsyncThrowsError(
             try repository.validatePastureGroupIDsExist([group.id, missingGroupID]),
             file: file,
             line: line
@@ -598,8 +598,8 @@ enum PastureRepositoryContract {
                 line: line
             )
         }
-        XCTAssertThrowsError(
-            try repository.updateGroup(
+        await assertAsyncThrowsError(
+            try await repository.updateGroup(
                 id: missingGroupID,
                 input: PastureGroupInput(name: "Missing Update Group", grazeDays: 5, restDays: 20)
             ),
@@ -619,11 +619,11 @@ enum PastureRepositoryContract {
         using fixture: PastureRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makePastureRepository()
-        let pasture = try repository.create(input: makePastureInput(name: "Delete Pasture"))
+        let pasture = try await repository.create(input: makePastureInput(name: "Delete Pasture"))
 
-        try repository.delete(ids: [pasture.id])
+        try await repository.delete(ids: [pasture.id])
 
         let reloadedRepository = fixture.makePastureRepository()
         XCTAssertNil(try reloadedRepository.fetchPastureDetail(id: pasture.id), file: file, line: line)
@@ -688,4 +688,20 @@ enum PastureRepositoryContract {
             statusReferenceID: nil
         )
     }
+
+    private static func assertAsyncThrowsError<Value>(
+        _ expression: @autoclosure () async throws -> Value,
+        _ message: @autoclosure () -> String = "",
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        _ errorHandler: (Error) -> Void = { _ in }
+    ) async {
+        do {
+            _ = try await expression()
+            XCTFail(message(), file: file, line: line)
+        } catch {
+            errorHandler(error)
+        }
+    }
+
 }
