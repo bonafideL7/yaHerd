@@ -235,7 +235,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             _ = Self.makeHerd(id: herdID, name: "Control Herd", in: context)
         }
 
-        XCTAssertThrowsError(
+        do {
             try await assembly.transactionExecutor.performWrite { context in
                 let herd = try XCTUnwrap(
                     CoreDataLookup().herd(id: herdID, in: context)
@@ -248,7 +248,8 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
 
                 throw ProbeError.injectedFailure
             }
-        ) { error in
+            XCTFail("The injected transaction failure must propagate.")
+        } catch {
             XCTAssertTrue(error is ProbeError)
         }
 
@@ -314,11 +315,12 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             )
         }
 
-        XCTAssertThrowsError(
+        do {
             try await readOnly.transactionExecutor.performWrite { _ in
                 XCTFail("A read-only transaction must be rejected before its mutation block executes.")
             }
-        ) { error in
+            XCTFail("A read-only store must reject write transactions.")
+        } catch {
             XCTAssertEqual(error as? CoreDataPersistenceError, .readOnlyStore)
         }
     }
