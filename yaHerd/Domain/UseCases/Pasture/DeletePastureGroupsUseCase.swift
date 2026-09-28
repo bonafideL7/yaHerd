@@ -4,9 +4,9 @@ import Foundation
 struct DeletePastureGroupsUseCase {
     let repository: any PastureGroupDeleteRepository
 
-    func execute(ids: [UUID]) throws {
+    func execute(ids: [UUID]) async throws {
         guard !ids.isEmpty else { return }
         try repository.validatePastureGroupIDsExist(ids)
-        try repository.deleteGroups(ids: ids)
+        try await repository.deleteGroups(ids: ids)
     }
 }
