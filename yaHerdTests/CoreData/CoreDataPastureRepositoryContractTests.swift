@@ -7,54 +7,54 @@ import XCTest
 final class CoreDataPastureRepositoryContractTests: XCTestCase {
     func testCreateUpdateAndReload() async throws {
         let harness = try await makeHarness()
-        try PastureRepositoryContract.assertCreateUpdateAndReload(using: harness.fixture)
+        try await PastureRepositoryContract.assertCreateUpdateAndReload(using: harness.fixture)
     }
 
     func testListOrderingAndSubsetReorder() async throws {
         let harness = try await makeHarness()
-        try PastureRepositoryContract.assertListOrderingAndSubsetReorder(using: harness.fixture)
+        try await PastureRepositoryContract.assertListOrderingAndSubsetReorder(using: harness.fixture)
     }
 
     func testReferenceDataAndNameLookup() async throws {
         let harness = try await makeHarness()
-        try PastureRepositoryContract.assertReferenceDataAndNameLookup(using: harness.fixture)
+        try await PastureRepositoryContract.assertReferenceDataAndNameLookup(using: harness.fixture)
     }
 
     func testGroupLifecycleAndPastureAssignment() async throws {
         let harness = try await makeHarness()
-        try PastureRepositoryContract.assertGroupLifecycleAndPastureAssignment(using: harness.fixture)
+        try await PastureRepositoryContract.assertGroupLifecycleAndPastureAssignment(using: harness.fixture)
     }
 
     func testGroupListOrderingAndPastureCounts() async throws {
         let harness = try await makeHarness()
-        try PastureRepositoryContract.assertGroupListOrderingAndPastureCounts(using: harness.fixture)
+        try await PastureRepositoryContract.assertGroupListOrderingAndPastureCounts(using: harness.fixture)
     }
 
     func testGroupNameLookupAndDuplicateProtection() async throws {
         let harness = try await makeHarness()
-        try PastureRepositoryContract.assertGroupNameLookupAndDuplicateProtection(using: harness.fixture)
+        try await PastureRepositoryContract.assertGroupNameLookupAndDuplicateProtection(using: harness.fixture)
     }
 
     func testIDValidationRejectsDuplicatesAndMissingRecords() async throws {
         let harness = try await makeHarness()
-        try PastureRepositoryContract.assertIDValidationRejectsDuplicatesAndMissingRecords(using: harness.fixture)
+        try await PastureRepositoryContract.assertIDValidationRejectsDuplicatesAndMissingRecords(using: harness.fixture)
     }
 
     func testDeleteRemovesPasture() async throws {
         let harness = try await makeHarness()
-        try PastureRepositoryContract.assertDeleteRemovesPasture(using: harness.fixture)
+        try await PastureRepositoryContract.assertDeleteRemovesPasture(using: harness.fixture)
     }
 
     func testClearingOptionalStockingFieldsPersists() async throws {
         let harness = try await makeHarness()
-        try PastureRepositoryEdgeCaseContract.assertClearingOptionalStockingFieldsPersists(
+        try await PastureRepositoryEdgeCaseContract.assertClearingOptionalStockingFieldsPersists(
             using: harness.fixture
         )
     }
 
     func testPersistedGrazingDate() async throws {
         let harness = try await makeHarness()
-        try PastureRepositoryEdgeCaseContract.assertPersistedGrazingDate(
+        try await PastureRepositoryEdgeCaseContract.assertPersistedGrazingDate(
             using: harness.fixture,
             markPastureGrazed: harness.markPastureGrazed
         )
@@ -62,28 +62,28 @@ final class CoreDataPastureRepositoryContractTests: XCTestCase {
 
     func testNameLookupExcludesOnlyRequestedPasture() async throws {
         let harness = try await makeHarness()
-        try PastureRepositoryEdgeCaseContract.assertNameLookupExcludesOnlyRequestedPasture(
+        try await PastureRepositoryEdgeCaseContract.assertNameLookupExcludesOnlyRequestedPasture(
             using: harness.fixture
         )
     }
 
     func testGroupNameLookupExcludesOnlyRequestedGroup() async throws {
         let harness = try await makeHarness()
-        try PastureRepositoryEdgeCaseContract.assertGroupNameLookupExcludesOnlyRequestedGroup(
+        try await PastureRepositoryEdgeCaseContract.assertGroupNameLookupExcludesOnlyRequestedGroup(
             using: harness.fixture
         )
     }
 
     func testDirectReassignmentBetweenGroupsUpdatesBothInverses() async throws {
         let harness = try await makeHarness()
-        try PastureRepositoryEdgeCaseContract.assertDirectReassignmentBetweenGroupsUpdatesBothInverses(
+        try await PastureRepositoryEdgeCaseContract.assertDirectReassignmentBetweenGroupsUpdatesBothInverses(
             using: harness.fixture
         )
     }
 
     func testUpdatingGroupPreservesPastureMembership() async throws {
         let harness = try await makeHarness()
-        try PastureRepositoryEdgeCaseContract.assertUpdatingGroupPreservesPastureMembership(
+        try await PastureRepositoryEdgeCaseContract.assertUpdatingGroupPreservesPastureMembership(
             using: harness.fixture
         )
     }
