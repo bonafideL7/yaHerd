@@ -86,16 +86,18 @@ struct AddPastureView: View {
     }
 
     private func save() {
-        do {
+        Task { @MainActor in
+            do {
             let input = try model.makeCreateInput(
                 defaultTargetAcresPerHead: targetAcresPerHeadDefault,
                 usableAcreagePercentDefault: usableAcreagePercentDefault
             )
-            _ = try CreatePastureUseCase(repository: repository).execute(input: input)
+            _ = try await CreatePastureUseCase(repository: repository).execute(input: input)
             onSave?()
             dismiss()
-        } catch {
-            model.errorMessage = UserVisibleErrorMessage.make(error)
+            } catch {
+                model.errorMessage = UserVisibleErrorMessage.make(error)
+            }
         }
     }
 
