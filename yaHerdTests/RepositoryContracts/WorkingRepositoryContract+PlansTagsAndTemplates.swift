@@ -221,7 +221,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeWorkingRepository()
         let firstItems = [
             WorkingTreatmentPlanItem(
@@ -230,8 +230,8 @@ extension WorkingRepositoryContract {
                 suggestedDose: WorkingTreatmentDose(amount: 2, unit: .milliliter, route: .subcutaneous)
             )
         ]
-        let zuluID = try repository.createTemplate(name: "  Zulu Template  ", items: firstItems)
-        let alphaID = try repository.createTemplate(name: "Alpha Template", items: [])
+        let zuluID = try await repository.createTemplate(name: "  Zulu Template  ", items: firstItems)
+        let alphaID = try await repository.createTemplate(name: "Alpha Template", items: [])
 
         let reloaded = fixture.makeWorkingRepository()
         let summaries = try reloaded.fetchTemplates()
@@ -245,8 +245,8 @@ extension WorkingRepositoryContract {
         XCTAssertEqual(zuluDetail.name, "Zulu Template", file: file, line: line)
         XCTAssertEqual(zuluDetail.plannedTreatments, firstItems, file: file, line: line)
 
-        XCTAssertThrowsError(
-            try fixture.makeWorkingRepository().createTemplate(name: " alpha template ", items: []),
+        await assertAsyncThrowsError(
+            try await fixture.makeWorkingRepository().createTemplate(name: " alpha template ", items: []),
             file: file,
             line: line
         ) { error in
@@ -257,7 +257,7 @@ extension WorkingRepositoryContract {
             WorkingTreatmentPlanItem(id: firstItems[0].id, name: "Template Vaccine Updated"),
             WorkingTreatmentPlanItem(id: UUID(), name: "Template Dewormer")
         ]
-        try fixture.makeWorkingRepository().updateTemplate(
+        try await fixture.makeWorkingRepository().updateTemplate(
             id: zuluID,
             name: "  Aardvark Template  ",
             items: updatedItems
@@ -281,8 +281,8 @@ extension WorkingRepositoryContract {
             line: line
         )
 
-        XCTAssertThrowsError(
-            try fixture.makeWorkingRepository().updateTemplate(id: zuluID, name: "ALPHA TEMPLATE", items: updatedItems),
+        await assertAsyncThrowsError(
+            try await fixture.makeWorkingRepository().updateTemplate(id: zuluID, name: "ALPHA TEMPLATE", items: updatedItems),
             file: file,
             line: line
         ) { error in
@@ -296,8 +296,8 @@ extension WorkingRepositoryContract {
         )
 
         let missingTemplateID = UUID()
-        XCTAssertThrowsError(
-            try fixture.makeWorkingRepository().deleteTemplates(
+        await assertAsyncThrowsError(
+            try await fixture.makeWorkingRepository().deleteTemplates(
                 ids: [alphaID, missingTemplateID]
             ),
             file: file,
@@ -322,7 +322,7 @@ extension WorkingRepositoryContract {
             line: line
         )
 
-        try fixture.makeWorkingRepository().deleteTemplates(ids: [alphaID, zuluID, alphaID])
+        try await fixture.makeWorkingRepository().deleteTemplates(ids: [alphaID, zuluID, alphaID])
         XCTAssertNil(try fixture.makeWorkingRepository().fetchTemplateDetail(id: alphaID), file: file, line: line)
         XCTAssertNil(try fixture.makeWorkingRepository().fetchTemplateDetail(id: zuluID), file: file, line: line)
     }
@@ -334,7 +334,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Template Snapshot Source", using: fixture)
         let animal = try makeAnimal(name: "Template Snapshot Cow", tagNumber: "TS101", sex: .female, pastureID: source.id, using: fixture)
         let repository = fixture.makeWorkingRepository()
@@ -345,7 +345,7 @@ extension WorkingRepositoryContract {
                 suggestedDose: WorkingTreatmentDose(amount: 2, unit: .milliliter, route: .subcutaneous)
             )
         ]
-        let templateID = try repository.createTemplate(name: "Snapshot Template", items: originalItems)
+        let templateID = try await repository.createTemplate(name: "Snapshot Template", items: originalItems)
         let template = try XCTUnwrap(repository.fetchTemplateDetail(id: templateID), file: file, line: line)
         let sessionID = try repository.startSession(
             input: WorkingSessionStartInput(
@@ -367,12 +367,12 @@ extension WorkingRepositoryContract {
         let replacementItems = [
             WorkingTreatmentPlanItem(id: UUID(), name: "Replacement Template Treatment")
         ]
-        try fixture.makeWorkingRepository().updateTemplate(
+        try await fixture.makeWorkingRepository().updateTemplate(
             id: templateID,
             name: "Renamed Snapshot Template",
             items: replacementItems
         )
-        try fixture.makeWorkingRepository().deleteTemplates(ids: [templateID])
+        try await fixture.makeWorkingRepository().deleteTemplates(ids: [templateID])
 
         let afterTemplateDeletion = try XCTUnwrap(
             fixture.makeWorkingRepository().fetchSessionDetail(id: sessionID),
@@ -395,7 +395,7 @@ extension WorkingRepositoryContract {
         )
         XCTAssertNil(try fixture.makeWorkingRepository().fetchTemplateDetail(id: templateID), file: file, line: line)
 
-        let savedFromSessionTemplateID = try fixture.makeWorkingRepository().createTemplate(
+        let savedFromSessionTemplateID = try await fixture.makeWorkingRepository().createTemplate(
             name: "Saved Session Plan",
             items: afterTemplateDeletion.plannedTreatments
         )
@@ -669,7 +669,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeWorkingRepository()
         let originalItems = [
             WorkingTreatmentPlanItem(
@@ -681,7 +681,7 @@ extension WorkingRepositoryContract {
                 )
             )
         ]
-        let templateID = try repository.createTemplate(
+        let templateID = try await repository.createTemplate(
             name: "Template Validation",
             items: originalItems
         )
@@ -693,8 +693,8 @@ extension WorkingRepositoryContract {
         let beforeList = try fixture.makeWorkingRepository().fetchTemplates()
 
         let duplicateID = UUID()
-        XCTAssertThrowsError(
-            try fixture.makeWorkingRepository().createTemplate(
+        await assertAsyncThrowsError(
+            try await fixture.makeWorkingRepository().createTemplate(
                 name: "Invalid Duplicate Item Template",
                 items: [
                     WorkingTreatmentPlanItem(id: duplicateID, name: "Duplicate One"),
@@ -719,8 +719,8 @@ extension WorkingRepositoryContract {
             line: line
         )
 
-        XCTAssertThrowsError(
-            try fixture.makeWorkingRepository().updateTemplate(
+        await assertAsyncThrowsError(
+            try await fixture.makeWorkingRepository().updateTemplate(
                 id: templateID,
                 name: "Template Validation Mutated",
                 items: [
@@ -1138,5 +1138,21 @@ extension WorkingRepositoryContract {
         XCTAssertEqual(afterQueue.destinationPastureID, destination.id, file: file, line: line)
         XCTAssertEqual(afterQueue.destinationPastureName, "Working History Destination Original", file: file, line: line)
     }
+
+    private static func assertAsyncThrowsError<Value>(
+        _ expression: @autoclosure () async throws -> Value,
+        _ message: @autoclosure () -> String = "",
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        _ errorHandler: (Error) -> Void = { _ in }
+    ) async {
+        do {
+            _ = try await expression()
+            XCTFail(message(), file: file, line: line)
+        } catch {
+            errorHandler(error)
+        }
+    }
+
 }
 
