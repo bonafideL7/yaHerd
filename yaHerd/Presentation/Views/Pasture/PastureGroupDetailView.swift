@@ -29,7 +29,7 @@ struct PastureGroupDetailView: View {
                         } else {
                             ForEach(model.assignmentRows) { row in
                                 Button {
-                                    model.toggleAssignment(row, using: repository)
+                                    Task { await model.toggleAssignment(row, using: repository) }
                                 } label: {
                                     PastureGroupAssignmentRowView(row: row)
                                 }
