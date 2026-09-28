@@ -50,20 +50,19 @@ final class TagColorLibraryStore: ObservableObject {
     func definition(for id: UUID?) -> TagColorSnapshot? {
         guard let id else { return nil }
 
-        if let visible = colors.first(where: { $0.id == id }) {
-            return visible
-        }
-
         if let cached = historicalDefinitionsByID[id] {
             return cached
         }
 
-        guard let historical = try? repository.fetchColor(id: id) else {
-            return nil
+        // Repository UUID lookup is authoritative for tag-display resolution. Core Data may keep a
+        // removed referenced definition hidden while the visible settings library exposes the
+        // canonical built-in with the same application UUID.
+        if let persisted = try? repository.fetchColor(id: id) {
+            historicalDefinitionsByID[id] = persisted
+            return persisted
         }
 
-        historicalDefinitionsByID[id] = historical
-        return historical
+        return colors.first(where: { $0.id == id })
     }
 
     func resolvedDefinition(tagColorID: UUID?) -> TagColorSnapshot {
