@@ -7,21 +7,21 @@ import XCTest
 final class CoreDataWorkingTreatmentTemplateRepositoryContractTests: XCTestCase {
     func testTreatmentTemplateCRUDAndOrdering() async throws {
         let harness = try await makeHarness()
-        try WorkingRepositoryContract.assertTreatmentTemplateCRUDAndOrdering(
+        try await WorkingRepositoryContract.assertTreatmentTemplateCRUDAndOrdering(
             using: harness.fixture
         )
     }
 
     func testTreatmentTemplatePlanValidationDoesNotPartiallyWrite() async throws {
         let harness = try await makeHarness()
-        try WorkingRepositoryContract.assertTreatmentTemplatePlanValidationDoesNotPartiallyWrite(
+        try await WorkingRepositoryContract.assertTreatmentTemplatePlanValidationDoesNotPartiallyWrite(
             using: harness.fixture
         )
     }
 
     func testTemplateBatchDeletionFailureRollsBackEveryTemplate() async throws {
         let harness = try await makeHarness()
-        try WorkingRepositoryContract.assertTemplateBatchDeletionFailureRollsBackEveryTemplate(
+        try await WorkingRepositoryContract.assertTemplateBatchDeletionFailureRollsBackEveryTemplate(
             using: harness.fixture,
             failureInjection: harness.failureInjection
         )
@@ -93,7 +93,7 @@ final class CoreDataWorkingTreatmentTemplateRepositoryContractTests: XCTestCase 
                     selection: selection,
                     assembly: assembly
                 )
-                try repository.deleteTemplates(
+                try await repository.deleteTemplates(
                     ids: ids,
                     beforeSave: { context in
                         let stagedIDs = Set(
@@ -185,13 +185,13 @@ private struct CoreDataTemplateWorkingRepositoryAdapter: WorkingRepository {
     func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) throws {}
     func deleteSession(id: UUID) throws {}
     func completeSession(id: UUID, assignments: [WorkingQueueDestinationAssignment]) throws {}
-    func createTemplate(name: String, items: [WorkingTreatmentPlanItem]) throws -> UUID {
-        try templates.createTemplate(name: name, items: items)
+    func createTemplate(name: String, items: [WorkingTreatmentPlanItem]) async throws -> UUID {
+        try await templates.createTemplate(name: name, items: items)
     }
-    func updateTemplate(id: UUID, name: String, items: [WorkingTreatmentPlanItem]) throws {
-        try templates.updateTemplate(id: id, name: name, items: items)
+    func updateTemplate(id: UUID, name: String, items: [WorkingTreatmentPlanItem]) async throws {
+        try await templates.updateTemplate(id: id, name: name, items: items)
     }
-    func deleteTemplates(ids: [UUID]) throws {
-        try templates.deleteTemplates(ids: ids)
+    func deleteTemplates(ids: [UUID]) async throws {
+        try await templates.deleteTemplates(ids: ids)
     }
 }
