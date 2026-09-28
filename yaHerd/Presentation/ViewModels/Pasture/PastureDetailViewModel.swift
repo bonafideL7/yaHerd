@@ -143,7 +143,7 @@ final class PastureDetailViewModel {
         isEditing = false
     }
 
-    func save(pastureID: UUID, using repository: any PastureUpdateRepository & PastureResidentAnimalReader) {
+    func save(pastureID: UUID, using repository: any PastureUpdateRepository & PastureResidentAnimalReader) async {
         guard loadedPastureID == pastureID, detail?.id == pastureID else {
             errorMessage = "The selected pasture changed before this edit could be saved. Please try again."
             return
@@ -151,7 +151,7 @@ final class PastureDetailViewModel {
 
         do {
             let input = try form.makeUpdateInput()
-            let updated = try UpdatePastureUseCase(repository: repository).execute(
+            let updated = try await UpdatePastureUseCase(repository: repository).execute(
                 id: pastureID,
                 input: input
             )
