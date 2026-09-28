@@ -7,6 +7,39 @@ final class CoreDataTransactionExecutor {
         self.contextFactory = contextFactory
     }
 
+    func performWriteAndWait<Result>(
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil,
+        _ operation: @Sendable (NSManagedObjectContext) throws -> Result
+    ) throws -> Result {
+        let context = try contextFactory.makeWriteContext()
+
+        return try context.performAndWait {
+            do {
+                let result = try operation(context)
+                guard context.hasChanges else {
+                    return result
+                }
+
+                try beforeSave?(context)
+
+                do {
+                    try context.save()
+                    return result
+                } catch {
+                    context.rollback()
+                    throw CoreDataPersistenceError.saveFailed(
+                        description: error.localizedDescription
+                    )
+                }
+            } catch {
+                if context.hasChanges {
+                    context.rollback()
+                }
+                throw error
+            }
+        }
+    }
+
     func performWrite<Result: Sendable>(
         beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil,
         _ operation: @escaping @Sendable (NSManagedObjectContext) throws -> Result

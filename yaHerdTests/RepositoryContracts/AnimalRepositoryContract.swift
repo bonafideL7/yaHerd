@@ -27,42 +27,21 @@ enum AnimalRepositoryContract {
         let createdTagColorID = TagColorDefaults.whiteID
         let updatedTagColorID = TagColorDefaults.yellowID
         let updatedDamTagColorID = TagColorDefaults.blueID
-        let createdStatusReference = try fixture.makeStatusReference("Contract Deceased", .dead)
-        let updatedStatusReference = try fixture.makeStatusReference("Contract Sold", .sold)
+        let statusReferences = try AnimalStatusReferenceRepositoryContract
+            .assertOptionsPreserveIdentityNameAndBaseStatus(
+                using: AnimalStatusReferenceRepositoryContractFixture(
+                    makeReader: fixture.makeAnimalRepository,
+                    makeStatusReference: fixture.makeStatusReference
+                ),
+                file: file,
+                line: line
+            )
+        let createdStatusReference = statusReferences.created
+        let updatedStatusReference = statusReferences.updated
         let createdDistinguishingFeatures = [
             DistinguishingFeature(description: "White blaze", order: 0),
             DistinguishingFeature(description: "Black tail switch", order: 1)
         ]
-
-        let statusReferenceOptions = try fixture.makeAnimalRepository().fetchStatusReferenceOptions()
-        let reloadedCreatedStatusReference = try XCTUnwrap(
-            statusReferenceOptions.first { $0.id == createdStatusReference.id },
-            "The created status reference must be returned through the repository read API.",
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(reloadedCreatedStatusReference.name, createdStatusReference.name, file: file, line: line)
-        XCTAssertEqual(
-            reloadedCreatedStatusReference.baseStatus.rawValue,
-            AnimalStatus.dead.rawValue,
-            "The dead status reference must retain its exact base status through the repository read API.",
-            file: file,
-            line: line
-        )
-        let reloadedUpdatedStatusReference = try XCTUnwrap(
-            statusReferenceOptions.first { $0.id == updatedStatusReference.id },
-            "The updated status reference must be returned through the repository read API.",
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(reloadedUpdatedStatusReference.name, updatedStatusReference.name, file: file, line: line)
-        XCTAssertEqual(
-            reloadedUpdatedStatusReference.baseStatus.rawValue,
-            AnimalStatus.sold.rawValue,
-            "The sold status reference must retain its exact base status through the repository read API.",
-            file: file,
-            line: line
-        )
 
         let created = try repository.create(
             input: makeAnimalInput(
