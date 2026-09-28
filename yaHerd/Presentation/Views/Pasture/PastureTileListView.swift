@@ -68,7 +68,7 @@ struct PastureTileListView: View {
                         }
                     },
                     onCommitMove: {
-                        model.commitDragOrder(using: repository)
+                        Task { await model.commitDragOrder(using: repository) }
                     }
                 )
             } else if filteredItems.isEmpty {
@@ -127,8 +127,8 @@ struct PastureTileListView: View {
         ) {
             if let pasture = model.pasturePendingDeletion {
                 Button("Delete \(pasture.name)", role: .destructive) {
-                    withAnimation(.snappy) {
-                        model.deletePasture(
+                    Task {
+                        await model.deletePasture(
                             id: pasture.id,
                             pastureRepository: repository,
                             animalRepository: animalMover,
