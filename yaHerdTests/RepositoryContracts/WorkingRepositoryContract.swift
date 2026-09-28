@@ -436,7 +436,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeWorkingRepository()
         let missingSessionID = UUID()
         let missingTemplateID = UUID()
@@ -476,15 +476,15 @@ extension WorkingRepositoryContract {
         assertThrowsWorkingError(.sessionNotFound, file: file, line: line) {
             try fixture.makeWorkingRepository().reopenSession(id: missingSessionID)
         }
-        assertThrowsWorkingError(.templateNotFound, file: file, line: line) {
-            try fixture.makeWorkingRepository().updateTemplate(
+        await assertThrowsWorkingErrorAsync(.templateNotFound, file: file, line: line) {
+            try await fixture.makeWorkingRepository().updateTemplate(
                 id: missingTemplateID,
                 name: "Missing Template",
                 items: []
             )
         }
-        assertThrowsWorkingError(.templateNotFound, file: file, line: line) {
-            try fixture.makeWorkingRepository().deleteTemplates(ids: [missingTemplateID])
+        await assertThrowsWorkingErrorAsync(.templateNotFound, file: file, line: line) {
+            try await fixture.makeWorkingRepository().deleteTemplates(ids: [missingTemplateID])
         }
 
         let source = try makePasture(named: "Working Error Source", using: fixture)
@@ -591,6 +591,20 @@ extension WorkingRepositoryContract {
             file: file,
             line: line
         ) { error in
+            XCTAssertEqual(error as? WorkingRepositoryError, expected, file: file, line: line)
+        }
+    }
+
+    private static func assertThrowsWorkingErrorAsync(
+        _ expected: WorkingRepositoryError,
+        file: StaticString,
+        line: UInt,
+        operation: () async throws -> Void
+    ) async {
+        do {
+            try await operation()
+            XCTFail("Expected WorkingRepositoryError.\(expected)", file: file, line: line)
+        } catch {
             XCTAssertEqual(error as? WorkingRepositoryError, expected, file: file, line: line)
         }
     }
