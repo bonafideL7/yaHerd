@@ -3,14 +3,20 @@ import Foundation
 
 @MainActor
 final class CoreDataTagColorRepository: TagColorRepository {
-    private let repositoryContext: CoreDataSynchronousRepositoryContext
+    private let selection: any CurrentHerdSelectionReading
+    private let contextFactory: CoreDataContextFactory
+    private let transactionExecutor: CoreDataTransactionExecutor
     nonisolated private let lookup: CoreDataLookup
 
     init(
-        repositoryContext: CoreDataSynchronousRepositoryContext,
+        selection: any CurrentHerdSelectionReading,
+        contextFactory: CoreDataContextFactory,
+        transactionExecutor: CoreDataTransactionExecutor,
         lookup: CoreDataLookup
     ) {
-        self.repositoryContext = repositoryContext
+        self.selection = selection
+        self.contextFactory = contextFactory
+        self.transactionExecutor = transactionExecutor
         self.lookup = lookup
     }
 
@@ -19,10 +25,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
         assembly: CoreDataPersistenceAssembly
     ) {
         self.init(
-            repositoryContext: CoreDataSynchronousRepositoryContext(
-                selection: selection,
-                assembly: assembly
-            ),
+            selection: selection,
+            contextFactory: assembly.contextFactory,
+            transactionExecutor: assembly.transactionExecutor,
             lookup: assembly.lookup
         )
     }
@@ -47,7 +52,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    func upsert(_ color: TagColorSnapshot) throws {
+    func upsert(_ color: TagColorSnapshot) async throws {
         let name = TagColorLibraryRules.normalizedDisplayName(color.name)
         guard !name.isEmpty else { return }
         let prefix = TagColorLibraryRules.normalizedPrefix(color.prefix, fallbackName: name)
@@ -64,7 +69,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             return
         }
 
-        try write { context, herd in
+        try await write { context, herd in
             let all = try self.persistedColors(in: context, herd: herd)
             let existingByID = all.first { $0.id == color.id }
             let sameName = all.filter {
@@ -172,8 +177,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    func setDefaultColor(id: UUID) throws {
-        try write { context, herd in
+    func setDefaultColor(id: UUID) async throws {
+        try await write { context, herd in
             var target = try self.lookup.herdOwned(
                 CDTagColorDefinition.self,
                 id: id,
@@ -196,11 +201,11 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    func deleteColors(ids: [UUID]) throws {
+    func deleteColors(ids: [UUID]) async throws {
         guard !ids.isEmpty else { return }
         let requested = Set(ids)
 
-        try write { context, herd in
+        try await write { context, herd in
             let all = try self.persistedColors(in: context, herd: herd)
             let builtInsByID = Dictionary(
                 uniqueKeysWithValues: TagColorDefaults.seedDefaultColors().map { ($0.id, $0) }
@@ -224,10 +229,10 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    func reorder(colorIDs: [UUID]) throws {
+    func reorder(colorIDs: [UUID]) async throws {
         guard !colorIDs.isEmpty else { return }
 
-        try write { context, herd in
+        try await write { context, herd in
             let visible = try self.visibleSnapshots(in: context, herd: herd)
             let visibleIDs = Set(visible.map(\.id))
             guard Set(colorIDs) == visibleIDs, colorIDs.count == visibleIDs.count else {
@@ -259,8 +264,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    func restoreDefaultColors() throws {
-        try write { context, herd in
+    func restoreDefaultColors() async throws {
+        try await write { context, herd in
             let allBefore = try self.persistedColors(in: context, herd: herd)
             let selectedDefaultID = allBefore.first(where: { $0.isDefault && !$0.isHidden })?.id
 
@@ -302,13 +307,34 @@ final class CoreDataTagColorRepository: TagColorRepository {
     private func read<Result>(
         _ operation: @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
     ) throws -> Result {
-        try repositoryContext.read(operation)
+        guard let herdID = selection.currentHerdID else {
+            throw HerdRepositoryError.missingHerd
+        }
+
+        let context = contextFactory.makeReadContext()
+        let lookup = self.lookup
+        return try context.performAndWait {
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            return try operation(context, herd)
+        }
     }
 
-    private func write<Result>(
-        _ operation: @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
-    ) throws -> Result {
-        try repositoryContext.write(operation)
+    private func write<Result: Sendable>(
+        _ operation: @escaping @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
+    ) async throws -> Result {
+        guard let herdID = selection.currentHerdID else {
+            throw HerdRepositoryError.missingHerd
+        }
+
+        let lookup = self.lookup
+        return try await transactionExecutor.performWrite { context in
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            return try operation(context, herd)
+        }
     }
 
     private nonisolated func persistedColors(
