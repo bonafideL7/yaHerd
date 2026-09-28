@@ -7,101 +7,101 @@ import XCTest
 final class CoreDataTagColorRepositoryContractTests: XCTestCase {
     func testBuiltInLibraryHasStableIdentityOrderingAndWhiteDefault() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertBuiltInLibraryHasStableIdentityOrderingAndWhiteDefault(
+        try await TagColorRepositoryContract.assertBuiltInLibraryHasStableIdentityOrderingAndWhiteDefault(
             using: harness.fixture
         )
     }
 
     func testUpsertNormalizesPersistsAndPreservesApplicationIdentity() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertUpsertNormalizesPersistsAndPreservesApplicationIdentity(
+        try await TagColorRepositoryContract.assertUpsertNormalizesPersistsAndPreservesApplicationIdentity(
             using: harness.fixture
         )
     }
 
     func testEmptyNameUpsertIsNoOp() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertEmptyNameUpsertIsNoOp(using: harness.fixture)
+        try await TagColorRepositoryContract.assertEmptyNameUpsertIsNoOp(using: harness.fixture)
     }
 
     func testDefaultSelectionIsExclusivePersistentAndUnaffectedByUnknownIDs() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertDefaultSelectionIsExclusivePersistentAndUnaffectedByUnknownIDs(
+        try await TagColorRepositoryContract.assertDefaultSelectionIsExclusivePersistentAndUnaffectedByUnknownIDs(
             using: harness.fixture
         )
     }
 
     func testDeleteRemovesCustomColorsButBuiltInsRemainAvailableAndDefaultFallsBackToWhite() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertDeleteRemovesCustomColorsButBuiltInsRemainAvailableAndDefaultFallsBackToWhite(
+        try await TagColorRepositoryContract.assertDeleteRemovesCustomColorsButBuiltInsRemainAvailableAndDefaultFallsBackToWhite(
             using: harness.fixture
         )
     }
 
     func testReorderPersistsCompleteLibraryOrder() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertReorderPersistsCompleteLibraryOrder(using: harness.fixture)
+        try await TagColorRepositoryContract.assertReorderPersistsCompleteLibraryOrder(using: harness.fixture)
     }
 
     func testRestoreDefaultsRepairsCanonicalDefinitionsPreservesCustomsAndIsIdempotent() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertRestoreDefaultsRepairsCanonicalDefinitionsPreservesCustomsAndIsIdempotent(
+        try await TagColorRepositoryContract.assertRestoreDefaultsRepairsCanonicalDefinitionsPreservesCustomsAndIsIdempotent(
             using: harness.fixture
         )
     }
 
     func testNormalizedNameCollisionKeepsCanonicalIdentityAndRemapsReferences() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertNormalizedNameCollisionKeepsCanonicalIdentityAndRemapsReferences(
+        try await TagColorRepositoryContract.assertNormalizedNameCollisionKeepsCanonicalIdentityAndRemapsReferences(
             using: harness.fixture
         )
     }
 
     func testBuiltInNameCollisionPreservesBuiltInIdentityAndRemapsReferences() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertBuiltInNameCollisionPreservesBuiltInIdentityAndRemapsReferences(
+        try await TagColorRepositoryContract.assertBuiltInNameCollisionPreservesBuiltInIdentityAndRemapsReferences(
             using: harness.fixture
         )
     }
 
     func testCrossBuiltInNameCollisionPreservesBothStableIdentitiesAndReferences() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertCrossBuiltInNameCollisionPreservesBothStableIdentitiesAndReferences(
+        try await TagColorRepositoryContract.assertCrossBuiltInNameCollisionPreservesBothStableIdentitiesAndReferences(
             using: harness.fixture
         )
     }
 
     func testEditingVirtualBuiltInPreservesStableIdentityWhenNameChanges() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertEditingVirtualBuiltInPreservesStableIdentityWhenNameChanges(
+        try await TagColorRepositoryContract.assertEditingVirtualBuiltInPreservesStableIdentityWhenNameChanges(
             using: harness.fixture
         )
     }
 
     func testReferencedBuiltInRemovalPreservesReferenceIdentityAndRestoresCanonicalDefinition() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertReferencedBuiltInRemovalPreservesReferenceIdentityAndRestoresCanonicalDefinition(
+        try await TagColorRepositoryContract.assertReferencedBuiltInRemovalPreservesReferenceIdentityAndRestoresCanonicalDefinition(
             using: harness.fixture
         )
     }
 
     func testReferencedCustomColorRemovalPreservesHistoricalReferenceIdentity() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertReferencedCustomColorRemovalPreservesHistoricalReferenceIdentity(
+        try await TagColorRepositoryContract.assertReferencedCustomColorRemovalPreservesHistoricalReferenceIdentity(
             using: harness.fixture
         )
     }
 
     func testReadsWritesDefaultsAndNameUniquenessAreHerdScoped() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertReadsWritesDefaultsAndNameUniquenessAreHerdScoped(
+        try await TagColorRepositoryContract.assertReadsWritesDefaultsAndNameUniquenessAreHerdScoped(
             using: harness.fixture
         )
     }
 
     func testMissingOrStaleCurrentHerdDoesNotFallbackOrBootstrapOnReadOrWrite() async throws {
         let harness = try await makeHarness()
-        try TagColorRepositoryContract.assertMissingOrStaleCurrentHerdDoesNotFallbackOrBootstrapOnReadOrWrite(
+        try await TagColorRepositoryContract.assertMissingOrStaleCurrentHerdDoesNotFallbackOrBootstrapOnReadOrWrite(
             using: harness.fixture
         )
     }
