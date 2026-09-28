@@ -131,7 +131,7 @@ Add the final Core Data container/infrastructure that will survive launch:
 - deterministic Herd scoping;
 - explicit store-load failure handling and recovery-mode integration;
 - a Core Data contract harness.
-- transaction work submitted to private Core Data contexts is `@Sendable`; repository implementations normalize/copy the immutable value data they need before entering that closure and must not capture Presentation/ViewModel state, actor-isolated UI objects, or managed objects from another context.
+- transaction work submitted to private Core Data contexts is asynchronous and `@Sendable`; returned transaction values must be `Sendable`. Repository implementations normalize/copy the immutable value data they need before entering that closure and must not capture Presentation/ViewModel state, actor-isolated UI objects, or managed objects from another context. As each Core Data repository is introduced, its Domain mutation capability must become async rather than wrapping the private-context transaction in `performAndWait`, a semaphore, or another synchronous main-actor wait.
 
 Run the applicable permanent characterization contracts against Core Data as soon as the required repository surface exists. Add target-only Core Data contracts as their production capability is introduced.
 
