@@ -48,7 +48,9 @@ struct TagColorLibraryView: View {
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
                         if !def.isDefault {
                             Button {
-                                tagColorLibrary.setDefaultColor(id: def.id)
+                                Task { @MainActor in
+                                    await tagColorLibrary.setDefaultColor(id: def.id)
+                                }
                             } label: {
                                 Label("Set Default", systemImage: "checkmark.circle")
                             }
@@ -58,7 +60,9 @@ struct TagColorLibraryView: View {
                     .contextMenu {
                         if !def.isDefault {
                             Button {
-                                tagColorLibrary.setDefaultColor(id: def.id)
+                                Task { @MainActor in
+                                    await tagColorLibrary.setDefaultColor(id: def.id)
+                                }
                             } label: {
                                 Label("Set as Default", systemImage: "checkmark.circle")
                             }
@@ -93,7 +97,9 @@ struct TagColorLibraryView: View {
                     }
 
                     Button {
-                        tagColorLibrary.restoreDefaultColors()
+                        Task { @MainActor in
+                            await tagColorLibrary.restoreDefaultColors()
+                        }
                     } label: {
                         Label("Restore Default Colors", systemImage: "arrow.clockwise")
                     }
