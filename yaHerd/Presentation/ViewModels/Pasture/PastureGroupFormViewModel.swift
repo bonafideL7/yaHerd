@@ -24,16 +24,16 @@ final class PastureGroupFormViewModel {
         errorMessage = nil
     }
 
-    func create(using repository: any PastureGroupCreateRepository) throws {
-        _ = try CreatePastureGroupUseCase(repository: repository).execute(
+    func create(using repository: any PastureGroupCreateRepository) async throws {
+        _ = try await CreatePastureGroupUseCase(repository: repository).execute(
             name: name,
             grazeDays: grazeDays,
             restDays: restDays
         )
     }
 
-    func update(id: UUID, using repository: any PastureGroupUpdateRepository) throws {
-        _ = try UpdatePastureGroupUseCase(repository: repository).execute(
+    func update(id: UUID, using repository: any PastureGroupUpdateRepository) async throws {
+        _ = try await UpdatePastureGroupUseCase(repository: repository).execute(
             id: id,
             name: name,
             grazeDays: grazeDays,
