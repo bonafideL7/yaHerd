@@ -91,11 +91,11 @@ final class PastureTileListViewModel {
         draggedPasture = pasture
     }
 
-    func movePastures(from source: IndexSet, to destination: Int, using repository: any PastureOrdering) {
+    func movePastures(from source: IndexSet, to destination: Int, using repository: any PastureOrdering) async {
         let originalItems = items
         movePasturesInMemory(from: source, to: destination)
 
-        commitPastureOrder(using: repository, rollbackTo: originalItems)
+        await commitPastureOrder(using: repository, rollbackTo: originalItems)
     }
 
     func movePasturesInMemory(from source: IndexSet, to destination: Int) {
@@ -106,19 +106,22 @@ final class PastureTileListViewModel {
         movePasturesInMemory(from: IndexSet(integer: source), to: destination)
     }
 
-    func commitDragOrder(using repository: any PastureOrdering) {
+    func commitDragOrder(using repository: any PastureOrdering) async {
         guard !dragStartOrder.isEmpty else { return }
-        commitPastureOrder(using: repository, rollbackTo: dragStartOrder)
+        await commitPastureOrder(using: repository, rollbackTo: dragStartOrder)
         dragStartOrder = []
     }
 
-    func persistPastureOrder(using repository: any PastureOrdering) throws {
-        try ReorderPasturesUseCase(repository: repository).execute(ids: items.map(\.id))
+    func persistPastureOrder(using repository: any PastureOrdering) async throws {
+        try await ReorderPasturesUseCase(repository: repository).execute(ids: items.map(\.id))
     }
 
-    func commitPastureOrder(using repository: any PastureOrdering, rollbackTo originalItems: [PastureSummary]) {
+    func commitPastureOrder(
+        using repository: any PastureOrdering,
+        rollbackTo originalItems: [PastureSummary]
+    ) async {
         do {
-            try persistPastureOrder(using: repository)
+            try await persistPastureOrder(using: repository)
         } catch {
             items = originalItems
             errorMessage = UserVisibleErrorMessage.make(error)
@@ -130,7 +133,7 @@ final class PastureTileListViewModel {
         pastureRepository: any PastureDeleteRepository & PastureOrdering,
         animalRepository: any AnimalPastureMoving,
         fieldCheckRepository: any FieldCheckPastureArchiveWriter
-    ) {
+    ) async {
         let originalItems = items
         let ids: [UUID] = offsets.sorted().reduce(into: []) { result, index in
             guard items.indices.contains(index) else { return }
@@ -142,12 +145,12 @@ final class PastureTileListViewModel {
             .map(\.element)
 
         do {
-            try DeletePasturesUseCase(
+            try await DeletePasturesUseCase(
                 pastureRepository: pastureRepository,
                 animalRepository: animalRepository,
                 fieldCheckRepository: fieldCheckRepository
             ).execute(ids: ids)
-            try persistPastureOrder(using: pastureRepository)
+            try await persistPastureOrder(using: pastureRepository)
             clearPendingDeletion()
         } catch {
             items = originalItems
@@ -160,9 +163,9 @@ final class PastureTileListViewModel {
         pastureRepository: any PastureDeleteRepository & PastureOrdering,
         animalRepository: any AnimalPastureMoving,
         fieldCheckRepository: any FieldCheckPastureArchiveWriter
-    ) {
+    ) async {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
-        deletePastures(
+        await deletePastures(
             at: IndexSet(integer: index),
             pastureRepository: pastureRepository,
             animalRepository: animalRepository,
