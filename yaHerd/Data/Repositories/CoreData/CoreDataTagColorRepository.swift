@@ -211,9 +211,6 @@ final class CoreDataTagColorRepository: TagColorRepository {
             }
 
             guard let target else { return }
-            if !target.isHidden {
-                target.isHidden = false
-            }
             setExclusiveDefault(target.id, in: herd, context: context)
         }
     }
