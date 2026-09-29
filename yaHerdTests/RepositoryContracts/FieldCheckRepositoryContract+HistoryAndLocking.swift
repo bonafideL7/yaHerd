@@ -7,7 +7,7 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Hard Delete Snapshot Pasture",
@@ -22,7 +22,7 @@ extension FieldCheckRepositoryContract {
             prefix: "HD",
             rgba: RGBAColor(r: 0.4, g: 0.5, b: 0.6)
         )
-        try fixture.makeTagColorRepository().upsert(color)
+        try await fixture.makeTagColorRepository().upsert(color)
 
         let animal = try fixture.makeAnimalRepository().create(
             input: AnimalInput(
