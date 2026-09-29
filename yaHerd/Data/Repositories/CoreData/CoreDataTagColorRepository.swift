@@ -288,6 +288,26 @@ final class CoreDataTagColorRepository: TagColorRepository {
                         && TagColorLibraryRules.normalizedNameKey($0.name) == builtInKey
                 }
 
+                if let hiddenHistorical = byID, hiddenHistorical.isHidden {
+                    // The persisted row is historical state, not the live built-in definition.
+                    // Keep its display payload and hidden status intact so UUID lookup continues
+                    // to resolve the definition captured by existing Animal/Field Check/Working
+                    // references. The visible canonical built-in remains virtual.
+                    if let byName, byName !== hiddenHistorical {
+                        if try Self.isReferenced(colorID: byName.id, herd: herd, in: context) {
+                            Self.preserveAsHiddenDefinition(byName)
+                        } else {
+                            context.delete(byName)
+                        }
+                    }
+
+                    let preservesSelectedDefault =
+                        existingDefaultID == hiddenHistorical.id || existingDefaultID == byName?.id
+                    hiddenHistorical.isDefault =
+                        existingDefaultID == nil ? builtIn.isDefault : preservesSelectedDefault
+                    continue
+                }
+
                 let target: CDTagColorDefinition
                 if let byID {
                     target = byID
