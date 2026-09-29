@@ -31,12 +31,13 @@ final class CoreDataTagColorRepository: TagColorRepository {
     func fetchColors() throws -> [TagColorSnapshot] {
         let herdID = try currentHerdID()
         let context = contextFactory.makeReadContext()
+        let lookup = self.lookup
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
 
-            let persisted = try fetchPersistedColors(for: herd, in: context)
+            let persisted = try Self.fetchPersistedColors(for: herd, in: context)
             var snapshotsByID = Dictionary(
                 uniqueKeysWithValues: TagColorDefaults.seedDefaultColors().map { ($0.id, $0) }
             )
@@ -61,7 +62,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
 
             if let selectedDefaultID = persisted
                 .filter({ $0.isDefault })
-                .sorted(by: defaultSort)
+                .sorted(by: Self.defaultSort)
                 .first?.id {
                 for id in Array(snapshotsByID.keys) {
                     guard var snapshot = snapshotsByID[id] else { continue }
@@ -70,7 +71,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 }
             }
 
-            var result = snapshotsByID.values.sorted(by: snapshotSort)
+            var result = snapshotsByID.values.sorted(by: Self.snapshotSort)
             if !result.contains(where: \.isDefault),
                let whiteIndex = result.firstIndex(where: { $0.id == TagColorDefaults.whiteID }) {
                 result[whiteIndex].isDefault = true
@@ -82,6 +83,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
     func fetchColor(id: UUID) throws -> TagColorSnapshot? {
         let herdID = try currentHerdID()
         let context = contextFactory.makeReadContext()
+        let lookup = self.lookup
         return try context.performAndWait {
             guard try lookup.herd(id: herdID, in: context) != nil else {
                 throw HerdRepositoryError.missingHerd
@@ -104,13 +106,13 @@ final class CoreDataTagColorRepository: TagColorRepository {
         let cleanedName = TagColorLibraryRules.normalizedDisplayName(color.name)
         guard !cleanedName.isEmpty else { return }
 
-        let herdID = try currentHerdID()
+        let lookup = self.lookup
         try performWrite { context, herd in
             let cleanedPrefix = TagColorLibraryRules.normalizedPrefix(
                 color.prefix,
                 fallbackName: cleanedName
             )
-            let persisted = try fetchPersistedColors(for: herd, in: context)
+            let persisted = try Self.fetchPersistedColors(for: herd, in: context)
             let nameKey = TagColorLibraryRules.normalizedNameKey(cleanedName)
             let builtIns = TagColorDefaults.seedDefaultColors()
             let builtInByID = builtIns.first { $0.id == color.id }
@@ -130,7 +132,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             let existingByID = persisted.first { $0.id == color.id }
             let existingByName = persisted
                 .filter { $0.id != color.id }
-                .sorted(by: persistedSort)
+                .sorted(by: Self.persistedSort)
                 .first {
                     TagColorLibraryRules.normalizedNameKey($0.name) == nameKey
                 }
@@ -176,11 +178,12 @@ final class CoreDataTagColorRepository: TagColorRepository {
             )
 
             for duplicateID in duplicateIDs {
-                try remapReferences(
+                try Self.remapReferences(
                     from: duplicateID,
                     to: canonical.id,
                     herd: herd,
-                    in: context
+                    in: context,
+                    lookup: lookup
                 )
                 if let duplicate = persisted.first(where: { $0.id == duplicateID }) {
                     context.delete(duplicate)
@@ -188,15 +191,16 @@ final class CoreDataTagColorRepository: TagColorRepository {
             }
 
             if canonical.isDefault {
-                setExclusiveDefault(canonical.id, in: herd, context: context)
+                Self.setExclusiveDefault(canonical.id, in: herd, context: context)
             }
-            try removeRetiredDefaults(in: herd, context: context)
-            try normalizeDefault(in: herd, context: context)
+            try Self.removeRetiredDefaults(in: herd, context: context)
+            try Self.normalizeDefault(in: herd, context: context)
         }
     }
 
     func setDefaultColor(id: UUID) throws {
         let herdID = try currentHerdID()
+        let lookup = self.lookup
         try performWrite { context, herd in
             var target = try lookup.herdOwned(
                 CDTagColorDefinition.self,
@@ -207,11 +211,11 @@ final class CoreDataTagColorRepository: TagColorRepository {
 
             if target == nil,
                let builtIn = TagColorDefaults.seedDefaultColors().first(where: { $0.id == id }) {
-                target = makeManagedColor(from: builtIn, herd: herd, in: context)
+                target = Self.makeManagedColor(from: builtIn, herd: herd, in: context)
             }
 
             guard let target else { return }
-            setExclusiveDefault(target.id, in: herd, context: context)
+            Self.setExclusiveDefault(target.id, in: herd, context: context)
         }
     }
 
@@ -221,26 +225,25 @@ final class CoreDataTagColorRepository: TagColorRepository {
         let idsToDelete = Set(ids)
 
         try performWrite { context, herd in
-            let persisted = try fetchPersistedColors(for: herd, in: context)
+            let persisted = try Self.fetchPersistedColors(for: herd, in: context)
             for color in persisted where idsToDelete.contains(color.id) {
-                if try isReferenced(colorID: color.id, herd: herd, in: context) {
-                    preserveAsHiddenDefinition(color)
+                if try Self.isReferenced(colorID: color.id, herd: herd, in: context) {
+                    Self.Self.preserveAsHiddenDefinition(color)
                 } else {
                     context.delete(color)
                 }
             }
 
-            try normalizeDefault(in: herd, context: context)
+            try Self.normalizeDefault(in: herd, context: context)
         }
     }
 
     func reorder(colorIDs: [UUID]) throws {
         guard !colorIDs.isEmpty else { return }
-        _ = try currentHerdID()
 
         try performWrite { context, herd in
             var persistedByID = Dictionary(
-                uniqueKeysWithValues: try fetchPersistedColors(for: herd, in: context).map { ($0.id, $0) }
+                uniqueKeysWithValues: try Self.fetchPersistedColors(for: herd, in: context).map { ($0.id, $0) }
             )
             let builtInsByID = Dictionary(
                 uniqueKeysWithValues: TagColorDefaults.seedDefaultColors().map { ($0.id, $0) }
@@ -255,7 +258,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
                     }
                     target = persisted
                 } else if let builtIn = builtInsByID[id] {
-                    target = makeManagedColor(from: builtIn, herd: herd, in: context)
+                    target = Self.makeManagedColor(from: builtIn, herd: herd, in: context)
                     persistedByID[id] = target
                 } else {
                     continue
@@ -269,15 +272,15 @@ final class CoreDataTagColorRepository: TagColorRepository {
     }
 
     func restoreDefaultColors() throws {
-        _ = try currentHerdID()
+        let lookup = self.lookup
         try performWrite { context, herd in
-            try removeRetiredDefaults(in: herd, context: context)
+            try Self.removeRetiredDefaults(in: herd, context: context)
 
-            let existingDefaultID = try fetchPersistedColors(for: herd, in: context)
+            let existingDefaultID = try Self.fetchPersistedColors(for: herd, in: context)
                 .first(where: { !$0.isHidden && $0.isDefault })?.id
 
             for builtIn in TagColorDefaults.seedDefaultColors() {
-                let persisted = try fetchPersistedColors(for: herd, in: context)
+                let persisted = try Self.fetchPersistedColors(for: herd, in: context)
                 let builtInKey = TagColorLibraryRules.normalizedNameKey(builtIn.name)
                 let byID = persisted.first { $0.id == builtIn.id }
                 let byName = persisted.first {
@@ -288,11 +291,17 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 if let byID {
                     target = byID
                 } else {
-                    target = makeManagedColor(from: builtIn, herd: herd, in: context)
+                    target = Self.makeManagedColor(from: builtIn, herd: herd, in: context)
                 }
 
                 if let byName, byName !== target {
-                    try remapReferences(from: byName.id, to: target.id, herd: herd, in: context)
+                    try Self.remapReferences(
+                        from: byName.id,
+                        to: target.id,
+                        herd: herd,
+                        in: context,
+                        lookup: lookup
+                    )
                     context.delete(byName)
                 }
 
@@ -306,7 +315,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 target.isDefault = existingDefaultID == nil ? builtIn.isDefault : target.id == existingDefaultID
             }
 
-            try normalizeDefault(in: herd, context: context)
+            try Self.normalizeDefault(in: herd, context: context)
         }
     }
 
@@ -318,10 +327,11 @@ final class CoreDataTagColorRepository: TagColorRepository {
     }
 
     private func performWrite(
-        _ operation: (NSManagedObjectContext, CDHerd) throws -> Void
+        _ operation: @Sendable (NSManagedObjectContext, CDHerd) throws -> Void
     ) throws {
         let herdID = try currentHerdID()
         let context = try contextFactory.makeWriteContext()
+        let lookup = self.lookup
 
         try context.performAndWait {
             do {
@@ -348,7 +358,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    private func fetchPersistedColors(
+    nonisolated private static func fetchPersistedColors(
         for herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws -> [CDTagColorDefinition] {
@@ -363,7 +373,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         return try context.fetch(request)
     }
 
-    private func makeManagedColor(
+    nonisolated private static func makeManagedColor(
         from snapshot: TagColorSnapshot,
         herd: CDHerd,
         in context: NSManagedObjectContext
@@ -385,7 +395,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         return color
     }
 
-    private func setExclusiveDefault(
+    nonisolated private static func setExclusiveDefault(
         _ id: UUID,
         in herd: CDHerd,
         context: NSManagedObjectContext
@@ -396,12 +406,12 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    private func normalizeDefault(
+    nonisolated private static func normalizeDefault(
         in herd: CDHerd,
         context: NSManagedObjectContext
     ) throws {
-        let colors = try fetchPersistedColors(for: herd, in: context).filter { !$0.isHidden }
-        let selected = colors.filter(\.isDefault).sorted(by: defaultSort).first
+        let colors = try Self.fetchPersistedColors(for: herd, in: context).filter { !$0.isHidden }
+        let selected = colors.filter(\.isDefault).sorted(by: Self.defaultSort).first
 
         guard let selected else {
             return
@@ -412,31 +422,32 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    private func removeRetiredDefaults(
+    nonisolated private static func removeRetiredDefaults(
         in herd: CDHerd,
         context: NSManagedObjectContext
     ) throws {
-        for color in try fetchPersistedColors(for: herd, in: context)
+        for color in try Self.fetchPersistedColors(for: herd, in: context)
         where TagColorDefaults.retiredDefaultColorIDs.contains(color.id) {
-            if try isReferenced(colorID: color.id, herd: herd, in: context) {
-                preserveAsHiddenDefinition(color)
+            if try Self.isReferenced(colorID: color.id, herd: herd, in: context) {
+                Self.Self.preserveAsHiddenDefinition(color)
             } else {
                 context.delete(color)
             }
         }
     }
 
-    private func preserveAsHiddenDefinition(_ color: CDTagColorDefinition) {
+    nonisolated private static func Self.preserveAsHiddenDefinition(_ color: CDTagColorDefinition) {
         color.isHidden = true
         color.isDefault = false
         color.updatedAt = .now
     }
 
-    private func remapReferences(
+    nonisolated private static func remapReferences(
         from oldID: UUID,
         to replacementID: UUID,
         herd: CDHerd,
-        in context: NSManagedObjectContext
+        in context: NSManagedObjectContext,
+        lookup: CoreDataLookup
     ) throws {
         guard oldID != replacementID else { return }
 
@@ -483,7 +494,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    private func isReferenced(
+    nonisolated private static func isReferenced(
         colorID: UUID,
         herd: CDHerd,
         in context: NSManagedObjectContext
@@ -529,7 +540,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         return try context.count(for: queue) > 0
     }
 
-    private func persistedSort(
+    nonisolated private static func persistedSort(
         _ lhs: CDTagColorDefinition,
         _ rhs: CDTagColorDefinition
     ) -> Bool {
@@ -538,7 +549,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         return lhs.updatedAt < rhs.updatedAt
     }
 
-    private func defaultSort(
+    nonisolated private static func defaultSort(
         _ lhs: CDTagColorDefinition,
         _ rhs: CDTagColorDefinition
     ) -> Bool {
@@ -547,7 +558,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         return lhs.sortOrder < rhs.sortOrder
     }
 
-    private func snapshotSort(
+    nonisolated private static func snapshotSort(
         _ lhs: TagColorSnapshot,
         _ rhs: TagColorSnapshot
     ) -> Bool {
