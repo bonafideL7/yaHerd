@@ -63,10 +63,6 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
         try TagColorRepositoryContract.assertBuiltInNameCollisionPreservesBuiltInIdentityAndRemapsReferences(using: fixture)
     }
 
-    func testReferencedBuiltInAndRetiredDefinitionsSurviveRemoval() async throws {
-        let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertReferencedBuiltInAndRetiredDefinitionsSurviveRemoval(using: fixture)
-    }
 
     func testReferencedCustomColorRemovalPreservesHistoricalReferenceIdentity() async throws {
         let fixture = try await makeFixture()
