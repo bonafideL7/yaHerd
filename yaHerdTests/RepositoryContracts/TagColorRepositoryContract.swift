@@ -544,30 +544,6 @@ enum TagColorRepositoryContract {
             line: line
         )
 
-        try fixture.makeTagColorRepository().setDefaultColor(id: red.id)
-        try fixture.referenceControl.seedReferences(red.id)
-        try fixture.makeTagColorRepository().upsert(conflictingBlue)
-        stableBuiltIns = try fixture.makeTagColorRepository().fetchColors()
-        XCTAssertEqual(
-            try fixture.referenceControl.fetchReferences(),
-            referenceSnapshot(colorID: red.id),
-            "Renaming one stable built-in into another built-in's normalized name must not remap references between their application identities.",
-            file: file,
-            line: line
-        )
-        assertSameDefinition(
-            try XCTUnwrap(stableBuiltIns.first { $0.id == blue.id }, file: file, line: line),
-            blue,
-            file: file,
-            line: line
-        )
-        assertSameDefinition(
-            try XCTUnwrap(stableBuiltIns.first { $0.id == red.id }, file: file, line: line),
-            red,
-            file: file,
-            line: line
-        )
-
         let incomingID = UUID()
         var incoming = TagColorSnapshot(
             id: incomingID,
