@@ -11,10 +11,6 @@ private final class TagColorContractSelection: CurrentHerdSelectionReading {
 final class CoreDataTagColorContractHarness {
     let fixture: TagColorRepositoryContractFixture
 
-    private let assembly: CoreDataPersistenceAssembly
-    private let selection: TagColorContractSelection
-    private let ids: ReferenceIDs
-
     static func make() async throws -> CoreDataTagColorContractHarness {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         let selection = TagColorContractSelection()
@@ -37,10 +33,7 @@ final class CoreDataTagColorContractHarness {
         assembly: CoreDataPersistenceAssembly,
         selection: TagColorContractSelection
     ) {
-        self.assembly = assembly
-        self.selection = selection
         let ids = ReferenceIDs()
-        self.ids = ids
 
         fixture = TagColorRepositoryContractFixture(
             makeTagColorRepository: {
@@ -64,7 +57,6 @@ final class CoreDataTagColorContractHarness {
                         assembly: assembly,
                         selection: selection
                     )
-
                 }
             ),
             herdSelectionControl: Self.herdSelectionControl(
