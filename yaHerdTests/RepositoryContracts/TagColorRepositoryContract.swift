@@ -384,6 +384,7 @@ enum TagColorRepositoryContract {
             file: file,
             line: line
         )
+        modifiedYellow.name = "Contract Gold"
         modifiedYellow.prefix = "ZZ"
         modifiedYellow.rgba = RGBAColor(r: 0.05, g: 0.05, b: 0.05)
         try repository.upsert(modifiedYellow)
