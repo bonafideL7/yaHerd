@@ -119,14 +119,15 @@ final class CoreDataTagColorRepository: TagColorRepository {
             let builtIn = builtInByID ?? builtInByName
 
             let existingByID = persisted.first { $0.id == color.id }
-            let existingByName = persisted
-                .filter { $0.id != color.id && !$0.isHidden }
-                .sorted(by: Self.persistedSort)
-                .first {
-                    TagColorLibraryRules.normalizedNameKey($0.name) == nameKey
+            let existingByNames = persisted
+                .filter {
+                    $0.id != color.id
+                        && !$0.isHidden
+                        && TagColorLibraryRules.normalizedNameKey($0.name) == nameKey
                 }
+                .sorted(by: Self.persistedSort)
 
-            let canonicalID = builtIn?.id ?? existingByName?.id ?? color.id
+            let canonicalID = builtIn?.id ?? existingByNames.first?.id ?? color.id
             let canonical: CDTagColorDefinition
 
             if let existing = persisted.first(where: { $0.id == canonicalID }) {
@@ -148,7 +149,10 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 canonical.herd = herd
             }
 
-            let wasDefault = canonical.isDefault || existingByID?.isDefault == true
+            let wasDefault =
+                canonical.isDefault
+                || existingByID?.isDefault == true
+                || existingByNames.contains(where: \.isDefault)
             canonical.name = cleanedName
             canonical.prefix = cleanedPrefix
             canonical.red = color.rgba.r
@@ -160,8 +164,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             canonical.updatedAt = max(canonical.updatedAt, color.updatedAt)
 
             let duplicateIDs = Set(
-                [existingByID, existingByName]
-                    .compactMap { $0 }
+                ([existingByID].compactMap { $0 } + existingByNames)
                     .filter { $0 !== canonical }
                     .map(\.id)
             )
@@ -276,7 +279,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 let persisted = try Self.fetchPersistedColors(for: herd, in: context)
                 let builtInKey = TagColorLibraryRules.normalizedNameKey(builtIn.name)
                 let byID = persisted.first { $0.id == builtIn.id }
-                let byName = persisted.first {
+                let byNames = persisted.filter {
                     !$0.isHidden
                         && TagColorLibraryRules.normalizedNameKey($0.name) == builtInKey
                 }
@@ -291,15 +294,16 @@ final class CoreDataTagColorRepository: TagColorRepository {
                     target = Self.makeManagedColor(from: builtIn, herd: herd, in: context)
                 }
 
-                if let byName, byName !== target {
+                let duplicateNames = byNames.filter { $0 !== target }
+                for duplicate in duplicateNames {
                     try Self.remapReferences(
-                        from: byName.id,
+                        from: duplicate.id,
                         to: target.id,
                         herd: herd,
                         in: context,
                         lookup: lookup
                     )
-                    context.delete(byName)
+                    context.delete(duplicate)
                 }
 
                 target.name = builtIn.name
@@ -309,7 +313,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 target.blue = builtIn.rgba.b
                 target.alpha = builtIn.rgba.a
                 target.isHidden = false
-                let preservesSelectedDefault = existingDefaultID == target.id || existingDefaultID == byName?.id
+                let preservesSelectedDefault =
+                    existingDefaultID == target.id
+                    || duplicateNames.contains { $0.id == existingDefaultID }
                 target.isDefault = existingDefaultID == nil ? builtIn.isDefault : preservesSelectedDefault
             }
 
