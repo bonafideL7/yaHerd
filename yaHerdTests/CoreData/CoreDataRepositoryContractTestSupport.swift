@@ -105,6 +105,13 @@ final class CoreDataTagColorContractHarness {
                         assembly: assembly,
                         selection: selection
                     )
+                },
+                fetchOwningAnimalEditorRevision: { [assembly, selection, ids] in
+                    try Self.fetchOwningAnimalEditorRevision(
+                        ids: ids,
+                        assembly: assembly,
+                        selection: selection
+                    )
                 }
             ),
             herdSelectionControl: CoreDataContractTestSupport.herdSelectionControl(
@@ -289,6 +296,19 @@ final class CoreDataTagColorContractHarness {
                 workingQueueTagColorIDSnapshot: queue.animalTagColorIDSnapshot,
                 workingQueueDamTagColorIDSnapshot: queue.animalDamDisplayTagColorIDSnapshot
             )
+        }
+    }
+
+    private static func fetchOwningAnimalEditorRevision(
+        ids: ReferenceIDs,
+        assembly: CoreDataPersistenceAssembly,
+        selection: CoreDataContractSelection
+    ) throws -> UUID? {
+        let context = assembly.contextFactory.makeReadContext()
+        return try context.performAndWait {
+            let herd = try currentHerd(assembly, selection, context)
+            let tag: CDAnimalTag = try required(ids.currentTag, herd.id, assembly, context)
+            return tag.animal.editorRevision
         }
     }
 
