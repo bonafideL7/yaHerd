@@ -9,6 +9,8 @@ DERIVED_DATA_PATH="$ROOT_DIR/.build/ConcurrencyDerivedData"
 FULL_VERIFY="${YAHERD_FULL_VERIFY:-0}"
 CLEAN_VERIFY="${YAHERD_CLEAN_VERIFY:-0}"
 
+bash Scripts/verify-core-data.sh
+
 if grep -q 'SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;' "$PROJECT_FILE"; then
   echo 'Module-wide MainActor default isolation is prohibited; isolate UI and persistence boundaries explicitly.' >&2
   exit 1
