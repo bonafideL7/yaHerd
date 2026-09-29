@@ -12,6 +12,7 @@ MANAGED_OBJECT_ROOT="yaHerd/Data/CoreData/ManagedObjects"
 
 python3 - "$MODEL" "$MANAGED_OBJECT_ROOT" <<'PYTHON'
 from pathlib import Path
+import re
 import sys
 import xml.etree.ElementTree as ET
 
@@ -128,6 +129,78 @@ def parse_relationships(spec):
         result[name] = (destination, requirement == "O", cardinality == "M", delete_rule, inverse)
     return result
 
+ATTRIBUTE_SWIFT_TYPES = {
+    "UUID": ("UUID", "UUID?"),
+    "String": ("String", "String?"),
+    "Date": ("Date", "Date?"),
+    "Double": ("Double", "NSNumber?"),
+    "Integer 64": ("Int64", "NSNumber?"),
+    "Boolean": ("Bool", "NSNumber?"),
+    "Binary": ("Data", "Data?"),
+}
+
+def validate_managed_object_source(entity_name, entity, represented_class):
+    source = managed_object_root / f"{represented_class}.swift"
+    if not source.is_file():
+        failures.append(f"{entity_name}: missing managed-object source {source}")
+        return
+
+    text = source.read_text()
+    objc_pattern = rf"@objc\s*\(\s*{re.escape(represented_class)}\s*\)"
+    class_pattern = rf"\b(?:final\s+)?class\s+{re.escape(represented_class)}\s*:\s*NSManagedObject\b"
+    if re.search(objc_pattern, text) is None:
+        failures.append(f"{entity_name}: {represented_class} must declare @objc({represented_class})")
+    if re.search(class_pattern, text) is None:
+        failures.append(f"{entity_name}: {represented_class} must inherit NSManagedObject")
+
+    declarations = {
+        match.group(1): re.sub(r"\s+", "", match.group(2))
+        for match in re.finditer(
+            r"@NSManaged\s+(?:public\s+|internal\s+|private\s+|fileprivate\s+)?var\s+"
+            r"([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([^\n/{]+)",
+            text,
+        )
+    }
+
+    for attribute in entity.findall("attribute"):
+        name = attribute.get("name")
+        attribute_type = attribute.get("attributeType")
+        optional = attribute.get("optional") == "YES"
+        expected_types = ATTRIBUTE_SWIFT_TYPES.get(attribute_type)
+        if expected_types is None:
+            failures.append(
+                f"{entity_name}.{name}: verifier has no Swift mapping for Core Data type {attribute_type!r}"
+            )
+            continue
+        expected = expected_types[1 if optional else 0]
+        actual = declarations.get(name)
+        if actual is None:
+            failures.append(f"{entity_name}.{name}: missing @NSManaged attribute declaration")
+        elif actual != expected:
+            failures.append(
+                f"{entity_name}.{name}: @NSManaged type must be {expected}, found {actual}"
+            )
+
+    for relationship in entity.findall("relationship"):
+        name = relationship.get("name")
+        optional = relationship.get("optional") == "YES"
+        to_many = relationship.get("toMany") == "YES"
+        destination = entities.get(relationship.get("destinationEntity"))
+        destination_class = destination.get("representedClassName") if destination is not None else None
+        if to_many:
+            expected = "NSSet?" if optional else "NSSet"
+        elif destination_class:
+            expected = destination_class + ("?" if optional else "")
+        else:
+            continue
+        actual = declarations.get(name)
+        if actual is None:
+            failures.append(f"{entity_name}.{name}: missing @NSManaged relationship declaration")
+        elif actual != expected:
+            failures.append(
+                f"{entity_name}.{name}: @NSManaged type must be {expected}, found {actual}"
+            )
+
 for name, represented_class in CLASSES.items():
     entity = entities.get(name)
     if entity is None:
@@ -141,9 +214,7 @@ for name, represented_class in CLASSES.items():
     if entity.find("uniquenessConstraints") is not None:
         failures.append(f"{name}: Core Data uniqueness constraints are prohibited")
 
-    source = managed_object_root / f"{represented_class}.swift"
-    if not source.is_file():
-        failures.append(f"{name}: missing managed-object source {source}")
+    validate_managed_object_source(name, entity, represented_class)
 
     actual_attributes = {item.get("name"): item for item in entity.findall("attribute")}
     for attribute_name, (attribute_type, optional) in parse_attributes(ATTRIBUTE_CONTRACT[name]).items():
@@ -196,8 +267,8 @@ for name, entity in entities.items():
     represented_class = entity.get("representedClassName")
     if not represented_class:
         failures.append(f"{name}: representedClassName is required")
-    elif not (managed_object_root / f"{represented_class}.swift").is_file():
-        failures.append(f"{name}: missing managed-object source for {represented_class}")
+    elif name not in CLASSES:
+        validate_managed_object_source(name, entity, represented_class)
 
     if entity.get("syncable") != "NO":
         failures.append(f"{name}: syncable must be NO")
