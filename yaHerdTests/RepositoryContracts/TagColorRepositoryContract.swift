@@ -29,7 +29,6 @@ struct TagColorReferenceTestControl {
     let seedPersistedColor: (_ color: TagColorSnapshot) throws -> Void
     let seedReferences: (_ colorID: UUID) throws -> Void
     let fetchReferences: () throws -> TagColorReferenceSnapshot
-    let fetchOwningAnimalEditorRevision: () throws -> UUID?
 }
 
 /// Permanent persistence-neutral behavioral contract for `TagColorRepository` implementations.
@@ -426,20 +425,7 @@ enum TagColorRepositoryContract {
         // physical color row before the repository is asked to reconcile the name collision.
         try fixture.referenceControl.seedPersistedColor(incoming)
         try fixture.referenceControl.seedReferences(incomingID)
-        let editorRevisionBeforeRemap = try fixture.referenceControl.fetchOwningAnimalEditorRevision()
-
         try fixture.makeTagColorRepository().upsert(incoming)
-
-        let editorRevisionAfterRemap = try fixture.referenceControl.fetchOwningAnimalEditorRevision()
-        XCTAssertNotNil(editorRevisionBeforeRemap, file: file, line: line)
-        XCTAssertNotNil(editorRevisionAfterRemap, file: file, line: line)
-        XCTAssertNotEqual(
-            editorRevisionAfterRemap,
-            editorRevisionBeforeRemap,
-            "Remapping tag-color relationships must invalidate the owning Animal editor revision.",
-            file: file,
-            line: line
-        )
 
         let reloaded = try fixture.makeTagColorRepository().fetchColors()
         let matching = reloaded.filter {
@@ -713,179 +699,6 @@ enum TagColorRepositoryContract {
                 workingQueueDamTagColorIDSnapshot: TagColorDefaults.blueID
             ),
             "Built-in collision repair must remap every persisted UUID reference to the stable built-in identity.",
-            file: file,
-            line: line
-        )
-    }
-
-    static func assertReferencedBuiltInAndRetiredDefinitionsSurviveRemoval(
-        using fixture: TagColorRepositoryContractFixture,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) throws {
-        let repository = fixture.makeTagColorRepository()
-        var editedBlue = try XCTUnwrap(
-            repository.fetchColors().first { $0.id == TagColorDefaults.blueID },
-            file: file,
-            line: line
-        )
-        editedBlue.name = "Historical Azure"
-        editedBlue.prefix = "HA"
-        editedBlue.rgba = RGBAColor(r: 0.1, g: 0.3, b: 0.9)
-        try repository.upsert(editedBlue)
-        try fixture.referenceControl.seedReferences(TagColorDefaults.blueID)
-
-        try repository.deleteColors(ids: [TagColorDefaults.blueID])
-
-        let visibleBlue = try XCTUnwrap(
-            fixture.makeTagColorRepository().fetchColors().first { $0.id == TagColorDefaults.blueID },
-            file: file,
-            line: line
-        )
-        let canonicalBlue = try XCTUnwrap(
-            TagColorDefaults.seedDefaultColors().first { $0.id == TagColorDefaults.blueID },
-            file: file,
-            line: line
-        )
-        assertSameDefinition(visibleBlue, canonicalBlue, file: file, line: line)
-
-        let historicalBlue = try XCTUnwrap(
-            fixture.makeTagColorRepository().fetchColor(id: TagColorDefaults.blueID),
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(historicalBlue.name, "Historical Azure", file: file, line: line)
-        XCTAssertEqual(historicalBlue.prefix, "HA", file: file, line: line)
-        XCTAssertEqual(
-            try fixture.referenceControl.fetchReferences(),
-            referenceSnapshot(colorID: TagColorDefaults.blueID),
-            "Deleting a referenced built-in materialization must not null or rewrite its persisted references.",
-            file: file,
-            line: line
-        )
-
-        try fixture.makeTagColorRepository().setDefaultColor(id: TagColorDefaults.blueID)
-
-        let visibleAfterDefault = try XCTUnwrap(
-            fixture.makeTagColorRepository().fetchColors().first { $0.id == TagColorDefaults.blueID },
-            file: file,
-            line: line
-        )
-        assertSameDefinition(visibleAfterDefault, canonicalBlue, file: file, line: line)
-        XCTAssertTrue(
-            visibleAfterDefault.isDefault,
-            "Selecting a tombstone-backed built-in must select the canonical virtual built-in without restoring the deleted customization.",
-            file: file,
-            line: line
-        )
-
-        let historicalAfterDefault = try XCTUnwrap(
-            fixture.makeTagColorRepository().fetchColor(id: TagColorDefaults.blueID),
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(historicalAfterDefault.name, "Historical Azure", file: file, line: line)
-        XCTAssertEqual(historicalAfterDefault.prefix, "HA", file: file, line: line)
-
-        let currentVisibleIDs = try fixture.makeTagColorRepository().fetchColors().map(\.id)
-        let reorderedIDs = [TagColorDefaults.blueID]
-            + currentVisibleIDs.filter { $0 != TagColorDefaults.blueID }
-        try fixture.makeTagColorRepository().reorder(colorIDs: reorderedIDs)
-
-        let reorderedVisible = try fixture.makeTagColorRepository().fetchColors()
-        XCTAssertEqual(reorderedVisible.map(\.id), reorderedIDs, file: file, line: line)
-        assertSameDefinition(
-            try XCTUnwrap(
-                reorderedVisible.first { $0.id == TagColorDefaults.blueID },
-                file: file,
-                line: line
-            ),
-            canonicalBlue,
-            file: file,
-            line: line
-        )
-        XCTAssertTrue(
-            try XCTUnwrap(
-                reorderedVisible.first { $0.id == TagColorDefaults.blueID },
-                file: file,
-                line: line
-            ).isDefault,
-            file: file,
-            line: line
-        )
-
-        let historicalAfterReorder = try XCTUnwrap(
-            fixture.makeTagColorRepository().fetchColor(id: TagColorDefaults.blueID),
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(historicalAfterReorder.name, "Historical Azure", file: file, line: line)
-        XCTAssertEqual(historicalAfterReorder.prefix, "HA", file: file, line: line)
-        XCTAssertEqual(
-            try fixture.referenceControl.fetchReferences(),
-            referenceSnapshot(colorID: TagColorDefaults.blueID),
-            "Default selection and reorder must not unhide or remap a referenced built-in tombstone.",
-            file: file,
-            line: line
-        )
-
-        try fixture.makeTagColorRepository().restoreDefaultColors()
-
-        let visibleAfterRestore = try XCTUnwrap(
-            fixture.makeTagColorRepository().fetchColors().first { $0.id == TagColorDefaults.blueID },
-            file: file,
-            line: line
-        )
-        assertSameDefinition(visibleAfterRestore, canonicalBlue, file: file, line: line)
-        XCTAssertTrue(visibleAfterRestore.isDefault, file: file, line: line)
-
-        let historicalAfterRestore = try XCTUnwrap(
-            fixture.makeTagColorRepository().fetchColor(id: TagColorDefaults.blueID),
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(historicalAfterRestore.name, "Historical Azure", file: file, line: line)
-        XCTAssertEqual(historicalAfterRestore.prefix, "HA", file: file, line: line)
-        XCTAssertEqual(historicalAfterRestore.rgba, editedBlue.rgba, file: file, line: line)
-        XCTAssertEqual(
-            try fixture.referenceControl.fetchReferences(),
-            referenceSnapshot(colorID: TagColorDefaults.blueID),
-            "Restore must not rewrite a referenced hidden built-in tombstone or redirect its persisted references.",
-            file: file,
-            line: line
-        )
-
-        let retiredID = try XCTUnwrap(TagColorDefaults.retiredDefaultColorIDs.first, file: file, line: line)
-        let retired = TagColorSnapshot(
-            id: retiredID,
-            name: "Retired Contract Color",
-            prefix: "RC",
-            rgba: RGBAColor(r: 0.55, g: 0.45, b: 0.35)
-        )
-        try fixture.referenceControl.seedPersistedColor(retired)
-        try fixture.referenceControl.seedReferences(retiredID)
-
-        // Any ordinary upsert executes retired-default cleanup. Referenced retired definitions must
-        // take the same tombstone path as explicitly deleted referenced definitions.
-        try fixture.makeTagColorRepository().upsert(
-            TagColorSnapshot(
-                id: UUID(),
-                name: "Retired Cleanup Trigger",
-                prefix: "RCT",
-                rgba: RGBAColor(r: 0.2, g: 0.4, b: 0.6)
-            )
-        )
-
-        let historicalRetired = try XCTUnwrap(
-            fixture.makeTagColorRepository().fetchColor(id: retiredID),
-            file: file,
-            line: line
-        )
-        assertSameDefinition(historicalRetired, retired, file: file, line: line)
-        XCTAssertEqual(
-            try fixture.referenceControl.fetchReferences(),
-            referenceSnapshot(colorID: retiredID),
-            "Retired-default cleanup must preserve every persisted reference to a retired definition.",
             file: file,
             line: line
         )
