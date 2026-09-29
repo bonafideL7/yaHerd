@@ -20,9 +20,9 @@ enum FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try makePasture(named: "Contract North", using: fixture)
-        let colorID = try makeColor(named: "Contract Emerald", prefix: "CE", using: fixture)
+        let colorID = try await makeColor(named: "Contract Emerald", prefix: "CE", using: fixture)
         let dam = try makeAnimal(
             name: "Contract Dam",
             tagNumber: "D10",
@@ -731,9 +731,9 @@ enum FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
-        let originalColorID = try makeColor(named: "Snapshot Amber", prefix: "SA", using: fixture)
-        let replacementColorID = try makeColor(named: "Snapshot Blue", prefix: "SB", using: fixture)
+    ) async throws {
+        let originalColorID = try await makeColor(named: "Snapshot Amber", prefix: "SA", using: fixture)
+        let replacementColorID = try await makeColor(named: "Snapshot Blue", prefix: "SB", using: fixture)
         let pasture = try makePasture(named: "Snapshot North", using: fixture)
         let dam = try makeAnimal(
             name: "Snapshot Dam",
@@ -1240,14 +1240,14 @@ enum FieldCheckRepositoryContract {
         named name: String,
         prefix: String,
         using fixture: FieldCheckRepositoryContractFixture
-    ) throws -> UUID {
+    ) async throws -> UUID {
         let color = TagColorSnapshot(
             id: UUID(),
             name: name,
             prefix: prefix,
             rgba: RGBAColor(r: 0.25, g: 0.5, b: 0.75)
         )
-        try fixture.makeTagColorRepository().upsert(color)
+        try await fixture.makeTagColorRepository().upsert(color)
         return color.id
     }
 
