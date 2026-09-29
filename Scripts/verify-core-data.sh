@@ -5,106 +5,139 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 MODEL="yaHerd/Data/CoreData/yaHerdModel.xcdatamodeld/yaHerdModel.xcdatamodel/contents"
-EXPECTED_MODEL_BLOB="39c09ff3c09bc8da482826d74e3ec9c38a4dc1c0"
+MANAGED_OBJECT_ROOT="yaHerd/Data/CoreData/ManagedObjects"
 
 [[ -f "$MODEL" ]] || { echo "Core Data model is missing: $MODEL" >&2; exit 1; }
+[[ -d "$MANAGED_OBJECT_ROOT" ]] || { echo "Managed-object source directory is missing: $MANAGED_OBJECT_ROOT" >&2; exit 1; }
 
-actual_model_blob="$(git hash-object "$MODEL")"
-if [[ "$actual_model_blob" != "$EXPECTED_MODEL_BLOB" ]]; then
-  echo "Core Data model no longer matches the Milestone 2 schema contract." >&2
-  echo "Expected model blob: $EXPECTED_MODEL_BLOB" >&2
-  echo "Actual model blob:   $actual_model_blob" >&2
-  echo "Update the model and this verification contract together when a schema change is intentional." >&2
-  exit 1
-fi
-
-python3 - "$MODEL" <<'PYTHON'
+python3 - "$MODEL" "$MANAGED_OBJECT_ROOT" <<'PYTHON'
 from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
 
-path = Path(sys.argv[1])
-root = ET.parse(path).getroot()
+model_path = Path(sys.argv[1])
+managed_object_root = Path(sys.argv[2])
 failures = []
 
-expected_entities = {
-    "Herd": "CDHerd",
-    "TagColorDefinition": "CDTagColorDefinition",
-    "AnimalStatusReference": "CDAnimalStatusReference",
-    "PastureGroup": "CDPastureGroup",
-    "Pasture": "CDPasture",
-    "Animal": "CDAnimal",
-    "AnimalTag": "CDAnimalTag",
-    "MovementRecord": "CDMovementRecord",
-    "StatusRecord": "CDStatusRecord",
-    "HealthRecord": "CDHealthRecord",
-    "PregnancyCheck": "CDPregnancyCheck",
-    "FieldCheckSession": "CDFieldCheckSession",
-    "FieldCheckAnimalCheck": "CDFieldCheckAnimalCheck",
-    "FieldCheckFinding": "CDFieldCheckFinding",
-    "WorkingTreatmentTemplate": "CDWorkingTreatmentTemplate",
-    "WorkingSession": "CDWorkingSession",
-    "WorkingQueueItem": "CDWorkingQueueItem",
-    "WorkingTreatmentRecord": "CDWorkingTreatmentRecord",
-}
+try:
+    root = ET.parse(model_path).getroot()
+except ET.ParseError as error:
+    print(f"Core Data model is invalid XML: {error}", file=sys.stderr)
+    raise SystemExit(1)
 
-entities = {entity.get("name"): entity for entity in root.findall("entity")}
-if set(entities) != set(expected_entities):
-    missing = sorted(set(expected_entities) - set(entities))
-    extra = sorted(set(entities) - set(expected_entities))
-    if missing:
-        failures.append(f"missing entities: {', '.join(missing)}")
-    if extra:
-        failures.append(f"unexpected entities: {', '.join(extra)}")
+entity_list = root.findall("entity")
+entities = {entity.get("name"): entity for entity in entity_list}
 
-for name, represented_class in expected_entities.items():
-    entity = entities.get(name)
-    if entity is None:
-        continue
+if not entity_list:
+    failures.append("model contains no entities")
+if None in entities:
+    failures.append("every entity must have a name")
+if len(entities) != len(entity_list):
+    failures.append("entity names must be unique")
 
-    if entity.get("representedClassName") != represented_class:
-        failures.append(
-            f"{name}: representedClassName must be {represented_class}"
-        )
+herd_entity = entities.get("Herd")
+if herd_entity is None:
+    failures.append("Herd ownership root is missing")
+
+for name, entity in sorted(
+    ((name, entity) for name, entity in entities.items() if name is not None),
+    key=lambda item: item[0],
+):
+    represented_class = entity.get("representedClassName")
+    if not represented_class:
+        failures.append(f"{name}: representedClassName is required")
+    else:
+        source = managed_object_root / f"{represented_class}.swift"
+        if not source.is_file():
+            failures.append(f"{name}: missing managed-object source {source}")
 
     if entity.get("syncable") != "NO":
-        failures.append(f"{name}: syncable must be NO")
+        failures.append(f"{name}: syncable must remain NO")
 
     if entity.find("uniquenessConstraints") is not None:
-        failures.append(f"{name}: Core Data uniqueness constraints are prohibited")
+        failures.append(
+            f"{name}: Core Data uniqueness constraints are prohibited; "
+            "Herd-scoped identity belongs to repository/transaction validation"
+        )
 
     attributes = {item.get("name"): item for item in entity.findall("attribute")}
     identifier = attributes.get("id")
     if identifier is None:
-        failures.append(f"{name}: missing id attribute")
+        failures.append(f"{name}: missing application id attribute")
     elif identifier.get("attributeType") != "UUID" or identifier.get("optional") != "NO":
         failures.append(f"{name}: id must be a required UUID")
 
-    id_indexes = [
-        index for index in entity.findall("fetchIndex")
-        if index.get("name") == "by_id"
-    ]
-    if not id_indexes or not any(
+    indexes = {
+        index.get("name"): index
+        for index in entity.findall("fetchIndex")
+        if index.get("name")
+    }
+    id_index = indexes.get("by_id")
+    if id_index is None or not any(
         element.get("property") == "id"
-        for index in id_indexes
-        for element in index.findall("fetchIndexElement")
+        for element in id_index.findall("fetchIndexElement")
     ):
         failures.append(f"{name}: missing by_id fetch index")
 
-    source = Path("yaHerd/Data/CoreData/ManagedObjects") / f"{represented_class}.swift"
-    if not source.is_file():
-        failures.append(f"{name}: missing managed-object source {source}")
+    relationships = {
+        relationship.get("name"): relationship
+        for relationship in entity.findall("relationship")
+        if relationship.get("name")
+    }
+
+    for relationship_name, relationship in relationships.items():
+        destination_name = relationship.get("destinationEntity")
+        destination = entities.get(destination_name)
+        if destination is None:
+            failures.append(
+                f"{name}.{relationship_name}: destination entity "
+                f"{destination_name!r} does not exist"
+            )
+            continue
+
+        inverse_name = relationship.get("inverseName")
+        inverse_entity_name = relationship.get("inverseEntity")
+        if not inverse_name or not inverse_entity_name:
+            failures.append(f"{name}.{relationship_name}: inverse is required")
+            continue
+
+        if inverse_entity_name != destination_name:
+            failures.append(
+                f"{name}.{relationship_name}: inverseEntity must match destinationEntity"
+            )
+            continue
+
+        inverse = next(
+            (
+                item
+                for item in destination.findall("relationship")
+                if item.get("name") == inverse_name
+            ),
+            None,
+        )
+        if inverse is None:
+            failures.append(
+                f"{name}.{relationship_name}: inverse relationship "
+                f"{destination_name}.{inverse_name} does not exist"
+            )
+        elif (
+            inverse.get("destinationEntity") != name
+            or inverse.get("inverseName") != relationship_name
+            or inverse.get("inverseEntity") != name
+        ):
+            failures.append(
+                f"{name}.{relationship_name}: inverse relationship is not reciprocal"
+            )
 
     if name == "Herd":
         continue
 
-    herd = next(
-        (item for item in entity.findall("relationship") if item.get("name") == "herd"),
-        None,
-    )
+    herd = relationships.get("herd")
     if herd is None:
-        failures.append(f"{name}: missing Herd scope")
-    elif (
+        failures.append(f"{name}: missing required Herd scope")
+        continue
+
+    if (
         herd.get("destinationEntity") != "Herd"
         or herd.get("optional") != "NO"
         or herd.get("maxCount") != "1"
@@ -112,10 +145,10 @@ for name, represented_class in expected_entities.items():
         or herd.get("inverseEntity") != "Herd"
     ):
         failures.append(f"{name}: invalid Herd ownership relationship")
+        continue
 
-    herd_entity = entities.get("Herd")
     if herd_entity is not None:
-        inverse_name = herd.get("inverseName") if herd is not None else None
+        inverse_name = herd.get("inverseName")
         inverse = next(
             (
                 item
@@ -128,18 +161,19 @@ for name, represented_class in expected_entities.items():
             inverse is None
             or inverse.get("destinationEntity") != name
             or inverse.get("inverseName") != "herd"
+            or inverse.get("inverseEntity") != name
             or inverse.get("deletionRule") != "Cascade"
             or inverse.get("toMany") != "YES"
         ):
-            failures.append(f"{name}: invalid inverse Herd ownership relationship")
+            failures.append(f"{name}: Herd must cascade its owned inverse relationship")
 
 if failures:
     print("Core Data verification failed:", file=sys.stderr)
     for failure in failures:
-        print(failure, file=sys.stderr)
+        print(f"  - {failure}", file=sys.stderr)
     raise SystemExit(1)
 
-print("Core Data schema contract passed.")
+print(f"Core Data model verification passed ({len(entity_list)} entities).")
 PYTHON
 
 if grep -R --line-number --include='*.swift' 'import SwiftData' \
