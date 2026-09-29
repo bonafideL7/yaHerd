@@ -221,14 +221,13 @@ final class CoreDataTagColorRepository: TagColorRepository {
 
     func deleteColors(ids: [UUID]) throws {
         guard !ids.isEmpty else { return }
-        let herdID = try currentHerdID()
         let idsToDelete = Set(ids)
 
         try performWrite { context, herd in
             let persisted = try Self.fetchPersistedColors(for: herd, in: context)
             for color in persisted where idsToDelete.contains(color.id) {
                 if try Self.isReferenced(colorID: color.id, herd: herd, in: context) {
-                    Self.Self.preserveAsHiddenDefinition(color)
+                    Self.preserveAsHiddenDefinition(color)
                 } else {
                     context.delete(color)
                 }
@@ -429,14 +428,14 @@ final class CoreDataTagColorRepository: TagColorRepository {
         for color in try Self.fetchPersistedColors(for: herd, in: context)
         where TagColorDefaults.retiredDefaultColorIDs.contains(color.id) {
             if try Self.isReferenced(colorID: color.id, herd: herd, in: context) {
-                Self.Self.preserveAsHiddenDefinition(color)
+                Self.preserveAsHiddenDefinition(color)
             } else {
                 context.delete(color)
             }
         }
     }
 
-    nonisolated private static func Self.preserveAsHiddenDefinition(_ color: CDTagColorDefinition) {
+    nonisolated private static func preserveAsHiddenDefinition(_ color: CDTagColorDefinition) {
         color.isHidden = true
         color.isDefault = false
         color.updatedAt = .now
