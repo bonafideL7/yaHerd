@@ -368,7 +368,17 @@ final class CoreDataTagColorRepository: TagColorRepository {
             NSSortDescriptor(key: "sortOrder", ascending: true),
             NSSortDescriptor(key: "name", ascending: true)
         ]
-        return try context.fetch(request)
+
+        let colors = try context.fetch(request)
+        var seenIDs = Set<UUID>()
+        for color in colors where !seenIDs.insert(color.id).inserted {
+            throw CoreDataPersistenceError.duplicateApplicationID(
+                entity: CDTagColorDefinition.coreDataEntityName,
+                id: color.id,
+                herdID: herd.id
+            )
+        }
+        return colors
     }
 
     nonisolated private static func makeManagedColor(
