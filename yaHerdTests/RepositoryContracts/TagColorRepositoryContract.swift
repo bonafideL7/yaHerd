@@ -751,6 +751,71 @@ enum TagColorRepositoryContract {
             line: line
         )
 
+        try fixture.makeTagColorRepository().setDefaultColor(id: TagColorDefaults.blueID)
+
+        let visibleAfterDefault = try XCTUnwrap(
+            fixture.makeTagColorRepository().fetchColors().first { $0.id == TagColorDefaults.blueID },
+            file: file,
+            line: line
+        )
+        assertSameDefinition(visibleAfterDefault, canonicalBlue, file: file, line: line)
+        XCTAssertTrue(
+            visibleAfterDefault.isDefault,
+            "Selecting a tombstone-backed built-in must select the canonical virtual built-in without restoring the deleted customization.",
+            file: file,
+            line: line
+        )
+
+        let historicalAfterDefault = try XCTUnwrap(
+            fixture.makeTagColorRepository().fetchColor(id: TagColorDefaults.blueID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(historicalAfterDefault.name, "Historical Azure", file: file, line: line)
+        XCTAssertEqual(historicalAfterDefault.prefix, "HA", file: file, line: line)
+
+        let currentVisibleIDs = try fixture.makeTagColorRepository().fetchColors().map(\.id)
+        let reorderedIDs = [TagColorDefaults.blueID]
+            + currentVisibleIDs.filter { $0 != TagColorDefaults.blueID }
+        try fixture.makeTagColorRepository().reorder(colorIDs: reorderedIDs)
+
+        let reorderedVisible = try fixture.makeTagColorRepository().fetchColors()
+        XCTAssertEqual(reorderedVisible.map(\.id), reorderedIDs, file: file, line: line)
+        assertSameDefinition(
+            try XCTUnwrap(
+                reorderedVisible.first { $0.id == TagColorDefaults.blueID },
+                file: file,
+                line: line
+            ),
+            canonicalBlue,
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            try XCTUnwrap(
+                reorderedVisible.first { $0.id == TagColorDefaults.blueID },
+                file: file,
+                line: line
+            ).isDefault,
+            file: file,
+            line: line
+        )
+
+        let historicalAfterReorder = try XCTUnwrap(
+            fixture.makeTagColorRepository().fetchColor(id: TagColorDefaults.blueID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(historicalAfterReorder.name, "Historical Azure", file: file, line: line)
+        XCTAssertEqual(historicalAfterReorder.prefix, "HA", file: file, line: line)
+        XCTAssertEqual(
+            try fixture.referenceControl.fetchReferences(),
+            referenceSnapshot(colorID: TagColorDefaults.blueID),
+            "Default selection and reorder must not unhide or remap a referenced built-in tombstone.",
+            file: file,
+            line: line
+        )
+
         let retiredID = try XCTUnwrap(TagColorDefaults.retiredDefaultColorIDs.first, file: file, line: line)
         let retired = TagColorSnapshot(
             id: retiredID,
