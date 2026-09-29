@@ -122,21 +122,19 @@ final class CoreDataTagColorContractHarness {
         try CoreDataContractTestSupport.write(assembly) { context in
             let herd = try currentHerd(assembly, selection, context)
             let managed = CDTagColorDefinition(context: context)
-            managed.setValuesForKeys([
-                "id": color.id,
-                "name": color.name,
-                "prefix": color.prefix,
-                "red": color.rgba.r,
-                "green": color.rgba.g,
-                "blue": color.rgba.b,
-                "alpha": color.rgba.a,
-                "sortOrder": color.sortOrder,
-                "isHidden": false,
-                "isDefault": color.isDefault,
-                "createdAt": color.createdAt,
-                "updatedAt": color.updatedAt,
-                "herd": herd
-            ])
+            managed.id = color.id
+            managed.name = color.name
+            managed.prefix = color.prefix
+            managed.red = color.rgba.r
+            managed.green = color.rgba.g
+            managed.blue = color.rgba.b
+            managed.alpha = color.rgba.a
+            managed.sortOrder = Int64(color.sortOrder)
+            managed.isHidden = false
+            managed.isDefault = color.isDefault
+            managed.createdAt = color.createdAt
+            managed.updatedAt = color.updatedAt
+            managed.herd = herd
         }
     }
 
