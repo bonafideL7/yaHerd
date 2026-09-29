@@ -14,13 +14,13 @@ final class TagColorLibraryStoreTests: XCTestCase {
         XCTAssertEqual(store.resolvedColorID(nil), store.defaultColorID)
     }
 
-    func testSetDefaultColorPersistsSingleDefault() throws {
+    func testSetDefaultColorPersistsSingleDefault() async throws {
         let container = try TestSupport.makeModelContainer()
         let context = ModelContext(container)
         let store = makeStore(context: context)
         let blue = try XCTUnwrap(store.colors.first { $0.name == "Blue" })
 
-        store.setDefaultColor(id: blue.id)
+        await store.setDefaultColor(id: blue.id)
 
         XCTAssertEqual(store.defaultColor.id, blue.id)
         XCTAssertEqual(store.resolvedColorID(nil), blue.id)
