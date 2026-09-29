@@ -269,9 +269,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
     func restoreDefaultColors() throws {
         let lookup = self.lookup
         try performWrite { context, herd in
-            let builtInIDs = Set(TagColorDefaults.seedDefaultColors().map(\.id))
             let existingDefaultID = try Self.fetchPersistedColors(for: herd, in: context)
-                .first(where: { $0.isDefault && (!$0.isHidden || builtInIDs.contains($0.id)) })?.id
+                .first(where: { !$0.isHidden && $0.isDefault })?.id
 
             for builtIn in TagColorDefaults.seedDefaultColors() {
                 let persisted = try Self.fetchPersistedColors(for: herd, in: context)
