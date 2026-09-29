@@ -467,6 +467,183 @@ enum TagColorRepositoryContract {
         )
     }
 
+    static func assertBuiltInEditPreservesSingleIdentityThroughReorder(
+        using fixture: TagColorRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeTagColorRepository()
+        try repository.setDefaultColor(id: TagColorDefaults.blueID)
+
+        let canonicalBlue = try XCTUnwrap(
+            repository.fetchColors().first { $0.id == TagColorDefaults.blueID },
+            file: file,
+            line: line
+        )
+        var editedBlue = canonicalBlue
+        editedBlue.name = "Contract Azure"
+        editedBlue.prefix = "CA"
+        editedBlue.rgba = RGBAColor(r: 0.12, g: 0.32, b: 0.88)
+        editedBlue.updatedAt = fixedDate(1_805_000_000)
+
+        try repository.upsert(editedBlue)
+
+        var reloaded = try fixture.makeTagColorRepository().fetchColors()
+        XCTAssertEqual(
+            reloaded.filter { $0.id == TagColorDefaults.blueID }.count,
+            1,
+            "Editing a built-in by application UUID must not expose both its virtual and materialized definitions.",
+            file: file,
+            line: line
+        )
+        let edited = try XCTUnwrap(
+            reloaded.first { $0.id == TagColorDefaults.blueID },
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(edited.name, "Contract Azure", file: file, line: line)
+        XCTAssertEqual(edited.prefix, "CA", file: file, line: line)
+        XCTAssertEqual(edited.rgba, editedBlue.rgba, file: file, line: line)
+        XCTAssertTrue(edited.isDefault, file: file, line: line)
+        XCTAssertFalse(
+            reloaded.contains {
+                TagColorLibraryRules.normalizedNameKey($0.name)
+                    == TagColorLibraryRules.normalizedNameKey("Blue")
+                    && $0.id != TagColorDefaults.blueID
+            },
+            file: file,
+            line: line
+        )
+
+        let reorderedIDs = Array(reloaded.map(\.id).reversed())
+        try fixture.makeTagColorRepository().reorder(colorIDs: reorderedIDs)
+        reloaded = try fixture.makeTagColorRepository().fetchColors()
+        XCTAssertEqual(reloaded.map(\.id), reorderedIDs, file: file, line: line)
+        XCTAssertEqual(
+            Set(reloaded.map(\.id)).count,
+            reloaded.count,
+            "The edit-to-reorder lifecycle must never emit duplicate application identities.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertReorderMaterializesVirtualLibraryAndPersistsCompleteOrder(
+        using fixture: TagColorRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let pristineRepository = fixture.makeTagColorRepository()
+        let pristineIDs = try pristineRepository.fetchColors().map(\.id)
+        let pristineOrder = Array(pristineIDs.reversed())
+
+        try pristineRepository.reorder(colorIDs: pristineOrder)
+
+        let pristineReloaded = try fixture.makeTagColorRepository().fetchColors()
+        XCTAssertEqual(pristineReloaded.map(\.id), pristineOrder, file: file, line: line)
+        XCTAssertEqual(pristineReloaded.map(\.sortOrder), Array(pristineOrder.indices), file: file, line: line)
+
+        let partialHerdID = UUID()
+        try fixture.herdSelectionControl.seedHerd(
+            partialHerdID,
+            "Partial Tag Color Contract Herd",
+            fixedDate(1_806_000_000),
+            fixedDate(1_806_000_100)
+        )
+        try fixture.herdSelectionControl.setCurrentHerdID(partialHerdID)
+
+        let customID = UUID()
+        try fixture.makeTagColorRepository().upsert(
+            TagColorSnapshot(
+                id: customID,
+                name: "Partial Custom",
+                prefix: "PC",
+                rgba: RGBAColor(r: 0.45, g: 0.25, b: 0.65)
+            )
+        )
+        try fixture.makeTagColorRepository().setDefaultColor(id: TagColorDefaults.greenID)
+
+        let partiallyMaterializedIDs = try fixture.makeTagColorRepository().fetchColors().map(\.id)
+        let requested = [customID]
+            + Array(partiallyMaterializedIDs.filter { $0 != customID }.reversed())
+
+        try fixture.makeTagColorRepository().reorder(colorIDs: requested)
+
+        let partialReloaded = try fixture.makeTagColorRepository().fetchColors()
+        XCTAssertEqual(partialReloaded.map(\.id), requested, file: file, line: line)
+        XCTAssertEqual(partialReloaded.map(\.sortOrder), Array(requested.indices), file: file, line: line)
+        XCTAssertEqual(defaultColorIDs(in: partialReloaded), [TagColorDefaults.greenID], file: file, line: line)
+    }
+
+    static func assertBuiltInToBuiltInNameCollisionPreservesBothStableIdentities(
+        using fixture: TagColorRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeTagColorRepository()
+        let defaults = TagColorDefaults.seedDefaultColors()
+        let blue = try XCTUnwrap(defaults.first { $0.id == TagColorDefaults.blueID }, file: file, line: line)
+        let red = try XCTUnwrap(defaults.first { $0.id == TagColorDefaults.redID }, file: file, line: line)
+
+        var conflictingBlue = blue
+        conflictingBlue.name = "  red  "
+        conflictingBlue.prefix = "BR"
+
+        // First protect the pristine virtual-built-in path.
+        try repository.upsert(conflictingBlue)
+        var reloaded = try fixture.makeTagColorRepository().fetchColors()
+        assertSameDefinition(
+            try XCTUnwrap(reloaded.first { $0.id == blue.id }, file: file, line: line),
+            blue,
+            file: file,
+            line: line
+        )
+        assertSameDefinition(
+            try XCTUnwrap(reloaded.first { $0.id == red.id }, file: file, line: line),
+            red,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            reloaded.filter {
+                TagColorLibraryRules.normalizedNameKey($0.name)
+                    == TagColorLibraryRules.normalizedNameKey("Red")
+            }.map(\.id),
+            [red.id],
+            "One stable built-in must not be renamed into another built-in's normalized name.",
+            file: file,
+            line: line
+        )
+
+        // Then materialize the target built-in and prove neither its identity nor its references
+        // can be absorbed by the source built-in.
+        try fixture.makeTagColorRepository().setDefaultColor(id: red.id)
+        try fixture.referenceControl.seedReferences(red.id)
+        try fixture.makeTagColorRepository().upsert(conflictingBlue)
+
+        reloaded = try fixture.makeTagColorRepository().fetchColors()
+        assertSameDefinition(
+            try XCTUnwrap(reloaded.first { $0.id == blue.id }, file: file, line: line),
+            blue,
+            file: file,
+            line: line
+        )
+        let materializedRed = try XCTUnwrap(
+            reloaded.first { $0.id == red.id },
+            file: file,
+            line: line
+        )
+        assertSameDefinition(materializedRed, red, file: file, line: line)
+        XCTAssertTrue(materializedRed.isDefault, file: file, line: line)
+        XCTAssertEqual(
+            try fixture.referenceControl.fetchReferences(),
+            referenceSnapshot(colorID: red.id),
+            "A built-in/built-in collision must not remap references between stable application identities.",
+            file: file,
+            line: line
+        )
+    }
+
     static func assertBuiltInNameCollisionPreservesBuiltInIdentityAndRemapsReferences(
         using fixture: TagColorRepositoryContractFixture,
         file: StaticString = #filePath,
@@ -523,6 +700,153 @@ enum TagColorRepositoryContract {
                 workingQueueDamTagColorIDSnapshot: TagColorDefaults.blueID
             ),
             "Built-in collision repair must remap every persisted UUID reference to the stable built-in identity.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertReferencedBuiltInAndRetiredDefinitionsSurviveRemoval(
+        using fixture: TagColorRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let repository = fixture.makeTagColorRepository()
+        var editedBlue = try XCTUnwrap(
+            repository.fetchColors().first { $0.id == TagColorDefaults.blueID },
+            file: file,
+            line: line
+        )
+        editedBlue.name = "Historical Azure"
+        editedBlue.prefix = "HA"
+        editedBlue.rgba = RGBAColor(r: 0.1, g: 0.3, b: 0.9)
+        try repository.upsert(editedBlue)
+        try fixture.referenceControl.seedReferences(TagColorDefaults.blueID)
+
+        try repository.deleteColors(ids: [TagColorDefaults.blueID])
+
+        let visibleBlue = try XCTUnwrap(
+            fixture.makeTagColorRepository().fetchColors().first { $0.id == TagColorDefaults.blueID },
+            file: file,
+            line: line
+        )
+        let canonicalBlue = try XCTUnwrap(
+            TagColorDefaults.seedDefaultColors().first { $0.id == TagColorDefaults.blueID },
+            file: file,
+            line: line
+        )
+        assertSameDefinition(visibleBlue, canonicalBlue, file: file, line: line)
+
+        let historicalBlue = try XCTUnwrap(
+            fixture.makeTagColorRepository().fetchColor(id: TagColorDefaults.blueID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(historicalBlue.name, "Historical Azure", file: file, line: line)
+        XCTAssertEqual(historicalBlue.prefix, "HA", file: file, line: line)
+        XCTAssertEqual(
+            try fixture.referenceControl.fetchReferences(),
+            referenceSnapshot(colorID: TagColorDefaults.blueID),
+            "Deleting a referenced built-in materialization must not null or rewrite its persisted references.",
+            file: file,
+            line: line
+        )
+
+        try fixture.makeTagColorRepository().setDefaultColor(id: TagColorDefaults.blueID)
+
+        let visibleAfterDefault = try XCTUnwrap(
+            fixture.makeTagColorRepository().fetchColors().first { $0.id == TagColorDefaults.blueID },
+            file: file,
+            line: line
+        )
+        assertSameDefinition(visibleAfterDefault, canonicalBlue, file: file, line: line)
+        XCTAssertTrue(
+            visibleAfterDefault.isDefault,
+            "Selecting a tombstone-backed built-in must select the canonical virtual built-in without restoring the deleted customization.",
+            file: file,
+            line: line
+        )
+
+        let historicalAfterDefault = try XCTUnwrap(
+            fixture.makeTagColorRepository().fetchColor(id: TagColorDefaults.blueID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(historicalAfterDefault.name, "Historical Azure", file: file, line: line)
+        XCTAssertEqual(historicalAfterDefault.prefix, "HA", file: file, line: line)
+
+        let currentVisibleIDs = try fixture.makeTagColorRepository().fetchColors().map(\.id)
+        let reorderedIDs = [TagColorDefaults.blueID]
+            + currentVisibleIDs.filter { $0 != TagColorDefaults.blueID }
+        try fixture.makeTagColorRepository().reorder(colorIDs: reorderedIDs)
+
+        let reorderedVisible = try fixture.makeTagColorRepository().fetchColors()
+        XCTAssertEqual(reorderedVisible.map(\.id), reorderedIDs, file: file, line: line)
+        assertSameDefinition(
+            try XCTUnwrap(
+                reorderedVisible.first { $0.id == TagColorDefaults.blueID },
+                file: file,
+                line: line
+            ),
+            canonicalBlue,
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            try XCTUnwrap(
+                reorderedVisible.first { $0.id == TagColorDefaults.blueID },
+                file: file,
+                line: line
+            ).isDefault,
+            file: file,
+            line: line
+        )
+
+        let historicalAfterReorder = try XCTUnwrap(
+            fixture.makeTagColorRepository().fetchColor(id: TagColorDefaults.blueID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(historicalAfterReorder.name, "Historical Azure", file: file, line: line)
+        XCTAssertEqual(historicalAfterReorder.prefix, "HA", file: file, line: line)
+        XCTAssertEqual(
+            try fixture.referenceControl.fetchReferences(),
+            referenceSnapshot(colorID: TagColorDefaults.blueID),
+            "Default selection and reorder must not unhide or remap a referenced built-in tombstone.",
+            file: file,
+            line: line
+        )
+
+        let retiredID = try XCTUnwrap(TagColorDefaults.retiredDefaultColorIDs.first, file: file, line: line)
+        let retired = TagColorSnapshot(
+            id: retiredID,
+            name: "Retired Contract Color",
+            prefix: "RC",
+            rgba: RGBAColor(r: 0.55, g: 0.45, b: 0.35)
+        )
+        try fixture.referenceControl.seedPersistedColor(retired)
+        try fixture.referenceControl.seedReferences(retiredID)
+
+        // Any ordinary upsert executes retired-default cleanup. Referenced retired definitions must
+        // take the same tombstone path as explicitly deleted referenced definitions.
+        try fixture.makeTagColorRepository().upsert(
+            TagColorSnapshot(
+                id: UUID(),
+                name: "Retired Cleanup Trigger",
+                prefix: "RCT",
+                rgba: RGBAColor(r: 0.2, g: 0.4, b: 0.6)
+            )
+        )
+
+        let historicalRetired = try XCTUnwrap(
+            fixture.makeTagColorRepository().fetchColor(id: retiredID),
+            file: file,
+            line: line
+        )
+        assertSameDefinition(historicalRetired, retired, file: file, line: line)
+        XCTAssertEqual(
+            try fixture.referenceControl.fetchReferences(),
+            referenceSnapshot(colorID: retiredID),
+            "Retired-default cleanup must preserve every persisted reference to a retired definition.",
             file: file,
             line: line
         )
@@ -872,6 +1196,18 @@ enum TagColorRepositoryContract {
             "Expected tag color \(id) to be visible after reload.",
             file: file,
             line: line
+        )
+    }
+
+    private static func referenceSnapshot(colorID: UUID) -> TagColorReferenceSnapshot {
+        TagColorReferenceSnapshot(
+            animalTagColorID: colorID,
+            historicalTagColorID: colorID,
+            fieldCheckRosterTagColorID: colorID,
+            fieldCheckDamRosterTagColorID: colorID,
+            fieldCheckFindingTagColorIDSnapshot: colorID,
+            workingQueueTagColorIDSnapshot: colorID,
+            workingQueueDamTagColorIDSnapshot: colorID
         )
     }
 
