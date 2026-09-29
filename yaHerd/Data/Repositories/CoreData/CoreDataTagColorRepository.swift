@@ -95,7 +95,6 @@ final class CoreDataTagColorRepository: TagColorRepository {
         let cleanedName = TagColorLibraryRules.normalizedDisplayName(color.name)
         guard !cleanedName.isEmpty else { return }
 
-        let lookup = self.lookup
         try performWrite { context, herd in
             let cleanedPrefix = TagColorLibraryRules.normalizedPrefix(
                 color.prefix,
@@ -172,10 +171,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
             for duplicateID in duplicateIDs {
                 try Self.remapReferences(
                     from: duplicateID,
-                    to: canonical.id,
+                    to: canonical,
                     herd: herd,
-                    in: context,
-                    lookup: lookup
+                    in: context
                 )
                 if let duplicate = persisted.first(where: { $0.id == duplicateID }) {
                     context.delete(duplicate)
@@ -270,7 +268,6 @@ final class CoreDataTagColorRepository: TagColorRepository {
     }
 
     func restoreDefaultColors() throws {
-        let lookup = self.lookup
         try performWrite { context, herd in
             let existingDefaultID = try Self.fetchPersistedColors(for: herd, in: context)
                 .first(where: { !$0.isHidden && $0.isDefault })?.id
@@ -298,10 +295,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 for duplicate in duplicateNames {
                     try Self.remapReferences(
                         from: duplicate.id,
-                        to: target.id,
+                        to: target,
                         herd: herd,
-                        in: context,
-                        lookup: lookup
+                        in: context
                     )
                     context.delete(duplicate)
                 }
@@ -460,21 +456,12 @@ final class CoreDataTagColorRepository: TagColorRepository {
 
     nonisolated private static func remapReferences(
         from oldID: UUID,
-        to replacementID: UUID,
+        to replacement: CDTagColorDefinition,
         herd: CDHerd,
-        in context: NSManagedObjectContext,
-        lookup: CoreDataLookup
+        in context: NSManagedObjectContext
     ) throws {
+        let replacementID = replacement.id
         guard oldID != replacementID else { return }
-
-        guard let replacement = try lookup.herdOwned(
-            CDTagColorDefinition.self,
-            id: replacementID,
-            herdID: herd.id,
-            in: context
-        ) else {
-            return
-        }
 
         let tagRequest = NSFetchRequest<CDAnimalTag>(entityName: CDAnimalTag.coreDataEntityName)
         tagRequest.predicate = NSPredicate(format: "herd == %@ AND color.id == %@", herd, oldID as NSUUID)
