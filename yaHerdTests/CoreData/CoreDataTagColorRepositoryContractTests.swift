@@ -43,9 +43,6 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
         try TagColorRepositoryContract.assertNormalizedNameCollisionKeepsCanonicalIdentityAndRemapsReferences(using: fixture)
     }
 
-
-
-
     func testBuiltInNameCollisionPreservesBuiltInIdentityAndRemapsReferences() async throws {
         let fixture = try await makeFixture()
         try TagColorRepositoryContract.assertBuiltInNameCollisionPreservesBuiltInIdentityAndRemapsReferences(using: fixture)
