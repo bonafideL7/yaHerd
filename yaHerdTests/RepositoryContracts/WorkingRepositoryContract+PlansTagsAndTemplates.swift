@@ -8,14 +8,14 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Plan Source", using: fixture)
         let replacementColor = TagColorSnapshot(
             name: "Working Replacement Tag Color",
             prefix: "WRT",
             rgba: RGBAColor(r: 0.3, g: 0.6, b: 0.9)
         )
-        try fixture.makeTagColorRepository().upsert(replacementColor)
+        try await fixture.makeTagColorRepository().upsert(replacementColor)
         let animal = try makeAnimal(name: "Plan Tag Cow", tagNumber: "801", sex: .female, pastureID: source.id, using: fixture)
         let originalTagID = try XCTUnwrap(animal.activeTags.first { $0.isPrimary }?.id, file: file, line: line)
         let originalTreatment = WorkingTreatmentPlanItem(id: UUID(), name: "Original Vaccine")
