@@ -388,33 +388,33 @@ final class MutationPublishingTagColorRepository: TagColorRepository {
     func fetchColors() throws -> [TagColorSnapshot] { try base.fetchColors() }
     func fetchColor(id: UUID) throws -> TagColorSnapshot? { try base.fetchColor(id: id) }
 
-    func upsert(_ color: TagColorSnapshot) throws {
+    func upsert(_ color: TagColorSnapshot) async throws {
         try writePolicy.validateCanWrite()
-        try base.upsert(color)
+        try await base.upsert(color)
         mutationRecorder.recordSuccessfulMutation(reason: .tagColor)
     }
 
-    func setDefaultColor(id: UUID) throws {
+    func setDefaultColor(id: UUID) async throws {
         try writePolicy.validateCanWrite()
-        try base.setDefaultColor(id: id)
+        try await base.setDefaultColor(id: id)
         mutationRecorder.recordSuccessfulMutation(reason: .tagColor)
     }
 
-    func deleteColors(ids: [UUID]) throws {
+    func deleteColors(ids: [UUID]) async throws {
         try writePolicy.validateCanWrite()
-        try base.deleteColors(ids: ids)
+        try await base.deleteColors(ids: ids)
         mutationRecorder.recordSuccessfulMutation(reason: .tagColor)
     }
 
-    func reorder(colorIDs: [UUID]) throws {
+    func reorder(colorIDs: [UUID]) async throws {
         try writePolicy.validateCanWrite()
-        try base.reorder(colorIDs: colorIDs)
+        try await base.reorder(colorIDs: colorIDs)
         mutationRecorder.recordSuccessfulMutation(reason: .tagColor)
     }
 
-    func restoreDefaultColors() throws {
+    func restoreDefaultColors() async throws {
         try writePolicy.validateCanWrite()
-        try base.restoreDefaultColors()
+        try await base.restoreDefaultColors()
         mutationRecorder.recordSuccessfulMutation(reason: .tagColor)
     }
 }
