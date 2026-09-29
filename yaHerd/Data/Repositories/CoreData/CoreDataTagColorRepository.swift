@@ -5,15 +5,18 @@ import Foundation
 final class CoreDataTagColorRepository: TagColorRepository {
     private let selection: any CurrentHerdSelectionReading
     private let contextFactory: CoreDataContextFactory
+    private let transactionExecutor: CoreDataTransactionExecutor
     private let lookup: CoreDataLookup
 
     init(
         selection: any CurrentHerdSelectionReading,
         contextFactory: CoreDataContextFactory,
+        transactionExecutor: CoreDataTransactionExecutor,
         lookup: CoreDataLookup
     ) {
         self.selection = selection
         self.contextFactory = contextFactory
+        self.transactionExecutor = transactionExecutor
         self.lookup = lookup
     }
 
@@ -24,6 +27,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         self.init(
             selection: selection,
             contextFactory: assembly.contextFactory,
+            transactionExecutor: assembly.transactionExecutor,
             lookup: assembly.lookup
         )
     }
@@ -91,11 +95,11 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    func upsert(_ color: TagColorSnapshot) throws {
+    func upsert(_ color: TagColorSnapshot) async throws {
         let cleanedName = TagColorLibraryRules.normalizedDisplayName(color.name)
         guard !cleanedName.isEmpty else { return }
 
-        try performWrite { context, herd in
+        try await performWrite { context, herd in
             let cleanedPrefix = TagColorLibraryRules.normalizedPrefix(
                 color.prefix,
                 fallbackName: cleanedName
@@ -187,10 +191,10 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    func setDefaultColor(id: UUID) throws {
+    func setDefaultColor(id: UUID) async throws {
         let herdID = try currentHerdID()
         let lookup = self.lookup
-        try performWrite { context, herd in
+        try await performWrite { context, herd in
             var target = try lookup.herdOwned(
                 CDTagColorDefinition.self,
                 id: id,
@@ -208,11 +212,11 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    func deleteColors(ids: [UUID]) throws {
+    func deleteColors(ids: [UUID]) async throws {
         guard !ids.isEmpty else { return }
         let idsToDelete = Set(ids)
 
-        try performWrite { context, herd in
+        try await performWrite { context, herd in
             let persisted = try Self.fetchPersistedColors(for: herd, in: context)
             let builtInsByID = Dictionary(
                 uniqueKeysWithValues: TagColorDefaults.seedDefaultColors().map { ($0.id, $0) }
@@ -236,10 +240,10 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    func reorder(colorIDs: [UUID]) throws {
+    func reorder(colorIDs: [UUID]) async throws {
         guard !colorIDs.isEmpty else { return }
 
-        try performWrite { context, herd in
+        try await performWrite { context, herd in
             var persistedByID = Dictionary(
                 uniqueKeysWithValues: try Self.fetchPersistedColors(for: herd, in: context).map { ($0.id, $0) }
             )
@@ -267,8 +271,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    func restoreDefaultColors() throws {
-        try performWrite { context, herd in
+    func restoreDefaultColors() async throws {
+        try await performWrite { context, herd in
             let existingDefaultID = try Self.fetchPersistedColors(for: herd, in: context)
                 .first(where: { !$0.isHidden && $0.isDefault })?.id
 
@@ -327,34 +331,16 @@ final class CoreDataTagColorRepository: TagColorRepository {
     }
 
     private func performWrite(
-        _ operation: @Sendable (NSManagedObjectContext, CDHerd) throws -> Void
-    ) throws {
+        _ operation: @escaping @Sendable (NSManagedObjectContext, CDHerd) throws -> Void
+    ) async throws {
         let herdID = try currentHerdID()
-        let context = try contextFactory.makeWriteContext()
         let lookup = self.lookup
 
-        try context.performAndWait {
-            do {
-                guard let herd = try lookup.herd(id: herdID, in: context) else {
-                    throw HerdRepositoryError.missingHerd
-                }
-                try operation(context, herd)
-                if context.hasChanges {
-                    do {
-                        try context.save()
-                    } catch {
-                        context.rollback()
-                        throw CoreDataPersistenceError.saveFailed(
-                            description: error.localizedDescription
-                        )
-                    }
-                }
-            } catch {
-                if context.hasChanges {
-                    context.rollback()
-                }
-                throw error
+        try await transactionExecutor.performWrite { context in
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
             }
+            try operation(context, herd)
         }
     }
 
