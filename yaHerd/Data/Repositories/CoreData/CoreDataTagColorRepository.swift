@@ -131,7 +131,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
 
             let existingByID = persisted.first { $0.id == color.id }
             let existingByName = persisted
-                .filter { $0.id != color.id }
+                .filter { $0.id != color.id && !$0.isHidden }
                 .sorted(by: Self.persistedSort)
                 .first {
                     TagColorLibraryRules.normalizedNameKey($0.name) == nameKey
@@ -284,7 +284,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 let builtInKey = TagColorLibraryRules.normalizedNameKey(builtIn.name)
                 let byID = persisted.first { $0.id == builtIn.id }
                 let byName = persisted.first {
-                    TagColorLibraryRules.normalizedNameKey($0.name) == builtInKey
+                    !$0.isHidden
+                        && TagColorLibraryRules.normalizedNameKey($0.name) == builtInKey
                 }
 
                 let target: CDTagColorDefinition
