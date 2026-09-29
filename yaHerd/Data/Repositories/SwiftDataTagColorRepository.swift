@@ -73,7 +73,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
         try prepareLibraryIfNeeded()
     }
 
-    func upsert(_ color: TagColorSnapshot) throws {
+    func upsert(_ color: TagColorSnapshot) async throws {
         let cleanedName = TagColorLibraryRules.normalizedDisplayName(color.name)
         guard !cleanedName.isEmpty else { return }
 
@@ -108,11 +108,11 @@ final class SwiftDataTagColorRepository: TagColorRepository {
         try saveAndNormalize()
 
         if color.isDefault, let persisted = try persistedColor(name: cleanedName) {
-            try setDefaultColor(id: persisted.id)
+            try await setDefaultColor(id: persisted.id)
         }
     }
 
-    func setDefaultColor(id: UUID) throws {
+    func setDefaultColor(id: UUID) async throws {
         var persistedColors = try fetchPersistedColors()
 
         if !persistedColors.contains(where: { $0.id == id }),
@@ -134,7 +134,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
         try saveAndNormalize()
     }
 
-    func deleteColors(ids: [UUID]) throws {
+    func deleteColors(ids: [UUID]) async throws {
         guard !ids.isEmpty else { return }
         let idsToDelete = Set(ids)
 
@@ -146,7 +146,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
         try saveAndNormalize()
     }
 
-    func reorder(colorIDs: [UUID]) throws {
+    func reorder(colorIDs: [UUID]) async throws {
         guard !colorIDs.isEmpty else { return }
         let sortOrderByID = Dictionary(uniqueKeysWithValues: colorIDs.enumerated().map { ($0.element, $0.offset) })
 
@@ -160,7 +160,7 @@ final class SwiftDataTagColorRepository: TagColorRepository {
         try saveAndNormalize()
     }
 
-    func restoreDefaultColors() throws {
+    func restoreDefaultColors() async throws {
         try removeRetiredDefaultColors()
         let existingDefaultID = try fetchPersistedColors().first(where: { $0.isDefault })?.id
 
