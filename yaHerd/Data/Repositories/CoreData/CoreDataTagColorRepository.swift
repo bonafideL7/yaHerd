@@ -45,23 +45,12 @@ final class CoreDataTagColorRepository: TagColorRepository {
             // Application UUID is authoritative. A materialized built-in may legitimately have an
             // edited display name, so overlaying by UUID prevents its virtual definition from
             // appearing as a second SwiftUI identity.
-            let builtInIDs = Set(TagColorDefaults.seedDefaultColors().map(\.id))
-            for color in persisted {
-                if !color.isHidden {
-                    snapshotsByID[color.id] = color.toSnapshot()
-                } else if builtInIDs.contains(color.id),
-                          var virtualBuiltIn = snapshotsByID[color.id] {
-                    // A referenced deleted built-in keeps its historical display fields hidden for
-                    // UUID lookup, while sort/default metadata continues to drive the canonical
-                    // virtual built-in shown in settings.
-                    virtualBuiltIn.sortOrder = Int(color.sortOrder)
-                    virtualBuiltIn.isDefault = color.isDefault
-                    snapshotsByID[color.id] = virtualBuiltIn
-                }
+            for color in persisted where !color.isHidden {
+                snapshotsByID[color.id] = color.toSnapshot()
             }
 
             if let selectedDefaultID = persisted
-                .filter({ $0.isDefault })
+                .filter({ !$0.isHidden && $0.isDefault })
                 .sorted(by: Self.defaultSort)
                 .first?.id {
                 for id in Array(snapshotsByID.keys) {
@@ -193,7 +182,6 @@ final class CoreDataTagColorRepository: TagColorRepository {
             if canonical.isDefault {
                 Self.setExclusiveDefault(canonical.id, in: herd, context: context)
             }
-            try Self.removeRetiredDefaults(in: herd, context: context)
             try Self.normalizeDefault(in: herd, context: context)
         }
     }
@@ -225,8 +213,18 @@ final class CoreDataTagColorRepository: TagColorRepository {
 
         try performWrite { context, herd in
             let persisted = try Self.fetchPersistedColors(for: herd, in: context)
+            let builtInsByID = Dictionary(
+                uniqueKeysWithValues: TagColorDefaults.seedDefaultColors().map { ($0.id, $0) }
+            )
+
             for color in persisted where idsToDelete.contains(color.id) {
-                if try Self.isReferenced(colorID: color.id, herd: herd, in: context) {
+                if let builtIn = builtInsByID[color.id] {
+                    if try Self.isReferenced(colorID: color.id, herd: herd, in: context) {
+                        Self.resetBuiltInOverride(color, to: builtIn)
+                    } else {
+                        context.delete(color)
+                    }
+                } else if try Self.isReferenced(colorID: color.id, herd: herd, in: context) {
                     Self.preserveAsHiddenDefinition(color)
                 } else {
                     context.delete(color)
@@ -252,9 +250,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
             for (order, id) in colorIDs.enumerated() where seen.insert(id).inserted {
                 let target: CDTagColorDefinition
                 if let persisted = persistedByID[id] {
-                    if persisted.isHidden && builtInsByID[id] == nil {
-                        continue
-                    }
+                    guard !persisted.isHidden else { continue }
                     target = persisted
                 } else if let builtIn = builtInsByID[id] {
                     target = Self.makeManagedColor(from: builtIn, herd: herd, in: context)
@@ -273,8 +269,6 @@ final class CoreDataTagColorRepository: TagColorRepository {
     func restoreDefaultColors() throws {
         let lookup = self.lookup
         try performWrite { context, herd in
-            try Self.removeRetiredDefaults(in: herd, context: context)
-
             let builtInIDs = Set(TagColorDefaults.seedDefaultColors().map(\.id))
             let existingDefaultID = try Self.fetchPersistedColors(for: herd, in: context)
                 .first(where: { $0.isDefault && (!$0.isHidden || builtInIDs.contains($0.id)) })?.id
@@ -288,29 +282,12 @@ final class CoreDataTagColorRepository: TagColorRepository {
                         && TagColorLibraryRules.normalizedNameKey($0.name) == builtInKey
                 }
 
-                if let hiddenHistorical = byID, hiddenHistorical.isHidden {
-                    // The persisted row is historical state, not the live built-in definition.
-                    // Keep its display payload and hidden status intact so UUID lookup continues
-                    // to resolve the definition captured by existing Animal/Field Check/Working
-                    // references. The visible canonical built-in remains virtual.
-                    if let byName, byName !== hiddenHistorical {
-                        if try Self.isReferenced(colorID: byName.id, herd: herd, in: context) {
-                            Self.preserveAsHiddenDefinition(byName)
-                        } else {
-                            context.delete(byName)
-                        }
-                    }
-
-                    let preservesSelectedDefault =
-                        existingDefaultID == hiddenHistorical.id || existingDefaultID == byName?.id
-                    hiddenHistorical.isDefault =
-                        existingDefaultID == nil ? builtIn.isDefault : preservesSelectedDefault
-                    continue
-                }
-
                 let target: CDTagColorDefinition
                 if let byID {
                     target = byID
+                    if target.isHidden {
+                        Self.resetBuiltInOverride(target, to: builtIn)
+                    }
                 } else {
                     target = Self.makeManagedColor(from: builtIn, herd: herd, in: context)
                 }
@@ -444,18 +421,20 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
-    nonisolated private static func removeRetiredDefaults(
-        in herd: CDHerd,
-        context: NSManagedObjectContext
-    ) throws {
-        for color in try Self.fetchPersistedColors(for: herd, in: context)
-        where TagColorDefaults.retiredDefaultColorIDs.contains(color.id) {
-            if try Self.isReferenced(colorID: color.id, herd: herd, in: context) {
-                Self.preserveAsHiddenDefinition(color)
-            } else {
-                context.delete(color)
-            }
-        }
+    nonisolated private static func resetBuiltInOverride(
+        _ color: CDTagColorDefinition,
+        to builtIn: TagColorSnapshot
+    ) {
+        color.name = builtIn.name
+        color.prefix = builtIn.prefix
+        color.red = builtIn.rgba.r
+        color.green = builtIn.rgba.g
+        color.blue = builtIn.rgba.b
+        color.alpha = builtIn.rgba.a
+        color.sortOrder = Int64(builtIn.sortOrder)
+        color.isHidden = false
+        color.isDefault = false
+        color.updatedAt = .now
     }
 
     nonisolated private static func preserveAsHiddenDefinition(_ color: CDTagColorDefinition) {
