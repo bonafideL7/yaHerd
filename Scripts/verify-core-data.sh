@@ -146,19 +146,73 @@ def validate_managed_object_source(entity_name, entity, represented_class):
         return
 
     text = source.read_text()
-    objc_pattern = rf"@objc\s*\(\s*{re.escape(represented_class)}\s*\)"
-    class_pattern = rf"\b(?:final\s+)?class\s+{re.escape(represented_class)}\s*:\s*NSManagedObject\b"
-    if re.search(objc_pattern, text) is None:
-        failures.append(f"{entity_name}: {represented_class} must declare @objc({represented_class})")
-    if re.search(class_pattern, text) is None:
-        failures.append(f"{entity_name}: {represented_class} must inherit NSManagedObject")
+
+    def strip_swift_comments(source_text):
+        output = []
+        i = 0
+        block_depth = 0
+        in_string = False
+        escaped = False
+        while i < len(source_text):
+            if block_depth:
+                if source_text.startswith("/*", i):
+                    block_depth += 1
+                    i += 2
+                elif source_text.startswith("*/", i):
+                    block_depth -= 1
+                    i += 2
+                else:
+                    if source_text[i] == "\n":
+                        output.append("\n")
+                    i += 1
+                continue
+            char = source_text[i]
+            if in_string:
+                output.append(char)
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                i += 1
+                continue
+            if char == '"':
+                in_string = True
+                output.append(char)
+                i += 1
+            elif source_text.startswith("//", i):
+                newline = source_text.find("\n", i + 2)
+                if newline == -1:
+                    break
+                output.append("\n")
+                i = newline + 1
+            elif source_text.startswith("/*", i):
+                block_depth = 1
+                i += 2
+            else:
+                output.append(char)
+                i += 1
+        return "".join(output)
+
+    code = strip_swift_comments(text)
+    class_declaration_pattern = (
+        rf"@objc\s*\(\s*{re.escape(represented_class)}\s*\)"
+        rf"\s*(?:final\s+)?class\s+{re.escape(represented_class)}"
+        rf"\s*:\s*NSManagedObject\b"
+    )
+    if re.search(class_declaration_pattern, code) is None:
+        failures.append(
+            f"{entity_name}: {represented_class} must attach "
+            f"@objc({represented_class}) to its NSManagedObject declaration"
+        )
 
     declarations = {
         match.group(1): re.sub(r"\s+", "", match.group(2))
         for match in re.finditer(
             r"@NSManaged\s+(?:public\s+|internal\s+|private\s+|fileprivate\s+)?var\s+"
             r"([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([^\n/{]+)",
-            text,
+            code,
         )
     }
 
