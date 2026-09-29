@@ -44,12 +44,23 @@ final class CoreDataTagColorRepository: TagColorRepository {
             // Application UUID is authoritative. A materialized built-in may legitimately have an
             // edited display name, so overlaying by UUID prevents its virtual definition from
             // appearing as a second SwiftUI identity.
-            for color in persisted where !color.isHidden {
-                snapshotsByID[color.id] = color.toSnapshot()
+            let builtInIDs = Set(TagColorDefaults.seedDefaultColors().map(\.id))
+            for color in persisted {
+                if !color.isHidden {
+                    snapshotsByID[color.id] = color.toSnapshot()
+                } else if builtInIDs.contains(color.id),
+                          var virtualBuiltIn = snapshotsByID[color.id] {
+                    // A referenced deleted built-in keeps its historical display fields hidden for
+                    // UUID lookup, while sort/default metadata continues to drive the canonical
+                    // virtual built-in shown in settings.
+                    virtualBuiltIn.sortOrder = Int(color.sortOrder)
+                    virtualBuiltIn.isDefault = color.isDefault
+                    snapshotsByID[color.id] = virtualBuiltIn
+                }
             }
 
             if let selectedDefaultID = persisted
-                .filter({ !$0.isHidden && $0.isDefault })
+                .filter({ $0.isDefault })
                 .sorted(by: defaultSort)
                 .first?.id {
                 for id in Array(snapshotsByID.keys) {
@@ -200,7 +211,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
             }
 
             guard let target else { return }
-            target.isHidden = false
+            if !target.isHidden {
+                target.isHidden = false
+            }
             setExclusiveDefault(target.id, in: herd, context: context)
         }
     }
@@ -240,6 +253,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
             for (order, id) in colorIDs.enumerated() where seen.insert(id).inserted {
                 let target: CDTagColorDefinition
                 if let persisted = persistedByID[id] {
+                    if persisted.isHidden && builtInsByID[id] == nil {
+                        continue
+                    }
                     target = persisted
                 } else if let builtIn = builtInsByID[id] {
                     target = makeManagedColor(from: builtIn, herd: herd, in: context)
