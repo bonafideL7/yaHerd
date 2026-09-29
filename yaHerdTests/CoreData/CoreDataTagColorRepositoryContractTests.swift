@@ -10,58 +10,58 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
 
     func testUpsertNormalizesPersistsAndPreservesApplicationIdentity() async throws {
         let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertUpsertNormalizesPersistsAndPreservesApplicationIdentity(using: fixture)
+        try await TagColorRepositoryContract.assertUpsertNormalizesPersistsAndPreservesApplicationIdentity(using: fixture)
     }
 
     func testEmptyNameUpsertIsNoOp() async throws {
         let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertEmptyNameUpsertIsNoOp(using: fixture)
+        try await TagColorRepositoryContract.assertEmptyNameUpsertIsNoOp(using: fixture)
     }
 
     func testDefaultSelectionIsExclusivePersistentAndUnaffectedByUnknownIDs() async throws {
         let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertDefaultSelectionIsExclusivePersistentAndUnaffectedByUnknownIDs(using: fixture)
+        try await TagColorRepositoryContract.assertDefaultSelectionIsExclusivePersistentAndUnaffectedByUnknownIDs(using: fixture)
     }
 
     func testDeleteRemovesCustomColorsButBuiltInsRemainAvailableAndDefaultFallsBackToWhite() async throws {
         let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertDeleteRemovesCustomColorsButBuiltInsRemainAvailableAndDefaultFallsBackToWhite(using: fixture)
+        try await TagColorRepositoryContract.assertDeleteRemovesCustomColorsButBuiltInsRemainAvailableAndDefaultFallsBackToWhite(using: fixture)
     }
 
     func testReorderPersistsCompleteLibraryOrder() async throws {
         let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertReorderPersistsCompleteLibraryOrder(using: fixture)
+        try await TagColorRepositoryContract.assertReorderPersistsCompleteLibraryOrder(using: fixture)
     }
 
     func testRestoreDefaultsRepairsCanonicalDefinitionsPreservesCustomsAndIsIdempotent() async throws {
         let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertRestoreDefaultsRepairsCanonicalDefinitionsPreservesCustomsAndIsIdempotent(using: fixture)
+        try await TagColorRepositoryContract.assertRestoreDefaultsRepairsCanonicalDefinitionsPreservesCustomsAndIsIdempotent(using: fixture)
     }
 
     func testNormalizedNameCollisionKeepsCanonicalIdentityAndRemapsReferences() async throws {
         let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertNormalizedNameCollisionKeepsCanonicalIdentityAndRemapsReferences(using: fixture)
+        try await TagColorRepositoryContract.assertNormalizedNameCollisionKeepsCanonicalIdentityAndRemapsReferences(using: fixture)
     }
 
     func testBuiltInNameCollisionPreservesBuiltInIdentityAndRemapsReferences() async throws {
         let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertBuiltInNameCollisionPreservesBuiltInIdentityAndRemapsReferences(using: fixture)
+        try await TagColorRepositoryContract.assertBuiltInNameCollisionPreservesBuiltInIdentityAndRemapsReferences(using: fixture)
     }
 
 
     func testReferencedCustomColorRemovalPreservesHistoricalReferenceIdentity() async throws {
         let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertReferencedCustomColorRemovalPreservesHistoricalReferenceIdentity(using: fixture)
+        try await TagColorRepositoryContract.assertReferencedCustomColorRemovalPreservesHistoricalReferenceIdentity(using: fixture)
     }
 
     func testReadsWritesDefaultsAndNameUniquenessAreHerdScoped() async throws {
         let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertReadsWritesDefaultsAndNameUniquenessAreHerdScoped(using: fixture)
+        try await TagColorRepositoryContract.assertReadsWritesDefaultsAndNameUniquenessAreHerdScoped(using: fixture)
     }
 
     func testMissingOrStaleCurrentHerdDoesNotFallbackOrBootstrapOnReadOrWrite() async throws {
         let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertMissingOrStaleCurrentHerdDoesNotFallbackOrBootstrapOnReadOrWrite(using: fixture)
+        try await TagColorRepositoryContract.assertMissingOrStaleCurrentHerdDoesNotFallbackOrBootstrapOnReadOrWrite(using: fixture)
     }
 
     private func makeFixture() async throws -> TagColorRepositoryContractFixture {
