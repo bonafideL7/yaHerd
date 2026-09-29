@@ -8,7 +8,7 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let originalColor = TagColorSnapshot(
             id: UUID(),
             name: "Reassignment Snapshot Amber",
@@ -21,8 +21,8 @@ extension FieldCheckRepositoryContract {
             prefix: "RSB",
             rgba: RGBAColor(r: 0.6, g: 0.4, b: 0.2)
         )
-        try fixture.makeTagColorRepository().upsert(originalColor)
-        try fixture.makeTagColorRepository().upsert(replacementColor)
+        try await fixture.makeTagColorRepository().upsert(originalColor)
+        try await fixture.makeTagColorRepository().upsert(replacementColor)
 
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
@@ -245,14 +245,14 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let color = TagColorSnapshot(
             id: UUID(),
             name: "Orphan Edit Amber",
             prefix: "OEA",
             rgba: RGBAColor(r: 0.5, g: 0.4, b: 0.3)
         )
-        try fixture.makeTagColorRepository().upsert(color)
+        try await fixture.makeTagColorRepository().upsert(color)
 
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
