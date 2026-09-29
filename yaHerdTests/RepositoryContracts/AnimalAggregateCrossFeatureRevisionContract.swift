@@ -1307,7 +1307,7 @@ enum AnimalAggregateCrossFeatureRevisionContract {
             )
         )
 
-        try probe.makeTagColorRepository().upsert(probe.collisionInput)
+        try await probe.makeTagColorRepository().upsert(probe.collisionInput)
 
         let damAfter = try XCTUnwrap(
             probe.makeAnimalRepository().fetchAnimalDetail(id: probe.damID),
