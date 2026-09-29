@@ -147,14 +147,6 @@ final class CoreDataTagColorContractHarness {
                 throw HerdRepositoryError.missingHerd
             }
 
-            // The persistence-neutral control means "seed representative references to this color."
-            // Re-seeding replaces the probe graph instead of creating duplicate application IDs.
-            try deleteIfPresent(CDAnimalTag.self, id: ids.currentTag, herdID: herd.id, assembly: assembly, context: context)
-            try deleteIfPresent(CDAnimalTag.self, id: ids.historicalTag, herdID: herd.id, assembly: assembly, context: context)
-            try deleteIfPresent(CDFieldCheckAnimalCheck.self, id: ids.fieldCheck, herdID: herd.id, assembly: assembly, context: context)
-            try deleteIfPresent(CDFieldCheckFinding.self, id: ids.finding, herdID: herd.id, assembly: assembly, context: context)
-            try deleteIfPresent(CDWorkingQueueItem.self, id: ids.queueItem, herdID: herd.id, assembly: assembly, context: context)
-
             let animal = CDAnimal(context: context)
             animal.id = UUID()
             animal.editorRevision = UUID()
@@ -294,23 +286,6 @@ final class CoreDataTagColorContractHarness {
             throw HerdRepositoryError.missingHerd
         }
         return herd
-    }
-
-    private static func deleteIfPresent<Object>(
-        _ type: Object.Type,
-        id: UUID,
-        herdID: UUID,
-        assembly: CoreDataPersistenceAssembly,
-        context: NSManagedObjectContext
-    ) throws where Object: NSManagedObject & CoreDataHerdOwnedManagedObject {
-        if let object = try assembly.lookup.herdOwned(
-            type,
-            id: id,
-            herdID: herdID,
-            in: context
-        ) {
-            context.delete(object)
-        }
     }
 
     private static func required<Object>(
