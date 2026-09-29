@@ -311,7 +311,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 target.blue = builtIn.rgba.b
                 target.alpha = builtIn.rgba.a
                 target.isHidden = false
-                target.isDefault = existingDefaultID == nil ? builtIn.isDefault : target.id == existingDefaultID
+                let preservesSelectedDefault = existingDefaultID == target.id || existingDefaultID == byName?.id
+                target.isDefault = existingDefaultID == nil ? builtIn.isDefault : preservesSelectedDefault
             }
 
             try Self.normalizeDefault(in: herd, context: context)
@@ -461,8 +462,12 @@ final class CoreDataTagColorRepository: TagColorRepository {
 
         let tagRequest = NSFetchRequest<CDAnimalTag>(entityName: CDAnimalTag.coreDataEntityName)
         tagRequest.predicate = NSPredicate(format: "herd == %@ AND color.id == %@", herd, oldID as NSUUID)
+        var revisedAnimalIDs = Set<NSManagedObjectID>()
         for tag in try context.fetch(tagRequest) {
             tag.color = replacement
+            if revisedAnimalIDs.insert(tag.animal.objectID).inserted {
+                tag.animal.editorRevision = UUID()
+            }
         }
 
         let checkRequest = NSFetchRequest<CDFieldCheckAnimalCheck>(
