@@ -253,8 +253,10 @@ enum TagColorRepositoryContract {
         XCTAssertFalse(colors.contains { $0.id == customID }, file: file, line: line)
         XCTAssertEqual(defaultColorIDs(in: colors), [TagColorDefaults.blueID], file: file, line: line)
 
-        // A selected built-in may have a persisted override, but deleting that override must not
-        // remove the built-in application constant from the visible library.
+        // A selected built-in may have a persisted override. If that row is referenced by
+        // authoritative tags or historical snapshots, deleting the override must reset it to the
+        // canonical built-in definition without nullifying the stable application UUID.
+        try fixture.referenceControl.seedReferences(TagColorDefaults.blueID)
         try fixture.makeTagColorRepository().deleteColors(ids: [TagColorDefaults.blueID])
         colors = try fixture.makeTagColorRepository().fetchColors()
         XCTAssertTrue(colors.contains { $0.id == TagColorDefaults.blueID }, file: file, line: line)
@@ -271,6 +273,23 @@ enum TagColorRepositoryContract {
             line: line
         )
         assertSameDefinition(visibleBlue, canonicalBlue, file: file, line: line)
+        assertSameDefinition(
+            try XCTUnwrap(
+                fixture.makeTagColorRepository().fetchColor(id: TagColorDefaults.blueID),
+                file: file,
+                line: line
+            ),
+            canonicalBlue,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try fixture.referenceControl.fetchReferences(),
+            referenceSnapshot(colorID: TagColorDefaults.blueID),
+            "Resetting a referenced built-in override must preserve every persisted reference to its stable application UUID.",
+            file: file,
+            line: line
+        )
 
         let beforeVirtualDelete = stableProjection(colors)
         try fixture.makeTagColorRepository().deleteColors(ids: [TagColorDefaults.yellowID, UUID()])
