@@ -275,9 +275,15 @@ for name, represented_class in CLASSES.items():
         attribute = actual_attributes.get(attribute_name)
         if attribute is None:
             failures.append(f"{name}.{attribute_name}: contracted attribute is missing")
-        elif attribute.get("attributeType") != attribute_type or (attribute.get("optional") == "YES") != optional:
+        elif (
+            attribute.get("attributeType") != attribute_type
+            or (attribute.get("optional") == "YES") != optional
+            or attribute.get("transient") == "YES"
+        ):
             requirement = "optional" if optional else "required"
-            failures.append(f"{name}.{attribute_name}: must remain {requirement} {attribute_type}")
+            failures.append(
+                f"{name}.{attribute_name}: must remain persisted, {requirement} {attribute_type}"
+            )
 
     actual_indexes = {
         index.get("name"): index for index in entity.findall("fetchIndex") if index.get("name")
