@@ -48,7 +48,9 @@ struct TagColorLibraryView: View {
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
                         if !def.isDefault {
                             Button {
-                                tagColorLibrary.setDefaultColor(id: def.id)
+                                Task {
+                                    await tagColorLibrary.setDefaultColor(id: def.id)
+                                }
                             } label: {
                                 Label("Set Default", systemImage: "checkmark.circle")
                             }
@@ -58,7 +60,9 @@ struct TagColorLibraryView: View {
                     .contextMenu {
                         if !def.isDefault {
                             Button {
-                                tagColorLibrary.setDefaultColor(id: def.id)
+                                Task {
+                                    await tagColorLibrary.setDefaultColor(id: def.id)
+                                }
                             } label: {
                                 Label("Set as Default", systemImage: "checkmark.circle")
                             }
@@ -72,8 +76,16 @@ struct TagColorLibraryView: View {
                     }
                     .disabledWhenDataReadOnly()
                 }
-                .onDelete(perform: tagColorLibrary.delete)
-                .onMove(perform: tagColorLibrary.move)
+                .onDelete { offsets in
+                    Task {
+                        await tagColorLibrary.delete(at: offsets)
+                    }
+                }
+                .onMove { source, destination in
+                    Task {
+                        await tagColorLibrary.move(from: source, to: destination)
+                    }
+                }
             } footer: {
                 Text("The default color is used for new tags and for legacy tags that do not have a stored color.")
             }
@@ -93,7 +105,9 @@ struct TagColorLibraryView: View {
                     }
 
                     Button {
-                        tagColorLibrary.restoreDefaultColors()
+                        Task {
+                            await tagColorLibrary.restoreDefaultColors()
+                        }
                     } label: {
                         Label("Restore Default Colors", systemImage: "arrow.clockwise")
                     }
