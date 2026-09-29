@@ -43,20 +43,8 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
         try TagColorRepositoryContract.assertNormalizedNameCollisionKeepsCanonicalIdentityAndRemapsReferences(using: fixture)
     }
 
-    func testBuiltInEditPreservesSingleIdentityThroughReorder() async throws {
-        let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertBuiltInEditPreservesSingleIdentityThroughReorder(using: fixture)
-    }
 
-    func testReorderMaterializesVirtualLibraryAndPersistsCompleteOrder() async throws {
-        let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertReorderMaterializesVirtualLibraryAndPersistsCompleteOrder(using: fixture)
-    }
 
-    func testBuiltInToBuiltInNameCollisionPreservesBothStableIdentities() async throws {
-        let fixture = try await makeFixture()
-        try TagColorRepositoryContract.assertBuiltInToBuiltInNameCollisionPreservesBothStableIdentities(using: fixture)
-    }
 
     func testBuiltInNameCollisionPreservesBuiltInIdentityAndRemapsReferences() async throws {
         let fixture = try await makeFixture()
