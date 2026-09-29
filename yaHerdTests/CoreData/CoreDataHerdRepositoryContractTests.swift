@@ -64,7 +64,7 @@ final class CoreDataHerdRepositoryContractTests: XCTestCase {
 
     private func makeHarness() async throws -> Harness {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
-        let selection = CoreDataContractSelection()
+        let selection = TestCurrentHerdSelection()
 
         let fixture = HerdRepositoryContractFixture(
             makeHerdRepository: {
@@ -73,9 +73,32 @@ final class CoreDataHerdRepositoryContractTests: XCTestCase {
                     assembly: assembly
                 )
             },
-            selectionControl: CoreDataContractTestSupport.herdSelectionControl(
-                selection: selection,
-                assembly: assembly
+            selectionControl: HerdRepositorySelectionTestControl(
+                seedHerd: { id, name, createdAt, updatedAt in
+                    let context = try assembly.contextFactory.makeWriteContext()
+                    try context.performAndWait {
+                        let herd = CDHerd(context: context)
+                        herd.id = id
+                        herd.name = name
+                        herd.createdAt = createdAt
+                        herd.updatedAt = updatedAt
+                        try context.save()
+                    }
+                },
+                setCurrentHerdID: { id in
+                    selection.currentHerdID = id
+                },
+                persistedHerdRowCountsByID: {
+                    let context = assembly.contextFactory.makeReadContext()
+                    return try context.performAndWait {
+                        let request = NSFetchRequest<CDHerd>(
+                            entityName: CDHerd.coreDataEntityName
+                        )
+                        return try context.fetch(request).reduce(into: [UUID: Int]()) {
+                            $0[$1.id, default: 0] += 1
+                        }
+                    }
+                }
             ),
             ownershipControl: HerdRepositoryOwnershipTestControl(
                 seedPasture: { id, herdID in
@@ -147,6 +170,11 @@ final class CoreDataHerdRepositoryContractTests: XCTestCase {
             failureInjection: failureInjection
         )
     }
+}
+
+@MainActor
+private final class TestCurrentHerdSelection: CurrentHerdSelectionReading {
+    var currentHerdID: UUID?
 }
 
 @MainActor
