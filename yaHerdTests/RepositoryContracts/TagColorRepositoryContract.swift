@@ -829,6 +829,32 @@ enum TagColorRepositoryContract {
             line: line
         )
 
+        try fixture.makeTagColorRepository().restoreDefaultColors()
+
+        let visibleAfterRestore = try XCTUnwrap(
+            fixture.makeTagColorRepository().fetchColors().first { $0.id == TagColorDefaults.blueID },
+            file: file,
+            line: line
+        )
+        assertSameDefinition(visibleAfterRestore, canonicalBlue, file: file, line: line)
+        XCTAssertTrue(visibleAfterRestore.isDefault, file: file, line: line)
+
+        let historicalAfterRestore = try XCTUnwrap(
+            fixture.makeTagColorRepository().fetchColor(id: TagColorDefaults.blueID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(historicalAfterRestore.name, "Historical Azure", file: file, line: line)
+        XCTAssertEqual(historicalAfterRestore.prefix, "HA", file: file, line: line)
+        XCTAssertEqual(historicalAfterRestore.rgba, editedBlue.rgba, file: file, line: line)
+        XCTAssertEqual(
+            try fixture.referenceControl.fetchReferences(),
+            referenceSnapshot(colorID: TagColorDefaults.blueID),
+            "Restore must not rewrite a referenced hidden built-in tombstone or redirect its persisted references.",
+            file: file,
+            line: line
+        )
+
         let retiredID = try XCTUnwrap(TagColorDefaults.retiredDefaultColorIDs.first, file: file, line: line)
         let retired = TagColorSnapshot(
             id: retiredID,
@@ -911,6 +937,46 @@ enum TagColorRepositoryContract {
                 workingQueueDamTagColorIDSnapshot: colorID
             ),
             "Removing a visible tag color must not rewrite or nullify persisted historical color identity.",
+            file: file,
+            line: line
+        )
+
+        let recreatedID = UUID()
+        try fixture.makeTagColorRepository().upsert(
+            TagColorSnapshot(
+                id: recreatedID,
+                name: color.name,
+                prefix: "NEW",
+                rgba: RGBAColor(r: 0.8, g: 0.2, b: 0.2)
+            )
+        )
+
+        let recreated = try XCTUnwrap(
+            fixture.makeTagColorRepository().fetchColors().first { $0.id == recreatedID },
+            "Reusing a deleted color name must create a new visible identity rather than resurrecting its tombstone.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            TagColorLibraryRules.normalizedNameKey(recreated.name),
+            TagColorLibraryRules.normalizedNameKey(color.name),
+            file: file,
+            line: line
+        )
+        assertSameDefinition(
+            try XCTUnwrap(
+                fixture.makeTagColorRepository().fetchColor(id: colorID),
+                file: file,
+                line: line
+            ),
+            color,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try fixture.referenceControl.fetchReferences(),
+            referenceSnapshot(colorID: colorID),
+            "Recreating a deleted name must not redirect historical references away from the preserved tombstone.",
             file: file,
             line: line
         )
