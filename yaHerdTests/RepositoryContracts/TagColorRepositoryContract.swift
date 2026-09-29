@@ -29,6 +29,7 @@ struct TagColorReferenceTestControl {
     let seedPersistedColor: (_ color: TagColorSnapshot) throws -> Void
     let seedReferences: (_ colorID: UUID) throws -> Void
     let fetchReferences: () throws -> TagColorReferenceSnapshot
+    let fetchOwningAnimalEditorRevision: () throws -> UUID?
 }
 
 /// Permanent persistence-neutral behavioral contract for `TagColorRepository` implementations.
@@ -425,8 +426,20 @@ enum TagColorRepositoryContract {
         // physical color row before the repository is asked to reconcile the name collision.
         try fixture.referenceControl.seedPersistedColor(incoming)
         try fixture.referenceControl.seedReferences(incomingID)
+        let editorRevisionBeforeRemap = try fixture.referenceControl.fetchOwningAnimalEditorRevision()
 
         try fixture.makeTagColorRepository().upsert(incoming)
+
+        let editorRevisionAfterRemap = try fixture.referenceControl.fetchOwningAnimalEditorRevision()
+        XCTAssertNotNil(editorRevisionBeforeRemap, file: file, line: line)
+        XCTAssertNotNil(editorRevisionAfterRemap, file: file, line: line)
+        XCTAssertNotEqual(
+            editorRevisionAfterRemap,
+            editorRevisionBeforeRemap,
+            "Remapping tag-color relationships must invalidate the owning Animal editor revision.",
+            file: file,
+            line: line
+        )
 
         let reloaded = try fixture.makeTagColorRepository().fetchColors()
         let matching = reloaded.filter {
