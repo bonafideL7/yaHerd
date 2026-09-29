@@ -567,14 +567,14 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Tag Rollback Source", using: fixture)
         let replacementColor = TagColorSnapshot(
             name: "Working Tag Rollback Color",
             prefix: "WTR",
             rgba: RGBAColor(r: 0.2, g: 0.5, b: 0.8)
         )
-        try fixture.makeTagColorRepository().upsert(replacementColor)
+        try await fixture.makeTagColorRepository().upsert(replacementColor)
         let animal = try makeAnimal(
             name: "Working Tag Rollback Cow",
             tagNumber: "TR401",
