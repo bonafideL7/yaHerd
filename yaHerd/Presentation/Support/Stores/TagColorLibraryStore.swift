@@ -84,41 +84,41 @@ final class TagColorLibraryStore: ObservableObject {
         formattedTag(tagNumber: animal.displayTagNumber, colorID: animal.displayTagColorID)
     }
 
-    func upsert(_ color: TagColorSnapshot) {
-        performRepositoryWrite("Failed to save tag color") {
-            try repository.upsert(color)
+    func upsert(_ color: TagColorSnapshot) async {
+        await performRepositoryWrite("Failed to save tag color") {
+            try await repository.upsert(color)
         }
     }
 
-    func setDefaultColor(id: UUID) {
-        performRepositoryWrite("Failed to set default tag color") {
-            try repository.setDefaultColor(id: id)
+    func setDefaultColor(id: UUID) async {
+        await performRepositoryWrite("Failed to set default tag color") {
+            try await repository.setDefaultColor(id: id)
         }
     }
 
-    func delete(at offsets: IndexSet) {
+    func delete(at offsets: IndexSet) async {
         let ids = offsets.compactMap { index in
             colors.indices.contains(index) ? colors[index].id : nil
         }
 
-        performRepositoryWrite("Failed to delete tag color") {
-            try repository.deleteColors(ids: ids)
+        await performRepositoryWrite("Failed to delete tag color") {
+            try await repository.deleteColors(ids: ids)
         }
     }
 
-    func move(from source: IndexSet, to destination: Int) {
+    func move(from source: IndexSet, to destination: Int) async {
         var reordered = colors
         reordered.move(fromOffsets: source, toOffset: destination)
         let orderedIDs = reordered.map(\.id)
 
-        performRepositoryWrite("Failed to reorder tag colors") {
-            try repository.reorder(colorIDs: orderedIDs)
+        await performRepositoryWrite("Failed to reorder tag colors") {
+            try await repository.reorder(colorIDs: orderedIDs)
         }
     }
 
-    func restoreDefaultColors() {
-        performRepositoryWrite("Failed to restore default tag colors") {
-            try repository.restoreDefaultColors()
+    func restoreDefaultColors() async {
+        await performRepositoryWrite("Failed to restore default tag colors") {
+            try await repository.restoreDefaultColors()
         }
     }
 
@@ -136,9 +136,12 @@ final class TagColorLibraryStore: ObservableObject {
         }
     }
 
-    private func performRepositoryWrite(_ failureMessage: String, operation: () throws -> Void) {
+    private func performRepositoryWrite(
+        _ failureMessage: String,
+        operation: () async throws -> Void
+    ) async {
         do {
-            try operation()
+            try await operation()
             historicalDefinitionsByID.removeAll()
             colors = try repository.fetchColors()
             lastErrorMessage = nil
