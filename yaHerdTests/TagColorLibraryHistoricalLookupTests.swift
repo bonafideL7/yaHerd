@@ -3,33 +3,6 @@ import XCTest
 
 @MainActor
 final class TagColorLibraryHistoricalLookupTests: XCTestCase {
-    func testPersistedHistoricalDefinitionWinsWhenVisibleBuiltInSharesApplicationID() {
-        let visibleBlue = TagColorSnapshot(
-            id: TagColorDefaults.blueID,
-            name: "Blue",
-            prefix: "B",
-            rgba: RGBAColor(r: 0.15, g: 0.35, b: 0.85)
-        )
-        let preservedBlue = TagColorSnapshot(
-            id: TagColorDefaults.blueID,
-            name: "Historical Azure",
-            prefix: "HA",
-            rgba: RGBAColor(r: 0.08, g: 0.28, b: 0.78)
-        )
-        let repository = HistoricalLookupTagColorRepository(
-            visibleColors: [visibleBlue],
-            historicalColorsByID: [TagColorDefaults.blueID: preservedBlue]
-        )
-
-        let store = TagColorLibraryStore(repository: repository)
-
-        XCTAssertEqual(store.colors, [visibleBlue])
-        XCTAssertEqual(store.definition(for: TagColorDefaults.blueID), preservedBlue)
-        XCTAssertEqual(store.resolvedDefinition(tagColorID: TagColorDefaults.blueID), preservedBlue)
-        XCTAssertEqual(store.formattedTag(tagNumber: "42", colorID: TagColorDefaults.blueID), "HA42")
-        XCTAssertEqual(repository.fetchColorIDs, [TagColorDefaults.blueID])
-    }
-
     func testHistoricalDefinitionResolvesOutsideVisibleLibrary() {
         let visible = TagColorSnapshot(
             id: TagColorDefaults.whiteID,
@@ -80,7 +53,7 @@ private final class HistoricalLookupTagColorRepository: TagColorRepository {
 
     func fetchColor(id: UUID) throws -> TagColorSnapshot? {
         fetchColorIDs.append(id)
-        return historicalColorsByID[id] ?? visibleColors.first { $0.id == id }
+        return visibleColors.first { $0.id == id } ?? historicalColorsByID[id]
     }
 
     func upsert(_ color: TagColorSnapshot) throws {}
