@@ -67,7 +67,9 @@ struct TagColorEditorView: View {
                                 .foregroundStyle(.secondary)
                         } else {
                             Button {
-                                tagColorLibrary.setDefaultColor(id: existing.id)
+                                Task {
+                                    await tagColorLibrary.setDefaultColor(id: existing.id)
+                                }
                             } label: {
                                 Label("Set as Default Tag Color", systemImage: "checkmark.circle")
                             }
@@ -99,8 +101,10 @@ struct TagColorEditorView: View {
                             rgba: RGBAColor(color: color)
                         )
 
-                        tagColorLibrary.upsert(def)
-                        dismiss()
+                        Task { @MainActor in
+                            await tagColorLibrary.upsert(def)
+                            dismiss()
+                        }
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
