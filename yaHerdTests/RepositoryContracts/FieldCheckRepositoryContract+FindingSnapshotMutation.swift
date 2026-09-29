@@ -10,13 +10,13 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
-        let originalColorID = try mutationSnapshotColor(
+    ) async throws {
+        let originalColorID = try await mutationSnapshotColor(
             named: "Mutation Snapshot Amber",
             prefix: "MSA",
             using: fixture
         )
-        let replacementColorID = try mutationSnapshotColor(
+        let replacementColorID = try await mutationSnapshotColor(
             named: "Mutation Snapshot Blue",
             prefix: "MSB",
             using: fixture
@@ -303,14 +303,14 @@ extension FieldCheckRepositoryContract {
         named name: String,
         prefix: String,
         using fixture: FieldCheckRepositoryContractFixture
-    ) throws -> UUID {
+    ) async throws -> UUID {
         let color = TagColorSnapshot(
             id: UUID(),
             name: name,
             prefix: prefix,
             rgba: RGBAColor(r: 0.2, g: 0.4, b: 0.6)
         )
-        try fixture.makeTagColorRepository().upsert(color)
+        try await fixture.makeTagColorRepository().upsert(color)
         return color.id
     }
 
