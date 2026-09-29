@@ -77,7 +77,7 @@ enum TagColorRepositoryContract {
         using fixture: TagColorRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeTagColorRepository()
         let colorID = UUID()
         let createdAt = fixedDate(1_700_000_000)
@@ -97,7 +97,7 @@ enum TagColorRepositoryContract {
         color.name = "  Contract Aqua\n"
         color.prefix = " ca "
 
-        try repository.upsert(color)
+        try await repository.upsert(color)
 
         let inserted = try requireColor(
             id: colorID,
@@ -125,7 +125,7 @@ enum TagColorRepositoryContract {
         updated.name = "  Contract Aqua Updated  "
         updated.prefix = "   "
 
-        try fixture.makeTagColorRepository().upsert(updated)
+        try await fixture.makeTagColorRepository().upsert(updated)
 
         let reloaded = try requireColor(
             id: colorID,
@@ -159,7 +159,7 @@ enum TagColorRepositoryContract {
         builtInBlue.name = "Contract Azure"
         builtInBlue.prefix = "CA"
         builtInBlue.rgba = RGBAColor(r: 0.12, g: 0.32, b: 0.88)
-        try fixture.makeTagColorRepository().upsert(builtInBlue)
+        try await fixture.makeTagColorRepository().upsert(builtInBlue)
 
         let afterBuiltInEdit = try fixture.makeTagColorRepository().fetchColors()
         XCTAssertEqual(
@@ -183,7 +183,7 @@ enum TagColorRepositoryContract {
         using fixture: TagColorRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeTagColorRepository()
         let before = stableProjection(try repository.fetchColors())
 
@@ -194,7 +194,7 @@ enum TagColorRepositoryContract {
         )
         invalid.name = "  \n\t  "
 
-        try repository.upsert(invalid)
+        try await repository.upsert(invalid)
 
         let after = stableProjection(try fixture.makeTagColorRepository().fetchColors())
         XCTAssertEqual(
@@ -210,15 +210,15 @@ enum TagColorRepositoryContract {
         using fixture: TagColorRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeTagColorRepository()
-        try repository.setDefaultColor(id: TagColorDefaults.blueID)
+        try await repository.setDefaultColor(id: TagColorDefaults.blueID)
 
         var colors = try fixture.makeTagColorRepository().fetchColors()
         XCTAssertEqual(defaultColorIDs(in: colors), [TagColorDefaults.blueID], file: file, line: line)
 
         let beforeUnknownSelection = stableProjection(colors)
-        try fixture.makeTagColorRepository().setDefaultColor(id: UUID())
+        try await fixture.makeTagColorRepository().setDefaultColor(id: UUID())
         colors = try fixture.makeTagColorRepository().fetchColors()
         XCTAssertEqual(
             stableProjection(colors),
@@ -235,8 +235,8 @@ enum TagColorRepositoryContract {
             prefix: "CD",
             rgba: RGBAColor(r: 0.15, g: 0.25, b: 0.75)
         )
-        try fixture.makeTagColorRepository().upsert(custom)
-        try fixture.makeTagColorRepository().setDefaultColor(id: customID)
+        try await fixture.makeTagColorRepository().upsert(custom)
+        try await fixture.makeTagColorRepository().setDefaultColor(id: customID)
 
         colors = try fixture.makeTagColorRepository().fetchColors()
         XCTAssertEqual(defaultColorIDs(in: colors), [customID], file: file, line: line)
@@ -246,7 +246,7 @@ enum TagColorRepositoryContract {
         edited.prefix = "CDE"
         edited.rgba = RGBAColor(r: 0.3, g: 0.4, b: 0.9)
         edited.isDefault = false
-        try fixture.makeTagColorRepository().upsert(edited)
+        try await fixture.makeTagColorRepository().upsert(edited)
 
         let reloaded = try fixture.makeTagColorRepository().fetchColors()
         XCTAssertEqual(
@@ -262,10 +262,10 @@ enum TagColorRepositoryContract {
         using fixture: TagColorRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeTagColorRepository()
         let customID = UUID()
-        try repository.upsert(
+        try await repository.upsert(
             TagColorSnapshot(
                 id: customID,
                 name: "Contract Delete",
@@ -273,9 +273,9 @@ enum TagColorRepositoryContract {
                 rgba: RGBAColor(r: 0.8, g: 0.15, b: 0.2)
             )
         )
-        try repository.setDefaultColor(id: TagColorDefaults.blueID)
+        try await repository.setDefaultColor(id: TagColorDefaults.blueID)
 
-        try repository.deleteColors(ids: [customID])
+        try await repository.deleteColors(ids: [customID])
         var colors = try fixture.makeTagColorRepository().fetchColors()
         XCTAssertFalse(colors.contains { $0.id == customID }, file: file, line: line)
         XCTAssertEqual(defaultColorIDs(in: colors), [TagColorDefaults.blueID], file: file, line: line)
@@ -284,7 +284,7 @@ enum TagColorRepositoryContract {
         // authoritative tags or historical snapshots, deleting the override must reset it to the
         // canonical built-in definition without nullifying the stable application UUID.
         try fixture.referenceControl.seedReferences(TagColorDefaults.blueID)
-        try fixture.makeTagColorRepository().deleteColors(ids: [TagColorDefaults.blueID])
+        try await fixture.makeTagColorRepository().deleteColors(ids: [TagColorDefaults.blueID])
         colors = try fixture.makeTagColorRepository().fetchColors()
         XCTAssertTrue(colors.contains { $0.id == TagColorDefaults.blueID }, file: file, line: line)
         XCTAssertEqual(defaultColorIDs(in: colors), [TagColorDefaults.whiteID], file: file, line: line)
@@ -319,7 +319,7 @@ enum TagColorRepositoryContract {
         )
 
         let beforeVirtualDelete = stableProjection(colors)
-        try fixture.makeTagColorRepository().deleteColors(ids: [TagColorDefaults.yellowID, UUID()])
+        try await fixture.makeTagColorRepository().deleteColors(ids: [TagColorDefaults.yellowID, UUID()])
         let afterVirtualDelete = stableProjection(try fixture.makeTagColorRepository().fetchColors())
         XCTAssertEqual(
             afterVirtualDelete,
@@ -334,7 +334,7 @@ enum TagColorRepositoryContract {
         using fixture: TagColorRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeTagColorRepository()
 
         // Production starts with virtual built-ins. Persist only the custom row so this
@@ -345,7 +345,7 @@ enum TagColorRepositoryContract {
             prefix: "COC",
             rgba: RGBAColor(r: 0.2, g: 0.75, b: 0.55)
         )
-        try repository.upsert(custom)
+        try await repository.upsert(custom)
 
         let desiredOrder = [
             TagColorDefaults.blueID,
@@ -359,7 +359,7 @@ enum TagColorRepositoryContract {
             TagColorDefaults.pinkID
         ]
 
-        try repository.reorder(colorIDs: desiredOrder)
+        try await repository.reorder(colorIDs: desiredOrder)
 
         let reloaded = try fixture.makeTagColorRepository().fetchColors()
         XCTAssertEqual(reloaded.map(\.id), desiredOrder, file: file, line: line)
@@ -376,7 +376,7 @@ enum TagColorRepositoryContract {
         using fixture: TagColorRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeTagColorRepository()
 
         var modifiedYellow = try XCTUnwrap(
@@ -387,7 +387,7 @@ enum TagColorRepositoryContract {
         modifiedYellow.name = "Contract Gold"
         modifiedYellow.prefix = "ZZ"
         modifiedYellow.rgba = RGBAColor(r: 0.05, g: 0.05, b: 0.05)
-        try repository.upsert(modifiedYellow)
+        try await repository.upsert(modifiedYellow)
 
         let custom = TagColorSnapshot(
             id: UUID(),
@@ -395,10 +395,10 @@ enum TagColorRepositoryContract {
             prefix: "CP",
             rgba: RGBAColor(r: 0.45, g: 0.15, b: 0.7)
         )
-        try repository.upsert(custom)
-        try repository.setDefaultColor(id: custom.id)
+        try await repository.upsert(custom)
+        try await repository.setDefaultColor(id: custom.id)
 
-        try repository.restoreDefaultColors()
+        try await repository.restoreDefaultColors()
 
         let restored = try fixture.makeTagColorRepository().fetchColors()
         let expectedDefaults = TagColorDefaults.seedDefaultColors()
@@ -424,7 +424,7 @@ enum TagColorRepositoryContract {
         XCTAssertEqual(defaultColorIDs(in: restored), [custom.id], file: file, line: line)
 
         let firstRestoreProjection = stableProjection(restored)
-        try fixture.makeTagColorRepository().restoreDefaultColors()
+        try await fixture.makeTagColorRepository().restoreDefaultColors()
         let secondRestoreProjection = stableProjection(try fixture.makeTagColorRepository().fetchColors())
         XCTAssertEqual(
             secondRestoreProjection,
@@ -439,12 +439,12 @@ enum TagColorRepositoryContract {
         using fixture: TagColorRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeTagColorRepository()
         let canonicalID = UUID()
         let incomingID = UUID()
 
-        try repository.upsert(
+        try await repository.upsert(
             TagColorSnapshot(
                 id: canonicalID,
                 name: "Contract Merge",
@@ -468,7 +468,7 @@ enum TagColorRepositoryContract {
         // physical color row before the repository is asked to reconcile the name collision.
         try fixture.referenceControl.seedPersistedColor(incoming)
         try fixture.referenceControl.seedReferences(incomingID)
-        try fixture.makeTagColorRepository().upsert(incoming)
+        try await fixture.makeTagColorRepository().upsert(incoming)
 
         let reloaded = try fixture.makeTagColorRepository().fetchColors()
         let matching = reloaded.filter {
@@ -513,7 +513,7 @@ enum TagColorRepositoryContract {
         using fixture: TagColorRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let defaults = TagColorDefaults.seedDefaultColors()
         let blue = try XCTUnwrap(
             defaults.first { $0.id == TagColorDefaults.blueID },
@@ -529,7 +529,7 @@ enum TagColorRepositoryContract {
         conflictingBlue.name = "  red  "
         conflictingBlue.prefix = "BR"
 
-        try fixture.makeTagColorRepository().upsert(conflictingBlue)
+        try await fixture.makeTagColorRepository().upsert(conflictingBlue)
 
         var stableBuiltIns = try fixture.makeTagColorRepository().fetchColors()
         assertSameDefinition(
@@ -562,7 +562,7 @@ enum TagColorRepositoryContract {
         try fixture.referenceControl.seedPersistedColor(incoming)
         try fixture.referenceControl.seedReferences(incomingID)
 
-        try fixture.makeTagColorRepository().upsert(incoming)
+        try await fixture.makeTagColorRepository().upsert(incoming)
 
         let reloaded = try fixture.makeTagColorRepository().fetchColors()
         let matching = reloaded.filter {
@@ -605,7 +605,7 @@ enum TagColorRepositoryContract {
         using fixture: TagColorRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeTagColorRepository()
         let colorID = UUID()
         let color = TagColorSnapshot(
@@ -615,9 +615,9 @@ enum TagColorRepositoryContract {
             rgba: RGBAColor(r: 0.35, g: 0.55, b: 0.75)
         )
 
-        try repository.upsert(color)
+        try await repository.upsert(color)
         try fixture.referenceControl.seedReferences(colorID)
-        try repository.deleteColors(ids: [colorID])
+        try await repository.deleteColors(ids: [colorID])
 
         let reloadedRepository = fixture.makeTagColorRepository()
         XCTAssertFalse(
@@ -652,7 +652,7 @@ enum TagColorRepositoryContract {
         )
 
         let recreatedID = UUID()
-        try fixture.makeTagColorRepository().upsert(
+        try await fixture.makeTagColorRepository().upsert(
             TagColorSnapshot(
                 id: recreatedID,
                 name: color.name,
@@ -696,7 +696,7 @@ enum TagColorRepositoryContract {
         using fixture: TagColorRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let firstHerdID = UUID()
         let secondHerdID = UUID()
         try fixture.herdSelectionControl.seedHerd(
@@ -716,7 +716,7 @@ enum TagColorRepositoryContract {
         let secondColorID = UUID()
 
         try fixture.herdSelectionControl.setCurrentHerdID(firstHerdID)
-        try fixture.makeTagColorRepository().upsert(
+        try await fixture.makeTagColorRepository().upsert(
             TagColorSnapshot(
                 id: firstColorID,
                 name: "Scoped Contract Color",
@@ -724,7 +724,7 @@ enum TagColorRepositoryContract {
                 rgba: RGBAColor(r: 0.15, g: 0.45, b: 0.75)
             )
         )
-        try fixture.makeTagColorRepository().setDefaultColor(id: firstColorID)
+        try await fixture.makeTagColorRepository().setDefaultColor(id: firstColorID)
 
         try fixture.herdSelectionControl.setCurrentHerdID(secondHerdID)
         let secondRepositoryBeforeWrite = fixture.makeTagColorRepository()
@@ -751,8 +751,8 @@ enum TagColorRepositoryContract {
             rgba: RGBAColor(r: 0.75, g: 0.45, b: 0.15)
         )
         secondColor.name = "  scoped contract color  "
-        try fixture.makeTagColorRepository().upsert(secondColor)
-        try fixture.makeTagColorRepository().setDefaultColor(id: secondColorID)
+        try await fixture.makeTagColorRepository().upsert(secondColor)
+        try await fixture.makeTagColorRepository().setDefaultColor(id: secondColorID)
 
         let secondReloaded = try fixture.makeTagColorRepository().fetchColors()
         XCTAssertTrue(secondReloaded.contains { $0.id == secondColorID }, file: file, line: line)
@@ -790,16 +790,16 @@ enum TagColorRepositoryContract {
         // from Herd B. Returning to Herd A must reproduce the same Domain-visible library exactly.
         try fixture.herdSelectionControl.setCurrentHerdID(firstHerdID)
         for builtIn in TagColorDefaults.seedDefaultColors() {
-            try fixture.makeTagColorRepository().upsert(builtIn)
+            try await fixture.makeTagColorRepository().upsert(builtIn)
         }
         let firstControlProjection = stableProjection(try fixture.makeTagColorRepository().fetchColors())
 
         try fixture.herdSelectionControl.setCurrentHerdID(secondHerdID)
         for builtIn in TagColorDefaults.seedDefaultColors() {
-            try fixture.makeTagColorRepository().upsert(builtIn)
+            try await fixture.makeTagColorRepository().upsert(builtIn)
         }
         let secondExtraID = UUID()
-        try fixture.makeTagColorRepository().upsert(
+        try await fixture.makeTagColorRepository().upsert(
             TagColorSnapshot(
                 id: secondExtraID,
                 name: "Second Herd Disposable",
@@ -812,9 +812,9 @@ enum TagColorRepositoryContract {
         let reorderedSecondIDs = [secondColorID]
             + secondVisibleIDs.filter { $0 != secondColorID && $0 != secondExtraID }
             + [secondExtraID]
-        try fixture.makeTagColorRepository().reorder(colorIDs: reorderedSecondIDs)
-        try fixture.makeTagColorRepository().deleteColors(ids: [secondExtraID])
-        try fixture.makeTagColorRepository().restoreDefaultColors()
+        try await fixture.makeTagColorRepository().reorder(colorIDs: reorderedSecondIDs)
+        try await fixture.makeTagColorRepository().deleteColors(ids: [secondExtraID])
+        try await fixture.makeTagColorRepository().restoreDefaultColors()
 
         try fixture.herdSelectionControl.setCurrentHerdID(firstHerdID)
         XCTAssertEqual(
@@ -830,7 +830,7 @@ enum TagColorRepositoryContract {
         using fixture: TagColorRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let storedHerdID = UUID()
         try fixture.herdSelectionControl.seedHerd(
             storedHerdID,
@@ -841,7 +841,7 @@ enum TagColorRepositoryContract {
         try fixture.herdSelectionControl.setCurrentHerdID(storedHerdID)
 
         let existingColorID = UUID()
-        try fixture.makeTagColorRepository().upsert(
+        try await fixture.makeTagColorRepository().upsert(
             TagColorSnapshot(
                 id: existingColorID,
                 name: "Existing Scoped Color",
@@ -856,7 +856,7 @@ enum TagColorRepositoryContract {
         let herdRowsBeforeFailure = try fixture.herdSelectionControl.persistedHerdRowCountsByID()
 
         try fixture.herdSelectionControl.setCurrentHerdID(UUID())
-        assertAllOperationsRejectMissingHerd(
+        await assertAllOperationsRejectMissingHerd(
             using: fixture,
             existingColorID: existingColorID,
             attemptedColorID: UUID(),
@@ -866,7 +866,7 @@ enum TagColorRepositoryContract {
         )
 
         try fixture.herdSelectionControl.setCurrentHerdID(nil)
-        assertAllOperationsRejectMissingHerd(
+        await assertAllOperationsRejectMissingHerd(
             using: fixture,
             existingColorID: existingColorID,
             attemptedColorID: UUID(),
@@ -900,56 +900,77 @@ enum TagColorRepositoryContract {
         selectionDescription: String,
         file: StaticString,
         line: UInt
-    ) {
-        XCTAssertThrowsError(
-            try fixture.makeTagColorRepository().fetchColors(),
+    ) async {
+        await assertThrows(
             "Tag-color library reads must reject a \(selectionDescription).",
             file: file,
             line: line
-        )
-        XCTAssertThrowsError(
-            try fixture.makeTagColorRepository().fetchColor(id: existingColorID),
+        ) {
+            _ = try fixture.makeTagColorRepository().fetchColors()
+        }
+        await assertThrows(
             "Direct tag-color reads must reject a \(selectionDescription).",
             file: file,
             line: line
-        )
-        XCTAssertThrowsError(
-            try fixture.makeTagColorRepository().upsert(
+        ) {
+            _ = try fixture.makeTagColorRepository().fetchColor(id: existingColorID)
+        }
+        await assertThrows(
+            "Tag-color upsert must reject a \(selectionDescription).",
+            file: file,
+            line: line
+        ) {
+            try await fixture.makeTagColorRepository().upsert(
                 TagColorSnapshot(
                     id: attemptedColorID,
                     name: "Must Not Fall Back",
                     prefix: "MNFB",
                     rgba: RGBAColor(r: 0.7, g: 0.2, b: 0.5)
                 )
-            ),
-            "Tag-color upsert must reject a \(selectionDescription).",
-            file: file,
-            line: line
-        )
-        XCTAssertThrowsError(
-            try fixture.makeTagColorRepository().setDefaultColor(id: existingColorID),
+            )
+        }
+        await assertThrows(
             "Default selection must reject a \(selectionDescription).",
             file: file,
             line: line
-        )
-        XCTAssertThrowsError(
-            try fixture.makeTagColorRepository().deleteColors(ids: [existingColorID]),
+        ) {
+            try await fixture.makeTagColorRepository().setDefaultColor(id: existingColorID)
+        }
+        await assertThrows(
             "Tag-color deletion must reject a \(selectionDescription).",
             file: file,
             line: line
-        )
-        XCTAssertThrowsError(
-            try fixture.makeTagColorRepository().reorder(colorIDs: [existingColorID]),
+        ) {
+            try await fixture.makeTagColorRepository().deleteColors(ids: [existingColorID])
+        }
+        await assertThrows(
             "Tag-color reorder must reject a \(selectionDescription).",
             file: file,
             line: line
-        )
-        XCTAssertThrowsError(
-            try fixture.makeTagColorRepository().restoreDefaultColors(),
+        ) {
+            try await fixture.makeTagColorRepository().reorder(colorIDs: [existingColorID])
+        }
+        await assertThrows(
             "Restore-defaults must reject a \(selectionDescription).",
             file: file,
             line: line
-        )
+        ) {
+            try await fixture.makeTagColorRepository().restoreDefaultColors()
+        }
+    }
+
+    private static func assertThrows(
+        _ message: String,
+        file: StaticString,
+        line: UInt,
+        operation: () async throws -> Void
+    ) async {
+        do {
+            try await operation()
+            XCTFail(message, file: file, line: line)
+        } catch {
+            // Expected.
+        }
     }
 
     private struct StableColorProjection: Equatable {
