@@ -1,6 +1,27 @@
 @preconcurrency import CoreData
 import Foundation
 
+enum CoreDataAnimalPayloadCodec {
+    static func encodeDistinguishingFeatures(
+        _ features: [DistinguishingFeature]
+    ) throws -> Data {
+        try JSONEncoder().encode(features.normalizedDistinguishingFeatureOrder)
+    }
+
+    static func decodeDistinguishingFeatures(
+        _ data: Data,
+        animalID: UUID
+    ) throws -> [DistinguishingFeature] {
+        do {
+            return try JSONDecoder().decode([DistinguishingFeature].self, from: data)
+        } catch {
+            throw CoreDataAnimalRepositoryError.corruptDistinguishingFeatures(
+                animalID: animalID
+            )
+        }
+    }
+}
+
 enum CoreDataAnimalProjection {
     static func summary(_ animal: CDAnimal) throws -> AnimalSummary {
         let tags = managedTags(animal)
@@ -277,16 +298,10 @@ enum CoreDataAnimalProjection {
     }
 
     static func distinguishingFeatures(_ animal: CDAnimal) throws -> [DistinguishingFeature] {
-        do {
-            return try JSONDecoder().decode(
-                [DistinguishingFeature].self,
-                from: animal.distinguishingFeaturesData
-            )
-        } catch {
-            throw CoreDataAnimalRepositoryError.corruptDistinguishingFeatures(
-                animalID: animal.id
-            )
-        }
+        try CoreDataAnimalPayloadCodec.decodeDistinguishingFeatures(
+            animal.distinguishingFeaturesData,
+            animalID: animal.id
+        )
     }
 
     static func animalType(_ animal: CDAnimal) throws -> AnimalType {
