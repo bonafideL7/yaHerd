@@ -1006,8 +1006,8 @@ final class CoreDataAnimalRepository:
         return (contextFactory.makeReadContext(), herdID)
     }
 
-    private func performWrite<Result>(
-        _ operation: @escaping (NSManagedObjectContext, CDHerd) throws -> Result
+    private func performWrite<Result: Sendable>(
+        _ operation: @escaping @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
     ) throws -> Result {
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
