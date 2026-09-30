@@ -9,6 +9,7 @@ final class CoreDataAnimalRepository:
 {
     private let selection: any CurrentHerdSelectionReading
     private let contextFactory: CoreDataContextFactory
+    private let statusReferenceRepository: CoreDataAnimalStatusReferenceRepository
     private nonisolated let lookup: CoreDataLookup
 
     init(
@@ -18,6 +19,11 @@ final class CoreDataAnimalRepository:
     ) {
         self.selection = selection
         self.contextFactory = contextFactory
+        self.statusReferenceRepository = CoreDataAnimalStatusReferenceRepository(
+            selection: selection,
+            contextFactory: contextFactory,
+            lookup: lookup
+        )
         self.lookup = lookup
     }
 
@@ -82,30 +88,7 @@ final class CoreDataAnimalRepository:
     }
 
     func fetchStatusReferenceOptions() throws -> [AnimalStatusReferenceOption] {
-        let (context, herdID) = try makeReadScope()
-        return try context.performAndWait {
-            guard let herd = try lookup.herd(id: herdID, in: context) else {
-                throw HerdRepositoryError.missingHerd
-            }
-            let request = NSFetchRequest<CDAnimalStatusReference>(
-                entityName: CDAnimalStatusReference.coreDataEntityName
-            )
-            request.predicate = NSPredicate(format: "herd == %@", herd)
-            request.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
-            return try context.fetch(request).map { reference in
-                guard let baseStatus = AnimalStatus(rawValue: reference.baseStatusRawValue) else {
-                    throw CoreDataAnimalRepositoryError.invalidStatusReferenceBaseStatus(
-                        referenceID: reference.id,
-                        value: reference.baseStatusRawValue
-                    )
-                }
-                return AnimalStatusReferenceOption(
-                    id: reference.id,
-                    name: reference.name,
-                    baseStatus: baseStatus
-                )
-            }
-        }
+        try statusReferenceRepository.fetchStatusReferenceOptions()
     }
 
     func fetchParentOptions(
