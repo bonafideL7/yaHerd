@@ -1,6 +1,6 @@
 import Foundation
 
-enum AnimalValidationError: LocalizedError, Equatable {
+enum AnimalValidationError: LocalizedError, Equatable, Sendable {
     case invalidSalePrice
     case animalNotFound
     case animalTagNotFound
