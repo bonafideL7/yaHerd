@@ -57,10 +57,14 @@ final class CoreDataAnimalStatusReferenceRepository: AnimalStatusReferenceReadin
             request.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
 
             let references = try context.fetch(request)
-            try CoreDataAnimalMutation.validateUniqueApplicationIDs(
-                references,
-                herdID: herd.id
-            )
+            let grouped = Dictionary(grouping: references, by: \.id)
+            if let duplicate = grouped.first(where: { $0.value.count > 1 }) {
+                throw CoreDataPersistenceError.duplicateApplicationID(
+                    entity: CDAnimalStatusReference.coreDataEntityName,
+                    id: duplicate.key,
+                    herdID: herd.id
+                )
+            }
             return try references.map { reference in
                 guard let baseStatus = AnimalStatus(rawValue: reference.baseStatusRawValue) else {
                     throw CoreDataAnimalStatusReferenceRepositoryError.invalidBaseStatus(
