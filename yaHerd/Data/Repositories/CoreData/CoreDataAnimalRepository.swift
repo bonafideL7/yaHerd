@@ -331,7 +331,7 @@ final class CoreDataAnimalRepository:
                 in: context
             )
             let explicitSire = try CoreDataAnimalMutation.resolveAnimal(
-                id: input.sireID,
+                id: input.sireAnimalID,
                 herdID: herd.id,
                 lookup: self.lookup,
                 in: context
