@@ -149,7 +149,7 @@ struct HealthRecordInput: Hashable, Sendable {
     var notes: String?
 }
 
-struct PregnancyCheckInput: Hashable {
+struct PregnancyCheckInput: Hashable, Sendable {
     var date: Date
     var result: PregnancyResult
     var technician: String?
