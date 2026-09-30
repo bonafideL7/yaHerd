@@ -9,8 +9,8 @@ enum CoreDataAnimalProjection {
 
         let pregnancyChecks = managedPregnancyChecks(animal)
         let latestPregnancyCheck = pregnancyChecks.max { $0.date < $1.date }
-        let latestPregnancyResult = latestPregnancyCheck.flatMap {
-            PregnancyResult(rawValue: $0.resultRawValue)
+        let latestPregnancyResult = try latestPregnancyCheck.map {
+            try pregnancyResult($0)
         }
         let expectedCalvingDate: Date? = {
             guard latestPregnancyResult == .pregnant, let latestPregnancyCheck else {
@@ -27,7 +27,7 @@ enum CoreDataAnimalProjection {
         }()
 
         let healthRecords = managedHealthRecords(animal)
-        let sex = Sex(rawValue: animal.sexRawValue) ?? .unknown
+        let sex = try sex(animal)
 
         return AnimalSummary(
             id: animal.id,
@@ -39,11 +39,11 @@ enum CoreDataAnimalProjection {
                 : (damPrimary?.number.isEmpty == false ? damPrimary?.number : AnimalDisplayTagFormatter.untaggedPlaceholder),
             damDisplayTagColorID: damPrimary?.colorID,
             sex: sex,
-            animalType: animalType(animal),
+            animalType: try animalType(animal),
             firstDistinguishingFeature: try distinguishingFeatures(animal)
                 .firstOrderedDistinguishingFeatureDescription,
             birthDate: animal.birthDate,
-            status: AnimalStatus(rawValue: animal.statusRawValue) ?? .active,
+            status: try status(animal),
             isArchived: animal.isArchived,
             pastureID: animal.currentPasture?.id,
             pastureName: animal.currentPasture?.name,
@@ -80,16 +80,16 @@ enum CoreDataAnimalProjection {
             name: animal.name,
             displayTagNumber: primary.number,
             displayTagColorID: primary.colorID,
-            sex: Sex(rawValue: animal.sexRawValue) ?? .unknown,
-            animalType: animalType(animal),
+            sex: try sex(animal),
+            animalType: try animalType(animal),
             birthDate: animal.birthDate,
-            status: AnimalStatus(rawValue: animal.statusRawValue) ?? .active,
+            status: try status(animal),
             pastureID: animal.currentPasture?.id,
             pastureName: animal.currentPasture?.name,
             sireID: animal.sire?.id,
-            sire: animal.sire.map(parentDisplayName),
+            sire: try animal.sire.map { try parentDisplayName($0) },
             damID: animal.dam?.id,
-            dam: animal.dam.map(parentDisplayName),
+            dam: try animal.dam.map { try parentDisplayName($0) },
             distinguishingFeatures: try distinguishingFeatures(animal)
                 .normalizedDistinguishingFeatureOrder,
             saleDate: animal.saleDate,
@@ -110,14 +110,14 @@ enum CoreDataAnimalProjection {
         )
     }
 
-    static func parentOption(_ animal: CDAnimal) -> AnimalParentOption {
+    static func parentOption(_ animal: CDAnimal) throws -> AnimalParentOption {
         let primary = primaryTagFields(managedTags(animal))
         return AnimalParentOption(
             id: animal.id,
             name: animal.name,
             displayTagNumber: primary.number,
             displayTagColorID: primary.colorID,
-            sex: Sex(rawValue: animal.sexRawValue) ?? .unknown,
+            sex: try sex(animal),
             isArchived: animal.isArchived
         )
     }
@@ -134,7 +134,7 @@ enum CoreDataAnimalProjection {
         )
     }
 
-    static func timeline(_ animal: CDAnimal) -> [AnimalTimelineEvent] {
+    static func timeline(_ animal: CDAnimal) throws -> [AnimalTimelineEvent] {
         var events: [AnimalTimelineEvent] = [
             AnimalTimelineEvent(
                 date: animal.birthDate,
@@ -167,7 +167,7 @@ enum CoreDataAnimalProjection {
         }
 
         for check in managedPregnancyChecks(animal) {
-            let result = PregnancyResult(rawValue: check.resultRawValue) ?? .unknown
+            let result = try pregnancyResult(check)
             events.append(
                 AnimalTimelineEvent(
                     date: check.date,
@@ -190,8 +190,8 @@ enum CoreDataAnimalProjection {
         }
 
         for record in managedStatusRecords(animal) {
-            let oldStatus = AnimalStatus(rawValue: record.oldStatusRawValue) ?? .active
-            let newStatus = AnimalStatus(rawValue: record.newStatusRawValue) ?? .active
+            let oldStatus = try statusHistoryValue(record.oldStatusRawValue, record: record)
+            let newStatus = try statusHistoryValue(record.newStatusRawValue, record: record)
             events.append(
                 AnimalTimelineEvent(
                     date: record.date,
@@ -289,9 +289,9 @@ enum CoreDataAnimalProjection {
         }
     }
 
-    static func animalType(_ animal: CDAnimal) -> AnimalType {
+    static func animalType(_ animal: CDAnimal) throws -> AnimalType {
         AnimalTypeClassifier.classify(
-            sex: Sex(rawValue: animal.sexRawValue) ?? .unknown,
+            sex: try sex(animal),
             birthDate: animal.birthDate,
             hasMaternalOffspring: !managedMaternalOffspring(animal).isEmpty,
             hasCastrationOrBandingRecord: managedHealthRecords(animal).contains {
@@ -300,7 +300,7 @@ enum CoreDataAnimalProjection {
         )
     }
 
-    static func parentDisplayName(_ animal: CDAnimal) -> String {
+    static func parentDisplayName(_ animal: CDAnimal) throws -> String {
         let tag = primaryTagFields(managedTags(animal)).number
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !tag.isEmpty {
@@ -312,7 +312,7 @@ enum CoreDataAnimalProjection {
             return name
         }
 
-        switch Sex(rawValue: animal.sexRawValue) ?? .unknown {
+        switch try sex(animal) {
         case .female:
             return "Untagged dam"
         case .male:
@@ -320,6 +320,49 @@ enum CoreDataAnimalProjection {
         case .unknown:
             return "Untagged animal"
         }
+    }
+
+    static func sex(_ animal: CDAnimal) throws -> Sex {
+        guard let value = Sex(rawValue: animal.sexRawValue) else {
+            throw CoreDataAnimalRepositoryError.invalidAnimalSexRawValue(
+                animalID: animal.id,
+                value: animal.sexRawValue
+            )
+        }
+        return value
+    }
+
+    static func status(_ animal: CDAnimal) throws -> AnimalStatus {
+        guard let value = AnimalStatus(rawValue: animal.statusRawValue) else {
+            throw CoreDataAnimalRepositoryError.invalidAnimalStatusRawValue(
+                animalID: animal.id,
+                value: animal.statusRawValue
+            )
+        }
+        return value
+    }
+
+    private static func pregnancyResult(_ check: CDPregnancyCheck) throws -> PregnancyResult {
+        guard let value = PregnancyResult(rawValue: check.resultRawValue) else {
+            throw CoreDataAnimalRepositoryError.invalidPregnancyResultRawValue(
+                checkID: check.id,
+                value: check.resultRawValue
+            )
+        }
+        return value
+    }
+
+    private static func statusHistoryValue(
+        _ rawValue: String,
+        record: CDStatusRecord
+    ) throws -> AnimalStatus {
+        guard let value = AnimalStatus(rawValue: rawValue) else {
+            throw CoreDataAnimalRepositoryError.invalidStatusHistoryRawValue(
+                recordID: record.id,
+                value: rawValue
+            )
+        }
+        return value
     }
 
     private static func orderedTags(
