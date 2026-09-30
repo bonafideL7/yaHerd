@@ -310,8 +310,8 @@ enum CoreDataAnimalMutation {
         animal.birthDate = attributes.birthDate
         animal.sire = sire
         animal.dam = dam
-        animal.distinguishingFeaturesData = try JSONEncoder().encode(
-            attributes.distinguishingFeatures.normalizedDistinguishingFeatureOrder
+        animal.distinguishingFeaturesData = try CoreDataAnimalPayloadCodec.encodeDistinguishingFeatures(
+            attributes.distinguishingFeatures
         )
         animal.statusReference = statusReference
 
