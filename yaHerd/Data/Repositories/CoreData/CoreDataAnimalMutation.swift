@@ -505,6 +505,49 @@ enum CoreDataAnimalMutation {
         return changed
     }
 
+    static func enforceActivePrimary(
+        in tags: [CDAnimalTag],
+        preferredPrimaryID: UUID? = nil,
+        excludedFallbackID: UUID? = nil
+    ) {
+        let active = tags.filter(\.isActive)
+        guard !active.isEmpty else {
+            for tag in tags {
+                tag.isPrimary = false
+            }
+            return
+        }
+
+        if let preferredPrimaryID,
+           active.contains(where: { $0.id == preferredPrimaryID }) {
+            for tag in tags {
+                tag.isPrimary = tag.isActive && tag.id == preferredPrimaryID
+            }
+            return
+        }
+
+        let actualPrimaries = active.filter(\.isPrimary)
+        if actualPrimaries.count == 1 {
+            for tag in tags where !tag.isActive {
+                tag.isPrimary = false
+            }
+            return
+        }
+
+        let fallbackPool: [CDAnimalTag]
+        let excludingRequested = active.filter { $0.id != excludedFallbackID }
+        fallbackPool = excludingRequested.isEmpty ? active : excludingRequested
+
+        let orderedIDs = AnimalTagService.activeTags(
+            fallbackPool.map(CoreDataAnimalProjection.tagState)
+        ).map(\.id)
+        let selectedID = orderedIDs.first
+
+        for tag in tags {
+            tag.isPrimary = tag.isActive && tag.id == selectedID
+        }
+    }
+
     static func rotateRevision(_ animal: CDAnimal) {
         animal.editorRevision = UUID()
     }
