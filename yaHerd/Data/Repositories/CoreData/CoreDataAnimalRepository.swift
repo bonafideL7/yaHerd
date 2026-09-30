@@ -9,18 +9,15 @@ final class CoreDataAnimalRepository:
 {
     private let selection: any CurrentHerdSelectionReading
     private let contextFactory: CoreDataContextFactory
-    private let transactionExecutor: CoreDataTransactionExecutor
     private nonisolated let lookup: CoreDataLookup
 
     init(
         selection: any CurrentHerdSelectionReading,
         contextFactory: CoreDataContextFactory,
-        transactionExecutor: CoreDataTransactionExecutor,
         lookup: CoreDataLookup
     ) {
         self.selection = selection
         self.contextFactory = contextFactory
-        self.transactionExecutor = transactionExecutor
         self.lookup = lookup
     }
 
@@ -31,7 +28,6 @@ final class CoreDataAnimalRepository:
         self.init(
             selection: selection,
             contextFactory: assembly.contextFactory,
-            transactionExecutor: assembly.transactionExecutor,
             lookup: assembly.lookup
         )
     }
@@ -774,61 +770,54 @@ final class CoreDataAnimalRepository:
 
     func createAnimal(
         _ transaction: CreateAnimalAggregateTransaction
-    ) async throws -> AnimalAggregateEditSnapshot {
-        try await createAnimal(transaction, beforeSave: nil)
+    ) throws -> AnimalAggregateEditSnapshot {
+        try createAnimal(transaction, beforeSave: nil)
     }
 
     func createAnimal(
         _ transaction: CreateAnimalAggregateTransaction,
-        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)?
-    ) async throws -> AnimalAggregateEditSnapshot {
+        beforeSave: ((NSManagedObjectContext) throws -> Void)?
+    ) throws -> AnimalAggregateEditSnapshot {
         try CoreDataAnimalMutation.validateTagState(transaction.tags)
-        guard let herdID = selection.currentHerdID else {
-            throw HerdRepositoryError.missingHerd
-        }
-
-        let lookup = self.lookup
         let mutationDate = Date()
-        _ = try await transactionExecutor.performWrite(beforeSave: beforeSave) { context in
-            guard let herd = try lookup.herd(id: herdID, in: context) else {
-                throw HerdRepositoryError.missingHerd
-            }
-            if try lookup.herdOwned(
+
+        return try performWrite(beforeSave: beforeSave) { context, herd in
+            if try self.lookup.herdOwned(
                 CDAnimal.self,
                 id: transaction.animalID,
-                herdID: herdID,
+                herdID: herd.id,
                 in: context
             ) != nil {
                 throw CoreDataPersistenceError.duplicateApplicationID(
                     entity: CDAnimal.coreDataEntityName,
                     id: transaction.animalID,
-                    herdID: herdID
+                    herdID: herd.id
                 )
             }
 
             let attributes = transaction.attributes
             let pasture = try CoreDataAnimalMutation.resolvePasture(
                 id: attributes.pastureID,
-                herdID: herdID,
-                lookup: lookup,
+                herdID: herd.id,
+                lookup: self.lookup,
                 in: context
             )
             let sire = try CoreDataAnimalMutation.resolveAnimal(
                 id: attributes.sireID,
-                herdID: herdID,
-                lookup: lookup,
+                herdID: herd.id,
+                lookup: self.lookup,
                 in: context
             )
             let dam = try CoreDataAnimalMutation.resolveAnimal(
                 id: attributes.damID,
-                herdID: herdID,
-                lookup: lookup,
+                herdID: herd.id,
+                lookup: self.lookup,
                 in: context
             )
             let statusReference = try CoreDataAnimalMutation.resolveStatusReference(
                 id: attributes.statusReferenceID,
-                herdID: herdID,
-                lookup: lookup,
+                herdID: herd.id,
+                lookup: self.lookup,
                 in: context
             )
             try CoreDataAnimalMutation.validateAnimal(
@@ -884,46 +873,36 @@ final class CoreDataAnimalRepository:
                 transaction.tags,
                 for: animal,
                 herd: herd,
-                lookup: lookup,
+                lookup: self.lookup,
                 in: context,
                 mutationDate: mutationDate
             )
-            return animal.editorRevision
-        }
 
-        guard let created = try fetchAnimalAggregateForEditing(id: transaction.animalID) else {
-            throw AnimalAggregateTransactionError.aggregateNotFound(
-                animalID: transaction.animalID
+            return AnimalAggregateEditSnapshot(
+                animal: CoreDataAnimalProjection.detail(animal),
+                revision: AnimalAggregateRevision(value: animal.editorRevision)
             )
         }
-        return created
     }
 
     func updateAnimal(
         _ transaction: UpdateAnimalAggregateTransaction
-    ) async throws -> AnimalAggregateEditSnapshot {
-        try await updateAnimal(transaction, beforeSave: nil)
+    ) throws -> AnimalAggregateEditSnapshot {
+        try updateAnimal(transaction, beforeSave: nil)
     }
 
     func updateAnimal(
         _ transaction: UpdateAnimalAggregateTransaction,
-        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)?
-    ) async throws -> AnimalAggregateEditSnapshot {
+        beforeSave: ((NSManagedObjectContext) throws -> Void)?
+    ) throws -> AnimalAggregateEditSnapshot {
         try CoreDataAnimalMutation.validateTagState(transaction.tags)
-        guard let herdID = selection.currentHerdID else {
-            throw HerdRepositoryError.missingHerd
-        }
-
-        let lookup = self.lookup
         let mutationDate = Date()
-        _ = try await transactionExecutor.performWrite(beforeSave: beforeSave) { context in
-            guard let herd = try lookup.herd(id: herdID, in: context) else {
-                throw HerdRepositoryError.missingHerd
-            }
-            guard let animal = try lookup.herdOwned(
+
+        return try performWrite(beforeSave: beforeSave) { context, herd in
+            guard let animal = try self.lookup.herdOwned(
                 CDAnimal.self,
                 id: transaction.animalID,
-                herdID: herdID,
+                herdID: herd.id,
                 in: context
             ) else {
                 throw AnimalAggregateTransactionError.aggregateNotFound(
@@ -940,7 +919,7 @@ final class CoreDataAnimalRepository:
                 transaction.attributes,
                 to: animal,
                 herd: herd,
-                lookup: lookup,
+                lookup: self.lookup,
                 in: context,
                 mutationDate: mutationDate
             )
@@ -948,22 +927,19 @@ final class CoreDataAnimalRepository:
                 transaction.tags,
                 for: animal,
                 herd: herd,
-                lookup: lookup,
+                lookup: self.lookup,
                 in: context,
                 mutationDate: mutationDate
             )
             if attributesChanged || tagsChanged {
                 CoreDataAnimalMutation.rotateRevision(animal)
             }
-            return animal.editorRevision
-        }
 
-        guard let updated = try fetchAnimalAggregateForEditing(id: transaction.animalID) else {
-            throw AnimalAggregateTransactionError.aggregateNotFound(
-                animalID: transaction.animalID
+            return AnimalAggregateEditSnapshot(
+                animal: CoreDataAnimalProjection.detail(animal),
+                revision: AnimalAggregateRevision(value: animal.editorRevision)
             )
         }
-        return updated
     }
 
     // MARK: - Private
@@ -1042,8 +1018,9 @@ final class CoreDataAnimalRepository:
         return (contextFactory.makeReadContext(), herdID)
     }
 
-    private func performWrite<Result: Sendable>(
-        _ operation: @escaping @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
+    private func performWrite<Result>(
+        beforeSave: ((NSManagedObjectContext) throws -> Void)? = nil,
+        _ operation: (NSManagedObjectContext, CDHerd) throws -> Result
     ) throws -> Result {
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
@@ -1054,18 +1031,23 @@ final class CoreDataAnimalRepository:
                 guard let herd = try lookup.herd(id: herdID, in: context) else {
                     throw HerdRepositoryError.missingHerd
                 }
+
                 let result = try operation(context, herd)
-                if context.hasChanges {
-                    do {
-                        try context.save()
-                    } catch {
-                        context.rollback()
-                        throw CoreDataPersistenceError.saveFailed(
-                            description: error.localizedDescription
-                        )
-                    }
+                guard context.hasChanges else {
+                    return result
                 }
-                return result
+
+                try beforeSave?(context)
+
+                do {
+                    try context.save()
+                    return result
+                } catch {
+                    context.rollback()
+                    throw CoreDataPersistenceError.saveFailed(
+                        description: error.localizedDescription
+                    )
+                }
             } catch {
                 if context.hasChanges {
                     context.rollback()
