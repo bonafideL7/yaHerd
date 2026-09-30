@@ -241,8 +241,8 @@ final class CoreDataAnimalRepository:
             animal.name = input.name
             animal.sexRawValue = input.sex.rawValue
             animal.birthDate = input.birthDate
-            animal.distinguishingFeaturesData = try JSONEncoder().encode(
-                input.distinguishingFeatures.normalizedDistinguishingFeatureOrder
+            animal.distinguishingFeaturesData = try CoreDataAnimalPayloadCodec.encodeDistinguishingFeatures(
+                input.distinguishingFeatures
             )
             animal.isArchived = false
             animal.archivedAt = nil
@@ -366,8 +366,8 @@ final class CoreDataAnimalRepository:
             animal.birthDate = input.birthDate
             animal.sire = sire
             animal.dam = dam
-            animal.distinguishingFeaturesData = try JSONEncoder().encode(
-                input.distinguishingFeatures.normalizedDistinguishingFeatureOrder
+            animal.distinguishingFeaturesData = try CoreDataAnimalPayloadCodec.encodeDistinguishingFeatures(
+                input.distinguishingFeatures
             )
 
             let normalizedStatus = AnimalStatusTransitionService.normalizedState(
@@ -831,8 +831,8 @@ final class CoreDataAnimalRepository:
             animal.name = attributes.name
             animal.sexRawValue = attributes.sex.rawValue
             animal.birthDate = attributes.birthDate
-            animal.distinguishingFeaturesData = try JSONEncoder().encode(
-                attributes.distinguishingFeatures.normalizedDistinguishingFeatureOrder
+            animal.distinguishingFeaturesData = try CoreDataAnimalPayloadCodec.encodeDistinguishingFeatures(
+                attributes.distinguishingFeatures
             )
             animal.isArchived = false
             animal.archivedAt = nil
