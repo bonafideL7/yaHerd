@@ -75,7 +75,7 @@ final class CoreDataPastureRepository:
                 AnimalStatus.active.rawValue
             )
             return try context.fetch(request)
-                .map(Self.animalSummary)
+                .map { try CoreDataAnimalProjection.summary($0) }
                 .sorted {
                     $0.displayTagNumber.localizedStandardCompare($1.displayTagNumber) == .orderedAscending
                 }
@@ -323,94 +323,6 @@ final class CoreDataPastureRepository:
                 throw error
             }
         }
-    }
-
-    private nonisolated static func animalSummary(_ animal: CDAnimal) -> AnimalSummary {
-        let tags = (animal.tags?.allObjects as? [CDAnimalTag]) ?? []
-        let primaryTagFields = Self.primaryTagFields(in: tags)
-
-        let damTags = (animal.dam?.tags?.allObjects as? [CDAnimalTag]) ?? []
-        let damPrimaryTagFields = Self.primaryTagFields(in: damTags)
-
-        let pregnancyChecks = (animal.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? []
-        let latestPregnancyCheck = pregnancyChecks.max { $0.date < $1.date }
-        let pregnancyStatus: AnimalPregnancyStatus? = latestPregnancyCheck.map {
-            switch PregnancyResult(rawValue: $0.resultRawValue) ?? .unknown {
-            case .open: return .open
-            case .pregnant: return .pregnant
-            case .unknown: return .unknown
-            }
-        }
-        let expectedCalvingDate: Date? = {
-            guard let check = latestPregnancyCheck,
-                  PregnancyResult(rawValue: check.resultRawValue) == .pregnant else { return nil }
-            if let dueDate = check.dueDate { return dueDate }
-            return Calendar.current.date(
-                byAdding: .day,
-                value: CattleReproductionRules.gestationDays,
-                to: check.date
-            )
-        }()
-
-        let healthRecords = (animal.healthRecords?.allObjects as? [CDHealthRecord]) ?? []
-        let latestHealthDate = healthRecords.map(\.date).max()
-        let hasCastrationOrBandingRecord = healthRecords.contains {
-            AnimalTypeClassifier.isCastrationOrBandingTreatment($0.treatment)
-        }
-        let hasMaternalOffspring = ((animal.damOffspring?.allObjects as? [CDAnimal]) ?? []).isEmpty == false
-        let sex = Sex(rawValue: animal.sexRawValue) ?? .unknown
-        let animalType = AnimalTypeClassifier.classify(
-            sex: sex,
-            birthDate: animal.birthDate,
-            hasMaternalOffspring: hasMaternalOffspring,
-            hasCastrationOrBandingRecord: hasCastrationOrBandingRecord
-        )
-        let features = (try? JSONDecoder().decode(
-            [DistinguishingFeature].self,
-            from: animal.distinguishingFeaturesData
-        )) ?? []
-
-        return AnimalSummary(
-            id: animal.id,
-            name: animal.name,
-            displayTagNumber: primaryTagFields.number,
-            displayTagColorID: primaryTagFields.colorID,
-            damDisplayTagNumber: animal.dam == nil
-                ? nil
-                : (damPrimaryTagFields.number.isEmpty ? "UT" : damPrimaryTagFields.number),
-            damDisplayTagColorID: damPrimaryTagFields.colorID,
-            sex: sex,
-            animalType: animalType,
-            firstDistinguishingFeature: features.firstOrderedDistinguishingFeatureDescription,
-            birthDate: animal.birthDate,
-            status: AnimalStatus(rawValue: animal.statusRawValue) ?? .active,
-            isArchived: animal.isArchived,
-            pastureID: animal.currentPasture?.id,
-            pastureName: animal.currentPasture?.name,
-            location: animal.activeWorkingSession == nil ? .pasture : .workingPen,
-            lastPregnancyCheckDate: latestPregnancyCheck?.date,
-            lastPregnancyStatus: pregnancyStatus,
-            expectedCalvingDate: expectedCalvingDate,
-            lastTreatmentDate: latestHealthDate
-        )
-    }
-
-    private nonisolated static func primaryTagFields(in tags: [CDAnimalTag]) -> AnimalPrimaryTagFields {
-        AnimalTagService.primaryTagFields(
-            in: tags.map {
-                AnimalTagState(
-                    id: $0.id,
-                    number: $0.number,
-                    colorID: $0.color?.id,
-                    isPrimary: $0.isPrimary,
-                    isActive: $0.isActive,
-                    assignedAt: $0.assignedAt,
-                    removedAt: $0.removedAt
-                )
-            },
-            fallbackNumber: "",
-            fallbackColorID: nil
-        )
     }
 
     private nonisolated static func fetchPastures(herd: CDHerd, in context: NSManagedObjectContext) throws -> [CDPasture] {
