@@ -44,8 +44,15 @@ enum CoreDataAnimalMutation {
             return []
         }
         let all = try fetchAnimals(herd: herd, in: context)
-        let byID = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
-        return uniqueIDs.compactMap { byID[$0] }
+        let grouped = Dictionary(grouping: all, by: \.id)
+        if let duplicate = grouped.first(where: { $0.value.count > 1 }) {
+            throw CoreDataPersistenceError.duplicateApplicationID(
+                entity: CDAnimal.coreDataEntityName,
+                id: duplicate.key,
+                herdID: herd.id
+            )
+        }
+        return uniqueIDs.compactMap { grouped[$0]?.first }
     }
 
     static func resolvePasture(
@@ -348,7 +355,15 @@ enum CoreDataAnimalMutation {
         }
 
         let before = aggregateTagStates(animal)
-        let existingByID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+        let existingGroups = Dictionary(grouping: existing, by: \.id)
+        if let duplicate = existingGroups.first(where: { $0.value.count > 1 }) {
+            throw CoreDataPersistenceError.duplicateApplicationID(
+                entity: CDAnimalTag.coreDataEntityName,
+                id: duplicate.key,
+                herdID: herd.id
+            )
+        }
+        let existingByID = existingGroups.compactMapValues(\.first)
 
         for state in desired {
             let color = try resolveTagColor(
