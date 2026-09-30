@@ -929,7 +929,19 @@ final class CoreDataAnimalRepository:
         let primaryID = AnimalTagService.primaryTag(in: states)?.id
         let primary = primaryID.flatMap { id in tags.first { $0.id == id } }
 
-        if normalizedNumber.isEmpty && tags.isEmpty {
+        if normalizedNumber.isEmpty {
+            guard let primary else {
+                return
+            }
+            primary.isActive = false
+            primary.isPrimary = false
+            if primary.removedAt == nil {
+                primary.removedAt = date
+            }
+            CoreDataAnimalMutation.enforceActivePrimary(
+                in: tags,
+                excludedFallbackID: primary.id
+            )
             return
         }
 
