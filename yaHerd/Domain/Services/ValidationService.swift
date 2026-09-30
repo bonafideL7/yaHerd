@@ -103,7 +103,7 @@ struct ValidationService {
 
 
     // For throwing human-readable errors
-    struct ValidationError: LocalizedError {
+    struct ValidationError: LocalizedError, Sendable {
         var message: String
         init(_ message: String) { self.message = message }
         var errorDescription: String? { message }
