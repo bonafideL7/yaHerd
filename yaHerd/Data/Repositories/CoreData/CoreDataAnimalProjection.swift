@@ -65,8 +65,7 @@ enum CoreDataAnimalProjection {
             matching: AnimalTagService.inactiveTags
         )
         let primary = primaryTagFields(managedTags(animal))
-        let visibleMaternalOffspring = managedMaternalOffspring(animal)
-            .filter { !$0.isArchived }
+        let maternalOffspring = managedMaternalOffspring(animal)
             .sorted {
                 if $0.birthDate != $1.birthDate {
                     return $0.birthDate > $1.birthDate
@@ -107,7 +106,7 @@ enum CoreDataAnimalProjection {
             inactiveTags: inactiveTags.map(tagSnapshot),
             location: animal.activeWorkingSession == nil ? .pasture : .workingPen,
             maternalOffspringCountIncludingArchived: managedMaternalOffspring(animal).count,
-            maternalOffspring: try visibleMaternalOffspring.map(summary)
+            maternalOffspring: try maternalOffspring.map(summary)
         )
     }
 
