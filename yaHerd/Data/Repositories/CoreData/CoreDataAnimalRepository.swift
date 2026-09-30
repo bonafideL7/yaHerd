@@ -190,12 +190,19 @@ final class CoreDataAnimalRepository:
                 lookup: self.lookup,
                 in: context
             )
-            let sire = explicitSire ?? (dam == nil ? nil : try CoreDataAnimalMutation.inferSingleSire(
-                pastureID: pasture?.id ?? dam?.currentPasture?.id,
-                excluding: input.damID,
-                herd: herd,
-                in: context
-            ))
+            let sire: CDAnimal?
+            if let explicitSire {
+                sire = explicitSire
+            } else if dam != nil {
+                sire = try CoreDataAnimalMutation.inferSingleSire(
+                    pastureID: pasture?.id ?? dam?.currentPasture?.id,
+                    excluding: input.damID,
+                    herd: herd,
+                    in: context
+                )
+            } else {
+                sire = nil
+            }
             let statusReference = try CoreDataAnimalMutation.resolveStatusReference(
                 id: input.statusReferenceID,
                 herdID: herd.id,
@@ -321,12 +328,19 @@ final class CoreDataAnimalRepository:
                 lookup: self.lookup,
                 in: context
             )
-            let sire = explicitSire ?? (dam == nil ? nil : try CoreDataAnimalMutation.inferSingleSire(
-                pastureID: pasture?.id ?? dam?.currentPasture?.id,
-                excluding: input.damID,
-                herd: herd,
-                in: context
-            ))
+            let sire: CDAnimal?
+            if let explicitSire {
+                sire = explicitSire
+            } else if dam != nil {
+                sire = try CoreDataAnimalMutation.inferSingleSire(
+                    pastureID: pasture?.id ?? dam?.currentPasture?.id,
+                    excluding: input.damID,
+                    herd: herd,
+                    in: context
+                )
+            } else {
+                sire = nil
+            }
             let statusReference = try CoreDataAnimalMutation.resolveStatusReference(
                 id: input.statusReferenceID,
                 herdID: herd.id,
