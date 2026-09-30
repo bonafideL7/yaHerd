@@ -767,17 +767,10 @@ final class CoreDataAnimalRepository:
     func createAnimal(
         _ transaction: CreateAnimalAggregateTransaction
     ) throws -> AnimalAggregateEditSnapshot {
-        try createAnimal(transaction, beforeSave: nil)
-    }
-
-    func createAnimal(
-        _ transaction: CreateAnimalAggregateTransaction,
-        beforeSave: ((NSManagedObjectContext) throws -> Void)?
-    ) throws -> AnimalAggregateEditSnapshot {
         try CoreDataAnimalMutation.validateTagState(transaction.tags)
         let mutationDate = Date()
 
-        return try performWrite(beforeSave: beforeSave) { context, herd in
+        return try performWrite { context, herd in
             if try self.lookup.herdOwned(
                 CDAnimal.self,
                 id: transaction.animalID,
@@ -884,17 +877,10 @@ final class CoreDataAnimalRepository:
     func updateAnimal(
         _ transaction: UpdateAnimalAggregateTransaction
     ) throws -> AnimalAggregateEditSnapshot {
-        try updateAnimal(transaction, beforeSave: nil)
-    }
-
-    func updateAnimal(
-        _ transaction: UpdateAnimalAggregateTransaction,
-        beforeSave: ((NSManagedObjectContext) throws -> Void)?
-    ) throws -> AnimalAggregateEditSnapshot {
         try CoreDataAnimalMutation.validateTagState(transaction.tags)
         let mutationDate = Date()
 
-        return try performWrite(beforeSave: beforeSave) { context, herd in
+        return try performWrite { context, herd in
             guard let animal = try self.lookup.herdOwned(
                 CDAnimal.self,
                 id: transaction.animalID,
@@ -1015,7 +1001,6 @@ final class CoreDataAnimalRepository:
     }
 
     private func performWrite<Result>(
-        beforeSave: ((NSManagedObjectContext) throws -> Void)? = nil,
         _ operation: (NSManagedObjectContext, CDHerd) throws -> Result
     ) throws -> Result {
         guard let herdID = selection.currentHerdID else {
@@ -1032,8 +1017,6 @@ final class CoreDataAnimalRepository:
                 guard context.hasChanges else {
                     return result
                 }
-
-                try beforeSave?(context)
 
                 do {
                     try context.save()
