@@ -143,7 +143,7 @@ protocol AnimalRepository:
     AnimalPregnancyCheckAdding
 {}
 
-struct HealthRecordInput: Hashable {
+struct HealthRecordInput: Hashable, Sendable {
     var date: Date
     var treatment: String
     var notes: String?
