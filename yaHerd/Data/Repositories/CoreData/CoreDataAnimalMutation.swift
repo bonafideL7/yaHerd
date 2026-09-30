@@ -49,7 +49,9 @@ enum CoreDataAnimalMutation {
     ) throws -> [CDAnimal] {
         let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
         request.predicate = NSPredicate(format: "herd == %@", herd)
-        return try context.fetch(request)
+        let animals = try context.fetch(request)
+        try validateUniqueApplicationIDs(animals, herdID: herd.id)
+        return animals
     }
 
     static func fetchAnimals(
@@ -62,15 +64,51 @@ enum CoreDataAnimalMutation {
             return []
         }
         let all = try fetchAnimals(herd: herd, in: context)
-        let grouped = Dictionary(grouping: all, by: \.id)
+        let byID = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
+        return uniqueIDs.compactMap { byID[$0] }
+    }
+
+    static func validateUniqueApplicationIDs<Object>(
+        _ objects: [Object],
+        herdID: UUID
+    ) throws
+    where Object: NSManagedObject & CoreDataHerdOwnedManagedObject {
+        let grouped = Dictionary(grouping: objects, by: \.id)
         if let duplicate = grouped.first(where: { $0.value.count > 1 }) {
             throw CoreDataPersistenceError.duplicateApplicationID(
-                entity: CDAnimal.coreDataEntityName,
+                entity: Object.coreDataEntityName,
                 id: duplicate.key,
-                herdID: herd.id
+                herdID: herdID
             )
         }
-        return uniqueIDs.compactMap { grouped[$0]?.first }
+    }
+
+    static func validateOwnedGraphIdentity(_ animal: CDAnimal) throws {
+        let herdID = animal.herd.id
+        try validateUniqueApplicationIDs(
+            CoreDataAnimalProjection.managedTags(animal),
+            herdID: herdID
+        )
+        try validateUniqueApplicationIDs(
+            CoreDataAnimalProjection.managedMovementRecords(animal),
+            herdID: herdID
+        )
+        try validateUniqueApplicationIDs(
+            CoreDataAnimalProjection.managedStatusRecords(animal),
+            herdID: herdID
+        )
+        try validateUniqueApplicationIDs(
+            CoreDataAnimalProjection.managedHealthRecords(animal),
+            herdID: herdID
+        )
+        try validateUniqueApplicationIDs(
+            CoreDataAnimalProjection.managedPregnancyChecks(animal),
+            herdID: herdID
+        )
+        try validateUniqueApplicationIDs(
+            CoreDataAnimalProjection.managedMaternalOffspring(animal),
+            herdID: herdID
+        )
     }
 
     static func resolvePasture(
