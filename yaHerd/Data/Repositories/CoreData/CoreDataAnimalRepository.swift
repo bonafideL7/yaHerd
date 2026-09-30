@@ -200,7 +200,7 @@ final class CoreDataAnimalRepository:
                 in: context
             )
             let explicitSire = try CoreDataAnimalMutation.resolveAnimal(
-                id: input.sireID,
+                id: input.sireAnimalID,
                 herdID: herd.id,
                 lookup: self.lookup,
                 in: context
@@ -968,7 +968,7 @@ final class CoreDataAnimalRepository:
 
     // MARK: - Private
 
-    private func reconcileLegacyPrimaryTag(
+    private nonisolated func reconcileLegacyPrimaryTag(
         animal: CDAnimal,
         number: String,
         colorID: UUID?,
@@ -1019,7 +1019,7 @@ final class CoreDataAnimalRepository:
         }
     }
 
-    private func requiredAnimal(
+    private nonisolated func requiredAnimal(
         id: UUID,
         herdID: UUID,
         context: NSManagedObjectContext
