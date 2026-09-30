@@ -1,6 +1,6 @@
 import Foundation
 
-struct AnimalInput: Hashable, Sendable {
+struct AnimalInput: Hashable {
     let name: String
     let tagNumber: String
     let tagColorID: UUID?
