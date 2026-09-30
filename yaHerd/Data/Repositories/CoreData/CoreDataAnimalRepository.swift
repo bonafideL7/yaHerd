@@ -41,7 +41,7 @@ final class CoreDataAnimalRepository:
                 throw HerdRepositoryError.missingHerd
             }
             return try CoreDataAnimalMutation.fetchAnimals(herd: herd, in: context)
-                .map(CoreDataAnimalProjection.summary)
+                .map { try CoreDataAnimalProjection.summary($0) }
         }
     }
 
@@ -59,7 +59,7 @@ final class CoreDataAnimalRepository:
             ) else {
                 return nil
             }
-            return CoreDataAnimalProjection.detail(animal)
+            return try CoreDataAnimalProjection.detail(animal)
         }
     }
 
@@ -173,7 +173,7 @@ final class CoreDataAnimalRepository:
                 return nil
             }
             return AnimalAggregateEditSnapshot(
-                animal: CoreDataAnimalProjection.detail(animal),
+                animal: try CoreDataAnimalProjection.detail(animal),
                 revision: AnimalAggregateRevision(value: animal.editorRevision)
             )
         }
@@ -291,7 +291,7 @@ final class CoreDataAnimalRepository:
                 tag.animal = animal
             }
 
-            return CoreDataAnimalProjection.detail(animal)
+            return try CoreDataAnimalProjection.detail(animal)
         }
     }
 
@@ -309,7 +309,7 @@ final class CoreDataAnimalRepository:
                 throw AnimalValidationError.animalNotFound
             }
 
-            let beforeAttributes = CoreDataAnimalMutation.aggregateAttributes(animal)
+            let beforeAttributes = try CoreDataAnimalMutation.aggregateAttributes(animal)
             let beforeTags = CoreDataAnimalMutation.aggregateTagStates(animal)
             let oldStatus = AnimalStatus(rawValue: animal.statusRawValue) ?? .active
             let oldPasture = animal.currentPasture
@@ -414,12 +414,12 @@ final class CoreDataAnimalRepository:
                 at: mutationDate
             )
 
-            if beforeAttributes != CoreDataAnimalMutation.aggregateAttributes(animal)
+            if beforeAttributes != (try CoreDataAnimalMutation.aggregateAttributes(animal))
                 || beforeTags != CoreDataAnimalMutation.aggregateTagStates(animal) {
                 CoreDataAnimalMutation.rotateRevision(animal)
             }
 
-            return CoreDataAnimalProjection.detail(animal)
+            return try CoreDataAnimalProjection.detail(animal)
         }
     }
 
@@ -571,7 +571,7 @@ final class CoreDataAnimalRepository:
             tag.herd = herd
             tag.animal = animal
             CoreDataAnimalMutation.rotateRevision(animal)
-            return CoreDataAnimalProjection.detail(animal)
+            return try CoreDataAnimalProjection.detail(animal)
         }
     }
 
@@ -627,7 +627,7 @@ final class CoreDataAnimalRepository:
             if before != CoreDataAnimalMutation.aggregateTagStates(animal) {
                 CoreDataAnimalMutation.rotateRevision(animal)
             }
-            return CoreDataAnimalProjection.detail(animal)
+            return try CoreDataAnimalProjection.detail(animal)
         }
     }
 
@@ -657,7 +657,7 @@ final class CoreDataAnimalRepository:
             if before != CoreDataAnimalMutation.aggregateTagStates(animal) {
                 CoreDataAnimalMutation.rotateRevision(animal)
             }
-            return CoreDataAnimalProjection.detail(animal)
+            return try CoreDataAnimalProjection.detail(animal)
         }
     }
 
@@ -697,7 +697,7 @@ final class CoreDataAnimalRepository:
             if before != CoreDataAnimalMutation.aggregateTagStates(animal) {
                 CoreDataAnimalMutation.rotateRevision(animal)
             }
-            return CoreDataAnimalProjection.detail(animal)
+            return try CoreDataAnimalProjection.detail(animal)
         }
     }
 
@@ -725,7 +725,7 @@ final class CoreDataAnimalRepository:
             record.herd = herd
             record.animal = animal
             record.workingSession = nil
-            return CoreDataAnimalProjection.detail(animal)
+            return try CoreDataAnimalProjection.detail(animal)
         }
     }
 
@@ -762,7 +762,7 @@ final class CoreDataAnimalRepository:
             check.animal = animal
             check.sire = sire
             check.workingSession = nil
-            return CoreDataAnimalProjection.detail(animal)
+            return try CoreDataAnimalProjection.detail(animal)
         }
     }
 
@@ -879,7 +879,7 @@ final class CoreDataAnimalRepository:
             )
 
             return AnimalAggregateEditSnapshot(
-                animal: CoreDataAnimalProjection.detail(animal),
+                animal: try CoreDataAnimalProjection.detail(animal),
                 revision: AnimalAggregateRevision(value: animal.editorRevision)
             )
         }
@@ -936,7 +936,7 @@ final class CoreDataAnimalRepository:
             }
 
             return AnimalAggregateEditSnapshot(
-                animal: CoreDataAnimalProjection.detail(animal),
+                animal: try CoreDataAnimalProjection.detail(animal),
                 revision: AnimalAggregateRevision(value: animal.editorRevision)
             )
         }
