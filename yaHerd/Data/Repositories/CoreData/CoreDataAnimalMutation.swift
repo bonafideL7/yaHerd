@@ -7,6 +7,7 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
     case statusReferenceNotFound(UUID)
     case tagColorNotFound(UUID)
     case existingTagOmitted(UUID)
+    case corruptDistinguishingFeatures(animalID: UUID)
 
     var errorDescription: String? {
         switch self {
@@ -20,6 +21,8 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
             return "The selected tag color could not be found."
         case .existingTagOmitted:
             return "An existing tag is missing from the complete aggregate tag state."
+        case .corruptDistinguishingFeatures:
+            return "The animal's distinguishing-feature data is corrupt."
         }
     }
 }
@@ -206,7 +209,7 @@ enum CoreDataAnimalMutation {
         }
     }
 
-    static func aggregateAttributes(_ animal: CDAnimal) -> AnimalAggregateAttributes {
+    static func aggregateAttributes(_ animal: CDAnimal) throws -> AnimalAggregateAttributes {
         AnimalAggregateAttributes(
             name: animal.name,
             sex: Sex(rawValue: animal.sexRawValue) ?? .unknown,
@@ -215,7 +218,7 @@ enum CoreDataAnimalMutation {
             pastureID: animal.currentPasture?.id,
             sireID: animal.sire?.id,
             damID: animal.dam?.id,
-            distinguishingFeatures: CoreDataAnimalProjection.distinguishingFeatures(animal)
+            distinguishingFeatures: try CoreDataAnimalProjection.distinguishingFeatures(animal)
                 .normalizedDistinguishingFeatureOrder,
             saleDate: animal.saleDate,
             salePrice: animal.salePrice?.doubleValue,
@@ -248,7 +251,7 @@ enum CoreDataAnimalMutation {
         in context: NSManagedObjectContext,
         mutationDate: Date
     ) throws -> Bool {
-        let oldAttributes = aggregateAttributes(animal)
+        let oldAttributes = try aggregateAttributes(animal)
         let oldStatus = AnimalStatus(rawValue: animal.statusRawValue) ?? .active
         let oldPasture = animal.currentPasture
 
@@ -335,7 +338,7 @@ enum CoreDataAnimalMutation {
             )
         }
 
-        return oldAttributes != aggregateAttributes(animal)
+        return oldAttributes != (try aggregateAttributes(animal))
     }
 
     static func reconcileAggregateTags(
