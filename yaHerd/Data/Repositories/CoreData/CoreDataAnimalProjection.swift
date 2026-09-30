@@ -2,7 +2,7 @@
 import Foundation
 
 enum CoreDataAnimalProjection {
-    static func summary(_ animal: CDAnimal) -> AnimalSummary {
+    static func summary(_ animal: CDAnimal) throws -> AnimalSummary {
         let tags = managedTags(animal)
         let primary = primaryTagFields(tags)
         let damPrimary = animal.dam.map { primaryTagFields(managedTags($0)) }
@@ -40,7 +40,7 @@ enum CoreDataAnimalProjection {
             damDisplayTagColorID: damPrimary?.colorID,
             sex: sex,
             animalType: animalType(animal),
-            firstDistinguishingFeature: distinguishingFeatures(animal)
+            firstDistinguishingFeature: try distinguishingFeatures(animal)
                 .firstOrderedDistinguishingFeatureDescription,
             birthDate: animal.birthDate,
             status: AnimalStatus(rawValue: animal.statusRawValue) ?? .active,
@@ -55,7 +55,7 @@ enum CoreDataAnimalProjection {
         )
     }
 
-    static func detail(_ animal: CDAnimal) -> AnimalDetailSnapshot {
+    static func detail(_ animal: CDAnimal) throws -> AnimalDetailSnapshot {
         let activeTags = orderedTags(
             managedTags(animal),
             matching: AnimalTagService.activeTags
@@ -91,7 +91,7 @@ enum CoreDataAnimalProjection {
             sire: animal.sire.map(parentDisplayName),
             damID: animal.dam?.id,
             dam: animal.dam.map(parentDisplayName),
-            distinguishingFeatures: distinguishingFeatures(animal)
+            distinguishingFeatures: try distinguishingFeatures(animal)
                 .normalizedDistinguishingFeatureOrder,
             saleDate: animal.saleDate,
             salePrice: animal.salePrice?.doubleValue,
@@ -107,7 +107,7 @@ enum CoreDataAnimalProjection {
             inactiveTags: inactiveTags.map(tagSnapshot),
             location: animal.activeWorkingSession == nil ? .pasture : .workingPen,
             maternalOffspringCountIncludingArchived: managedMaternalOffspring(animal).count,
-            maternalOffspring: visibleMaternalOffspring.map(summary)
+            maternalOffspring: try visibleMaternalOffspring.map(summary)
         )
     }
 
@@ -277,11 +277,17 @@ enum CoreDataAnimalProjection {
         (animal.damOffspring?.allObjects as? [CDAnimal]) ?? []
     }
 
-    static func distinguishingFeatures(_ animal: CDAnimal) -> [DistinguishingFeature] {
-        (try? JSONDecoder().decode(
-            [DistinguishingFeature].self,
-            from: animal.distinguishingFeaturesData
-        )) ?? []
+    static func distinguishingFeatures(_ animal: CDAnimal) throws -> [DistinguishingFeature] {
+        do {
+            return try JSONDecoder().decode(
+                [DistinguishingFeature].self,
+                from: animal.distinguishingFeaturesData
+            )
+        } catch {
+            throw CoreDataAnimalRepositoryError.corruptDistinguishingFeatures(
+                animalID: animal.id
+            )
+        }
     }
 
     static func animalType(_ animal: CDAnimal) -> AnimalType {
