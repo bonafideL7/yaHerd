@@ -12,6 +12,7 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
     case invalidAnimalStatusRawValue(animalID: UUID, value: String)
     case invalidPregnancyResultRawValue(checkID: UUID, value: String)
     case invalidStatusHistoryRawValue(recordID: UUID, value: String)
+    case invalidStatusReferenceBaseStatus(referenceID: UUID, value: String)
 
     var errorDescription: String? {
         switch self {
@@ -35,6 +36,8 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
             return "The pregnancy check contains an invalid persisted result value."
         case .invalidStatusHistoryRawValue:
             return "The animal status history contains an invalid persisted status value."
+        case .invalidStatusReferenceBaseStatus:
+            return "The animal status reference contains an invalid persisted base-status value."
         }
     }
 }
