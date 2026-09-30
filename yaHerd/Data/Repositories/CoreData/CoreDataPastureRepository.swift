@@ -74,7 +74,12 @@ final class CoreDataPastureRepository:
                 pasture,
                 AnimalStatus.active.rawValue
             )
-            return try context.fetch(request)
+            let residents = try context.fetch(request)
+            try CoreDataAnimalMutation.validateUniqueApplicationIDs(
+                residents,
+                herdID: herdID
+            )
+            return try residents
                 .map { try CoreDataAnimalProjection.summary($0) }
                 .sorted {
                     $0.displayTagNumber.localizedStandardCompare($1.displayTagNumber) == .orderedAscending
