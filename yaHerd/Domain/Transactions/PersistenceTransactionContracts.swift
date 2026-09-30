@@ -42,7 +42,7 @@ struct AnimalTagTransactionState: Hashable, Sendable {
 }
 
 /// Editor read result that carries the aggregate revision used for optimistic conflict detection.
-struct AnimalAggregateEditSnapshot: Hashable {
+struct AnimalAggregateEditSnapshot: Hashable, Sendable {
     let animal: AnimalDetailSnapshot
     let revision: AnimalAggregateRevision
 }
