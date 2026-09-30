@@ -12,7 +12,7 @@ struct AnimalAggregateRevision: Hashable, Sendable {
 ///
 /// Tag number/color do not appear here intentionally. `tags` in the aggregate transaction is the
 /// single source of truth for primary and secondary tag state in the production Core Data model.
-struct AnimalAggregateAttributes: Hashable {
+struct AnimalAggregateAttributes: Hashable, Sendable {
     let name: String
     let sex: Sex
     let birthDate: Date
@@ -33,7 +33,7 @@ struct AnimalAggregateAttributes: Hashable {
 ///
 /// `id` is application identity. Persistence implementations must preserve it exactly;
 /// storage-native object identifiers are not part of this contract.
-struct AnimalTagTransactionState: Hashable {
+struct AnimalTagTransactionState: Hashable, Sendable {
     let id: UUID
     let number: String
     let colorID: UUID?
@@ -58,7 +58,7 @@ protocol AnimalAggregateEditReading {
 /// The supplied animal and tag UUIDs are authoritative application identities. `tags` is the only
 /// source of primary-tag state. Untagged animals may have no active tags; otherwise the request must
 /// contain exactly one active primary tag. A thrown error leaves none of the aggregate committed.
-struct CreateAnimalAggregateTransaction: Hashable {
+struct CreateAnimalAggregateTransaction: Hashable, Sendable {
     let animalID: UUID
     let attributes: AnimalAggregateAttributes
     let tags: [AnimalTagTransactionState]
@@ -70,7 +70,7 @@ struct CreateAnimalAggregateTransaction: Hashable {
 /// compare it with the current stored revision before applying any changes and fail the transaction
 /// when they differ. `tags` is the complete desired tag state: existing tags are matched by UUID,
 /// new UUIDs create tags, and inactive tags remain as retired history.
-struct UpdateAnimalAggregateTransaction: Hashable {
+struct UpdateAnimalAggregateTransaction: Hashable, Sendable {
     let animalID: UUID
     let expectedRevision: AnimalAggregateRevision
     let attributes: AnimalAggregateAttributes
@@ -83,17 +83,43 @@ struct UpdateAnimalAggregateTransaction: Hashable {
 /// revision. Any mutation of editor-owned animal fields or tag state must rotate the revision so a
 /// stale editor cannot silently overwrite a remote/imported change. Mutation publication and sync
 /// scheduling occur only after commit.
+enum AnimalAggregateTransactionError: LocalizedError, Equatable, Sendable {
+    case aggregateNotFound(animalID: UUID)
+    case staleRevision(animalID: UUID)
+    case activeTagsRequirePrimary
+    case multipleActivePrimaryTags
+    case inactiveTagCannotBePrimary
+    case duplicateTagApplicationIDs
+
+    var errorDescription: String? {
+        switch self {
+        case .aggregateNotFound:
+            return "That animal no longer exists. Reload before saving."
+        case .staleRevision:
+            return "This animal changed after the editor was opened. Reload before saving."
+        case .activeTagsRequirePrimary:
+            return "An animal with active tags must have one primary tag."
+        case .multipleActivePrimaryTags:
+            return "An animal can have only one active primary tag."
+        case .inactiveTagCannotBePrimary:
+            return "A retired tag cannot remain the primary tag."
+        case .duplicateTagApplicationIDs:
+            return "The animal contains duplicate tag identities."
+        }
+    }
+}
+
 @MainActor
 protocol AnimalAggregateTransactionWriting {
     @discardableResult
     func createAnimal(
         _ transaction: CreateAnimalAggregateTransaction
-    ) throws -> AnimalAggregateEditSnapshot
+    ) async throws -> AnimalAggregateEditSnapshot
 
     @discardableResult
     func updateAnimal(
         _ transaction: UpdateAnimalAggregateTransaction
-    ) throws -> AnimalAggregateEditSnapshot
+    ) async throws -> AnimalAggregateEditSnapshot
 }
 
 /// State observed by the Domain use case while preparing a pasture-deletion transaction.
