@@ -1001,7 +1001,7 @@ final class CoreDataAnimalRepository:
     }
 
     private func performWrite<Result>(
-        _ operation: (NSManagedObjectContext, CDHerd) throws -> Result
+        _ operation: @escaping (NSManagedObjectContext, CDHerd) throws -> Result
     ) throws -> Result {
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
