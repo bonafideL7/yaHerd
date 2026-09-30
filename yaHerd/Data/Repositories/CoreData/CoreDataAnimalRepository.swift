@@ -544,12 +544,6 @@ final class CoreDataAnimalRepository:
                 isPrimary: input.isPrimary,
                 existingTags: tags.map(CoreDataAnimalProjection.tagState)
             )
-            if shouldBePrimary {
-                for tag in tags where tag.isActive {
-                    tag.isPrimary = false
-                }
-            }
-
             let tag = CDAnimalTag(context: context)
             tag.id = try CoreDataAnimalMutation.uniqueID(
                 for: CDAnimalTag.self,
@@ -570,6 +564,10 @@ final class CoreDataAnimalRepository:
             )
             tag.herd = herd
             tag.animal = animal
+            CoreDataAnimalMutation.enforceActivePrimary(
+                in: CoreDataAnimalProjection.managedTags(animal),
+                preferredPrimaryID: shouldBePrimary ? tag.id : nil
+            )
             CoreDataAnimalMutation.rotateRevision(animal)
             return try CoreDataAnimalProjection.detail(animal)
         }
@@ -603,25 +601,20 @@ final class CoreDataAnimalRepository:
             let tags = CoreDataAnimalProjection.managedTags(animal)
             if tag.isActive {
                 if input.isPrimary {
-                    for existing in tags where existing.isActive {
-                        existing.isPrimary = existing.id == tag.id
-                    }
+                    CoreDataAnimalMutation.enforceActivePrimary(
+                        in: tags,
+                        preferredPrimaryID: tag.id
+                    )
                 } else {
-                    let otherActive = tags.filter { $0.isActive && $0.id != tag.id }
-                    if otherActive.isEmpty {
-                        tag.isPrimary = true
-                    } else {
-                        tag.isPrimary = false
-                        let states = tags.map(CoreDataAnimalProjection.tagState)
-                        if AnimalTagService.primaryTag(in: states) == nil,
-                           let replacementID = AnimalTagService.activeTags(states).first?.id,
-                           let replacement = tags.first(where: { $0.id == replacementID }) {
-                            replacement.isPrimary = true
-                        }
-                    }
+                    tag.isPrimary = false
+                    CoreDataAnimalMutation.enforceActivePrimary(
+                        in: tags,
+                        excludedFallbackID: tag.id
+                    )
                 }
             } else {
                 tag.isPrimary = false
+                CoreDataAnimalMutation.enforceActivePrimary(in: tags)
             }
 
             if before != CoreDataAnimalMutation.aggregateTagStates(animal) {
@@ -647,12 +640,12 @@ final class CoreDataAnimalRepository:
             }
 
             let before = CoreDataAnimalMutation.aggregateTagStates(animal)
-            for existing in CoreDataAnimalProjection.managedTags(animal) where existing.isActive {
-                existing.isPrimary = existing.id == tag.id
-            }
             tag.isActive = true
-            tag.isPrimary = true
             tag.removedAt = nil
+            CoreDataAnimalMutation.enforceActivePrimary(
+                in: CoreDataAnimalProjection.managedTags(animal),
+                preferredPrimaryID: tag.id
+            )
 
             if before != CoreDataAnimalMutation.aggregateTagStates(animal) {
                 CoreDataAnimalMutation.rotateRevision(animal)
@@ -690,9 +683,12 @@ final class CoreDataAnimalRepository:
             if let replacementID,
                let replacement = tags.first(where: { $0.id == replacementID }) {
                 replacement.isActive = true
-                replacement.isPrimary = true
                 replacement.removedAt = nil
             }
+            CoreDataAnimalMutation.enforceActivePrimary(
+                in: tags,
+                preferredPrimaryID: replacementID
+            )
 
             if before != CoreDataAnimalMutation.aggregateTagStates(animal) {
                 CoreDataAnimalMutation.rotateRevision(animal)
