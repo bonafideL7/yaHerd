@@ -200,7 +200,7 @@ final class CoreDataAnimalRepository:
                 in: context
             )
             let explicitSire = try CoreDataAnimalMutation.resolveAnimal(
-                id: input.sireAnimalID,
+                id: input.sireID,
                 herdID: herd.id,
                 lookup: self.lookup,
                 in: context
@@ -331,7 +331,7 @@ final class CoreDataAnimalRepository:
                 in: context
             )
             let explicitSire = try CoreDataAnimalMutation.resolveAnimal(
-                id: input.sireAnimalID,
+                id: input.sireID,
                 herdID: herd.id,
                 lookup: self.lookup,
                 in: context
@@ -745,7 +745,7 @@ final class CoreDataAnimalRepository:
                 context: context
             )
             let sire = try CoreDataAnimalMutation.resolveAnimal(
-                id: input.sireID,
+                id: input.sireAnimalID,
                 herdID: herd.id,
                 lookup: self.lookup,
                 in: context
