@@ -165,6 +165,12 @@ enum CoreDataAnimalMutation {
         ) else {
             throw CoreDataAnimalRepositoryError.statusReferenceNotFound(id)
         }
+        guard AnimalStatus(rawValue: reference.baseStatusRawValue) != nil else {
+            throw CoreDataAnimalStatusReferenceRepositoryError.invalidBaseStatus(
+                referenceID: reference.id,
+                value: reference.baseStatusRawValue
+            )
+        }
         return reference
     }
 
