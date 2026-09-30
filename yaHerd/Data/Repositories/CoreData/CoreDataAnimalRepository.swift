@@ -202,8 +202,8 @@ final class CoreDataAnimalRepository:
                 in: context
             )
             let sire = explicitSire ?? (dam == nil ? nil : try CoreDataAnimalMutation.inferSingleSire(
-                pastureID: pasture?.id,
-                excluding: nil,
+                pastureID: pasture?.id ?? dam?.currentPasture?.id,
+                excluding: input.damID,
                 herd: herd,
                 in: context
             ))
@@ -333,8 +333,8 @@ final class CoreDataAnimalRepository:
                 in: context
             )
             let sire = explicitSire ?? (dam == nil ? nil : try CoreDataAnimalMutation.inferSingleSire(
-                pastureID: pasture?.id,
-                excluding: id,
+                pastureID: pasture?.id ?? dam?.currentPasture?.id,
+                excluding: input.damID,
                 herd: herd,
                 in: context
             ))
