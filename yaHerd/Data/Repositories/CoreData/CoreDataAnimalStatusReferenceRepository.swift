@@ -56,7 +56,12 @@ final class CoreDataAnimalStatusReferenceRepository: AnimalStatusReferenceReadin
             request.predicate = NSPredicate(format: "herd == %@", herd)
             request.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
 
-            return try context.fetch(request).map { reference in
+            let references = try context.fetch(request)
+            try CoreDataAnimalMutation.validateUniqueApplicationIDs(
+                references,
+                herdID: herd.id
+            )
+            return try references.map { reference in
                 guard let baseStatus = AnimalStatus(rawValue: reference.baseStatusRawValue) else {
                     throw CoreDataAnimalStatusReferenceRepositoryError.invalidBaseStatus(
                         referenceID: reference.id,
