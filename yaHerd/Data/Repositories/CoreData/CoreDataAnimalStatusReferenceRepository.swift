@@ -46,10 +46,16 @@ final class CoreDataAnimalStatusReferenceRepository: AnimalStatusReferenceReadin
             request.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
 
             return try context.fetch(request).map { reference in
-                AnimalStatusReferenceOption(
+                guard let baseStatus = AnimalStatus(rawValue: reference.baseStatusRawValue) else {
+                    throw CoreDataAnimalRepositoryError.invalidStatusReferenceBaseStatus(
+                        referenceID: reference.id,
+                        value: reference.baseStatusRawValue
+                    )
+                }
+                return AnimalStatusReferenceOption(
                     id: reference.id,
                     name: reference.name,
-                    baseStatus: AnimalStatus(rawValue: reference.baseStatusRawValue) ?? .active
+                    baseStatus: baseStatus
                 )
             }
         }
