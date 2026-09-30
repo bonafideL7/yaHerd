@@ -77,7 +77,7 @@ final class CoreDataAnimalRepository:
             ) else {
                 return []
             }
-            return CoreDataAnimalProjection.timeline(animal)
+            return try CoreDataAnimalProjection.timeline(animal)
         }
     }
 
@@ -92,11 +92,17 @@ final class CoreDataAnimalRepository:
             )
             request.predicate = NSPredicate(format: "herd == %@", herd)
             request.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
-            return try context.fetch(request).map {
-                AnimalStatusReferenceOption(
-                    id: $0.id,
-                    name: $0.name,
-                    baseStatus: AnimalStatus(rawValue: $0.baseStatusRawValue) ?? .active
+            return try context.fetch(request).map { reference in
+                guard let baseStatus = AnimalStatus(rawValue: reference.baseStatusRawValue) else {
+                    throw CoreDataAnimalRepositoryError.invalidStatusReferenceBaseStatus(
+                        referenceID: reference.id,
+                        value: reference.baseStatusRawValue
+                    )
+                }
+                return AnimalStatusReferenceOption(
+                    id: reference.id,
+                    name: reference.name,
+                    baseStatus: baseStatus
                 )
             }
         }
@@ -112,7 +118,7 @@ final class CoreDataAnimalRepository:
             }
             return try CoreDataAnimalMutation.fetchAnimals(herd: herd, in: context)
                 .filter { !$0.isArchived && $0.id != excludedAnimalID }
-                .map(CoreDataAnimalProjection.parentOption)
+                .map { try CoreDataAnimalProjection.parentOption($0) }
                 .sorted {
                     $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
                 }
@@ -144,12 +150,12 @@ final class CoreDataAnimalRepository:
             )
             return OffspringDraftSeed(
                 damID: dam.id,
-                damDisplayName: CoreDataAnimalProjection.parentOption(dam).displayName,
+                damDisplayName: try CoreDataAnimalProjection.parentOption(dam).displayName,
                 pastureID: dam.currentPasture?.id,
                 pastureName: dam.currentPasture?.name,
                 inferredSireID: inferredSire?.id,
-                inferredSireDisplayName: inferredSire.map {
-                    CoreDataAnimalProjection.parentOption($0).displayName
+                inferredSireDisplayName: try inferredSire.map {
+                    try CoreDataAnimalProjection.parentOption($0).displayName
                 },
                 defaultBirthDate: Calendar.current.startOfDay(for: .now)
             )
@@ -311,7 +317,7 @@ final class CoreDataAnimalRepository:
 
             let beforeAttributes = try CoreDataAnimalMutation.aggregateAttributes(animal)
             let beforeTags = CoreDataAnimalMutation.aggregateTagStates(animal)
-            let oldStatus = AnimalStatus(rawValue: animal.statusRawValue) ?? .active
+            let oldStatus = try CoreDataAnimalProjection.status(animal)
             let oldPasture = animal.currentPasture
 
             let pasture = try CoreDataAnimalMutation.resolvePasture(
