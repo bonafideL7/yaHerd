@@ -57,7 +57,7 @@ extension YaHerdSchemaV1 {
     }
 }
 
-enum PregnancyResult: String, Codable, CaseIterable {
+enum PregnancyResult: String, Codable, CaseIterable, Sendable {
     case open
     case pregnant
     case unknown
