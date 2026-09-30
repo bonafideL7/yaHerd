@@ -8,6 +8,11 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
     case tagColorNotFound(UUID)
     case existingTagOmitted(UUID)
     case corruptDistinguishingFeatures(animalID: UUID)
+    case invalidAnimalSexRawValue(animalID: UUID, value: String)
+    case invalidAnimalStatusRawValue(animalID: UUID, value: String)
+    case invalidPregnancyResultRawValue(checkID: UUID, value: String)
+    case invalidStatusHistoryRawValue(recordID: UUID, value: String)
+    case invalidStatusReferenceBaseStatus(referenceID: UUID, value: String)
 
     var errorDescription: String? {
         switch self {
@@ -23,6 +28,16 @@ enum CoreDataAnimalRepositoryError: LocalizedError, Equatable, Sendable {
             return "An existing tag is missing from the complete aggregate tag state."
         case .corruptDistinguishingFeatures:
             return "The animal's distinguishing-feature data is corrupt."
+        case .invalidAnimalSexRawValue:
+            return "The animal contains an invalid persisted sex value."
+        case .invalidAnimalStatusRawValue:
+            return "The animal contains an invalid persisted status value."
+        case .invalidPregnancyResultRawValue:
+            return "The pregnancy check contains an invalid persisted result value."
+        case .invalidStatusHistoryRawValue:
+            return "The animal status history contains an invalid persisted status value."
+        case .invalidStatusReferenceBaseStatus:
+            return "The animal status reference contains an invalid persisted base-status value."
         }
     }
 }
@@ -212,9 +227,9 @@ enum CoreDataAnimalMutation {
     static func aggregateAttributes(_ animal: CDAnimal) throws -> AnimalAggregateAttributes {
         AnimalAggregateAttributes(
             name: animal.name,
-            sex: Sex(rawValue: animal.sexRawValue) ?? .unknown,
+            sex: try CoreDataAnimalProjection.sex(animal),
             birthDate: animal.birthDate,
-            status: AnimalStatus(rawValue: animal.statusRawValue) ?? .active,
+            status: try CoreDataAnimalProjection.status(animal),
             pastureID: animal.currentPasture?.id,
             sireID: animal.sire?.id,
             damID: animal.dam?.id,
@@ -252,7 +267,7 @@ enum CoreDataAnimalMutation {
         mutationDate: Date
     ) throws -> Bool {
         let oldAttributes = try aggregateAttributes(animal)
-        let oldStatus = AnimalStatus(rawValue: animal.statusRawValue) ?? .active
+        let oldStatus = try CoreDataAnimalProjection.status(animal)
         let oldPasture = animal.currentPasture
 
         let pasture = try resolvePasture(
@@ -583,15 +598,15 @@ enum CoreDataAnimalMutation {
         }
 
         let animals = try fetchAnimals(herd: herd, in: context)
-        let candidates = animals.map {
+        let candidates = try animals.map {
             AnimalSireCandidate(
                 id: $0.id,
                 pastureID: $0.currentPasture?.id,
-                sex: Sex(rawValue: $0.sexRawValue) ?? .unknown,
+                sex: try CoreDataAnimalProjection.sex($0),
                 birthDate: $0.birthDate,
-                status: AnimalStatus(rawValue: $0.statusRawValue) ?? .active,
+                status: try CoreDataAnimalProjection.status($0),
                 isArchived: $0.isArchived,
-                animalType: CoreDataAnimalProjection.animalType($0)
+                animalType: try CoreDataAnimalProjection.animalType($0)
             )
         }
 
