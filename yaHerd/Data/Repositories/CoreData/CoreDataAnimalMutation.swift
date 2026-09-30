@@ -198,9 +198,9 @@ enum CoreDataAnimalMutation {
                 deathDate: deathDate,
                 animalID: animalID,
                 sireID: sire?.id,
-                sireSex: sire.map { Sex(rawValue: $0.sexRawValue) ?? .unknown },
+                sireSex: try sire.map { try CoreDataAnimalProjection.sex($0) },
                 damID: dam?.id,
-                damSex: dam.map { Sex(rawValue: $0.sexRawValue) ?? .unknown }
+                damSex: try dam.map { try CoreDataAnimalProjection.sex($0) }
             )
         )
     }
