@@ -1,6 +1,17 @@
 @preconcurrency import CoreData
 import Foundation
 
+enum CoreDataAnimalStatusReferenceRepositoryError: LocalizedError, Equatable, Sendable {
+    case invalidBaseStatus(referenceID: UUID, value: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidBaseStatus:
+            return "The animal status reference contains an invalid persisted base-status value."
+        }
+    }
+}
+
 @MainActor
 final class CoreDataAnimalStatusReferenceRepository: AnimalStatusReferenceReading {
     private let selection: any CurrentHerdSelectionReading
@@ -47,7 +58,7 @@ final class CoreDataAnimalStatusReferenceRepository: AnimalStatusReferenceReadin
 
             return try context.fetch(request).map { reference in
                 guard let baseStatus = AnimalStatus(rawValue: reference.baseStatusRawValue) else {
-                    throw CoreDataAnimalRepositoryError.invalidStatusReferenceBaseStatus(
+                    throw CoreDataAnimalStatusReferenceRepositoryError.invalidBaseStatus(
                         referenceID: reference.id,
                         value: reference.baseStatusRawValue
                     )
