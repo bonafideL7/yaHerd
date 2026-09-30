@@ -24,6 +24,7 @@ enum CoreDataAnimalPayloadCodec {
 
 enum CoreDataAnimalProjection {
     static func summary(_ animal: CDAnimal) throws -> AnimalSummary {
+        try CoreDataAnimalMutation.validateOwnedGraphIdentity(animal)
         let tags = managedTags(animal)
         let primary = primaryTagFields(tags)
         let damPrimary = animal.dam.map { primaryTagFields(managedTags($0)) }
@@ -77,6 +78,7 @@ enum CoreDataAnimalProjection {
     }
 
     static func detail(_ animal: CDAnimal) throws -> AnimalDetailSnapshot {
+        try CoreDataAnimalMutation.validateOwnedGraphIdentity(animal)
         let activeTags = orderedTags(
             managedTags(animal),
             matching: AnimalTagService.activeTags
@@ -132,6 +134,7 @@ enum CoreDataAnimalProjection {
     }
 
     static func parentOption(_ animal: CDAnimal) throws -> AnimalParentOption {
+        try CoreDataAnimalMutation.validateOwnedGraphIdentity(animal)
         let primary = primaryTagFields(managedTags(animal))
         return AnimalParentOption(
             id: animal.id,
@@ -156,6 +159,7 @@ enum CoreDataAnimalProjection {
     }
 
     static func timeline(_ animal: CDAnimal) throws -> [AnimalTimelineEvent] {
+        try CoreDataAnimalMutation.validateOwnedGraphIdentity(animal)
         var events: [AnimalTimelineEvent] = [
             AnimalTimelineEvent(
                 date: animal.birthDate,
