@@ -5,7 +5,7 @@ enum CoreDataAnimalPayloadCodec {
     static func encodeDistinguishingFeatures(
         _ features: [DistinguishingFeature]
     ) throws -> Data {
-        try JSONEncoder().encode(features.normalizedDistinguishingFeatureOrder)
+        try JSONEncoder().encode(features)
     }
 
     static func decodeDistinguishingFeatures(
