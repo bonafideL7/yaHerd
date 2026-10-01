@@ -165,7 +165,7 @@ enum PersistenceTransactionRollbackContract {
             freshPersistedStateSnapshot: pastureProbe.freshPersistedStateSnapshot,
             recoveryProbe: pastureProbe.recoveryProbe,
             performFailingTransaction: {
-                try pastureProbe.writer.deletePastures(pastureProbe.plan)
+                try await pastureProbe.writer.deletePastures(pastureProbe.plan)
             },
             file: file,
             line: line
