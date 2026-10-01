@@ -92,6 +92,12 @@ struct PastureDeletionRollbackProbe {
 /// Each factory must create a fresh isolated persistent store. No SwiftData compatibility runner
 /// should be introduced for this contract.
 @MainActor
+struct AnimalAggregateRollbackContractFixture {
+    let makeAnimalAggregateCreateProbe: () throws -> AnimalAggregateCreateRollbackProbe
+    let makeAnimalAggregateUpdateProbe: () throws -> AnimalAggregateUpdateRollbackProbe
+}
+
+@MainActor
 struct PersistenceTransactionRollbackContractFixture {
     let makeAnimalAggregateCreateProbe: () throws -> AnimalAggregateCreateRollbackProbe
     let makeAnimalAggregateUpdateProbe: () throws -> AnimalAggregateUpdateRollbackProbe
@@ -105,39 +111,55 @@ struct PersistenceTransactionRollbackContractFixture {
 /// rollback after a material partial transaction write has been staged.
 @MainActor
 enum PersistenceTransactionRollbackContract {
-    static func assertFailedTargetTransactionsRollBackAllDurableState(
-        using fixture: PersistenceTransactionRollbackContractFixture,
+    static func assertAnimalAggregateTransactionsRollBackAllDurableState(
+        using fixture: AnimalAggregateRollbackContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let createProbe = try fixture.makeAnimalAggregateCreateProbe()
-        try assertRollback(
+        try await assertRollback(
             operation: .animalAggregateCreate,
             didReachInjectedRollbackFailpoint: createProbe.didReachInjectedRollbackFailpoint,
             freshPersistedStateSnapshot: createProbe.freshPersistedStateSnapshot,
             recoveryProbe: createProbe.recoveryProbe,
             performFailingTransaction: {
-                _ = try createProbe.writer.createAnimal(createProbe.transaction)
+                _ = try await createProbe.writer.createAnimal(createProbe.transaction)
             },
             file: file,
             line: line
         )
 
         let updateProbe = try fixture.makeAnimalAggregateUpdateProbe()
-        try assertRollback(
+        try await assertRollback(
             operation: .animalAggregateUpdate,
             didReachInjectedRollbackFailpoint: updateProbe.didReachInjectedRollbackFailpoint,
             freshPersistedStateSnapshot: updateProbe.freshPersistedStateSnapshot,
             recoveryProbe: updateProbe.recoveryProbe,
             performFailingTransaction: {
-                _ = try updateProbe.writer.updateAnimal(updateProbe.transaction)
+                _ = try await updateProbe.writer.updateAnimal(updateProbe.transaction)
             },
             file: file,
             line: line
         )
 
+    }
+
+    static func assertFailedTargetTransactionsRollBackAllDurableState(
+        using fixture: PersistenceTransactionRollbackContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        try await assertAnimalAggregateTransactionsRollBackAllDurableState(
+            using: AnimalAggregateRollbackContractFixture(
+                makeAnimalAggregateCreateProbe: fixture.makeAnimalAggregateCreateProbe,
+                makeAnimalAggregateUpdateProbe: fixture.makeAnimalAggregateUpdateProbe
+            ),
+            file: file,
+            line: line
+        )
+
         let pastureProbe = try fixture.makePastureDeletionProbe()
-        try assertRollback(
+        try await assertRollback(
             operation: .pastureDeletion,
             didReachInjectedRollbackFailpoint: pastureProbe.didReachInjectedRollbackFailpoint,
             freshPersistedStateSnapshot: pastureProbe.freshPersistedStateSnapshot,
@@ -155,10 +177,10 @@ enum PersistenceTransactionRollbackContract {
         didReachInjectedRollbackFailpoint: () -> Bool,
         freshPersistedStateSnapshot: () throws -> PersistenceTransactionRollbackStateSnapshot,
         recoveryProbe: PersistenceTransactionRollbackRecoveryProbe,
-        performFailingTransaction: () throws -> Void,
+        performFailingTransaction: () async throws -> Void,
         file: StaticString,
         line: UInt
-    ) throws {
+    ) async throws {
         let expectedKinds = Set(IdentityContractEntityKind.allCases)
 
         XCTAssertFalse(
@@ -178,12 +200,16 @@ enum PersistenceTransactionRollbackContract {
             line: line
         )
 
-        XCTAssertThrowsError(
-            try performFailingTransaction(),
-            "The rollback probe for \(operation.rawValue) must surface its injected persistence failure.",
-            file: file,
-            line: line
-        )
+        do {
+            try await performFailingTransaction()
+            XCTFail(
+                "The rollback probe for \(operation.rawValue) must surface its injected persistence failure.",
+                file: file,
+                line: line
+            )
+        } catch {
+            // Expected: the injected persistence failure must escape the real transaction boundary.
+        }
         XCTAssertTrue(
             didReachInjectedRollbackFailpoint(),
             "The rollback probe for \(operation.rawValue) must prove a material partial transaction write was staged before failure.",

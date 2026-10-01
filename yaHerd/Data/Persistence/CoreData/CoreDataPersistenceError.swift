@@ -5,6 +5,8 @@ enum CoreDataPersistenceError: LocalizedError, Equatable {
     case storeLoadFailed(url: URL?, description: String)
     case saveFailed(description: String)
     case duplicateApplicationID(entity: String, id: UUID, herdID: UUID?)
+    case tagColorMaterializationInProgress(id: UUID, herdID: UUID)
+    case tagColorDefaultMaterializationInProgress(herdID: UUID)
     case readOnlyStore
 
     var errorDescription: String? {
@@ -20,7 +22,11 @@ enum CoreDataPersistenceError: LocalizedError, Equatable {
             if let herdID {
                 return "More than one \(entity) has application UUID \(id.uuidString) in Herd \(herdID.uuidString)."
             }
-            return "More than one \(entity) has store-global application UUID \(id.uuidString)."
+            return "More than one \(entity) has application UUID \(id.uuidString)."
+        case let .tagColorMaterializationInProgress(id, herdID):
+            return "Tag color \(id.uuidString) is already being materialized in Herd \(herdID.uuidString). Retry the change after the in-flight transaction completes."
+        case let .tagColorDefaultMaterializationInProgress(herdID):
+            return "A tag color default is already being materialized in Herd \(herdID.uuidString). Retry the change after the in-flight transaction completes."
         case .readOnlyStore:
             return "Changes are disabled while the Core Data store is read-only."
         }

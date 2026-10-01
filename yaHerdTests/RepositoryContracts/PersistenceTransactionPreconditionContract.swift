@@ -92,6 +92,12 @@ struct PastureDeletionPreconditionContractProbe {
 }
 
 @MainActor
+struct AnimalAggregatePreconditionContractFixture {
+    let makeAnimalAggregateRevisionProbe: () throws -> AnimalAggregateRevisionContractProbe
+    let makeAnimalAggregateMissingProbe: () throws -> AnimalAggregateMissingPreconditionContractProbe
+}
+
+@MainActor
 struct PersistenceTransactionPreconditionContractFixture {
     let makeAnimalAggregateRevisionProbe: () throws -> AnimalAggregateRevisionContractProbe
     let makeAnimalAggregateMissingProbe: () throws -> AnimalAggregateMissingPreconditionContractProbe
@@ -108,13 +114,13 @@ struct PersistenceTransactionPreconditionContractFixture {
 @MainActor
 enum PersistenceTransactionPreconditionContract {
     static func assertAnimalAggregateRevisionLifecycleAndStaleRejection(
-        using fixture: PersistenceTransactionPreconditionContractFixture,
+        using fixture: AnimalAggregatePreconditionContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let probe = try fixture.makeAnimalAggregateRevisionProbe()
 
-        let created = try probe.writer.createAnimal(probe.createTransaction)
+        let created = try await probe.writer.createAnimal(probe.createTransaction)
         XCTAssertEqual(
             created.animal.id,
             probe.createTransaction.animalID,
@@ -155,7 +161,7 @@ enum PersistenceTransactionPreconditionContract {
             line: line
         )
 
-        let scalarUpdated = try probe.writer.updateAnimal(scalarUpdate)
+        let scalarUpdated = try await probe.writer.updateAnimal(scalarUpdate)
         XCTAssertEqual(scalarUpdated.animal.id, reloadedCreated.animal.id, file: file, line: line)
         XCTAssertNotEqual(
             scalarUpdated.animal,
@@ -203,7 +209,7 @@ enum PersistenceTransactionPreconditionContract {
             line: line
         )
 
-        let tagUpdated = try probe.writer.updateAnimal(tagUpdate)
+        let tagUpdated = try await probe.writer.updateAnimal(tagUpdate)
         XCTAssertEqual(tagUpdated.animal.id, reloadedScalarUpdated.animal.id, file: file, line: line)
         XCTAssertTrue(
             tagUpdated.animal.activeTags != reloadedScalarUpdated.animal.activeTags
@@ -259,12 +265,14 @@ enum PersistenceTransactionPreconditionContract {
         let beforeStaleAttempt = try probe.freshPersistedStateSnapshot()
         assertCompleteStoreSnapshot(beforeStaleAttempt, operation: "stale Animal aggregate update", file: file, line: line)
         var classifiedFailure: PersistenceTransactionPreconditionFailure?
-        XCTAssertThrowsError(
-            try probe.writer.updateAnimal(staleUpdate),
-            "An update using an obsolete aggregate revision must be rejected before mutation.",
-            file: file,
-            line: line
-        ) { error in
+        do {
+            _ = try await probe.writer.updateAnimal(staleUpdate)
+            XCTFail(
+                "An update using an obsolete aggregate revision must be rejected before mutation.",
+                file: file,
+                line: line
+            )
+        } catch {
             classifiedFailure = probe.classifyError(error)
         }
         XCTAssertEqual(
@@ -307,10 +315,10 @@ enum PersistenceTransactionPreconditionContract {
     }
 
     static func assertAnimalAggregateUpdateRejectsDeletedAggregateWithoutRecreation(
-        using fixture: PersistenceTransactionPreconditionContractFixture,
+        using fixture: AnimalAggregatePreconditionContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let probe = try fixture.makeAnimalAggregateMissingProbe()
         let animalID = probe.staleBase.animal.id
 
@@ -367,12 +375,14 @@ enum PersistenceTransactionPreconditionContract {
         )
 
         var classifiedFailure: PersistenceTransactionPreconditionFailure?
-        XCTAssertThrowsError(
-            try probe.writer.updateAnimal(probe.updateTransaction),
-            "Updating an aggregate that was hard-deleted after the editor loaded it must fail before mutation.",
-            file: file,
-            line: line
-        ) { error in
+        do {
+            _ = try await probe.writer.updateAnimal(probe.updateTransaction)
+            XCTFail(
+                "Updating an aggregate that was hard-deleted after the editor loaded it must fail before mutation.",
+                file: file,
+                line: line
+            )
+        } catch {
             classifiedFailure = probe.classifyError(error)
         }
         XCTAssertEqual(
@@ -414,6 +424,36 @@ enum PersistenceTransactionPreconditionContract {
         XCTAssertNil(
             try probe.makeReader().fetchAnimalAggregateForEditing(id: animalID),
             "Recovery/save of the failed write scope must not resurrect the deleted aggregate.",
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertAnimalAggregateRevisionLifecycleAndStaleRejection(
+        using fixture: PersistenceTransactionPreconditionContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        try await assertAnimalAggregateRevisionLifecycleAndStaleRejection(
+            using: AnimalAggregatePreconditionContractFixture(
+                makeAnimalAggregateRevisionProbe: fixture.makeAnimalAggregateRevisionProbe,
+                makeAnimalAggregateMissingProbe: fixture.makeAnimalAggregateMissingProbe
+            ),
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertAnimalAggregateUpdateRejectsDeletedAggregateWithoutRecreation(
+        using fixture: PersistenceTransactionPreconditionContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        try await assertAnimalAggregateUpdateRejectsDeletedAggregateWithoutRecreation(
+            using: AnimalAggregatePreconditionContractFixture(
+                makeAnimalAggregateRevisionProbe: fixture.makeAnimalAggregateRevisionProbe,
+                makeAnimalAggregateMissingProbe: fixture.makeAnimalAggregateMissingProbe
+            ),
             file: file,
             line: line
         )

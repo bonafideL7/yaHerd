@@ -39,8 +39,8 @@ struct AnimalAggregateTaggedCreateContractProbe {
     let writer: any AnimalAggregateTransactionWriting
     let makeReader: () -> any AnimalAggregateEditReading
     let makeAnimalRepository: () -> any AnimalRepository
-    let makeAnimalListQueryReader: () -> any AnimalListQueryReading
-    let makeDashboardQueryReader: () -> any DashboardQueryReading
+    let makeAnimalListQueryReader: (() -> any AnimalListQueryReading)?
+    let makeDashboardQueryReader: (() -> any DashboardQueryReading)?
     let makePastureRepository: () -> any PastureRepository
     let makeWorkingOwnershipControl: () -> any AnimalAggregateWorkingOwnershipContractTestControl
     let transaction: CreateAnimalAggregateTransaction
@@ -55,8 +55,8 @@ struct AnimalAggregateUntaggedCreateContractProbe {
     let writer: any AnimalAggregateTransactionWriting
     let makeReader: () -> any AnimalAggregateEditReading
     let makeAnimalRepository: () -> any AnimalRepository
-    let makeAnimalListQueryReader: () -> any AnimalListQueryReading
-    let makeDashboardQueryReader: () -> any DashboardQueryReading
+    let makeAnimalListQueryReader: (() -> any AnimalListQueryReading)?
+    let makeDashboardQueryReader: (() -> any DashboardQueryReading)?
     let makeWorkingOwnershipControl: () -> any AnimalAggregateWorkingOwnershipContractTestControl
     let transaction: CreateAnimalAggregateTransaction
 }
@@ -84,8 +84,8 @@ struct AnimalAggregateUpdateContractProbe {
     let writer: any AnimalAggregateTransactionWriting
     let makeReader: () -> any AnimalAggregateEditReading
     let makeAnimalRepository: () -> any AnimalRepository
-    let makeAnimalListQueryReader: () -> any AnimalListQueryReading
-    let makeDashboardQueryReader: () -> any DashboardQueryReading
+    let makeAnimalListQueryReader: (() -> any AnimalListQueryReading)?
+    let makeDashboardQueryReader: (() -> any DashboardQueryReading)?
     let makePastureRepository: () -> any PastureRepository
     let animalID: UUID
     let makeUpdateTransaction: (
@@ -104,7 +104,7 @@ struct AnimalAggregateActivePastureMoveContractProbe {
     let writer: any AnimalAggregateTransactionWriting
     let makeReader: () -> any AnimalAggregateEditReading
     let makeAnimalRepository: () -> any AnimalRepository
-    let makeDashboardQueryReader: () -> any DashboardQueryReading
+    let makeDashboardQueryReader: (() -> any DashboardQueryReading)?
     let makePastureRepository: () -> any PastureRepository
     let animalID: UUID
     let makeUpdateTransaction: (
@@ -124,8 +124,8 @@ struct AnimalAggregateDamRetagContractProbe {
     let writer: any AnimalAggregateTransactionWriting
     let makeReader: () -> any AnimalAggregateEditReading
     let makeAnimalRepository: () -> any AnimalRepository
-    let makeAnimalListQueryReader: () -> any AnimalListQueryReading
-    let makeDashboardQueryReader: () -> any DashboardQueryReading
+    let makeAnimalListQueryReader: (() -> any AnimalListQueryReading)?
+    let makeDashboardQueryReader: (() -> any DashboardQueryReading)?
     let damID: UUID
     let offspringID: UUID
     let makeUpdateTransaction: (
@@ -144,8 +144,8 @@ struct AnimalAggregateSameStatusMetadataContractProbe {
     let writer: any AnimalAggregateTransactionWriting
     let makeReader: () -> any AnimalAggregateEditReading
     let makeAnimalRepository: () -> any AnimalRepository
-    let makeAnimalListQueryReader: () -> any AnimalListQueryReading
-    let makeDashboardQueryReader: () -> any DashboardQueryReading
+    let makeAnimalListQueryReader: (() -> any AnimalListQueryReading)?
+    let makeDashboardQueryReader: (() -> any DashboardQueryReading)?
     let animalID: UUID
     let makeUpdateTransaction: (
         _ current: AnimalAggregateEditSnapshot
@@ -164,8 +164,8 @@ struct AnimalAggregateAllTagsRetiredUpdateContractProbe {
     let writer: any AnimalAggregateTransactionWriting
     let makeReader: () -> any AnimalAggregateEditReading
     let makeAnimalRepository: () -> any AnimalRepository
-    let makeAnimalListQueryReader: () -> any AnimalListQueryReading
-    let makeDashboardQueryReader: () -> any DashboardQueryReading
+    let makeAnimalListQueryReader: (() -> any AnimalListQueryReading)?
+    let makeDashboardQueryReader: (() -> any DashboardQueryReading)?
     let animalID: UUID
     let makeUpdateTransaction: (
         _ current: AnimalAggregateEditSnapshot
@@ -197,8 +197,8 @@ struct AnimalAggregateNonOwnedStatePreservationContractProbe {
     let writer: any AnimalAggregateTransactionWriting
     let makeReader: () -> any AnimalAggregateEditReading
     let makeAnimalRepository: () -> any AnimalRepository
-    let makeAnimalListQueryReader: () -> any AnimalListQueryReading
-    let makeDashboardQueryReader: () -> any DashboardQueryReading
+    let makeAnimalListQueryReader: (() -> any AnimalListQueryReading)?
+    let makeDashboardQueryReader: (() -> any DashboardQueryReading)?
     let makeWorkingReader: () -> any WorkingSessionDetailReader
     let makeWorkingOwnershipControl: () -> any AnimalAggregateWorkingOwnershipContractTestControl
     let makeHealthControl: () -> any HealthRepositoryContractTestControl
@@ -293,7 +293,7 @@ enum AnimalAggregateTransactionContract {
             line: line
         )
 
-        let taggedCreated = try taggedProbe.writer.createAnimal(taggedProbe.transaction)
+        let taggedCreated = try await taggedProbe.writer.createAnimal(taggedProbe.transaction)
         XCTAssertEqual(taggedCreated.animal.id, taggedProbe.transaction.animalID, file: file, line: line)
         try assertNewAggregateDefaults(
             detail: taggedCreated.animal,
@@ -350,8 +350,8 @@ enum AnimalAggregateTransactionContract {
         try await assertFreshAnimalReadProjections(
             detail: taggedCreated.animal,
             repository: taggedProbe.makeAnimalRepository(),
-            listQueryReader: taggedProbe.makeAnimalListQueryReader(),
-            dashboardQueryReader: taggedProbe.makeDashboardQueryReader(),
+            listQueryReader: taggedProbe.makeAnimalListQueryReader?(),
+            dashboardQueryReader: taggedProbe.makeDashboardQueryReader?(),
             preservingSummaryOnlyFieldsFrom: nil,
             preservingDashboardOnlyFieldsFrom: nil,
             file: file,
@@ -390,7 +390,7 @@ enum AnimalAggregateTransactionContract {
         )
         try await assertPastureCountProjectionsMatchResidents(
             pastureID: taggedPastureID,
-            dashboardReader: taggedProbe.makeDashboardQueryReader(),
+            dashboardReader: taggedProbe.makeDashboardQueryReader?(),
             pastureRepository: taggedProbe.makePastureRepository(),
             file: file,
             line: line
@@ -415,7 +415,7 @@ enum AnimalAggregateTransactionContract {
             line: line
         )
 
-        let untaggedCreated = try untaggedProbe.writer.createAnimal(untaggedProbe.transaction)
+        let untaggedCreated = try await untaggedProbe.writer.createAnimal(untaggedProbe.transaction)
         XCTAssertEqual(untaggedCreated.animal.id, untaggedProbe.transaction.animalID, file: file, line: line)
         try assertNewAggregateDefaults(
             detail: untaggedCreated.animal,
@@ -464,8 +464,8 @@ enum AnimalAggregateTransactionContract {
         try await assertFreshAnimalReadProjections(
             detail: untaggedCreated.animal,
             repository: untaggedProbe.makeAnimalRepository(),
-            listQueryReader: untaggedProbe.makeAnimalListQueryReader(),
-            dashboardQueryReader: untaggedProbe.makeDashboardQueryReader(),
+            listQueryReader: untaggedProbe.makeAnimalListQueryReader?(),
+            dashboardQueryReader: untaggedProbe.makeDashboardQueryReader?(),
             preservingSummaryOnlyFieldsFrom: nil,
             preservingDashboardOnlyFieldsFrom: nil,
             file: file,
@@ -497,12 +497,17 @@ enum AnimalAggregateTransactionContract {
             file: file,
             line: line
         )
-        let dashboardBefore = try await fetchDashboardAnimalRecord(
-            id: probe.animalID,
-            reader: probe.makeDashboardQueryReader(),
-            file: file,
-            line: line
-        )
+        let dashboardBefore: DashboardAnimalRecord?
+        if let makeDashboardQueryReader = probe.makeDashboardQueryReader {
+            dashboardBefore = try await fetchDashboardAnimalRecord(
+                id: probe.animalID,
+                reader: makeDashboardQueryReader(),
+                file: file,
+                line: line
+            )
+        } else {
+            dashboardBefore = nil
+        }
         let sireInferenceBefore = try activeDamSireInferenceSnapshots(
             repository: probe.makeAnimalRepository(),
             file: file,
@@ -670,7 +675,7 @@ enum AnimalAggregateTransactionContract {
             line: line
         )
 
-        let updated = try probe.writer.updateAnimal(transaction)
+        let updated = try await probe.writer.updateAnimal(transaction)
         XCTAssertEqual(updated.animal.id, current.animal.id, file: file, line: line)
         XCTAssertNotEqual(updated.revision, current.revision, file: file, line: line)
         assertAttributes(updated.animal, match: transaction.attributes, file: file, line: line)
@@ -712,8 +717,8 @@ enum AnimalAggregateTransactionContract {
         try await assertFreshAnimalReadProjections(
             detail: reloaded.animal,
             repository: probe.makeAnimalRepository(),
-            listQueryReader: probe.makeAnimalListQueryReader(),
-            dashboardQueryReader: probe.makeDashboardQueryReader(),
+            listQueryReader: probe.makeAnimalListQueryReader?(),
+            dashboardQueryReader: probe.makeDashboardQueryReader?(),
             preservingSummaryOnlyFieldsFrom: summaryBefore,
             preservingDashboardOnlyFieldsFrom: dashboardBefore,
             file: file,
@@ -855,14 +860,14 @@ enum AnimalAggregateTransactionContract {
         )
         try await assertPastureCountProjectionsMatchResidents(
             pastureID: oldPastureID,
-            dashboardReader: probe.makeDashboardQueryReader(),
+            dashboardReader: probe.makeDashboardQueryReader?(),
             pastureRepository: probe.makePastureRepository(),
             file: file,
             line: line
         )
         try await assertPastureCountProjectionsMatchResidents(
             pastureID: newPastureID,
-            dashboardReader: probe.makeDashboardQueryReader(),
+            dashboardReader: probe.makeDashboardQueryReader?(),
             pastureRepository: probe.makePastureRepository(),
             file: file,
             line: line
@@ -943,20 +948,20 @@ enum AnimalAggregateTransactionContract {
         )
         try await assertPastureCountProjectionsMatchResidents(
             pastureID: oldPastureID,
-            dashboardReader: probe.makeDashboardQueryReader(),
+            dashboardReader: probe.makeDashboardQueryReader?(),
             pastureRepository: probe.makePastureRepository(),
             file: file,
             line: line
         )
         try await assertPastureCountProjectionsMatchResidents(
             pastureID: newPastureID,
-            dashboardReader: probe.makeDashboardQueryReader(),
+            dashboardReader: probe.makeDashboardQueryReader?(),
             pastureRepository: probe.makePastureRepository(),
             file: file,
             line: line
         )
 
-        let updated = try probe.writer.updateAnimal(transaction)
+        let updated = try await probe.writer.updateAnimal(transaction)
         XCTAssertEqual(updated.animal.id, current.animal.id, file: file, line: line)
         XCTAssertNotEqual(
             updated.revision,
@@ -1021,14 +1026,14 @@ enum AnimalAggregateTransactionContract {
         )
         try await assertPastureCountProjectionsMatchResidents(
             pastureID: oldPastureID,
-            dashboardReader: probe.makeDashboardQueryReader(),
+            dashboardReader: probe.makeDashboardQueryReader?(),
             pastureRepository: probe.makePastureRepository(),
             file: file,
             line: line
         )
         try await assertPastureCountProjectionsMatchResidents(
             pastureID: newPastureID,
-            dashboardReader: probe.makeDashboardQueryReader(),
+            dashboardReader: probe.makeDashboardQueryReader?(),
             pastureRepository: probe.makePastureRepository(),
             file: file,
             line: line
@@ -1141,31 +1146,39 @@ enum AnimalAggregateTransactionContract {
             file: file,
             line: line
         )
-        let childPagedBefore = try await fetchAnimalListQuerySummary(
-            id: probe.offspringID,
-            reader: probe.makeAnimalListQueryReader(),
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(childPagedBefore, childSummaryBefore, file: file, line: line)
-        let childDashboardBefore = try await fetchDashboardAnimalRecord(
-            id: probe.offspringID,
-            reader: probe.makeDashboardQueryReader(),
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(
-            childDashboardBefore.damDisplayTagNumber,
-            childSummaryBefore.damDisplayTagNumber,
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(
-            childDashboardBefore.damDisplayTagColorID,
-            childSummaryBefore.damDisplayTagColorID,
-            file: file,
-            line: line
-        )
+        if let makeAnimalListQueryReader = probe.makeAnimalListQueryReader {
+            let childPagedBefore = try await fetchAnimalListQuerySummary(
+                id: probe.offspringID,
+                reader: makeAnimalListQueryReader(),
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(childPagedBefore, childSummaryBefore, file: file, line: line)
+        }
+        let childDashboardBefore: DashboardAnimalRecord?
+        if let makeDashboardQueryReader = probe.makeDashboardQueryReader {
+            let value = try await fetchDashboardAnimalRecord(
+                id: probe.offspringID,
+                reader: makeDashboardQueryReader(),
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(
+                value.damDisplayTagNumber,
+                childSummaryBefore.damDisplayTagNumber,
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(
+                value.damDisplayTagColorID,
+                childSummaryBefore.damDisplayTagColorID,
+                file: file,
+                line: line
+            )
+            childDashboardBefore = value
+        } else {
+            childDashboardBefore = nil
+        }
         let childTimelineBefore = try probe.makeAnimalRepository().fetchTimeline(id: probe.offspringID)
         let primaryBirthBefore = try primaryBirthSignature(
             detail: childAggregateBefore.animal,
@@ -1240,7 +1253,7 @@ enum AnimalAggregateTransactionContract {
             line: line
         )
 
-        let updated = try probe.writer.updateAnimal(transaction)
+        let updated = try await probe.writer.updateAnimal(transaction)
         XCTAssertEqual(updated.animal.id, probe.damID, file: file, line: line)
         XCTAssertNotEqual(
             updated.revision,
@@ -1338,45 +1351,50 @@ enum AnimalAggregateTransactionContract {
             line: line
         )
 
-        let childPagedAfter = try await fetchAnimalListQuerySummary(
-            id: probe.offspringID,
-            reader: probe.makeAnimalListQueryReader(),
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(
-            childPagedAfter,
-            childSummaryAfter,
-            "The production paged Animal list must expose the same refreshed dam display as the synchronous summary.",
-            file: file,
-            line: line
-        )
+        if let makeAnimalListQueryReader = probe.makeAnimalListQueryReader {
+            let childPagedAfter = try await fetchAnimalListQuerySummary(
+                id: probe.offspringID,
+                reader: makeAnimalListQueryReader(),
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(
+                childPagedAfter,
+                childSummaryAfter,
+                "The production paged Animal list must expose the same refreshed dam display as the synchronous summary.",
+                file: file,
+                line: line
+            )
+        }
 
-        let childDashboardAfter = try await fetchDashboardAnimalRecord(
-            id: probe.offspringID,
-            reader: probe.makeDashboardQueryReader(),
-            file: file,
-            line: line
-        )
-        assertDashboardAnimalRecordUnchangedExceptDamDisplay(
-            before: childDashboardBefore,
-            after: childDashboardAfter,
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(childDashboardAfter.damID, probe.damID, file: file, line: line)
-        XCTAssertEqual(
-            childDashboardAfter.damDisplayTagNumber,
-            childSummaryAfter.damDisplayTagNumber,
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(
-            childDashboardAfter.damDisplayTagColorID,
-            childSummaryAfter.damDisplayTagColorID,
-            file: file,
-            line: line
-        )
+        if let makeDashboardQueryReader = probe.makeDashboardQueryReader,
+           let childDashboardBefore {
+            let childDashboardAfter = try await fetchDashboardAnimalRecord(
+                id: probe.offspringID,
+                reader: makeDashboardQueryReader(),
+                file: file,
+                line: line
+            )
+            assertDashboardAnimalRecordUnchangedExceptDamDisplay(
+                before: childDashboardBefore,
+                after: childDashboardAfter,
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(childDashboardAfter.damID, probe.damID, file: file, line: line)
+            XCTAssertEqual(
+                childDashboardAfter.damDisplayTagNumber,
+                childSummaryAfter.damDisplayTagNumber,
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(
+                childDashboardAfter.damDisplayTagColorID,
+                childSummaryAfter.damDisplayTagColorID,
+                file: file,
+                line: line
+            )
+        }
 
         let childTimelineAfter = try probe.makeAnimalRepository().fetchTimeline(id: probe.offspringID)
         XCTAssertEqual(
@@ -1441,19 +1459,26 @@ enum AnimalAggregateTransactionContract {
             file: file,
             line: line
         )
-        let pagedBefore = try await fetchAnimalListQuerySummary(
-            id: probe.animalID,
-            reader: probe.makeAnimalListQueryReader(),
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(pagedBefore, summaryBefore, file: file, line: line)
-        let dashboardBefore = try await fetchDashboardAnimalRecord(
-            id: probe.animalID,
-            reader: probe.makeDashboardQueryReader(),
-            file: file,
-            line: line
-        )
+        if let makeAnimalListQueryReader = probe.makeAnimalListQueryReader {
+            let pagedBefore = try await fetchAnimalListQuerySummary(
+                id: probe.animalID,
+                reader: makeAnimalListQueryReader(),
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(pagedBefore, summaryBefore, file: file, line: line)
+        }
+        let dashboardBefore: DashboardAnimalRecord?
+        if let makeDashboardQueryReader = probe.makeDashboardQueryReader {
+            dashboardBefore = try await fetchDashboardAnimalRecord(
+                id: probe.animalID,
+                reader: makeDashboardQueryReader(),
+                file: file,
+                line: line
+            )
+        } else {
+            dashboardBefore = nil
+        }
         let timelineBefore = try probe.makeAnimalRepository().fetchTimeline(id: probe.animalID)
 
         let transaction = try probe.makeUpdateTransaction(current)
@@ -1478,7 +1503,7 @@ enum AnimalAggregateTransactionContract {
             line: line
         )
 
-        let updated = try probe.writer.updateAnimal(transaction)
+        let updated = try await probe.writer.updateAnimal(transaction)
         XCTAssertEqual(updated.animal.id, current.animal.id, file: file, line: line)
         XCTAssertNotEqual(
             updated.revision,
@@ -1539,46 +1564,51 @@ enum AnimalAggregateTransactionContract {
             file: file,
             line: line
         )
-        let pagedSummaryAfterMetadataUpdate = try await fetchAnimalListQuerySummary(
-            id: probe.animalID,
-            reader: probe.makeAnimalListQueryReader(),
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(
-            pagedSummaryAfterMetadataUpdate,
-            summaryAfter,
-            "The production paged Animal list must remain coherent after same-status metadata replacement.",
-            file: file,
-            line: line
-        )
+        if let makeAnimalListQueryReader = probe.makeAnimalListQueryReader {
+            let pagedSummaryAfterMetadataUpdate = try await fetchAnimalListQuerySummary(
+                id: probe.animalID,
+                reader: makeAnimalListQueryReader(),
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(
+                pagedSummaryAfterMetadataUpdate,
+                summaryAfter,
+                "The production paged Animal list must remain coherent after same-status metadata replacement.",
+                file: file,
+                line: line
+            )
+        }
 
-        let dashboardAfter = try await fetchDashboardAnimalRecord(
-            id: probe.animalID,
-            reader: probe.makeDashboardQueryReader(),
-            file: file,
-            line: line
-        )
-        assertDashboardAnimalRecordUnchangedExceptDeathDate(
-            before: dashboardBefore,
-            after: dashboardAfter,
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(
-            dashboardAfter.deathDate,
-            transaction.attributes.deathDate,
-            "Dashboard must expose the replacement death date after the aggregate update.",
-            file: file,
-            line: line
-        )
-        XCTAssertNotEqual(
-            dashboardAfter.deathDate,
-            dashboardBefore.deathDate,
-            "The focused same-status metadata fixture must materially change the Dashboard death-date projection.",
-            file: file,
-            line: line
-        )
+        if let makeDashboardQueryReader = probe.makeDashboardQueryReader,
+           let dashboardBefore {
+            let dashboardAfter = try await fetchDashboardAnimalRecord(
+                id: probe.animalID,
+                reader: makeDashboardQueryReader(),
+                file: file,
+                line: line
+            )
+            assertDashboardAnimalRecordUnchangedExceptDeathDate(
+                before: dashboardBefore,
+                after: dashboardAfter,
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(
+                dashboardAfter.deathDate,
+                transaction.attributes.deathDate,
+                "Dashboard must expose the replacement death date after the aggregate update.",
+                file: file,
+                line: line
+            )
+            XCTAssertNotEqual(
+                dashboardAfter.deathDate,
+                dashboardBefore.deathDate,
+                "The focused same-status metadata fixture must materially change the Dashboard death-date projection.",
+                file: file,
+                line: line
+            )
+        }
 
         let timelineAfter = try probe.makeAnimalRepository().fetchTimeline(id: probe.animalID)
         XCTAssertEqual(
@@ -1621,12 +1651,17 @@ enum AnimalAggregateTransactionContract {
             file: file,
             line: line
         )
-        let dashboardBefore = try await fetchDashboardAnimalRecord(
-            id: probe.animalID,
-            reader: probe.makeDashboardQueryReader(),
-            file: file,
-            line: line
-        )
+        let dashboardBefore: DashboardAnimalRecord?
+        if let makeDashboardQueryReader = probe.makeDashboardQueryReader {
+            dashboardBefore = try await fetchDashboardAnimalRecord(
+                id: probe.animalID,
+                reader: makeDashboardQueryReader(),
+                file: file,
+                line: line
+            )
+        } else {
+            dashboardBefore = nil
+        }
         let sireInferenceBefore = try activeDamSireInferenceSnapshots(
             repository: probe.makeAnimalRepository(),
             file: file,
@@ -1691,7 +1726,7 @@ enum AnimalAggregateTransactionContract {
             )
         }
 
-        let updated = try probe.writer.updateAnimal(transaction)
+        let updated = try await probe.writer.updateAnimal(transaction)
         XCTAssertEqual(updated.animal.id, current.animal.id, file: file, line: line)
         XCTAssertNotEqual(
             updated.revision,
@@ -1738,8 +1773,8 @@ enum AnimalAggregateTransactionContract {
         try await assertFreshAnimalReadProjections(
             detail: reloaded.animal,
             repository: probe.makeAnimalRepository(),
-            listQueryReader: probe.makeAnimalListQueryReader(),
-            dashboardQueryReader: probe.makeDashboardQueryReader(),
+            listQueryReader: probe.makeAnimalListQueryReader?(),
+            dashboardQueryReader: probe.makeDashboardQueryReader?(),
             preservingSummaryOnlyFieldsFrom: summaryBefore,
             preservingDashboardOnlyFieldsFrom: dashboardBefore,
             file: file,
@@ -1867,12 +1902,17 @@ enum AnimalAggregateTransactionContract {
             file: file,
             line: line
         )
-        let dashboardBefore = try await fetchDashboardAnimalRecord(
-            id: probe.animalID,
-            reader: probe.makeDashboardQueryReader(),
-            file: file,
-            line: line
-        )
+        let dashboardBefore: DashboardAnimalRecord?
+        if let makeDashboardQueryReader = probe.makeDashboardQueryReader {
+            dashboardBefore = try await fetchDashboardAnimalRecord(
+                id: probe.animalID,
+                reader: makeDashboardQueryReader(),
+                file: file,
+                line: line
+            )
+        } else {
+            dashboardBefore = nil
+        }
         let sireInferenceBefore = try activeDamSireInferenceSnapshots(
             repository: probe.makeAnimalRepository(),
             file: file,
@@ -1985,7 +2025,7 @@ enum AnimalAggregateTransactionContract {
             line: line
         )
 
-        let updated = try probe.writer.updateAnimal(transaction)
+        let updated = try await probe.writer.updateAnimal(transaction)
         XCTAssertEqual(updated.animal.id, current.animal.id, file: file, line: line)
         XCTAssertNotEqual(
             updated.revision,
@@ -2054,24 +2094,27 @@ enum AnimalAggregateTransactionContract {
         try await assertFreshAnimalReadProjections(
             detail: reloaded.animal,
             repository: probe.makeAnimalRepository(),
-            listQueryReader: probe.makeAnimalListQueryReader(),
-            dashboardQueryReader: probe.makeDashboardQueryReader(),
+            listQueryReader: probe.makeAnimalListQueryReader?(),
+            dashboardQueryReader: probe.makeDashboardQueryReader?(),
             preservingSummaryOnlyFieldsFrom: summaryBefore,
             preservingDashboardOnlyFieldsFrom: dashboardBefore,
             file: file,
             line: line
         )
-        assertDashboardAnimalRecordSemanticallyEqual(
-            try await fetchDashboardAnimalRecord(
-                id: probe.animalID,
-                reader: probe.makeDashboardQueryReader(),
+        if let makeDashboardQueryReader = probe.makeDashboardQueryReader,
+           let dashboardBefore {
+            assertDashboardAnimalRecordSemanticallyEqual(
+                try await fetchDashboardAnimalRecord(
+                    id: probe.animalID,
+                    reader: makeDashboardQueryReader(),
+                    file: file,
+                    line: line
+                ),
+                dashboardBefore,
                 file: file,
                 line: line
-            ),
-            dashboardBefore,
-            file: file,
-            line: line
-        )
+            )
+        }
         XCTAssertEqual(
             try activeDamSireInferenceSnapshots(
                 repository: probe.makeAnimalRepository(),
@@ -2204,7 +2247,7 @@ enum AnimalAggregateTransactionContract {
         using fixture: AnimalAggregateTransactionContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         for expected in AnimalAggregateTagValidationFailure.allCases {
             for method in AnimalAggregateInvalidTagMethod.allCases {
                 let probe = try fixture.makeInvalidTagProbe(expected, method)
@@ -2215,7 +2258,7 @@ enum AnimalAggregateTransactionContract {
                     file: file,
                     line: line
                 )
-                try assertInvalidTagProbe(
+                try await assertInvalidTagProbe(
                     probe,
                     expected: expected,
                     file: file,
@@ -2230,7 +2273,7 @@ enum AnimalAggregateTransactionContract {
         expected: AnimalAggregateTagValidationFailure,
         file: StaticString,
         line: UInt
-    ) throws {
+    ) async throws {
         XCTAssertEqual(
             probe.expectedFailure,
             expected,
@@ -2251,21 +2294,23 @@ enum AnimalAggregateTransactionContract {
         let before = try probe.freshPersistedStateSnapshot()
         assertCompleteStoreSnapshot(before, operation: "invalid aggregate tag state", file: file, line: line)
 
-        let performInvalidWrite: () throws -> Void = {
+        let performInvalidWrite: () async throws -> Void = {
             switch probe.operation {
             case .create(let transaction):
-                _ = try probe.writer.createAnimal(transaction)
+                _ = try await probe.writer.createAnimal(transaction)
             case .update(let transaction):
-                _ = try probe.writer.updateAnimal(transaction)
+                _ = try await probe.writer.updateAnimal(transaction)
             }
         }
         var classifiedFailure: AnimalAggregateTagValidationFailure?
-        XCTAssertThrowsError(
-            try performInvalidWrite(),
-            "The invalid aggregate tag state must be rejected.",
-            file: file,
-            line: line
-        ) { error in
+        do {
+            try await performInvalidWrite()
+            XCTFail(
+                "The invalid aggregate tag state must be rejected.",
+                file: file,
+                line: line
+            )
+        } catch {
             classifiedFailure = probe.classifyError(error)
         }
         XCTAssertEqual(
@@ -2503,7 +2548,7 @@ enum AnimalAggregateTransactionContract {
 
     private static func assertPastureCountProjectionsMatchResidents(
         pastureID: UUID,
-        dashboardReader: any DashboardQueryReading,
+        dashboardReader: (any DashboardQueryReading)?,
         pastureRepository: any PastureRepository,
         file: StaticString,
         line: UInt
@@ -2560,35 +2605,37 @@ enum AnimalAggregateTransactionContract {
             )
         }
 
-        let dashboardRecords = try await dashboardReader.fetchDashboardRecords()
-        let dashboardRecordsPasture = try XCTUnwrap(
-            dashboardRecords.pastures.first { $0.id == pastureID },
-            "The affected Pasture must remain visible through the Dashboard records projection.",
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(
-            dashboardRecordsPasture.activeAnimalCount,
-            expectedResidentCount,
-            "Dashboard records Pasture active-head count must match the fresh resident projection after aggregate mutation.",
-            file: file,
-            line: line
-        )
+        if let dashboardReader {
+            let dashboardRecords = try await dashboardReader.fetchDashboardRecords()
+            let dashboardRecordsPasture = try XCTUnwrap(
+                dashboardRecords.pastures.first { $0.id == pastureID },
+                "The affected Pasture must remain visible through the Dashboard records projection.",
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(
+                dashboardRecordsPasture.activeAnimalCount,
+                expectedResidentCount,
+                "Dashboard records Pasture active-head count must match the fresh resident projection after aggregate mutation.",
+                file: file,
+                line: line
+            )
 
-        let dashboardPastureRecords = try await dashboardReader.fetchDashboardPastureRecords()
-        let dashboardPastureListRecord = try XCTUnwrap(
-            dashboardPastureRecords.first { $0.id == pastureID },
-            "The affected Pasture must remain visible through the dedicated Dashboard Pasture-list projection.",
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(
-            dashboardPastureListRecord.activeAnimalCount,
-            expectedResidentCount,
-            "Dashboard Pasture-list active-head count must match the fresh resident projection after aggregate mutation.",
-            file: file,
-            line: line
-        )
+            let dashboardPastureRecords = try await dashboardReader.fetchDashboardPastureRecords()
+            let dashboardPastureListRecord = try XCTUnwrap(
+                dashboardPastureRecords.first { $0.id == pastureID },
+                "The affected Pasture must remain visible through the dedicated Dashboard Pasture-list projection.",
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(
+                dashboardPastureListRecord.activeAnimalCount,
+                expectedResidentCount,
+                "Dashboard Pasture-list active-head count must match the fresh resident projection after aggregate mutation.",
+                file: file,
+                line: line
+            )
+        }
     }
 
     private struct ActiveDamSireInferenceSnapshot: Equatable {
@@ -2667,8 +2714,8 @@ enum AnimalAggregateTransactionContract {
     private static func assertFreshAnimalReadProjections(
         detail: AnimalDetailSnapshot,
         repository: any AnimalRepository,
-        listQueryReader: any AnimalListQueryReading,
-        dashboardQueryReader: any DashboardQueryReading,
+        listQueryReader: (any AnimalListQueryReading)?,
+        dashboardQueryReader: (any DashboardQueryReading)?,
         preservingSummaryOnlyFieldsFrom priorSummary: AnimalSummary?,
         preservingDashboardOnlyFieldsFrom priorDashboard: DashboardAnimalRecord?,
         file: StaticString,
@@ -2699,41 +2746,45 @@ enum AnimalAggregateTransactionContract {
         XCTAssertEqual(summary.pastureName, detail.pastureName, file: file, line: line)
         XCTAssertEqual(summary.location, detail.location, file: file, line: line)
 
-        let pagedSummary = try await fetchAnimalListQuerySummary(
-            id: detail.id,
-            reader: listQueryReader,
-            file: file,
-            line: line
-        )
-        XCTAssertEqual(
-            pagedSummary,
-            summary,
-            "The production-preferred paged Animal list projection must exactly match the synchronous Animal summary projection after aggregate mutation.",
-            file: file,
-            line: line
-        )
+        if let listQueryReader {
+            let pagedSummary = try await fetchAnimalListQuerySummary(
+                id: detail.id,
+                reader: listQueryReader,
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(
+                pagedSummary,
+                summary,
+                "The production-preferred paged Animal list projection must exactly match the synchronous Animal summary projection after aggregate mutation.",
+                file: file,
+                line: line
+            )
+        }
 
-        let dashboard = try await fetchDashboardAnimalRecord(
-            id: detail.id,
-            reader: dashboardQueryReader,
-            file: file,
-            line: line
-        )
-        assertDashboardAnimalRecord(
-            dashboard,
-            matches: detail,
-            summary: summary,
-            preservingDashboardOnlyFieldsFrom: priorDashboard,
-            file: file,
-            line: line
-        )
-        try await assertDashboardAnimalListMembership(
-            dashboard,
-            detail: detail,
-            reader: dashboardQueryReader,
-            file: file,
-            line: line
-        )
+        if let dashboardQueryReader {
+            let dashboard = try await fetchDashboardAnimalRecord(
+                id: detail.id,
+                reader: dashboardQueryReader,
+                file: file,
+                line: line
+            )
+            assertDashboardAnimalRecord(
+                dashboard,
+                matches: detail,
+                summary: summary,
+                preservingDashboardOnlyFieldsFrom: priorDashboard,
+                file: file,
+                line: line
+            )
+            try await assertDashboardAnimalListMembership(
+                dashboard,
+                detail: detail,
+                reader: dashboardQueryReader,
+                file: file,
+                line: line
+            )
+        }
 
         if let damID = detail.damID {
             let dam = try XCTUnwrap(
