@@ -268,7 +268,7 @@ enum PastureDeletionTransactionContract {
             line: line
         )
 
-        try probe.writer.deletePastures(probe.plan)
+        try await probe.writer.deletePastures(probe.plan)
         XCTAssertEqual(
             probe.executedOperations(),
             probe.plan.operations,
