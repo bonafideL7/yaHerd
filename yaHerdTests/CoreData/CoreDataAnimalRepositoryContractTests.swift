@@ -546,11 +546,10 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         )
 
         let defaultEnvironment = try await makeEnvironment()
-        let tagRepository = defaultEnvironment.makeTagColorRepository()
-        try tagRepository.setDefaultColor(id: TagColorDefaults.redID)
         let defaultSubject = defaultEnvironment.makeCreateTransaction(
             name: "Default arbitration subject",
-            tagNumber: "DEFAULT-ARBITRATION"
+            tagNumber: "DEFAULT-ARBITRATION",
+            colorID: TagColorDefaults.redID
         )
         _ = try await defaultEnvironment.makeAnimalRepository().createAnimal(defaultSubject)
         let defaultBefore = try XCTUnwrap(
@@ -607,7 +606,15 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             .fetchColors()
             .filter(\.isDefault)
         XCTAssertEqual(visibleDefaults.count, 1)
-        XCTAssertEqual(visibleDefaults.first?.id, TagColorDefaults.redID)
+        XCTAssertEqual(visibleDefaults.first?.id, TagColorDefaults.whiteID)
+
+        try defaultEnvironment.makeTagColorRepository()
+            .setDefaultColor(id: TagColorDefaults.redID)
+        let defaultsAfterRelease = try defaultEnvironment.makeTagColorRepository()
+            .fetchColors()
+            .filter(\.isDefault)
+        XCTAssertEqual(defaultsAfterRelease.count, 1)
+        XCTAssertEqual(defaultsAfterRelease.first?.id, TagColorDefaults.redID)
     }
 
     func testAnimalAggregateRevisionLifecycleAndStaleRejection() async throws {
