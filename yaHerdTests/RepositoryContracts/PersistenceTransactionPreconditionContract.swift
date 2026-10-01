@@ -463,14 +463,14 @@ enum PersistenceTransactionPreconditionContract {
         using fixture: PersistenceTransactionPreconditionContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
-        try assertPastureDeletionRejectsStaleExpectedState(
+    ) async throws {
+        try await assertPastureDeletionRejectsStaleExpectedState(
             probe: fixture.makePastureResidentSetChangedProbe(),
             requiredFailureCase: .residentSetChanged,
             file: file,
             line: line
         )
-        try assertPastureDeletionRejectsStaleExpectedState(
+        try await assertPastureDeletionRejectsStaleExpectedState(
             probe: fixture.makePastureMissingProbe(),
             requiredFailureCase: .missingPasture,
             file: file,
@@ -488,7 +488,7 @@ enum PersistenceTransactionPreconditionContract {
         requiredFailureCase: RequiredPastureFailureCase,
         file: StaticString,
         line: UInt
-    ) throws {
+    ) async throws {
         let expectedPastureID: UUID
         switch (requiredFailureCase, probe.expectedFailure) {
         case let (.residentSetChanged, .pastureResidentSetChanged(pastureID)):
@@ -562,12 +562,14 @@ enum PersistenceTransactionPreconditionContract {
         let before = try probe.freshPersistedStateSnapshot()
         assertCompleteStoreSnapshot(before, operation: "stale Pasture deletion", file: file, line: line)
         var classifiedFailure: PersistenceTransactionPreconditionFailure?
-        XCTAssertThrowsError(
-            try probe.writer.deletePastures(probe.plan),
-            "A stale Pasture deletion plan must be rejected before any supplied plan operation mutates durable state.",
-            file: file,
-            line: line
-        ) { error in
+        do {
+            try await probe.writer.deletePastures(probe.plan)
+            XCTFail(
+                "A stale Pasture deletion plan must be rejected before any supplied plan operation mutates durable state.",
+                file: file,
+                line: line
+            )
+        } catch {
             classifiedFailure = probe.classifyError(error)
         }
         XCTAssertEqual(
