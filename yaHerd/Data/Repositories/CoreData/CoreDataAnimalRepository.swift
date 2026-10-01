@@ -9,16 +9,25 @@ final class CoreDataAnimalRepository:
 {
     private let selection: any CurrentHerdSelectionReading
     private let contextFactory: CoreDataContextFactory
+    private let transactionExecutor: CoreDataTransactionExecutor
+    private let aggregateWriteGate: CoreDataAsyncSerialGate
+    private let coordinationID: UUID
     private let statusReferenceRepository: CoreDataAnimalStatusReferenceRepository
     private nonisolated let lookup: CoreDataLookup
 
     init(
         selection: any CurrentHerdSelectionReading,
         contextFactory: CoreDataContextFactory,
+        transactionExecutor: CoreDataTransactionExecutor,
+        aggregateWriteGate: CoreDataAsyncSerialGate,
+        coordinationID: UUID,
         lookup: CoreDataLookup
     ) {
         self.selection = selection
         self.contextFactory = contextFactory
+        self.transactionExecutor = transactionExecutor
+        self.aggregateWriteGate = aggregateWriteGate
+        self.coordinationID = coordinationID
         self.statusReferenceRepository = CoreDataAnimalStatusReferenceRepository(
             selection: selection,
             contextFactory: contextFactory,
@@ -34,6 +43,9 @@ final class CoreDataAnimalRepository:
         self.init(
             selection: selection,
             contextFactory: assembly.contextFactory,
+            transactionExecutor: assembly.transactionExecutor,
+            aggregateWriteGate: assembly.animalAggregateWriteGate,
+            coordinationID: assembly.coordinationID,
             lookup: assembly.lookup
         )
     }
@@ -171,7 +183,12 @@ final class CoreDataAnimalRepository:
     // MARK: - Legacy Animal repository writes
 
     func create(input: AnimalInput) throws -> AnimalDetailSnapshot {
-        try performWrite { context, herd in
+        try performWrite(
+            materializingTagColorIDs: legacyTagColorCandidate(
+                number: input.tagNumber,
+                colorID: input.tagColorID
+            )
+        ) { context, herd in
             let pasture = try CoreDataAnimalMutation.resolvePasture(
                 id: input.pastureID,
                 herdID: herd.id,
@@ -295,7 +312,12 @@ final class CoreDataAnimalRepository:
         id: UUID,
         input: AnimalInput
     ) throws -> AnimalDetailSnapshot {
-        try performWrite { context, herd in
+        try performWrite(
+            materializingTagColorIDs: legacyTagColorCandidate(
+                number: input.tagNumber,
+                colorID: input.tagColorID
+            )
+        ) { context, herd in
             guard let animal = try self.lookup.herdOwned(
                 CDAnimal.self,
                 id: id,
@@ -536,7 +558,9 @@ final class CoreDataAnimalRepository:
         animalID: UUID,
         input: AnimalTagInput
     ) throws -> AnimalDetailSnapshot {
-        try performWrite { context, herd in
+        try performWrite(
+            materializingTagColorIDs: candidateBuiltInTagColorIDs([input.colorID])
+        ) { context, herd in
             let animal = try self.requiredAnimal(
                 id: animalID,
                 herdID: herd.id,
@@ -581,7 +605,9 @@ final class CoreDataAnimalRepository:
         tagID: UUID,
         input: AnimalTagInput
     ) throws -> AnimalDetailSnapshot {
-        try performWrite { context, herd in
+        try performWrite(
+            materializingTagColorIDs: candidateBuiltInTagColorIDs([input.colorID])
+        ) { context, herd in
             let animal = try self.requiredAnimal(
                 id: animalID,
                 herdID: herd.id,
@@ -769,12 +795,25 @@ final class CoreDataAnimalRepository:
 
     func createAnimal(
         _ transaction: CreateAnimalAggregateTransaction
-    ) throws -> AnimalAggregateEditSnapshot {
+    ) async throws -> AnimalAggregateEditSnapshot {
+        try await createAnimal(transaction, beforeSave: nil)
+    }
+
+    func createAnimal(
+        _ transaction: CreateAnimalAggregateTransaction,
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)?
+    ) async throws -> AnimalAggregateEditSnapshot {
         try CoreDataAnimalMutation.validateTagState(transaction.tags)
         let mutationDate = Date()
+        let lookup = self.lookup
 
-        return try performWrite { context, herd in
-            if try self.lookup.herdOwned(
+        return try await performAggregateWrite(
+            beforeSave: beforeSave,
+            materializingTagColorIDs: candidateBuiltInTagColorIDs(
+                transaction.tags.map(\.colorID)
+            )
+        ) { context, herd in
+            if try lookup.herdOwned(
                 CDAnimal.self,
                 id: transaction.animalID,
                 herdID: herd.id,
@@ -791,25 +830,25 @@ final class CoreDataAnimalRepository:
             let pasture = try CoreDataAnimalMutation.resolvePasture(
                 id: attributes.pastureID,
                 herdID: herd.id,
-                lookup: self.lookup,
+                lookup: lookup,
                 in: context
             )
             let sire = try CoreDataAnimalMutation.resolveAnimal(
                 id: attributes.sireID,
                 herdID: herd.id,
-                lookup: self.lookup,
+                lookup: lookup,
                 in: context
             )
             let dam = try CoreDataAnimalMutation.resolveAnimal(
                 id: attributes.damID,
                 herdID: herd.id,
-                lookup: self.lookup,
+                lookup: lookup,
                 in: context
             )
             let statusReference = try CoreDataAnimalMutation.resolveStatusReference(
                 id: attributes.statusReferenceID,
                 herdID: herd.id,
-                lookup: self.lookup,
+                lookup: lookup,
                 in: context
             )
             try CoreDataAnimalMutation.validateAnimal(
@@ -865,7 +904,7 @@ final class CoreDataAnimalRepository:
                 transaction.tags,
                 for: animal,
                 herd: herd,
-                lookup: self.lookup,
+                lookup: lookup,
                 in: context,
                 mutationDate: mutationDate
             )
@@ -879,12 +918,43 @@ final class CoreDataAnimalRepository:
 
     func updateAnimal(
         _ transaction: UpdateAnimalAggregateTransaction
-    ) throws -> AnimalAggregateEditSnapshot {
-        try CoreDataAnimalMutation.validateTagState(transaction.tags)
-        let mutationDate = Date()
+    ) async throws -> AnimalAggregateEditSnapshot {
+        try await updateAnimal(
+            transaction,
+            beforeSave: nil,
+            beforeSuccessfulRevalidation: nil
+        )
+    }
 
-        return try performWrite { context, herd in
-            guard let animal = try self.lookup.herdOwned(
+    func updateAnimal(
+        _ transaction: UpdateAnimalAggregateTransaction,
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)?,
+        beforeSuccessfulRevalidation: (@Sendable () async -> Void)? = nil
+    ) async throws -> AnimalAggregateEditSnapshot {
+        try CoreDataAnimalMutation.validateTagState(transaction.tags)
+        guard let herdID = selection.currentHerdID else {
+            throw HerdRepositoryError.missingHerd
+        }
+        let mutationDate = Date()
+        let lookup = self.lookup
+
+        let commitPrecondition = AggregateCommitPrecondition(
+            animalID: transaction.animalID,
+            expectedRevision: transaction.expectedRevision,
+            herdID: herdID
+        )
+        let result = try await performAggregateWrite(
+            beforeSave: beforeSave,
+            commitPrecondition: commitPrecondition,
+            beforeSuccessfulRevalidation: beforeSuccessfulRevalidation,
+            successfulResultPrecondition: { result in
+                result.didStageChanges ? nil : commitPrecondition
+            },
+            materializingTagColorIDs: candidateBuiltInTagColorIDs(
+                transaction.tags.map(\.colorID)
+            )
+        ) { context, herd in
+            guard let animal = try lookup.herdOwned(
                 CDAnimal.self,
                 id: transaction.animalID,
                 herdID: herd.id,
@@ -904,7 +974,7 @@ final class CoreDataAnimalRepository:
                 transaction.attributes,
                 to: animal,
                 herd: herd,
-                lookup: self.lookup,
+                lookup: lookup,
                 in: context,
                 mutationDate: mutationDate
             )
@@ -912,19 +982,24 @@ final class CoreDataAnimalRepository:
                 transaction.tags,
                 for: animal,
                 herd: herd,
-                lookup: self.lookup,
+                lookup: lookup,
                 in: context,
                 mutationDate: mutationDate
             )
-            if attributesChanged || tagsChanged {
+            let didStageChanges = attributesChanged || tagsChanged
+            if didStageChanges {
                 CoreDataAnimalMutation.rotateRevision(animal)
             }
 
-            return AnimalAggregateEditSnapshot(
-                animal: try CoreDataAnimalProjection.detail(animal),
-                revision: AnimalAggregateRevision(value: animal.editorRevision)
+            return AggregateUpdateWriteResult(
+                snapshot: AnimalAggregateEditSnapshot(
+                    animal: try CoreDataAnimalProjection.detail(animal),
+                    revision: AnimalAggregateRevision(value: animal.editorRevision)
+                ),
+                didStageChanges: didStageChanges
             )
         }
+        return result.snapshot
     }
 
     // MARK: - Private
@@ -1008,6 +1083,195 @@ final class CoreDataAnimalRepository:
         return animal
     }
 
+    private struct AggregateCommitPrecondition: Sendable {
+        let animalID: UUID
+        let expectedRevision: AnimalAggregateRevision
+        let herdID: UUID
+    }
+
+    private struct AggregateUpdateWriteResult: Sendable {
+        let snapshot: AnimalAggregateEditSnapshot
+        let didStageChanges: Bool
+    }
+
+    private func candidateBuiltInTagColorIDs(
+        _ ids: [UUID?]
+    ) -> Set<UUID> {
+        Set(ids.compactMap { $0 })
+            .intersection(TagColorDefaults.defaultColorIDs)
+    }
+
+    private func legacyTagColorCandidate(
+        number: String,
+        colorID: UUID?
+    ) -> Set<UUID> {
+        guard !number.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return []
+        }
+        return candidateBuiltInTagColorIDs([colorID])
+    }
+
+    private func unmaterializedBuiltInTagColorIDs(
+        _ ids: Set<UUID>,
+        herdID: UUID
+    ) throws -> Set<UUID> {
+        guard !ids.isEmpty else {
+            return []
+        }
+
+        let context = contextFactory.makeReadContext()
+        return try context.performAndWait {
+            guard try lookup.herd(id: herdID, in: context) != nil else {
+                throw HerdRepositoryError.missingHerd
+            }
+
+            return Set(
+                try ids.filter { id in
+                    try lookup.herdOwned(
+                        CDTagColorDefinition.self,
+                        id: id,
+                        herdID: herdID,
+                        in: context
+                    ) == nil
+                }
+            )
+        }
+    }
+
+    private func assertDirectTagColorMaterializationAvailable(
+        candidateIDs: Set<UUID>,
+        herdID: UUID
+    ) throws {
+        let missing = try unmaterializedBuiltInTagColorIDs(
+            candidateIDs,
+            herdID: herdID
+        )
+        try CoreDataTagColorMaterializationCoordinator.shared.assertAvailable(
+            coordinationID: coordinationID,
+            herdID: herdID,
+            colorIDs: missing
+        )
+    }
+
+    private func aggregateCommitConflict(
+        animalID: UUID,
+        expectedRevision: AnimalAggregateRevision,
+        herdID: UUID
+    ) throws -> AnimalAggregateTransactionError? {
+        let context = contextFactory.makeReadContext()
+        return try context.performAndWait {
+            guard try lookup.herd(id: herdID, in: context) != nil else {
+                return nil
+            }
+            guard let animal = try lookup.herdOwned(
+                CDAnimal.self,
+                id: animalID,
+                herdID: herdID,
+                in: context
+            ) else {
+                return .aggregateNotFound(animalID: animalID)
+            }
+            guard animal.editorRevision != expectedRevision.value else {
+                return nil
+            }
+            return .staleRevision(animalID: animalID)
+        }
+    }
+
+    private func performAggregateWrite<Result: Sendable>(
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)?,
+        commitPrecondition: AggregateCommitPrecondition? = nil,
+        beforeSuccessfulRevalidation: (@Sendable () async -> Void)? = nil,
+        successfulResultPrecondition: ((Result) -> AggregateCommitPrecondition?)? = nil,
+        materializingTagColorIDs: Set<UUID> = [],
+        _ operation: @escaping @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
+    ) async throws -> Result {
+        guard let herdID = selection.currentHerdID else {
+            throw HerdRepositoryError.missingHerd
+        }
+        let lookup = self.lookup
+        let gate = aggregateWriteGate
+
+        await gate.acquire()
+
+        let reservedTagColorIDs: Set<UUID>
+        do {
+            let missingTagColorIDs = try unmaterializedBuiltInTagColorIDs(
+                materializingTagColorIDs,
+                herdID: herdID
+            )
+            reservedTagColorIDs = try CoreDataTagColorMaterializationCoordinator.shared.reserve(
+                coordinationID: coordinationID,
+                herdID: herdID,
+                colorIDs: missingTagColorIDs
+            )
+        } catch {
+            await gate.release()
+            throw error
+        }
+
+        do {
+            let result = try await transactionExecutor.performWrite(beforeSave: beforeSave) { context in
+                guard let herd = try lookup.herd(id: herdID, in: context) else {
+                    throw HerdRepositoryError.missingHerd
+                }
+                return try operation(context, herd)
+            }
+
+            if let successPrecondition = successfulResultPrecondition?(result) {
+                await beforeSuccessfulRevalidation?()
+                if let conflict = try aggregateCommitConflict(
+                    animalID: successPrecondition.animalID,
+                    expectedRevision: successPrecondition.expectedRevision,
+                    herdID: successPrecondition.herdID
+                ) {
+                    throw conflict
+                }
+            }
+
+            CoreDataTagColorMaterializationCoordinator.shared.release(
+                coordinationID: coordinationID,
+                herdID: herdID,
+                colorIDs: reservedTagColorIDs
+            )
+            await gate.release()
+            return result
+        } catch let persistenceError as CoreDataPersistenceError {
+            var conflict: AnimalAggregateTransactionError?
+            if case .saveFailed = persistenceError,
+               let commitPrecondition {
+                do {
+                    conflict = try aggregateCommitConflict(
+                        animalID: commitPrecondition.animalID,
+                        expectedRevision: commitPrecondition.expectedRevision,
+                        herdID: commitPrecondition.herdID
+                    )
+                } catch {
+                    conflict = nil
+                }
+            }
+
+            CoreDataTagColorMaterializationCoordinator.shared.release(
+                coordinationID: coordinationID,
+                herdID: herdID,
+                colorIDs: reservedTagColorIDs
+            )
+            await gate.release()
+            if let conflict {
+                throw conflict
+            }
+            throw persistenceError
+        } catch {
+            CoreDataTagColorMaterializationCoordinator.shared.release(
+                coordinationID: coordinationID,
+                herdID: herdID,
+                colorIDs: reservedTagColorIDs
+            )
+            await gate.release()
+            throw error
+        }
+    }
+
     private func makeReadScope() throws -> (NSManagedObjectContext, UUID) {
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
@@ -1016,11 +1280,16 @@ final class CoreDataAnimalRepository:
     }
 
     private func performWrite<Result: Sendable>(
+        materializingTagColorIDs: Set<UUID> = [],
         _ operation: @escaping @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
     ) throws -> Result {
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
         }
+        try assertDirectTagColorMaterializationAvailable(
+            candidateIDs: materializingTagColorIDs,
+            herdID: herdID
+        )
         let context = try contextFactory.makeWriteContext()
         return try context.performAndWait {
             do {

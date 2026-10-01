@@ -5,15 +5,18 @@ import Foundation
 final class CoreDataTagColorRepository: TagColorRepository {
     private let selection: any CurrentHerdSelectionReading
     private let contextFactory: CoreDataContextFactory
+    private let coordinationID: UUID
     private nonisolated let lookup: CoreDataLookup
 
     init(
         selection: any CurrentHerdSelectionReading,
         contextFactory: CoreDataContextFactory,
+        coordinationID: UUID,
         lookup: CoreDataLookup
     ) {
         self.selection = selection
         self.contextFactory = contextFactory
+        self.coordinationID = coordinationID
         self.lookup = lookup
     }
 
@@ -24,6 +27,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         self.init(
             selection: selection,
             contextFactory: assembly.contextFactory,
+            coordinationID: assembly.coordinationID,
             lookup: assembly.lookup
         )
     }
@@ -92,7 +96,12 @@ final class CoreDataTagColorRepository: TagColorRepository {
         guard !cleanedName.isEmpty else { return }
         let cleanedPrefix = TagColorLibraryRules.normalizedPrefix(color.prefix, fallbackName: cleanedName)
 
-        try performWrite { context, herd in
+        try performWrite(
+            materializingTagColorIDs: upsertMaterializationCandidates(
+                incomingID: color.id,
+                cleanedName: cleanedName
+            )
+        ) { context, herd in
             let colors = try Self.fetchManagedColors(herd: herd, in: context)
             let existingByID = colors.first { $0.id == color.id }
             let nameKey = TagColorLibraryRules.normalizedNameKey(cleanedName)
@@ -240,7 +249,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
     }
 
     func setDefaultColor(id: UUID) throws {
-        try performWrite { context, herd in
+        try performWrite(
+            materializingTagColorIDs: candidateBuiltInTagColorIDs([id])
+        ) { context, herd in
             var colors = try Self.fetchManagedColors(herd: herd, in: context)
             if !colors.contains(where: { $0.id == id }),
                let builtIn = Self.seedBuiltIns().first(where: { $0.id == id }) {
@@ -291,7 +302,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
     func reorder(colorIDs: [UUID]) throws {
         guard !colorIDs.isEmpty else { return }
         let order = Dictionary(uniqueKeysWithValues: colorIDs.enumerated().map { ($0.element, $0.offset) })
-        try performWrite { context, herd in
+        try performWrite(
+            materializingTagColorIDs: candidateBuiltInTagColorIDs(colorIDs)
+        ) { context, herd in
             var colors = try Self.fetchManagedColors(herd: herd, in: context)
             let persistedIDs = Set(colors.map(\.id))
             let existingDefaultID = colors.first { $0.isDefault && !$0.isHidden }?.id
@@ -315,7 +328,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
     }
 
     func restoreDefaultColors() throws {
-        try performWrite { context, herd in
+        try performWrite(
+            materializingTagColorIDs: TagColorDefaults.defaultColorIDs
+        ) { context, herd in
             let colors = try Self.fetchManagedColors(herd: herd, in: context)
             for color in colors where TagColorDefaults.retiredDefaultColorIDs.contains(color.id) {
                 if try Self.hasPersistedReferences(to: color.id, herd: herd, in: context) {
@@ -376,6 +391,68 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
     }
 
+    private func candidateBuiltInTagColorIDs(
+        _ ids: [UUID]
+    ) -> Set<UUID> {
+        Set(ids).intersection(TagColorDefaults.defaultColorIDs)
+    }
+
+    private func upsertMaterializationCandidates(
+        incomingID: UUID,
+        cleanedName: String
+    ) -> Set<UUID> {
+        var candidates = candidateBuiltInTagColorIDs([incomingID])
+        if let builtIn = Self.seedBuiltIns().first(where: {
+            TagColorLibraryRules.normalizedNameKey($0.name)
+                == TagColorLibraryRules.normalizedNameKey(cleanedName)
+        }) {
+            candidates.insert(builtIn.id)
+        }
+        return candidates
+    }
+
+    private func unmaterializedBuiltInTagColorIDs(
+        _ ids: Set<UUID>,
+        herdID: UUID
+    ) throws -> Set<UUID> {
+        guard !ids.isEmpty else {
+            return []
+        }
+
+        let context = contextFactory.makeReadContext()
+        return try context.performAndWait {
+            guard try lookup.herd(id: herdID, in: context) != nil else {
+                throw HerdRepositoryError.missingHerd
+            }
+
+            return Set(
+                try ids.filter { id in
+                    try lookup.herdOwned(
+                        CDTagColorDefinition.self,
+                        id: id,
+                        herdID: herdID,
+                        in: context
+                    ) == nil
+                }
+            )
+        }
+    }
+
+    private func assertMaterializationAvailable(
+        candidateIDs: Set<UUID>,
+        herdID: UUID
+    ) throws {
+        let missing = try unmaterializedBuiltInTagColorIDs(
+            candidateIDs,
+            herdID: herdID
+        )
+        try CoreDataTagColorMaterializationCoordinator.shared.assertAvailable(
+            coordinationID: coordinationID,
+            herdID: herdID,
+            colorIDs: missing
+        )
+    }
+
     private func fetchPersistedColors(includeHidden: Bool) throws -> [TagColorSnapshot] {
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
@@ -393,11 +470,17 @@ final class CoreDataTagColorRepository: TagColorRepository {
     }
 
     private func performWrite(
+        materializingTagColorIDs: Set<UUID> = [],
         _ operation: @escaping @Sendable (NSManagedObjectContext, CDHerd) throws -> Void
     ) throws {
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
         }
+
+        try assertMaterializationAvailable(
+            candidateIDs: materializingTagColorIDs,
+            herdID: herdID
+        )
 
         let context = try contextFactory.makeWriteContext()
         try context.performAndWait {

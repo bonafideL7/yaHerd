@@ -12,7 +12,7 @@ struct AnimalAggregateRevision: Hashable, Sendable {
 ///
 /// Tag number/color do not appear here intentionally. `tags` in the aggregate transaction is the
 /// single source of truth for primary and secondary tag state in the production Core Data model.
-struct AnimalAggregateAttributes: Hashable {
+struct AnimalAggregateAttributes: Hashable, Sendable {
     let name: String
     let sex: Sex
     let birthDate: Date
@@ -33,7 +33,7 @@ struct AnimalAggregateAttributes: Hashable {
 ///
 /// `id` is application identity. Persistence implementations must preserve it exactly;
 /// storage-native object identifiers are not part of this contract.
-struct AnimalTagTransactionState: Hashable {
+struct AnimalTagTransactionState: Hashable, Sendable {
     let id: UUID
     let number: String
     let colorID: UUID?
@@ -42,7 +42,7 @@ struct AnimalTagTransactionState: Hashable {
 }
 
 /// Editor read result that carries the aggregate revision used for optimistic conflict detection.
-struct AnimalAggregateEditSnapshot: Hashable {
+struct AnimalAggregateEditSnapshot: Hashable, Sendable {
     let animal: AnimalDetailSnapshot
     let revision: AnimalAggregateRevision
 }
@@ -58,7 +58,7 @@ protocol AnimalAggregateEditReading {
 /// The supplied animal and tag UUIDs are authoritative application identities. `tags` is the only
 /// source of primary-tag state. Untagged animals may have no active tags; otherwise the request must
 /// contain exactly one active primary tag. A thrown error leaves none of the aggregate committed.
-struct CreateAnimalAggregateTransaction: Hashable {
+struct CreateAnimalAggregateTransaction: Hashable, Sendable {
     let animalID: UUID
     let attributes: AnimalAggregateAttributes
     let tags: [AnimalTagTransactionState]
@@ -70,7 +70,7 @@ struct CreateAnimalAggregateTransaction: Hashable {
 /// compare it with the current stored revision before applying any changes and fail the transaction
 /// when they differ. `tags` is the complete desired tag state: existing tags are matched by UUID,
 /// new UUIDs create tags, and inactive tags remain as retired history.
-struct UpdateAnimalAggregateTransaction: Hashable {
+struct UpdateAnimalAggregateTransaction: Hashable, Sendable {
     let animalID: UUID
     let expectedRevision: AnimalAggregateRevision
     let attributes: AnimalAggregateAttributes
@@ -114,12 +114,12 @@ protocol AnimalAggregateTransactionWriting {
     @discardableResult
     func createAnimal(
         _ transaction: CreateAnimalAggregateTransaction
-    ) throws -> AnimalAggregateEditSnapshot
+    ) async throws -> AnimalAggregateEditSnapshot
 
     @discardableResult
     func updateAnimal(
         _ transaction: UpdateAnimalAggregateTransaction
-    ) throws -> AnimalAggregateEditSnapshot
+    ) async throws -> AnimalAggregateEditSnapshot
 }
 
 /// State observed by the Domain use case while preparing a pasture-deletion transaction.

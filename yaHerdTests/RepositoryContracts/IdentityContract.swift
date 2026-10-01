@@ -128,7 +128,7 @@ protocol IdentityContractTestControl {
         id: UUID,
         variant: IdentityContractSeedVariant,
         owningHerdID: UUID?
-    ) throws
+    ) async throws
 
     func snapshotsInIdentityScope(
         for kind: IdentityContractEntityKind,
@@ -169,10 +169,11 @@ struct IdentityContractFixture {
 enum IdentityContract {
     static func assertDuplicateApplicationIDsFailWithoutReplacingMergingOrReminting(
         using fixture: IdentityContractFixture,
+        kinds: [IdentityContractEntityKind] = IdentityContractEntityKind.allCases,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
-        for kind in IdentityContractEntityKind.allCases {
+    ) async throws {
+        for kind in kinds {
             let applicationID = UUID()
             let unrelatedControlID = UUID()
 
@@ -194,13 +195,13 @@ enum IdentityContract {
                 )
             }
 
-            try fixture.makeTestControl(kind).seedEntity(
+            try await fixture.makeTestControl(kind).seedEntity(
                 kind,
                 id: applicationID,
                 variant: .original,
                 owningHerdID: owningHerdID
             )
-            try fixture.makeTestControl(kind).seedEntity(
+            try await fixture.makeTestControl(kind).seedEntity(
                 kind,
                 id: unrelatedControlID,
                 variant: .unrelatedControl,
@@ -333,24 +334,26 @@ enum IdentityContract {
                 file: file,
                 line: line
             )
-            XCTAssertThrowsError(
-                try duplicateControl.seedEntity(
+            do {
+                try await duplicateControl.seedEntity(
                     kind,
                     id: applicationID,
                     variant: .conflictingDuplicate,
                     owningHerdID: owningHerdID
-                ),
-                "Persisting a second \(kind.rawValue) with an established application UUID in the same repository identity scope must fail.",
-                file: file,
-                line: line
-            ) { error in
+                )
+                XCTFail(
+                    "Persisting a second \(kind.rawValue) with an established application UUID in the same repository identity scope must fail.",
+                    file: file,
+                    line: line
+                )
+            } catch {
                 guard let identityError = error as? IdentityContractSeedError else {
                     XCTFail(
                         "The \(kind.rawValue) duplicate probe surfaced \(type(of: error)) instead of IdentityContractSeedError.",
                         file: file,
                         line: line
                     )
-                    return
+                    throw error
                 }
                 XCTAssertEqual(
                     identityError,
