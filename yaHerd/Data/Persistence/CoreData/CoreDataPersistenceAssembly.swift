@@ -65,6 +65,63 @@ final class CoreDataTagColorMaterializationCoordinator {
     }
 }
 
+enum CoreDataResidentWriteCoordinationError: Error, Equatable {
+    case pastureDeletionInProgress
+}
+
+final class CoreDataPastureResidentWriteCoordinator: @unchecked Sendable {
+    private let lock = NSLock()
+    private var activeAnimalWrites = 0
+    private var deletionPending = false
+    private var deletionContinuation: CheckedContinuation<Void, Never>?
+
+    func beginAnimalWrite() throws {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !deletionPending else {
+            throw CoreDataResidentWriteCoordinationError.pastureDeletionInProgress
+        }
+        activeAnimalWrites += 1
+    }
+
+    func endAnimalWrite() {
+        let continuation: CheckedContinuation<Void, Never>?
+        lock.lock()
+        precondition(activeAnimalWrites > 0)
+        activeAnimalWrites -= 1
+        if activeAnimalWrites == 0, deletionPending {
+            continuation = deletionContinuation
+            deletionContinuation = nil
+        } else {
+            continuation = nil
+        }
+        lock.unlock()
+        continuation?.resume()
+    }
+
+    func acquirePastureDeletion() async {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            precondition(!deletionPending)
+            deletionPending = true
+            if activeAnimalWrites == 0 {
+                lock.unlock()
+                continuation.resume()
+            } else {
+                deletionContinuation = continuation
+                lock.unlock()
+            }
+        }
+    }
+
+    func releasePastureDeletion() {
+        lock.lock()
+        deletionPending = false
+        deletionContinuation = nil
+        lock.unlock()
+    }
+}
+
 actor CoreDataAsyncSerialGate {
     private var isHeld = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
@@ -93,6 +150,7 @@ final class CoreDataPersistenceAssembly {
     let contextFactory: CoreDataContextFactory
     let transactionExecutor: CoreDataTransactionExecutor
     let animalAggregateWriteGate: CoreDataAsyncSerialGate
+    let pastureResidentWriteCoordinator: CoreDataPastureResidentWriteCoordinator
     let coordinationID: UUID
     let lookup: CoreDataLookup
 
@@ -101,6 +159,7 @@ final class CoreDataPersistenceAssembly {
         self.contextFactory = CoreDataContextFactory(persistence: persistence)
         self.transactionExecutor = CoreDataTransactionExecutor(contextFactory: contextFactory)
         self.animalAggregateWriteGate = CoreDataAsyncSerialGate()
+        self.pastureResidentWriteCoordinator = CoreDataPastureResidentWriteCoordinator()
         self.coordinationID = UUID()
         self.lookup = CoreDataLookup()
     }
