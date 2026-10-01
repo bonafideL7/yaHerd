@@ -1153,6 +1153,33 @@ final class CoreDataAnimalRepository:
         )
     }
 
+    private func aggregateMaterializationReservesDefaultSlot(
+        missingColorIDs: Set<UUID>,
+        herdID: UUID
+    ) throws -> Bool {
+        guard CoreDataAnimalMutation.stableBuiltIns().contains(where: {
+            $0.isDefault && missingColorIDs.contains($0.id)
+        }) else {
+            return false
+        }
+
+        let context = contextFactory.makeReadContext()
+        return try context.performAndWait {
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            let request = NSFetchRequest<CDTagColorDefinition>(
+                entityName: CDTagColorDefinition.coreDataEntityName
+            )
+            request.predicate = NSPredicate(
+                format: "herd == %@ AND isHidden == NO AND isDefault == YES",
+                herd
+            )
+            request.fetchLimit = 1
+            return try context.count(for: request) == 0
+        }
+    }
+
     private func aggregateCommitConflict(
         animalID: UUID,
         expectedRevision: AnimalAggregateRevision,
@@ -1195,15 +1222,21 @@ final class CoreDataAnimalRepository:
         await gate.acquire()
 
         let reservedTagColorIDs: Set<UUID>
+        let reservedTagColorDefaultSlot: Bool
         do {
             let missingTagColorIDs = try unmaterializedBuiltInTagColorIDs(
                 materializingTagColorIDs,
                 herdID: herdID
             )
+            reservedTagColorDefaultSlot = try aggregateMaterializationReservesDefaultSlot(
+                missingColorIDs: missingTagColorIDs,
+                herdID: herdID
+            )
             reservedTagColorIDs = try CoreDataTagColorMaterializationCoordinator.shared.reserve(
                 coordinationID: coordinationID,
                 herdID: herdID,
-                colorIDs: missingTagColorIDs
+                colorIDs: missingTagColorIDs,
+                reservesDefaultSlot: reservedTagColorDefaultSlot
             )
         } catch {
             await gate.release()
@@ -1232,7 +1265,8 @@ final class CoreDataAnimalRepository:
             CoreDataTagColorMaterializationCoordinator.shared.release(
                 coordinationID: coordinationID,
                 herdID: herdID,
-                colorIDs: reservedTagColorIDs
+                colorIDs: reservedTagColorIDs,
+                releasesDefaultSlot: reservedTagColorDefaultSlot
             )
             await gate.release()
             return result
@@ -1254,7 +1288,8 @@ final class CoreDataAnimalRepository:
             CoreDataTagColorMaterializationCoordinator.shared.release(
                 coordinationID: coordinationID,
                 herdID: herdID,
-                colorIDs: reservedTagColorIDs
+                colorIDs: reservedTagColorIDs,
+                releasesDefaultSlot: reservedTagColorDefaultSlot
             )
             await gate.release()
             if let conflict {
@@ -1265,7 +1300,8 @@ final class CoreDataAnimalRepository:
             CoreDataTagColorMaterializationCoordinator.shared.release(
                 coordinationID: coordinationID,
                 herdID: herdID,
-                colorIDs: reservedTagColorIDs
+                colorIDs: reservedTagColorIDs,
+                releasesDefaultSlot: reservedTagColorDefaultSlot
             )
             await gate.release()
             throw error
