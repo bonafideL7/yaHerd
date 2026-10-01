@@ -544,6 +544,70 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             try tagRepositoryEnvironment.tagColorRowCount(id: TagColorDefaults.redID),
             1
         )
+
+        let defaultEnvironment = try await makeEnvironment()
+        let tagRepository = defaultEnvironment.makeTagColorRepository()
+        try tagRepository.setDefaultColor(id: TagColorDefaults.redID)
+        let defaultSubject = defaultEnvironment.makeCreateTransaction(
+            name: "Default arbitration subject",
+            tagNumber: "DEFAULT-ARBITRATION"
+        )
+        _ = try await defaultEnvironment.makeAnimalRepository().createAnimal(defaultSubject)
+        let defaultBefore = try XCTUnwrap(
+            defaultEnvironment.makeAnimalRepository()
+                .fetchAnimalAggregateForEditing(id: defaultSubject.animalID)
+        )
+        let defaultTags = defaultEnvironment.tags(from: defaultBefore.animal).map {
+            AnimalTagTransactionState(
+                id: $0.id,
+                number: $0.number,
+                colorID: TagColorDefaults.whiteID,
+                isPrimary: $0.isPrimary,
+                isActive: $0.isActive
+            )
+        }
+        let defaultUpdate = UpdateAnimalAggregateTransaction(
+            animalID: defaultBefore.animal.id,
+            expectedRevision: defaultBefore.revision,
+            attributes: defaultEnvironment.attributes(from: defaultBefore.animal),
+            tags: defaultTags
+        )
+        let defaultBarrier = CoreDataAnimalCommitBarrier()
+        let pendingDefaultMaterialization = Task { @MainActor in
+            try await defaultEnvironment.makeAnimalRepository().updateAnimal(
+                defaultUpdate,
+                beforeSave: { _ in
+                    defaultBarrier.blockUntilReleased()
+                }
+            )
+        }
+
+        await waitUntilReached(defaultBarrier)
+        XCTAssertTrue(
+            defaultBarrier.didReach,
+            "The aggregate update must reach the pre-save boundary after reserving the Herd default slot."
+        )
+
+        do {
+            try defaultEnvironment.makeTagColorRepository()
+                .setDefaultColor(id: TagColorDefaults.redID)
+            XCTFail("A default-color write must not overlap aggregate materialization that owns the Herd default slot.")
+        } catch let error as CoreDataPersistenceError {
+            XCTAssertEqual(
+                error,
+                .tagColorDefaultMaterializationInProgress(
+                    herdID: defaultEnvironment.herdID
+                )
+            )
+        }
+
+        defaultBarrier.release()
+        _ = try await pendingDefaultMaterialization.value
+        let visibleDefaults = try defaultEnvironment.makeTagColorRepository()
+            .fetchColors()
+            .filter(\.isDefault)
+        XCTAssertEqual(visibleDefaults.count, 1)
+        XCTAssertEqual(visibleDefaults.first?.id, TagColorDefaults.redID)
     }
 
     func testAnimalAggregateRevisionLifecycleAndStaleRejection() async throws {
