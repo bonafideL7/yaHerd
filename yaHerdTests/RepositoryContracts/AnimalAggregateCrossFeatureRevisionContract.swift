@@ -112,7 +112,7 @@ protocol AnimalAggregateCrossFeatureRevisionContractTestControl {
 
     func makeAggregateReader() -> any AnimalAggregateEditReading
     func makeAnimalRepository() -> any AnimalRepository
-    func performMutation() throws
+    func performMutation() async throws
 }
 
 @MainActor
@@ -379,7 +379,7 @@ enum AnimalAggregateCrossFeatureRevisionContract {
         using fixture: AnimalAggregateCrossFeatureRevisionContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         for operation in AnimalAggregateCrossFeatureRevisionOperation.allCases {
             let control = try fixture.makeTestControl(operation)
             XCTAssertEqual(control.operation, operation, file: file, line: line)
@@ -544,7 +544,7 @@ enum AnimalAggregateCrossFeatureRevisionContract {
                 }
             }
 
-            try control.performMutation()
+            try await control.performMutation()
 
             var didRemapActiveTagColor = false
             var didRemapRetiredTagColor = false
