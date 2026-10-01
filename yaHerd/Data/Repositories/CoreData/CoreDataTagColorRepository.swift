@@ -100,7 +100,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
             materializingTagColorIDs: upsertMaterializationCandidates(
                 incomingID: color.id,
                 cleanedName: cleanedName
-            )
+            ),
+            requiresDefaultSlot: color.isDefault
         ) { context, herd in
             let colors = try Self.fetchManagedColors(herd: herd, in: context)
             let existingByID = colors.first { $0.id == color.id }
@@ -250,7 +251,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
 
     func setDefaultColor(id: UUID) throws {
         try performWrite(
-            materializingTagColorIDs: candidateBuiltInTagColorIDs([id])
+            materializingTagColorIDs: candidateBuiltInTagColorIDs([id]),
+            requiresDefaultSlot: true
         ) { context, herd in
             var colors = try Self.fetchManagedColors(herd: herd, in: context)
             if !colors.contains(where: { $0.id == id }),
@@ -271,7 +273,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
     func deleteColors(ids: [UUID]) throws {
         guard !ids.isEmpty else { return }
         let ids = Set(ids)
-        try performWrite { context, herd in
+        try performWrite(requiresDefaultSlot: true) { context, herd in
             let colors = try Self.fetchManagedColors(herd: herd, in: context)
             for color in colors where ids.contains(color.id) {
                 if TagColorDefaults.defaultColorIDs.contains(color.id) {
@@ -329,7 +331,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
 
     func restoreDefaultColors() throws {
         try performWrite(
-            materializingTagColorIDs: TagColorDefaults.defaultColorIDs
+            materializingTagColorIDs: TagColorDefaults.defaultColorIDs,
+            requiresDefaultSlot: true
         ) { context, herd in
             let colors = try Self.fetchManagedColors(herd: herd, in: context)
             for color in colors where TagColorDefaults.retiredDefaultColorIDs.contains(color.id) {
@@ -440,7 +443,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
 
     private func assertMaterializationAvailable(
         candidateIDs: Set<UUID>,
-        herdID: UUID
+        herdID: UUID,
+        requiresDefaultSlot: Bool
     ) throws {
         let missing = try unmaterializedBuiltInTagColorIDs(
             candidateIDs,
@@ -449,7 +453,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
         try CoreDataTagColorMaterializationCoordinator.shared.assertAvailable(
             coordinationID: coordinationID,
             herdID: herdID,
-            colorIDs: missing
+            colorIDs: missing,
+            requiresDefaultSlot: requiresDefaultSlot
         )
     }
 
@@ -471,6 +476,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
 
     private func performWrite(
         materializingTagColorIDs: Set<UUID> = [],
+        requiresDefaultSlot: Bool = false,
         _ operation: @escaping @Sendable (NSManagedObjectContext, CDHerd) throws -> Void
     ) throws {
         guard let herdID = selection.currentHerdID else {
@@ -479,7 +485,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
 
         try assertMaterializationAvailable(
             candidateIDs: materializingTagColorIDs,
-            herdID: herdID
+            herdID: herdID,
+            requiresDefaultSlot: requiresDefaultSlot
         )
 
         let context = try contextFactory.makeWriteContext()
