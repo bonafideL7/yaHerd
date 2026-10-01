@@ -127,13 +127,13 @@ protocol AnimalAggregateTransactionWriting {
 /// The transaction implementation revalidates this exact resident set before applying operations.
 /// If the pasture disappeared or its resident set changed, the transaction fails as stale rather
 /// than discovering a new workflow on behalf of Domain.
-struct PastureDeletionExpectedState: Hashable {
+struct PastureDeletionExpectedState: Hashable, Sendable {
     let pastureID: UUID
     let residentAnimalIDs: Set<UUID>
 }
 
 /// Ordered operation selected by the Domain pasture-delete workflow.
-enum PastureDeletionOperation: Hashable {
+enum PastureDeletionOperation: Hashable, Sendable {
     case moveAnimals(
         animalIDs: [UUID],
         fromPastureID: UUID,
@@ -150,13 +150,39 @@ enum PastureDeletionOperation: Hashable {
 ///
 /// Domain owns which operations occur and their order. Persistence owns stale-state validation,
 /// executing the supplied operations on one transaction context, and commit/rollback.
-struct DeletePasturesTransactionPlan: Hashable {
+struct DeletePasturesTransactionPlan: Hashable, Sendable {
     let expectedStates: [PastureDeletionExpectedState]
     let operations: [PastureDeletionOperation]
+}
+
+enum PastureDeletionTransactionError: LocalizedError, Equatable, Sendable {
+    case pastureMissing(pastureID: UUID)
+    case residentSetChanged(pastureID: UUID)
+    case animalMissing(animalID: UUID)
+    case animalSourceChanged(animalID: UUID, expectedPastureID: UUID)
+    case destinationPastureMissing(pastureID: UUID)
+    case invalidPlan
+
+    var errorDescription: String? {
+        switch self {
+        case .pastureMissing:
+            return "A pasture in this deletion plan no longer exists. Reload before deleting."
+        case .residentSetChanged:
+            return "Pasture residents changed after deletion was prepared. Reload before deleting."
+        case .animalMissing:
+            return "An animal in this deletion plan no longer exists. Reload before deleting."
+        case .animalSourceChanged:
+            return "An animal moved after pasture deletion was prepared. Reload before deleting."
+        case .destinationPastureMissing:
+            return "A destination pasture no longer exists. Reload before deleting."
+        case .invalidPlan:
+            return "The pasture deletion plan is invalid."
+        }
+    }
 }
 
 /// Persistence-neutral atomic boundary for destructive pasture changes that span aggregates.
 @MainActor
 protocol PastureDeletionTransactionWriting {
-    func deletePastures(_ plan: DeletePasturesTransactionPlan) throws
+    func deletePastures(_ plan: DeletePasturesTransactionPlan) async throws
 }
