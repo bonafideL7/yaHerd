@@ -23,6 +23,12 @@ enum CoreDataAnimalPayloadCodec {
 }
 
 enum CoreDataAnimalProjection {
+    private struct TimelineProjectionEvent {
+        let event: AnimalTimelineEvent
+        let sourceID: UUID
+        let kindOrder: Int
+    }
+
     static func summary(_ animal: CDAnimal) throws -> AnimalSummary {
         try CoreDataAnimalMutation.validateOwnedGraphIdentity(animal)
         let tags = managedTags(animal)
@@ -160,33 +166,45 @@ enum CoreDataAnimalProjection {
 
     static func timeline(_ animal: CDAnimal) throws -> [AnimalTimelineEvent] {
         try CoreDataAnimalMutation.validateOwnedGraphIdentity(animal)
-        var events: [AnimalTimelineEvent] = [
-            AnimalTimelineEvent(
-                date: animal.birthDate,
-                type: .birth,
-                title: "Birth",
-                details: birthEventDetails(animal)
+        var events: [TimelineProjectionEvent] = [
+            TimelineProjectionEvent(
+                event: AnimalTimelineEvent(
+                    date: animal.birthDate,
+                    type: .birth,
+                    title: "Birth",
+                    details: birthEventDetails(animal)
+                ),
+                sourceID: animal.id,
+                kindOrder: 0
             )
         ]
 
         for offspring in managedMaternalOffspring(animal) where !offspring.isArchived {
             events.append(
-                AnimalTimelineEvent(
-                    date: offspring.birthDate,
-                    type: .birth,
-                    title: "Offspring Recorded",
-                    details: offspringBirthEventDetails(offspring)
+                TimelineProjectionEvent(
+                    event: AnimalTimelineEvent(
+                        date: offspring.birthDate,
+                        type: .birth,
+                        title: "Offspring Recorded",
+                        details: offspringBirthEventDetails(offspring)
+                    ),
+                    sourceID: offspring.id,
+                    kindOrder: 1
                 )
             )
         }
 
         for record in managedHealthRecords(animal) {
             events.append(
-                AnimalTimelineEvent(
-                    date: record.date,
-                    type: .health,
-                    title: record.treatment,
-                    details: record.notes
+                TimelineProjectionEvent(
+                    event: AnimalTimelineEvent(
+                        date: record.date,
+                        type: .health,
+                        title: record.treatment,
+                        details: record.notes
+                    ),
+                    sourceID: record.id,
+                    kindOrder: 0
                 )
             )
         }
@@ -194,22 +212,30 @@ enum CoreDataAnimalProjection {
         for check in managedPregnancyChecks(animal) {
             let result = try pregnancyResult(check)
             events.append(
-                AnimalTimelineEvent(
-                    date: check.date,
-                    type: .pregnancy,
-                    title: "Pregnancy Check: \(result.rawValue.capitalized)",
-                    details: check.technician
+                TimelineProjectionEvent(
+                    event: AnimalTimelineEvent(
+                        date: check.date,
+                        type: .pregnancy,
+                        title: "Pregnancy Check: \(result.rawValue.capitalized)",
+                        details: check.technician
+                    ),
+                    sourceID: check.id,
+                    kindOrder: 0
                 )
             )
         }
 
         for movement in managedMovementRecords(animal) {
             events.append(
-                AnimalTimelineEvent(
-                    date: movement.date,
-                    type: .movement,
-                    title: "Pasture Movement",
-                    details: "\(movement.fromPastureNameSnapshot ?? "—") → \(movement.toPastureNameSnapshot ?? "—")"
+                TimelineProjectionEvent(
+                    event: AnimalTimelineEvent(
+                        date: movement.date,
+                        type: .movement,
+                        title: "Pasture Movement",
+                        details: "\(movement.fromPastureNameSnapshot ?? "—") → \(movement.toPastureNameSnapshot ?? "—")"
+                    ),
+                    sourceID: movement.id,
+                    kindOrder: 0
                 )
             )
         }
@@ -218,11 +244,15 @@ enum CoreDataAnimalProjection {
             let oldStatus = try statusHistoryValue(record.oldStatusRawValue, record: record)
             let newStatus = try statusHistoryValue(record.newStatusRawValue, record: record)
             events.append(
-                AnimalTimelineEvent(
-                    date: record.date,
-                    type: .status,
-                    title: "Status Change",
-                    details: "\(oldStatus.label) → \(newStatus.label)"
+                TimelineProjectionEvent(
+                    event: AnimalTimelineEvent(
+                        date: record.date,
+                        type: .status,
+                        title: "Status Change",
+                        details: "\(oldStatus.label) → \(newStatus.label)"
+                    ),
+                    sourceID: record.id,
+                    kindOrder: 0
                 )
             )
         }
@@ -230,31 +260,34 @@ enum CoreDataAnimalProjection {
         for tag in managedTags(animal) {
             let normalizedNumber = tag.number.trimmingCharacters(in: .whitespacesAndNewlines)
             events.append(
-                AnimalTimelineEvent(
-                    date: tag.assignedAt,
-                    type: .tag,
-                    title: "Tag Assigned",
-                    details: normalizedNumber
+                TimelineProjectionEvent(
+                    event: AnimalTimelineEvent(
+                        date: tag.assignedAt,
+                        type: .tag,
+                        title: "Tag Assigned",
+                        details: normalizedNumber
+                    ),
+                    sourceID: tag.id,
+                    kindOrder: 0
                 )
             )
             if let removedAt = tag.removedAt {
                 events.append(
-                    AnimalTimelineEvent(
-                        date: removedAt,
-                        type: .tag,
-                        title: "Tag Retired",
-                        details: normalizedNumber
+                    TimelineProjectionEvent(
+                        event: AnimalTimelineEvent(
+                            date: removedAt,
+                            type: .tag,
+                            title: "Tag Retired",
+                            details: normalizedNumber
+                        ),
+                        sourceID: tag.id,
+                        kindOrder: 1
                     )
                 )
             }
         }
 
-        return events.sorted {
-            if $0.date != $1.date {
-                return $0.date > $1.date
-            }
-            return $0.title.localizedStandardCompare($1.title) == .orderedAscending
-        }
+        return events.sorted(by: timelineSort).map(\.event)
     }
 
     static func primaryTagFields(_ tags: [CDAnimalTag]) -> AnimalPrimaryTagFields {
@@ -391,6 +424,62 @@ enum CoreDataAnimalProjection {
         let orderedIDs = ordering(tags.map(tagState)).map(\.id)
         return orderedIDs.compactMap { id in
             tags.first { $0.id == id }
+        }
+    }
+
+    private static func timelineSort(
+        _ lhs: TimelineProjectionEvent,
+        _ rhs: TimelineProjectionEvent
+    ) -> Bool {
+        if lhs.event.date != rhs.event.date {
+            return lhs.event.date > rhs.event.date
+        }
+
+        let localizedTitleOrder = lhs.event.title.localizedStandardCompare(rhs.event.title)
+        if localizedTitleOrder != .orderedSame {
+            return localizedTitleOrder == .orderedAscending
+        }
+        if lhs.event.title != rhs.event.title {
+            return lhs.event.title < rhs.event.title
+        }
+
+        let lhsDetails = lhs.event.details ?? ""
+        let rhsDetails = rhs.event.details ?? ""
+        let localizedDetailsOrder = lhsDetails.localizedStandardCompare(rhsDetails)
+        if localizedDetailsOrder != .orderedSame {
+            return localizedDetailsOrder == .orderedAscending
+        }
+        if lhsDetails != rhsDetails {
+            return lhsDetails < rhsDetails
+        }
+
+        let lhsTypeOrder = timelineTypeOrder(lhs.event.type)
+        let rhsTypeOrder = timelineTypeOrder(rhs.event.type)
+        if lhsTypeOrder != rhsTypeOrder {
+            return lhsTypeOrder < rhsTypeOrder
+        }
+
+        if lhs.sourceID != rhs.sourceID {
+            return lhs.sourceID.uuidString < rhs.sourceID.uuidString
+        }
+
+        return lhs.kindOrder < rhs.kindOrder
+    }
+
+    private static func timelineTypeOrder(_ type: AnimalTimelineEventType) -> Int {
+        switch type {
+        case .birth:
+            return 0
+        case .health:
+            return 1
+        case .pregnancy:
+            return 2
+        case .movement:
+            return 3
+        case .status:
+            return 4
+        case .tag:
+            return 5
         }
     }
 
