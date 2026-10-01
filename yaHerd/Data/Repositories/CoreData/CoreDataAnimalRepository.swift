@@ -11,6 +11,7 @@ final class CoreDataAnimalRepository:
     private let contextFactory: CoreDataContextFactory
     private let transactionExecutor: CoreDataTransactionExecutor
     private let aggregateWriteGate: CoreDataAsyncSerialGate
+    private let pastureResidentWriteCoordinator: CoreDataPastureResidentWriteCoordinator
     private let coordinationID: UUID
     private let statusReferenceRepository: CoreDataAnimalStatusReferenceRepository
     private nonisolated let lookup: CoreDataLookup
@@ -20,6 +21,7 @@ final class CoreDataAnimalRepository:
         contextFactory: CoreDataContextFactory,
         transactionExecutor: CoreDataTransactionExecutor,
         aggregateWriteGate: CoreDataAsyncSerialGate,
+        pastureResidentWriteCoordinator: CoreDataPastureResidentWriteCoordinator,
         coordinationID: UUID,
         lookup: CoreDataLookup
     ) {
@@ -27,6 +29,7 @@ final class CoreDataAnimalRepository:
         self.contextFactory = contextFactory
         self.transactionExecutor = transactionExecutor
         self.aggregateWriteGate = aggregateWriteGate
+        self.pastureResidentWriteCoordinator = pastureResidentWriteCoordinator
         self.coordinationID = coordinationID
         self.statusReferenceRepository = CoreDataAnimalStatusReferenceRepository(
             selection: selection,
@@ -45,6 +48,7 @@ final class CoreDataAnimalRepository:
             contextFactory: assembly.contextFactory,
             transactionExecutor: assembly.transactionExecutor,
             aggregateWriteGate: assembly.animalAggregateWriteGate,
+            pastureResidentWriteCoordinator: assembly.pastureResidentWriteCoordinator,
             coordinationID: assembly.coordinationID,
             lookup: assembly.lookup
         )
@@ -1220,6 +1224,12 @@ final class CoreDataAnimalRepository:
         let gate = aggregateWriteGate
 
         await gate.acquire()
+        do {
+            try pastureResidentWriteCoordinator.beginAnimalWrite()
+        } catch {
+            await gate.release()
+            throw error
+        }
 
         let reservedTagColorIDs: Set<UUID>
         let reservedTagColorDefaultSlot: Bool
@@ -1239,6 +1249,7 @@ final class CoreDataAnimalRepository:
                 reservesDefaultSlot: reservedTagColorDefaultSlot
             )
         } catch {
+            pastureResidentWriteCoordinator.endAnimalWrite()
             await gate.release()
             throw error
         }
@@ -1268,6 +1279,7 @@ final class CoreDataAnimalRepository:
                 colorIDs: reservedTagColorIDs,
                 releasesDefaultSlot: reservedTagColorDefaultSlot
             )
+            pastureResidentWriteCoordinator.endAnimalWrite()
             await gate.release()
             return result
         } catch let persistenceError as CoreDataPersistenceError {
@@ -1291,6 +1303,7 @@ final class CoreDataAnimalRepository:
                 colorIDs: reservedTagColorIDs,
                 releasesDefaultSlot: reservedTagColorDefaultSlot
             )
+            pastureResidentWriteCoordinator.endAnimalWrite()
             await gate.release()
             if let conflict {
                 throw conflict
@@ -1303,6 +1316,7 @@ final class CoreDataAnimalRepository:
                 colorIDs: reservedTagColorIDs,
                 releasesDefaultSlot: reservedTagColorDefaultSlot
             )
+            pastureResidentWriteCoordinator.endAnimalWrite()
             await gate.release()
             throw error
         }
@@ -1326,6 +1340,8 @@ final class CoreDataAnimalRepository:
             candidateIDs: materializingTagColorIDs,
             herdID: herdID
         )
+        try pastureResidentWriteCoordinator.beginAnimalWrite()
+        defer { pastureResidentWriteCoordinator.endAnimalWrite() }
         let context = try contextFactory.makeWriteContext()
         return try context.performAndWait {
             do {
