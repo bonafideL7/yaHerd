@@ -5,6 +5,7 @@ import Foundation
 final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransactionWriting {
     private let selection: any CurrentHerdSelectionReading
     private let transactionExecutor: CoreDataTransactionExecutor
+    private let residentWriteCoordinator: CoreDataPastureResidentWriteCoordinator
     private nonisolated let lookup: CoreDataLookup
 
     private(set) var lastExecutedOperations: [PastureDeletionOperation] = []
@@ -12,10 +13,12 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
     init(
         selection: any CurrentHerdSelectionReading,
         transactionExecutor: CoreDataTransactionExecutor,
+        residentWriteCoordinator: CoreDataPastureResidentWriteCoordinator,
         lookup: CoreDataLookup
     ) {
         self.selection = selection
         self.transactionExecutor = transactionExecutor
+        self.residentWriteCoordinator = residentWriteCoordinator
         self.lookup = lookup
     }
 
@@ -26,6 +29,7 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
         self.init(
             selection: selection,
             transactionExecutor: assembly.transactionExecutor,
+            residentWriteCoordinator: assembly.pastureResidentWriteCoordinator,
             lookup: assembly.lookup
         )
     }
@@ -47,7 +51,9 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
         let mutationDate = Date()
 
         lastExecutedOperations = []
-        let executed = try await transactionExecutor.performWrite(beforeSave: beforeSave) { context in
+        await residentWriteCoordinator.acquirePastureDeletion()
+        do {
+            let executed = try await transactionExecutor.performWrite(beforeSave: beforeSave) { context in
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
@@ -92,9 +98,14 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
                 executed.append(operation)
             }
             return executed
-        }
+            }
 
-        lastExecutedOperations = executed
+            lastExecutedOperations = executed
+            residentWriteCoordinator.releasePastureDeletion()
+        } catch {
+            residentWriteCoordinator.releasePastureDeletion()
+            throw error
+        }
     }
 
     private nonisolated struct ValidatedPlan: Sendable {
