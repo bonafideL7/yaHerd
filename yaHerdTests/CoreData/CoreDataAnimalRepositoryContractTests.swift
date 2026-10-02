@@ -1178,12 +1178,39 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let second = try pastureRepository.create(
             input: PastureInput(name: "Queued deletion second", acreage: 9, usableAcreage: 8, targetAcresPerHead: 1)
         )
-        func plan(_ pastureID: UUID, archivedAt: Date) -> DeletePasturesTransactionPlan {
+        let animals = environment.makeAnimalRepository()
+        let firstResident = try animals.create(
+            input: environment.contractAnimalInput(
+                name: "Queued first resident",
+                tagNumber: "M6-QUEUE-1",
+                pastureID: first.id
+            )
+        )
+        let secondResident = try animals.create(
+            input: environment.contractAnimalInput(
+                name: "Queued second resident",
+                tagNumber: "M6-QUEUE-2",
+                pastureID: second.id
+            )
+        )
+        func plan(
+            _ pastureID: UUID,
+            residentID: UUID,
+            archivedAt: Date
+        ) -> DeletePasturesTransactionPlan {
             DeletePasturesTransactionPlan(
                 expectedStates: [
-                    PastureDeletionExpectedState(pastureID: pastureID, residentAnimalIDs: [])
+                    PastureDeletionExpectedState(
+                        pastureID: pastureID,
+                        residentAnimalIDs: [residentID]
+                    )
                 ],
                 operations: [
+                    .moveAnimals(
+                        animalIDs: [residentID],
+                        fromPastureID: pastureID,
+                        toPastureID: nil
+                    ),
                     .archiveFieldChecks(pastureIDs: [pastureID], archivedAt: archivedAt),
                     .deletePastures(ids: [pastureID])
                 ]
@@ -1197,7 +1224,11 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         )
         let pendingFirst = Task { @MainActor in
             try await firstWriter.deletePastures(
-                plan(first.id, archivedAt: Date(timeIntervalSinceReferenceDate: 96_000)),
+                plan(
+                    first.id,
+                    residentID: firstResident.id,
+                    archivedAt: Date(timeIntervalSinceReferenceDate: 96_000)
+                ),
                 beforeSave: { _ in barrier.blockUntilReleased() }
             )
         }
@@ -1210,19 +1241,36 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
                 selection: environment.selection,
                 assembly: environment.assembly
             ).deletePastures(
-                plan(second.id, archivedAt: Date(timeIntervalSinceReferenceDate: 96_100))
+                plan(
+                    second.id,
+                    residentID: secondResident.id,
+                    archivedAt: Date(timeIntervalSinceReferenceDate: 96_100)
+                )
             )
         }
 
         await Task.yield()
         XCTAssertNotNil(try environment.makePastureRepository().fetchPastureDetail(id: second.id))
 
+        let firstReleaseDate = Date()
         barrier.release()
         try await pendingFirst.value
         try await pendingSecond.value
 
         XCTAssertNil(try environment.makePastureRepository().fetchPastureDetail(id: first.id))
         XCTAssertNil(try environment.makePastureRepository().fetchPastureDetail(id: second.id))
+        let firstMovement = try XCTUnwrap(
+            environment.movementRecordStates(animalID: firstResident.id).last
+        )
+        let secondMovement = try XCTUnwrap(
+            environment.movementRecordStates(animalID: secondResident.id).last
+        )
+        XCTAssertLessThanOrEqual(firstMovement.date, secondMovement.date)
+        XCTAssertGreaterThanOrEqual(
+            secondMovement.date,
+            firstReleaseDate,
+            "A queued deletion must timestamp its movement after it acquires the deletion boundary, not while waiting behind the active transaction."
+        )
     }
 
     func testMilestone6PastureDeletionRotatesEveryAffectedAnimalRevision() async throws {
@@ -2519,6 +2567,7 @@ private final class CoreDataAnimalContractEnvironment {
             return try context.fetch(request).map {
                 PastureDeletionMovementRecordContractSnapshot(
                     id: $0.id,
+                    date: $0.date,
                     fromPastureIDSnapshot: $0.fromPastureIDSnapshot,
                     fromPastureNameSnapshot: $0.fromPastureNameSnapshot,
                     toPastureIDSnapshot: $0.toPastureIDSnapshot,
