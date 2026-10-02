@@ -760,6 +760,62 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         )
     }
 
+    func testMilestone6OverlappingPastureDeletionsSerializeWithoutCrash() async throws {
+        let environment = try await makeEnvironment()
+        let pastureRepository = environment.makePastureRepository()
+        let first = try pastureRepository.create(
+            input: PastureInput(name: "Queued deletion first", acreage: 8, usableAcreage: 7, targetAcresPerHead: 1)
+        )
+        let second = try pastureRepository.create(
+            input: PastureInput(name: "Queued deletion second", acreage: 9, usableAcreage: 8, targetAcresPerHead: 1)
+        )
+        func plan(_ pastureID: UUID, archivedAt: Date) -> DeletePasturesTransactionPlan {
+            DeletePasturesTransactionPlan(
+                expectedStates: [
+                    PastureDeletionExpectedState(pastureID: pastureID, residentAnimalIDs: [])
+                ],
+                operations: [
+                    .archiveFieldChecks(pastureIDs: [pastureID], archivedAt: archivedAt),
+                    .deletePastures(ids: [pastureID])
+                ]
+            )
+        }
+
+        let barrier = CoreDataAnimalCommitBarrier()
+        let firstWriter = CoreDataPastureDeletionTransactionWriter(
+            selection: environment.selection,
+            assembly: environment.assembly
+        )
+        let pendingFirst = Task { @MainActor in
+            try await firstWriter.deletePastures(
+                plan(first.id, archivedAt: Date(timeIntervalSinceReferenceDate: 96_000)),
+                beforeSave: { _ in barrier.blockUntilReleased() }
+            )
+        }
+
+        await waitUntilReached(barrier)
+        XCTAssertTrue(barrier.didReach)
+
+        let pendingSecond = Task { @MainActor in
+            try await CoreDataPastureDeletionTransactionWriter(
+                selection: environment.selection,
+                assembly: environment.assembly
+            ).deletePastures(
+                plan(second.id, archivedAt: Date(timeIntervalSinceReferenceDate: 96_100))
+            )
+        }
+
+        await Task.yield()
+        XCTAssertNotNil(try environment.makePastureRepository().fetchPastureDetail(id: second.id))
+
+        barrier.release()
+        try await pendingFirst.value
+        try await pendingSecond.value
+
+        XCTAssertNil(try environment.makePastureRepository().fetchPastureDetail(id: first.id))
+        XCTAssertNil(try environment.makePastureRepository().fetchPastureDetail(id: second.id))
+    }
+
     func testMilestone6PastureDeletionRotatesEveryAffectedAnimalRevision() async throws {
         let environment = try await makeEnvironment()
         let fixture = AnimalAggregateCrossFeatureRevisionContractFixture(
