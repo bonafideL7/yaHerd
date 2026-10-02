@@ -41,7 +41,7 @@ This matrix is the implementation/review inventory for Milestone 6. It covers th
 
 ## Verification status
 
-The Core Data M6 runner now wires the permanent stale-precondition and rollback contracts, the M6 Pasture-deletion slice of the cross-feature Animal revision contract, the distinct concurrent-resident-write and overlapping-deletion races, and a focused Core Data success graph/history scenario. Full success semantics remain explicitly `Unverified` until the M6 success runner can be reconciled with M7/M9 projection ownership. Mutation publication is delegated to Milestone 10 because no production target-port mutation wrapper exists before runtime cutover. Contract code has been added/updated, but no test, build, lint, verification script, or workflow has been executed for this work because repository policy requires an explicit user request.
+The M6-owned matrix has no remaining `Unverified` cells. The Core Data runner covers stale-precondition rejection, malformed-plan rejection, rollback/recovery, the M6 Pasture-deletion slice of cross-feature Animal revision invalidation, resident/Pasture/deletion concurrency, durable movement identity/snapshots, and the M6-owned success graph/history semantics. Field Check repository projections remain explicitly delegated to M7, Working repository behavior to M8, Dashboard/Home/Animal-list projections to M9, and runtime mutation publication/cutover to M10. Automatic branch verification passed on earlier M6 head `43a4c81f`; the latest automatic run is queued after the subsequent M6 coverage changes. No verification workflow was manually dispatched.
 
 ## Matrix notes
 
