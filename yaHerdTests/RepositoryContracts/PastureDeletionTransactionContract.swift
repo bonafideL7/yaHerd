@@ -59,6 +59,7 @@ struct PastureDeletionCorePersistenceContractProbe {
     let plan: DeletePasturesTransactionPlan
     let makePastureRepository: () -> any PastureRepository
     let makeAnimalRepository: () -> any AnimalRepository
+    let makeAggregateReader: () -> any AnimalAggregateEditReading
     let executedOperations: () -> [PastureDeletionOperation]
     let moves: [PastureDeletionCorePersistenceMoveExpectation]
     let movementRecords: (UUID) throws -> [PastureDeletionMovementRecordContractSnapshot]
@@ -107,13 +108,14 @@ enum PastureDeletionTransactionContract {
         XCTAssertTrue(probe.executedOperations().isEmpty, file: file, line: line)
 
         let animals = probe.makeAnimalRepository()
+        let aggregateReader = probe.makeAggregateReader()
         let pastures = probe.makePastureRepository()
         var aggregateBefore: [UUID: AnimalAggregateEditSnapshot] = [:]
         var timelineBefore: [UUID: [AnimalTimelineEvent]] = [:]
         var movementBefore: [UUID: [PastureDeletionMovementRecordContractSnapshot]] = [:]
         for move in probe.moves {
             let aggregate = try XCTUnwrap(
-                animals.fetchAnimalAggregateForEditing(id: move.animalID),
+                aggregateReader.fetchAnimalAggregateForEditing(id: move.animalID),
                 file: file,
                 line: line
             )
@@ -124,13 +126,13 @@ enum PastureDeletionTransactionContract {
         }
 
         let inactiveBefore = try XCTUnwrap(
-            animals.fetchAnimalAggregateForEditing(id: probe.inactiveSurvivorAnimalID),
+            aggregateReader.fetchAnimalAggregateForEditing(id: probe.inactiveSurvivorAnimalID),
             file: file,
             line: line
         )
         let inactiveTimelineBefore = try animals.fetchTimeline(id: probe.inactiveSurvivorAnimalID)
         let unaffectedAnimalBefore = try XCTUnwrap(
-            animals.fetchAnimalAggregateForEditing(id: probe.unaffectedAnimalID),
+            aggregateReader.fetchAnimalAggregateForEditing(id: probe.unaffectedAnimalID),
             file: file,
             line: line
         )
@@ -157,7 +159,7 @@ enum PastureDeletionTransactionContract {
         for move in probe.moves {
             let before = try XCTUnwrap(aggregateBefore[move.animalID], file: file, line: line)
             let after = try XCTUnwrap(
-                probe.makeAnimalRepository().fetchAnimalAggregateForEditing(id: move.animalID),
+                probe.makeAggregateReader().fetchAnimalAggregateForEditing(id: move.animalID),
                 file: file,
                 line: line
             )
@@ -239,7 +241,7 @@ enum PastureDeletionTransactionContract {
         }
 
         XCTAssertEqual(
-            try probe.makeAnimalRepository().fetchAnimalAggregateForEditing(id: probe.unaffectedAnimalID),
+            try probe.makeAggregateReader().fetchAnimalAggregateForEditing(id: probe.unaffectedAnimalID),
             unaffectedAnimalBefore,
             file: file,
             line: line
