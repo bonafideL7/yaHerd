@@ -3128,7 +3128,7 @@ private final class CoreDataAnimalContractEnvironment {
                 sex: .female,
                 birthDate: Date(timeIntervalSinceReferenceDate: 10_000),
                 status: .active,
-                pastureID: nil,
+                pastureID: pastureID,
                 sireID: nil,
                 damID: nil,
                 distinguishingFeatures: [
