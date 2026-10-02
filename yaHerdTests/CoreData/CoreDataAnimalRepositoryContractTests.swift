@@ -703,13 +703,27 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let source = try pastures.create(
             input: PastureInput(name: "M6 source", acreage: 20, usableAcreage: 18, targetAcresPerHead: 1)
         )
+        let nilDestinationSource = try pastures.create(
+            input: PastureInput(name: "M6 nil source", acreage: 18, usableAcreage: 17, targetAcresPerHead: 1)
+        )
         let destination = try pastures.create(
             input: PastureInput(name: "M6 destination", acreage: 22, usableAcreage: 20, targetAcresPerHead: 1)
         )
-        let group = try pastures.createGroup(
+        let sharedGroupSurvivor = try pastures.create(
+            input: PastureInput(name: "M6 shared survivor", acreage: 15, usableAcreage: 14, targetAcresPerHead: 1)
+        )
+        let unrelatedPasture = try pastures.create(
+            input: PastureInput(name: "M6 unrelated pasture", acreage: 13, usableAcreage: 12, targetAcresPerHead: 1)
+        )
+        let emptyGroup = try pastures.createGroup(
             input: PastureGroupInput(name: "M6 empty group", grazeDays: 5, restDays: 20)
         )
-        try pastures.assignPasture(id: source.id, toGroupID: group.id)
+        let sharedGroup = try pastures.createGroup(
+            input: PastureGroupInput(name: "M6 shared group", grazeDays: 4, restDays: 18)
+        )
+        try pastures.assignPasture(id: source.id, toGroupID: emptyGroup.id)
+        try pastures.assignPasture(id: nilDestinationSource.id, toGroupID: sharedGroup.id)
+        try pastures.assignPasture(id: sharedGroupSurvivor.id, toGroupID: sharedGroup.id)
 
         let animals = environment.makeAnimalRepository()
         let active = try animals.create(
@@ -717,6 +731,13 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
                 name: "M6 active",
                 tagNumber: "M6-SUCCESS-A",
                 pastureID: source.id
+            )
+        )
+        let nilDestinationResident = try animals.create(
+            input: environment.contractAnimalInput(
+                name: "M6 nil destination resident",
+                tagNumber: "M6-SUCCESS-N",
+                pastureID: nilDestinationSource.id
             )
         )
         let inactive = try animals.create(
@@ -731,24 +752,44 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             input: environment.contractAnimalInput(
                 name: "M6 unrelated",
                 tagNumber: "M6-SUCCESS-U",
-                pastureID: nil
+                pastureID: unrelatedPasture.id
             )
         )
 
         let activeBefore = try XCTUnwrap(animals.fetchAnimalAggregateForEditing(id: active.id))
+        let nilDestinationBefore = try XCTUnwrap(
+            animals.fetchAnimalAggregateForEditing(id: nilDestinationResident.id)
+        )
         let inactiveBefore = try XCTUnwrap(animals.fetchAnimalAggregateForEditing(id: inactive.id))
         let unrelatedBefore = try XCTUnwrap(animals.fetchAnimalAggregateForEditing(id: unrelated.id))
-        let timelineBefore = try animals.fetchTimeline(id: active.id)
-        let fieldCheckID = try environment.seedFieldCheckSession(
+        let activeTimelineBefore = try animals.fetchTimeline(id: active.id)
+        let nilTimelineBefore = try animals.fetchTimeline(id: nilDestinationResident.id)
+        let inactiveTimelineBefore = try animals.fetchTimeline(id: inactive.id)
+
+        let sourceFieldCheckID = try environment.seedFieldCheckSession(
             pastureID: source.id,
             pastureName: source.name
         )
+        let nilSourceFieldCheckID = try environment.seedFieldCheckSession(
+            pastureID: nilDestinationSource.id,
+            pastureName: nilDestinationSource.name
+        )
+        let unrelatedFieldCheckID = try environment.seedFieldCheckSession(
+            pastureID: unrelatedPasture.id,
+            pastureName: unrelatedPasture.name
+        )
+        let unrelatedFieldCheckBefore = try environment.fieldCheckArchiveState(id: unrelatedFieldCheckID)
+
         let archivedAt = Date(timeIntervalSinceReferenceDate: 97_000)
         let plan = DeletePasturesTransactionPlan(
             expectedStates: [
                 PastureDeletionExpectedState(
                     pastureID: source.id,
                     residentAnimalIDs: [active.id]
+                ),
+                PastureDeletionExpectedState(
+                    pastureID: nilDestinationSource.id,
+                    residentAnimalIDs: [nilDestinationResident.id]
                 )
             ],
             operations: [
@@ -757,8 +798,16 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
                     fromPastureID: source.id,
                     toPastureID: destination.id
                 ),
-                .archiveFieldChecks(pastureIDs: [source.id], archivedAt: archivedAt),
-                .deletePastures(ids: [source.id])
+                .moveAnimals(
+                    animalIDs: [nilDestinationResident.id],
+                    fromPastureID: nilDestinationSource.id,
+                    toPastureID: nil
+                ),
+                .archiveFieldChecks(
+                    pastureIDs: [source.id, nilDestinationSource.id],
+                    archivedAt: archivedAt
+                ),
+                .deletePastures(ids: [source.id, nilDestinationSource.id])
             ]
         )
 
@@ -770,7 +819,13 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
 
         XCTAssertEqual(writer.lastExecutedOperations, plan.operations)
         XCTAssertNil(try environment.makePastureRepository().fetchPastureDetail(id: source.id))
+        XCTAssertNil(
+            try environment.makePastureRepository().fetchPastureDetail(id: nilDestinationSource.id)
+        )
         XCTAssertNotNil(try environment.makePastureRepository().fetchPastureDetail(id: destination.id))
+        XCTAssertNotNil(
+            try environment.makePastureRepository().fetchPastureDetail(id: unrelatedPasture.id)
+        )
 
         let activeAfter = try XCTUnwrap(
             environment.makeAnimalRepository().fetchAnimalAggregateForEditing(id: active.id)
@@ -779,7 +834,18 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         XCTAssertNotEqual(activeAfter.revision, activeBefore.revision)
         XCTAssertEqual(
             try environment.makeAnimalRepository().fetchTimeline(id: active.id).count,
-            timelineBefore.count + 1
+            activeTimelineBefore.count + 1
+        )
+
+        let nilDestinationAfter = try XCTUnwrap(
+            environment.makeAnimalRepository()
+                .fetchAnimalAggregateForEditing(id: nilDestinationResident.id)
+        )
+        XCTAssertNil(nilDestinationAfter.animal.pastureID)
+        XCTAssertNotEqual(nilDestinationAfter.revision, nilDestinationBefore.revision)
+        XCTAssertEqual(
+            try environment.makeAnimalRepository().fetchTimeline(id: nilDestinationResident.id).count,
+            nilTimelineBefore.count + 1
         )
 
         let inactiveAfter = try XCTUnwrap(
@@ -787,6 +853,10 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         )
         XCTAssertNil(inactiveAfter.animal.pastureID)
         XCTAssertNotEqual(inactiveAfter.revision, inactiveBefore.revision)
+        XCTAssertEqual(
+            try environment.makeAnimalRepository().fetchTimeline(id: inactive.id),
+            inactiveTimelineBefore
+        )
 
         let unrelatedAfter = try XCTUnwrap(
             environment.makeAnimalRepository().fetchAnimalAggregateForEditing(id: unrelated.id)
@@ -797,16 +867,32 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             .fetchResidentAnimals(pastureID: destination.id)
         XCTAssertTrue(destinationResidents.contains { $0.id == active.id })
 
-        let groupAfter = try XCTUnwrap(
-            environment.makePastureRepository().fetchPastureGroupDetail(id: group.id)
+        let emptyGroupAfter = try XCTUnwrap(
+            environment.makePastureRepository().fetchPastureGroupDetail(id: emptyGroup.id)
         )
-        XCTAssertTrue(groupAfter.pastures.isEmpty)
+        XCTAssertTrue(emptyGroupAfter.pastures.isEmpty)
 
-        let fieldCheckState = try environment.fieldCheckArchiveState(id: fieldCheckID)
-        XCTAssertEqual(fieldCheckState.pastureIDSnapshot, source.id)
-        XCTAssertEqual(fieldCheckState.pastureNameSnapshot, source.name)
-        XCTAssertEqual(fieldCheckState.pastureArchivedAt, archivedAt)
-        XCTAssertNil(fieldCheckState.livePastureID)
+        let sharedGroupAfter = try XCTUnwrap(
+            environment.makePastureRepository().fetchPastureGroupDetail(id: sharedGroup.id)
+        )
+        XCTAssertEqual(Set(sharedGroupAfter.pastures.map(\.id)), [sharedGroupSurvivor.id])
+
+        for fieldCheckID in [sourceFieldCheckID, nilSourceFieldCheckID] {
+            let fieldCheckState = try environment.fieldCheckArchiveState(id: fieldCheckID)
+            XCTAssertEqual(fieldCheckState.pastureArchivedAt, archivedAt)
+            XCTAssertNil(fieldCheckState.livePastureID)
+        }
+        let sourceFieldCheckState = try environment.fieldCheckArchiveState(id: sourceFieldCheckID)
+        XCTAssertEqual(sourceFieldCheckState.pastureIDSnapshot, source.id)
+        XCTAssertEqual(sourceFieldCheckState.pastureNameSnapshot, source.name)
+        let nilSourceFieldCheckState = try environment.fieldCheckArchiveState(id: nilSourceFieldCheckID)
+        XCTAssertEqual(nilSourceFieldCheckState.pastureIDSnapshot, nilDestinationSource.id)
+        XCTAssertEqual(nilSourceFieldCheckState.pastureNameSnapshot, nilDestinationSource.name)
+
+        XCTAssertEqual(
+            try environment.fieldCheckArchiveState(id: unrelatedFieldCheckID),
+            unrelatedFieldCheckBefore
+        )
     }
 
     func testMilestone6PastureDeletionWaitsForActiveResidentWriteThenRejectsStalePlan() async throws {
@@ -3258,7 +3344,7 @@ private final class FaultInjectingAnimalAggregateWriter: AnimalAggregateTransact
     }
 }
 
-private struct CoreDataFieldCheckArchiveState {
+private struct CoreDataFieldCheckArchiveState: Equatable {
     let pastureIDSnapshot: UUID
     let pastureNameSnapshot: String
     let pastureArchivedAt: Date?
