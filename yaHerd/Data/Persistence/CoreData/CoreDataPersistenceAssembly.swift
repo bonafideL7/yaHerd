@@ -69,15 +69,13 @@ enum CoreDataResidentWriteCoordinationError: Error, Equatable {
     case pastureDeletionInProgress
 }
 
-final class CoreDataPastureResidentWriteCoordinator: @unchecked Sendable {
-    private let lock = NSLock()
+@MainActor
+final class CoreDataPastureResidentWriteCoordinator {
     private var activeAnimalWrites = 0
     private var deletionPending = false
     private var deletionContinuation: CheckedContinuation<Void, Never>?
 
     func beginAnimalWrite() throws {
-        lock.lock()
-        defer { lock.unlock() }
         guard !deletionPending else {
             throw CoreDataResidentWriteCoordinationError.pastureDeletionInProgress
         }
@@ -85,40 +83,29 @@ final class CoreDataPastureResidentWriteCoordinator: @unchecked Sendable {
     }
 
     func endAnimalWrite() {
-        let continuation: CheckedContinuation<Void, Never>?
-        lock.lock()
         precondition(activeAnimalWrites > 0)
         activeAnimalWrites -= 1
         if activeAnimalWrites == 0, deletionPending {
-            continuation = deletionContinuation
+            let continuation = deletionContinuation
             deletionContinuation = nil
-        } else {
-            continuation = nil
+            continuation?.resume()
         }
-        lock.unlock()
-        continuation?.resume()
     }
 
     func acquirePastureDeletion() async {
+        precondition(!deletionPending)
+        deletionPending = true
+        guard activeAnimalWrites > 0 else {
+            return
+        }
         await withCheckedContinuation { continuation in
-            lock.lock()
-            precondition(!deletionPending)
-            deletionPending = true
-            if activeAnimalWrites == 0 {
-                lock.unlock()
-                continuation.resume()
-            } else {
-                deletionContinuation = continuation
-                lock.unlock()
-            }
+            deletionContinuation = continuation
         }
     }
 
     func releasePastureDeletion() {
-        lock.lock()
         deletionPending = false
         deletionContinuation = nil
-        lock.unlock()
     }
 }
 
