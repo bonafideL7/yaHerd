@@ -30,6 +30,18 @@ struct PastureDeletionTransactionContractProbe {
     let unaffectedFieldCheckSessionID: UUID
 }
 
+struct PastureDeletionInvalidPlanContractCase {
+    let name: String
+    let plan: DeletePasturesTransactionPlan
+}
+
+@MainActor
+struct PastureDeletionInvalidPlanContractProbe {
+    let writer: any PastureDeletionTransactionWriting
+    let cases: [PastureDeletionInvalidPlanContractCase]
+    let freshPersistedStateSnapshot: () throws -> PersistenceTransactionRollbackStateSnapshot
+}
+
 /// Permanent persistence-neutral success contract for the final atomic Pasture deletion port.
 ///
 /// User-facing workflow policy and broader historical scenarios remain owned by
@@ -39,6 +51,47 @@ struct PastureDeletionTransactionContractProbe {
 /// `MutationBoundaryContract`.
 @MainActor
 enum PastureDeletionTransactionContract {
+    static func assertInvalidPlansRejectBeforeMutation(
+        using probe: PastureDeletionInvalidPlanContractProbe,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        XCTAssertFalse(
+            probe.cases.isEmpty,
+            "The invalid-plan contract requires representative malformed plans.",
+            file: file,
+            line: line
+        )
+        let baseline = try probe.freshPersistedStateSnapshot()
+
+        for testCase in probe.cases {
+            do {
+                try await probe.writer.deletePastures(testCase.plan)
+                XCTFail(
+                    "Malformed Pasture deletion plan '\(testCase.name)' must be rejected.",
+                    file: file,
+                    line: line
+                )
+            } catch let error as PastureDeletionTransactionError {
+                XCTAssertEqual(
+                    error,
+                    .invalidPlan,
+                    "Malformed plan '\(testCase.name)' must fail as invalidPlan before persistence mutation.",
+                    file: file,
+                    line: line
+                )
+            }
+
+            XCTAssertEqual(
+                try probe.freshPersistedStateSnapshot(),
+                baseline,
+                "Malformed plan '\(testCase.name)' must leave the complete durable store unchanged.",
+                file: file,
+                line: line
+            )
+        }
+    }
+
     private struct MoveExpectation {
         let animalID: UUID
         let fromPastureID: UUID
