@@ -869,6 +869,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             plan: plan,
             makePastureRepository: { environment.makePastureRepository() },
             makeAnimalRepository: { environment.makeAnimalRepository() },
+            makeAggregateReader: { environment.makeAnimalRepository() },
             executedOperations: { writer.lastExecutedOperations },
             moves: [
                 PastureDeletionCorePersistenceMoveExpectation(
