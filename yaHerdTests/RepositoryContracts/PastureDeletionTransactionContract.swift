@@ -30,6 +30,50 @@ struct PastureDeletionTransactionContractProbe {
     let unaffectedFieldCheckSessionID: UUID
 }
 
+struct PastureDeletionMovementRecordContractSnapshot: Equatable {
+    let id: UUID
+    let fromPastureIDSnapshot: UUID?
+    let fromPastureNameSnapshot: String?
+    let toPastureIDSnapshot: UUID?
+    let toPastureNameSnapshot: String?
+}
+
+struct PastureDeletionFieldCheckContractSnapshot: Equatable {
+    let pastureIDSnapshot: UUID
+    let pastureNameSnapshot: String
+    let pastureArchivedAt: Date?
+    let livePastureID: UUID?
+}
+
+struct PastureDeletionCorePersistenceMoveExpectation {
+    let animalID: UUID
+    let fromPastureID: UUID
+    let fromPastureName: String
+    let toPastureID: UUID?
+    let toPastureName: String?
+}
+
+@MainActor
+struct PastureDeletionCorePersistenceContractProbe {
+    let writer: any PastureDeletionTransactionWriting
+    let plan: DeletePasturesTransactionPlan
+    let makePastureRepository: () -> any PastureRepository
+    let makeAnimalRepository: () -> any AnimalRepository
+    let executedOperations: () -> [PastureDeletionOperation]
+    let moves: [PastureDeletionCorePersistenceMoveExpectation]
+    let movementRecords: (UUID) throws -> [PastureDeletionMovementRecordContractSnapshot]
+    let inactiveSurvivorAnimalID: UUID
+    let emptyGroupID: UUID
+    let survivingGroupID: UUID
+    let expectedSurvivingGroupPastureIDs: Set<UUID>
+    let archivedFieldCheckIDs: [UUID]
+    let archivedAt: Date
+    let fieldCheckState: (UUID) throws -> PastureDeletionFieldCheckContractSnapshot
+    let unaffectedPastureID: UUID
+    let unaffectedAnimalID: UUID
+    let unaffectedFieldCheckSessionID: UUID
+}
+
 struct PastureDeletionInvalidPlanContractCase {
     let name: String
     let plan: DeletePasturesTransactionPlan
@@ -51,6 +95,169 @@ struct PastureDeletionInvalidPlanContractProbe {
 /// `MutationBoundaryContract`.
 @MainActor
 enum PastureDeletionTransactionContract {
+    static func assertCorePersistenceSuccessSemantics(
+        using probe: PastureDeletionCorePersistenceContractProbe,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        XCTAssertGreaterThanOrEqual(probe.plan.expectedStates.count, 2, file: file, line: line)
+        XCTAssertGreaterThanOrEqual(probe.moves.count, 2, file: file, line: line)
+        XCTAssertTrue(probe.moves.contains { $0.toPastureID == nil }, file: file, line: line)
+        XCTAssertTrue(probe.moves.contains { $0.toPastureID != nil }, file: file, line: line)
+        XCTAssertTrue(probe.executedOperations().isEmpty, file: file, line: line)
+
+        let animals = probe.makeAnimalRepository()
+        let pastures = probe.makePastureRepository()
+        var aggregateBefore: [UUID: AnimalAggregateEditSnapshot] = [:]
+        var timelineBefore: [UUID: [AnimalTimelineEvent]] = [:]
+        var movementBefore: [UUID: [PastureDeletionMovementRecordContractSnapshot]] = [:]
+        for move in probe.moves {
+            let aggregate = try XCTUnwrap(
+                animals.fetchAnimalAggregateForEditing(id: move.animalID),
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(aggregate.animal.pastureID, move.fromPastureID, file: file, line: line)
+            aggregateBefore[move.animalID] = aggregate
+            timelineBefore[move.animalID] = try animals.fetchTimeline(id: move.animalID)
+            movementBefore[move.animalID] = try probe.movementRecords(move.animalID)
+        }
+
+        let inactiveBefore = try XCTUnwrap(
+            animals.fetchAnimalAggregateForEditing(id: probe.inactiveSurvivorAnimalID),
+            file: file,
+            line: line
+        )
+        let inactiveTimelineBefore = try animals.fetchTimeline(id: probe.inactiveSurvivorAnimalID)
+        let unaffectedAnimalBefore = try XCTUnwrap(
+            animals.fetchAnimalAggregateForEditing(id: probe.unaffectedAnimalID),
+            file: file,
+            line: line
+        )
+        let unaffectedPastureBefore = try XCTUnwrap(
+            pastures.fetchPastureDetail(id: probe.unaffectedPastureID),
+            file: file,
+            line: line
+        )
+        let unaffectedFieldCheckBefore = try probe.fieldCheckState(
+            probe.unaffectedFieldCheckSessionID
+        )
+
+        try await probe.writer.deletePastures(probe.plan)
+
+        XCTAssertEqual(probe.executedOperations(), probe.plan.operations, file: file, line: line)
+        for expected in probe.plan.expectedStates {
+            XCTAssertNil(
+                try probe.makePastureRepository().fetchPastureDetail(id: expected.pastureID),
+                file: file,
+                line: line
+            )
+        }
+
+        for move in probe.moves {
+            let before = try XCTUnwrap(aggregateBefore[move.animalID], file: file, line: line)
+            let after = try XCTUnwrap(
+                probe.makeAnimalRepository().fetchAnimalAggregateForEditing(id: move.animalID),
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(after.animal.id, move.animalID, file: file, line: line)
+            XCTAssertEqual(after.animal.pastureID, move.toPastureID, file: file, line: line)
+            XCTAssertNotEqual(after.revision, before.revision, file: file, line: line)
+            XCTAssertEqual(
+                try probe.makeAnimalRepository().fetchTimeline(id: move.animalID).count,
+                (timelineBefore[move.animalID] ?? []).count + 1,
+                file: file,
+                line: line
+            )
+
+            let beforeMovements = movementBefore[move.animalID] ?? []
+            let afterMovements = try probe.movementRecords(move.animalID)
+            XCTAssertEqual(afterMovements.count, beforeMovements.count + 1, file: file, line: line)
+            let newMovement = try XCTUnwrap(
+                afterMovements.first { candidate in
+                    !beforeMovements.contains { $0.id == candidate.id }
+                },
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(newMovement.fromPastureIDSnapshot, move.fromPastureID, file: file, line: line)
+            XCTAssertEqual(newMovement.fromPastureNameSnapshot, move.fromPastureName, file: file, line: line)
+            XCTAssertEqual(newMovement.toPastureIDSnapshot, move.toPastureID, file: file, line: line)
+            XCTAssertEqual(newMovement.toPastureNameSnapshot, move.toPastureName, file: file, line: line)
+        }
+
+        let inactiveAfter = try XCTUnwrap(
+            probe.makeAnimalRepository()
+                .fetchAnimalAggregateForEditing(id: probe.inactiveSurvivorAnimalID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(inactiveAfter.animal.id, inactiveBefore.animal.id, file: file, line: line)
+        XCTAssertNil(inactiveAfter.animal.pastureID, file: file, line: line)
+        XCTAssertNotEqual(inactiveAfter.revision, inactiveBefore.revision, file: file, line: line)
+        XCTAssertEqual(
+            try probe.makeAnimalRepository().fetchTimeline(id: probe.inactiveSurvivorAnimalID),
+            inactiveTimelineBefore,
+            file: file,
+            line: line
+        )
+
+        let emptyGroup = try XCTUnwrap(
+            probe.makePastureRepository().fetchPastureGroupDetail(id: probe.emptyGroupID),
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(emptyGroup.pastures.isEmpty, file: file, line: line)
+        let survivingGroup = try XCTUnwrap(
+            probe.makePastureRepository().fetchPastureGroupDetail(id: probe.survivingGroupID),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            Set(survivingGroup.pastures.map(\.id)),
+            probe.expectedSurvivingGroupPastureIDs,
+            file: file,
+            line: line
+        )
+
+        for sessionID in probe.archivedFieldCheckIDs {
+            let state = try probe.fieldCheckState(sessionID)
+            XCTAssertEqual(state.pastureArchivedAt, probe.archivedAt, file: file, line: line)
+            XCTAssertNil(state.livePastureID, file: file, line: line)
+            XCTAssertTrue(
+                probe.plan.expectedStates.contains { $0.pastureID == state.pastureIDSnapshot },
+                file: file,
+                line: line
+            )
+            let sourceName = try XCTUnwrap(
+                probe.moves.first { $0.fromPastureID == state.pastureIDSnapshot }?.fromPastureName,
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(state.pastureNameSnapshot, sourceName, file: file, line: line)
+        }
+
+        XCTAssertEqual(
+            try probe.makeAnimalRepository().fetchAnimalAggregateForEditing(id: probe.unaffectedAnimalID),
+            unaffectedAnimalBefore,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try probe.makePastureRepository().fetchPastureDetail(id: probe.unaffectedPastureID),
+            unaffectedPastureBefore,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try probe.fieldCheckState(probe.unaffectedFieldCheckSessionID),
+            unaffectedFieldCheckBefore,
+            file: file,
+            line: line
+        )
+    }
+
     static func assertInvalidPlansRejectBeforeMutation(
         using probe: PastureDeletionInvalidPlanContractProbe,
         file: StaticString = #filePath,
