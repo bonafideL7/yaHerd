@@ -690,6 +690,118 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             .assertPastureDeletionRejectsStaleExpectedStateBeforeMutation(using: fixture)
     }
 
+    func testMilestone6PastureDeletionCommitsCoreOwnedGraphAndHistory() async throws {
+        let environment = try await makeEnvironment()
+        let pastures = environment.makePastureRepository()
+        let source = try pastures.create(
+            input: PastureInput(name: "M6 source", acreage: 20, usableAcreage: 18, targetAcresPerHead: 1)
+        )
+        let destination = try pastures.create(
+            input: PastureInput(name: "M6 destination", acreage: 22, usableAcreage: 20, targetAcresPerHead: 1)
+        )
+        let group = try pastures.createGroup(
+            input: PastureGroupInput(name: "M6 empty group", grazeDays: 5, restDays: 20)
+        )
+        try pastures.assignPasture(id: source.id, toGroupID: group.id)
+
+        let animals = environment.makeAnimalRepository()
+        let active = try animals.create(
+            input: environment.contractAnimalInput(
+                name: "M6 active",
+                tagNumber: "M6-SUCCESS-A",
+                pastureID: source.id
+            )
+        )
+        let inactive = try animals.create(
+            input: environment.contractAnimalInput(
+                name: "M6 inactive",
+                tagNumber: "M6-SUCCESS-I",
+                pastureID: source.id
+            )
+        )
+        try animals.archive(ids: [inactive.id])
+        let unrelated = try animals.create(
+            input: environment.contractAnimalInput(
+                name: "M6 unrelated",
+                tagNumber: "M6-SUCCESS-U",
+                pastureID: nil
+            )
+        )
+
+        let activeBefore = try XCTUnwrap(animals.fetchAnimalAggregateForEditing(id: active.id))
+        let inactiveBefore = try XCTUnwrap(animals.fetchAnimalAggregateForEditing(id: inactive.id))
+        let unrelatedBefore = try XCTUnwrap(animals.fetchAnimalAggregateForEditing(id: unrelated.id))
+        let timelineBefore = try animals.fetchTimeline(id: active.id)
+        let fieldCheckID = try environment.seedFieldCheckSession(
+            pastureID: source.id,
+            pastureName: source.name
+        )
+        let archivedAt = Date(timeIntervalSinceReferenceDate: 97_000)
+        let plan = DeletePasturesTransactionPlan(
+            expectedStates: [
+                PastureDeletionExpectedState(
+                    pastureID: source.id,
+                    residentAnimalIDs: [active.id]
+                )
+            ],
+            operations: [
+                .moveAnimals(
+                    animalIDs: [active.id],
+                    fromPastureID: source.id,
+                    toPastureID: destination.id
+                ),
+                .archiveFieldChecks(pastureIDs: [source.id], archivedAt: archivedAt),
+                .deletePastures(ids: [source.id])
+            ]
+        )
+
+        let writer = CoreDataPastureDeletionTransactionWriter(
+            selection: environment.selection,
+            assembly: environment.assembly
+        )
+        try await writer.deletePastures(plan)
+
+        XCTAssertEqual(writer.lastExecutedOperations, plan.operations)
+        XCTAssertNil(try environment.makePastureRepository().fetchPastureDetail(id: source.id))
+        XCTAssertNotNil(try environment.makePastureRepository().fetchPastureDetail(id: destination.id))
+
+        let activeAfter = try XCTUnwrap(
+            environment.makeAnimalRepository().fetchAnimalAggregateForEditing(id: active.id)
+        )
+        XCTAssertEqual(activeAfter.animal.pastureID, destination.id)
+        XCTAssertNotEqual(activeAfter.revision, activeBefore.revision)
+        XCTAssertEqual(
+            try environment.makeAnimalRepository().fetchTimeline(id: active.id).count,
+            timelineBefore.count + 1
+        )
+
+        let inactiveAfter = try XCTUnwrap(
+            environment.makeAnimalRepository().fetchAnimalAggregateForEditing(id: inactive.id)
+        )
+        XCTAssertNil(inactiveAfter.animal.pastureID)
+        XCTAssertNotEqual(inactiveAfter.revision, inactiveBefore.revision)
+
+        let unrelatedAfter = try XCTUnwrap(
+            environment.makeAnimalRepository().fetchAnimalAggregateForEditing(id: unrelated.id)
+        )
+        XCTAssertEqual(unrelatedAfter, unrelatedBefore)
+
+        let destinationResidents = try environment.makePastureRepository()
+            .fetchResidentAnimals(pastureID: destination.id)
+        XCTAssertTrue(destinationResidents.contains { $0.id == active.id })
+
+        let groupAfter = try XCTUnwrap(
+            environment.makePastureRepository().fetchPastureGroupDetail(id: group.id)
+        )
+        XCTAssertTrue(groupAfter.pastures.isEmpty)
+
+        let fieldCheckState = try environment.fieldCheckArchiveState(id: fieldCheckID)
+        XCTAssertEqual(fieldCheckState.pastureIDSnapshot, source.id)
+        XCTAssertEqual(fieldCheckState.pastureNameSnapshot, source.name)
+        XCTAssertEqual(fieldCheckState.pastureArchivedAt, archivedAt)
+        XCTAssertNil(fieldCheckState.livePastureID)
+    }
+
     func testMilestone6PastureDeletionWaitsForActiveResidentWriteThenRejectsStalePlan() async throws {
         let environment = try await makeEnvironment()
         let pasture = try environment.makePastureRepository().create(
