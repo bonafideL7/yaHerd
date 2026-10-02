@@ -4,7 +4,7 @@ import SwiftData
 
 @MainActor
 final class FieldCheckHistoricalSnapshotTests: XCTestCase {
-    func testSessionDetailUsesCheckStartSnapshotsAfterPastureAndAnimalChange() throws {
+    func testSessionDetailUsesCheckStartSnapshotsAfterPastureAndAnimalChange() async throws {
         let container = try TestSupport.makeModelContainer()
         let context = ModelContext(container)
         let repository = SwiftDataFieldCheckRepository(context: context)
@@ -24,7 +24,7 @@ final class FieldCheckHistoricalSnapshotTests: XCTestCase {
         context.insert(animal)
         try context.save()
 
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.publicID,
                 startedAt: Date(timeIntervalSince1970: 1_000),
@@ -50,7 +50,7 @@ final class FieldCheckHistoricalSnapshotTests: XCTestCase {
         XCTAssertEqual(check.animalType, .heifer)
     }
 
-    func testQuickCountCapacityUsesSnapshotAnimalTypeAfterAnimalTypeChanges() throws {
+    func testQuickCountCapacityUsesSnapshotAnimalTypeAfterAnimalTypeChanges() async throws {
         let container = try TestSupport.makeModelContainer()
         let context = ModelContext(container)
         let repository = SwiftDataFieldCheckRepository(context: context)
@@ -69,7 +69,7 @@ final class FieldCheckHistoricalSnapshotTests: XCTestCase {
         context.insert(animal)
         try context.save()
 
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.publicID,
                 startedAt: Date(timeIntervalSince1970: 1_000),
@@ -80,7 +80,7 @@ final class FieldCheckHistoricalSnapshotTests: XCTestCase {
         animal.sex = .male
         try context.save()
 
-        try repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.heifer: 1, .bull: 1])
+        try await repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.heifer: 1, .bull: 1])
 
         let detail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
         XCTAssertEqual(detail.quickHeiferCount, 1)
@@ -88,7 +88,7 @@ final class FieldCheckHistoricalSnapshotTests: XCTestCase {
         XCTAssertEqual(detail.totalSeen, 1)
     }
 
-    func testFindingUsesAnimalAndPastureSnapshotsAfterRecordsChange() throws {
+    func testFindingUsesAnimalAndPastureSnapshotsAfterRecordsChange() async throws {
         let container = try TestSupport.makeModelContainer()
         let context = ModelContext(container)
         let repository = SwiftDataFieldCheckRepository(context: context)
@@ -108,7 +108,7 @@ final class FieldCheckHistoricalSnapshotTests: XCTestCase {
         context.insert(animal)
         try context.save()
 
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.publicID,
                 startedAt: Date(timeIntervalSince1970: 1_000),
@@ -118,7 +118,7 @@ final class FieldCheckHistoricalSnapshotTests: XCTestCase {
         let detail = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID))
         let animalID = try XCTUnwrap(detail.animalChecks.first?.animalID)
 
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: Date(timeIntervalSince1970: 2_000),
@@ -144,7 +144,7 @@ final class FieldCheckHistoricalSnapshotTests: XCTestCase {
         XCTAssertEqual(finding.pastureName, "North")
     }
 
-    func testDamTagUsesCheckStartSnapshotAfterDamChanges() throws {
+    func testDamTagUsesCheckStartSnapshotAfterDamChanges() async throws {
         let container = try TestSupport.makeModelContainer()
         let context = ModelContext(container)
         let repository = SwiftDataFieldCheckRepository(context: context)
@@ -176,7 +176,7 @@ final class FieldCheckHistoricalSnapshotTests: XCTestCase {
         context.insert(calf)
         try context.save()
 
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.publicID,
                 startedAt: Date(timeIntervalSince1970: 1_000),

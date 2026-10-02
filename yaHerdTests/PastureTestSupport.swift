@@ -187,7 +187,7 @@ final class AnimalPastureMovingSpy: AnimalPastureMoving {
 final class FieldCheckPastureArchiveWriterSpy: FieldCheckPastureArchiveWriter {
     private(set) var archiveCalls: [(pastureIDs: [UUID], archivedAt: Date)] = []
 
-    func archiveSessionsForDeletedPastures(_ pastureIDs: [UUID], archivedAt: Date) throws {
+    func archiveSessionsForDeletedPastures(_ pastureIDs: [UUID], archivedAt: Date) async throws {
         archiveCalls.append((pastureIDs, archivedAt))
     }
 }

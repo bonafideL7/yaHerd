@@ -19,7 +19,7 @@ struct FieldCheckTrackedAnimalRollbackFailureInjection {
         _ sessionID: UUID,
         _ animalID: UUID,
         _ checkedAt: Date
-    ) throws -> Void
+    ) async throws -> Void
 }
 
 @MainActor
@@ -29,7 +29,7 @@ extension FieldCheckRepositoryContract {
         failureInjection: FieldCheckTrackedAnimalRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pastureRepository = fixture.makePastureRepository()
         let source = try pastureRepository.create(
             input: PastureInput(
@@ -65,7 +65,7 @@ extension FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: destination.id,
                 startedAt: rollbackDate(year: 2026, month: 8, day: 10, hour: 8),
@@ -85,16 +85,18 @@ extension FieldCheckRepositoryContract {
         )
         let beforeTimeline = try fixture.makeAnimalRepository().fetchTimeline(id: tracked.id)
 
-        XCTAssertThrowsError(
-            try failureInjection.addTrackedAnimalFailingAfterMovementStaged(
+        do {
+            try await failureInjection.addTrackedAnimalFailingAfterMovementStaged(
                 sessionID,
                 tracked.id,
                 rollbackDate(year: 2026, month: 8, day: 10, hour: 9)
-            ),
-            "The fault-injected tracked-animal transaction must fail at the configured post-movement failpoint.",
-            file: file,
-            line: line
-        ) { error in
+            )
+            XCTFail(
+                "The fault-injected tracked-animal transaction must fail at the configured post-movement failpoint.",
+                file: file,
+                line: line
+            )
+        } catch {
             XCTAssertEqual(
                 error as? FieldCheckTrackedAnimalRollbackInjectedError,
                 .afterMovementStaged,
@@ -145,7 +147,7 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Attention North",
@@ -170,14 +172,14 @@ extension FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: rollbackDate(year: 2026, month: 9, day: 10, hour: 8),
                 notes: "Attention projection contract"
             )
         )
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: rollbackDate(year: 2026, month: 9, day: 10, hour: 9),
@@ -188,7 +190,7 @@ extension FieldCheckRepositoryContract {
                 animalID: animal.id
             )
         )
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: rollbackDate(year: 2026, month: 9, day: 10, hour: 10),
@@ -275,7 +277,7 @@ extension FieldCheckRepositoryContract {
         )
         XCTAssertEqual(afterAddSummary.flaggedAnimalCount, 1, file: file, line: line)
 
-        try repository.updateFindingStatus(
+        try await repository.updateFindingStatus(
             sessionID: sessionID,
             findingID: firstFinding.id,
             status: .resolved
@@ -337,7 +339,7 @@ extension FieldCheckRepositoryContract {
         XCTAssertFalse(afterFirstResolveUnrelatedSummaryCheck.needsAttention, file: file, line: line)
         XCTAssertEqual(afterFirstResolveSummary.flaggedAnimalCount, 1, file: file, line: line)
 
-        try repository.updateFindingStatus(
+        try await repository.updateFindingStatus(
             sessionID: sessionID,
             findingID: secondFinding.id,
             status: .resolved
@@ -389,7 +391,7 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Unlinked Attention Pasture",
@@ -414,14 +416,14 @@ extension FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: rollbackDate(year: 2026, month: 9, day: 11, hour: 8),
                 notes: "Unlinked attention isolation contract"
             )
         )
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: rollbackDate(year: 2026, month: 9, day: 11, hour: 9),

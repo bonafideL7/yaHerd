@@ -20,7 +20,7 @@ enum FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try makePasture(named: "Contract North", using: fixture)
         let colorID = try makeColor(named: "Contract Emerald", prefix: "CE", using: fixture)
         let dam = try makeAnimal(
@@ -93,7 +93,7 @@ enum FieldCheckRepositoryContract {
 
         let startedAt = date(year: 2026, month: 1, day: 10, hour: 8)
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: startedAt,
@@ -152,7 +152,7 @@ enum FieldCheckRepositoryContract {
         XCTAssertEqual(Set(summary.animalChecks.map(\.id)), Set(detail.animalChecks.map(\.id)), file: file, line: line)
         XCTAssertEqual(summary.openFindingsCount, 0, file: file, line: line)
 
-        let laterSessionID = try repository.createSession(
+        let laterSessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: date(year: 2026, month: 1, day: 11, hour: 8),
@@ -168,7 +168,7 @@ enum FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try makePasture(named: "Mutable North", using: fixture)
         let firstAnimal = try makeAnimal(
             name: "Mutable One",
@@ -185,7 +185,7 @@ enum FieldCheckRepositoryContract {
             using: fixture
         )
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: date(year: 2026, month: 2, day: 10, hour: 8),
@@ -198,8 +198,8 @@ enum FieldCheckRepositoryContract {
         let snapshotType = firstCheck.animalType
         XCTAssertNotEqual(snapshotType, .bull, file: file, line: line)
 
-        try repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [snapshotType: 1])
-        try repository.updateNotes(sessionID: sessionID, notes: "  Updated durable notes  ")
+        try await repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [snapshotType: 1])
+        try await repository.updateNotes(sessionID: sessionID, notes: "  Updated durable notes  ")
 
         _ = try fixture.makeAnimalRepository().update(
             id: firstAnimal.id,
@@ -210,7 +210,7 @@ enum FieldCheckRepositoryContract {
                 pastureID: pasture.id
             )
         )
-        try repository.updateQuickAnimalTypeCounts(
+        try await repository.updateQuickAnimalTypeCounts(
             sessionID: sessionID,
             counts: [snapshotType: 1, .bull: 1]
         )
@@ -226,8 +226,8 @@ enum FieldCheckRepositoryContract {
         XCTAssertEqual(afterCountReload.animalChecks.first { $0.id == firstCheck.id }?.animalType, snapshotType, file: file, line: line)
 
         let secondCheckID = try XCTUnwrap(created.animalChecks.first { $0.id != firstCheck.id }?.id, file: file, line: line)
-        try repository.setAnimalCheckCounted(sessionID: sessionID, animalCheckID: firstCheck.id, isCounted: true)
-        try repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: firstCheck.id, isMissing: true)
+        try await repository.setAnimalCheckCounted(sessionID: sessionID, animalCheckID: firstCheck.id, isCounted: true)
+        try await repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: firstCheck.id, isMissing: true)
 
         let afterMissingTransition = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
@@ -242,8 +242,8 @@ enum FieldCheckRepositoryContract {
         XCTAssertFalse(firstMissing.wasCounted, "Marking a roster animal missing must clear its counted state.", file: file, line: line)
         XCTAssertTrue(firstMissing.isMissing, file: file, line: line)
 
-        try repository.setAnimalCheckCounted(sessionID: sessionID, animalCheckID: firstCheck.id, isCounted: true)
-        try repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: secondCheckID, isMissing: true)
+        try await repository.setAnimalCheckCounted(sessionID: sessionID, animalCheckID: firstCheck.id, isCounted: true)
+        try await repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: secondCheckID, isMissing: true)
 
         let afterSecondMissing = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
@@ -258,7 +258,7 @@ enum FieldCheckRepositoryContract {
             line: line
         )
 
-        try repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: secondCheckID, isMissing: false)
+        try await repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: secondCheckID, isMissing: false)
         let afterSecondUnmarked = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
             file: file,
@@ -273,7 +273,7 @@ enum FieldCheckRepositoryContract {
             line: line
         )
 
-        try repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: secondCheckID, isMissing: true)
+        try await repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: secondCheckID, isMissing: true)
         let reloaded = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
             file: file,
@@ -302,7 +302,7 @@ enum FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let destination = try makePasture(named: "Tracked Destination", using: fixture)
         let source = try makePasture(named: "Tracked Source", using: fixture)
         _ = try makeAnimal(
@@ -358,7 +358,7 @@ enum FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: destination.id,
                 startedAt: date(year: 2026, month: 3, day: 10, hour: 8),
@@ -366,7 +366,7 @@ enum FieldCheckRepositoryContract {
             )
         )
         let checkedAt = date(year: 2026, month: 3, day: 10, hour: 9)
-        try repository.addTrackedAnimalToSession(
+        try await repository.addTrackedAnimalToSession(
             sessionID: sessionID,
             animalID: tracked.id,
             checkedAt: checkedAt
@@ -397,7 +397,7 @@ enum FieldCheckRepositoryContract {
             line: line
         )
 
-        try repository.addTrackedAnimalToSession(
+        try await repository.addTrackedAnimalToSession(
             sessionID: sessionID,
             animalID: tracked.id,
             checkedAt: date(year: 2026, month: 3, day: 10, hour: 10)
@@ -412,22 +412,22 @@ enum FieldCheckRepositoryContract {
         XCTAssertEqual(afterRepeat.animalChecks.first { $0.animalID == tracked.id }?.id, trackedCheck.id, file: file, line: line)
         let rosterIDsBeforeInactiveAttempts = Set(afterRepeat.animalChecks.map(\.id))
 
-        assertThrowsRepositoryError(.animalNotActive, file: file, line: line) {
-            try repository.addTrackedAnimalToSession(
+        await assertThrowsRepositoryError(.animalNotActive, file: file, line: line) {
+            try await repository.addTrackedAnimalToSession(
                 sessionID: sessionID,
                 animalID: soldTracked.id,
                 checkedAt: date(year: 2026, month: 3, day: 10, hour: 11)
             )
         }
-        assertThrowsRepositoryError(.animalNotActive, file: file, line: line) {
-            try repository.addTrackedAnimalToSession(
+        await assertThrowsRepositoryError(.animalNotActive, file: file, line: line) {
+            try await repository.addTrackedAnimalToSession(
                 sessionID: sessionID,
                 animalID: deceasedTracked.id,
                 checkedAt: date(year: 2026, month: 3, day: 10, hour: 12)
             )
         }
 
-        try repository.updateNotes(
+        try await repository.updateNotes(
             sessionID: sessionID,
             notes: "Inactive rejection recovery probe"
         )
@@ -476,7 +476,7 @@ enum FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try makePasture(named: "Finding North", using: fixture)
         let animal = try makeAnimal(
             name: "Finding Animal",
@@ -493,7 +493,7 @@ enum FieldCheckRepositoryContract {
             using: fixture
         )
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: date(year: 2026, month: 4, day: 10, hour: 8),
@@ -501,7 +501,7 @@ enum FieldCheckRepositoryContract {
             )
         )
         let originalDate = date(year: 2026, month: 4, day: 10, hour: 9)
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: originalDate,
@@ -544,7 +544,7 @@ enum FieldCheckRepositoryContract {
         XCTAssertFalse(destinationAnimalCheckBeforeReassignment.isMissing, file: file, line: line)
 
         let reassignedDate = date(year: 2026, month: 4, day: 10, hour: 10)
-        try repository.updateFinding(
+        try await repository.updateFinding(
             sessionID: sessionID,
             findingID: finding.id,
             input: FieldCheckFindingInput(
@@ -597,7 +597,7 @@ enum FieldCheckRepositoryContract {
         )
 
         let updatedDate = date(year: 2026, month: 4, day: 10, hour: 11)
-        try repository.updateFinding(
+        try await repository.updateFinding(
             sessionID: sessionID,
             findingID: finding.id,
             input: FieldCheckFindingInput(
@@ -636,7 +636,7 @@ enum FieldCheckRepositoryContract {
         )
 
         let pastureFindingDate = date(year: 2026, month: 4, day: 10, hour: 12)
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: pastureFindingDate,
@@ -654,7 +654,7 @@ enum FieldCheckRepositoryContract {
         XCTAssertEqual(limited.count, 1, file: file, line: line)
         XCTAssertEqual(limited.first?.recordedAt, pastureFindingDate, "Open findings should be returned newest first before applying the limit.", file: file, line: line)
 
-        try repository.updateFindingStatus(sessionID: sessionID, findingID: finding.id, status: .resolved)
+        try await repository.updateFindingStatus(sessionID: sessionID, findingID: finding.id, status: .resolved)
         let afterResolveRepository = fixture.makeFieldCheckRepository()
         XCTAssertFalse(
             try afterResolveRepository.fetchOpenFindings(limit: 0).contains { $0.id == finding.id },
@@ -673,7 +673,7 @@ enum FieldCheckRepositoryContract {
             file: file,
             line: line
         )
-        try repository.deleteFinding(sessionID: sessionID, findingID: remainingFinding.id)
+        try await repository.deleteFinding(sessionID: sessionID, findingID: remainingFinding.id)
         let afterDelete = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
             file: file,
@@ -682,7 +682,7 @@ enum FieldCheckRepositoryContract {
         XCTAssertFalse(afterDelete.findings.contains { $0.id == remainingFinding.id }, file: file, line: line)
         XCTAssertTrue(afterDelete.findings.contains { $0.id == finding.id && $0.status == .resolved }, file: file, line: line)
 
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: date(year: 2026, month: 4, day: 10, hour: 13),
@@ -731,7 +731,7 @@ enum FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let originalColorID = try makeColor(named: "Snapshot Amber", prefix: "SA", using: fixture)
         let replacementColorID = try makeColor(named: "Snapshot Blue", prefix: "SB", using: fixture)
         let pasture = try makePasture(named: "Snapshot North", using: fixture)
@@ -753,7 +753,7 @@ enum FieldCheckRepositoryContract {
             using: fixture
         )
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: date(year: 2026, month: 5, day: 10, hour: 8),
@@ -762,7 +762,7 @@ enum FieldCheckRepositoryContract {
         )
         let before = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID), file: file, line: line)
         let calfBefore = try XCTUnwrap(before.animalChecks.first { $0.animalID == calf.id }, file: file, line: line)
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: date(year: 2026, month: 5, day: 10, hour: 9),
@@ -863,7 +863,7 @@ enum FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try makePasture(named: "Completion North", using: fixture)
         let sourcePasture = try makePasture(named: "Completion Source", using: fixture)
         let animal = try makeAnimal(
@@ -882,14 +882,14 @@ enum FieldCheckRepositoryContract {
         )
         let outsideTimelineBaseline = try fixture.makeAnimalRepository().fetchTimeline(id: outsideTrackedAnimal.id)
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: date(year: 2026, month: 6, day: 10, hour: 8),
                 notes: "Completion notes"
             )
         )
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: date(year: 2026, month: 6, day: 10, hour: 9),
@@ -904,7 +904,7 @@ enum FieldCheckRepositoryContract {
         let findingID = try XCTUnwrap(beforeCompletion.findings.first?.id, file: file, line: line)
         let animalCheckID = try XCTUnwrap(beforeCompletion.animalChecks.first?.id, file: file, line: line)
 
-        try repository.completeSession(id: sessionID)
+        try await repository.completeSession(id: sessionID)
 
         let completedRepository = fixture.makeFieldCheckRepository()
         let completed = try XCTUnwrap(completedRepository.fetchSessionDetail(id: sessionID), file: file, line: line)
@@ -919,35 +919,35 @@ enum FieldCheckRepositoryContract {
         )
         XCTAssertEqual(summary.completedAt, completedAt, file: file, line: line)
 
-        assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
-            try completedRepository.updateNotes(sessionID: sessionID, notes: "Blocked")
+        await assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
+            try await completedRepository.updateNotes(sessionID: sessionID, notes: "Blocked")
         }
-        assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
-            try completedRepository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.heifer: 1])
+        await assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
+            try await completedRepository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.heifer: 1])
         }
-        assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
-            try completedRepository.setAnimalCheckCounted(
+        await assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
+            try await completedRepository.setAnimalCheckCounted(
                 sessionID: sessionID,
                 animalCheckID: animalCheckID,
                 isCounted: true
             )
         }
-        assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
-            try completedRepository.setAnimalCheckMissing(
+        await assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
+            try await completedRepository.setAnimalCheckMissing(
                 sessionID: sessionID,
                 animalCheckID: animalCheckID,
                 isMissing: true
             )
         }
-        assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
-            try completedRepository.addTrackedAnimalToSession(
+        await assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
+            try await completedRepository.addTrackedAnimalToSession(
                 sessionID: sessionID,
                 animalID: outsideTrackedAnimal.id,
                 checkedAt: date(year: 2026, month: 6, day: 10, hour: 10)
             )
         }
-        assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
-            try completedRepository.addFinding(
+        await assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
+            try await completedRepository.addFinding(
                 sessionID: sessionID,
                 input: FieldCheckFindingInput(
                     recordedAt: date(year: 2026, month: 6, day: 10, hour: 11),
@@ -959,8 +959,8 @@ enum FieldCheckRepositoryContract {
                 )
             )
         }
-        assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
-            try completedRepository.updateFinding(
+        await assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
+            try await completedRepository.updateFinding(
                 sessionID: sessionID,
                 findingID: findingID,
                 input: FieldCheckFindingInput(
@@ -973,8 +973,8 @@ enum FieldCheckRepositoryContract {
                 )
             )
         }
-        assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
-            try completedRepository.deleteFinding(sessionID: sessionID, findingID: findingID)
+        await assertThrowsRepositoryError(.sessionCompleted, file: file, line: line) {
+            try await completedRepository.deleteFinding(sessionID: sessionID, findingID: findingID)
         }
 
         let postRejectionRepository = fixture.makeFieldCheckRepository()
@@ -997,7 +997,7 @@ enum FieldCheckRepositoryContract {
             line: line
         )
 
-        try completedRepository.updateFindingStatus(
+        try await completedRepository.updateFindingStatus(
             sessionID: sessionID,
             findingID: findingID,
             status: .resolved
@@ -1091,7 +1091,7 @@ enum FieldCheckRepositoryContract {
             line: line
         )
 
-        try completedRepository.updateFindingStatus(
+        try await completedRepository.updateFindingStatus(
             sessionID: sessionID,
             findingID: findingID,
             status: .monitoring
@@ -1117,14 +1117,14 @@ enum FieldCheckRepositoryContract {
         )
         XCTAssertEqual(reopenedFindingSummary.openFindingsCount, 1, file: file, line: line)
 
-        try completedRepository.reopenSession(id: sessionID)
+        try await completedRepository.reopenSession(id: sessionID)
         let reopenedRepository = fixture.makeFieldCheckRepository()
         let reopened = try XCTUnwrap(reopenedRepository.fetchSessionDetail(id: sessionID), file: file, line: line)
         XCTAssertNil(reopened.completedAt, file: file, line: line)
         XCTAssertEqual(reopened.id, sessionID, file: file, line: line)
         XCTAssertEqual(reopened.findings.first { $0.id == findingID }?.status, .monitoring, file: file, line: line)
 
-        try reopenedRepository.updateNotes(sessionID: sessionID, notes: "Reopened notes")
+        try await reopenedRepository.updateNotes(sessionID: sessionID, notes: "Reopened notes")
         XCTAssertEqual(
             try fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID)?.notes,
             "Reopened notes",
@@ -1137,13 +1137,13 @@ enum FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeFieldCheckRepository()
         let missingSessionID = UUID()
         XCTAssertNil(try repository.fetchSessionDetail(id: missingSessionID), file: file, line: line)
 
-        assertThrowsRepositoryError(.pastureNotFound, file: file, line: line) {
-            _ = try repository.createSession(
+        await assertThrowsRepositoryError(.pastureNotFound, file: file, line: line) {
+            _ = try await repository.createSession(
                 input: FieldCheckSessionStartInput(
                     pastureID: UUID(),
                     startedAt: date(year: 2026, month: 7, day: 10, hour: 8),
@@ -1151,20 +1151,20 @@ enum FieldCheckRepositoryContract {
                 )
             )
         }
-        assertThrowsRepositoryError(.sessionNotFound, file: file, line: line) {
-            try repository.updateNotes(sessionID: missingSessionID, notes: "Missing")
+        await assertThrowsRepositoryError(.sessionNotFound, file: file, line: line) {
+            try await repository.updateNotes(sessionID: missingSessionID, notes: "Missing")
         }
 
         let pasture = try makePasture(named: "Error North", using: fixture)
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: date(year: 2026, month: 7, day: 10, hour: 9),
                 notes: "Error contract"
             )
         )
-        assertThrowsRepositoryError(.animalNotFound, file: file, line: line) {
-            try repository.addTrackedAnimalToSession(
+        await assertThrowsRepositoryError(.animalNotFound, file: file, line: line) {
+            try await repository.addTrackedAnimalToSession(
                 sessionID: sessionID,
                 animalID: UUID(),
                 checkedAt: date(year: 2026, month: 7, day: 10, hour: 10)
@@ -1179,8 +1179,8 @@ enum FieldCheckRepositoryContract {
             using: fixture
         )
         try fixture.makeAnimalRepository().archive(ids: [archivedAnimal.id])
-        assertThrowsRepositoryError(.animalNotActive, file: file, line: line) {
-            try repository.addTrackedAnimalToSession(
+        await assertThrowsRepositoryError(.animalNotActive, file: file, line: line) {
+            try await repository.addTrackedAnimalToSession(
                 sessionID: sessionID,
                 animalID: archivedAnimal.id,
                 checkedAt: date(year: 2026, month: 7, day: 10, hour: 11)

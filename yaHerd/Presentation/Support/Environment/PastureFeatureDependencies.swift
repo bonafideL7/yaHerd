@@ -136,7 +136,7 @@ private struct MissingPastureAnimalMover: AnimalPastureMoving {
 private struct MissingPastureFieldCheckArchiveWriter: FieldCheckPastureArchiveWriter {
     nonisolated init(environmentFallback _: Void = ()) {}
 
-    func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) throws {
+    func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) async throws {
         throw MissingPastureFeatureDependencyError.dependency("Field-check pasture archive writer")
     }
 }

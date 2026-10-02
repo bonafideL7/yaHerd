@@ -388,6 +388,19 @@ enum AnimalAggregateCrossFeatureRevisionContract {
         )
     }
 
+    static func assertFieldCheckAddTrackedAnimalRotatesRevision(
+        using fixture: AnimalAggregateCrossFeatureRevisionContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        try await assertCrossFeatureEditorStateMutationsRotateRevision(
+            using: fixture,
+            operations: [.fieldCheckAddTrackedAnimal],
+            file: file,
+            line: line
+        )
+    }
+
     static func assertPastureDeletionTransactionRotatesRevision(
         using fixture: AnimalAggregateCrossFeatureRevisionContractFixture,
         file: StaticString = #filePath,

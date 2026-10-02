@@ -12,6 +12,7 @@ struct FieldCheckSessionSetupView: View {
     @State private var startedAt: Date = .now
     @State private var notes = ""
     @State private var startedRoute: StartedFieldCheckRoute?
+    @State private var isStartingSession = false
 
     private let suggestedPastureID: UUID?
     private let onSessionStarted: ((UUID) -> Void)?
@@ -28,10 +29,14 @@ struct FieldCheckSessionSetupView: View {
     }
 
     private var canStart: Bool {
-        dataAccessMode.allowsDataMutations && selectedPasture != nil
+        dataAccessMode.allowsDataMutations && selectedPasture != nil && !isStartingSession
     }
 
     private var startStatusText: String? {
+        if isStartingSession {
+            return "Starting check…"
+        }
+
         if !dataAccessMode.allowsDataMutations {
             return "Recovery mode is read-only. New checks cannot be saved."
         }
@@ -56,8 +61,11 @@ struct FieldCheckSessionSetupView: View {
             startDetailsSection
             workflowPreviewSection
         }
+        .disabled(isStartingSession)
         .navigationTitle("Start Pasture Check")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(isStartingSession)
+        .interactiveDismissDisabled(isStartingSession)
         .task {
             if !model.hasLoaded {
                 model.load(using: pastureReferenceDataReader)
@@ -142,23 +150,35 @@ struct FieldCheckSessionSetupView: View {
     }
 
     private func startSession() {
-        guard dataAccessMode.allowsDataMutations else { return }
+        guard dataAccessMode.allowsDataMutations,
+              !isStartingSession,
+              let pastureID = selectedPasture?.id else {
+            return
+        }
 
-        do {
-            let sessionID = try model.createSession(
-                pastureID: selectedPasture?.id,
-                startedAt: startedAt,
-                notes: notes,
-                using: setupRepository
-            )
-            if let onSessionStarted {
-                dismiss()
-                onSessionStarted(sessionID)
-            } else {
-                startedRoute = StartedFieldCheckRoute(id: sessionID)
+        isStartingSession = true
+        let sessionStartedAt = startedAt
+        let openingNotes = notes
+
+        Task { @MainActor in
+            defer { isStartingSession = false }
+
+            do {
+                let sessionID = try await model.createSession(
+                    pastureID: pastureID,
+                    startedAt: sessionStartedAt,
+                    notes: openingNotes,
+                    using: setupRepository
+                )
+                if let onSessionStarted {
+                    dismiss()
+                    onSessionStarted(sessionID)
+                } else {
+                    startedRoute = StartedFieldCheckRoute(id: sessionID)
+                }
+            } catch {
+                model.errorMessage = UserVisibleErrorMessage.make(error)
             }
-        } catch {
-            model.errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 

@@ -9,11 +9,20 @@ final class CoreDataTransactionExecutor {
 
     func performWrite<Result: Sendable>(
         beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil,
+        afterTransaction: (@Sendable () -> Void)? = nil,
         _ operation: @escaping @Sendable (NSManagedObjectContext) throws -> Result
     ) async throws -> Result {
-        let context = try contextFactory.makeWriteContext()
+        let context: NSManagedObjectContext
+        do {
+            context = try contextFactory.makeWriteContext()
+        } catch {
+            afterTransaction?()
+            throw error
+        }
 
         return try await context.perform {
+            defer { afterTransaction?() }
+
             do {
                 let result = try operation(context)
                 guard context.hasChanges else {

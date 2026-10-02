@@ -7,7 +7,7 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Missing Finding Synchronization Pasture",
@@ -58,7 +58,7 @@ extension FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: Date(timeIntervalSince1970: 1_780_200_000),
@@ -67,7 +67,7 @@ extension FieldCheckRepositoryContract {
         )
 
         func addMissingFinding(note: String, recordedAt: Date) throws -> UUID {
-            try repository.addFinding(
+            try await repository.addFinding(
                 sessionID: sessionID,
                 input: FieldCheckFindingInput(
                     recordedAt: recordedAt,
@@ -118,7 +118,7 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        try repository.updateFindingStatus(
+        try await repository.updateFindingStatus(
             sessionID: sessionID,
             findingID: firstResolvableID,
             status: .resolved
@@ -130,7 +130,7 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        try repository.updateFindingStatus(
+        try await repository.updateFindingStatus(
             sessionID: sessionID,
             findingID: secondResolvableID,
             status: .resolved
@@ -173,7 +173,7 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        try repository.deleteFinding(sessionID: sessionID, findingID: firstDeletableID)
+        try await repository.deleteFinding(sessionID: sessionID, findingID: firstDeletableID)
         XCTAssertTrue(
             try reloadedAnimalCheck(animalID: animal.id).isMissing,
             "Deleting one missing-animal finding must preserve missing state while another unresolved missing finding remains.",
@@ -181,7 +181,7 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        try repository.deleteFinding(sessionID: sessionID, findingID: secondDeletableID)
+        try await repository.deleteFinding(sessionID: sessionID, findingID: secondDeletableID)
         let afterDeletion = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
             file: file,
@@ -222,7 +222,7 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        try repository.updateFinding(
+        try await repository.updateFinding(
             sessionID: sessionID,
             findingID: firstReassignmentID,
             input: FieldCheckFindingInput(

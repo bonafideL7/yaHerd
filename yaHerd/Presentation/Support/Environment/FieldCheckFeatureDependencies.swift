@@ -94,28 +94,28 @@ private struct MissingFieldCheckRepository: FieldCheckRepository {
         .dependency(name)
     }
 
-    func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) throws { throw missing("Field-check pasture archive writer") }
+    func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) async throws { throw missing("Field-check pasture archive writer") }
     func fetchSessions() throws -> [FieldCheckSessionSummary] { throw missing("Field-check overview reader") }
     func fetchOpenFindings(limit: Int) throws -> [FieldCheckFindingSnapshot] { throw missing("Field-check open finding reader") }
     func fetchSessionDetail(id: UUID) throws -> FieldCheckSessionDetailSnapshot? { throw missing("Field-check session detail repository") }
-    func createSession(input: FieldCheckSessionStartInput) throws -> UUID { throw missing("Field-check session setup repository") }
-    func updateQuickAnimalTypeCounts(sessionID: UUID, counts: [AnimalType: Int]) throws { throw missing("Field-check quick-count writer") }
-    func updateNotes(sessionID: UUID, notes: String) throws { throw missing("Field-check notes writer") }
-    func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool) throws { throw missing("Field-check animal count writer") }
-    func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool) throws { throw missing("Field-check missing-animal writer") }
-    func addTrackedAnimalToSession(sessionID: UUID, animalID: UUID, checkedAt: Date) throws { throw missing("Field-check tracked-animal writer") }
-    func addFinding(sessionID: UUID, input: FieldCheckFindingInput) throws { throw missing("Field-check finding writer") }
-    func updateFinding(sessionID: UUID, findingID: UUID, input: FieldCheckFindingInput) throws { throw missing("Field-check finding writer") }
+    func createSession(input: FieldCheckSessionStartInput) async throws -> UUID { throw missing("Field-check session setup repository") }
+    func updateQuickAnimalTypeCounts(sessionID: UUID, counts: [AnimalType: Int]) async throws { throw missing("Field-check quick-count writer") }
+    func updateNotes(sessionID: UUID, notes: String) async throws { throw missing("Field-check notes writer") }
+    func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool) async throws { throw missing("Field-check animal count writer") }
+    func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool) async throws { throw missing("Field-check missing-animal writer") }
+    func addTrackedAnimalToSession(sessionID: UUID, animalID: UUID, checkedAt: Date) async throws { throw missing("Field-check tracked-animal writer") }
+    func addFinding(sessionID: UUID, input: FieldCheckFindingInput) async throws { throw missing("Field-check finding writer") }
+    func updateFinding(sessionID: UUID, findingID: UUID, input: FieldCheckFindingInput) async throws { throw missing("Field-check finding writer") }
     func updateFindingStatus(
         sessionID: UUID,
         findingID: UUID,
         status: FieldCheckFindingStatus
-    ) throws {
+    ) async throws {
         throw missing("Field-check finding status writer")
     }
-    func deleteFinding(sessionID: UUID, findingID: UUID) throws { throw missing("Field-check finding deleter") }
-    func completeSession(id: UUID) throws { throw missing("Field-check completion writer") }
-    func reopenSession(id: UUID) throws { throw missing("Field-check completion writer") }
+    func deleteFinding(sessionID: UUID, findingID: UUID) async throws { throw missing("Field-check finding deleter") }
+    func completeSession(id: UUID) async throws { throw missing("Field-check completion writer") }
+    func reopenSession(id: UUID) async throws { throw missing("Field-check completion writer") }
 }
 
 private struct MissingFieldCheckAnimalRepository: AnimalRepository {

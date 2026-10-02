@@ -361,7 +361,7 @@ struct FieldCheckTrackedAnimalPickerView: View {
     @State private var pendingAnimal: AnimalSummary?
 
     let session: FieldCheckSessionDetailSnapshot
-    let onSelect: (UUID) -> Bool
+    let onSelect: (UUID) async -> Bool
 
     private var existingAnimalIDs: Set<UUID> {
         Set(session.animalChecks.compactMap(\.animalID))
@@ -410,8 +410,18 @@ struct FieldCheckTrackedAnimalPickerView: View {
                 Text("Selecting an animal moves it to \(destinationName), records a pasture movement, adds it to this check, and marks it seen. Use Add Offspring from the dam record for new calves.")
             }
         }
+        .disabled(model.isSubmittingSelection)
+        .overlay {
+            if model.isSubmittingSelection {
+                ProgressView("Moving animal…")
+                    .padding()
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+            }
+        }
         .navigationTitle("Add to Pasture")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(model.isSubmittingSelection)
+        .interactiveDismissDisabled(model.isSubmittingSelection)
         .searchable(text: $model.searchText, prompt: "Search animals")
         .task {
             if !model.hasLoaded {
@@ -445,9 +455,18 @@ struct FieldCheckTrackedAnimalPickerView: View {
     }
 
     private func selectPendingAnimal(_ animal: AnimalSummary) {
-        if onSelect(animal.id) {
-            pendingAnimal = nil
-            dismiss()
+        guard model.beginSelectionSubmission() else {
+            return
+        }
+
+        pendingAnimal = nil
+
+        Task { @MainActor in
+            defer { model.endSelectionSubmission() }
+
+            if await onSelect(animal.id) {
+                dismiss()
+            }
         }
     }
 
@@ -458,7 +477,7 @@ struct FieldCheckTrackedAnimalPickerView: View {
 
     private var moveConfirmationBinding: Binding<Bool> {
         Binding(
-            get: { pendingAnimal != nil },
+            get: { pendingAnimal != nil && !model.isSubmittingSelection },
             set: { newValue in
                 if !newValue {
                     pendingAnimal = nil

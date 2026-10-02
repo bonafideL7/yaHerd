@@ -7,7 +7,7 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Hard Delete Snapshot Pasture",
@@ -46,7 +46,7 @@ extension FieldCheckRepositoryContract {
         )
 
         let fieldChecks = fixture.makeFieldCheckRepository()
-        let sessionID = try fieldChecks.createSession(
+        let sessionID = try await fieldChecks.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: Date(timeIntervalSince1970: 1_780_000_000),
@@ -64,7 +64,7 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        try fieldChecks.addFinding(
+        try await fieldChecks.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: Date(timeIntervalSince1970: 1_780_003_600),
@@ -183,7 +183,7 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(openFindingAfterDelete.pastureName, findingBeforeDelete.pastureName, file: file, line: line)
         XCTAssertEqual(openFindingAfterDelete.note, findingBeforeDelete.note, file: file, line: line)
 
-        try reloadedRepository.updateFindingStatus(
+        try await reloadedRepository.updateFindingStatus(
             sessionID: sessionID,
             findingID: findingBeforeDelete.id,
             status: .resolved
@@ -238,7 +238,7 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Completed Missing Pasture",
@@ -269,14 +269,14 @@ extension FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: Date(timeIntervalSince1970: 1_781_000_000),
                 notes: "Completed missing synchronization"
             )
         )
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: Date(timeIntervalSince1970: 1_781_003_600),
@@ -306,7 +306,7 @@ extension FieldCheckRepositoryContract {
         XCTAssertTrue(beforeCompletion.animalChecks.first { $0.id == checkID }?.isMissing == true, file: file, line: line)
         XCTAssertEqual(beforeCompletion.missingAnimalCount, 1, file: file, line: line)
 
-        try repository.completeSession(id: sessionID)
+        try await repository.completeSession(id: sessionID)
         let completedRepository = fixture.makeFieldCheckRepository()
         let completed = try XCTUnwrap(
             completedRepository.fetchSessionDetail(id: sessionID),
@@ -317,7 +317,7 @@ extension FieldCheckRepositoryContract {
         XCTAssertTrue(completed.animalChecks.first { $0.id == checkID }?.isMissing == true, file: file, line: line)
         XCTAssertEqual(completed.missingAnimalCount, 1, file: file, line: line)
 
-        try completedRepository.updateFindingStatus(
+        try await completedRepository.updateFindingStatus(
             sessionID: sessionID,
             findingID: findingID,
             status: .resolved
@@ -358,7 +358,7 @@ extension FieldCheckRepositoryContract {
         XCTAssertFalse(resolvedSummaryCheck.isMissing, file: file, line: line)
         XCTAssertEqual(resolvedSummary.missingAnimalCount, 0, file: file, line: line)
 
-        try resolvedRepository.updateFindingStatus(
+        try await resolvedRepository.updateFindingStatus(
             sessionID: sessionID,
             findingID: findingID,
             status: .monitoring
@@ -390,7 +390,7 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Untagged Snapshot Pasture",
@@ -421,14 +421,14 @@ extension FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: Date(timeIntervalSince1970: 1_782_000_000),
                 notes: "Untagged finding snapshot"
             )
         )
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: Date(timeIntervalSince1970: 1_782_003_600),

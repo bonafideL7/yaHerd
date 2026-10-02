@@ -743,7 +743,7 @@ enum PastureRepositoryEdgeCaseContract {
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pastureRepository = fixture.makePastureRepository()
         let pasture = try pastureRepository.create(
             input: PastureInput(
@@ -774,7 +774,7 @@ enum PastureRepositoryEdgeCaseContract {
             )
         )
         let fieldChecks = fixture.makeFieldCheckRepository()
-        let sessionID = try fieldChecks.createSession(
+        let sessionID = try await fieldChecks.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: Date(timeIntervalSince1970: 1_781_100_000),
@@ -818,13 +818,13 @@ enum PastureRepositoryEdgeCaseContract {
         )
 
         let updatedNotes = "Updated after pasture deletion"
-        try archivedFieldChecks.setAnimalCheckCounted(
+        try await archivedFieldChecks.setAnimalCheckCounted(
             sessionID: sessionID,
             animalCheckID: animalCheck.id,
             isCounted: true
         )
         try archivedFieldChecks.updateNotes(sessionID: sessionID, notes: updatedNotes)
-        try archivedFieldChecks.completeSession(id: sessionID)
+        try await archivedFieldChecks.completeSession(id: sessionID)
 
         let reloadedFieldChecks = fixture.makeFieldCheckRepository()
         let reloadedSession = try XCTUnwrap(
@@ -1185,7 +1185,7 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(queuedEditorAfterCompletion.animalID, queuedAnimal.id, file: file, line: line)
         XCTAssertEqual(queuedEditorAfterCompletion.observationNotes, queuedPostDeletionNotes, file: file, line: line)
 
-        try postDeletionWorking.completeSession(
+        try await postDeletionWorking.completeSession(
             id: sessionID,
             assignments: [
                 WorkingQueueDestinationAssignment(
