@@ -665,6 +665,52 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             .assertAnimalAggregateTransactionsRollBackAllDurableState(using: fixture)
     }
 
+    func testMilestone6PastureDeletionRejectsStaleExpectedStateBeforeMutation() async throws {
+        let revisionEnvironment = try await makeEnvironment()
+        let missingAnimalEnvironment = try await makeEnvironment()
+        let residentChangedEnvironment = try await makeEnvironment()
+        let missingPastureEnvironment = try await makeEnvironment()
+
+        let fixture = PersistenceTransactionPreconditionContractFixture(
+            makeAnimalAggregateRevisionProbe: {
+                try revisionEnvironment.makeRevisionProbe()
+            },
+            makeAnimalAggregateMissingProbe: {
+                try missingAnimalEnvironment.makeMissingProbe()
+            },
+            makePastureResidentSetChangedProbe: {
+                try residentChangedEnvironment.makePastureResidentSetChangedProbe()
+            },
+            makePastureMissingProbe: {
+                try missingPastureEnvironment.makePastureMissingProbe()
+            }
+        )
+
+        try await PersistenceTransactionPreconditionContract
+            .assertPastureDeletionRejectsStaleExpectedStateBeforeMutation(using: fixture)
+    }
+
+    func testMilestone6PastureDeletionRollsBackAfterStaging() async throws {
+        let createEnvironment = try await makeEnvironment()
+        let updateEnvironment = try await makeEnvironment()
+        let pastureEnvironment = try await makeEnvironment()
+
+        let fixture = PersistenceTransactionRollbackContractFixture(
+            makeAnimalAggregateCreateProbe: {
+                try createEnvironment.makeCreateRollbackProbe()
+            },
+            makeAnimalAggregateUpdateProbe: {
+                try updateEnvironment.makeUpdateRollbackProbe()
+            },
+            makePastureDeletionProbe: {
+                try pastureEnvironment.makePastureDeletionRollbackProbe()
+            }
+        )
+
+        try await PersistenceTransactionRollbackContract
+            .assertFailedTargetTransactionsRollBackAllDurableState(using: fixture)
+    }
+
     func testAnimalAndAnimalTagApplicationIdentityContract() async throws {
         let animalAssembly = try await CoreDataPersistenceAssembly.inMemory()
         let tagAssembly = try await CoreDataPersistenceAssembly.inMemory()
