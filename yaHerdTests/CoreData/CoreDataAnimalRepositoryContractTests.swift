@@ -1936,7 +1936,7 @@ private final class CoreDataAnimalContractEnvironment {
                 pastureID: pasture.id
             )
         )
-        try animalRepository.archive(ids: [inactive.id], reason: "M6 revision fixture")
+        try animalRepository.archive(ids: [inactive.id])
         let unrelated = try animalRepository.create(
             input: animalInput(
                 name: "Revision unrelated",
