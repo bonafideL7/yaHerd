@@ -23,20 +23,28 @@ final class CoreDataPastureRepository:
 {
     private let selection: any CurrentHerdSelectionReading
     private let contextFactory: CoreDataContextFactory
+    private let residentWriteCoordinator: CoreDataPastureResidentWriteCoordinator
     private nonisolated let lookup: CoreDataLookup
 
     init(
         selection: any CurrentHerdSelectionReading,
         contextFactory: CoreDataContextFactory,
+        residentWriteCoordinator: CoreDataPastureResidentWriteCoordinator,
         lookup: CoreDataLookup
     ) {
         self.selection = selection
         self.contextFactory = contextFactory
+        self.residentWriteCoordinator = residentWriteCoordinator
         self.lookup = lookup
     }
 
     convenience init(selection: any CurrentHerdSelectionReading, assembly: CoreDataPersistenceAssembly) {
-        self.init(selection: selection, contextFactory: assembly.contextFactory, lookup: assembly.lookup)
+        self.init(
+            selection: selection,
+            contextFactory: assembly.contextFactory,
+            residentWriteCoordinator: assembly.pastureResidentWriteCoordinator,
+            lookup: assembly.lookup
+        )
     }
 
     func fetchPastures() throws -> [PastureSummary] {
@@ -307,6 +315,8 @@ final class CoreDataPastureRepository:
         _ operation: @escaping @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
     ) throws -> Result {
         guard let herdID = selection.currentHerdID else { throw HerdRepositoryError.missingHerd }
+        try residentWriteCoordinator.beginPastureWrite()
+        defer { residentWriteCoordinator.endPastureWrite() }
         let context = try contextFactory.makeWriteContext()
         return try context.performAndWait {
             do {
