@@ -41,7 +41,7 @@ This matrix is the implementation/review inventory for Milestone 6. It covers th
 
 ## Verification status
 
-The M6-owned matrix has no remaining `Unverified` cells. The Core Data runner covers stale-precondition rejection, malformed-plan rejection, rollback/recovery, the M6 Pasture-deletion slice of cross-feature Animal revision invalidation, resident/Pasture/deletion concurrency, durable movement identity/snapshots, and the M6-owned success graph/history semantics. Field Check repository projections remain explicitly delegated to M7, Working repository behavior to M8, Dashboard/Home/Animal-list projections to M9, and runtime mutation publication/cutover to M10. Automatic branch verification passed on current M6 head `12c07c40` in run #2314. No verification workflow was manually dispatched.
+The M6-owned matrix has no remaining `Unverified` cells. The Core Data runner covers stale-precondition rejection, malformed-plan rejection, rollback/recovery, the M6 Pasture-deletion slice of cross-feature Animal revision invalidation, resident/Pasture/deletion concurrency, durable movement identity/snapshots, and the M6-owned success graph/history semantics. Field Check repository projections remain explicitly delegated to M7, Working repository behavior to M8, Dashboard/Home/Animal-list projections to M9, and runtime mutation publication/cutover to M10. Automatic branch verification passed on current implementation head `56a68c14` in run #2320. Codex review of that head reported no major issues. No verification workflow was manually dispatched.
 
 ## Matrix notes
 
