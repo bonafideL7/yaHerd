@@ -2025,6 +2025,76 @@ private final class CoreDataAnimalContractEnvironment {
         )
     }
 
+    func contractAnimalInput(
+        name: String,
+        tagNumber: String,
+        pastureID: UUID?
+    ) -> AnimalInput {
+        animalInput(
+            name: name,
+            tagNumber: tagNumber,
+            sex: .female,
+            pastureID: pastureID
+        )
+    }
+
+    func seedFieldCheckSession(
+        pastureID: UUID,
+        pastureName: String
+    ) throws -> UUID {
+        let id = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            guard let herd = try assembly.lookup.herd(id: herdID, in: context),
+                  let pasture = try assembly.lookup.herdOwned(
+                    CDPasture.self,
+                    id: pastureID,
+                    herdID: herdID,
+                    in: context
+                  ) else {
+                throw CoreDataAnimalContractTestError.missingPreparedPasture
+            }
+            let session = CDFieldCheckSession(context: context)
+            session.id = id
+            session.startedAt = Date(timeIntervalSinceReferenceDate: 70_000)
+            session.completedAt = nil
+            session.notes = "M6 historical session"
+            session.expectedHeadCountSnapshot = 1
+            session.quickCowCount = 0
+            session.quickHeiferCount = 0
+            session.quickCalfCount = 0
+            session.quickBullCount = 0
+            session.quickSteerCount = 0
+            session.pastureIDSnapshot = pastureID
+            session.pastureNameSnapshot = pastureName
+            session.pastureArchivedAt = nil
+            session.herd = herd
+            session.pasture = pasture
+            try context.save()
+        }
+        return id
+    }
+
+    func fieldCheckArchiveState(id: UUID) throws -> CoreDataFieldCheckArchiveState {
+        let context = assembly.contextFactory.makeReadContext()
+        return try context.performAndWait {
+            guard let session = try assembly.lookup.herdOwned(
+                CDFieldCheckSession.self,
+                id: id,
+                herdID: herdID,
+                in: context
+            ) else {
+                throw CoreDataAnimalContractTestError.missingPreparedFieldCheck
+            }
+            return CoreDataFieldCheckArchiveState(
+                pastureIDSnapshot: session.pastureIDSnapshot,
+                pastureNameSnapshot: session.pastureNameSnapshot,
+                pastureArchivedAt: session.pastureArchivedAt,
+                livePastureID: session.pasture?.id
+            )
+        }
+    }
+
     func makePastureResidentSetChangedProbe() throws -> PastureDeletionPreconditionContractProbe {
         let pastureRepository = makePastureRepository()
         let first = try pastureRepository.create(
@@ -2602,6 +2672,8 @@ private enum CoreDataAnimalContractTestError: Error {
     case invalidWorkingSessionStatus
     case invalidWorkingQueueStatus
     case invalidWorkingAnimalSex
+    case missingPreparedPasture
+    case missingPreparedFieldCheck
 }
 
 @MainActor
@@ -2812,6 +2884,13 @@ private final class FaultInjectingAnimalAggregateWriter: AnimalAggregateTransact
             throw CoreDataAnimalContractTestError.injectedFailure
         }
     }
+}
+
+private struct CoreDataFieldCheckArchiveState {
+    let pastureIDSnapshot: UUID
+    let pastureNameSnapshot: String
+    let pastureArchivedAt: Date?
+    let livePastureID: UUID?
 }
 
 @MainActor
