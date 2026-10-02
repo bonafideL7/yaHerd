@@ -48,10 +48,10 @@ final class CoreDataPastureDeletionTransactionWriter: PastureDeletionTransaction
 
         let normalized = try Self.validate(plan)
         let lookup = self.lookup
-        let mutationDate = Date()
 
         lastExecutedOperations = []
         await residentWriteCoordinator.acquirePastureDeletion()
+        let mutationDate = Date()
         do {
             let executed = try await transactionExecutor.performWrite(beforeSave: beforeSave) { context in
             guard let herd = try lookup.herd(id: herdID, in: context) else {
