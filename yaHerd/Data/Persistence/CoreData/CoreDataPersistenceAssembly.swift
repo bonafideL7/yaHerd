@@ -71,22 +71,38 @@ enum CoreDataResidentWriteCoordinationError: Error, Equatable {
 
 @MainActor
 final class CoreDataPastureResidentWriteCoordinator {
-    private var activeAnimalWrites = 0
+    private var activeConflictingWrites = 0
     private var deletionPending = false
     private var animalDrainContinuation: CheckedContinuation<Void, Never>?
     private var deletionWaiters: [CheckedContinuation<Void, Never>] = []
 
     func beginAnimalWrite() throws {
-        guard !deletionPending else {
-            throw CoreDataResidentWriteCoordinationError.pastureDeletionInProgress
-        }
-        activeAnimalWrites += 1
+        try beginConflictingWrite()
     }
 
     func endAnimalWrite() {
-        precondition(activeAnimalWrites > 0)
-        activeAnimalWrites -= 1
-        if activeAnimalWrites == 0, deletionPending {
+        endConflictingWrite()
+    }
+
+    func beginPastureWrite() throws {
+        try beginConflictingWrite()
+    }
+
+    func endPastureWrite() {
+        endConflictingWrite()
+    }
+
+    private func beginConflictingWrite() throws {
+        guard !deletionPending else {
+            throw CoreDataResidentWriteCoordinationError.pastureDeletionInProgress
+        }
+        activeConflictingWrites += 1
+    }
+
+    private func endConflictingWrite() {
+        precondition(activeConflictingWrites > 0)
+        activeConflictingWrites -= 1
+        if activeConflictingWrites == 0, deletionPending {
             let continuation = animalDrainContinuation
             animalDrainContinuation = nil
             continuation?.resume()
@@ -102,7 +118,7 @@ final class CoreDataPastureResidentWriteCoordinator {
         }
 
         deletionPending = true
-        guard activeAnimalWrites > 0 else {
+        guard activeConflictingWrites > 0 else {
             return
         }
         await withCheckedContinuation { continuation in
