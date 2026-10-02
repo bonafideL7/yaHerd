@@ -1757,6 +1757,142 @@ private final class CoreDataAnimalContractEnvironment {
         )
     }
 
+    func makePastureResidentSetChangedProbe() throws -> PastureDeletionPreconditionContractProbe {
+        let pastureRepository = makePastureRepository()
+        let first = try pastureRepository.create(
+            input: PastureInput(name: "Stale resident first", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1)
+        )
+        let stale = try pastureRepository.create(
+            input: PastureInput(name: "Stale resident second", acreage: 11, usableAcreage: 10, targetAcresPerHead: 1)
+        )
+        let plan = emptyPastureDeletionPlan(ids: [first.id, stale.id])
+
+        _ = try makeAnimalRepository().create(
+            input: animalInput(
+                name: "Late resident",
+                tagNumber: "M6-LATE",
+                sex: .female,
+                pastureID: stale.id
+            )
+        )
+
+        return PastureDeletionPreconditionContractProbe(
+            writer: CoreDataPastureDeletionTransactionWriter(selection: selection, assembly: assembly),
+            plan: plan,
+            expectedFailure: .pastureResidentSetChanged(pastureID: stale.id),
+            classifyError: Self.classifyPastureDeletionPreconditionError,
+            freshPersistedStateSnapshot: {
+                try CoreDataContractStoreSnapshotter.snapshot(assembly: self.assembly)
+            },
+            recoveryProbe: .discardedWriteScope(
+                verifyFailedWriteScopeWasDisposed: { true }
+            )
+        )
+    }
+
+    func makePastureMissingProbe() throws -> PastureDeletionPreconditionContractProbe {
+        let pastureRepository = makePastureRepository()
+        let first = try pastureRepository.create(
+            input: PastureInput(name: "Missing first", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1)
+        )
+        let missing = try pastureRepository.create(
+            input: PastureInput(name: "Missing second", acreage: 11, usableAcreage: 10, targetAcresPerHead: 1)
+        )
+        let plan = emptyPastureDeletionPlan(ids: [first.id, missing.id])
+        try pastureRepository.delete(ids: [missing.id])
+
+        return PastureDeletionPreconditionContractProbe(
+            writer: CoreDataPastureDeletionTransactionWriter(selection: selection, assembly: assembly),
+            plan: plan,
+            expectedFailure: .pastureMissing(pastureID: missing.id),
+            classifyError: Self.classifyPastureDeletionPreconditionError,
+            freshPersistedStateSnapshot: {
+                try CoreDataContractStoreSnapshotter.snapshot(assembly: self.assembly)
+            },
+            recoveryProbe: .discardedWriteScope(
+                verifyFailedWriteScopeWasDisposed: { true }
+            )
+        )
+    }
+
+    func makePastureDeletionRollbackProbe() throws -> PastureDeletionRollbackProbe {
+        let pasture = try makePastureRepository().create(
+            input: PastureInput(name: "Rollback pasture", acreage: 12, usableAcreage: 11, targetAcresPerHead: 1)
+        )
+        let resident = try makeAnimalRepository().create(
+            input: animalInput(
+                name: "Rollback resident",
+                tagNumber: "M6-RB",
+                sex: .female,
+                pastureID: pasture.id
+            )
+        )
+        let archivedAt = Date(timeIntervalSinceReferenceDate: 90_000)
+        let plan = DeletePasturesTransactionPlan(
+            expectedStates: [
+                PastureDeletionExpectedState(
+                    pastureID: pasture.id,
+                    residentAnimalIDs: [resident.id]
+                )
+            ],
+            operations: [
+                .moveAnimals(
+                    animalIDs: [resident.id],
+                    fromPastureID: pasture.id,
+                    toPastureID: nil
+                ),
+                .archiveFieldChecks(pastureIDs: [pasture.id], archivedAt: archivedAt),
+                .deletePastures(ids: [pasture.id])
+            ]
+        )
+        let failureState = CoreDataAnimalInjectedFailureState()
+        let base = CoreDataPastureDeletionTransactionWriter(selection: selection, assembly: assembly)
+        let writer = FaultInjectingPastureDeletionWriter(base: base, failureState: failureState)
+
+        return PastureDeletionRollbackProbe(
+            writer: writer,
+            plan: plan,
+            didReachInjectedRollbackFailpoint: { failureState.didReachFailpoint },
+            freshPersistedStateSnapshot: {
+                try CoreDataContractStoreSnapshotter.snapshot(assembly: self.assembly)
+            },
+            recoveryProbe: .reusableWriteScope(
+                saveFailedWriteScopeWithoutAdditionalReset: {
+                    try failureState.saveCapturedContextWithoutReset()
+                }
+            )
+        )
+    }
+
+    private func emptyPastureDeletionPlan(ids: [UUID]) -> DeletePasturesTransactionPlan {
+        let archivedAt = Date(timeIntervalSinceReferenceDate: 80_000)
+        return DeletePasturesTransactionPlan(
+            expectedStates: ids.map {
+                PastureDeletionExpectedState(pastureID: $0, residentAnimalIDs: [])
+            },
+            operations: [
+                .archiveFieldChecks(pastureIDs: ids, archivedAt: archivedAt),
+                .deletePastures(ids: ids)
+            ]
+        )
+    }
+
+    private static func classifyPastureDeletionPreconditionError(
+        _ error: Error
+    ) -> PersistenceTransactionPreconditionFailure? {
+        guard let error = error as? PastureDeletionTransactionError else {
+            return nil
+        }
+        switch error {
+        case .pastureMissing(let pastureID):
+            return .pastureMissing(pastureID: pastureID)
+        case .residentSetChanged(let pastureID):
+            return .pastureResidentSetChanged(pastureID: pastureID)
+        default:
+            return nil
+        }
+    }
+
     func makeWorkingOwnershipControl() -> CoreDataAnimalWorkingOwnershipControl {
         CoreDataAnimalWorkingOwnershipControl(
             assembly: assembly,
