@@ -817,18 +817,6 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             )
         )
 
-        let activeBefore = try XCTUnwrap(animals.fetchAnimalAggregateForEditing(id: active.id))
-        let nilDestinationBefore = try XCTUnwrap(
-            animals.fetchAnimalAggregateForEditing(id: nilDestinationResident.id)
-        )
-        let inactiveBefore = try XCTUnwrap(animals.fetchAnimalAggregateForEditing(id: inactive.id))
-        let unrelatedBefore = try XCTUnwrap(animals.fetchAnimalAggregateForEditing(id: unrelated.id))
-        let activeTimelineBefore = try animals.fetchTimeline(id: active.id)
-        let nilTimelineBefore = try animals.fetchTimeline(id: nilDestinationResident.id)
-        let inactiveTimelineBefore = try animals.fetchTimeline(id: inactive.id)
-        let activeMovementBefore = try environment.movementRecordStates(animalID: active.id)
-        let nilMovementBefore = try environment.movementRecordStates(animalID: nilDestinationResident.id)
-
         let sourceFieldCheckID = try environment.seedFieldCheckSession(
             pastureID: source.id,
             pastureName: source.name
@@ -841,7 +829,6 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             pastureID: unrelatedPasture.id,
             pastureName: unrelatedPasture.name
         )
-        let unrelatedFieldCheckBefore = try environment.fieldCheckArchiveState(id: unrelatedFieldCheckID)
 
         let archivedAt = Date(timeIntervalSinceReferenceDate: 97_000)
         let plan = DeletePasturesTransactionPlan(
@@ -873,114 +860,47 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
                 .deletePastures(ids: [source.id, nilDestinationSource.id])
             ]
         )
-
         let writer = CoreDataPastureDeletionTransactionWriter(
             selection: environment.selection,
             assembly: environment.assembly
         )
-        try await writer.deletePastures(plan)
-
-        XCTAssertEqual(writer.lastExecutedOperations, plan.operations)
-        XCTAssertNil(try environment.makePastureRepository().fetchPastureDetail(id: source.id))
-        XCTAssertNil(
-            try environment.makePastureRepository().fetchPastureDetail(id: nilDestinationSource.id)
-        )
-        XCTAssertNotNil(try environment.makePastureRepository().fetchPastureDetail(id: destination.id))
-        XCTAssertNotNil(
-            try environment.makePastureRepository().fetchPastureDetail(id: unrelatedPasture.id)
-        )
-
-        let activeAfter = try XCTUnwrap(
-            environment.makeAnimalRepository().fetchAnimalAggregateForEditing(id: active.id)
-        )
-        XCTAssertEqual(activeAfter.animal.pastureID, destination.id)
-        XCTAssertNotEqual(activeAfter.revision, activeBefore.revision)
-        XCTAssertEqual(
-            try environment.makeAnimalRepository().fetchTimeline(id: active.id).count,
-            activeTimelineBefore.count + 1
-        )
-        XCTAssertEqual(activeAfter.animal.id, active.id)
-        let activeMovementAfter = try environment.movementRecordStates(animalID: active.id)
-        XCTAssertEqual(activeMovementAfter.count, activeMovementBefore.count + 1)
-        let activeNewMovement = try XCTUnwrap(
-            activeMovementAfter.first { record in
-                !activeMovementBefore.contains { $0.id == record.id }
-            }
-        )
-        XCTAssertEqual(activeNewMovement.fromPastureIDSnapshot, source.id)
-        XCTAssertEqual(activeNewMovement.fromPastureNameSnapshot, source.name)
-        XCTAssertEqual(activeNewMovement.toPastureIDSnapshot, destination.id)
-        XCTAssertEqual(activeNewMovement.toPastureNameSnapshot, destination.name)
-
-        let nilDestinationAfter = try XCTUnwrap(
-            environment.makeAnimalRepository()
-                .fetchAnimalAggregateForEditing(id: nilDestinationResident.id)
-        )
-        XCTAssertNil(nilDestinationAfter.animal.pastureID)
-        XCTAssertNotEqual(nilDestinationAfter.revision, nilDestinationBefore.revision)
-        XCTAssertEqual(
-            try environment.makeAnimalRepository().fetchTimeline(id: nilDestinationResident.id).count,
-            nilTimelineBefore.count + 1
-        )
-        XCTAssertEqual(nilDestinationAfter.animal.id, nilDestinationResident.id)
-        let nilMovementAfter = try environment.movementRecordStates(animalID: nilDestinationResident.id)
-        XCTAssertEqual(nilMovementAfter.count, nilMovementBefore.count + 1)
-        let nilNewMovement = try XCTUnwrap(
-            nilMovementAfter.first { record in
-                !nilMovementBefore.contains { $0.id == record.id }
-            }
-        )
-        XCTAssertEqual(nilNewMovement.fromPastureIDSnapshot, nilDestinationSource.id)
-        XCTAssertEqual(nilNewMovement.fromPastureNameSnapshot, nilDestinationSource.name)
-        XCTAssertNil(nilNewMovement.toPastureIDSnapshot)
-        XCTAssertNil(nilNewMovement.toPastureNameSnapshot)
-
-        let inactiveAfter = try XCTUnwrap(
-            environment.makeAnimalRepository().fetchAnimalAggregateForEditing(id: inactive.id)
-        )
-        XCTAssertNil(inactiveAfter.animal.pastureID)
-        XCTAssertEqual(inactiveAfter.animal.id, inactive.id)
-        XCTAssertNotEqual(inactiveAfter.revision, inactiveBefore.revision)
-        XCTAssertEqual(
-            try environment.makeAnimalRepository().fetchTimeline(id: inactive.id),
-            inactiveTimelineBefore
+        let probe = PastureDeletionCorePersistenceContractProbe(
+            writer: writer,
+            plan: plan,
+            makePastureRepository: { environment.makePastureRepository() },
+            makeAnimalRepository: { environment.makeAnimalRepository() },
+            executedOperations: { writer.lastExecutedOperations },
+            moves: [
+                PastureDeletionCorePersistenceMoveExpectation(
+                    animalID: active.id,
+                    fromPastureID: source.id,
+                    fromPastureName: source.name,
+                    toPastureID: destination.id,
+                    toPastureName: destination.name
+                ),
+                PastureDeletionCorePersistenceMoveExpectation(
+                    animalID: nilDestinationResident.id,
+                    fromPastureID: nilDestinationSource.id,
+                    fromPastureName: nilDestinationSource.name,
+                    toPastureID: nil,
+                    toPastureName: nil
+                )
+            ],
+            movementRecords: { try environment.movementRecordStates(animalID: $0) },
+            inactiveSurvivorAnimalID: inactive.id,
+            emptyGroupID: emptyGroup.id,
+            survivingGroupID: sharedGroup.id,
+            expectedSurvivingGroupPastureIDs: [sharedGroupSurvivor.id],
+            archivedFieldCheckIDs: [sourceFieldCheckID, nilSourceFieldCheckID],
+            archivedAt: archivedAt,
+            fieldCheckState: { try environment.fieldCheckArchiveState(id: $0) },
+            unaffectedPastureID: unrelatedPasture.id,
+            unaffectedAnimalID: unrelated.id,
+            unaffectedFieldCheckSessionID: unrelatedFieldCheckID
         )
 
-        let unrelatedAfter = try XCTUnwrap(
-            environment.makeAnimalRepository().fetchAnimalAggregateForEditing(id: unrelated.id)
-        )
-        XCTAssertEqual(unrelatedAfter, unrelatedBefore)
-
-        let destinationResidents = try environment.makePastureRepository()
-            .fetchResidentAnimals(pastureID: destination.id)
-        XCTAssertTrue(destinationResidents.contains { $0.id == active.id })
-
-        let emptyGroupAfter = try XCTUnwrap(
-            environment.makePastureRepository().fetchPastureGroupDetail(id: emptyGroup.id)
-        )
-        XCTAssertTrue(emptyGroupAfter.pastures.isEmpty)
-
-        let sharedGroupAfter = try XCTUnwrap(
-            environment.makePastureRepository().fetchPastureGroupDetail(id: sharedGroup.id)
-        )
-        XCTAssertEqual(Set(sharedGroupAfter.pastures.map(\.id)), [sharedGroupSurvivor.id])
-
-        for fieldCheckID in [sourceFieldCheckID, nilSourceFieldCheckID] {
-            let fieldCheckState = try environment.fieldCheckArchiveState(id: fieldCheckID)
-            XCTAssertEqual(fieldCheckState.pastureArchivedAt, archivedAt)
-            XCTAssertNil(fieldCheckState.livePastureID)
-        }
-        let sourceFieldCheckState = try environment.fieldCheckArchiveState(id: sourceFieldCheckID)
-        XCTAssertEqual(sourceFieldCheckState.pastureIDSnapshot, source.id)
-        XCTAssertEqual(sourceFieldCheckState.pastureNameSnapshot, source.name)
-        let nilSourceFieldCheckState = try environment.fieldCheckArchiveState(id: nilSourceFieldCheckID)
-        XCTAssertEqual(nilSourceFieldCheckState.pastureIDSnapshot, nilDestinationSource.id)
-        XCTAssertEqual(nilSourceFieldCheckState.pastureNameSnapshot, nilDestinationSource.name)
-
-        XCTAssertEqual(
-            try environment.fieldCheckArchiveState(id: unrelatedFieldCheckID),
-            unrelatedFieldCheckBefore
-        )
+        try await PastureDeletionTransactionContract
+            .assertCorePersistenceSuccessSemantics(using: probe)
     }
 
     func testMilestone6PastureDeletionWaitsForActiveResidentWriteThenRejectsStalePlan() async throws {
@@ -2584,7 +2504,7 @@ private final class CoreDataAnimalContractEnvironment {
         )
     }
 
-    func movementRecordStates(animalID: UUID) throws -> [CoreDataMovementRecordState] {
+    func movementRecordStates(animalID: UUID) throws -> [PastureDeletionMovementRecordContractSnapshot] {
         let context = assembly.contextFactory.makeReadContext()
         return try context.performAndWait {
             let request = NSFetchRequest<CDMovementRecord>(
@@ -2596,7 +2516,7 @@ private final class CoreDataAnimalContractEnvironment {
                 animalID as NSUUID
             )
             return try context.fetch(request).map {
-                CoreDataMovementRecordState(
+                PastureDeletionMovementRecordContractSnapshot(
                     id: $0.id,
                     fromPastureIDSnapshot: $0.fromPastureIDSnapshot,
                     fromPastureNameSnapshot: $0.fromPastureNameSnapshot,
@@ -2644,7 +2564,7 @@ private final class CoreDataAnimalContractEnvironment {
         return id
     }
 
-    func fieldCheckArchiveState(id: UUID) throws -> CoreDataFieldCheckArchiveState {
+    func fieldCheckArchiveState(id: UUID) throws -> PastureDeletionFieldCheckContractSnapshot {
         let context = assembly.contextFactory.makeReadContext()
         return try context.performAndWait {
             guard let session = try assembly.lookup.herdOwned(
@@ -2655,7 +2575,7 @@ private final class CoreDataAnimalContractEnvironment {
             ) else {
                 throw CoreDataAnimalContractTestError.missingPreparedFieldCheck
             }
-            return CoreDataFieldCheckArchiveState(
+            return PastureDeletionFieldCheckContractSnapshot(
                 pastureIDSnapshot: session.pastureIDSnapshot,
                 pastureNameSnapshot: session.pastureNameSnapshot,
                 pastureArchivedAt: session.pastureArchivedAt,
@@ -3453,21 +3373,6 @@ private final class FaultInjectingAnimalAggregateWriter: AnimalAggregateTransact
             throw CoreDataAnimalContractTestError.injectedFailure
         }
     }
-}
-
-private struct CoreDataMovementRecordState: Equatable {
-    let id: UUID
-    let fromPastureIDSnapshot: UUID?
-    let fromPastureNameSnapshot: String?
-    let toPastureIDSnapshot: UUID?
-    let toPastureNameSnapshot: String?
-}
-
-private struct CoreDataFieldCheckArchiveState: Equatable {
-    let pastureIDSnapshot: UUID
-    let pastureNameSnapshot: String
-    let pastureArchivedAt: Date?
-    let livePastureID: UUID?
 }
 
 @MainActor
