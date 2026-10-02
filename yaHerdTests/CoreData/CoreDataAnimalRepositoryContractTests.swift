@@ -2647,6 +2647,51 @@ private final class FaultInjectingAnimalAggregateWriter: AnimalAggregateTransact
 }
 
 @MainActor
+private final class CoreDataPastureDeletionRevisionControl:
+    AnimalAggregateCrossFeatureRevisionContractTestControl
+{
+    let operation: AnimalAggregateCrossFeatureRevisionOperation = .pastureDeletionTransaction
+    let affectedAnimalIDs: [UUID]
+    let pastureDeletionInactiveSurvivorAnimalID: UUID?
+    let unrelatedAnimalID: UUID
+
+    private let assembly: CoreDataPersistenceAssembly
+    private let selection: CoreDataAnimalContractSelection
+    private let plan: DeletePasturesTransactionPlan
+
+    init(
+        assembly: CoreDataPersistenceAssembly,
+        selection: CoreDataAnimalContractSelection,
+        plan: DeletePasturesTransactionPlan,
+        activeResidentID: UUID,
+        inactiveSurvivorID: UUID,
+        unrelatedAnimalID: UUID
+    ) {
+        self.assembly = assembly
+        self.selection = selection
+        self.plan = plan
+        self.affectedAnimalIDs = [activeResidentID, inactiveSurvivorID]
+        self.pastureDeletionInactiveSurvivorAnimalID = inactiveSurvivorID
+        self.unrelatedAnimalID = unrelatedAnimalID
+    }
+
+    func makeAggregateReader() -> any AnimalAggregateEditReading {
+        CoreDataAnimalRepository(selection: selection, assembly: assembly)
+    }
+
+    func makeAnimalRepository() -> any AnimalRepository {
+        CoreDataAnimalRepository(selection: selection, assembly: assembly)
+    }
+
+    func performMutation() async throws {
+        try await CoreDataPastureDeletionTransactionWriter(
+            selection: selection,
+            assembly: assembly
+        ).deletePastures(plan)
+    }
+}
+
+@MainActor
 private final class FaultInjectingPastureDeletionWriter: PastureDeletionTransactionWriting {
     private let base: CoreDataPastureDeletionTransactionWriter
     private let failureState: CoreDataAnimalInjectedFailureState
