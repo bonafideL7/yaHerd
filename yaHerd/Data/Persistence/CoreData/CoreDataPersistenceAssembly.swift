@@ -73,7 +73,8 @@ enum CoreDataResidentWriteCoordinationError: Error, Equatable {
 final class CoreDataPastureResidentWriteCoordinator {
     private var activeAnimalWrites = 0
     private var deletionPending = false
-    private var deletionContinuation: CheckedContinuation<Void, Never>?
+    private var animalDrainContinuation: CheckedContinuation<Void, Never>?
+    private var deletionWaiters: [CheckedContinuation<Void, Never>] = []
 
     func beginAnimalWrite() throws {
         guard !deletionPending else {
@@ -86,26 +87,36 @@ final class CoreDataPastureResidentWriteCoordinator {
         precondition(activeAnimalWrites > 0)
         activeAnimalWrites -= 1
         if activeAnimalWrites == 0, deletionPending {
-            let continuation = deletionContinuation
-            deletionContinuation = nil
+            let continuation = animalDrainContinuation
+            animalDrainContinuation = nil
             continuation?.resume()
         }
     }
 
     func acquirePastureDeletion() async {
-        precondition(!deletionPending)
+        if deletionPending {
+            await withCheckedContinuation { continuation in
+                deletionWaiters.append(continuation)
+            }
+            return
+        }
+
         deletionPending = true
         guard activeAnimalWrites > 0 else {
             return
         }
         await withCheckedContinuation { continuation in
-            deletionContinuation = continuation
+            animalDrainContinuation = continuation
         }
     }
 
     func releasePastureDeletion() {
-        deletionPending = false
-        deletionContinuation = nil
+        animalDrainContinuation = nil
+        if deletionWaiters.isEmpty {
+            deletionPending = false
+        } else {
+            deletionWaiters.removeFirst().resume()
+        }
     }
 }
 
