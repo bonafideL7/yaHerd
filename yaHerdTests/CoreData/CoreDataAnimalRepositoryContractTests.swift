@@ -760,6 +760,36 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         )
     }
 
+    func testMilestone6PastureDeletionRotatesEveryAffectedAnimalRevision() async throws {
+        let environment = try await makeEnvironment()
+        let fixture = AnimalAggregateCrossFeatureRevisionContractFixture(
+            makeTestControl: { operation in
+                guard operation == .pastureDeletionTransaction else {
+                    preconditionFailure("M6 owns only the Pasture deletion transaction revision probe.")
+                }
+                return try environment.makePastureDeletionRevisionControl()
+            },
+            makeParentDeletionProjectionProbe: {
+                preconditionFailure("Not part of the M6 Pasture deletion revision slice.")
+            },
+            makeLegacyUpdateTagDependentProjectionProbe: {
+                preconditionFailure("Not part of the M6 Pasture deletion revision slice.")
+            },
+            makeDirectTagDependentProjectionProbe: {
+                preconditionFailure("Not part of the M6 Pasture deletion revision slice.")
+            },
+            makeWorkingTagDependentProjectionProbe: {
+                preconditionFailure("Not part of the M6 Pasture deletion revision slice.")
+            },
+            makeTagColorRemapDependentProjectionProbe: {
+                preconditionFailure("Not part of the M6 Pasture deletion revision slice.")
+            }
+        )
+
+        try await AnimalAggregateCrossFeatureRevisionContract
+            .assertPastureDeletionTransactionRotatesRevision(using: fixture)
+    }
+
     func testMilestone6PastureDeletionRollsBackAfterStaging() async throws {
         let createEnvironment = try await makeEnvironment()
         let updateEnvironment = try await makeEnvironment()
@@ -1882,6 +1912,66 @@ private final class CoreDataAnimalContractEnvironment {
             recoveryProbe: .discardedWriteScope(
                 verifyFailedWriteScopeWasDisposed: { true }
             )
+        )
+    }
+
+    func makePastureDeletionRevisionControl() throws -> CoreDataPastureDeletionRevisionControl {
+        let pasture = try makePastureRepository().create(
+            input: PastureInput(name: "Revision target", acreage: 16, usableAcreage: 15, targetAcresPerHead: 1)
+        )
+        let animalRepository = makeAnimalRepository()
+        let active = try animalRepository.create(
+            input: animalInput(
+                name: "Revision active resident",
+                tagNumber: "M6-REV-A",
+                sex: .female,
+                pastureID: pasture.id
+            )
+        )
+        let inactive = try animalRepository.create(
+            input: animalInput(
+                name: "Revision archived resident",
+                tagNumber: "M6-REV-I",
+                sex: .female,
+                pastureID: pasture.id
+            )
+        )
+        try animalRepository.archive(ids: [inactive.id], reason: "M6 revision fixture")
+        let unrelated = try animalRepository.create(
+            input: animalInput(
+                name: "Revision unrelated",
+                tagNumber: "M6-REV-U",
+                sex: .female
+            )
+        )
+        let plan = DeletePasturesTransactionPlan(
+            expectedStates: [
+                PastureDeletionExpectedState(
+                    pastureID: pasture.id,
+                    residentAnimalIDs: [active.id]
+                )
+            ],
+            operations: [
+                .moveAnimals(
+                    animalIDs: [active.id],
+                    fromPastureID: pasture.id,
+                    toPastureID: nil
+                ),
+                .archiveFieldChecks(
+                    pastureIDs: [pasture.id],
+                    archivedAt: Date(timeIntervalSinceReferenceDate: 92_000)
+                ),
+                .deletePastures(ids: [pasture.id])
+            ]
+        )
+
+        return CoreDataPastureDeletionRevisionControl(
+            assembly: assembly,
+            selection: selection,
+            plan: plan,
+            activeResidentID: active.id,
+            inactiveSurvivorID: inactive.id,
+            unrelatedAnimalID: unrelated.id
         )
     }
 
