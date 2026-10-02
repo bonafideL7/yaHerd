@@ -826,6 +826,8 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let activeTimelineBefore = try animals.fetchTimeline(id: active.id)
         let nilTimelineBefore = try animals.fetchTimeline(id: nilDestinationResident.id)
         let inactiveTimelineBefore = try animals.fetchTimeline(id: inactive.id)
+        let activeMovementBefore = try environment.movementRecordStates(animalID: active.id)
+        let nilMovementBefore = try environment.movementRecordStates(animalID: nilDestinationResident.id)
 
         let sourceFieldCheckID = try environment.seedFieldCheckSession(
             pastureID: source.id,
@@ -897,6 +899,18 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             try environment.makeAnimalRepository().fetchTimeline(id: active.id).count,
             activeTimelineBefore.count + 1
         )
+        XCTAssertEqual(activeAfter.animal.id, active.id)
+        let activeMovementAfter = try environment.movementRecordStates(animalID: active.id)
+        XCTAssertEqual(activeMovementAfter.count, activeMovementBefore.count + 1)
+        let activeNewMovement = try XCTUnwrap(
+            activeMovementAfter.first { record in
+                !activeMovementBefore.contains { $0.id == record.id }
+            }
+        )
+        XCTAssertEqual(activeNewMovement.fromPastureIDSnapshot, source.id)
+        XCTAssertEqual(activeNewMovement.fromPastureNameSnapshot, source.name)
+        XCTAssertEqual(activeNewMovement.toPastureIDSnapshot, destination.id)
+        XCTAssertEqual(activeNewMovement.toPastureNameSnapshot, destination.name)
 
         let nilDestinationAfter = try XCTUnwrap(
             environment.makeAnimalRepository()
@@ -908,11 +922,24 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             try environment.makeAnimalRepository().fetchTimeline(id: nilDestinationResident.id).count,
             nilTimelineBefore.count + 1
         )
+        XCTAssertEqual(nilDestinationAfter.animal.id, nilDestinationResident.id)
+        let nilMovementAfter = try environment.movementRecordStates(animalID: nilDestinationResident.id)
+        XCTAssertEqual(nilMovementAfter.count, nilMovementBefore.count + 1)
+        let nilNewMovement = try XCTUnwrap(
+            nilMovementAfter.first { record in
+                !nilMovementBefore.contains { $0.id == record.id }
+            }
+        )
+        XCTAssertEqual(nilNewMovement.fromPastureIDSnapshot, nilDestinationSource.id)
+        XCTAssertEqual(nilNewMovement.fromPastureNameSnapshot, nilDestinationSource.name)
+        XCTAssertNil(nilNewMovement.toPastureIDSnapshot)
+        XCTAssertNil(nilNewMovement.toPastureNameSnapshot)
 
         let inactiveAfter = try XCTUnwrap(
             environment.makeAnimalRepository().fetchAnimalAggregateForEditing(id: inactive.id)
         )
         XCTAssertNil(inactiveAfter.animal.pastureID)
+        XCTAssertEqual(inactiveAfter.animal.id, inactive.id)
         XCTAssertNotEqual(inactiveAfter.revision, inactiveBefore.revision)
         XCTAssertEqual(
             try environment.makeAnimalRepository().fetchTimeline(id: inactive.id),
@@ -2557,6 +2584,29 @@ private final class CoreDataAnimalContractEnvironment {
         )
     }
 
+    func movementRecordStates(animalID: UUID) throws -> [CoreDataMovementRecordState] {
+        let context = assembly.contextFactory.makeReadContext()
+        return try context.performAndWait {
+            let request = NSFetchRequest<CDMovementRecord>(
+                entityName: CDMovementRecord.coreDataEntityName
+            )
+            request.predicate = NSPredicate(
+                format: "herd.id == %@ AND animal.id == %@",
+                herdID as CVarArg,
+                animalID as CVarArg
+            )
+            return try context.fetch(request).map {
+                CoreDataMovementRecordState(
+                    id: $0.id,
+                    fromPastureIDSnapshot: $0.fromPastureIDSnapshot,
+                    fromPastureNameSnapshot: $0.fromPastureNameSnapshot,
+                    toPastureIDSnapshot: $0.toPastureIDSnapshot,
+                    toPastureNameSnapshot: $0.toPastureNameSnapshot
+                )
+            }
+        }
+    }
+
     func seedFieldCheckSession(
         pastureID: UUID,
         pastureName: String
@@ -3403,6 +3453,14 @@ private final class FaultInjectingAnimalAggregateWriter: AnimalAggregateTransact
             throw CoreDataAnimalContractTestError.injectedFailure
         }
     }
+}
+
+private struct CoreDataMovementRecordState: Equatable {
+    let id: UUID
+    let fromPastureIDSnapshot: UUID?
+    let fromPastureNameSnapshot: String?
+    let toPastureIDSnapshot: UUID?
+    let toPastureNameSnapshot: String?
 }
 
 private struct CoreDataFieldCheckArchiveState: Equatable {
