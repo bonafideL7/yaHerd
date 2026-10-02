@@ -690,6 +690,76 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             .assertPastureDeletionRejectsStaleExpectedStateBeforeMutation(using: fixture)
     }
 
+    func testMilestone6PastureDeletionWaitsForActiveResidentWriteThenRejectsStalePlan() async throws {
+        let environment = try await makeEnvironment()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Concurrent deletion target",
+                acreage: 14,
+                usableAcreage: 13,
+                targetAcresPerHead: 1
+            )
+        )
+        let plan = DeletePasturesTransactionPlan(
+            expectedStates: [
+                PastureDeletionExpectedState(
+                    pastureID: pasture.id,
+                    residentAnimalIDs: []
+                )
+            ],
+            operations: [
+                .archiveFieldChecks(
+                    pastureIDs: [pasture.id],
+                    archivedAt: Date(timeIntervalSinceReferenceDate: 95_000)
+                ),
+                .deletePastures(ids: [pasture.id])
+            ]
+        )
+        let residentTransaction = environment.makeCreateTransaction(
+            name: "Concurrent resident",
+            tagNumber: "M6-RACE",
+            pastureID: pasture.id
+        )
+        let barrier = CoreDataAnimalCommitBarrier()
+        let pendingResident = Task { @MainActor in
+            try await environment.makeAnimalRepository().createAnimal(
+                residentTransaction,
+                beforeSave: { _ in
+                    barrier.blockUntilReleased()
+                }
+            )
+        }
+
+        await waitUntilReached(barrier)
+        XCTAssertTrue(barrier.didReach)
+
+        let pendingDeletion = Task { @MainActor in
+            try await CoreDataPastureDeletionTransactionWriter(
+                selection: environment.selection,
+                assembly: environment.assembly
+            ).deletePastures(plan)
+        }
+
+        await Task.yield()
+        barrier.release()
+        let created = try await pendingResident.value
+
+        do {
+            try await pendingDeletion.value
+            XCTFail("Deletion must revalidate after the already-active resident write commits.")
+        } catch let error as PastureDeletionTransactionError {
+            XCTAssertEqual(error, .residentSetChanged(pastureID: pasture.id))
+        }
+
+        let reloaded = try XCTUnwrap(
+            environment.makeAnimalRepository().fetchAnimalDetail(id: created.animal.id)
+        )
+        XCTAssertEqual(reloaded.pastureID, pasture.id)
+        XCTAssertNotNil(
+            try environment.makePastureRepository().fetchPastureDetail(id: pasture.id)
+        )
+    }
+
     func testMilestone6PastureDeletionRollsBackAfterStaging() async throws {
         let createEnvironment = try await makeEnvironment()
         let updateEnvironment = try await makeEnvironment()
@@ -1027,7 +1097,7 @@ private final class CoreDataAnimalContractEnvironment {
                 sex: .female,
                 birthDate: Date(timeIntervalSinceReferenceDate: 41_000),
                 status: .active,
-                pastureID: nil,
+                pastureID: pastureID,
                 sireID: nil,
                 damID: nil,
                 distinguishingFeatures: [],
@@ -2151,7 +2221,8 @@ private final class CoreDataAnimalContractEnvironment {
     func makeCreateTransaction(
         name: String,
         tagNumber: String,
-        colorID: UUID? = nil
+        colorID: UUID? = nil,
+        pastureID: UUID? = nil
     ) -> CreateAnimalAggregateTransaction {
         CreateAnimalAggregateTransaction(
             animalID: UUID(),
