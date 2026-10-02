@@ -190,7 +190,7 @@ enum PastureDeletionTransactionContract {
         }
 
         let inactiveAfter = try XCTUnwrap(
-            probe.makeAnimalRepository()
+            probe.makeAggregateReader()
                 .fetchAnimalAggregateForEditing(id: probe.inactiveSurvivorAnimalID),
             file: file,
             line: line
