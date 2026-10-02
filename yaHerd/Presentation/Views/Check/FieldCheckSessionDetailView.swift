@@ -187,6 +187,8 @@ struct FieldCheckSessionDetailView: View {
         }
         .navigationTitle(model.detail?.displayTitle ?? "Check")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(model.isCompletingSession)
+        .interactiveDismissDisabled(model.isCompletingSession)
         .applyFieldCheckNavigationSubtitle(navigationSubtitleText)
         .toolbar {
             if let detail = model.detail {
@@ -194,7 +196,9 @@ struct FieldCheckSessionDetailView: View {
                     if detail.isCompleted {
                         Menu {
                             Button {
-                                model.reopenSession(sessionID: sessionID, using: repository)
+                                Task { @MainActor in
+                                    await model.reopenSession(sessionID: sessionID, using: repository)
+                                }
                             } label: {
                                 Label("Reopen Check", systemImage: "lock.open")
                             }
@@ -212,6 +216,7 @@ struct FieldCheckSessionDetailView: View {
                             Label(listOrQuickCountToolbarTitle, systemImage: listOrQuickCountToolbarSystemImage)
                         }
                         .accessibilityLabel(listOrQuickCountToolbarTitle)
+                        .disabled(model.isCompletingSession)
 
                         Button {
                             selectPane(.findings)
@@ -219,6 +224,7 @@ struct FieldCheckSessionDetailView: View {
                             Label("Findings", systemImage: "exclamationmark.bubble")
                         }
                         .accessibilityLabel("Findings")
+                        .disabled(model.isCompletingSession)
 
                         Button {
                             selectPane(.notes)
@@ -226,14 +232,18 @@ struct FieldCheckSessionDetailView: View {
                             Label("Notes", systemImage: "note.text")
                         }
                         .accessibilityLabel("Notes")
+                        .disabled(model.isCompletingSession)
+
+                        let countProjection = model.countProjection(for: detail)
 
                         Button {
                             finishSession(from: detail)
                         } label: {
-                            Text(detail.remainingExpectedCount == 0 && detail.countVariance == 0 ? "Finish" : "Review")
+                            Text(countProjection.requiresFinishConfirmation ? "Review" : "Finish")
                         }
-                        .tint(detail.remainingExpectedCount == 0 && detail.countVariance == 0 ? Color.accentColor : Color.orange)
+                        .tint(countProjection.requiresFinishConfirmation ? Color.orange : Color.accentColor)
                         .disabledWhenDataReadOnly()
+                        .disabled(model.isCompletingSession)
                     }
                 }
             }
@@ -248,6 +258,7 @@ struct FieldCheckSessionDetailView: View {
         .overlay(alignment: .bottomTrailing) {
             if dataAccessMode.allowsDataMutations
                 && model.detail?.isCompleted == false
+                && !model.isCompletingSession
                 && !isRosterSearchFiltering {
                 FieldCheckFloatingActionMenu(
                     onAddFinding: {
@@ -277,7 +288,9 @@ struct FieldCheckSessionDetailView: View {
         }
         .onDisappear {
             if dataAccessMode.allowsDataMutations && model.detail?.isCompleted == false {
-                model.persistNotes(sessionID: sessionID, using: repository)
+                Task { @MainActor in
+                    await model.persistNotes(sessionID: sessionID, using: repository)
+                }
             }
         }
         .sheet(isPresented: $showingAddFinding, onDismiss: { pendingFindingAnimalID = nil }) {
@@ -288,9 +301,12 @@ struct FieldCheckSessionDetailView: View {
                     initialAnimalID: pendingFindingAnimalID
                 ) { input in
                     guard dataAccessMode.allowsDataMutations,
-                        model.detail?.isCompleted == false
+                        model.detail?.isCompleted == false,
+                        !model.isCompletingSession
                     else { return }
-                    model.addFinding(sessionID: sessionID, input: input, using: repository)
+                    Task { @MainActor in
+                        await model.addFinding(sessionID: sessionID, input: input, using: repository)
+                    }
                 }
             }
         }
@@ -299,9 +315,10 @@ struct FieldCheckSessionDetailView: View {
                 NavigationStack {
                     FieldCheckTrackedAnimalPickerView(session: detail) { animalID in
                         guard dataAccessMode.allowsDataMutations,
-                            model.detail?.isCompleted == false
+                            model.detail?.isCompleted == false,
+                            !model.isCompletingSession
                         else { return false }
-                        return model.addTrackedAnimalToSession(
+                        return await model.addTrackedAnimalToSession(
                             sessionID: sessionID,
                             animalID: animalID,
                             using: repository
@@ -325,7 +342,9 @@ struct FieldCheckSessionDetailView: View {
             }
         }
         .sheet(isPresented: $showingNotes, onDismiss: {
-            model.persistNotes(sessionID: sessionID, using: repository)
+            Task { @MainActor in
+                await model.persistNotes(sessionID: sessionID, using: repository)
+            }
         }) {
             if let detail = model.detail {
                 NavigationStack {
@@ -341,14 +360,17 @@ struct FieldCheckSessionDetailView: View {
                     finding: finding
                 ) { input in
                     guard dataAccessMode.allowsDataMutations,
-                        model.detail?.isCompleted == false
+                        model.detail?.isCompleted == false,
+                        !model.isCompletingSession
                     else { return }
-                    model.updateFinding(
-                        sessionID: sessionID,
-                        findingID: finding.id,
-                        input: input,
-                        using: repository
-                    )
+                    Task { @MainActor in
+                        await model.updateFinding(
+                            sessionID: sessionID,
+                            findingID: finding.id,
+                            input: input,
+                            using: repository
+                        )
+                    }
                 }
             }
         }
@@ -366,6 +388,7 @@ struct FieldCheckSessionDetailView: View {
                 completeCurrentSession()
             }
             .disabledWhenDataReadOnly()
+            .disabled(model.isCompletingSession)
             Button("Keep Checking", role: .cancel) {}
         } message: {
             Text(finishConfirmationMessage)
@@ -402,6 +425,7 @@ struct FieldCheckSessionDetailView: View {
         .refreshable {
             model.refresh(sessionID: sessionID, using: repository)
         }
+        .disabled(model.isCompletingSession)
         .modifier(FieldCheckRosterSearchModifier(isActive: selectedPane == .roster, text: $rosterSearchText))
     }
 
@@ -502,23 +526,27 @@ struct FieldCheckSessionDetailView: View {
                     FieldCheckAnimalCheckRow(
                         sessionID: detail.id,
                         check: check,
-                        isEditable: dataAccessMode.allowsDataMutations,
+                        isEditable: dataAccessMode.allowsDataMutations && !model.isCompletingSession,
                         isCountedByQuickCount: quickCountedIDs.contains(check.id),
                         onToggleCounted: {
-                            model.setAnimalCheckCounted(
-                                sessionID: sessionID,
-                                animalCheckID: check.id,
-                                isCounted: !check.wasCounted,
-                                using: repository
-                            )
+                            Task { @MainActor in
+                                await model.setAnimalCheckCounted(
+                                    sessionID: sessionID,
+                                    animalCheckID: check.id,
+                                    isCounted: !check.wasCounted,
+                                    using: repository
+                                )
+                            }
                         },
                         onToggleMissing: {
-                            model.setAnimalCheckMissing(
-                                sessionID: sessionID,
-                                animalCheckID: check.id,
-                                isMissing: !check.isMissing,
-                                using: repository
-                            )
+                            Task { @MainActor in
+                                await model.setAnimalCheckMissing(
+                                    sessionID: sessionID,
+                                    animalCheckID: check.id,
+                                    isMissing: !check.isMissing,
+                                    using: repository
+                                )
+                            }
                         },
                         onAddFinding: { animalID in
                             pendingFindingAnimalID = animalID
@@ -570,7 +598,10 @@ struct FieldCheckSessionDetailView: View {
                 )
             } else {
                 ForEach(sortedFindings) { finding in
-                    findingRow(finding, allowsEditing: dataAccessMode.allowsDataMutations)
+                    findingRow(
+                            finding,
+                            allowsEditing: dataAccessMode.allowsDataMutations && !model.isCompletingSession
+                        )
                 }
             }
         } header: {
@@ -581,7 +612,7 @@ struct FieldCheckSessionDetailView: View {
     @ViewBuilder
     private func notesMainSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section {
-            TextField("Session notes", text: $model.notesDraft, axis: .vertical)
+            TextField("Session notes", text: notesDraftBinding, axis: .vertical)
                 .lineLimit(4...8)
         } header: {
             Text("Notes")
@@ -641,7 +672,10 @@ struct FieldCheckSessionDetailView: View {
                     )
                 } else {
                     ForEach(sortedFindings) { finding in
-                        findingRow(finding, allowsEditing: dataAccessMode.allowsDataMutations)
+                        findingRow(
+                            finding,
+                            allowsEditing: dataAccessMode.allowsDataMutations && !model.isCompletingSession
+                        )
                     }
                 }
             } label: {
@@ -660,7 +694,7 @@ struct FieldCheckSessionDetailView: View {
     private func notesSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section {
             DisclosureGroup(isExpanded: $showingNotes) {
-                TextField("Session notes", text: $model.notesDraft, axis: .vertical)
+                TextField("Session notes", text: notesDraftBinding, axis: .vertical)
                     .lineLimit(3...6)
                     .disabledWhenDataReadOnly()
             } label: {
@@ -724,7 +758,10 @@ struct FieldCheckSessionDetailView: View {
                     )
                 } else {
                     ForEach(sortedFindings) { finding in
-                        findingRow(finding, allowsEditing: dataAccessMode.allowsDataMutations)
+                        findingRow(
+                            finding,
+                            allowsEditing: dataAccessMode.allowsDataMutations && !model.isCompletingSession
+                        )
                     }
                 }
             }
@@ -743,7 +780,7 @@ struct FieldCheckSessionDetailView: View {
     private func notesSheetContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Form {
             Section {
-                TextField("Session notes", text: $model.notesDraft, axis: .vertical)
+                TextField("Session notes", text: notesDraftBinding, axis: .vertical)
                     .lineLimit(6...12)
                     .disabledWhenDataReadOnly()
             } footer: {
@@ -782,12 +819,14 @@ struct FieldCheckSessionDetailView: View {
                         finding: finding,
                         showsPastureName: false,
                         onStatusChange: dataAccessMode.allowsDataMutations ? { status in
-                            model.updateFindingStatus(
-                                sessionID: sessionID,
-                                findingID: finding.id,
-                                status: status,
-                                using: repository
-                            )
+                            Task { @MainActor in
+                                await model.updateFindingStatus(
+                                    sessionID: sessionID,
+                                    findingID: finding.id,
+                                    status: status,
+                                    using: repository
+                                )
+                            }
                         } : nil
                     )
                 }
@@ -911,12 +950,14 @@ struct FieldCheckSessionDetailView: View {
                 editingFinding = finding
             } : nil,
             onStatusChange: allowsEditing ? { status in
-                model.updateFindingStatus(
-                    sessionID: sessionID,
-                    findingID: finding.id,
-                    status: status,
-                    using: repository
-                )
+                Task { @MainActor in
+                    await model.updateFindingStatus(
+                        sessionID: sessionID,
+                        findingID: finding.id,
+                        status: status,
+                        using: repository
+                    )
+                }
             } : nil
         )
 
@@ -924,7 +965,13 @@ struct FieldCheckSessionDetailView: View {
             row
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button("Delete", role: .destructive) {
-                        model.deleteFinding(sessionID: sessionID, findingID: finding.id, using: repository)
+                        Task { @MainActor in
+                            await model.deleteFinding(
+                                sessionID: sessionID,
+                                findingID: finding.id,
+                                using: repository
+                            )
+                        }
                     }
                 }
         } else {
@@ -934,7 +981,10 @@ struct FieldCheckSessionDetailView: View {
 
     private func progressHeaderSection(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
         Section {
-            FieldCheckProgressHeader(detail: detail)
+            FieldCheckProgressHeader(
+                detail: detail,
+                countProjection: model.countProjection(for: detail)
+            )
         }
     }
 
@@ -943,7 +993,9 @@ struct FieldCheckSessionDetailView: View {
             selectedPane == .notes,
             pane != .notes
         {
-            model.persistNotes(sessionID: sessionID, using: repository)
+            Task { @MainActor in
+                await model.persistNotes(sessionID: sessionID, using: repository)
+            }
         }
 
         if pane != .roster {
@@ -954,7 +1006,7 @@ struct FieldCheckSessionDetailView: View {
     }
 
     private func quickCountedAnimalCheckIDs(for detail: FieldCheckSessionDetailSnapshot) -> Set<UUID> {
-        var remainingCounts = detail.quickAnimalTypeCounts
+        var remainingCounts = model.quickAnimalTypeCountsDraft
         var ids: Set<UUID> = []
 
         for check in sortedAnimalChecks(detail.animalChecks) {
@@ -974,11 +1026,19 @@ struct FieldCheckSessionDetailView: View {
         rosterFilter = .all
     }
 
+    private var notesDraftBinding: Binding<String> {
+        Binding(
+            get: { model.notesDraft },
+            set: { model.updateNotesDraft($0) }
+        )
+    }
+
     private func quickAnimalTypeCountsBinding(_ detail: FieldCheckSessionDetailSnapshot) -> Binding<[AnimalType: Int]> {
         Binding(
-            get: { detail.quickAnimalTypeCounts },
+            get: { model.quickAnimalTypeCountsDraft },
             set: { newValue in
-                guard dataAccessMode.allowsDataMutations else { return }
+                guard dataAccessMode.allowsDataMutations,
+                      !model.isCompletingSession else { return }
                 model.updateQuickAnimalTypeCounts(
                     sessionID: sessionID,
                     counts: newValue,
@@ -995,7 +1055,7 @@ struct FieldCheckSessionDetailView: View {
     }
 
     private func quickTypeSummary(for detail: FieldCheckSessionDetailSnapshot) -> String {
-        let counts = detail.quickAnimalTypeCounts
+        let counts = model.quickAnimalTypeCountsDraft
         let parts = AnimalType.allCases.compactMap { animalType -> String? in
             let count = counts[animalType, default: 0]
             guard count > 0 else { return nil }
@@ -1011,7 +1071,8 @@ struct FieldCheckSessionDetailView: View {
             let count = detail.animalChecks.filter { !$0.wasCounted && !$0.isMissing }.count
             return count == 1 ? "1 not seen by tag" : "\(count) not seen by tag"
         case .quickCount:
-            return "\(detail.totalSeen)/\(detail.expectedHeadCountSnapshot) seen"
+            let countProjection = model.countProjection(for: detail)
+            return "\(countProjection.totalSeen)/\(detail.expectedHeadCountSnapshot) seen"
         case .findings:
             let count = detail.openFindingsCount
             return count == 1 ? "1 open" : "\(count) open"
@@ -1033,20 +1094,23 @@ struct FieldCheckSessionDetailView: View {
     }
 
     private func shouldConfirmFinish(_ detail: FieldCheckSessionDetailSnapshot) -> Bool {
-        detail.remainingExpectedCount > 0 || detail.countVariance != 0
+        model.countProjection(for: detail).requiresFinishConfirmation
     }
 
     private var finishConfirmationMessage: String {
         guard let detail = model.detail else { return "Finish this pasture check?" }
+        let countProjection = model.countProjection(for: detail)
 
         var messages: [String] = []
-        if detail.remainingExpectedCount > 0 {
-            let noun = detail.remainingExpectedCount == 1 ? "animal is" : "animals are"
-            messages.append("\(detail.remainingExpectedCount) \(noun) still not seen.")
+        if countProjection.remainingExpectedCount > 0 {
+            let noun = countProjection.remainingExpectedCount == 1 ? "animal is" : "animals are"
+            messages.append("\(countProjection.remainingExpectedCount) \(noun) still not seen.")
         }
 
-        if detail.countVariance != 0 {
-            messages.append("The count difference is \(detail.countVariance > 0 ? "+" : "")\(detail.countVariance).")
+        if countProjection.countVariance != 0 {
+            messages.append(
+                "The count difference is \(countProjection.countVariance > 0 ? "+" : "")\(countProjection.countVariance)."
+            )
         }
 
         messages.append("You can reopen the check later if needed.")
@@ -1064,8 +1128,18 @@ struct FieldCheckSessionDetailView: View {
     }
 
     private func completeCurrentSession() {
-        guard dataAccessMode.allowsDataMutations else { return }
-        model.completeSession(sessionID: sessionID, using: repository)
+        guard dataAccessMode.allowsDataMutations,
+              model.beginSessionCompletion() else {
+            return
+        }
+
+        Task { @MainActor in
+            await model.completeSession(
+                sessionID: sessionID,
+                using: repository,
+                completionAlreadyAccepted: true
+            )
+        }
     }
 
     private var errorMessage: String? {
@@ -1212,15 +1286,16 @@ private struct FieldCheckRosterSearchModifier: ViewModifier {
 
 private struct FieldCheckProgressHeader: View {
     let detail: FieldCheckSessionDetailSnapshot
+    let countProjection: FieldCheckSessionCountProjection
 
     private var remainingText: String {
-        let count = detail.remainingExpectedCount
+        let count = countProjection.remainingExpectedCount
         return count == 1 ? "1 to check" : "\(count) to check"
     }
 
     private var differenceText: String {
-        guard detail.countVariance != 0 else { return "matched" }
-        return "diff \(detail.countVariance > 0 ? "+" : "")\(detail.countVariance)"
+        guard countProjection.countVariance != 0 else { return "matched" }
+        return "diff \(countProjection.countVariance > 0 ? "+" : "")\(countProjection.countVariance)"
     }
 
     private var statusParts: [String] {
@@ -1232,14 +1307,14 @@ private struct FieldCheckProgressHeader: View {
     }
 
     private var statusTint: Color {
-        detail.remainingExpectedCount == 0 && detail.countVariance == 0 ? Color.secondary : Color.orange
+        countProjection.remainingExpectedCount == 0 && countProjection.countVariance == 0 ? Color.secondary : Color.orange
     }
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("\(detail.totalSeen)/\(detail.expectedHeadCountSnapshot)")
+                    Text("\(countProjection.totalSeen)/\(detail.expectedHeadCountSnapshot)")
                         .font(.system(.title3, design: .rounded).weight(.bold))
                         .monospacedDigit()
                         .contentTransition(.numericText())
@@ -1258,7 +1333,7 @@ private struct FieldCheckProgressHeader: View {
 
             Spacer(minLength: 8)
 
-            if detail.remainingExpectedCount > 0 || detail.countVariance != 0 {
+            if countProjection.remainingExpectedCount > 0 || countProjection.countVariance != 0 {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.orange)

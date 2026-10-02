@@ -127,8 +127,8 @@ struct PastureTileListView: View {
         ) {
             if let pasture = model.pasturePendingDeletion {
                 Button("Delete \(pasture.name)", role: .destructive) {
-                    withAnimation(.snappy) {
-                        model.deletePasture(
+                    Task { @MainActor in
+                        await model.deletePasture(
                             id: pasture.id,
                             pastureRepository: repository,
                             animalRepository: animalMover,

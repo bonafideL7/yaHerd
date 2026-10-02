@@ -7,7 +7,7 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Session Scope Pasture",
@@ -38,14 +38,14 @@ extension FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let firstSessionID = try repository.createSession(
+        let firstSessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: Date(timeIntervalSince1970: 1_780_400_000),
                 notes: "First scoped session"
             )
         )
-        let secondSessionID = try repository.createSession(
+        let secondSessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: Date(timeIntervalSince1970: 1_780_486_400),
@@ -53,7 +53,7 @@ extension FieldCheckRepositoryContract {
             )
         )
 
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: firstSessionID,
             input: FieldCheckFindingInput(
                 recordedAt: Date(timeIntervalSince1970: 1_780_403_600),
@@ -64,7 +64,7 @@ extension FieldCheckRepositoryContract {
                 animalID: animal.id
             )
         )
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: secondSessionID,
             input: FieldCheckFindingInput(
                 recordedAt: Date(timeIntervalSince1970: 1_780_490_000),
@@ -91,8 +91,11 @@ extension FieldCheckRepositoryContract {
         let firstFinding = try XCTUnwrap(firstBefore.findings.first, file: file, line: line)
         let secondFinding = try XCTUnwrap(secondBefore.findings.first, file: file, line: line)
 
-        func assertAnimalCheckNotFound(_ operation: () throws -> Void) {
-            XCTAssertThrowsError(try operation(), file: file, line: line) { error in
+        func assertAnimalCheckNotFound(_ operation: () async throws -> Void) async {
+            do {
+                try await operation()
+                XCTFail("Expected animalCheckNotFound.", file: file, line: line)
+            } catch {
                 guard let repositoryError = error as? FieldCheckRepositoryError,
                       case .animalCheckNotFound = repositoryError else {
                     XCTFail(
@@ -105,8 +108,11 @@ extension FieldCheckRepositoryContract {
             }
         }
 
-        func assertFindingNotFound(_ operation: () throws -> Void) {
-            XCTAssertThrowsError(try operation(), file: file, line: line) { error in
+        func assertFindingNotFound(_ operation: () async throws -> Void) async {
+            do {
+                try await operation()
+                XCTFail("Expected findingNotFound.", file: file, line: line)
+            } catch {
                 guard let repositoryError = error as? FieldCheckRepositoryError,
                       case .findingNotFound = repositoryError else {
                     XCTFail(
@@ -123,15 +129,15 @@ extension FieldCheckRepositoryContract {
             (firstSessionID, secondCheck.id),
             (secondSessionID, firstCheck.id)
         ] {
-            assertAnimalCheckNotFound {
-                try repository.setAnimalCheckCounted(
+            await assertAnimalCheckNotFound {
+                try await repository.setAnimalCheckCounted(
                     sessionID: sessionID,
                     animalCheckID: foreignCheckID,
                     isCounted: true
                 )
             }
-            assertAnimalCheckNotFound {
-                try repository.setAnimalCheckMissing(
+            await assertAnimalCheckNotFound {
+                try await repository.setAnimalCheckMissing(
                     sessionID: sessionID,
                     animalCheckID: foreignCheckID,
                     isMissing: true
@@ -143,8 +149,8 @@ extension FieldCheckRepositoryContract {
             (firstSessionID, secondFinding.id),
             (secondSessionID, firstFinding.id)
         ] {
-            assertFindingNotFound {
-                try repository.updateFinding(
+            await assertFindingNotFound {
+                try await repository.updateFinding(
                     sessionID: sessionID,
                     findingID: foreignFindingID,
                     input: FieldCheckFindingInput(
@@ -157,15 +163,15 @@ extension FieldCheckRepositoryContract {
                     )
                 )
             }
-            assertFindingNotFound {
-                try repository.updateFindingStatus(
+            await assertFindingNotFound {
+                try await repository.updateFindingStatus(
                     sessionID: sessionID,
                     findingID: foreignFindingID,
                     status: .resolved
                 )
             }
-            assertFindingNotFound {
-                try repository.deleteFinding(
+            await assertFindingNotFound {
+                try await repository.deleteFinding(
                     sessionID: sessionID,
                     findingID: foreignFindingID
                 )
@@ -173,7 +179,7 @@ extension FieldCheckRepositoryContract {
         }
 
         let intentionalFirstNotes = "First scoped session flush"
-        try repository.updateNotes(sessionID: firstSessionID, notes: intentionalFirstNotes)
+        try await repository.updateNotes(sessionID: firstSessionID, notes: intentionalFirstNotes)
 
         let firstAfter = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: firstSessionID),

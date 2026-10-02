@@ -1,6 +1,6 @@
 import Foundation
 
-struct FieldCheckSessionStartInput: Hashable {
+struct FieldCheckSessionStartInput: Hashable, Sendable {
     let pastureID: UUID
     let startedAt: Date
     let notes: String
@@ -145,7 +145,7 @@ struct FieldCheckSessionSummary: Sendable, Identifiable, Hashable {
     }
 }
 
-struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
+struct FieldCheckSessionDetailSnapshot: Sendable, Identifiable, Hashable {
     let id: UUID
     let startedAt: Date
     let completedAt: Date?
@@ -265,7 +265,7 @@ struct FieldCheckSessionDetailSnapshot: Identifiable, Hashable {
     }
 }
 
-struct FieldCheckFindingInput: Hashable {
+struct FieldCheckFindingInput: Hashable, Sendable {
     let recordedAt: Date
     let type: FieldCheckFindingType
     let severity: FieldCheckFindingSeverity

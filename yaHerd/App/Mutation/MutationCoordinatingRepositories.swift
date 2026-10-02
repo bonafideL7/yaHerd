@@ -239,9 +239,9 @@ struct MutationPublishingFieldCheckRepository: FieldCheckRepository {
     let mutationRecorder: any SuccessfulMutationRecording
     let writePolicy: LocalDataWritePolicy
 
-    func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) throws {
+    func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) async throws {
         try writePolicy.validateCanWrite()
-        try base.archiveSessionsForDeletedPastures(ids, archivedAt: archivedAt)
+        try await base.archiveSessionsForDeletedPastures(ids, archivedAt: archivedAt)
         mutationRecorder.recordSuccessfulMutation(reason: .fieldCheck)
     }
 
@@ -253,28 +253,28 @@ struct MutationPublishingFieldCheckRepository: FieldCheckRepository {
         try base.fetchSessionDetail(id: id)
     }
 
-    func createSession(input: FieldCheckSessionStartInput) throws -> UUID {
+    func createSession(input: FieldCheckSessionStartInput) async throws -> UUID {
         try writePolicy.validateCanWrite()
-        let result = try base.createSession(input: input)
+        let result = try await base.createSession(input: input)
         mutationRecorder.recordSuccessfulMutation(reason: .fieldCheck)
         return result
     }
 
-    func updateQuickAnimalTypeCounts(sessionID: UUID, counts: [AnimalType: Int]) throws {
+    func updateQuickAnimalTypeCounts(sessionID: UUID, counts: [AnimalType: Int]) async throws {
         try writePolicy.validateCanWrite()
-        try base.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: counts)
+        try await base.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: counts)
         mutationRecorder.recordSuccessfulMutation(reason: .fieldCheck)
     }
 
-    func updateNotes(sessionID: UUID, notes: String) throws {
+    func updateNotes(sessionID: UUID, notes: String) async throws {
         try writePolicy.validateCanWrite()
-        try base.updateNotes(sessionID: sessionID, notes: notes)
+        try await base.updateNotes(sessionID: sessionID, notes: notes)
         mutationRecorder.recordSuccessfulMutation(reason: .fieldCheck)
     }
 
-    func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool) throws {
+    func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool) async throws {
         try writePolicy.validateCanWrite()
-        try base.setAnimalCheckCounted(
+        try await base.setAnimalCheckCounted(
             sessionID: sessionID,
             animalCheckID: animalCheckID,
             isCounted: isCounted
@@ -282,9 +282,9 @@ struct MutationPublishingFieldCheckRepository: FieldCheckRepository {
         mutationRecorder.recordSuccessfulMutation(reason: .fieldCheck)
     }
 
-    func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool) throws {
+    func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool) async throws {
         try writePolicy.validateCanWrite()
-        try base.setAnimalCheckMissing(
+        try await base.setAnimalCheckMissing(
             sessionID: sessionID,
             animalCheckID: animalCheckID,
             isMissing: isMissing
@@ -292,9 +292,9 @@ struct MutationPublishingFieldCheckRepository: FieldCheckRepository {
         mutationRecorder.recordSuccessfulMutation(reason: .fieldCheck)
     }
 
-    func addTrackedAnimalToSession(sessionID: UUID, animalID: UUID, checkedAt: Date) throws {
+    func addTrackedAnimalToSession(sessionID: UUID, animalID: UUID, checkedAt: Date) async throws {
         try writePolicy.validateCanWrite()
-        try base.addTrackedAnimalToSession(
+        try await base.addTrackedAnimalToSession(
             sessionID: sessionID,
             animalID: animalID,
             checkedAt: checkedAt
@@ -302,15 +302,15 @@ struct MutationPublishingFieldCheckRepository: FieldCheckRepository {
         mutationRecorder.recordSuccessfulMutation(reason: .fieldCheck)
     }
 
-    func addFinding(sessionID: UUID, input: FieldCheckFindingInput) throws {
+    func addFinding(sessionID: UUID, input: FieldCheckFindingInput) async throws {
         try writePolicy.validateCanWrite()
-        try base.addFinding(sessionID: sessionID, input: input)
+        try await base.addFinding(sessionID: sessionID, input: input)
         mutationRecorder.recordSuccessfulMutation(reason: .fieldCheck)
     }
 
-    func updateFinding(sessionID: UUID, findingID: UUID, input: FieldCheckFindingInput) throws {
+    func updateFinding(sessionID: UUID, findingID: UUID, input: FieldCheckFindingInput) async throws {
         try writePolicy.validateCanWrite()
-        try base.updateFinding(sessionID: sessionID, findingID: findingID, input: input)
+        try await base.updateFinding(sessionID: sessionID, findingID: findingID, input: input)
         mutationRecorder.recordSuccessfulMutation(reason: .fieldCheck)
     }
 
@@ -318,27 +318,27 @@ struct MutationPublishingFieldCheckRepository: FieldCheckRepository {
         sessionID: UUID,
         findingID: UUID,
         status: FieldCheckFindingStatus
-    ) throws {
+    ) async throws {
         try writePolicy.validateCanWrite()
-        try base.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: status)
+        try await base.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: status)
         mutationRecorder.recordSuccessfulMutation(reason: .fieldCheck)
     }
 
-    func deleteFinding(sessionID: UUID, findingID: UUID) throws {
+    func deleteFinding(sessionID: UUID, findingID: UUID) async throws {
         try writePolicy.validateCanWrite()
-        try base.deleteFinding(sessionID: sessionID, findingID: findingID)
+        try await base.deleteFinding(sessionID: sessionID, findingID: findingID)
         mutationRecorder.recordSuccessfulMutation(reason: .fieldCheck)
     }
 
-    func completeSession(id: UUID) throws {
+    func completeSession(id: UUID) async throws {
         try writePolicy.validateCanWrite()
-        try base.completeSession(id: id)
+        try await base.completeSession(id: id)
         mutationRecorder.recordSuccessfulMutation(reason: .fieldCheck)
     }
 
-    func reopenSession(id: UUID) throws {
+    func reopenSession(id: UUID) async throws {
         try writePolicy.validateCanWrite()
-        try base.reopenSession(id: id)
+        try await base.reopenSession(id: id)
         mutationRecorder.recordSuccessfulMutation(reason: .fieldCheck)
     }
 }

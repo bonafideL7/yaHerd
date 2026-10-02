@@ -95,7 +95,7 @@ struct FieldCheckAnimalDetailView: View {
                     initialDraft: preparedEditor.draft,
                     editorContext: preparedEditor.context
                 ) { createdAnimal in
-                    try model.addTrackedAnimalToSession(
+                    try await model.addTrackedAnimalToSession(
                         animalID: createdAnimal.id,
                         sessionID: sessionID,
                         fieldCheckRepository: fieldCheckRepository
@@ -111,13 +111,15 @@ struct FieldCheckAnimalDetailView: View {
                     initialAnimalID: animalID
                 ) { input in
                     guard isSessionEditable else { return }
-                    model.addFinding(
-                        animalID: animalID,
-                        sessionID: sessionID,
-                        input: input,
-                        animalRepository: animalRepository,
-                        fieldCheckRepository: fieldCheckRepository
-                    )
+                    Task { @MainActor in
+                        await model.addFinding(
+                            animalID: animalID,
+                            sessionID: sessionID,
+                            input: input,
+                            animalRepository: animalRepository,
+                            fieldCheckRepository: fieldCheckRepository
+                        )
+                    }
                 }
             }
         }
@@ -129,14 +131,16 @@ struct FieldCheckAnimalDetailView: View {
                     finding: finding
                 ) { input in
                     guard isSessionEditable else { return }
-                    model.updateFinding(
-                        animalID: animalID,
-                        sessionID: sessionID,
-                        findingID: finding.id,
-                        input: input,
-                        animalRepository: animalRepository,
-                        fieldCheckRepository: fieldCheckRepository
-                    )
+                    Task { @MainActor in
+                        await model.updateFinding(
+                            animalID: animalID,
+                            sessionID: sessionID,
+                            findingID: finding.id,
+                            input: input,
+                            animalRepository: animalRepository,
+                            fieldCheckRepository: fieldCheckRepository
+                        )
+                    }
                 }
             }
         }
@@ -205,13 +209,15 @@ struct FieldCheckAnimalDetailView: View {
     private func statusActions(for animalCheck: FieldCheckAnimalCheckSnapshot) -> some View {
         if animalCheck.isMissing {
             Button {
-                model.setAnimalCheckCounted(
-                    animalID: animalID,
-                    sessionID: sessionID,
-                    isCounted: true,
-                    animalRepository: animalRepository,
-                    fieldCheckRepository: fieldCheckRepository
-                )
+                Task { @MainActor in
+                    await model.setAnimalCheckCounted(
+                        animalID: animalID,
+                        sessionID: sessionID,
+                        isCounted: true,
+                        animalRepository: animalRepository,
+                        fieldCheckRepository: fieldCheckRepository
+                    )
+                }
             } label: {
                 Label("Mark Found", systemImage: "checkmark.circle")
                     .frame(maxWidth: .infinity)
@@ -220,13 +226,15 @@ struct FieldCheckAnimalDetailView: View {
             .foregroundStyle(colorScheme == .dark ? .black : .white)
         } else if animalCheck.wasCounted {
             Button {
-                model.setAnimalCheckCounted(
-                    animalID: animalID,
-                    sessionID: sessionID,
-                    isCounted: false,
-                    animalRepository: animalRepository,
-                    fieldCheckRepository: fieldCheckRepository
-                )
+                Task { @MainActor in
+                    await model.setAnimalCheckCounted(
+                        animalID: animalID,
+                        sessionID: sessionID,
+                        isCounted: false,
+                        animalRepository: animalRepository,
+                        fieldCheckRepository: fieldCheckRepository
+                    )
+                }
             } label: {
                 Label("Mark Not Seen", systemImage: "xmark.circle")
                     .frame(maxWidth: .infinity)
@@ -235,13 +243,15 @@ struct FieldCheckAnimalDetailView: View {
         } else {
             HStack(spacing: 10) {
                 Button {
-                    model.setAnimalCheckCounted(
-                        animalID: animalID,
-                        sessionID: sessionID,
-                        isCounted: true,
-                        animalRepository: animalRepository,
-                        fieldCheckRepository: fieldCheckRepository
-                    )
+                    Task { @MainActor in
+                        await model.setAnimalCheckCounted(
+                            animalID: animalID,
+                            sessionID: sessionID,
+                            isCounted: true,
+                            animalRepository: animalRepository,
+                            fieldCheckRepository: fieldCheckRepository
+                        )
+                    }
                 } label: {
                     Label("Mark Seen", systemImage: "checkmark.circle")
                         .frame(maxWidth: .infinity)
@@ -250,13 +260,15 @@ struct FieldCheckAnimalDetailView: View {
                 .foregroundStyle(colorScheme == .dark ? .black : .white)
 
                 Button {
-                    model.setAnimalCheckMissing(
-                        animalID: animalID,
-                        sessionID: sessionID,
-                        isMissing: true,
-                        animalRepository: animalRepository,
-                        fieldCheckRepository: fieldCheckRepository
-                    )
+                    Task { @MainActor in
+                        await model.setAnimalCheckMissing(
+                            animalID: animalID,
+                            sessionID: sessionID,
+                            isMissing: true,
+                            animalRepository: animalRepository,
+                            fieldCheckRepository: fieldCheckRepository
+                        )
+                    }
                 } label: {
                     Label("Mark Missing", systemImage: "exclamationmark.triangle")
                         .frame(maxWidth: .infinity)
@@ -308,14 +320,16 @@ struct FieldCheckAnimalDetailView: View {
                 editingFinding = finding
             } : nil,
             onStatusChange: allowsEditing ? { status in
-                model.updateFindingStatus(
-                    animalID: animalID,
-                    sessionID: sessionID,
-                    findingID: finding.id,
-                    status: status,
-                    animalRepository: animalRepository,
-                    fieldCheckRepository: fieldCheckRepository
-                )
+                Task { @MainActor in
+                    await model.updateFindingStatus(
+                        animalID: animalID,
+                        sessionID: sessionID,
+                        findingID: finding.id,
+                        status: status,
+                        animalRepository: animalRepository,
+                        fieldCheckRepository: fieldCheckRepository
+                    )
+                }
             } : nil
         )
 
@@ -323,13 +337,15 @@ struct FieldCheckAnimalDetailView: View {
             row
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button("Delete", role: .destructive) {
-                        model.deleteFinding(
-                            animalID: animalID,
-                            sessionID: sessionID,
-                            findingID: finding.id,
-                            animalRepository: animalRepository,
-                            fieldCheckRepository: fieldCheckRepository
-                        )
+                        Task { @MainActor in
+                            await model.deleteFinding(
+                                animalID: animalID,
+                                sessionID: sessionID,
+                                findingID: finding.id,
+                                animalRepository: animalRepository,
+                                fieldCheckRepository: fieldCheckRepository
+                            )
+                        }
                     }
                 }
         } else {

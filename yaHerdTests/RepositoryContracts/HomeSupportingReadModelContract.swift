@@ -54,14 +54,14 @@ enum HomeSupportingReadModelContract {
         )
 
         let writer = fieldCheckFixture.makeFieldCheckRepository()
-        let controlSessionID = try writer.createSession(
+        let controlSessionID = try await writer.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: Date(timeIntervalSince1970: 1_790_000_000),
                 notes: "Home history control"
             )
         )
-        try writer.completeSession(id: controlSessionID)
+        try await writer.completeSession(id: controlSessionID)
 
         let controlBefore = try XCTUnwrap(
             fieldCheckFixture.makeFieldCheckRepository()
@@ -80,7 +80,7 @@ enum HomeSupportingReadModelContract {
             line: line
         )
 
-        let unfinishedSessionID = try writer.createSession(
+        let unfinishedSessionID = try await writer.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: Date(timeIntervalSince1970: 1_790_000_100),
@@ -96,7 +96,7 @@ enum HomeSupportingReadModelContract {
             line: line
         )
 
-        let missingSessionID = try writer.createSession(
+        let missingSessionID = try await writer.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: Date(timeIntervalSince1970: 1_790_000_200),
@@ -108,12 +108,12 @@ enum HomeSupportingReadModelContract {
             file: file,
             line: line
         )
-        try writer.setAnimalCheckMissing(
+        try await writer.setAnimalCheckMissing(
             sessionID: missingSessionID,
             animalCheckID: missingCheckID,
             isMissing: true
         )
-        try writer.completeSession(id: missingSessionID)
+        try await writer.completeSession(id: missingSessionID)
         try await assertFieldCheckHomeState(
             expectedWarningSessionIDs: [missingSessionID, unfinishedSessionID],
             expectedOpenFindingCount: 0,
@@ -123,14 +123,14 @@ enum HomeSupportingReadModelContract {
             line: line
         )
 
-        let firstFindingSessionID = try writer.createSession(
+        let firstFindingSessionID = try await writer.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: Date(timeIntervalSince1970: 1_790_000_300),
                 notes: "Home first finding warning"
             )
         )
-        try writer.addFinding(
+        try await writer.addFinding(
             sessionID: firstFindingSessionID,
             input: FieldCheckFindingInput(
                 recordedAt: Date(timeIntervalSince1970: 1_790_000_310),
@@ -149,7 +149,7 @@ enum HomeSupportingReadModelContract {
             file: file,
             line: line
         )
-        try writer.completeSession(id: firstFindingSessionID)
+        try await writer.completeSession(id: firstFindingSessionID)
         try await assertFieldCheckHomeState(
             expectedWarningSessionIDs: [
                 firstFindingSessionID,
@@ -163,14 +163,14 @@ enum HomeSupportingReadModelContract {
             line: line
         )
 
-        let secondFindingSessionID = try writer.createSession(
+        let secondFindingSessionID = try await writer.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: Date(timeIntervalSince1970: 1_790_000_400),
                 notes: "Home second finding warning"
             )
         )
-        try writer.addFinding(
+        try await writer.addFinding(
             sessionID: secondFindingSessionID,
             input: FieldCheckFindingInput(
                 recordedAt: Date(timeIntervalSince1970: 1_790_000_410),
@@ -189,7 +189,7 @@ enum HomeSupportingReadModelContract {
             file: file,
             line: line
         )
-        try writer.completeSession(id: secondFindingSessionID)
+        try await writer.completeSession(id: secondFindingSessionID)
         try await assertFieldCheckHomeState(
             expectedWarningSessionIDs: [
                 secondFindingSessionID,
@@ -204,13 +204,13 @@ enum HomeSupportingReadModelContract {
             line: line
         )
 
-        try writer.reopenSession(id: firstFindingSessionID)
-        try writer.updateFindingStatus(
+        try await writer.reopenSession(id: firstFindingSessionID)
+        try await writer.updateFindingStatus(
             sessionID: firstFindingSessionID,
             findingID: firstFindingID,
             status: .resolved
         )
-        try writer.completeSession(id: firstFindingSessionID)
+        try await writer.completeSession(id: firstFindingSessionID)
         try await assertFieldCheckHomeState(
             expectedWarningSessionIDs: [
                 secondFindingSessionID,
@@ -224,13 +224,13 @@ enum HomeSupportingReadModelContract {
             line: line
         )
 
-        try writer.reopenSession(id: secondFindingSessionID)
-        try writer.updateFindingStatus(
+        try await writer.reopenSession(id: secondFindingSessionID)
+        try await writer.updateFindingStatus(
             sessionID: secondFindingSessionID,
             findingID: secondFindingID,
             status: .resolved
         )
-        try writer.completeSession(id: secondFindingSessionID)
+        try await writer.completeSession(id: secondFindingSessionID)
         try await assertFieldCheckHomeState(
             expectedWarningSessionIDs: [
                 missingSessionID,
@@ -243,13 +243,13 @@ enum HomeSupportingReadModelContract {
             line: line
         )
 
-        try writer.reopenSession(id: missingSessionID)
-        try writer.setAnimalCheckMissing(
+        try await writer.reopenSession(id: missingSessionID)
+        try await writer.setAnimalCheckMissing(
             sessionID: missingSessionID,
             animalCheckID: missingCheckID,
             isMissing: false
         )
-        try writer.completeSession(id: missingSessionID)
+        try await writer.completeSession(id: missingSessionID)
         try await assertFieldCheckHomeState(
             expectedWarningSessionIDs: [unfinishedSessionID],
             expectedOpenFindingCount: 0,
@@ -259,7 +259,7 @@ enum HomeSupportingReadModelContract {
             line: line
         )
 
-        try writer.completeSession(id: unfinishedSessionID)
+        try await writer.completeSession(id: unfinishedSessionID)
         try await assertFieldCheckHomeState(
             expectedWarningSessionIDs: [],
             expectedOpenFindingCount: 0,

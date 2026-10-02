@@ -8,7 +8,7 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let originalColor = TagColorSnapshot(
             id: UUID(),
             name: "Reassignment Snapshot Amber",
@@ -50,7 +50,7 @@ extension FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: findingEdgeDate(year: 2026, month: 9, day: 29, hour: 8),
@@ -70,7 +70,7 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(targetCheckBeforeLiveChange.displayTagNumber, "RS702", file: file, line: line)
         XCTAssertEqual(targetCheckBeforeLiveChange.displayTagColorID, originalColor.id, file: file, line: line)
 
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: findingEdgeDate(year: 2026, month: 9, day: 29, hour: 9),
@@ -125,7 +125,7 @@ extension FieldCheckRepositoryContract {
         )
 
         let reassignmentWriter = fixture.makeFieldCheckRepository()
-        try reassignmentWriter.updateFinding(
+        try await reassignmentWriter.updateFinding(
             sessionID: sessionID,
             findingID: findingID,
             input: FieldCheckFindingInput(
@@ -245,7 +245,7 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let color = TagColorSnapshot(
             id: UUID(),
             name: "Orphan Edit Amber",
@@ -272,15 +272,15 @@ extension FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: findingEdgeDate(year: 2026, month: 9, day: 30, hour: 8),
                 notes: "Orphan full edit contract"
             )
         )
-        try repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.cow: 1])
-        try repository.addFinding(
+        try await repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.cow: 1])
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: findingEdgeDate(year: 2026, month: 9, day: 30, hour: 9),
@@ -339,7 +339,7 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        try orphanedWriter.updateFinding(
+        try await orphanedWriter.updateFinding(
             sessionID: sessionID,
             findingID: findingBeforeDelete.id,
             input: FieldCheckFindingInput(

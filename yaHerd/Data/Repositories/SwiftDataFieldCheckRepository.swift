@@ -36,7 +36,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         }
     }
 
-    func createSession(input: FieldCheckSessionStartInput) throws -> UUID {
+    func createSession(input: FieldCheckSessionStartInput) async throws -> UUID {
         guard let pasture = try fetchPasture(id: input.pastureID) else {
             throw FieldCheckRepositoryError.pastureNotFound
         }
@@ -75,7 +75,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         return session.publicID
     }
 
-    func updateQuickAnimalTypeCounts(sessionID: UUID, counts: [AnimalType: Int]) throws {
+    func updateQuickAnimalTypeCounts(sessionID: UUID, counts: [AnimalType: Int]) async throws {
         guard let session = try fetchSession(id: sessionID) else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
@@ -89,7 +89,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
-    func updateNotes(sessionID: UUID, notes: String) throws {
+    func updateNotes(sessionID: UUID, notes: String) async throws {
         guard let session = try fetchSession(id: sessionID) else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
@@ -99,7 +99,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
-    func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool) throws {
+    func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool) async throws {
         let check = try fetchAnimalCheck(id: animalCheckID, sessionID: sessionID)
         try ensureSessionIsEditable(check.session)
         try saveIfNeeded(backfillHistoricalSnapshots(in: check.session))
@@ -114,7 +114,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
-    func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool) throws {
+    func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool) async throws {
         let check = try fetchAnimalCheck(id: animalCheckID, sessionID: sessionID)
         try ensureSessionIsEditable(check.session)
         try saveIfNeeded(backfillHistoricalSnapshots(in: check.session))
@@ -129,7 +129,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
-    func addTrackedAnimalToSession(sessionID: UUID, animalID: UUID, checkedAt: Date) throws {
+    func addTrackedAnimalToSession(sessionID: UUID, animalID: UUID, checkedAt: Date) async throws {
         guard let session = try fetchSession(id: sessionID) else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
@@ -174,7 +174,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
-    func addFinding(sessionID: UUID, input: FieldCheckFindingInput) throws {
+    func addFinding(sessionID: UUID, input: FieldCheckFindingInput) async throws {
         guard let session = try fetchSession(id: sessionID) else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
@@ -204,7 +204,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
-    func updateFinding(sessionID: UUID, findingID: UUID, input: FieldCheckFindingInput) throws {
+    func updateFinding(sessionID: UUID, findingID: UUID, input: FieldCheckFindingInput) async throws {
         let finding = try fetchFinding(id: findingID, sessionID: sessionID)
         try ensureSessionIsEditable(finding.session)
         try saveIfNeeded(backfillHistoricalSnapshots(in: finding.session))
@@ -248,7 +248,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
-    func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus) throws {
+    func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus) async throws {
         let finding = try fetchFinding(id: findingID, sessionID: sessionID)
         try ensureSessionCanUpdateFindingStatus(finding.session)
         try saveIfNeeded(backfillHistoricalSnapshots(in: finding.session))
@@ -262,7 +262,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
-    func deleteFinding(sessionID: UUID, findingID: UUID) throws {
+    func deleteFinding(sessionID: UUID, findingID: UUID) async throws {
         let finding = try fetchFinding(id: findingID, sessionID: sessionID)
         try ensureSessionIsEditable(finding.session)
         try saveIfNeeded(backfillHistoricalSnapshots(in: finding.session))
@@ -277,7 +277,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
-    func completeSession(id: UUID) throws {
+    func completeSession(id: UUID) async throws {
         guard let session = try fetchSession(id: id) else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
@@ -289,7 +289,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
-    func reopenSession(id: UUID) throws {
+    func reopenSession(id: UUID) async throws {
         guard let session = try fetchSession(id: id) else {
             throw FieldCheckRepositoryError.sessionNotFound
         }
@@ -298,7 +298,7 @@ struct SwiftDataFieldCheckRepository: FieldCheckRepository {
         try PersistenceLog.save(context, operation: "SwiftDataFieldCheckRepository")
     }
 
-    func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) throws {
+    func archiveSessionsForDeletedPastures(_ ids: [UUID], archivedAt: Date) async throws {
         guard !ids.isEmpty else { return }
 
         let sessions = try fetchSessions(matchingPastureIDs: ids)

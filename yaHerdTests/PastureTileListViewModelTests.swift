@@ -91,7 +91,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         viewModel.load(using: loadRepository)
         viewModel.requestDelete(pasture)
 
-        viewModel.deletePasture(
+        await viewModel.deletePasture(
             id: pasture.id,
             pastureRepository: pastureRepository,
             animalRepository: animalRepository,
@@ -104,7 +104,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertEqual(fieldCheckRepository.archiveCalls.map(\.pastureIDs), [[pasture.id]])
     }
 
-    func testDeletePastureRollsBackOnFailure() {
+    func testDeletePastureRollsBackOnFailure() async {
         let pasture = PastureTestSupport.makeSummary(id: UUID(), name: "North")
         let loadRepository = PastureListReaderStub(result: .success([pasture]))
         let pastureRepository = PastureDeleteRepositorySpy()
@@ -114,7 +114,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         let viewModel = PastureTileListViewModel()
         viewModel.load(using: loadRepository)
 
-        viewModel.deletePasture(
+        await viewModel.deletePasture(
             id: pasture.id,
             pastureRepository: pastureRepository,
             animalRepository: animalRepository,

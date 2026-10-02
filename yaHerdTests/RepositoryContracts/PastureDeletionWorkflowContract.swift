@@ -41,7 +41,7 @@ enum PastureDeletionWorkflowContract {
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pastureRepository = fixture.makePastureRepository()
         let firstPasture = try pastureRepository.create(
             input: PastureInput(
@@ -470,21 +470,21 @@ enum PastureDeletionWorkflowContract {
         let secondNotes = "Deletion workflow contract south"
         let controlNotes = "Deletion workflow contract control"
         let fieldCheckRepository = fixture.makeFieldCheckRepository()
-        let firstSessionID = try fieldCheckRepository.createSession(
+        let firstSessionID = try await fieldCheckRepository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: firstPasture.id,
                 startedAt: firstStartedAt,
                 notes: firstNotes
             )
         )
-        let secondSessionID = try fieldCheckRepository.createSession(
+        let secondSessionID = try await fieldCheckRepository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: secondPasture.id,
                 startedAt: secondStartedAt,
                 notes: secondNotes
             )
         )
-        let controlSessionID = try fieldCheckRepository.createSession(
+        let controlSessionID = try await fieldCheckRepository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: controlPasture.id,
                 startedAt: controlStartedAt,
@@ -509,22 +509,22 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
-        try fieldCheckRepository.setAnimalCheckCounted(
+        try await fieldCheckRepository.setAnimalCheckCounted(
             sessionID: firstSessionID,
             animalCheckID: countedCheck.id,
             isCounted: true
         )
-        try fieldCheckRepository.setAnimalCheckMissing(
+        try await fieldCheckRepository.setAnimalCheckMissing(
             sessionID: firstSessionID,
             animalCheckID: missingCheck.id,
             isMissing: true
         )
-        try fieldCheckRepository.addTrackedAnimalToSession(
+        try await fieldCheckRepository.addTrackedAnimalToSession(
             sessionID: firstSessionID,
             animalID: trackedAnimal.id,
             checkedAt: trackedAt
         )
-        try fieldCheckRepository.updateQuickAnimalTypeCounts(
+        try await fieldCheckRepository.updateQuickAnimalTypeCounts(
             sessionID: secondSessionID,
             counts: [.heifer: 1]
         )
@@ -537,9 +537,9 @@ enum PastureDeletionWorkflowContract {
             note: "Deletion workflow finding",
             animalID: secondAnimal.id
         )
-        try fieldCheckRepository.addFinding(sessionID: secondSessionID, input: findingInput)
+        try await fieldCheckRepository.addFinding(sessionID: secondSessionID, input: findingInput)
 
-        try fieldCheckRepository.completeSession(id: firstSessionID)
+        try await fieldCheckRepository.completeSession(id: firstSessionID)
         let completedFirstSession = try XCTUnwrap(
             fieldCheckRepository.fetchSessionDetail(id: firstSessionID),
             file: file,

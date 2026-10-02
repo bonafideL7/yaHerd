@@ -29,12 +29,12 @@ struct FieldCheckMissingFindingMutationQuickCountRollbackFailureInjection {
         _ sessionID: UUID,
         _ findingID: UUID,
         _ input: FieldCheckFindingInput
-    ) throws -> Void
+    ) async throws -> Void
     let updateFindingStatusFailingAfterMissingStateAndQuickCountNormalizationStaged: (
         _ sessionID: UUID,
         _ findingID: UUID,
         _ status: FieldCheckFindingStatus
-    ) throws -> Void
+    ) async throws -> Void
 }
 
 @MainActor
@@ -44,7 +44,7 @@ extension FieldCheckRepositoryContract {
         failureInjection: FieldCheckMissingFindingMutationQuickCountRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Finding Mutation Rollback Pasture",
@@ -69,15 +69,15 @@ extension FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: findingMutationRollbackDate(year: 2026, month: 9, day: 27, hour: 8),
                 notes: "Finding mutation quick-count rollback contract"
             )
         )
-        try repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.cow: 2])
-        try repository.addFinding(
+        try await repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.cow: 2])
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: findingMutationRollbackDate(year: 2026, month: 9, day: 27, hour: 9),
@@ -134,16 +134,18 @@ extension FieldCheckRepositoryContract {
             animalID: firstAnimal.id
         )
 
-        XCTAssertThrowsError(
-            try failureInjection.updateFindingFailingAfterMissingStateAndQuickCountNormalizationStaged(
+        do {
+            try await failureInjection.updateFindingFailingAfterMissingStateAndQuickCountNormalizationStaged(
                 sessionID,
                 findingBeforeUpdate.id,
                 missingInput
-            ),
-            "The fault-injected finding update must fail after missing state and quick-count normalization have both been staged.",
-            file: file,
-            line: line
-        ) { error in
+            )
+            XCTFail(
+                "The fault-injected finding update must fail after missing state and quick-count normalization have both been staged.",
+                file: file,
+                line: line
+            )
+        } catch {
             XCTAssertEqual(
                 error as? FieldCheckMissingFindingMutationQuickCountRollbackInjectedError,
                 .afterMissingStateAndQuickCountNormalizationStaged(
@@ -210,17 +212,17 @@ extension FieldCheckRepositoryContract {
         )
 
         let transitionRepository = fixture.makeFieldCheckRepository()
-        try transitionRepository.updateFinding(
+        try await transitionRepository.updateFinding(
             sessionID: sessionID,
             findingID: findingBeforeUpdate.id,
             input: missingInput
         )
-        try transitionRepository.updateFindingStatus(
+        try await transitionRepository.updateFindingStatus(
             sessionID: sessionID,
             findingID: findingBeforeUpdate.id,
             status: .resolved
         )
-        try transitionRepository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.cow: 2])
+        try await transitionRepository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.cow: 2])
 
         let beforeStatusRepository = fixture.makeFieldCheckRepository()
         let beforeStatusDetail = try XCTUnwrap(
@@ -264,16 +266,18 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        XCTAssertThrowsError(
-            try failureInjection.updateFindingStatusFailingAfterMissingStateAndQuickCountNormalizationStaged(
+        do {
+            try await failureInjection.updateFindingStatusFailingAfterMissingStateAndQuickCountNormalizationStaged(
                 sessionID,
                 findingBeforeStatus.id,
                 .monitoring
-            ),
-            "The fault-injected status update must fail after reopened missing state and quick-count normalization have both been staged.",
-            file: file,
-            line: line
-        ) { error in
+            )
+            XCTFail(
+                "The fault-injected status update must fail after reopened missing state and quick-count normalization have both been staged.",
+                file: file,
+                line: line
+            )
+        } catch {
             XCTAssertEqual(
                 error as? FieldCheckMissingFindingMutationQuickCountRollbackInjectedError,
                 .afterMissingStateAndQuickCountNormalizationStaged(
@@ -344,7 +348,7 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Orphaned Missing Finding Pasture",
@@ -361,14 +365,14 @@ extension FieldCheckRepositoryContract {
             )
         )
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: findingMutationRollbackDate(year: 2026, month: 9, day: 28, hour: 8),
                 notes: "Orphaned missing finding synchronization contract"
             )
         )
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: findingMutationRollbackDate(year: 2026, month: 9, day: 28, hour: 9),
@@ -431,7 +435,7 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(orphanedFinding.type, .missingAnimal, file: file, line: line)
         XCTAssertEqual(orphanedFinding.status, .open, file: file, line: line)
 
-        try orphanedRepository.updateFindingStatus(
+        try await orphanedRepository.updateFindingStatus(
             sessionID: sessionID,
             findingID: findingBeforeDelete.id,
             status: .resolved

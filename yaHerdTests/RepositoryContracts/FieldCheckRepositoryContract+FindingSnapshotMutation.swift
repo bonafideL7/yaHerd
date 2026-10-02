@@ -10,7 +10,7 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let originalColorID = try mutationSnapshotColor(
             named: "Mutation Snapshot Amber",
             prefix: "MSA",
@@ -59,7 +59,7 @@ extension FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: mutationSnapshotDate(year: 2026, month: 9, day: 27, hour: 8),
@@ -124,7 +124,7 @@ extension FieldCheckRepositoryContract {
         )
 
         let postChangeWriter = fixture.makeFieldCheckRepository()
-        try postChangeWriter.addFinding(
+        try await postChangeWriter.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: mutationSnapshotDate(year: 2026, month: 9, day: 27, hour: 9),
@@ -135,7 +135,7 @@ extension FieldCheckRepositoryContract {
                 animalID: calf.id
             )
         )
-        try postChangeWriter.addFinding(
+        try await postChangeWriter.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: mutationSnapshotDate(year: 2026, month: 9, day: 27, hour: 10),
@@ -228,7 +228,7 @@ extension FieldCheckRepositoryContract {
         )
 
         let postSecondChangeWriter = fixture.makeFieldCheckRepository()
-        try postSecondChangeWriter.updateFinding(
+        try await postSecondChangeWriter.updateFinding(
             sessionID: sessionID,
             findingID: taggedFinding.id,
             input: FieldCheckFindingInput(
@@ -240,7 +240,7 @@ extension FieldCheckRepositoryContract {
                 animalID: calf.id
             )
         )
-        try postSecondChangeWriter.updateFinding(
+        try await postSecondChangeWriter.updateFinding(
             sessionID: sessionID,
             findingID: untaggedFinding.id,
             input: FieldCheckFindingInput(

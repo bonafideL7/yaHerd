@@ -9,7 +9,7 @@ import SwiftUI
 
 struct AddAnimalView: View {
     private let title: String
-    private let onSave: ((AnimalDetailSnapshot) throws -> Void)?
+    private let onSave: (@MainActor (AnimalDetailSnapshot) async throws -> Void)?
     @Environment(\.animalFeatureDependencies) private var animalDependencies
     private var repository: any AnimalEditorRepository { animalDependencies.editorRepository }
     private var pastureReferenceDataReader: any PastureReferenceDataReader { animalDependencies.pastureReferenceReader }
@@ -21,12 +21,14 @@ struct AddAnimalView: View {
     @State private var showingError = false
     @State private var showingAddTag = false
     @State private var editingPendingTag: AnimalTagSnapshot?
+    @State private var isSaving = false
+    @State private var pendingCreatedAnimal: AnimalDetailSnapshot?
     
     init(
         title: String = "Add Animal",
         initialDraft: AnimalEditorDraft = AnimalEditorDraft(),
         editorContext: AnimalEditorContext = .standard,
-        onSave: ((AnimalDetailSnapshot) throws -> Void)? = nil
+        onSave: (@MainActor (AnimalDetailSnapshot) async throws -> Void)? = nil
     ) {
         self.title = title
         self.onSave = onSave
@@ -63,14 +65,17 @@ struct AddAnimalView: View {
                     scrollTarget: nil
                 )
             }
+            .disabled(isSaving || pendingCreatedAnimal != nil)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     ToolbarSaveButton { validateAndSave() }
+                        .disabled(isSaving)
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     ToolbarCancelButton { dismiss() }
+                        .disabled(isSaving)
                 }
             }
             .alert("Validation Error", isPresented: $showingError) {
@@ -134,13 +139,31 @@ struct AddAnimalView: View {
     }
 
     private func validateAndSave() {
-        do {
-            let createdAnimal = try viewModel.save(defaultTagColorID: tagColorLibrary.defaultColorID, using: repository)
-            try onSave?(createdAnimal)
-            dismiss()
-        } catch {
-            viewModel.errorMessage = UserVisibleErrorMessage.make(error)
-            showingError = true
+        guard !isSaving else { return }
+        isSaving = true
+
+        Task { @MainActor in
+            defer { isSaving = false }
+
+            do {
+                let createdAnimal: AnimalDetailSnapshot
+                if let pendingCreatedAnimal {
+                    createdAnimal = pendingCreatedAnimal
+                } else {
+                    createdAnimal = try viewModel.save(
+                        defaultTagColorID: tagColorLibrary.defaultColorID,
+                        using: repository
+                    )
+                    pendingCreatedAnimal = createdAnimal
+                }
+
+                try await onSave?(createdAnimal)
+                pendingCreatedAnimal = nil
+                dismiss()
+            } catch {
+                viewModel.errorMessage = UserVisibleErrorMessage.make(error)
+                showingError = true
+            }
         }
     }
 

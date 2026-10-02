@@ -26,7 +26,7 @@ extension FieldCheckRepositoryContract {
         failureInjection: FieldCheckMissingFindingRollbackContextRecoveryInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Failure Context Recovery Pasture",
@@ -51,14 +51,14 @@ extension FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: failureContextDate(year: 2026, month: 9, day: 29, hour: 8),
                 notes: "Failure-context recovery contract"
             )
         )
-        let probeSessionID = try repository.createSession(
+        let probeSessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: failureContextDate(year: 2026, month: 9, day: 29, hour: 8),
@@ -91,13 +91,13 @@ extension FieldCheckRepositoryContract {
             animalID: sourceAnimal.id
         )
 
-        let failedAddFindingID = try assertFailureContextSentinel(
+        let failedAddFindingID = try await assertFailureContextSentinel(
             expectedOperation: .add,
             expectedFindingID: nil,
             file: file,
             line: line
         ) {
-            try failureInjection.rollback.addMissingFindingFailingBetweenFindingAndMissingState(
+            try await failureInjection.rollback.addMissingFindingFailingBetweenFindingAndMissingState(
                 sessionID,
                 addInput
             )
@@ -140,7 +140,7 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        try repository.addFinding(sessionID: sessionID, input: addInput)
+        try await repository.addFinding(sessionID: sessionID, input: addInput)
         let persistedBaseline = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
             file: file,
@@ -174,13 +174,13 @@ extension FieldCheckRepositoryContract {
             note: "Leaked reassignment must not persist",
             animalID: targetAnimal.id
         )
-        _ = try assertFailureContextSentinel(
+        _ = try await assertFailureContextSentinel(
             expectedOperation: .update,
             expectedFindingID: findingID,
             file: file,
             line: line
         ) {
-            try failureInjection.rollback.updateMissingFindingFailingBetweenFindingAndMissingState(
+            try await failureInjection.rollback.updateMissingFindingFailingBetweenFindingAndMissingState(
                 sessionID,
                 findingID,
                 reassignmentInput
@@ -212,13 +212,13 @@ extension FieldCheckRepositoryContract {
             note: "Leaked missing-to-limping transition must not persist",
             animalID: sourceAnimal.id
         )
-        _ = try assertFailureContextSentinel(
+        _ = try await assertFailureContextSentinel(
             expectedOperation: .update,
             expectedFindingID: findingID,
             file: file,
             line: line
         ) {
-            try failureInjection.rollback.updateMissingFindingFailingBetweenFindingAndMissingState(
+            try await failureInjection.rollback.updateMissingFindingFailingBetweenFindingAndMissingState(
                 sessionID,
                 findingID,
                 typeTransitionInput
@@ -242,13 +242,13 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        _ = try assertFailureContextSentinel(
+        _ = try await assertFailureContextSentinel(
             expectedOperation: .updateStatus,
             expectedFindingID: findingID,
             file: file,
             line: line
         ) {
-            try failureInjection.rollback.updateMissingFindingStatusFailingBetweenFindingAndMissingState(
+            try await failureInjection.rollback.updateMissingFindingStatusFailingBetweenFindingAndMissingState(
                 sessionID,
                 findingID,
                 .resolved
@@ -272,13 +272,13 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        _ = try assertFailureContextSentinel(
+        _ = try await assertFailureContextSentinel(
             expectedOperation: .delete,
             expectedFindingID: findingID,
             file: file,
             line: line
         ) {
-            try failureInjection.rollback.deleteMissingFindingFailingBetweenFindingAndMissingState(
+            try await failureInjection.rollback.deleteMissingFindingFailingBetweenFindingAndMissingState(
                 sessionID,
                 findingID
             )
@@ -331,23 +331,25 @@ extension FieldCheckRepositoryContract {
         expectedFindingID: UUID?,
         file: StaticString,
         line: UInt,
-        operation: () throws -> Void
-    ) throws -> UUID {
+        operation: () async throws -> Void
+    ) async throws -> UUID {
         var stagedFindingID: UUID?
 
-        XCTAssertThrowsError(
-            try operation(),
-            "The fault-injected finding mutation must reach its coordinated-write failpoint.",
-            file: file,
-            line: line
-        ) { error in
+        do {
+            try await operation()
+            XCTFail(
+                "The fault-injected finding mutation must reach its coordinated-write failpoint.",
+                file: file,
+                line: line
+            )
+        } catch {
             guard let injected = error as? FieldCheckMissingFindingRollbackInjectedError else {
                 XCTFail(
                     "The fault-injected mutation must surface FieldCheckMissingFindingRollbackInjectedError rather than an unrelated early failure: \(error)",
                     file: file,
                     line: line
                 )
-                return
+                throw error
             }
             switch injected {
             case .betweenFindingAndMissingState(let operation, let findingID):

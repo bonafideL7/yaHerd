@@ -1,4 +1,6 @@
+import Dispatch
 import Foundation
+import Synchronization
 
 @MainActor
 final class CoreDataTagColorMaterializationCoordinator {
@@ -92,6 +94,14 @@ final class CoreDataPastureResidentWriteCoordinator {
         endConflictingWrite()
     }
 
+    func beginFieldCheckWrite() throws {
+        try beginConflictingWrite()
+    }
+
+    func endFieldCheckWrite() {
+        endConflictingWrite()
+    }
+
     private func beginConflictingWrite() throws {
         guard !deletionPending else {
             throw CoreDataResidentWriteCoordinationError.pastureDeletionInProgress
@@ -136,6 +146,150 @@ final class CoreDataPastureResidentWriteCoordinator {
     }
 }
 
+enum CoreDataAnimalWriteBoundaryError: LocalizedError, Equatable {
+    case fieldCheckPending
+
+    var errorDescription: String? {
+        switch self {
+        case .fieldCheckPending:
+            return "A pasture check is already waiting to update animal data. Try this Animal change again after the check finishes."
+        }
+    }
+}
+
+final class CoreDataAnimalWriteBoundary: Sendable {
+    private struct State: ~Copyable {
+        var activeAnimalWriters = 0
+        var fieldCheckActive = false
+        var fieldCheckPending = false
+        var fieldCheckWaiter: CheckedContinuation<Void, Never>?
+        var synchronousAnimalWaiters: [DispatchSemaphore] = []
+        var asynchronousAnimalWaiters: [CheckedContinuation<Void, Never>] = []
+    }
+
+    private let state = Mutex(State())
+
+    var queuedWriterCount: Int {
+        state.withLock {
+            $0.synchronousAnimalWaiters.count
+                + $0.asynchronousAnimalWaiters.count
+        }
+    }
+
+    var hasPendingFieldCheck: Bool {
+        state.withLock { $0.fieldCheckPending }
+    }
+
+    func beginAnimalWriteSynchronously() throws {
+        let waiter = DispatchSemaphore(value: 0)
+        let shouldWait = try state.withLock { state in
+            guard !state.fieldCheckPending else {
+                throw CoreDataAnimalWriteBoundaryError.fieldCheckPending
+            }
+            guard !state.fieldCheckActive else {
+                state.synchronousAnimalWaiters.append(waiter)
+                return true
+            }
+
+            state.activeAnimalWriters += 1
+            return false
+        }
+
+        if shouldWait {
+            waiter.wait()
+        }
+    }
+
+    func beginAnimalWrite() async {
+        let startsImmediately = state.withLock { state in
+            guard !state.fieldCheckActive && !state.fieldCheckPending else {
+                return false
+            }
+            state.activeAnimalWriters += 1
+            return true
+        }
+        guard !startsImmediately else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            let shouldResumeImmediately = state.withLock { state in
+                guard !state.fieldCheckActive && !state.fieldCheckPending else {
+                    state.asynchronousAnimalWaiters.append(continuation)
+                    return false
+                }
+                state.activeAnimalWriters += 1
+                return true
+            }
+            if shouldResumeImmediately {
+                continuation.resume()
+            }
+        }
+    }
+
+    func endAnimalWrite() {
+        let fieldCheckWaiter = state.withLock { state -> CheckedContinuation<Void, Never>? in
+            precondition(state.activeAnimalWriters > 0)
+            state.activeAnimalWriters -= 1
+            guard state.activeAnimalWriters == 0,
+                  state.fieldCheckPending,
+                  let waiter = state.fieldCheckWaiter else {
+                return nil
+            }
+
+            state.fieldCheckPending = false
+            state.fieldCheckActive = true
+            state.fieldCheckWaiter = nil
+            return waiter
+        }
+        fieldCheckWaiter?.resume()
+    }
+
+    func acquireFieldCheck() async {
+        await withCheckedContinuation { continuation in
+            let startsImmediately = state.withLock { state in
+                precondition(!state.fieldCheckActive && !state.fieldCheckPending)
+                guard state.activeAnimalWriters == 0 else {
+                    state.fieldCheckPending = true
+                    state.fieldCheckWaiter = continuation
+                    return false
+                }
+
+                state.fieldCheckActive = true
+                return true
+            }
+
+            if startsImmediately {
+                continuation.resume()
+            }
+        }
+    }
+
+    func releaseFieldCheck() {
+        let waiters = state.withLock { state -> (
+            [DispatchSemaphore],
+            [CheckedContinuation<Void, Never>]
+        ) in
+            precondition(state.fieldCheckActive)
+            state.fieldCheckActive = false
+
+            let synchronous = state.synchronousAnimalWaiters
+            let asynchronous = state.asynchronousAnimalWaiters
+            state.synchronousAnimalWaiters.removeAll(keepingCapacity: true)
+            state.asynchronousAnimalWaiters.removeAll(keepingCapacity: true)
+            state.activeAnimalWriters += synchronous.count + asynchronous.count
+            return (synchronous, asynchronous)
+        }
+
+        for waiter in waiters.0 {
+            waiter.signal()
+        }
+        for waiter in waiters.1 {
+            waiter.resume()
+        }
+    }
+}
+
 actor CoreDataAsyncSerialGate {
     private var isHeld = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
@@ -163,7 +317,9 @@ final class CoreDataPersistenceAssembly {
     let persistence: CoreDataPersistentContainer
     let contextFactory: CoreDataContextFactory
     let transactionExecutor: CoreDataTransactionExecutor
+    let animalWriteBoundary: CoreDataAnimalWriteBoundary
     let animalAggregateWriteGate: CoreDataAsyncSerialGate
+    let fieldCheckWriteGate: CoreDataAsyncSerialGate
     let pastureResidentWriteCoordinator: CoreDataPastureResidentWriteCoordinator
     let coordinationID: UUID
     let lookup: CoreDataLookup
@@ -172,7 +328,9 @@ final class CoreDataPersistenceAssembly {
         self.persistence = persistence
         self.contextFactory = CoreDataContextFactory(persistence: persistence)
         self.transactionExecutor = CoreDataTransactionExecutor(contextFactory: contextFactory)
+        self.animalWriteBoundary = CoreDataAnimalWriteBoundary()
         self.animalAggregateWriteGate = CoreDataAsyncSerialGate()
+        self.fieldCheckWriteGate = CoreDataAsyncSerialGate()
         self.pastureResidentWriteCoordinator = CoreDataPastureResidentWriteCoordinator()
         self.coordinationID = UUID()
         self.lookup = CoreDataLookup()

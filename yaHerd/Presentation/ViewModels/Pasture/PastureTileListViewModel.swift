@@ -130,7 +130,7 @@ final class PastureTileListViewModel {
         pastureRepository: any PastureDeleteRepository & PastureOrdering,
         animalRepository: any AnimalPastureMoving,
         fieldCheckRepository: any FieldCheckPastureArchiveWriter
-    ) {
+    ) async {
         let originalItems = items
         let ids: [UUID] = offsets.sorted().reduce(into: []) { result, index in
             guard items.indices.contains(index) else { return }
@@ -142,7 +142,7 @@ final class PastureTileListViewModel {
             .map(\.element)
 
         do {
-            try DeletePasturesUseCase(
+            try await DeletePasturesUseCase(
                 pastureRepository: pastureRepository,
                 animalRepository: animalRepository,
                 fieldCheckRepository: fieldCheckRepository
@@ -160,9 +160,9 @@ final class PastureTileListViewModel {
         pastureRepository: any PastureDeleteRepository & PastureOrdering,
         animalRepository: any AnimalPastureMoving,
         fieldCheckRepository: any FieldCheckPastureArchiveWriter
-    ) {
+    ) async {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
-        deletePastures(
+        await deletePastures(
             at: IndexSet(integer: index),
             pastureRepository: pastureRepository,
             animalRepository: animalRepository,

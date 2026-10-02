@@ -10,6 +10,7 @@ final class CoreDataAnimalRepository:
     private let selection: any CurrentHerdSelectionReading
     private let contextFactory: CoreDataContextFactory
     private let transactionExecutor: CoreDataTransactionExecutor
+    private let animalWriteBoundary: CoreDataAnimalWriteBoundary
     private let aggregateWriteGate: CoreDataAsyncSerialGate
     private let pastureResidentWriteCoordinator: CoreDataPastureResidentWriteCoordinator
     private let coordinationID: UUID
@@ -20,6 +21,7 @@ final class CoreDataAnimalRepository:
         selection: any CurrentHerdSelectionReading,
         contextFactory: CoreDataContextFactory,
         transactionExecutor: CoreDataTransactionExecutor,
+        animalWriteBoundary: CoreDataAnimalWriteBoundary,
         aggregateWriteGate: CoreDataAsyncSerialGate,
         pastureResidentWriteCoordinator: CoreDataPastureResidentWriteCoordinator,
         coordinationID: UUID,
@@ -28,6 +30,7 @@ final class CoreDataAnimalRepository:
         self.selection = selection
         self.contextFactory = contextFactory
         self.transactionExecutor = transactionExecutor
+        self.animalWriteBoundary = animalWriteBoundary
         self.aggregateWriteGate = aggregateWriteGate
         self.pastureResidentWriteCoordinator = pastureResidentWriteCoordinator
         self.coordinationID = coordinationID
@@ -47,6 +50,7 @@ final class CoreDataAnimalRepository:
             selection: selection,
             contextFactory: assembly.contextFactory,
             transactionExecutor: assembly.transactionExecutor,
+            animalWriteBoundary: assembly.animalWriteBoundary,
             aggregateWriteGate: assembly.animalAggregateWriteGate,
             pastureResidentWriteCoordinator: assembly.pastureResidentWriteCoordinator,
             coordinationID: assembly.coordinationID,
@@ -1224,9 +1228,12 @@ final class CoreDataAnimalRepository:
         let gate = aggregateWriteGate
 
         await gate.acquire()
+        await animalWriteBoundary.beginAnimalWrite()
+
         do {
             try pastureResidentWriteCoordinator.beginAnimalWrite()
         } catch {
+            animalWriteBoundary.endAnimalWrite()
             await gate.release()
             throw error
         }
@@ -1250,12 +1257,15 @@ final class CoreDataAnimalRepository:
             )
         } catch {
             pastureResidentWriteCoordinator.endAnimalWrite()
+            animalWriteBoundary.endAnimalWrite()
             await gate.release()
             throw error
         }
 
         do {
-            let result = try await transactionExecutor.performWrite(beforeSave: beforeSave) { context in
+            let result = try await transactionExecutor.performWrite(
+                beforeSave: beforeSave
+            ) { context in
                 guard let herd = try lookup.herd(id: herdID, in: context) else {
                     throw HerdRepositoryError.missingHerd
                 }
@@ -1280,6 +1290,7 @@ final class CoreDataAnimalRepository:
                 releasesDefaultSlot: reservedTagColorDefaultSlot
             )
             pastureResidentWriteCoordinator.endAnimalWrite()
+            animalWriteBoundary.endAnimalWrite()
             await gate.release()
             return result
         } catch let persistenceError as CoreDataPersistenceError {
@@ -1304,6 +1315,7 @@ final class CoreDataAnimalRepository:
                 releasesDefaultSlot: reservedTagColorDefaultSlot
             )
             pastureResidentWriteCoordinator.endAnimalWrite()
+            animalWriteBoundary.endAnimalWrite()
             await gate.release()
             if let conflict {
                 throw conflict
@@ -1317,6 +1329,7 @@ final class CoreDataAnimalRepository:
                 releasesDefaultSlot: reservedTagColorDefaultSlot
             )
             pastureResidentWriteCoordinator.endAnimalWrite()
+            animalWriteBoundary.endAnimalWrite()
             await gate.release()
             throw error
         }
@@ -1340,6 +1353,10 @@ final class CoreDataAnimalRepository:
             candidateIDs: materializingTagColorIDs,
             herdID: herdID
         )
+
+        try animalWriteBoundary.beginAnimalWriteSynchronously()
+        defer { animalWriteBoundary.endAnimalWrite() }
+
         try pastureResidentWriteCoordinator.beginAnimalWrite()
         defer { pastureResidentWriteCoordinator.endAnimalWrite() }
         let context = try contextFactory.makeWriteContext()

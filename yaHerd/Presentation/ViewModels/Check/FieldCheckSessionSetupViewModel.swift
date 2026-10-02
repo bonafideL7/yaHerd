@@ -25,7 +25,7 @@ final class FieldCheckSessionSetupViewModel {
         startedAt: Date,
         notes: String,
         using repository: any FieldCheckSessionCreating
-    ) throws -> UUID {
+    ) async throws -> UUID {
         guard let pastureID else {
             throw FieldCheckRepositoryError.pastureNotFound
         }
@@ -35,6 +35,6 @@ final class FieldCheckSessionSetupViewModel {
             startedAt: startedAt,
             notes: notes
         )
-        return try repository.createSession(input: input)
+        return try await repository.createSession(input: input)
     }
 }

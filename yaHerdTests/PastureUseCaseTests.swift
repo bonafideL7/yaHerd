@@ -74,7 +74,7 @@ final class PastureUseCaseTests: XCTestCase {
         XCTAssertTrue(repository.reorderedIDs.isEmpty)
     }
 
-    func testDeletePasturesCoordinatesAnimalUnassignmentFieldCheckArchiveAndPastureDelete() throws {
+    func testDeletePasturesCoordinatesAnimalUnassignmentFieldCheckArchiveAndPastureDelete() async throws {
         let pastureID = UUID()
         let animalID = UUID()
         let pastureRepository = PastureDeleteRepositorySpy()
@@ -90,7 +90,7 @@ final class PastureUseCaseTests: XCTestCase {
             fieldCheckRepository: fieldCheckRepository
         )
 
-        try useCase.execute(ids: [pastureID], archivedAt: Date(timeIntervalSince1970: 100))
+        try await useCase.execute(ids: [pastureID], archivedAt: Date(timeIntervalSince1970: 100))
 
         XCTAssertEqual(pastureRepository.validateCalls, [[pastureID]])
         XCTAssertEqual(pastureRepository.fetchedResidentPastureIDs, [pastureID])
@@ -102,7 +102,7 @@ final class PastureUseCaseTests: XCTestCase {
         XCTAssertEqual(pastureRepository.deletedIDs, [[pastureID]])
     }
 
-    func testDeletePasturesRejectsDuplicateIDsBeforeSideEffects() {
+    func testDeletePasturesRejectsDuplicateIDsBeforeSideEffects() async {
         let pastureID = UUID()
         let pastureRepository = PastureDeleteRepositorySpy()
         pastureRepository.existingIDs = [pastureID]
@@ -114,7 +114,10 @@ final class PastureUseCaseTests: XCTestCase {
             fieldCheckRepository: fieldCheckRepository
         )
 
-        XCTAssertThrowsError(try useCase.execute(ids: [pastureID, pastureID])) { error in
+        do {
+            try await useCase.execute(ids: [pastureID, pastureID])
+            XCTFail("Expected duplicate pasture IDs to be rejected.")
+        } catch {
             XCTAssertEqual(error as? PastureRepositoryError, .duplicatePastureIDs)
         }
 
@@ -124,7 +127,7 @@ final class PastureUseCaseTests: XCTestCase {
         XCTAssertTrue(pastureRepository.deletedIDs.isEmpty)
     }
 
-    func testDeletePasturesDoesNotMoveAnimalsWhenThereAreNoResidents() throws {
+    func testDeletePasturesDoesNotMoveAnimalsWhenThereAreNoResidents() async throws {
         let pastureID = UUID()
         let pastureRepository = PastureDeleteRepositorySpy()
         pastureRepository.existingIDs = [pastureID]
@@ -136,7 +139,7 @@ final class PastureUseCaseTests: XCTestCase {
             fieldCheckRepository: fieldCheckRepository
         )
 
-        try useCase.execute(ids: [pastureID])
+        try await useCase.execute(ids: [pastureID])
 
         XCTAssertTrue(animalRepository.moveCalls.isEmpty)
         XCTAssertEqual(fieldCheckRepository.archiveCalls.map(\.pastureIDs), [[pastureID]])

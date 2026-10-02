@@ -27,12 +27,12 @@ struct FieldCheckRosterStateRollbackFailureInjection {
         _ sessionID: UUID,
         _ animalCheckID: UUID,
         _ isMissing: Bool
-    ) throws -> Void
+    ) async throws -> Void
     let setAnimalCheckCountedFailingAfterRosterStateAndNormalizationStaged: (
         _ sessionID: UUID,
         _ animalCheckID: UUID,
         _ isCounted: Bool
-    ) throws -> Void
+    ) async throws -> Void
 }
 
 enum FieldCheckMissingFindingQuickCountRollbackInjectedError: Error, Equatable {
@@ -55,7 +55,7 @@ struct FieldCheckMissingFindingQuickCountRollbackFailureInjection {
     let addMissingFindingFailingAfterMissingStateAndQuickCountNormalizationStaged: (
         _ sessionID: UUID,
         _ input: FieldCheckFindingInput
-    ) throws -> Void
+    ) async throws -> Void
 }
 
 @MainActor
@@ -65,7 +65,7 @@ extension FieldCheckRepositoryContract {
         failureInjection: FieldCheckMissingFindingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Type Transition Rollback Pasture",
@@ -82,14 +82,14 @@ extension FieldCheckRepositoryContract {
             )
         )
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: rollbackEdgeDate(year: 2026, month: 9, day: 23, hour: 8),
                 notes: "Finding type transition rollback contract"
             )
         )
-        try repository.addFinding(
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: rollbackEdgeDate(year: 2026, month: 9, day: 23, hour: 9),
@@ -140,16 +140,18 @@ extension FieldCheckRepositoryContract {
         )
         var stagedFindingID: UUID?
 
-        XCTAssertThrowsError(
-            try failureInjection.updateMissingFindingFailingBetweenFindingAndMissingState(
+        do {
+            try await failureInjection.updateMissingFindingFailingBetweenFindingAndMissingState(
                 sessionID,
                 findingBeforeFailure.id,
                 transitionInput
-            ),
-            "The fault-injected type transition must fail between the finding mutation and synchronized roster mutation.",
-            file: file,
-            line: line
-        ) { error in
+            )
+            XCTFail(
+                "The fault-injected type transition must fail between the finding mutation and synchronized roster mutation.",
+                file: file,
+                line: line
+            )
+        } catch {
             guard let injected = error as? FieldCheckMissingFindingRollbackInjectedError else {
                 XCTFail(
                     "The operation must surface FieldCheckMissingFindingRollbackInjectedError rather than an unrelated early failure: \(error)",
@@ -237,7 +239,7 @@ extension FieldCheckRepositoryContract {
         failureInjection: FieldCheckRosterStateRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Roster State Rollback Pasture",
@@ -254,14 +256,14 @@ extension FieldCheckRepositoryContract {
             )
         )
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: rollbackEdgeDate(year: 2026, month: 9, day: 24, hour: 8),
                 notes: "Roster-state normalization rollback contract"
             )
         )
-        try repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.cow: 1])
+        try await repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.cow: 1])
 
         let beforeRepository = fixture.makeFieldCheckRepository()
         let beforeDetail = try XCTUnwrap(
@@ -295,16 +297,18 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        XCTAssertThrowsError(
-            try failureInjection.setAnimalCheckMissingFailingAfterRosterStateAndNormalizationStaged(
+        do {
+            try await failureInjection.setAnimalCheckMissingFailingAfterRosterStateAndNormalizationStaged(
                 sessionID,
                 checkBeforeFailure.id,
                 true
-            ),
-            "The fault-injected roster mutation must fail after both missing state and quick-count normalization have been staged.",
-            file: file,
-            line: line
-        ) { error in
+            )
+            XCTFail(
+                "The fault-injected roster mutation must fail after both missing state and quick-count normalization have been staged.",
+                file: file,
+                line: line
+            )
+        } catch {
             XCTAssertEqual(
                 error as? FieldCheckRosterStateRollbackInjectedError,
                 .afterMissingStateAndQuickCountNormalizationStaged(
@@ -381,7 +385,7 @@ extension FieldCheckRepositoryContract {
         failureInjection: FieldCheckRosterStateRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Counted State Rollback Pasture",
@@ -398,7 +402,7 @@ extension FieldCheckRepositoryContract {
             )
         )
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: rollbackEdgeDate(year: 2026, month: 9, day: 25, hour: 8),
@@ -411,7 +415,7 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         )
-        try repository.setAnimalCheckMissing(
+        try await repository.setAnimalCheckMissing(
             sessionID: sessionID,
             animalCheckID: animalCheckID,
             isMissing: true
@@ -457,16 +461,18 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        XCTAssertThrowsError(
-            try failureInjection.setAnimalCheckCountedFailingAfterRosterStateAndNormalizationStaged(
+        do {
+            try await failureInjection.setAnimalCheckCountedFailingAfterRosterStateAndNormalizationStaged(
                 sessionID,
                 animalCheckID,
                 true
-            ),
-            "The fault-injected counted-state mutation must fail after counted/missing state and quick-count normalization have been staged.",
-            file: file,
-            line: line
-        ) { error in
+            )
+            XCTFail(
+                "The fault-injected counted-state mutation must fail after counted/missing state and quick-count normalization have been staged.",
+                file: file,
+                line: line
+            )
+        } catch {
             XCTAssertEqual(
                 error as? FieldCheckRosterStateRollbackInjectedError,
                 .afterCountedStateAndQuickCountNormalizationStaged(
@@ -551,7 +557,7 @@ extension FieldCheckRepositoryContract {
         failureInjection: FieldCheckMissingFindingQuickCountRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Finding Quick Count Rollback Pasture",
@@ -576,14 +582,14 @@ extension FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: rollbackEdgeDate(year: 2026, month: 9, day: 26, hour: 8),
                 notes: "Finding quick-count rollback contract"
             )
         )
-        try repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.cow: 2])
+        try await repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.cow: 2])
 
         let beforeRepository = fixture.makeFieldCheckRepository()
         let beforeDetail = try XCTUnwrap(
@@ -622,15 +628,17 @@ extension FieldCheckRepositoryContract {
             animalID: firstAnimal.id
         )
         var stagedFindingID: UUID?
-        XCTAssertThrowsError(
-            try failureInjection.addMissingFindingFailingAfterMissingStateAndQuickCountNormalizationStaged(
+        do {
+            try await failureInjection.addMissingFindingFailingAfterMissingStateAndQuickCountNormalizationStaged(
                 sessionID,
                 input
-            ),
-            "The fault-injected missing-finding add must fail after the finding, synchronized missing state, and quick-count normalization have all been staged.",
-            file: file,
-            line: line
-        ) { error in
+            )
+            XCTFail(
+                "The fault-injected missing-finding add must fail after the finding, synchronized missing state, and quick-count normalization have all been staged.",
+                file: file,
+                line: line
+            )
+        } catch {
             guard let injected = error as? FieldCheckMissingFindingQuickCountRollbackInjectedError else {
                 XCTFail(
                     "The operation must surface FieldCheckMissingFindingQuickCountRollbackInjectedError rather than an unrelated early failure: \(error)",

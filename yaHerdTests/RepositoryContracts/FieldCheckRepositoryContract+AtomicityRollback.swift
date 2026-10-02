@@ -35,7 +35,7 @@ enum FieldCheckSessionCompletionRollbackInjectedError: Error, Equatable {
 struct FieldCheckSessionCreationRollbackFailureInjection {
     let createSessionFailingAfterSessionStaged: (
         _ input: FieldCheckSessionStartInput
-    ) throws -> Void
+    ) async throws -> Void
     let persistedAnimalCheckIDs: () throws -> Set<UUID>
 }
 
@@ -51,21 +51,21 @@ struct FieldCheckMissingFindingRollbackFailureInjection {
     let addMissingFindingFailingBetweenFindingAndMissingState: (
         _ sessionID: UUID,
         _ input: FieldCheckFindingInput
-    ) throws -> Void
+    ) async throws -> Void
     let updateMissingFindingFailingBetweenFindingAndMissingState: (
         _ sessionID: UUID,
         _ findingID: UUID,
         _ input: FieldCheckFindingInput
-    ) throws -> Void
+    ) async throws -> Void
     let updateMissingFindingStatusFailingBetweenFindingAndMissingState: (
         _ sessionID: UUID,
         _ findingID: UUID,
         _ status: FieldCheckFindingStatus
-    ) throws -> Void
+    ) async throws -> Void
     let deleteMissingFindingFailingBetweenFindingAndMissingState: (
         _ sessionID: UUID,
         _ findingID: UUID
-    ) throws -> Void
+    ) async throws -> Void
 }
 
 /// Permanent fault-injection hook for persistence implementations that can fail session completion
@@ -85,7 +85,7 @@ struct FieldCheckSessionCompletionRollbackFailureInjection {
     ) throws -> Int?
     let completeSessionFailingAfterCompletionStaged: (
         _ sessionID: UUID
-    ) throws -> Void
+    ) async throws -> Void
 }
 
 @MainActor
@@ -95,7 +95,7 @@ extension FieldCheckRepositoryContract {
         failureInjection: FieldCheckSessionCreationRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Create Rollback Pasture",
@@ -130,12 +130,14 @@ extension FieldCheckRepositoryContract {
         var stagedSessionID: UUID?
         var stagedAnimalCheckIDs = Set<UUID>()
 
-        XCTAssertThrowsError(
-            try failureInjection.createSessionFailingAfterSessionStaged(input),
-            "The fault-injected create-session operation must fail after the session and an initial roster row have been staged.",
-            file: file,
-            line: line
-        ) { error in
+        do {
+            try await failureInjection.createSessionFailingAfterSessionStaged(input)
+            XCTFail(
+                "The fault-injected create-session operation must fail after the session and an initial roster row have been staged.",
+                file: file,
+                line: line
+            )
+        } catch {
             guard let injected = error as? FieldCheckSessionCreationRollbackInjectedError else {
                 XCTFail(
                     "The production operation must surface FieldCheckSessionCreationRollbackInjectedError rather than failing earlier for an unrelated reason: \(error)",
@@ -199,7 +201,7 @@ extension FieldCheckRepositoryContract {
         failureInjection: FieldCheckMissingFindingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Missing Finding Rollback Pasture",
@@ -224,7 +226,7 @@ extension FieldCheckRepositoryContract {
         )
 
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: atomicityDate(year: 2026, month: 9, day: 21, hour: 8),
@@ -275,7 +277,7 @@ extension FieldCheckRepositoryContract {
             note: "Injected missing finding",
             animalID: originalAnimal.id
         )
-        let failedAddFindingID = try assertCoordinatedFindingFailureRollsBack(
+        let failedAddFindingID = try await assertCoordinatedFindingFailureRollsBack(
             expectedOperation: .add,
             expectedFindingID: nil,
             sessionID: sessionID,
@@ -286,7 +288,7 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         ) {
-            try failureInjection.addMissingFindingFailingBetweenFindingAndMissingState(sessionID, addInput)
+            try await failureInjection.addMissingFindingFailingBetweenFindingAndMissingState(sessionID, addInput)
         }
         let afterFailedAdd = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
@@ -304,7 +306,7 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        try repository.addFinding(sessionID: sessionID, input: addInput)
+        try await repository.addFinding(sessionID: sessionID, input: addInput)
         let beforeMutationRepository = fixture.makeFieldCheckRepository()
         let beforeMutationDetail = try XCTUnwrap(
             beforeMutationRepository.fetchSessionDetail(id: sessionID),
@@ -348,7 +350,7 @@ extension FieldCheckRepositoryContract {
             animalID: reassignmentAnimal.id
         )
 
-        _ = try assertCoordinatedFindingFailureRollsBack(
+        _ = try await assertCoordinatedFindingFailureRollsBack(
             expectedOperation: .update,
             expectedFindingID: findingID,
             sessionID: sessionID,
@@ -359,7 +361,7 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         ) {
-            try failureInjection.updateMissingFindingFailingBetweenFindingAndMissingState(
+            try await failureInjection.updateMissingFindingFailingBetweenFindingAndMissingState(
                 sessionID,
                 findingID,
                 reassignmentInput
@@ -374,7 +376,7 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        _ = try assertCoordinatedFindingFailureRollsBack(
+        _ = try await assertCoordinatedFindingFailureRollsBack(
             expectedOperation: .updateStatus,
             expectedFindingID: findingID,
             sessionID: sessionID,
@@ -385,7 +387,7 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         ) {
-            try failureInjection.updateMissingFindingStatusFailingBetweenFindingAndMissingState(
+            try await failureInjection.updateMissingFindingStatusFailingBetweenFindingAndMissingState(
                 sessionID,
                 findingID,
                 .resolved
@@ -400,7 +402,7 @@ extension FieldCheckRepositoryContract {
             line: line
         )
 
-        _ = try assertCoordinatedFindingFailureRollsBack(
+        _ = try await assertCoordinatedFindingFailureRollsBack(
             expectedOperation: .delete,
             expectedFindingID: findingID,
             sessionID: sessionID,
@@ -411,7 +413,7 @@ extension FieldCheckRepositoryContract {
             file: file,
             line: line
         ) {
-            try failureInjection.deleteMissingFindingFailingBetweenFindingAndMissingState(
+            try await failureInjection.deleteMissingFindingFailingBetweenFindingAndMissingState(
                 sessionID,
                 findingID
             )
@@ -431,7 +433,7 @@ extension FieldCheckRepositoryContract {
         failureInjection: FieldCheckSessionCompletionRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "Completion Rollback Pasture",
@@ -448,15 +450,15 @@ extension FieldCheckRepositoryContract {
             )
         )
         let repository = fixture.makeFieldCheckRepository()
-        let sessionID = try repository.createSession(
+        let sessionID = try await repository.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
                 startedAt: atomicityDate(year: 2026, month: 9, day: 22, hour: 8),
                 notes: "Completion rollback contract"
             )
         )
-        try repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.cow: 1])
-        try repository.addFinding(
+        try await repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: [.cow: 1])
+        try await repository.addFinding(
             sessionID: sessionID,
             input: FieldCheckFindingInput(
                 recordedAt: atomicityDate(year: 2026, month: 9, day: 22, hour: 9),
@@ -510,12 +512,14 @@ extension FieldCheckRepositoryContract {
         XCTAssertEqual(beforeDetail.animalChecks.count, 1, file: file, line: line)
         XCTAssertEqual(beforeDetail.findings.count, 1, file: file, line: line)
 
-        XCTAssertThrowsError(
-            try failureInjection.completeSessionFailingAfterCompletionStaged(sessionID),
-            "The fault-injected completion operation must fail after completion-time mutations have been staged.",
-            file: file,
-            line: line
-        ) { error in
+        do {
+            try await failureInjection.completeSessionFailingAfterCompletionStaged(sessionID)
+            XCTFail(
+                "The fault-injected completion operation must fail after completion-time mutations have been staged.",
+                file: file,
+                line: line
+            )
+        } catch {
             XCTAssertEqual(
                 error as? FieldCheckSessionCompletionRollbackInjectedError,
                 .afterCompletionStaged(sessionID: sessionID),
@@ -607,19 +611,21 @@ extension FieldCheckRepositoryContract {
     ) throws -> UUID {
         var stagedFindingID: UUID?
 
-        XCTAssertThrowsError(
-            try operation(),
-            "The fault-injected finding operation must fail between its coordinated finding and roster mutations.",
-            file: file,
-            line: line
-        ) { error in
+        do {
+            try await operation()
+            XCTFail(
+                "The fault-injected finding operation must fail between its coordinated finding and roster mutations.",
+                file: file,
+                line: line
+            )
+        } catch {
             guard let injected = error as? FieldCheckMissingFindingRollbackInjectedError else {
                 XCTFail(
                     "The production operation must surface FieldCheckMissingFindingRollbackInjectedError rather than failing earlier for an unrelated reason: \(error)",
                     file: file,
                     line: line
                 )
-                return
+                throw error
             }
             switch injected {
             case .betweenFindingAndMissingState(let actualOperation, let findingID):
@@ -672,7 +678,7 @@ extension FieldCheckRepositoryContract {
         expected: FieldCheckSessionDetailSnapshot,
         file: StaticString,
         line: UInt
-    ) throws {
+    ) async throws {
         let actual = try XCTUnwrap(
             actual,
             "A failed coordinated finding write must leave the session detail readable.",
@@ -715,7 +721,7 @@ extension FieldCheckRepositoryContract {
         expected: [FieldCheckSessionSummary],
         file: StaticString,
         line: UInt
-    ) throws {
+    ) async throws {
         let actualByID = actual.sorted(by: rollbackSnapshotIDOrder)
         let expectedByID = expected.sorted(by: rollbackSnapshotIDOrder)
 
@@ -772,7 +778,7 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString,
         line: UInt
-    ) throws {
+    ) async throws {
         let detail = try XCTUnwrap(
             fixture.makeFieldCheckRepository().fetchSessionDetail(id: sessionID),
             file: file,

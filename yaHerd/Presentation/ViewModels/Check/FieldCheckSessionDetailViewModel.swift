@@ -1,15 +1,31 @@
 import Foundation
 import Observation
 
+struct FieldCheckSessionCountProjection: Equatable, Sendable {
+    let totalSeen: Int
+    let remainingExpectedCount: Int
+    let countVariance: Int
+
+    var requiresFinishConfirmation: Bool {
+        remainingExpectedCount > 0 || countVariance != 0
+    }
+}
+
 @MainActor
 @Observable
 final class FieldCheckSessionDetailViewModel {
     private(set) var detail: FieldCheckSessionDetailSnapshot?
-    var notesDraft = ""
+    private(set) var quickAnimalTypeCountsDraft: [AnimalType: Int] = [:]
+    private(set) var notesDraft = ""
+    private(set) var isCompletingSession = false
     var errorMessage: String?
     var hasLoaded = false
 
     @ObservationIgnored private var mutationObservationTask: Task<Void, Never>?
+    @ObservationIgnored private var quickCountMutationTask: Task<Bool, Never>?
+    @ObservationIgnored private var pendingQuickAnimalTypeCounts: [AnimalType: Int]?
+    @ObservationIgnored private var orderedMutationTail: Task<Bool, Never>?
+    @ObservationIgnored private var orderedMutationSequence: UInt64 = 0
     @ObservationIgnored private var observedSessionID: UUID?
     private var lastLoadedRevision: UInt64 = 0
 
@@ -38,6 +54,7 @@ final class FieldCheckSessionDetailViewModel {
             let loadedDetail = try repository.fetchSessionDetail(id: sessionID)
             detail = loadedDetail
             notesDraft = loadedDetail?.notes ?? ""
+            syncQuickCountDraftFromLoadedDetailIfIdle()
             errorMessage = nil
             markCurrentRevision(using: repository)
             return true
@@ -64,6 +81,7 @@ final class FieldCheckSessionDetailViewModel {
                 )
             }
             detail = loadedDetail
+            syncQuickCountDraftFromLoadedDetailIfIdle()
             errorMessage = nil
             return true
         } catch {
@@ -72,50 +90,96 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func persistNotes(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) {
-        guard let detail else { return }
+    func countProjection(
+        for detail: FieldCheckSessionDetailSnapshot
+    ) -> FieldCheckSessionCountProjection {
+        let totalSeen = FieldCheckQuickCountRules.totalSeen(
+            quickCounts: quickAnimalTypeCountsDraft,
+            rosterEntries: detail.animalChecks.map(\.quickCountRosterEntry)
+        )
+
+        return FieldCheckSessionCountProjection(
+            totalSeen: totalSeen,
+            remainingExpectedCount: max(detail.expectedHeadCountSnapshot - totalSeen, 0),
+            countVariance: totalSeen - detail.expectedHeadCountSnapshot
+        )
+    }
+
+    private func performOrderedMutation(
+        allowsDuringCompletion: Bool = false,
+        _ operation: @escaping @MainActor () async -> Bool
+    ) async -> Bool {
+        guard allowsDuringCompletion || !isCompletingSession else {
+            return false
+        }
+
+        let predecessor = orderedMutationTail
+        let quickCountPrerequisite = quickCountMutationTask
+        orderedMutationSequence &+= 1
+        let sequence = orderedMutationSequence
+
+        let task = Task { @MainActor in
+            if let predecessor,
+               !(await predecessor.value) {
+                return false
+            }
+
+            if let quickCountPrerequisite,
+               !(await quickCountPrerequisite.value) {
+                return false
+            }
+
+            return await operation()
+        }
+
+        orderedMutationTail = task
+        let result = await task.value
+
+        if orderedMutationSequence == sequence {
+            orderedMutationTail = nil
+        }
+
+        return result
+    }
+
+    func updateNotesDraft(_ notes: String) {
+        guard !isCompletingSession,
+              detail?.isCompleted == false else {
+            return
+        }
+        notesDraft = notes
+    }
+
+    @discardableResult
+    func beginSessionCompletion() -> Bool {
+        guard !isCompletingSession,
+              detail?.isCompleted == false else {
+            return false
+        }
+        isCompletingSession = true
+        return true
+    }
+
+    private func endSessionCompletion() {
+        isCompletingSession = false
+    }
+
+    private func persistNotesOperation(
+        sessionID: UUID,
+        using repository: any FieldCheckSessionDetailRepository
+    ) async -> Bool {
+        guard let detail else {
+            return true
+        }
+
         let normalizedDraft = notesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedSaved = detail.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard normalizedDraft != normalizedSaved else { return }
-
-        do {
-            try repository.updateNotes(sessionID: sessionID, notes: notesDraft)
-            refresh(sessionID: sessionID, using: repository)
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+        guard normalizedDraft != normalizedSaved else {
+            return true
         }
-    }
 
-    func updateQuickAnimalTypeCounts(sessionID: UUID, counts: [AnimalType: Int], using repository: any FieldCheckSessionDetailRepository) {
         do {
-            try repository.updateQuickAnimalTypeCounts(sessionID: sessionID, counts: counts)
-            refresh(sessionID: sessionID, using: repository)
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-        }
-    }
-
-    func setAnimalCheckCounted(sessionID: UUID, animalCheckID: UUID, isCounted: Bool, using repository: any FieldCheckSessionDetailRepository) {
-        do {
-            try repository.setAnimalCheckCounted(sessionID: sessionID, animalCheckID: animalCheckID, isCounted: isCounted)
-            refresh(sessionID: sessionID, using: repository)
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-        }
-    }
-
-    func setAnimalCheckMissing(sessionID: UUID, animalCheckID: UUID, isMissing: Bool, using repository: any FieldCheckSessionDetailRepository) {
-        do {
-            try repository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: animalCheckID, isMissing: isMissing)
-            refresh(sessionID: sessionID, using: repository)
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-        }
-    }
-
-    func addTrackedAnimalToSession(sessionID: UUID, animalID: UUID, using repository: any FieldCheckSessionDetailRepository) -> Bool {
-        do {
-            try repository.addTrackedAnimalToSession(sessionID: sessionID, animalID: animalID, checkedAt: .now)
+            try await repository.updateNotes(sessionID: sessionID, notes: notesDraft)
             refresh(sessionID: sessionID, using: repository)
             return true
         } catch {
@@ -124,58 +188,273 @@ final class FieldCheckSessionDetailViewModel {
         }
     }
 
-    func addFinding(sessionID: UUID, input: FieldCheckFindingInput, using repository: any FieldCheckSessionDetailRepository) {
-        do {
-            try repository.addFinding(sessionID: sessionID, input: input)
-            refresh(sessionID: sessionID, using: repository)
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+    @discardableResult
+    func persistNotes(
+        sessionID: UUID,
+        using repository: any FieldCheckSessionDetailRepository
+    ) async -> Bool {
+        await performOrderedMutation {
+            await self.persistNotesOperation(
+                sessionID: sessionID,
+                using: repository
+            )
         }
     }
 
-    func updateFinding(sessionID: UUID, findingID: UUID, input: FieldCheckFindingInput, using repository: any FieldCheckSessionDetailRepository) {
-        do {
-            try repository.updateFinding(sessionID: sessionID, findingID: findingID, input: input)
-            refresh(sessionID: sessionID, using: repository)
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+    func updateQuickAnimalTypeCounts(
+        sessionID: UUID,
+        counts: [AnimalType: Int],
+        using repository: any FieldCheckSessionDetailRepository
+    ) {
+        guard !isCompletingSession,
+              detail?.isCompleted == false else {
+            return
+        }
+
+        quickAnimalTypeCountsDraft = counts
+        pendingQuickAnimalTypeCounts = counts
+
+        guard quickCountMutationTask == nil else {
+            return
+        }
+
+        quickCountMutationTask = Task { @MainActor in
+            await drainQuickAnimalTypeCountUpdates(
+                sessionID: sessionID,
+                using: repository
+            )
         }
     }
 
-    func updateFindingStatus(sessionID: UUID, findingID: UUID, status: FieldCheckFindingStatus, using repository: any FieldCheckSessionDetailRepository) {
+    private func drainQuickAnimalTypeCountUpdates(
+        sessionID: UUID,
+        using repository: any FieldCheckSessionDetailRepository
+    ) async -> Bool {
         do {
-            try repository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: status)
-            refresh(sessionID: sessionID, using: repository)
+            while let counts = pendingQuickAnimalTypeCounts {
+                pendingQuickAnimalTypeCounts = nil
+                try await repository.updateQuickAnimalTypeCounts(
+                    sessionID: sessionID,
+                    counts: counts
+                )
+            }
+
+            quickCountMutationTask = nil
+            _ = refresh(sessionID: sessionID, using: repository)
+            return true
         } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+            pendingQuickAnimalTypeCounts = nil
+            quickCountMutationTask = nil
+            let message = UserVisibleErrorMessage.make(error)
+            _ = refresh(sessionID: sessionID, using: repository)
+            errorMessage = message
+            return false
         }
     }
 
-    func deleteFinding(sessionID: UUID, findingID: UUID, using repository: any FieldCheckSessionDetailRepository) {
-        do {
-            try repository.deleteFinding(sessionID: sessionID, findingID: findingID)
-            refresh(sessionID: sessionID, using: repository)
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+    private func syncQuickCountDraftFromLoadedDetailIfIdle() {
+        guard quickCountMutationTask == nil,
+              pendingQuickAnimalTypeCounts == nil else {
+            return
+        }
+        quickAnimalTypeCountsDraft = detail?.quickAnimalTypeCounts ?? [:]
+    }
+
+    func setAnimalCheckCounted(
+        sessionID: UUID,
+        animalCheckID: UUID,
+        isCounted: Bool,
+        using repository: any FieldCheckSessionDetailRepository
+    ) async {
+        _ = await performOrderedMutation {
+            do {
+                try await repository.setAnimalCheckCounted(
+                    sessionID: sessionID,
+                    animalCheckID: animalCheckID,
+                    isCounted: isCounted
+                )
+                self.refresh(sessionID: sessionID, using: repository)
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
         }
     }
 
-    func completeSession(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) {
-        do {
-            persistNotes(sessionID: sessionID, using: repository)
-            try repository.completeSession(id: sessionID)
-            refresh(sessionID: sessionID, using: repository)
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+    func setAnimalCheckMissing(
+        sessionID: UUID,
+        animalCheckID: UUID,
+        isMissing: Bool,
+        using repository: any FieldCheckSessionDetailRepository
+    ) async {
+        _ = await performOrderedMutation {
+            do {
+                try await repository.setAnimalCheckMissing(
+                    sessionID: sessionID,
+                    animalCheckID: animalCheckID,
+                    isMissing: isMissing
+                )
+                self.refresh(sessionID: sessionID, using: repository)
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
         }
     }
 
-    func reopenSession(sessionID: UUID, using repository: any FieldCheckSessionDetailRepository) {
-        do {
-            try repository.reopenSession(id: sessionID)
-            refresh(sessionID: sessionID, using: repository)
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+    func addTrackedAnimalToSession(
+        sessionID: UUID,
+        animalID: UUID,
+        using repository: any FieldCheckSessionDetailRepository
+    ) async -> Bool {
+        await performOrderedMutation {
+            do {
+                try await repository.addTrackedAnimalToSession(
+                    sessionID: sessionID,
+                    animalID: animalID,
+                    checkedAt: .now
+                )
+                self.refresh(sessionID: sessionID, using: repository)
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
+        }
+    }
+
+    func addFinding(
+        sessionID: UUID,
+        input: FieldCheckFindingInput,
+        using repository: any FieldCheckSessionDetailRepository
+    ) async {
+        _ = await performOrderedMutation {
+            do {
+                try await repository.addFinding(sessionID: sessionID, input: input)
+                self.refresh(sessionID: sessionID, using: repository)
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
+        }
+    }
+
+    func updateFinding(
+        sessionID: UUID,
+        findingID: UUID,
+        input: FieldCheckFindingInput,
+        using repository: any FieldCheckSessionDetailRepository
+    ) async {
+        _ = await performOrderedMutation {
+            do {
+                try await repository.updateFinding(
+                    sessionID: sessionID,
+                    findingID: findingID,
+                    input: input
+                )
+                self.refresh(sessionID: sessionID, using: repository)
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
+        }
+    }
+
+    func updateFindingStatus(
+        sessionID: UUID,
+        findingID: UUID,
+        status: FieldCheckFindingStatus,
+        using repository: any FieldCheckSessionDetailRepository
+    ) async {
+        _ = await performOrderedMutation {
+            do {
+                try await repository.updateFindingStatus(
+                    sessionID: sessionID,
+                    findingID: findingID,
+                    status: status
+                )
+                self.refresh(sessionID: sessionID, using: repository)
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
+        }
+    }
+
+    func deleteFinding(
+        sessionID: UUID,
+        findingID: UUID,
+        using repository: any FieldCheckSessionDetailRepository
+    ) async {
+        _ = await performOrderedMutation {
+            do {
+                try await repository.deleteFinding(
+                    sessionID: sessionID,
+                    findingID: findingID
+                )
+                self.refresh(sessionID: sessionID, using: repository)
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
+        }
+    }
+
+    func completeSession(
+        sessionID: UUID,
+        using repository: any FieldCheckSessionDetailRepository,
+        completionAlreadyAccepted: Bool = false
+    ) async {
+        if completionAlreadyAccepted {
+            guard isCompletingSession else {
+                return
+            }
+        } else {
+            guard beginSessionCompletion() else {
+                return
+            }
+        }
+
+        defer { endSessionCompletion() }
+
+        _ = await performOrderedMutation(allowsDuringCompletion: true) {
+            guard await self.persistNotesOperation(
+                sessionID: sessionID,
+                using: repository
+            ) else {
+                return false
+            }
+
+            do {
+                try await repository.completeSession(id: sessionID)
+                self.refresh(sessionID: sessionID, using: repository)
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
+        }
+    }
+
+    func reopenSession(
+        sessionID: UUID,
+        using repository: any FieldCheckSessionDetailRepository
+    ) async {
+        _ = await performOrderedMutation {
+            do {
+                try await repository.reopenSession(id: sessionID)
+                self.refresh(sessionID: sessionID, using: repository)
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
         }
     }
 
@@ -227,6 +506,8 @@ final class FieldCheckSessionDetailViewModel {
 @Observable
 final class FieldCheckAnimalDetailViewModel {
     @ObservationIgnored private let dateProvider: any DateProviding
+    @ObservationIgnored private var orderedMutationTail: Task<Bool, Never>?
+    @ObservationIgnored private var orderedMutationSequence: UInt64 = 0
     private(set) var animalDetail: AnimalDetailSnapshot?
     private(set) var sessionDetail: FieldCheckSessionDetailSnapshot?
     var preparedOffspringEditor: PreparedAnimalEditor?
@@ -283,20 +564,58 @@ final class FieldCheckAnimalDetailViewModel {
         }
     }
 
+    private func performOrderedMutation(
+        _ operation: @escaping @MainActor () async -> Bool
+    ) async -> Bool {
+        let predecessor = orderedMutationTail
+        orderedMutationSequence &+= 1
+        let sequence = orderedMutationSequence
+
+        let task = Task { @MainActor in
+            if let predecessor,
+               !(await predecessor.value) {
+                return false
+            }
+            return await operation()
+        }
+
+        orderedMutationTail = task
+        let result = await task.value
+
+        if orderedMutationSequence == sequence {
+            orderedMutationTail = nil
+        }
+
+        return result
+    }
+
     func setAnimalCheckCounted(
         animalID: UUID,
         sessionID: UUID,
         isCounted: Bool,
         animalRepository: any AnimalDetailRepository,
         fieldCheckRepository: any FieldCheckAnimalDetailRepository
-    ) {
+    ) async {
         guard let animalCheckID = animalCheck?.id else { return }
 
-        do {
-            try fieldCheckRepository.setAnimalCheckCounted(sessionID: sessionID, animalCheckID: animalCheckID, isCounted: isCounted)
-            refresh(animalID: animalID, sessionID: sessionID, animalRepository: animalRepository, fieldCheckRepository: fieldCheckRepository)
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+        _ = await performOrderedMutation {
+            do {
+                try await fieldCheckRepository.setAnimalCheckCounted(
+                    sessionID: sessionID,
+                    animalCheckID: animalCheckID,
+                    isCounted: isCounted
+                )
+                self.refresh(
+                    animalID: animalID,
+                    sessionID: sessionID,
+                    animalRepository: animalRepository,
+                    fieldCheckRepository: fieldCheckRepository
+                )
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
         }
     }
 
@@ -306,14 +625,27 @@ final class FieldCheckAnimalDetailViewModel {
         isMissing: Bool,
         animalRepository: any AnimalDetailRepository,
         fieldCheckRepository: any FieldCheckAnimalDetailRepository
-    ) {
+    ) async {
         guard let animalCheckID = animalCheck?.id else { return }
 
-        do {
-            try fieldCheckRepository.setAnimalCheckMissing(sessionID: sessionID, animalCheckID: animalCheckID, isMissing: isMissing)
-            refresh(animalID: animalID, sessionID: sessionID, animalRepository: animalRepository, fieldCheckRepository: fieldCheckRepository)
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+        _ = await performOrderedMutation {
+            do {
+                try await fieldCheckRepository.setAnimalCheckMissing(
+                    sessionID: sessionID,
+                    animalCheckID: animalCheckID,
+                    isMissing: isMissing
+                )
+                self.refresh(
+                    animalID: animalID,
+                    sessionID: sessionID,
+                    animalRepository: animalRepository,
+                    fieldCheckRepository: fieldCheckRepository
+                )
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
         }
     }
 
@@ -321,8 +653,26 @@ final class FieldCheckAnimalDetailViewModel {
         animalID: UUID,
         sessionID: UUID,
         fieldCheckRepository: any FieldCheckAnimalDetailRepository
-    ) throws {
-        try fieldCheckRepository.addTrackedAnimalToSession(sessionID: sessionID, animalID: animalID, checkedAt: dateProvider.now)
+    ) async throws {
+        var operationError: Error?
+        let succeeded = await performOrderedMutation {
+            do {
+                try await fieldCheckRepository.addTrackedAnimalToSession(
+                    sessionID: sessionID,
+                    animalID: animalID,
+                    checkedAt: self.dateProvider.now
+                )
+                return true
+            } catch {
+                operationError = error
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
+        }
+
+        guard succeeded else {
+            throw operationError ?? FieldCheckAnimalDetailMutationError.priorMutationFailed
+        }
     }
 
     func addFinding(
@@ -331,17 +681,24 @@ final class FieldCheckAnimalDetailViewModel {
         input: FieldCheckFindingInput,
         animalRepository: any AnimalDetailRepository,
         fieldCheckRepository: any FieldCheckAnimalDetailRepository
-    ) {
-        do {
-            try fieldCheckRepository.addFinding(sessionID: sessionID, input: input)
-            refresh(
-                animalID: animalID,
-                sessionID: sessionID,
-                animalRepository: animalRepository,
-                fieldCheckRepository: fieldCheckRepository
-            )
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+    ) async {
+        _ = await performOrderedMutation {
+            do {
+                try await fieldCheckRepository.addFinding(
+                    sessionID: sessionID,
+                    input: input
+                )
+                self.refresh(
+                    animalID: animalID,
+                    sessionID: sessionID,
+                    animalRepository: animalRepository,
+                    fieldCheckRepository: fieldCheckRepository
+                )
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
         }
     }
 
@@ -352,12 +709,25 @@ final class FieldCheckAnimalDetailViewModel {
         input: FieldCheckFindingInput,
         animalRepository: any AnimalDetailRepository,
         fieldCheckRepository: any FieldCheckAnimalDetailRepository
-    ) {
-        do {
-            try fieldCheckRepository.updateFinding(sessionID: sessionID, findingID: findingID, input: input)
-            refresh(animalID: animalID, sessionID: sessionID, animalRepository: animalRepository, fieldCheckRepository: fieldCheckRepository)
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+    ) async {
+        _ = await performOrderedMutation {
+            do {
+                try await fieldCheckRepository.updateFinding(
+                    sessionID: sessionID,
+                    findingID: findingID,
+                    input: input
+                )
+                self.refresh(
+                    animalID: animalID,
+                    sessionID: sessionID,
+                    animalRepository: animalRepository,
+                    fieldCheckRepository: fieldCheckRepository
+                )
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
         }
     }
 
@@ -368,12 +738,25 @@ final class FieldCheckAnimalDetailViewModel {
         status: FieldCheckFindingStatus,
         animalRepository: any AnimalDetailRepository,
         fieldCheckRepository: any FieldCheckAnimalDetailRepository
-    ) {
-        do {
-            try fieldCheckRepository.updateFindingStatus(sessionID: sessionID, findingID: findingID, status: status)
-            refresh(animalID: animalID, sessionID: sessionID, animalRepository: animalRepository, fieldCheckRepository: fieldCheckRepository)
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+    ) async {
+        _ = await performOrderedMutation {
+            do {
+                try await fieldCheckRepository.updateFindingStatus(
+                    sessionID: sessionID,
+                    findingID: findingID,
+                    status: status
+                )
+                self.refresh(
+                    animalID: animalID,
+                    sessionID: sessionID,
+                    animalRepository: animalRepository,
+                    fieldCheckRepository: fieldCheckRepository
+                )
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
         }
     }
 
@@ -383,18 +766,34 @@ final class FieldCheckAnimalDetailViewModel {
         findingID: UUID,
         animalRepository: any AnimalDetailRepository,
         fieldCheckRepository: any FieldCheckAnimalDetailRepository
-    ) {
-        do {
-            try fieldCheckRepository.deleteFinding(sessionID: sessionID, findingID: findingID)
-            refresh(
-                animalID: animalID,
-                sessionID: sessionID,
-                animalRepository: animalRepository,
-                fieldCheckRepository: fieldCheckRepository
-            )
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+    ) async {
+        _ = await performOrderedMutation {
+            do {
+                try await fieldCheckRepository.deleteFinding(
+                    sessionID: sessionID,
+                    findingID: findingID
+                )
+                self.refresh(
+                    animalID: animalID,
+                    sessionID: sessionID,
+                    animalRepository: animalRepository,
+                    fieldCheckRepository: fieldCheckRepository
+                )
+                return true
+            } catch {
+                self.errorMessage = UserVisibleErrorMessage.make(error)
+                return false
+            }
         }
+    }
+
+}
+
+private enum FieldCheckAnimalDetailMutationError: LocalizedError {
+    case priorMutationFailed
+
+    var errorDescription: String? {
+        "A previous Field Check action failed. Retry after reviewing the current animal state."
     }
 }
 
@@ -402,6 +801,7 @@ final class FieldCheckAnimalDetailViewModel {
 @Observable
 final class FieldCheckTrackedAnimalPickerViewModel {
     private(set) var animals: [AnimalSummary] = []
+    private(set) var isSubmittingSelection = false
     var searchText = ""
     var errorMessage: String?
     var hasLoaded = false
@@ -415,6 +815,18 @@ final class FieldCheckTrackedAnimalPickerViewModel {
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
         }
+    }
+
+    func beginSelectionSubmission() -> Bool {
+        guard !isSubmittingSelection else {
+            return false
+        }
+        isSubmittingSelection = true
+        return true
+    }
+
+    func endSelectionSubmission() {
+        isSubmittingSelection = false
     }
 
     func eligibleAnimals(

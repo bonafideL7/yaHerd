@@ -41,7 +41,7 @@ extension FieldCheckRepositoryContract {
         failureInjection: FieldCheckAllFailureContextsRecoveryInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let probePasture = try fixture.makePastureRepository().create(
             input: PastureInput(
                 name: "All Failure Context Recovery Probe",
@@ -53,7 +53,7 @@ extension FieldCheckRepositoryContract {
         _ = try fixture.makeAnimalRepository().create(
             input: allFailureContextsProbeAnimalInput(pastureID: probePasture.id)
         )
-        let probeSessionID = try fixture.makeFieldCheckRepository().createSession(
+        let probeSessionID = try await fixture.makeFieldCheckRepository().createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: probePasture.id,
                 startedAt: allFailureContextsRecoveryDate(year: 2026, month: 9, day: 30, hour: 8),
@@ -61,7 +61,7 @@ extension FieldCheckRepositoryContract {
             )
         )
 
-        try assertMissingFindingFailureContextRecovers(
+        try await assertMissingFindingFailureContextRecovers(
             using: fixture,
             failureInjection: failureInjection.missingFinding,
             file: file,
@@ -70,7 +70,7 @@ extension FieldCheckRepositoryContract {
 
         let sessionCreation = FieldCheckSessionCreationRollbackFailureInjection(
             createSessionFailingAfterSessionStaged: { input in
-                try runWithFailureContextRecoveryProbe(
+                try await runWithFailureContextRecoveryProbe(
                     probeSessionID: probeSessionID,
                     notes: "Probe after session creation failure",
                     saveProbe: failureInjection.saveProbeAfterSessionCreationFailure,
@@ -78,12 +78,12 @@ extension FieldCheckRepositoryContract {
                     file: file,
                     line: line
                 ) {
-                    try failureInjection.sessionCreation.createSessionFailingAfterSessionStaged(input)
+                    try await failureInjection.sessionCreation.createSessionFailingAfterSessionStaged(input)
                 }
             },
             persistedAnimalCheckIDs: failureInjection.sessionCreation.persistedAnimalCheckIDs
         )
-        try assertSessionCreationFailureRollsBack(
+        try await assertSessionCreationFailureRollsBack(
             using: fixture,
             failureInjection: sessionCreation,
             file: file,
@@ -92,7 +92,7 @@ extension FieldCheckRepositoryContract {
 
         let trackedAnimal = FieldCheckTrackedAnimalRollbackFailureInjection(
             addTrackedAnimalFailingAfterMovementStaged: { sessionID, animalID, checkedAt in
-                try runWithFailureContextRecoveryProbe(
+                try await runWithFailureContextRecoveryProbe(
                     probeSessionID: probeSessionID,
                     notes: "Probe after tracked-animal failure",
                     saveProbe: failureInjection.saveProbeAfterTrackedAnimalFailure,
@@ -100,7 +100,7 @@ extension FieldCheckRepositoryContract {
                     file: file,
                     line: line
                 ) {
-                    try failureInjection.trackedAnimal.addTrackedAnimalFailingAfterMovementStaged(
+                    try await failureInjection.trackedAnimal.addTrackedAnimalFailingAfterMovementStaged(
                         sessionID,
                         animalID,
                         checkedAt
@@ -108,7 +108,7 @@ extension FieldCheckRepositoryContract {
                 }
             }
         )
-        try assertTrackedAnimalInsertionFailureRollsBack(
+        try await assertTrackedAnimalInsertionFailureRollsBack(
             using: fixture,
             failureInjection: trackedAnimal,
             file: file,
@@ -119,7 +119,7 @@ extension FieldCheckRepositoryContract {
             seedRawQuickCowCount: failureInjection.sessionCompletion.seedRawQuickCowCount,
             rawQuickCowCount: failureInjection.sessionCompletion.rawQuickCowCount,
             completeSessionFailingAfterCompletionStaged: { sessionID in
-                try runWithFailureContextRecoveryProbe(
+                try await runWithFailureContextRecoveryProbe(
                     probeSessionID: probeSessionID,
                     notes: "Probe after session completion failure",
                     saveProbe: failureInjection.saveProbeAfterSessionCompletionFailure,
@@ -127,11 +127,11 @@ extension FieldCheckRepositoryContract {
                     file: file,
                     line: line
                 ) {
-                    try failureInjection.sessionCompletion.completeSessionFailingAfterCompletionStaged(sessionID)
+                    try await failureInjection.sessionCompletion.completeSessionFailingAfterCompletionStaged(sessionID)
                 }
             }
         )
-        try assertSessionCompletionFailureRollsBack(
+        try await assertSessionCompletionFailureRollsBack(
             using: fixture,
             failureInjection: sessionCompletion,
             file: file,
@@ -142,7 +142,7 @@ extension FieldCheckRepositoryContract {
             seedRawQuickCowCount: failureInjection.rosterState.seedRawQuickCowCount,
             rawQuickCowCount: failureInjection.rosterState.rawQuickCowCount,
             setAnimalCheckMissingFailingAfterRosterStateAndNormalizationStaged: { sessionID, animalCheckID, isMissing in
-                try runWithFailureContextRecoveryProbe(
+                try await runWithFailureContextRecoveryProbe(
                     probeSessionID: probeSessionID,
                     notes: "Probe after roster missing failure",
                     saveProbe: failureInjection.saveProbeAfterRosterMissingFailure,
@@ -150,7 +150,7 @@ extension FieldCheckRepositoryContract {
                     file: file,
                     line: line
                 ) {
-                    try failureInjection.rosterState.setAnimalCheckMissingFailingAfterRosterStateAndNormalizationStaged(
+                    try await failureInjection.rosterState.setAnimalCheckMissingFailingAfterRosterStateAndNormalizationStaged(
                         sessionID,
                         animalCheckID,
                         isMissing
@@ -158,7 +158,7 @@ extension FieldCheckRepositoryContract {
                 }
             },
             setAnimalCheckCountedFailingAfterRosterStateAndNormalizationStaged: { sessionID, animalCheckID, isCounted in
-                try runWithFailureContextRecoveryProbe(
+                try await runWithFailureContextRecoveryProbe(
                     probeSessionID: probeSessionID,
                     notes: "Probe after roster counted failure",
                     saveProbe: failureInjection.saveProbeAfterRosterCountedFailure,
@@ -166,7 +166,7 @@ extension FieldCheckRepositoryContract {
                     file: file,
                     line: line
                 ) {
-                    try failureInjection.rosterState.setAnimalCheckCountedFailingAfterRosterStateAndNormalizationStaged(
+                    try await failureInjection.rosterState.setAnimalCheckCountedFailingAfterRosterStateAndNormalizationStaged(
                         sessionID,
                         animalCheckID,
                         isCounted
@@ -174,13 +174,13 @@ extension FieldCheckRepositoryContract {
                 }
             }
         )
-        try assertRosterMissingStateNormalizationFailureRollsBack(
+        try await assertRosterMissingStateNormalizationFailureRollsBack(
             using: fixture,
             failureInjection: rosterState,
             file: file,
             line: line
         )
-        try assertRosterCountedStateNormalizationFailureRollsBack(
+        try await assertRosterCountedStateNormalizationFailureRollsBack(
             using: fixture,
             failureInjection: rosterState,
             file: file,
@@ -190,7 +190,7 @@ extension FieldCheckRepositoryContract {
         let missingFindingQuickCount = FieldCheckMissingFindingQuickCountRollbackFailureInjection(
             rawQuickCowCount: failureInjection.missingFindingQuickCount.rawQuickCowCount,
             addMissingFindingFailingAfterMissingStateAndQuickCountNormalizationStaged: { sessionID, input in
-                try runWithFailureContextRecoveryProbe(
+                try await runWithFailureContextRecoveryProbe(
                     probeSessionID: probeSessionID,
                     notes: "Probe after missing-finding quick-count add failure",
                     saveProbe: failureInjection.saveProbeAfterMissingFindingQuickCountAddFailure,
@@ -198,14 +198,14 @@ extension FieldCheckRepositoryContract {
                     file: file,
                     line: line
                 ) {
-                    try failureInjection.missingFindingQuickCount.addMissingFindingFailingAfterMissingStateAndQuickCountNormalizationStaged(
+                    try await failureInjection.missingFindingQuickCount.addMissingFindingFailingAfterMissingStateAndQuickCountNormalizationStaged(
                         sessionID,
                         input
                     )
                 }
             }
         )
-        try assertMissingFindingQuickCountNormalizationFailureRollsBack(
+        try await assertMissingFindingQuickCountNormalizationFailureRollsBack(
             using: fixture,
             failureInjection: missingFindingQuickCount,
             file: file,
@@ -215,7 +215,7 @@ extension FieldCheckRepositoryContract {
         let missingFindingMutationQuickCount = FieldCheckMissingFindingMutationQuickCountRollbackFailureInjection(
             rawQuickCowCount: failureInjection.missingFindingMutationQuickCount.rawQuickCowCount,
             updateFindingFailingAfterMissingStateAndQuickCountNormalizationStaged: { sessionID, findingID, input in
-                try runWithFailureContextRecoveryProbe(
+                try await runWithFailureContextRecoveryProbe(
                     probeSessionID: probeSessionID,
                     notes: "Probe after missing-finding quick-count update failure",
                     saveProbe: failureInjection.saveProbeAfterMissingFindingQuickCountUpdateFailure,
@@ -223,7 +223,7 @@ extension FieldCheckRepositoryContract {
                     file: file,
                     line: line
                 ) {
-                    try failureInjection.missingFindingMutationQuickCount.updateFindingFailingAfterMissingStateAndQuickCountNormalizationStaged(
+                    try await failureInjection.missingFindingMutationQuickCount.updateFindingFailingAfterMissingStateAndQuickCountNormalizationStaged(
                         sessionID,
                         findingID,
                         input
@@ -231,7 +231,7 @@ extension FieldCheckRepositoryContract {
                 }
             },
             updateFindingStatusFailingAfterMissingStateAndQuickCountNormalizationStaged: { sessionID, findingID, status in
-                try runWithFailureContextRecoveryProbe(
+                try await runWithFailureContextRecoveryProbe(
                     probeSessionID: probeSessionID,
                     notes: "Probe after missing-finding quick-count status failure",
                     saveProbe: failureInjection.saveProbeAfterMissingFindingQuickCountStatusFailure,
@@ -239,7 +239,7 @@ extension FieldCheckRepositoryContract {
                     file: file,
                     line: line
                 ) {
-                    try failureInjection.missingFindingMutationQuickCount.updateFindingStatusFailingAfterMissingStateAndQuickCountNormalizationStaged(
+                    try await failureInjection.missingFindingMutationQuickCount.updateFindingStatusFailingAfterMissingStateAndQuickCountNormalizationStaged(
                         sessionID,
                         findingID,
                         status
@@ -247,7 +247,7 @@ extension FieldCheckRepositoryContract {
                 }
             }
         )
-        try assertMissingFindingUpdateAndStatusQuickCountNormalizationFailuresRollBack(
+        try await assertMissingFindingUpdateAndStatusQuickCountNormalizationFailuresRollBack(
             using: fixture,
             failureInjection: missingFindingMutationQuickCount,
             file: file,
@@ -262,10 +262,10 @@ extension FieldCheckRepositoryContract {
         using fixture: FieldCheckRepositoryContractFixture,
         file: StaticString,
         line: UInt,
-        operation: () throws -> Void
-    ) throws {
+        operation: () async throws -> Void
+    ) async throws {
         do {
-            try operation()
+            try await operation()
         } catch {
             let injectedError = error
             try saveProbe(probeSessionID, notes)
