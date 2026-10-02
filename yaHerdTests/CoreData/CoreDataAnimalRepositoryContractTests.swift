@@ -690,6 +690,67 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             .assertPastureDeletionRejectsStaleExpectedStateBeforeMutation(using: fixture)
     }
 
+    func testMilestone6PastureDeletionRejectsMissingMoveDestinationWithoutMutation() async throws {
+        let environment = try await makeEnvironment()
+        let pastures = environment.makePastureRepository()
+        let source = try pastures.create(
+            input: PastureInput(name: "Missing destination source", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1)
+        )
+        let destination = try pastures.create(
+            input: PastureInput(name: "Missing destination", acreage: 11, usableAcreage: 10, targetAcresPerHead: 1)
+        )
+        let resident = try environment.makeAnimalRepository().create(
+            input: environment.contractAnimalInput(
+                name: "Destination stale resident",
+                tagNumber: "M6-DEST-MISSING",
+                pastureID: source.id
+            )
+        )
+        let plan = DeletePasturesTransactionPlan(
+            expectedStates: [
+                PastureDeletionExpectedState(
+                    pastureID: source.id,
+                    residentAnimalIDs: [resident.id]
+                )
+            ],
+            operations: [
+                .moveAnimals(
+                    animalIDs: [resident.id],
+                    fromPastureID: source.id,
+                    toPastureID: destination.id
+                ),
+                .archiveFieldChecks(
+                    pastureIDs: [source.id],
+                    archivedAt: Date(timeIntervalSinceReferenceDate: 96_500)
+                ),
+                .deletePastures(ids: [source.id])
+            ]
+        )
+
+        try pastures.delete(ids: [destination.id])
+        let baseline = try CoreDataContractStoreSnapshotter.snapshot(assembly: environment.assembly)
+
+        do {
+            try await CoreDataPastureDeletionTransactionWriter(
+                selection: environment.selection,
+                assembly: environment.assembly
+            ).deletePastures(plan)
+            XCTFail("A deleted move destination must reject the prepared Pasture deletion plan.")
+        } catch let error as PastureDeletionTransactionError {
+            XCTAssertEqual(error, .destinationPastureMissing(pastureID: destination.id))
+        }
+
+        XCTAssertEqual(
+            try CoreDataContractStoreSnapshotter.snapshot(assembly: environment.assembly),
+            baseline
+        )
+        XCTAssertEqual(
+            try environment.makeAnimalRepository().fetchAnimalDetail(id: resident.id)?.pastureID,
+            source.id
+        )
+        XCTAssertNotNil(try environment.makePastureRepository().fetchPastureDetail(id: source.id))
+    }
+
     func testMilestone6PastureDeletionRejectsMalformedPlansBeforeMutation() async throws {
         let environment = try await makeEnvironment()
         try await PastureDeletionTransactionContract.assertInvalidPlansRejectBeforeMutation(
