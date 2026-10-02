@@ -690,6 +690,13 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             .assertPastureDeletionRejectsStaleExpectedStateBeforeMutation(using: fixture)
     }
 
+    func testMilestone6PastureDeletionRejectsMalformedPlansBeforeMutation() async throws {
+        let environment = try await makeEnvironment()
+        try await PastureDeletionTransactionContract.assertInvalidPlansRejectBeforeMutation(
+            using: try environment.makePastureDeletionInvalidPlanProbe()
+        )
+    }
+
     func testMilestone6PastureDeletionCommitsCoreOwnedGraphAndHistory() async throws {
         let environment = try await makeEnvironment()
         let pastures = environment.makePastureRepository()
@@ -2217,6 +2224,176 @@ private final class CoreDataAnimalContractEnvironment {
                     try failureState.saveCapturedContextWithoutReset()
                 }
             )
+        )
+    }
+
+    func makePastureDeletionInvalidPlanProbe() throws -> PastureDeletionInvalidPlanContractProbe {
+        let pastures = makePastureRepository()
+        let first = try pastures.create(
+            input: PastureInput(name: "Invalid plan first", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1)
+        )
+        let second = try pastures.create(
+            input: PastureInput(name: "Invalid plan second", acreage: 11, usableAcreage: 10, targetAcresPerHead: 1)
+        )
+        let resident = try makeAnimalRepository().create(
+            input: animalInput(
+                name: "Invalid plan resident",
+                tagNumber: "M6-INVALID",
+                sex: .female,
+                pastureID: first.id
+            )
+        )
+        let expected = [
+            PastureDeletionExpectedState(
+                pastureID: first.id,
+                residentAnimalIDs: [resident.id]
+            ),
+            PastureDeletionExpectedState(
+                pastureID: second.id,
+                residentAnimalIDs: []
+            )
+        ]
+        let archive = PastureDeletionOperation.archiveFieldChecks(
+            pastureIDs: [first.id, second.id],
+            archivedAt: Date(timeIntervalSinceReferenceDate: 79_000)
+        )
+        let delete = PastureDeletionOperation.deletePastures(ids: [first.id, second.id])
+        let move = PastureDeletionOperation.moveAnimals(
+            animalIDs: [resident.id],
+            fromPastureID: first.id,
+            toPastureID: nil
+        )
+        let unknownPastureID = UUID()
+
+        let cases = [
+            PastureDeletionInvalidPlanContractCase(
+                name: "empty expected state",
+                plan: DeletePasturesTransactionPlan(expectedStates: [], operations: [])
+            ),
+            PastureDeletionInvalidPlanContractCase(
+                name: "duplicate expected Pasture",
+                plan: DeletePasturesTransactionPlan(
+                    expectedStates: [expected[0], expected[0]],
+                    operations: [move, archive, delete]
+                )
+            ),
+            PastureDeletionInvalidPlanContractCase(
+                name: "missing Field Check archive",
+                plan: DeletePasturesTransactionPlan(
+                    expectedStates: expected,
+                    operations: [move, delete]
+                )
+            ),
+            PastureDeletionInvalidPlanContractCase(
+                name: "archive target mismatch",
+                plan: DeletePasturesTransactionPlan(
+                    expectedStates: expected,
+                    operations: [
+                        move,
+                        .archiveFieldChecks(
+                            pastureIDs: [first.id],
+                            archivedAt: Date(timeIntervalSinceReferenceDate: 79_100)
+                        ),
+                        delete
+                    ]
+                )
+            ),
+            PastureDeletionInvalidPlanContractCase(
+                name: "delete target mismatch",
+                plan: DeletePasturesTransactionPlan(
+                    expectedStates: expected,
+                    operations: [
+                        move,
+                        archive,
+                        .deletePastures(ids: [first.id])
+                    ]
+                )
+            ),
+            PastureDeletionInvalidPlanContractCase(
+                name: "move after archive",
+                plan: DeletePasturesTransactionPlan(
+                    expectedStates: expected,
+                    operations: [archive, move, delete]
+                )
+            ),
+            PastureDeletionInvalidPlanContractCase(
+                name: "move source outside target set",
+                plan: DeletePasturesTransactionPlan(
+                    expectedStates: expected,
+                    operations: [
+                        .moveAnimals(
+                            animalIDs: [resident.id],
+                            fromPastureID: unknownPastureID,
+                            toPastureID: nil
+                        ),
+                        archive,
+                        delete
+                    ]
+                )
+            ),
+            PastureDeletionInvalidPlanContractCase(
+                name: "move destination is also deleted",
+                plan: DeletePasturesTransactionPlan(
+                    expectedStates: expected,
+                    operations: [
+                        .moveAnimals(
+                            animalIDs: [resident.id],
+                            fromPastureID: first.id,
+                            toPastureID: second.id
+                        ),
+                        archive,
+                        delete
+                    ]
+                )
+            ),
+            PastureDeletionInvalidPlanContractCase(
+                name: "duplicate Animal identity in move",
+                plan: DeletePasturesTransactionPlan(
+                    expectedStates: expected,
+                    operations: [
+                        .moveAnimals(
+                            animalIDs: [resident.id, resident.id],
+                            fromPastureID: first.id,
+                            toPastureID: nil
+                        ),
+                        archive,
+                        delete
+                    ]
+                )
+            ),
+            PastureDeletionInvalidPlanContractCase(
+                name: "authored resident set does not match moves",
+                plan: DeletePasturesTransactionPlan(
+                    expectedStates: expected,
+                    operations: [archive, delete]
+                )
+            ),
+            PastureDeletionInvalidPlanContractCase(
+                name: "operation follows final delete",
+                plan: DeletePasturesTransactionPlan(
+                    expectedStates: expected,
+                    operations: [
+                        move,
+                        archive,
+                        delete,
+                        .archiveFieldChecks(
+                            pastureIDs: [first.id, second.id],
+                            archivedAt: Date(timeIntervalSinceReferenceDate: 79_200)
+                        )
+                    ]
+                )
+            )
+        ]
+
+        return PastureDeletionInvalidPlanContractProbe(
+            writer: CoreDataPastureDeletionTransactionWriter(
+                selection: selection,
+                assembly: assembly
+            ),
+            cases: cases,
+            freshPersistedStateSnapshot: {
+                try CoreDataContractStoreSnapshotter.snapshot(assembly: self.assembly)
+            }
         )
     }
 
