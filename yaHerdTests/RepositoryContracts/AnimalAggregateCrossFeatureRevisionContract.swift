@@ -380,7 +380,34 @@ enum AnimalAggregateCrossFeatureRevisionContract {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async throws {
-        for operation in AnimalAggregateCrossFeatureRevisionOperation.allCases {
+        try await assertCrossFeatureEditorStateMutationsRotateRevision(
+            using: fixture,
+            operations: AnimalAggregateCrossFeatureRevisionOperation.allCases,
+            file: file,
+            line: line
+        )
+    }
+
+    static func assertPastureDeletionTransactionRotatesRevision(
+        using fixture: AnimalAggregateCrossFeatureRevisionContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        try await assertCrossFeatureEditorStateMutationsRotateRevision(
+            using: fixture,
+            operations: [.pastureDeletionTransaction],
+            file: file,
+            line: line
+        )
+    }
+
+    private static func assertCrossFeatureEditorStateMutationsRotateRevision(
+        using fixture: AnimalAggregateCrossFeatureRevisionContractFixture,
+        operations: [AnimalAggregateCrossFeatureRevisionOperation],
+        file: StaticString,
+        line: UInt
+    ) async throws {
+        for operation in operations {
             let control = try fixture.makeTestControl(operation)
             XCTAssertEqual(control.operation, operation, file: file, line: line)
 
