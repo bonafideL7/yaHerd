@@ -32,6 +32,7 @@ struct PastureDeletionTransactionContractProbe {
 
 struct PastureDeletionMovementRecordContractSnapshot: Equatable {
     let id: UUID
+    let date: Date
     let fromPastureIDSnapshot: UUID?
     let fromPastureNameSnapshot: String?
     let toPastureIDSnapshot: UUID?
