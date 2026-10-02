@@ -932,6 +932,79 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         XCTAssertNil(try environment.makePastureRepository().fetchPastureDetail(id: pasture.id))
     }
 
+    func testMilestone6DirectPastureWriteIsRejectedWhileDeletionOwnsBoundary() async throws {
+        let environment = try await makeEnvironment()
+        let pastureRepository = environment.makePastureRepository()
+        let target = try pastureRepository.create(
+            input: PastureInput(name: "Deletion target", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1)
+        )
+        let unrelated = try pastureRepository.create(
+            input: PastureInput(name: "Unrelated pasture", acreage: 12, usableAcreage: 11, targetAcresPerHead: 1)
+        )
+        let plan = DeletePasturesTransactionPlan(
+            expectedStates: [
+                PastureDeletionExpectedState(pastureID: target.id, residentAnimalIDs: [])
+            ],
+            operations: [
+                .archiveFieldChecks(
+                    pastureIDs: [target.id],
+                    archivedAt: Date(timeIntervalSinceReferenceDate: 95_600)
+                ),
+                .deletePastures(ids: [target.id])
+            ]
+        )
+        let barrier = CoreDataAnimalCommitBarrier()
+        let pendingDeletion = Task { @MainActor in
+            try await CoreDataPastureDeletionTransactionWriter(
+                selection: environment.selection,
+                assembly: environment.assembly
+            ).deletePastures(
+                plan,
+                beforeSave: { _ in barrier.blockUntilReleased() }
+            )
+        }
+
+        await waitUntilReached(barrier)
+        XCTAssertTrue(barrier.didReach)
+
+        do {
+            _ = try environment.makePastureRepository().update(
+                id: unrelated.id,
+                input: PastureInput(
+                    name: "Racing rename",
+                    acreage: unrelated.acreage,
+                    usableAcreage: unrelated.usableAcreage,
+                    targetAcresPerHead: unrelated.targetAcresPerHead
+                )
+            )
+            XCTFail("A direct Pasture write must not begin while deletion owns the shared write boundary.")
+        } catch let error as CoreDataResidentWriteCoordinationError {
+            XCTAssertEqual(error, .pastureDeletionInProgress)
+        }
+
+        XCTAssertEqual(
+            try environment.makePastureRepository().fetchPastureDetail(id: unrelated.id)?.name,
+            unrelated.name
+        )
+
+        barrier.release()
+        try await pendingDeletion.value
+
+        _ = try environment.makePastureRepository().update(
+            id: unrelated.id,
+            input: PastureInput(
+                name: "Rename after deletion",
+                acreage: unrelated.acreage,
+                usableAcreage: unrelated.usableAcreage,
+                targetAcresPerHead: unrelated.targetAcresPerHead
+            )
+        )
+        XCTAssertEqual(
+            try environment.makePastureRepository().fetchPastureDetail(id: unrelated.id)?.name,
+            "Rename after deletion"
+        )
+    }
+
     func testMilestone6FailedDeletionReleasesNextQueuedDeletion() async throws {
         let environment = try await makeEnvironment()
         let pastureRepository = environment.makePastureRepository()
