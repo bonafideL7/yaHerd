@@ -2592,8 +2592,8 @@ private final class CoreDataAnimalContractEnvironment {
             )
             request.predicate = NSPredicate(
                 format: "herd.id == %@ AND animal.id == %@",
-                herdID as CVarArg,
-                animalID as CVarArg
+                herdID as NSUUID,
+                animalID as NSUUID
             )
             return try context.fetch(request).map {
                 CoreDataMovementRecordState(
