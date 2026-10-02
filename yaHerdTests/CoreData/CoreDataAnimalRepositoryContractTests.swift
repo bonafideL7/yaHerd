@@ -2485,6 +2485,28 @@ private final class FaultInjectingAnimalAggregateWriter: AnimalAggregateTransact
     }
 }
 
+@MainActor
+private final class FaultInjectingPastureDeletionWriter: PastureDeletionTransactionWriting {
+    private let base: CoreDataPastureDeletionTransactionWriter
+    private let failureState: CoreDataAnimalInjectedFailureState
+
+    init(
+        base: CoreDataPastureDeletionTransactionWriter,
+        failureState: CoreDataAnimalInjectedFailureState
+    ) {
+        self.base = base
+        self.failureState = failureState
+    }
+
+    func deletePastures(_ plan: DeletePasturesTransactionPlan) async throws {
+        let failureState = self.failureState
+        try await base.deletePastures(plan) { context in
+            failureState.capture(context)
+            throw CoreDataAnimalContractTestError.injectedFailure
+        }
+    }
+}
+
 private final class CoreDataAnimalInjectedFailureState: @unchecked Sendable {
     private let lock = NSLock()
     private var reached = false
