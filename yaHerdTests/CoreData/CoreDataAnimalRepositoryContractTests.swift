@@ -872,6 +872,128 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         )
     }
 
+    func testMilestone6NewAnimalWriteIsRejectedWhilePastureDeletionOwnsBoundary() async throws {
+        let environment = try await makeEnvironment()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Deletion write boundary",
+                acreage: 7,
+                usableAcreage: 6,
+                targetAcresPerHead: 1
+            )
+        )
+        let plan = DeletePasturesTransactionPlan(
+            expectedStates: [
+                PastureDeletionExpectedState(pastureID: pasture.id, residentAnimalIDs: [])
+            ],
+            operations: [
+                .archiveFieldChecks(
+                    pastureIDs: [pasture.id],
+                    archivedAt: Date(timeIntervalSinceReferenceDate: 95_500)
+                ),
+                .deletePastures(ids: [pasture.id])
+            ]
+        )
+        let barrier = CoreDataAnimalCommitBarrier()
+        let pendingDeletion = Task { @MainActor in
+            try await CoreDataPastureDeletionTransactionWriter(
+                selection: environment.selection,
+                assembly: environment.assembly
+            ).deletePastures(
+                plan,
+                beforeSave: { _ in barrier.blockUntilReleased() }
+            )
+        }
+
+        await waitUntilReached(barrier)
+        XCTAssertTrue(barrier.didReach)
+
+        do {
+            _ = try environment.makeAnimalRepository().create(
+                input: environment.contractAnimalInput(
+                    name: "Blocked resident write",
+                    tagNumber: "M6-BLOCKED",
+                    pastureID: nil
+                )
+            )
+            XCTFail("A new Animal write must not begin while Pasture deletion owns the resident-write boundary.")
+        } catch let error as CoreDataResidentWriteCoordinationError {
+            XCTAssertEqual(error, .pastureDeletionInProgress)
+        }
+
+        XCTAssertFalse(
+            try environment.makeAnimalRepository().fetchAnimals().contains {
+                $0.name == "Blocked resident write"
+            }
+        )
+
+        barrier.release()
+        try await pendingDeletion.value
+        XCTAssertNil(try environment.makePastureRepository().fetchPastureDetail(id: pasture.id))
+    }
+
+    func testMilestone6FailedDeletionReleasesNextQueuedDeletion() async throws {
+        let environment = try await makeEnvironment()
+        let pastureRepository = environment.makePastureRepository()
+        let failing = try pastureRepository.create(
+            input: PastureInput(name: "Failing queued deletion", acreage: 8, usableAcreage: 7, targetAcresPerHead: 1)
+        )
+        let succeeding = try pastureRepository.create(
+            input: PastureInput(name: "Success after failure", acreage: 9, usableAcreage: 8, targetAcresPerHead: 1)
+        )
+        func plan(_ pastureID: UUID, archivedAt: Date) -> DeletePasturesTransactionPlan {
+            DeletePasturesTransactionPlan(
+                expectedStates: [
+                    PastureDeletionExpectedState(pastureID: pastureID, residentAnimalIDs: [])
+                ],
+                operations: [
+                    .archiveFieldChecks(pastureIDs: [pastureID], archivedAt: archivedAt),
+                    .deletePastures(ids: [pastureID])
+                ]
+            )
+        }
+
+        let barrier = CoreDataAnimalCommitBarrier()
+        let pendingFailure = Task { @MainActor in
+            try await CoreDataPastureDeletionTransactionWriter(
+                selection: environment.selection,
+                assembly: environment.assembly
+            ).deletePastures(
+                plan(failing.id, archivedAt: Date(timeIntervalSinceReferenceDate: 95_700)),
+                beforeSave: { _ in
+                    barrier.blockUntilReleased()
+                    throw CoreDataAnimalContractTestError.injectedFailure
+                }
+            )
+        }
+
+        await waitUntilReached(barrier)
+        XCTAssertTrue(barrier.didReach)
+
+        let pendingSuccess = Task { @MainActor in
+            try await CoreDataPastureDeletionTransactionWriter(
+                selection: environment.selection,
+                assembly: environment.assembly
+            ).deletePastures(
+                plan(succeeding.id, archivedAt: Date(timeIntervalSinceReferenceDate: 95_800))
+            )
+        }
+
+        await Task.yield()
+        barrier.release()
+
+        do {
+            try await pendingFailure.value
+            XCTFail("The first deletion must surface its injected persistence failure.")
+        } catch {
+            // The injected failure is the expected first-writer result.
+        }
+        try await pendingSuccess.value
+
+        XCTAssertNotNil(try environment.makePastureRepository().fetchPastureDetail(id: failing.id))
+        XCTAssertNil(try environment.makePastureRepository().fetchPastureDetail(id: succeeding.id))
+    }
+
     func testMilestone6OverlappingPastureDeletionsSerializeWithoutCrash() async throws {
         let environment = try await makeEnvironment()
         let pastureRepository = environment.makePastureRepository()
