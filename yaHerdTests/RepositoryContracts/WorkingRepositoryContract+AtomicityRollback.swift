@@ -157,13 +157,13 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Collect Rollback Source", using: fixture)
         let existing = try makeAnimal(name: "Collect Existing", tagNumber: "CR100", sex: .female, pastureID: source.id, using: fixture)
         let firstCandidate = try makeAnimal(name: "Collect Candidate One", tagNumber: "CR101", sex: .female, pastureID: source.id, using: fixture)
         let secondCandidate = try makeAnimal(name: "Collect Candidate Two", tagNumber: "CR102", sex: .male, pastureID: source.id, using: fixture)
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 2),
                 sourcePastureID: source.id,
@@ -214,7 +214,7 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Completion Rollback Source", using: fixture)
         let animal = try makeAnimal(
             name: "Working Completion Rollback Cow",
@@ -225,7 +225,7 @@ extension WorkingRepositoryContract {
         )
         let treatmentID = UUID()
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 3),
                 sourcePastureID: source.id,
@@ -333,13 +333,13 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Data Rollback Source", using: fixture)
         let destination = try makePasture(named: "Working Data Rollback Destination", using: fixture)
         let animal = try makeAnimal(name: "Data Rollback Cow", tagNumber: "DR201", sex: .female, pastureID: source.id, using: fixture)
         let treatmentID = UUID()
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 3),
                 sourcePastureID: source.id,
@@ -438,7 +438,7 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Reset Rollback Source", using: fixture)
         let destination = try makePasture(named: "Working Reset Rollback Destination", using: fixture)
         let animal = try makeAnimal(
@@ -450,7 +450,7 @@ extension WorkingRepositoryContract {
         )
         let treatmentID = UUID()
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 4),
                 sourcePastureID: source.id,
@@ -567,7 +567,7 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Tag Rollback Source", using: fixture)
         let replacementColor = TagColorSnapshot(
             name: "Working Tag Rollback Color",
@@ -583,7 +583,7 @@ extension WorkingRepositoryContract {
             using: fixture
         )
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 4),
                 sourcePastureID: source.id,
@@ -782,13 +782,13 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Finish Rollback Source", using: fixture)
         let destination = try makePasture(named: "Working Finish Rollback Destination", using: fixture)
         let first = try makeAnimal(name: "Finish Rollback One", tagNumber: "FR301", sex: .female, pastureID: source.id, using: fixture)
         let second = try makeAnimal(name: "Finish Rollback Two", tagNumber: "FR302", sex: .male, pastureID: source.id, using: fixture)
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 5),
                 sourcePastureID: source.id,
@@ -923,13 +923,13 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Delete Rollback Source", using: fixture)
         let first = try makeAnimal(name: "Delete Rollback One", tagNumber: "XR401", sex: .female, pastureID: source.id, using: fixture)
         let second = try makeAnimal(name: "Delete Rollback Two", tagNumber: "XR402", sex: .female, pastureID: source.id, using: fixture)
         let treatmentID = UUID()
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 6),
                 sourcePastureID: source.id,
