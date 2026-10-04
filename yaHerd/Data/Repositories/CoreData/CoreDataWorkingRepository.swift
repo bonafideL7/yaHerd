@@ -887,6 +887,11 @@ private extension CoreDataWorkingRepository {
                 CoreDataAnimalProjection.managedTags($0)
             )
         }
+        let damDisplayTagNumber = animal.dam.map { _ in
+            AnimalDisplayTagFormatter.displayTagNumber(
+                from: damPrimary?.number ?? ""
+            )
+        }
         if let dam = animal.dam, dam.herd.id != herd.id {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
                 relationship: "WorkingQueueItem.animal.dam",
@@ -909,7 +914,7 @@ private extension CoreDataWorkingRepository {
         item.animalTagColorIDSnapshot = primary.colorID
         item.animalNameSnapshot = animal.name
         item.animalSexRawValueSnapshot = try CoreDataAnimalProjection.sex(animal).rawValue
-        item.animalDamDisplayTagNumberSnapshot = animal.dam == nil ? nil : damPrimary?.number
+        item.animalDamDisplayTagNumberSnapshot = damDisplayTagNumber
         item.animalDamDisplayTagColorIDSnapshot = damPrimary?.colorID
         item.collectedFromPastureIDSnapshot = sourcePasture.id
         item.collectedFromPastureNameSnapshot = sourcePasture.name
