@@ -1,6 +1,14 @@
 @preconcurrency import CoreData
 import Foundation
 
+enum CoreDataWorkingRepositoryError: Error, Equatable {
+    case invalidOwnership(
+        relationship: String,
+        expectedHerdID: UUID,
+        actualHerdID: UUID
+    )
+}
+
 @MainActor
 final class CoreDataWorkingRepository:
     WorkingSessionListReader,
@@ -43,17 +51,20 @@ final class CoreDataWorkingRepository:
                 entityName: CDWorkingSession.coreDataEntityName
             )
             request.predicate = NSPredicate(format: "herd == %@", herd)
-            request.sortDescriptors = [
-                NSSortDescriptor(key: "date", ascending: false),
-                NSSortDescriptor(key: "id", ascending: true)
-            ]
-
             let sessions = try context.fetch(request)
             try CoreDataAnimalMutation.validateUniqueApplicationIDs(
                 sessions,
                 herdID: herdID
             )
-            return try sessions.map(WorkingMapper.makeSessionSummary)
+
+            return try sessions
+                .sorted {
+                    if $0.date != $1.date {
+                        return $0.date > $1.date
+                    }
+                    return $0.id.uuidString < $1.id.uuidString
+                }
+                .map(WorkingMapper.makeSessionSummary)
         }
     }
 
@@ -127,10 +138,10 @@ final class CoreDataWorkingRepository:
         herdID: UUID
     ) throws {
         guard session.herd.id == herdID else {
-            throw CoreDataPersistenceError.crossHerdRelationship(
+            throw CoreDataWorkingRepositoryError.invalidOwnership(
                 relationship: "WorkingSession.herd",
-                ownerHerdID: herdID,
-                relatedHerdID: session.herd.id
+                expectedHerdID: herdID,
+                actualHerdID: session.herd.id
             )
         }
 
@@ -141,20 +152,20 @@ final class CoreDataWorkingRepository:
 
         for item in queueItems {
             guard item.herd.id == herdID, item.session.id == session.id else {
-                throw CoreDataPersistenceError.crossHerdRelationship(
+                throw CoreDataWorkingRepositoryError.invalidOwnership(
                     relationship: "WorkingSession.queueItems",
-                    ownerHerdID: herdID,
-                    relatedHerdID: item.herd.id
+                    expectedHerdID: herdID,
+                    actualHerdID: item.herd.id
                 )
             }
         }
 
         for record in treatmentRecords {
             guard record.herd.id == herdID, record.session.id == session.id else {
-                throw CoreDataPersistenceError.crossHerdRelationship(
+                throw CoreDataWorkingRepositoryError.invalidOwnership(
                     relationship: "WorkingSession.treatmentRecords",
-                    ownerHerdID: herdID,
-                    relatedHerdID: record.herd.id
+                    expectedHerdID: herdID,
+                    actualHerdID: record.herd.id
                 )
             }
         }
