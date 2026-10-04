@@ -437,9 +437,9 @@ struct MutationPublishingWorkingRepository: WorkingRepository {
         try base.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueItemID)
     }
 
-    func startSession(input: WorkingSessionStartInput) async throws -> UUID {
+    func startSession(input: WorkingSessionStartInput) throws -> UUID {
         try writePolicy.validateCanWrite()
-        let sessionID = try await base.startSession(input: input)
+        let sessionID = try base.startSession(input: input)
         mutationRecorder.recordSuccessfulMutation(reason: .working)
         return sessionID
     }
@@ -474,9 +474,9 @@ struct MutationPublishingWorkingRepository: WorkingRepository {
         return snapshot
     }
 
-    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) async throws {
+    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) throws {
         try writePolicy.validateCanWrite()
-        try await base.collectAnimals(sessionID: sessionID, animalIDs: animalIDs)
+        try base.collectAnimals(sessionID: sessionID, animalIDs: animalIDs)
         mutationRecorder.recordSuccessfulMutation(reason: .working)
     }
 
