@@ -843,9 +843,20 @@ private extension CoreDataWorkingRepository {
         _ animal: CDAnimal,
         sourcePasture: CDPasture
     ) throws -> Bool {
-        try CoreDataAnimalProjection.status(animal) == .active
+        guard let currentPasture = animal.currentPasture else {
+            return false
+        }
+        guard currentPasture.herd.id == sourcePasture.herd.id else {
+            throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                relationship: "Animal.currentPasture",
+                expectedHerdID: sourcePasture.herd.id,
+                actualHerdID: currentPasture.herd.id
+            )
+        }
+
+        return try CoreDataAnimalProjection.status(animal) == .active
             && !animal.isArchived
-            && animal.currentPasture?.id == sourcePasture.id
+            && currentPasture.id == sourcePasture.id
             && animal.activeWorkingSession == nil
     }
 
