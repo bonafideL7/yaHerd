@@ -24,7 +24,7 @@ enum CoreDataWorkingLifecycleMutation {
 
         var destinationsByQueueItemID: [UUID: UUID?] = [:]
         for assignment in assignments {
-            guard destinationsByQueueItemID[assignment.queueItemID] == nil else {
+            guard !destinationsByQueueItemID.keys.contains(assignment.queueItemID) else {
                 throw WorkingRepositoryError.duplicateQueueItemAssignments
             }
             destinationsByQueueItemID[assignment.queueItemID] = assignment.destinationPastureID
@@ -179,6 +179,15 @@ enum CoreDataWorkingLifecycleMutation {
                 )
             }
 
+            if let currentPasture = animal.currentPasture,
+               currentPasture.herd.id != herd.id {
+                throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                    relationship: "Animal.currentPasture",
+                    expectedHerdID: herd.id,
+                    actualHerdID: currentPasture.herd.id
+                )
+            }
+
             guard let activeSession = animal.activeWorkingSession else {
                 continue
             }
@@ -243,6 +252,15 @@ enum CoreDataWorkingLifecycleMutation {
                 actualHerdID: session.herd.id
             )
         }
+
+        if let sourcePasture = session.sourcePasture {
+            try validatePastureRelationship(
+                sourcePasture,
+                expectedID: session.sourcePastureIDSnapshot,
+                relationship: "WorkingSession.sourcePasture",
+                herd: herd
+            )
+        }
     }
 
     private static func validateQueueOwnership(
@@ -262,6 +280,23 @@ enum CoreDataWorkingLifecycleMutation {
                 relationship: "WorkingQueueItem.session",
                 expectedSessionID: session.id,
                 actualSessionID: item.session.id
+            )
+        }
+
+        if let collectedFrom = item.collectedFromPasture {
+            try validatePastureRelationship(
+                collectedFrom,
+                expectedID: item.collectedFromPastureIDSnapshot,
+                relationship: "WorkingQueueItem.collectedFromPasture",
+                herd: herd
+            )
+        }
+        if let destination = item.destinationPasture {
+            try validatePastureRelationship(
+                destination,
+                expectedID: item.destinationPastureIDSnapshot,
+                relationship: "WorkingQueueItem.destinationPasture",
+                herd: herd
             )
         }
     }
