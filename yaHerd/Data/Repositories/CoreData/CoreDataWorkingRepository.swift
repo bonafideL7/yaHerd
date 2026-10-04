@@ -31,6 +31,7 @@ final class CoreDataWorkingRepository:
     private let animalWriteBoundary: CoreDataAnimalWriteBoundary
     private let workingWriteGate: CoreDataAsyncSerialGate
     private let pastureResidentWriteCoordinator: CoreDataPastureResidentWriteCoordinator
+    private let coordinationID: UUID
     private let dateProvider: any DateProviding
     private nonisolated let lookup: CoreDataLookup
 
@@ -41,6 +42,7 @@ final class CoreDataWorkingRepository:
         animalWriteBoundary: CoreDataAnimalWriteBoundary,
         workingWriteGate: CoreDataAsyncSerialGate,
         pastureResidentWriteCoordinator: CoreDataPastureResidentWriteCoordinator,
+        coordinationID: UUID,
         lookup: CoreDataLookup,
         dateProvider: any DateProviding = SystemDateProvider()
     ) {
@@ -50,6 +52,7 @@ final class CoreDataWorkingRepository:
         self.animalWriteBoundary = animalWriteBoundary
         self.workingWriteGate = workingWriteGate
         self.pastureResidentWriteCoordinator = pastureResidentWriteCoordinator
+        self.coordinationID = coordinationID
         self.lookup = lookup
         self.dateProvider = dateProvider
     }
@@ -66,6 +69,7 @@ final class CoreDataWorkingRepository:
             animalWriteBoundary: assembly.animalWriteBoundary,
             workingWriteGate: assembly.workingWriteGate,
             pastureResidentWriteCoordinator: assembly.pastureResidentWriteCoordinator,
+            coordinationID: assembly.coordinationID,
             lookup: assembly.lookup,
             dateProvider: dateProvider
         )
@@ -306,6 +310,112 @@ final class CoreDataWorkingRepository:
         }
     }
 
+    // MARK: - Session plan and tag replacement
+
+    func updateSessionTreatments(
+        id: UUID,
+        plannedTreatments: [WorkingTreatmentPlanItem]
+    ) async throws {
+        try WorkingTreatmentPlanRules.validate(plannedTreatments)
+        let encodedTreatments = try JSONEncoder().encode(plannedTreatments)
+        let lookup = self.lookup
+
+        try await performWrite { context, herd in
+            guard let session = try lookup.herdOwned(
+                CDWorkingSession.self,
+                id: id,
+                herdID: herd.id,
+                in: context
+            ) else {
+                throw WorkingRepositoryError.sessionNotFound
+            }
+            guard let status = WorkingSessionStatus(rawValue: session.statusRawValue) else {
+                throw CoreDataWorkingMappingError.invalidSessionStatus(
+                    sessionID: session.id,
+                    value: session.statusRawValue
+                )
+            }
+            guard status == .active else {
+                throw WorkingRepositoryError.sessionAlreadyFinished
+            }
+
+            session.plannedTreatmentsData = encodedTreatments
+        }
+    }
+
+    func replacePrimaryTag(
+        forQueueItemID queueItemID: UUID,
+        inSessionID sessionID: UUID,
+        input: WorkingTagReplacementInput
+    ) async throws {
+        let normalizedNumber = input.number.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedNumber.isEmpty else {
+            throw WorkingRepositoryError.invalidTagNumber
+        }
+
+        let replacementDate = dateProvider.now
+        let colorID = input.colorID
+        let lookup = self.lookup
+
+        try await performWrite(
+            materializingTagColorIDs: candidateBuiltInTagColorIDs([colorID])
+        ) { context, herd in
+            let resolved = try Self.activeQueueTarget(
+                sessionID: sessionID,
+                queueItemID: queueItemID,
+                herd: herd,
+                lookup: lookup,
+                in: context
+            )
+            guard let animal = resolved.animal else {
+                throw WorkingRepositoryError.animalNotFound
+            }
+
+            try CoreDataAnimalMutation.validateOwnedGraphIdentity(animal)
+            let tags = CoreDataAnimalProjection.managedTags(animal)
+            let states = tags.map(CoreDataAnimalProjection.tagState)
+            if let primaryState = AnimalTagService.primaryTag(in: states),
+               let primaryTag = tags.first(where: { $0.id == primaryState.id }) {
+                primaryTag.isActive = false
+                primaryTag.isPrimary = false
+                if primaryTag.removedAt == nil {
+                    primaryTag.removedAt = replacementDate
+                }
+            }
+
+            let replacementColor = try CoreDataAnimalMutation.resolveTagColor(
+                id: colorID,
+                herd: herd,
+                lookup: lookup,
+                in: context
+            )
+            let replacement = CDAnimalTag(context: context)
+            replacement.id = try CoreDataAnimalMutation.uniqueID(
+                for: CDAnimalTag.self,
+                herdID: herd.id,
+                lookup: lookup,
+                in: context
+            )
+            replacement.number = normalizedNumber
+            replacement.isPrimary = true
+            replacement.isActive = true
+            replacement.assignedAt = replacementDate
+            replacement.removedAt = nil
+            replacement.color = replacementColor
+            replacement.herd = herd
+            replacement.animal = animal
+
+            CoreDataAnimalMutation.enforceActivePrimary(
+                in: CoreDataAnimalProjection.managedTags(animal),
+                preferredPrimaryID: replacement.id
+            )
+
+            resolved.queueItem.animalTagNumberSnapshot = normalizedNumber
+            resolved.queueItem.animalTagColorIDSnapshot = replacementColor?.id
+            CoreDataAnimalMutation.rotateRevision(animal)
+        }
+    }
+
     // MARK: - Session start and collection
 
     @discardableResult
@@ -467,6 +577,7 @@ final class CoreDataWorkingRepository:
     }
 
     private func performWrite<Result: Sendable>(
+        materializingTagColorIDs: Set<UUID> = [],
         _ operation: @escaping @Sendable (
             NSManagedObjectContext,
             CDHerd
@@ -488,6 +599,30 @@ final class CoreDataWorkingRepository:
             throw error
         }
 
+        let reservedTagColorIDs: Set<UUID>
+        let reservedTagColorDefaultSlot: Bool
+        do {
+            let missingTagColorIDs = try unmaterializedBuiltInTagColorIDs(
+                materializingTagColorIDs,
+                herdID: herdID
+            )
+            reservedTagColorDefaultSlot = try materializationReservesDefaultSlot(
+                missingColorIDs: missingTagColorIDs,
+                herdID: herdID
+            )
+            reservedTagColorIDs = try CoreDataTagColorMaterializationCoordinator.shared.reserve(
+                coordinationID: coordinationID,
+                herdID: herdID,
+                colorIDs: missingTagColorIDs,
+                reservesDefaultSlot: reservedTagColorDefaultSlot
+            )
+        } catch {
+            pastureResidentWriteCoordinator.endWorkingWrite()
+            animalWriteBoundary.endAnimalWrite()
+            await gate.release()
+            throw error
+        }
+
         let lookup = self.lookup
         let animalWriteBoundary = self.animalWriteBoundary
         do {
@@ -501,13 +636,86 @@ final class CoreDataWorkingRepository:
                 }
                 return try operation(context, herd)
             }
+            CoreDataTagColorMaterializationCoordinator.shared.release(
+                coordinationID: coordinationID,
+                herdID: herdID,
+                colorIDs: reservedTagColorIDs,
+                releasesDefaultSlot: reservedTagColorDefaultSlot
+            )
             pastureResidentWriteCoordinator.endWorkingWrite()
             await gate.release()
             return result
         } catch {
+            CoreDataTagColorMaterializationCoordinator.shared.release(
+                coordinationID: coordinationID,
+                herdID: herdID,
+                colorIDs: reservedTagColorIDs,
+                releasesDefaultSlot: reservedTagColorDefaultSlot
+            )
             pastureResidentWriteCoordinator.endWorkingWrite()
             await gate.release()
             throw error
+        }
+    }
+
+    private func candidateBuiltInTagColorIDs(
+        _ ids: [UUID?]
+    ) -> Set<UUID> {
+        Set(ids.compactMap { $0 })
+            .intersection(TagColorDefaults.defaultColorIDs)
+    }
+
+    private func unmaterializedBuiltInTagColorIDs(
+        _ ids: Set<UUID>,
+        herdID: UUID
+    ) throws -> Set<UUID> {
+        guard !ids.isEmpty else {
+            return []
+        }
+
+        let context = contextFactory.makeReadContext()
+        return try context.performAndWait {
+            guard try lookup.herd(id: herdID, in: context) != nil else {
+                throw HerdRepositoryError.missingHerd
+            }
+
+            return Set(
+                try ids.filter { id in
+                    try lookup.herdOwned(
+                        CDTagColorDefinition.self,
+                        id: id,
+                        herdID: herdID,
+                        in: context
+                    ) == nil
+                }
+            )
+        }
+    }
+
+    private func materializationReservesDefaultSlot(
+        missingColorIDs: Set<UUID>,
+        herdID: UUID
+    ) throws -> Bool {
+        guard CoreDataAnimalMutation.stableBuiltIns().contains(where: {
+            $0.isDefault && missingColorIDs.contains($0.id)
+        }) else {
+            return false
+        }
+
+        let context = contextFactory.makeReadContext()
+        return try context.performAndWait {
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            let request = NSFetchRequest<CDTagColorDefinition>(
+                entityName: CDTagColorDefinition.coreDataEntityName
+            )
+            request.predicate = NSPredicate(
+                format: "herd == %@ AND isHidden == NO AND isDefault == YES",
+                herd
+            )
+            request.fetchLimit = 1
+            return try context.count(for: request) == 0
         }
     }
 
