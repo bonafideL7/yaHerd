@@ -28,7 +28,7 @@ protocol WorkingQueueItemEditorReader {
 @MainActor
 protocol WorkingSessionStarting {
     @discardableResult
-    func startSession(input: WorkingSessionStartInput) throws -> UUID
+    func startSession(input: WorkingSessionStartInput) async throws -> UUID
 }
 
 @MainActor
@@ -41,7 +41,7 @@ extension WorkingSessionStarting {
 
 @MainActor
 protocol WorkingAnimalCollecting {
-    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) throws
+    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) async throws
 }
 
 @MainActor
