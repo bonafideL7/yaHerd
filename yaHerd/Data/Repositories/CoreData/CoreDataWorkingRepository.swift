@@ -25,7 +25,10 @@ final class CoreDataWorkingRepository:
     WorkingSessionDetailReader,
     WorkingQueueItemEditorReader,
     WorkingSessionStarting,
-    WorkingAnimalCollecting
+    WorkingAnimalCollecting,
+    WorkingQueueItemCompleting,
+    WorkingQueueItemEditSaving,
+    WorkingQueueItemDataDeleting
 {
     private let selection: any CurrentHerdSelectionReading
     private let contextFactory: CoreDataContextFactory
