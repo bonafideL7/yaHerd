@@ -310,6 +310,101 @@ final class CoreDataWorkingRepository:
         }
     }
 
+    // MARK: - Session lifecycle
+
+    func completeSession(
+        id: UUID,
+        assignments: [WorkingQueueDestinationAssignment]
+    ) async throws {
+        let completionDate = dateProvider.now
+        let lookup = self.lookup
+
+        try await performWrite { context, herd in
+            guard let session = try lookup.herdOwned(
+                CDWorkingSession.self,
+                id: id,
+                herdID: herd.id,
+                in: context
+            ) else {
+                throw WorkingRepositoryError.sessionNotFound
+            }
+            guard let status = WorkingSessionStatus(rawValue: session.statusRawValue) else {
+                throw CoreDataWorkingMappingError.invalidSessionStatus(
+                    sessionID: session.id,
+                    value: session.statusRawValue
+                )
+            }
+            guard status == .active else {
+                throw WorkingRepositoryError.sessionAlreadyFinished
+            }
+
+            let plan = try CoreDataWorkingLifecycleMutation.completionPlan(
+                session: session,
+                assignments: assignments,
+                herd: herd,
+                lookup: lookup,
+                in: context
+            )
+            try CoreDataWorkingLifecycleMutation.applyCompletion(
+                plan,
+                session: session,
+                herd: herd,
+                lookup: lookup,
+                in: context,
+                at: completionDate
+            )
+        }
+    }
+
+    func reopenSession(id: UUID) async throws {
+        let lookup = self.lookup
+        try await performWrite { context, herd in
+            guard let session = try lookup.herdOwned(
+                CDWorkingSession.self,
+                id: id,
+                herdID: herd.id,
+                in: context
+            ) else {
+                throw WorkingRepositoryError.sessionNotFound
+            }
+            guard let status = WorkingSessionStatus(rawValue: session.statusRawValue) else {
+                throw CoreDataWorkingMappingError.invalidSessionStatus(
+                    sessionID: session.id,
+                    value: session.statusRawValue
+                )
+            }
+
+            switch status {
+            case .finished:
+                session.statusRawValue = WorkingSessionStatus.active.rawValue
+            case .active:
+                throw WorkingRepositoryError.sessionAlreadyActive
+            case .cancelled:
+                throw WorkingRepositoryError.sessionCannotBeReopened
+            }
+        }
+    }
+
+    func deleteSession(id: UUID) async throws {
+        let lookup = self.lookup
+        try await performWrite { context, herd in
+            guard let session = try lookup.herdOwned(
+                CDWorkingSession.self,
+                id: id,
+                herdID: herd.id,
+                in: context
+            ) else {
+                throw WorkingRepositoryError.sessionNotFound
+            }
+
+            try CoreDataWorkingLifecycleMutation.restoreOwnedAnimalsBeforeDeleting(
+                session: session,
+                herd: herd
+            )
+            context.delete(session)
+        }
+    }
+
     // MARK: - Session plan and tag replacement
 
     func updateSessionTreatments(
