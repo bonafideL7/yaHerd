@@ -120,7 +120,7 @@ struct SwiftDataWorkingRepository: WorkingRepository {
         return session.publicID
     }
 
-    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) async throws {
+    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) throws {
         let session = try fetchActiveSession(id: sessionID)
         let animals = try lookup.fetchAnimals(ids: animalIDs)
         try validateCollection(animals: animals, for: session)
