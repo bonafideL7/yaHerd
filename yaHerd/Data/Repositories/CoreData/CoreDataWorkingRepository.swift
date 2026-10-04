@@ -651,13 +651,25 @@ private extension CoreDataWorkingRepository {
         lookup: CoreDataLookup,
         in context: NSManagedObjectContext
     ) throws {
-        guard animal.herd.id == herd.id,
-              sourcePasture.herd.id == herd.id,
-              session.herd.id == herd.id else {
+        guard animal.herd.id == herd.id else {
             throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
-                relationship: "Working collection",
+                relationship: "WorkingQueueItem.animal",
                 expectedHerdID: herd.id,
                 actualHerdID: animal.herd.id
+            )
+        }
+        guard sourcePasture.herd.id == herd.id else {
+            throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                relationship: "WorkingQueueItem.collectedFromPasture",
+                expectedHerdID: herd.id,
+                actualHerdID: sourcePasture.herd.id
+            )
+        }
+        guard session.herd.id == herd.id else {
+            throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                relationship: "WorkingQueueItem.session",
+                expectedHerdID: herd.id,
+                actualHerdID: session.herd.id
             )
         }
 
