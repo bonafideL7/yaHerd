@@ -3,7 +3,7 @@ import SwiftData
 
 @MainActor
 extension SwiftDataWorkingRepository {
-    func startSession(input: WorkingSessionStartInput) throws -> UUID {
+    func startSession(input: WorkingSessionStartInput) async throws -> UUID {
         try WorkingTreatmentPlanRules.validate(input.plannedTreatments)
 
         let lookup = SwiftDataWorkingLookupStore(context: context)
