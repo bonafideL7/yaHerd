@@ -8,7 +8,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Plan Source", using: fixture)
         let replacementColor = TagColorSnapshot(
             name: "Working Replacement Tag Color",
@@ -20,7 +20,7 @@ extension WorkingRepositoryContract {
         let originalTagID = try XCTUnwrap(animal.activeTags.first { $0.isPrimary }?.id, file: file, line: line)
         let originalTreatment = WorkingTreatmentPlanItem(id: UUID(), name: "Original Vaccine")
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 9, day: 26),
                 sourcePastureID: source.id,
@@ -334,7 +334,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Template Snapshot Source", using: fixture)
         let animal = try makeAnimal(name: "Template Snapshot Cow", tagNumber: "TS101", sex: .female, pastureID: source.id, using: fixture)
         let repository = fixture.makeWorkingRepository()
@@ -347,7 +347,7 @@ extension WorkingRepositoryContract {
         ]
         let templateID = try repository.createTemplate(name: "Snapshot Template", items: originalItems)
         let template = try XCTUnwrap(repository.fetchTemplateDetail(id: templateID), file: file, line: line)
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 7),
                 sourcePastureID: source.id,
@@ -438,7 +438,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Treatment History Source", using: fixture)
         let animal = try makeAnimal(name: "Treatment History Cow", tagNumber: "TH201", sex: .female, pastureID: source.id, using: fixture)
         let originalTreatmentID = UUID()
@@ -446,7 +446,7 @@ extension WorkingRepositoryContract {
             WorkingTreatmentPlanItem(id: originalTreatmentID, name: "Historical Vaccine")
         ]
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 8),
                 sourcePastureID: source.id,
@@ -518,7 +518,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Historical Animal Source", using: fixture)
         let tagColorRepository = fixture.makeTagColorRepository()
         let calfColor = TagColorSnapshot(
@@ -553,7 +553,7 @@ extension WorkingRepositoryContract {
         )
 
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 11),
                 sourcePastureID: source.id,
@@ -823,7 +823,7 @@ extension WorkingRepositoryContract {
         )
 
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 16),
                 sourcePastureID: source.id,
@@ -1002,7 +1002,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working History Source Original", using: fixture)
         let destination = try makePasture(named: "Working History Destination Original", using: fixture)
         let animal = try makeAnimal(
@@ -1014,7 +1014,7 @@ extension WorkingRepositoryContract {
         )
 
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 18),
                 sourcePastureID: source.id,
