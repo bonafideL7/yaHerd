@@ -148,9 +148,14 @@ final class CoreDataWorkingRepository:
                 id: queueItemID,
                 herdID: herdID,
                 in: context
-            ), queueItem.session.id == session.id else {
+            ) else {
                 return nil
             }
+            try Self.validateQueueSessionRelationship(
+                queueItem,
+                session: session,
+                herdID: herdID
+            )
             guard let animal = queueItem.animal else {
                 return nil
             }
@@ -886,10 +891,10 @@ final class CoreDataWorkingRepository:
                 expectedHerdID: herdID,
                 actualHerdID: item.herd.id
             )
-            try validateSessionRelationship(
-                relationship: "WorkingQueueItem.session",
-                expectedSessionID: session.id,
-                actualSessionID: item.session.id
+            try Self.validateQueueSessionRelationship(
+                item,
+                session: session,
+                herdID: herdID
             )
 
             if let animal = item.animal {
@@ -936,11 +941,20 @@ final class CoreDataWorkingRepository:
                 expectedHerdID: herdID,
                 actualHerdID: record.herd.id
             )
-            try validateSessionRelationship(
-                relationship: "WorkingTreatmentRecord.session",
-                expectedSessionID: session.id,
-                actualSessionID: record.session.id
-            )
+            guard record.session.herd.id == herdID else {
+                throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                    relationship: "WorkingTreatmentRecord.session",
+                    expectedHerdID: herdID,
+                    actualHerdID: record.session.herd.id
+                )
+            }
+            guard record.session.objectID == session.objectID else {
+                throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
+                    relationship: "WorkingTreatmentRecord.session",
+                    expectedSessionID: session.id,
+                    actualSessionID: record.session.id
+                )
+            }
             if let animal = record.animal {
                 try validateHerdOwnership(
                     relationship: "WorkingTreatmentRecord.animal",
@@ -961,11 +975,27 @@ final class CoreDataWorkingRepository:
                 expectedHerdID: herdID,
                 actualHerdID: record.herd.id
             )
-            try validateSessionRelationship(
-                relationship: "HealthRecord.workingSession",
-                expectedSessionID: session.id,
-                actualSessionID: record.workingSession?.id
-            )
+            guard let workingSession = record.workingSession else {
+                throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
+                    relationship: "HealthRecord.workingSession",
+                    expectedSessionID: session.id,
+                    actualSessionID: nil
+                )
+            }
+            guard workingSession.herd.id == herdID else {
+                throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                    relationship: "HealthRecord.workingSession",
+                    expectedHerdID: herdID,
+                    actualHerdID: workingSession.herd.id
+                )
+            }
+            guard workingSession.objectID == session.objectID else {
+                throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
+                    relationship: "HealthRecord.workingSession",
+                    expectedSessionID: session.id,
+                    actualSessionID: workingSession.id
+                )
+            }
             try validateHerdOwnership(
                 relationship: "HealthRecord.animal",
                 expectedHerdID: herdID,
@@ -979,11 +1009,27 @@ final class CoreDataWorkingRepository:
                 expectedHerdID: herdID,
                 actualHerdID: check.herd.id
             )
-            try validateSessionRelationship(
-                relationship: "PregnancyCheck.workingSession",
-                expectedSessionID: session.id,
-                actualSessionID: check.workingSession?.id
-            )
+            guard let workingSession = check.workingSession else {
+                throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
+                    relationship: "PregnancyCheck.workingSession",
+                    expectedSessionID: session.id,
+                    actualSessionID: nil
+                )
+            }
+            guard workingSession.herd.id == herdID else {
+                throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                    relationship: "PregnancyCheck.workingSession",
+                    expectedHerdID: herdID,
+                    actualHerdID: workingSession.herd.id
+                )
+            }
+            guard workingSession.objectID == session.objectID else {
+                throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
+                    relationship: "PregnancyCheck.workingSession",
+                    expectedSessionID: session.id,
+                    actualSessionID: workingSession.id
+                )
+            }
             try validateHerdOwnership(
                 relationship: "PregnancyCheck.animal",
                 expectedHerdID: herdID,
@@ -1004,11 +1050,27 @@ final class CoreDataWorkingRepository:
                 expectedHerdID: herdID,
                 actualHerdID: animal.herd.id
             )
-            try validateSessionRelationship(
-                relationship: "Animal.activeWorkingSession",
-                expectedSessionID: session.id,
-                actualSessionID: animal.activeWorkingSession?.id
-            )
+            guard let activeSession = animal.activeWorkingSession else {
+                throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
+                    relationship: "Animal.activeWorkingSession",
+                    expectedSessionID: session.id,
+                    actualSessionID: nil
+                )
+            }
+            guard activeSession.herd.id == herdID else {
+                throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                    relationship: "Animal.activeWorkingSession",
+                    expectedHerdID: herdID,
+                    actualHerdID: activeSession.herd.id
+                )
+            }
+            guard activeSession.objectID == session.objectID else {
+                throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
+                    relationship: "Animal.activeWorkingSession",
+                    expectedSessionID: session.id,
+                    actualSessionID: activeSession.id
+                )
+            }
         }
     }
 
@@ -1087,6 +1149,27 @@ private extension CoreDataWorkingRepository {
         }
     }
 
+    nonisolated static func validateQueueSessionRelationship(
+        _ queueItem: CDWorkingQueueItem,
+        session: CDWorkingSession,
+        herdID: UUID
+    ) throws {
+        guard queueItem.session.herd.id == herdID else {
+            throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                relationship: "WorkingQueueItem.session",
+                expectedHerdID: herdID,
+                actualHerdID: queueItem.session.herd.id
+            )
+        }
+        guard queueItem.session.objectID == session.objectID else {
+            throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
+                relationship: "WorkingQueueItem.session",
+                expectedSessionID: session.id,
+                actualSessionID: queueItem.session.id
+            )
+        }
+    }
+
     nonisolated static func activeQueueTarget(
         sessionID: UUID,
         queueItemID: UUID,
@@ -1121,9 +1204,14 @@ private extension CoreDataWorkingRepository {
             id: queueItemID,
             herdID: herd.id,
             in: context
-        ), queueItem.session.id == session.id else {
+        ) else {
             throw WorkingRepositoryError.queueItemNotFound
         }
+        try validateQueueSessionRelationship(
+            queueItem,
+            session: session,
+            herdID: herd.id
+        )
 
         guard queueItem.animal?.id == queueItem.animalIDSnapshot || queueItem.animal == nil else {
             throw CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
