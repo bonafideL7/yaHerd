@@ -211,7 +211,7 @@ enum PastureDeletionWorkflowContract {
             )
         )
         let workingRepository = fixture.makeWorkingRepository()
-        let workingSessionID = try workingRepository.startSession(
+        let workingSessionID = try await workingRepository.startSession(
             input: WorkingSessionStartInput(
                 date: workingStartedAt,
                 sourcePastureID: firstPasture.id,
@@ -348,7 +348,7 @@ enum PastureDeletionWorkflowContract {
             line: line
         )
 
-        let finishedWorkingSessionID = try workingRepository.startSession(
+        let finishedWorkingSessionID = try await workingRepository.startSession(
             input: WorkingSessionStartInput(
                 date: finishedWorkingStartedAt,
                 sourcePastureID: secondPasture.id,
@@ -419,7 +419,7 @@ enum PastureDeletionWorkflowContract {
         )
         XCTAssertEqual(finishedWorkingSessionBeforeDeletion.status, .finished, file: file, line: line)
 
-        let controlWorkingSessionID = try workingRepository.startSession(
+        let controlWorkingSessionID = try await workingRepository.startSession(
             input: WorkingSessionStartInput(
                 date: controlWorkingStartedAt,
                 sourcePastureID: controlPasture.id,
