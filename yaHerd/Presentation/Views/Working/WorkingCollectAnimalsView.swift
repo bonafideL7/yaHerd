@@ -20,7 +20,6 @@ struct WorkingCollectAnimalsView: View {
     @State private var errorMessage: String?
     @State private var showingError = false
     @State private var searchText: String = ""
-    @State private var isCollecting = false
 
     private var eligibleAnimals: [AnimalSummary] {
         guard let session, session.isSourcePastureAvailable else { return [] }
@@ -86,16 +85,13 @@ struct WorkingCollectAnimalsView: View {
                     .disabled(
                         selectedAnimalIDs.isEmpty
                             || session?.isSourcePastureAvailable != true
-                            || isCollecting
                     )
                     .disabledWhenDataReadOnly()
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     ToolbarCancelButton { dismiss() }
-                        .disabled(isCollecting)
                 }
             }
-            .interactiveDismissDisabled(isCollecting)
             .alert("Can’t Save", isPresented: $showingError) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -116,24 +112,13 @@ struct WorkingCollectAnimalsView: View {
     }
 
     private func collectSelected() {
-        guard session?.isSourcePastureAvailable == true,
-              !isCollecting else {
-            return
-        }
-        let animalIDs = Array(selectedAnimalIDs)
-        isCollecting = true
-        Task { @MainActor in
-            defer { isCollecting = false }
-            do {
-                try await repository.collectAnimals(
-                    sessionID: sessionID,
-                    animalIDs: animalIDs
-                )
-                dismiss()
-            } catch {
-                errorMessage = UserVisibleErrorMessage.make(error)
-                showingError = true
-            }
+        guard session?.isSourcePastureAvailable == true else { return }
+        do {
+            try repository.collectAnimals(sessionID: sessionID, animalIDs: Array(selectedAnimalIDs))
+            dismiss()
+        } catch {
+            errorMessage = UserVisibleErrorMessage.make(error)
+            showingError = true
         }
     }
 }
