@@ -102,6 +102,14 @@ final class CoreDataPastureResidentWriteCoordinator {
         endConflictingWrite()
     }
 
+    func beginWorkingWrite() throws {
+        try beginConflictingWrite()
+    }
+
+    func endWorkingWrite() {
+        endConflictingWrite()
+    }
+
     private func beginConflictingWrite() throws {
         guard !deletionPending else {
             throw CoreDataResidentWriteCoordinationError.pastureDeletionInProgress
@@ -320,6 +328,7 @@ final class CoreDataPersistenceAssembly {
     let animalWriteBoundary: CoreDataAnimalWriteBoundary
     let animalAggregateWriteGate: CoreDataAsyncSerialGate
     let fieldCheckWriteGate: CoreDataAsyncSerialGate
+    let workingWriteGate: CoreDataAsyncSerialGate
     let pastureResidentWriteCoordinator: CoreDataPastureResidentWriteCoordinator
     let coordinationID: UUID
     let lookup: CoreDataLookup
@@ -331,6 +340,7 @@ final class CoreDataPersistenceAssembly {
         self.animalWriteBoundary = CoreDataAnimalWriteBoundary()
         self.animalAggregateWriteGate = CoreDataAsyncSerialGate()
         self.fieldCheckWriteGate = CoreDataAsyncSerialGate()
+        self.workingWriteGate = CoreDataAsyncSerialGate()
         self.pastureResidentWriteCoordinator = CoreDataPastureResidentWriteCoordinator()
         self.coordinationID = UUID()
         self.lookup = CoreDataLookup()
