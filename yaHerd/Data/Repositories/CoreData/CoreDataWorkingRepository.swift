@@ -23,12 +23,7 @@ enum CoreDataWorkingRepositoryError: Error, Equatable {
 final class CoreDataWorkingRepository:
     WorkingSessionListReader,
     WorkingSessionDetailReader,
-    WorkingQueueItemEditorReader,
-    WorkingSessionStarting,
-    WorkingAnimalCollecting,
-    WorkingQueueItemCompleting,
-    WorkingQueueItemEditSaving,
-    WorkingQueueItemDataDeleting
+    WorkingQueueItemEditorReader
 {
     private let selection: any CurrentHerdSelectionReading
     private let contextFactory: CoreDataContextFactory
