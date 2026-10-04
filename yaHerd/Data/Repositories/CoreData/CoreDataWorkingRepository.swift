@@ -172,7 +172,8 @@ final class CoreDataWorkingRepository:
         treatmentEntries: [WorkingTreatmentEntryInput],
         pregnancyCheck: WorkingPregnancyCheckInput?,
         markCastrated: Bool,
-        observationNotes: String
+        observationNotes: String,
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil
     ) async throws {
         try WorkingTreatmentPlanRules.validate(treatmentEntries)
         let completedAt = dateProvider.now
@@ -184,7 +185,7 @@ final class CoreDataWorkingRepository:
         )
         let lookup = self.lookup
 
-        try await performWrite { context, herd in
+        try await performWrite(beforeSave: beforeSave) { context, herd in
             let resolved = try Self.activeQueueTarget(
                 sessionID: sessionID,
                 queueItemID: queueItemID,
@@ -221,7 +222,8 @@ final class CoreDataWorkingRepository:
     func saveEdits(
         forQueueItemID queueItemID: UUID,
         inSessionID sessionID: UUID,
-        input: WorkingSessionAnimalEditInput
+        input: WorkingSessionAnimalEditInput,
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil
     ) async throws {
         try WorkingTreatmentPlanRules.validate(input.treatmentEntries)
         let now = dateProvider.now
@@ -231,7 +233,7 @@ final class CoreDataWorkingRepository:
         let statusRawValue = input.status.rawValue
         let lookup = self.lookup
 
-        try await performWrite { context, herd in
+        try await performWrite(beforeSave: beforeSave) { context, herd in
             let resolved = try Self.activeQueueTarget(
                 sessionID: sessionID,
                 queueItemID: queueItemID,
@@ -285,10 +287,11 @@ final class CoreDataWorkingRepository:
 
     func deleteWorkData(
         forQueueItemID queueItemID: UUID,
-        inSessionID sessionID: UUID
+        inSessionID sessionID: UUID,
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil
     ) async throws {
         let lookup = self.lookup
-        try await performWrite { context, herd in
+        try await performWrite(beforeSave: beforeSave) { context, herd in
             let resolved = try Self.activeQueueTarget(
                 sessionID: sessionID,
                 queueItemID: queueItemID,
@@ -314,12 +317,13 @@ final class CoreDataWorkingRepository:
 
     func completeSession(
         id: UUID,
-        assignments: [WorkingQueueDestinationAssignment]
+        assignments: [WorkingQueueDestinationAssignment],
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil
     ) async throws {
         let completionDate = dateProvider.now
         let lookup = self.lookup
 
-        try await performWrite { context, herd in
+        try await performWrite(beforeSave: beforeSave) { context, herd in
             guard let session = try lookup.herdOwned(
                 CDWorkingSession.self,
                 id: id,
@@ -356,9 +360,12 @@ final class CoreDataWorkingRepository:
         }
     }
 
-    func reopenSession(id: UUID) async throws {
+    func reopenSession(
+        id: UUID,
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil
+    ) async throws {
         let lookup = self.lookup
-        try await performWrite { context, herd in
+        try await performWrite(beforeSave: beforeSave) { context, herd in
             guard let session = try lookup.herdOwned(
                 CDWorkingSession.self,
                 id: id,
@@ -385,9 +392,12 @@ final class CoreDataWorkingRepository:
         }
     }
 
-    func deleteSession(id: UUID) async throws {
+    func deleteSession(
+        id: UUID,
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil
+    ) async throws {
         let lookup = self.lookup
-        try await performWrite { context, herd in
+        try await performWrite(beforeSave: beforeSave) { context, herd in
             guard let session = try lookup.herdOwned(
                 CDWorkingSession.self,
                 id: id,
@@ -409,13 +419,14 @@ final class CoreDataWorkingRepository:
 
     func updateSessionTreatments(
         id: UUID,
-        plannedTreatments: [WorkingTreatmentPlanItem]
+        plannedTreatments: [WorkingTreatmentPlanItem],
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil
     ) async throws {
         try WorkingTreatmentPlanRules.validate(plannedTreatments)
         let encodedTreatments = try JSONEncoder().encode(plannedTreatments)
         let lookup = self.lookup
 
-        try await performWrite { context, herd in
+        try await performWrite(beforeSave: beforeSave) { context, herd in
             guard let session = try lookup.herdOwned(
                 CDWorkingSession.self,
                 id: id,
@@ -441,7 +452,8 @@ final class CoreDataWorkingRepository:
     func replacePrimaryTag(
         forQueueItemID queueItemID: UUID,
         inSessionID sessionID: UUID,
-        input: WorkingTagReplacementInput
+        input: WorkingTagReplacementInput,
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil
     ) async throws {
         let normalizedNumber = input.number.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedNumber.isEmpty else {
@@ -453,7 +465,8 @@ final class CoreDataWorkingRepository:
         let lookup = self.lookup
 
         try await performWrite(
-            materializingTagColorIDs: candidateBuiltInTagColorIDs([colorID])
+            materializingTagColorIDs: candidateBuiltInTagColorIDs([colorID]),
+            beforeSave: beforeSave
         ) { context, herd in
             let resolved = try Self.activeQueueTarget(
                 sessionID: sessionID,
@@ -519,7 +532,10 @@ final class CoreDataWorkingRepository:
     // MARK: - Session start and collection
 
     @discardableResult
-    func startSession(input: WorkingSessionStartInput) async throws -> UUID {
+    func startSession(
+        input: WorkingSessionStartInput,
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil
+    ) async throws -> UUID {
         try WorkingTreatmentPlanRules.validate(input.plannedTreatments)
 
         let sourcePastureID = input.sourcePastureID
@@ -540,7 +556,7 @@ final class CoreDataWorkingRepository:
         let plannedTreatmentsData = try JSONEncoder().encode(input.plannedTreatments)
         let lookup = self.lookup
 
-        return try await performWrite { context, herd in
+        return try await performWrite(beforeSave: beforeSave) { context, herd in
             guard let sourcePasture = try lookup.herdOwned(
                 CDPasture.self,
                 id: sourcePastureID,
@@ -594,7 +610,8 @@ final class CoreDataWorkingRepository:
 
     func collectAnimals(
         sessionID: UUID,
-        animalIDs: [UUID]
+        animalIDs: [UUID],
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil
     ) async throws {
         let animalIDs = Self.uniqueIDs(animalIDs)
         guard !animalIDs.isEmpty else {
@@ -602,7 +619,7 @@ final class CoreDataWorkingRepository:
         }
         let lookup = self.lookup
 
-        try await performWrite { context, herd in
+        try await performWrite(beforeSave: beforeSave) { context, herd in
             guard let session = try lookup.herdOwned(
                 CDWorkingSession.self,
                 id: sessionID,
@@ -678,6 +695,7 @@ final class CoreDataWorkingRepository:
 
     private func performWrite<Result: Sendable>(
         materializingTagColorIDs: Set<UUID> = [],
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil,
         _ operation: @escaping @Sendable (
             NSManagedObjectContext,
             CDHerd
@@ -727,6 +745,7 @@ final class CoreDataWorkingRepository:
         let animalWriteBoundary = self.animalWriteBoundary
         do {
             let result = try await transactionExecutor.performWrite(
+                beforeSave: beforeSave,
                 afterTransaction: {
                     animalWriteBoundary.endAnimalWrite()
                 }
