@@ -12,6 +12,11 @@ enum CoreDataWorkingRepositoryError: Error, Equatable {
         expectedSessionID: UUID,
         actualSessionID: UUID?
     )
+    case invalidSnapshotRelationship(
+        relationship: String,
+        expectedID: UUID?,
+        actualID: UUID?
+    )
 }
 
 @MainActor
@@ -157,6 +162,11 @@ final class CoreDataWorkingRepository:
                 expectedHerdID: herdID,
                 actualHerdID: sourcePasture.herd.id
             )
+            try validateSnapshotRelationship(
+                relationship: "WorkingSession.sourcePasture",
+                expectedID: session.sourcePastureIDSnapshot,
+                actualID: sourcePasture.id
+            )
         }
 
         let queueItems = (session.queueItems?.allObjects as? [CDWorkingQueueItem]) ?? []
@@ -189,6 +199,11 @@ final class CoreDataWorkingRepository:
                     expectedHerdID: herdID,
                     actualHerdID: animal.herd.id
                 )
+                try validateSnapshotRelationship(
+                    relationship: "WorkingQueueItem.animal",
+                    expectedID: item.animalIDSnapshot,
+                    actualID: animal.id
+                )
             }
             if let collectedFromPasture = item.collectedFromPasture {
                 try validateHerdOwnership(
@@ -196,12 +211,22 @@ final class CoreDataWorkingRepository:
                     expectedHerdID: herdID,
                     actualHerdID: collectedFromPasture.herd.id
                 )
+                try validateSnapshotRelationship(
+                    relationship: "WorkingQueueItem.collectedFromPasture",
+                    expectedID: item.collectedFromPastureIDSnapshot,
+                    actualID: collectedFromPasture.id
+                )
             }
             if let destinationPasture = item.destinationPasture {
                 try validateHerdOwnership(
                     relationship: "WorkingQueueItem.destinationPasture",
                     expectedHerdID: herdID,
                     actualHerdID: destinationPasture.herd.id
+                )
+                try validateSnapshotRelationship(
+                    relationship: "WorkingQueueItem.destinationPasture",
+                    expectedID: item.destinationPastureIDSnapshot,
+                    actualID: destinationPasture.id
                 )
             }
         }
@@ -222,6 +247,11 @@ final class CoreDataWorkingRepository:
                     relationship: "WorkingTreatmentRecord.animal",
                     expectedHerdID: herdID,
                     actualHerdID: animal.herd.id
+                )
+                try validateSnapshotRelationship(
+                    relationship: "WorkingTreatmentRecord.animal",
+                    expectedID: record.animalIDSnapshot,
+                    actualID: animal.id
                 )
             }
         }
@@ -307,6 +337,20 @@ final class CoreDataWorkingRepository:
                 relationship: relationship,
                 expectedSessionID: expectedSessionID,
                 actualSessionID: actualSessionID
+            )
+        }
+    }
+
+    private nonisolated func validateSnapshotRelationship(
+        relationship: String,
+        expectedID: UUID?,
+        actualID: UUID?
+    ) throws {
+        guard actualID == expectedID else {
+            throw CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
+                relationship: relationship,
+                expectedID: expectedID,
+                actualID: actualID
             )
         }
     }
