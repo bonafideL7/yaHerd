@@ -876,7 +876,7 @@ enum PastureRepositoryEdgeCaseContract {
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) async throws {
+    ) throws {
         let pastures = fixture.makePastureRepository()
         let sourcePasture = try pastures.create(
             input: PastureInput(
@@ -945,7 +945,7 @@ enum PastureRepositoryEdgeCaseContract {
         )
 
         let working = fixture.makeWorkingRepository()
-        let sessionID = try await working.startSession(
+        let sessionID = try working.startSession(
             input: WorkingSessionStartInput(
                 date: Date(timeIntervalSince1970: 1_781_300_000),
                 sourcePastureID: sourcePasture.id,
@@ -1363,7 +1363,7 @@ extension PastureRepositoryEdgeCaseContract {
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) async throws {
+    ) throws {
         let pastureRepository = fixture.makePastureRepository()
         let source = try pastureRepository.create(
             input: PastureInput(
@@ -1395,7 +1395,7 @@ extension PastureRepositoryEdgeCaseContract {
         )
 
         let working = fixture.makeWorkingRepository()
-        let sessionID = try await working.startSession(
+        let sessionID = try working.startSession(
             input: WorkingSessionStartInput(
                 date: Date(timeIntervalSince1970: 1_781_500_000),
                 sourcePastureID: source.id,
@@ -1475,7 +1475,7 @@ extension PastureRepositoryEdgeCaseContract {
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) async throws {
+    ) throws {
         let pastures = fixture.makePastureRepository()
         let source = try pastures.create(
             input: PastureInput(
@@ -1515,7 +1515,7 @@ extension PastureRepositoryEdgeCaseContract {
         )
 
         let working = fixture.makeWorkingRepository()
-        let sessionID = try await working.startSession(
+        let sessionID = try working.startSession(
             input: WorkingSessionStartInput(
                 date: Date(timeIntervalSince1970: 1_781_600_000),
                 sourcePastureID: source.id,
