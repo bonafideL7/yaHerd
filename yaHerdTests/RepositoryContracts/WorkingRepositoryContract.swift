@@ -21,7 +21,7 @@ enum WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) async throws {
+    ) throws {
         let source = try makePasture(named: "Working Contract North", using: fixture)
         let dam = try makeAnimal(
             name: "Working Dam",
@@ -58,7 +58,7 @@ enum WorkingRepositoryContract {
         )
         let requestedDate = date(year: 2026, month: 9, day: 17, hour: 14, minute: 30)
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try await repository.startSession(
+        let sessionID = try repository.startSession(
             input: WorkingSessionStartInput(
                 date: requestedDate,
                 sourcePastureID: source.id,
@@ -177,7 +177,7 @@ enum WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) async throws {
+    ) throws {
         let source = try makePasture(named: "Working Eligibility Source", using: fixture)
         let other = try makePasture(named: "Working Eligibility Other", using: fixture)
         let first = try makeAnimal(name: "Eligible One", tagNumber: "101", sex: .female, pastureID: source.id, using: fixture)
@@ -187,7 +187,7 @@ enum WorkingRepositoryContract {
         let otherAnimal = try makeAnimal(name: "Other Pasture", tagNumber: "201", sex: .female, pastureID: other.id, using: fixture)
 
         let repository = fixture.makeWorkingRepository()
-        let allEligibleSessionID = try await repository.startSession(
+        let allEligibleSessionID = try repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 9, day: 18),
                 sourcePastureID: source.id,
@@ -206,8 +206,8 @@ enum WorkingRepositoryContract {
         )
         XCTAssertEqual(allEligible.treatmentTemplateName, "Working Session", file: file, line: line)
 
-        await XCTAssertThrowsErrorAsync(
-            try await fixture.makeWorkingRepository().startSession(
+        XCTAssertThrowsError(
+            try fixture.makeWorkingRepository().startSession(
                 input: WorkingSessionStartInput(
                     date: date(year: 2026, month: 9, day: 19),
                     sourcePastureID: other.id,
@@ -222,8 +222,8 @@ enum WorkingRepositoryContract {
             XCTAssertEqual(error as? WorkingRepositoryError, .animalAlreadyInAnotherSession, file: file, line: line)
         }
 
-        await XCTAssertThrowsErrorAsync(
-            try await fixture.makeWorkingRepository().startSession(
+        XCTAssertThrowsError(
+            try fixture.makeWorkingRepository().startSession(
                 input: WorkingSessionStartInput(
                     date: date(year: 2026, month: 9, day: 19),
                     sourcePastureID: source.id,
@@ -239,8 +239,8 @@ enum WorkingRepositoryContract {
         }
 
         let missingAnimalID = UUID()
-        await XCTAssertThrowsErrorAsync(
-            try await fixture.makeWorkingRepository().startSession(
+        XCTAssertThrowsError(
+            try fixture.makeWorkingRepository().startSession(
                 input: WorkingSessionStartInput(
                     date: date(year: 2026, month: 9, day: 19),
                     sourcePastureID: other.id,
@@ -273,8 +273,8 @@ enum WorkingRepositoryContract {
         )
         try fixture.makeAnimalRepository().archive(ids: [archivedOnly.id])
 
-        await XCTAssertThrowsErrorAsync(
-            try await fixture.makeWorkingRepository().startSession(
+        XCTAssertThrowsError(
+            try fixture.makeWorkingRepository().startSession(
                 input: WorkingSessionStartInput(
                     date: date(year: 2026, month: 9, day: 19),
                     sourcePastureID: noEligiblePasture.id,
@@ -307,7 +307,7 @@ enum WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) async throws {
+    ) throws {
         let olderPasture = try makePasture(named: "Working List Older", using: fixture)
         let newerPasture = try makePasture(named: "Working List Newer", using: fixture)
         let olderAnimal = try makeAnimal(
@@ -326,7 +326,7 @@ enum WorkingRepositoryContract {
         )
 
         let repository = fixture.makeWorkingRepository()
-        let olderID = try await repository.startSession(
+        let olderID = try repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 9, day: 1),
                 sourcePastureID: olderPasture.id,
@@ -335,7 +335,7 @@ enum WorkingRepositoryContract {
                 animalIDs: [olderAnimal.id]
             )
         )
-        let newerID = try await repository.startSession(
+        let newerID = try repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 9, day: 3),
                 sourcePastureID: newerPasture.id,
@@ -436,7 +436,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) async throws {
+    ) throws {
         let repository = fixture.makeWorkingRepository()
         let missingSessionID = UUID()
         let missingTemplateID = UUID()
@@ -454,7 +454,7 @@ extension WorkingRepositoryContract {
         )
 
         assertThrowsWorkingError(.pastureNotFound, file: file, line: line) {
-            _ = try await fixture.makeWorkingRepository().startSession(
+            _ = try fixture.makeWorkingRepository().startSession(
                 input: WorkingSessionStartInput(
                     date: date(year: 2026, month: 10, day: 10),
                     sourcePastureID: UUID(),
@@ -465,7 +465,7 @@ extension WorkingRepositoryContract {
             )
         }
         assertThrowsWorkingError(.sessionNotFound, file: file, line: line) {
-            try await fixture.makeWorkingRepository().collectAnimals(
+            try fixture.makeWorkingRepository().collectAnimals(
                 sessionID: missingSessionID,
                 animalIDs: [UUID()]
             )
@@ -505,7 +505,7 @@ extension WorkingRepositoryContract {
         )
 
         assertThrowsWorkingError(.animalNotEligibleForCollection, file: file, line: line) {
-            _ = try await fixture.makeWorkingRepository().startSession(
+            _ = try fixture.makeWorkingRepository().startSession(
                 input: WorkingSessionStartInput(
                     date: date(year: 2026, month: 10, day: 10),
                     sourcePastureID: source.id,
@@ -516,7 +516,7 @@ extension WorkingRepositoryContract {
             )
         }
 
-        let sessionID = try await repository.startSession(
+        let sessionID = try repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 10),
                 sourcePastureID: source.id,
@@ -602,7 +602,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) async throws {
+    ) throws {
         let source = try makePasture(named: "Working Invalid Start Plan Source", using: fixture)
         let animal = try makeAnimal(
             name: "Invalid Start Plan Cow",
@@ -618,8 +618,8 @@ extension WorkingRepositoryContract {
             line: line
         )
 
-        await XCTAssertThrowsErrorAsync(
-            try await fixture.makeWorkingRepository().startSession(
+        XCTAssertThrowsError(
+            try fixture.makeWorkingRepository().startSession(
                 input: WorkingSessionStartInput(
                     date: date(year: 2026, month: 10, day: 14),
                     sourcePastureID: source.id,
@@ -735,7 +735,7 @@ extension WorkingRepositoryContract {
             using: fixture
         )
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try await repository.startSession(
+        let sessionID = try repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 15),
                 sourcePastureID: source.id,
