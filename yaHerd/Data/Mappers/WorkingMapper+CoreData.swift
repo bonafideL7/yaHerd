@@ -11,6 +11,50 @@ enum CoreDataWorkingMappingError: Error, Equatable {
     case corruptPlannedTreatments(sessionID: UUID)
 }
 
+private struct CoreDataWorkingTreatmentPlanItemPayload: Decodable {
+    let id: UUID
+    let name: String
+    let suggestedDose: WorkingTreatmentDose
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case suggestedDose
+        case defaultQuantity
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        // Core Data is authoritative persistence, so a stored plan item must already
+        // have stable application identity. Do not use WorkingTreatmentPlanItem's
+        // legacy UUID-generating fallback while reading persisted target data.
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+
+        if let dose = try container.decodeIfPresent(
+            WorkingTreatmentDose.self,
+            forKey: .suggestedDose
+        ) {
+            suggestedDose = dose
+        } else {
+            let legacyQuantity = try container.decodeIfPresent(
+                Double.self,
+                forKey: .defaultQuantity
+            )
+            suggestedDose = WorkingTreatmentDose(amount: legacyQuantity)
+        }
+    }
+
+    var domainValue: WorkingTreatmentPlanItem {
+        WorkingTreatmentPlanItem(
+            id: id,
+            name: name,
+            suggestedDose: suggestedDose
+        )
+    }
+}
+
 extension WorkingMapper {
     static func makeSessionSummary(from session: CDWorkingSession) throws -> WorkingSessionSummary {
         let queueItems = managedQueueItems(session)
@@ -199,9 +243,10 @@ extension WorkingMapper {
     static func plannedTreatments(_ session: CDWorkingSession) throws -> [WorkingTreatmentPlanItem] {
         do {
             return try JSONDecoder().decode(
-                [WorkingTreatmentPlanItem].self,
+                [CoreDataWorkingTreatmentPlanItemPayload].self,
                 from: session.plannedTreatmentsData
             )
+            .map(\.domainValue)
         } catch {
             throw CoreDataWorkingMappingError.corruptPlannedTreatments(sessionID: session.id)
         }
