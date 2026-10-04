@@ -33,6 +33,7 @@ final class CoreDataWorkingRepository:
     private let animalWriteBoundary: CoreDataAnimalWriteBoundary
     private let workingWriteGate: CoreDataAsyncSerialGate
     private let pastureResidentWriteCoordinator: CoreDataPastureResidentWriteCoordinator
+    private let dateProvider: any DateProviding
     private nonisolated let lookup: CoreDataLookup
 
     init(
@@ -42,7 +43,8 @@ final class CoreDataWorkingRepository:
         animalWriteBoundary: CoreDataAnimalWriteBoundary,
         workingWriteGate: CoreDataAsyncSerialGate,
         pastureResidentWriteCoordinator: CoreDataPastureResidentWriteCoordinator,
-        lookup: CoreDataLookup
+        lookup: CoreDataLookup,
+        dateProvider: any DateProviding = SystemDateProvider()
     ) {
         self.selection = selection
         self.contextFactory = contextFactory
@@ -51,11 +53,13 @@ final class CoreDataWorkingRepository:
         self.workingWriteGate = workingWriteGate
         self.pastureResidentWriteCoordinator = pastureResidentWriteCoordinator
         self.lookup = lookup
+        self.dateProvider = dateProvider
     }
 
     convenience init(
         selection: any CurrentHerdSelectionReading,
-        assembly: CoreDataPersistenceAssembly
+        assembly: CoreDataPersistenceAssembly,
+        dateProvider: any DateProviding = SystemDateProvider()
     ) {
         self.init(
             selection: selection,
@@ -64,7 +68,8 @@ final class CoreDataWorkingRepository:
             animalWriteBoundary: assembly.animalWriteBoundary,
             workingWriteGate: assembly.workingWriteGate,
             pastureResidentWriteCoordinator: assembly.pastureResidentWriteCoordinator,
-            lookup: assembly.lookup
+            lookup: assembly.lookup,
+            dateProvider: dateProvider
         )
     }
 
@@ -154,6 +159,152 @@ final class CoreDataWorkingRepository:
                 queueItem: queueItem,
                 animal: animal
             )
+        }
+    }
+
+    // MARK: - Queue work data
+
+    func complete(
+        queueItemID: UUID,
+        inSessionID sessionID: UUID,
+        treatmentEntries: [WorkingTreatmentEntryInput],
+        pregnancyCheck: WorkingPregnancyCheckInput?,
+        markCastrated: Bool,
+        observationNotes: String
+    ) async throws {
+        try WorkingTreatmentPlanRules.validate(treatmentEntries)
+        let completedAt = dateProvider.now
+        let input = WorkingQueueItemWorkDataInput(
+            treatmentEntries: treatmentEntries,
+            pregnancyCheck: pregnancyCheck,
+            castrationPerformed: markCastrated,
+            observationNotes: observationNotes
+        )
+        let lookup = self.lookup
+
+        try await performWrite { context, herd in
+            let resolved = try Self.activeQueueTarget(
+                sessionID: sessionID,
+                queueItemID: queueItemID,
+                herd: herd,
+                lookup: lookup,
+                in: context
+            )
+            guard let animal = resolved.animal else {
+                return
+            }
+
+            _ = try CoreDataWorkingWorkDataMutation.validateReferences(
+                input: input,
+                herdID: herd.id,
+                lookup: lookup,
+                in: context
+            )
+
+            resolved.queueItem.statusRawValue = WorkingQueueStatus.done.rawValue
+            resolved.queueItem.completedAt = completedAt
+
+            try CoreDataWorkingWorkDataMutation.replace(
+                session: resolved.session,
+                animal: animal,
+                input: input,
+                recordDate: completedAt,
+                herd: herd,
+                lookup: lookup,
+                in: context
+            )
+        }
+    }
+
+    func saveEdits(
+        forQueueItemID queueItemID: UUID,
+        inSessionID sessionID: UUID,
+        input: WorkingSessionAnimalEditInput
+    ) async throws {
+        try WorkingTreatmentPlanRules.validate(input.treatmentEntries)
+        let now = dateProvider.now
+        let completedAt = input.status == .done ? (input.completedAt ?? now) : nil
+        let destinationPastureID = input.destinationPastureID
+        let workData = input.workData
+        let statusRawValue = input.status.rawValue
+        let lookup = self.lookup
+
+        try await performWrite { context, herd in
+            let resolved = try Self.activeQueueTarget(
+                sessionID: sessionID,
+                queueItemID: queueItemID,
+                herd: herd,
+                lookup: lookup,
+                in: context
+            )
+            guard let animal = resolved.animal else {
+                return
+            }
+
+            let destination: CDPasture?
+            if let destinationPastureID {
+                guard let persisted = try lookup.herdOwned(
+                    CDPasture.self,
+                    id: destinationPastureID,
+                    herdID: herd.id,
+                    in: context
+                ) else {
+                    throw WorkingRepositoryError.pastureNotFound
+                }
+                destination = persisted
+            } else {
+                destination = nil
+            }
+
+            _ = try CoreDataWorkingWorkDataMutation.validateReferences(
+                input: workData,
+                herdID: herd.id,
+                lookup: lookup,
+                in: context
+            )
+
+            resolved.queueItem.statusRawValue = statusRawValue
+            resolved.queueItem.completedAt = completedAt
+            resolved.queueItem.destinationPasture = destination
+            resolved.queueItem.destinationPastureIDSnapshot = destination?.id
+            resolved.queueItem.destinationPastureNameSnapshot = destination?.name
+
+            try CoreDataWorkingWorkDataMutation.replace(
+                session: resolved.session,
+                animal: animal,
+                input: workData,
+                recordDate: completedAt ?? now,
+                herd: herd,
+                lookup: lookup,
+                in: context
+            )
+        }
+    }
+
+    func deleteWorkData(
+        forQueueItemID queueItemID: UUID,
+        inSessionID sessionID: UUID
+    ) async throws {
+        let lookup = self.lookup
+        try await performWrite { context, herd in
+            let resolved = try Self.activeQueueTarget(
+                sessionID: sessionID,
+                queueItemID: queueItemID,
+                herd: herd,
+                lookup: lookup,
+                in: context
+            )
+            guard let animal = resolved.animal else {
+                return
+            }
+
+            CoreDataWorkingWorkDataMutation.deleteAll(
+                session: resolved.session,
+                animal: animal,
+                in: context
+            )
+            resolved.queueItem.statusRawValue = WorkingQueueStatus.queued.rawValue
+            resolved.queueItem.completedAt = nil
         }
     }
 
@@ -580,6 +731,63 @@ final class CoreDataWorkingRepository:
 }
 
 private extension CoreDataWorkingRepository {
+    nonisolated static func activeQueueTarget(
+        sessionID: UUID,
+        queueItemID: UUID,
+        herd: CDHerd,
+        lookup: CoreDataLookup,
+        in context: NSManagedObjectContext
+    ) throws -> (
+        session: CDWorkingSession,
+        queueItem: CDWorkingQueueItem,
+        animal: CDAnimal?
+    ) {
+        guard let session = try lookup.herdOwned(
+            CDWorkingSession.self,
+            id: sessionID,
+            herdID: herd.id,
+            in: context
+        ) else {
+            throw WorkingRepositoryError.sessionNotFound
+        }
+        guard let status = WorkingSessionStatus(rawValue: session.statusRawValue) else {
+            throw CoreDataWorkingMappingError.invalidSessionStatus(
+                sessionID: session.id,
+                value: session.statusRawValue
+            )
+        }
+        guard status == .active else {
+            throw WorkingRepositoryError.sessionAlreadyFinished
+        }
+
+        guard let queueItem = try lookup.herdOwned(
+            CDWorkingQueueItem.self,
+            id: queueItemID,
+            herdID: herd.id,
+            in: context
+        ), queueItem.session.id == session.id else {
+            throw WorkingRepositoryError.queueItemNotFound
+        }
+
+        guard queueItem.animal?.id == queueItem.animalIDSnapshot || queueItem.animal == nil else {
+            throw CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
+                relationship: "WorkingQueueItem.animal",
+                expectedID: queueItem.animalIDSnapshot,
+                actualID: queueItem.animal?.id
+            )
+        }
+
+        if let animal = queueItem.animal, animal.herd.id != herd.id {
+            throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                relationship: "WorkingQueueItem.animal",
+                expectedHerdID: herd.id,
+                actualHerdID: animal.herd.id
+            )
+        }
+
+        return (session, queueItem, queueItem.animal)
+    }
+
     nonisolated static func uniqueIDs(_ ids: [UUID]) -> [UUID] {
         ids.reduce(into: [UUID]()) { result, id in
             guard !result.contains(id) else { return }
