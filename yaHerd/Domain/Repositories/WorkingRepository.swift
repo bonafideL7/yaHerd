@@ -34,7 +34,7 @@ protocol WorkingSessionStarting {
 @MainActor
 extension WorkingSessionStarting {
     @discardableResult
-    func startSession(input: WorkingSessionStartInput) throws -> UUID {
+    func startSession(input: WorkingSessionStartInput) async throws -> UUID {
         throw WorkingRepositoryError.sessionStartUnavailable
     }
 }
