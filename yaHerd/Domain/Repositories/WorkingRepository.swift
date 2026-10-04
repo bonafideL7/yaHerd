@@ -53,7 +53,7 @@ protocol WorkingQueueItemCompleting {
         pregnancyCheck: WorkingPregnancyCheckInput?,
         markCastrated: Bool,
         observationNotes: String
-    ) throws
+    ) async throws
 }
 
 @MainActor
@@ -62,7 +62,7 @@ protocol WorkingQueueItemEditSaving {
         forQueueItemID queueItemID: UUID,
         inSessionID sessionID: UUID,
         input: WorkingSessionAnimalEditInput
-    ) throws
+    ) async throws
 }
 
 @MainActor
@@ -107,7 +107,7 @@ extension WorkingPrimaryTagReplacing {
 
 @MainActor
 protocol WorkingQueueItemDataDeleting {
-    func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) throws
+    func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) async throws
 }
 
 @MainActor
