@@ -23,7 +23,9 @@ enum CoreDataWorkingRepositoryError: Error, Equatable {
 final class CoreDataWorkingRepository:
     WorkingSessionListReader,
     WorkingSessionDetailReader,
-    WorkingQueueItemEditorReader
+    WorkingQueueItemEditorReader,
+    WorkingSessionStarting,
+    WorkingAnimalCollecting
 {
     private let selection: any CurrentHerdSelectionReading
     private let contextFactory: CoreDataContextFactory
@@ -170,9 +172,12 @@ final class CoreDataWorkingRepository:
         let normalizedDate = Calendar.autoupdatingCurrent.startOfDay(for: input.date)
         let normalizedTemplateName = input.treatmentTemplateName?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let templateName = normalizedTemplateName?.isEmpty == false
-            ? normalizedTemplateName!
-            : "Working Session"
+        let templateName: String
+        if let normalizedTemplateName, !normalizedTemplateName.isEmpty {
+            templateName = normalizedTemplateName
+        } else {
+            templateName = "Working Session"
+        }
         let plannedTreatmentsData = try JSONEncoder().encode(input.plannedTreatments)
         let lookup = self.lookup
 
