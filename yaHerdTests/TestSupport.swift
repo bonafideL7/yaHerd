@@ -27,7 +27,7 @@ enum TestSupport {
 
 @MainActor
 func XCTAssertThrowsErrorAsync<T>(
-    _ expression: () async throws -> T,
+    _ expression: @autoclosure () async throws -> T,
     _ message: @autoclosure () -> String = "",
     file: StaticString = #filePath,
     line: UInt = #line,
