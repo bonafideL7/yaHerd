@@ -4,7 +4,7 @@ import XCTest
 
 @MainActor
 final class WorkingTreatmentDoseSchemaTests: XCTestCase {
-    func testTreatmentRecordPersistsStableItemIdentityAndStructuredDose() throws {
+    func testTreatmentRecordPersistsStableItemIdentityAndStructuredDose() async throws {
         let container = try TestSupport.makeModelContainer()
         let context = ModelContext(container)
         let repository = SwiftDataWorkingRepository(context: context)
@@ -38,7 +38,7 @@ final class WorkingTreatmentDoseSchemaTests: XCTestCase {
             protocolName: "Spring Work",
             protocolItems: [plannedTreatment]
         )
-        try repository.collectAnimals(sessionID: sessionID, animalIDs: [animal.publicID])
+        try await repository.collectAnimals(sessionID: sessionID, animalIDs: [animal.publicID])
 
         let queueItem = try XCTUnwrap(context.fetch(FetchDescriptor<WorkingQueueItem>()).first)
         try repository.complete(
@@ -84,7 +84,7 @@ final class WorkingTreatmentDoseSchemaTests: XCTestCase {
         XCTAssertEqual(snapshot.dose.route, .intramuscular)
     }
 
-    func testTreatmentRecordIdentitySurvivesPlanItemRename() throws {
+    func testTreatmentRecordIdentitySurvivesPlanItemRename() async throws {
         let container = try TestSupport.makeModelContainer()
         let context = ModelContext(container)
         let repository = SwiftDataWorkingRepository(context: context)
@@ -111,7 +111,7 @@ final class WorkingTreatmentDoseSchemaTests: XCTestCase {
                 WorkingTreatmentPlanItem(id: treatmentItemID, name: "Original Name")
             ]
         )
-        try repository.collectAnimals(sessionID: sessionID, animalIDs: [animal.publicID])
+        try await repository.collectAnimals(sessionID: sessionID, animalIDs: [animal.publicID])
         let queueItem = try XCTUnwrap(context.fetch(FetchDescriptor<WorkingQueueItem>()).first)
 
         try repository.complete(
@@ -177,7 +177,7 @@ final class WorkingTreatmentDoseSchemaTests: XCTestCase {
         }
     }
 
-    func testCollectionNoLongerAssignsQueueOrdering() throws {
+    func testCollectionNoLongerAssignsQueueOrdering() async throws {
         let container = try TestSupport.makeModelContainer()
         let context = ModelContext(container)
         let repository = SwiftDataWorkingRepository(context: context)
@@ -210,7 +210,7 @@ final class WorkingTreatmentDoseSchemaTests: XCTestCase {
             protocolName: "Working Session",
             protocolItems: []
         )
-        try repository.collectAnimals(
+        try await repository.collectAnimals(
             sessionID: sessionID,
             animalIDs: [secondAnimal.publicID, firstAnimal.publicID]
         )
