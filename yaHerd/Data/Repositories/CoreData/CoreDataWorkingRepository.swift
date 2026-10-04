@@ -100,7 +100,7 @@ final class CoreDataWorkingRepository:
                     return $0.id.uuidString < $1.id.uuidString
                 }
                 .map { session in
-                    try validateSessionGraph(session, herdID: herdID)
+                    try Self.validateSessionGraph(session, herdID: herdID)
                     return try WorkingMapper.makeSessionSummary(from: session)
                 }
         }
@@ -121,7 +121,7 @@ final class CoreDataWorkingRepository:
                 return nil
             }
 
-            try validateSessionGraph(session, herdID: herdID)
+            try Self.validateSessionGraph(session, herdID: herdID)
             return try WorkingMapper.makeSessionDetail(from: session)
         }
     }
@@ -160,7 +160,7 @@ final class CoreDataWorkingRepository:
                 return nil
             }
 
-            try validateSessionGraph(session, herdID: herdID)
+            try Self.validateSessionGraph(session, herdID: herdID)
             return try WorkingMapper.makeQueueItemEditorSnapshot(
                 session: session,
                 queueItem: queueItem,
@@ -412,6 +412,10 @@ final class CoreDataWorkingRepository:
                 throw WorkingRepositoryError.sessionNotFound
             }
 
+            try Self.validateSessionGraph(
+                session,
+                herdID: herd.id
+            )
             try CoreDataWorkingLifecycleMutation.restoreOwnedAnimalsBeforeDeleting(
                 session: session,
                 herd: herd
@@ -850,7 +854,7 @@ final class CoreDataWorkingRepository:
         return (contextFactory.makeReadContext(), herdID)
     }
 
-    private nonisolated func validateSessionGraph(
+    private nonisolated static func validateSessionGraph(
         _ session: CDWorkingSession,
         herdID: UUID
     ) throws {
@@ -1074,7 +1078,7 @@ final class CoreDataWorkingRepository:
         }
     }
 
-    private nonisolated func validateHerdOwnership(
+    private nonisolated static func validateHerdOwnership(
         relationship: String,
         expectedHerdID: UUID,
         actualHerdID: UUID
@@ -1088,7 +1092,7 @@ final class CoreDataWorkingRepository:
         }
     }
 
-    private nonisolated func validateSessionRelationship(
+    private nonisolated static func validateSessionRelationship(
         relationship: String,
         expectedSessionID: UUID,
         actualSessionID: UUID?
@@ -1102,7 +1106,7 @@ final class CoreDataWorkingRepository:
         }
     }
 
-    private nonisolated func validateSnapshotRelationship(
+    private nonisolated static func validateSnapshotRelationship(
         relationship: String,
         expectedID: UUID?,
         actualID: UUID?
