@@ -27,7 +27,10 @@ enum CoreDataWorkingLifecycleMutation {
             guard !destinationsByQueueItemID.keys.contains(assignment.queueItemID) else {
                 throw WorkingRepositoryError.duplicateQueueItemAssignments
             }
-            destinationsByQueueItemID[assignment.queueItemID] = assignment.destinationPastureID
+            destinationsByQueueItemID.updateValue(
+                assignment.destinationPastureID,
+                forKey: assignment.queueItemID
+            )
         }
 
         let queueItemIDs = Set(queueItems.map(\.id))
