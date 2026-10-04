@@ -9,6 +9,7 @@ enum CoreDataWorkingMappingError: Error, Equatable {
     case invalidDoseUnit(recordID: UUID, value: String)
     case invalidAdministrationRoute(recordID: UUID, value: String)
     case corruptPlannedTreatments(sessionID: UUID)
+    case corruptTreatmentRecord(recordID: UUID)
 }
 
 private struct CoreDataWorkingTreatmentPlanItemPayload: Decodable {
@@ -207,17 +208,32 @@ extension WorkingMapper {
             route = nil
         }
 
+        let dose = WorkingTreatmentDose(
+            amount: record.doseAmount?.doubleValue,
+            unit: unit,
+            route: route
+        )
+        do {
+            try WorkingTreatmentPlanRules.validate([
+                WorkingTreatmentEntryInput(
+                    date: record.date,
+                    treatmentItemID: record.treatmentItemID,
+                    itemName: record.itemNameSnapshot,
+                    given: record.given,
+                    dose: dose
+                )
+            ])
+        } catch {
+            throw CoreDataWorkingMappingError.corruptTreatmentRecord(recordID: record.id)
+        }
+
         return WorkingTreatmentRecordSnapshot(
             id: record.id,
             date: record.date,
             treatmentItemID: record.treatmentItemID,
             itemName: record.itemNameSnapshot,
             given: record.given,
-            dose: WorkingTreatmentDose(
-                amount: record.doseAmount?.doubleValue,
-                unit: unit,
-                route: route
-            )
+            dose: dose
         )
     }
 
@@ -242,11 +258,13 @@ extension WorkingMapper {
 
     static func plannedTreatments(_ session: CDWorkingSession) throws -> [WorkingTreatmentPlanItem] {
         do {
-            return try JSONDecoder().decode(
+            let items = try JSONDecoder().decode(
                 [CoreDataWorkingTreatmentPlanItemPayload].self,
                 from: session.plannedTreatmentsData
             )
             .map(\.domainValue)
+            try WorkingTreatmentPlanRules.validate(items)
+            return items
         } catch {
             throw CoreDataWorkingMappingError.corruptPlannedTreatments(sessionID: session.id)
         }
