@@ -76,8 +76,8 @@ final class NewWorkingSessionViewModel: ObservableObject {
         treatmentTemplateName: String?,
         plannedTreatments: [WorkingTreatmentPlanItem],
         animalIDs: [UUID]?
-    ) throws -> UUID {
-        try workingRepository.startSession(
+    ) async throws -> UUID {
+        try await workingRepository.startSession(
             input: WorkingSessionStartInput(
                 date: date,
                 sourcePastureID: pastureID,
