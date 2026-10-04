@@ -28,20 +28,20 @@ protocol WorkingQueueItemEditorReader {
 @MainActor
 protocol WorkingSessionStarting {
     @discardableResult
-    func startSession(input: WorkingSessionStartInput) async throws -> UUID
+    func startSession(input: WorkingSessionStartInput) throws -> UUID
 }
 
 @MainActor
 extension WorkingSessionStarting {
     @discardableResult
-    func startSession(input: WorkingSessionStartInput) async throws -> UUID {
+    func startSession(input: WorkingSessionStartInput) throws -> UUID {
         throw WorkingRepositoryError.sessionStartUnavailable
     }
 }
 
 @MainActor
 protocol WorkingAnimalCollecting {
-    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) async throws
+    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) throws
 }
 
 @MainActor
@@ -53,7 +53,7 @@ protocol WorkingQueueItemCompleting {
         pregnancyCheck: WorkingPregnancyCheckInput?,
         markCastrated: Bool,
         observationNotes: String
-    ) async throws
+    ) throws
 }
 
 @MainActor
@@ -62,7 +62,7 @@ protocol WorkingQueueItemEditSaving {
         forQueueItemID queueItemID: UUID,
         inSessionID sessionID: UUID,
         input: WorkingSessionAnimalEditInput
-    ) async throws
+    ) throws
 }
 
 @MainActor
@@ -107,7 +107,7 @@ extension WorkingPrimaryTagReplacing {
 
 @MainActor
 protocol WorkingQueueItemDataDeleting {
-    func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) async throws
+    func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) throws
 }
 
 @MainActor
