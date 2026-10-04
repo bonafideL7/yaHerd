@@ -121,9 +121,16 @@ final class CoreDataWorkingTreatmentTemplateRepository:
     }
 
     func deleteTemplates(ids: [UUID]) throws {
+        try deleteTemplates(ids: ids, beforeSave: nil)
+    }
+
+    func deleteTemplates(
+        ids: [UUID],
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)?
+    ) throws {
         guard !ids.isEmpty else { return }
         let requestedIDs = Set(ids)
-        try performWrite { context, herd in
+        try performWrite(beforeSave: beforeSave) { context, herd in
             let templates = try Self.fetchTemplates(herd: herd, in: context)
             let templatesByID = Dictionary(uniqueKeysWithValues: templates.map { ($0.id, $0) })
             guard requestedIDs.allSatisfy({ templatesByID[$0] != nil }) else {
@@ -162,6 +169,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
     }
 
     private func performWrite<Result: Sendable>(
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil,
         _ operation: @escaping @Sendable (NSManagedObjectContext, CDHerd) throws -> Result
     ) throws -> Result {
         guard let herdID = selection.currentHerdID else {
@@ -175,6 +183,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
                 }
                 let result = try operation(context, herd)
                 if context.hasChanges {
+                    try beforeSave?(context)
                     do {
                         try context.save()
                     } catch {
