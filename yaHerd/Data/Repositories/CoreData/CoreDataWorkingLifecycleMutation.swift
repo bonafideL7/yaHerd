@@ -198,7 +198,7 @@ enum CoreDataWorkingLifecycleMutation {
                     actualHerdID: activeSession.herd.id
                 )
             }
-            guard activeSession.id == session.id else {
+            guard activeSession.objectID == session.objectID else {
                 continue
             }
 
@@ -275,7 +275,14 @@ enum CoreDataWorkingLifecycleMutation {
                 actualHerdID: item.herd.id
             )
         }
-        guard item.session.id == session.id else {
+        guard item.session.herd.id == herd.id else {
+            throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                relationship: "WorkingQueueItem.session",
+                expectedHerdID: herd.id,
+                actualHerdID: item.session.herd.id
+            )
+        }
+        guard item.session.objectID == session.objectID else {
             throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
                 relationship: "WorkingQueueItem.session",
                 expectedSessionID: session.id,
@@ -339,7 +346,7 @@ enum CoreDataWorkingLifecycleMutation {
                     actualHerdID: activeSession.herd.id
                 )
             }
-            guard activeSession.id == session.id else {
+            guard activeSession.objectID == session.objectID else {
                 throw WorkingRepositoryError.animalAlreadyInAnotherSession
             }
         }
