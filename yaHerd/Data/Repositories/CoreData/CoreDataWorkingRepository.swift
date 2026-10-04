@@ -468,6 +468,11 @@ final class CoreDataWorkingRepository:
 
             try CoreDataAnimalMutation.validateOwnedGraphIdentity(animal)
             let tags = CoreDataAnimalProjection.managedTags(animal)
+            try Self.validateTagRelationships(
+                tags,
+                animal: animal,
+                herd: herd
+            )
             let states = tags.map(CoreDataAnimalProjection.tagState)
             if let primaryState = AnimalTagService.primaryTag(in: states),
                let primaryTag = tags.first(where: { $0.id == primaryState.id }) {
@@ -1032,6 +1037,37 @@ final class CoreDataWorkingRepository:
 }
 
 private extension CoreDataWorkingRepository {
+    nonisolated static func validateTagRelationships(
+        _ tags: [CDAnimalTag],
+        animal: CDAnimal,
+        herd: CDHerd
+    ) throws {
+        for tag in tags {
+            guard tag.herd.id == herd.id else {
+                throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                    relationship: "Animal.tags",
+                    expectedHerdID: herd.id,
+                    actualHerdID: tag.herd.id
+                )
+            }
+            guard tag.animal.id == animal.id else {
+                throw CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
+                    relationship: "AnimalTag.animal",
+                    expectedID: animal.id,
+                    actualID: tag.animal.id
+                )
+            }
+            if let color = tag.color,
+               color.herd.id != herd.id {
+                throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                    relationship: "AnimalTag.color",
+                    expectedHerdID: herd.id,
+                    actualHerdID: color.herd.id
+                )
+            }
+        }
+    }
+
     nonisolated static func activeQueueTarget(
         sessionID: UUID,
         queueItemID: UUID,
