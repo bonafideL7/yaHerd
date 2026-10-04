@@ -17,7 +17,7 @@ struct EmptyWorkingRepository: WorkingRepository {
     func fetchTemplates() throws -> [WorkingTreatmentTemplateSummary] { [] }
     func fetchTemplateDetail(id: UUID) throws -> WorkingTreatmentTemplateDetailSnapshot? { nil }
     func fetchQueueItemEditor(sessionID: UUID, queueItemID: UUID) throws -> WorkingQueueItemEditorSnapshot? { nil }
-    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) async throws {}
+    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) throws {}
     func complete(queueItemID: UUID, inSessionID sessionID: UUID, treatmentEntries: [WorkingTreatmentEntryInput], pregnancyCheck: WorkingPregnancyCheckInput?, markCastrated: Bool, observationNotes: String) throws {}
     func saveEdits(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID, input: WorkingSessionAnimalEditInput) throws {}
     func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) throws {}
