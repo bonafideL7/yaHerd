@@ -2,10 +2,15 @@
 import Foundation
 
 enum CoreDataWorkingRepositoryError: Error, Equatable {
-    case invalidOwnership(
+    case invalidHerdOwnership(
         relationship: String,
         expectedHerdID: UUID,
         actualHerdID: UUID
+    )
+    case invalidSessionRelationship(
+        relationship: String,
+        expectedSessionID: UUID,
+        actualSessionID: UUID?
     )
 }
 
@@ -64,7 +69,10 @@ final class CoreDataWorkingRepository:
                     }
                     return $0.id.uuidString < $1.id.uuidString
                 }
-                .map(WorkingMapper.makeSessionSummary)
+                .map { session in
+                    try validateSessionGraph(session, herdID: herdID)
+                    return try WorkingMapper.makeSessionSummary(from: session)
+                }
         }
     }
 
@@ -137,37 +145,169 @@ final class CoreDataWorkingRepository:
         _ session: CDWorkingSession,
         herdID: UUID
     ) throws {
-        guard session.herd.id == herdID else {
-            throw CoreDataWorkingRepositoryError.invalidOwnership(
-                relationship: "WorkingSession.herd",
+        try validateHerdOwnership(
+            relationship: "WorkingSession.herd",
+            expectedHerdID: herdID,
+            actualHerdID: session.herd.id
+        )
+
+        if let sourcePasture = session.sourcePasture {
+            try validateHerdOwnership(
+                relationship: "WorkingSession.sourcePasture",
                 expectedHerdID: herdID,
-                actualHerdID: session.herd.id
+                actualHerdID: sourcePasture.herd.id
             )
         }
 
         let queueItems = (session.queueItems?.allObjects as? [CDWorkingQueueItem]) ?? []
         let treatmentRecords = (session.treatmentRecords?.allObjects as? [CDWorkingTreatmentRecord]) ?? []
+        let healthRecords = (session.healthRecords?.allObjects as? [CDHealthRecord]) ?? []
+        let pregnancyChecks = (session.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? []
+        let activeAnimals = (session.activeAnimals?.allObjects as? [CDAnimal]) ?? []
+
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(queueItems, herdID: herdID)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(treatmentRecords, herdID: herdID)
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(healthRecords, herdID: herdID)
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(pregnancyChecks, herdID: herdID)
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(activeAnimals, herdID: herdID)
 
         for item in queueItems {
-            guard item.herd.id == herdID, item.session.id == session.id else {
-                throw CoreDataWorkingRepositoryError.invalidOwnership(
-                    relationship: "WorkingSession.queueItems",
+            try validateHerdOwnership(
+                relationship: "WorkingSession.queueItems",
+                expectedHerdID: herdID,
+                actualHerdID: item.herd.id
+            )
+            try validateSessionRelationship(
+                relationship: "WorkingQueueItem.session",
+                expectedSessionID: session.id,
+                actualSessionID: item.session.id
+            )
+
+            if let animal = item.animal {
+                try validateHerdOwnership(
+                    relationship: "WorkingQueueItem.animal",
                     expectedHerdID: herdID,
-                    actualHerdID: item.herd.id
+                    actualHerdID: animal.herd.id
+                )
+            }
+            if let collectedFromPasture = item.collectedFromPasture {
+                try validateHerdOwnership(
+                    relationship: "WorkingQueueItem.collectedFromPasture",
+                    expectedHerdID: herdID,
+                    actualHerdID: collectedFromPasture.herd.id
+                )
+            }
+            if let destinationPasture = item.destinationPasture {
+                try validateHerdOwnership(
+                    relationship: "WorkingQueueItem.destinationPasture",
+                    expectedHerdID: herdID,
+                    actualHerdID: destinationPasture.herd.id
                 )
             }
         }
 
         for record in treatmentRecords {
-            guard record.herd.id == herdID, record.session.id == session.id else {
-                throw CoreDataWorkingRepositoryError.invalidOwnership(
-                    relationship: "WorkingSession.treatmentRecords",
+            try validateHerdOwnership(
+                relationship: "WorkingSession.treatmentRecords",
+                expectedHerdID: herdID,
+                actualHerdID: record.herd.id
+            )
+            try validateSessionRelationship(
+                relationship: "WorkingTreatmentRecord.session",
+                expectedSessionID: session.id,
+                actualSessionID: record.session.id
+            )
+            if let animal = record.animal {
+                try validateHerdOwnership(
+                    relationship: "WorkingTreatmentRecord.animal",
                     expectedHerdID: herdID,
-                    actualHerdID: record.herd.id
+                    actualHerdID: animal.herd.id
                 )
             }
+        }
+
+        for record in healthRecords {
+            try validateHerdOwnership(
+                relationship: "WorkingSession.healthRecords",
+                expectedHerdID: herdID,
+                actualHerdID: record.herd.id
+            )
+            try validateSessionRelationship(
+                relationship: "HealthRecord.workingSession",
+                expectedSessionID: session.id,
+                actualSessionID: record.workingSession?.id
+            )
+            try validateHerdOwnership(
+                relationship: "HealthRecord.animal",
+                expectedHerdID: herdID,
+                actualHerdID: record.animal.herd.id
+            )
+        }
+
+        for check in pregnancyChecks {
+            try validateHerdOwnership(
+                relationship: "WorkingSession.pregnancyChecks",
+                expectedHerdID: herdID,
+                actualHerdID: check.herd.id
+            )
+            try validateSessionRelationship(
+                relationship: "PregnancyCheck.workingSession",
+                expectedSessionID: session.id,
+                actualSessionID: check.workingSession?.id
+            )
+            try validateHerdOwnership(
+                relationship: "PregnancyCheck.animal",
+                expectedHerdID: herdID,
+                actualHerdID: check.animal.herd.id
+            )
+            if let sire = check.sire {
+                try validateHerdOwnership(
+                    relationship: "PregnancyCheck.sire",
+                    expectedHerdID: herdID,
+                    actualHerdID: sire.herd.id
+                )
+            }
+        }
+
+        for animal in activeAnimals {
+            try validateHerdOwnership(
+                relationship: "WorkingSession.activeAnimals",
+                expectedHerdID: herdID,
+                actualHerdID: animal.herd.id
+            )
+            try validateSessionRelationship(
+                relationship: "Animal.activeWorkingSession",
+                expectedSessionID: session.id,
+                actualSessionID: animal.activeWorkingSession?.id
+            )
+        }
+    }
+
+    private nonisolated func validateHerdOwnership(
+        relationship: String,
+        expectedHerdID: UUID,
+        actualHerdID: UUID
+    ) throws {
+        guard actualHerdID == expectedHerdID else {
+            throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                relationship: relationship,
+                expectedHerdID: expectedHerdID,
+                actualHerdID: actualHerdID
+            )
+        }
+    }
+
+    private nonisolated func validateSessionRelationship(
+        relationship: String,
+        expectedSessionID: UUID,
+        actualSessionID: UUID?
+    ) throws {
+        guard actualSessionID == expectedSessionID else {
+            throw CoreDataWorkingRepositoryError.invalidSessionRelationship(
+                relationship: relationship,
+                expectedSessionID: expectedSessionID,
+                actualSessionID: actualSessionID
+            )
         }
     }
 }
