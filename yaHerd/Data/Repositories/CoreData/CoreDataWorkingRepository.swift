@@ -27,15 +27,27 @@ final class CoreDataWorkingRepository:
 {
     private let selection: any CurrentHerdSelectionReading
     private let contextFactory: CoreDataContextFactory
+    private let transactionExecutor: CoreDataTransactionExecutor
+    private let animalWriteBoundary: CoreDataAnimalWriteBoundary
+    private let workingWriteGate: CoreDataAsyncSerialGate
+    private let pastureResidentWriteCoordinator: CoreDataPastureResidentWriteCoordinator
     private nonisolated let lookup: CoreDataLookup
 
     init(
         selection: any CurrentHerdSelectionReading,
         contextFactory: CoreDataContextFactory,
+        transactionExecutor: CoreDataTransactionExecutor,
+        animalWriteBoundary: CoreDataAnimalWriteBoundary,
+        workingWriteGate: CoreDataAsyncSerialGate,
+        pastureResidentWriteCoordinator: CoreDataPastureResidentWriteCoordinator,
         lookup: CoreDataLookup
     ) {
         self.selection = selection
         self.contextFactory = contextFactory
+        self.transactionExecutor = transactionExecutor
+        self.animalWriteBoundary = animalWriteBoundary
+        self.workingWriteGate = workingWriteGate
+        self.pastureResidentWriteCoordinator = pastureResidentWriteCoordinator
         self.lookup = lookup
     }
 
@@ -46,6 +58,10 @@ final class CoreDataWorkingRepository:
         self.init(
             selection: selection,
             contextFactory: assembly.contextFactory,
+            transactionExecutor: assembly.transactionExecutor,
+            animalWriteBoundary: assembly.animalWriteBoundary,
+            workingWriteGate: assembly.workingWriteGate,
+            pastureResidentWriteCoordinator: assembly.pastureResidentWriteCoordinator,
             lookup: assembly.lookup
         )
     }
@@ -136,6 +152,208 @@ final class CoreDataWorkingRepository:
                 queueItem: queueItem,
                 animal: animal
             )
+        }
+    }
+
+    // MARK: - Session start and collection
+
+    @discardableResult
+    func startSession(input: WorkingSessionStartInput) async throws -> UUID {
+        try WorkingTreatmentPlanRules.validate(input.plannedTreatments)
+
+        let sourcePastureID = input.sourcePastureID
+        let requestedAnimalIDs = input.animalIDs.map(Self.uniqueIDs)
+        if let requestedAnimalIDs, requestedAnimalIDs.isEmpty {
+            throw WorkingRepositoryError.noEligibleAnimals
+        }
+
+        let normalizedDate = Calendar.autoupdatingCurrent.startOfDay(for: input.date)
+        let normalizedTemplateName = input.treatmentTemplateName?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let templateName = normalizedTemplateName?.isEmpty == false
+            ? normalizedTemplateName!
+            : "Working Session"
+        let plannedTreatmentsData = try JSONEncoder().encode(input.plannedTreatments)
+        let lookup = self.lookup
+
+        return try await performWrite { context, herd in
+            guard let sourcePasture = try lookup.herdOwned(
+                CDPasture.self,
+                id: sourcePastureID,
+                herdID: herd.id,
+                in: context
+            ) else {
+                throw WorkingRepositoryError.pastureNotFound
+            }
+
+            let animals = try Self.animalsForSessionStart(
+                requestedIDs: requestedAnimalIDs,
+                sourcePasture: sourcePasture,
+                herd: herd,
+                in: context
+            )
+            try Self.validateStartAnimals(
+                animals,
+                sourcePasture: sourcePasture
+            )
+
+            let session = CDWorkingSession(context: context)
+            session.id = try CoreDataAnimalMutation.uniqueID(
+                for: CDWorkingSession.self,
+                herdID: herd.id,
+                lookup: lookup,
+                in: context
+            )
+            session.date = normalizedDate
+            session.statusRawValue = WorkingSessionStatus.active.rawValue
+            session.treatmentTemplateNameSnapshot = templateName
+            session.plannedTreatmentsData = plannedTreatmentsData
+            session.sourcePastureIDSnapshot = sourcePasture.id
+            session.sourcePastureNameSnapshot = sourcePasture.name
+            session.herd = herd
+            session.sourcePasture = sourcePasture
+
+            for animal in animals.sorted(by: Self.animalTagOrder) {
+                try Self.collect(
+                    animal,
+                    into: session,
+                    from: sourcePasture,
+                    herd: herd,
+                    lookup: lookup,
+                    in: context
+                )
+            }
+
+            return session.id
+        }
+    }
+
+    func collectAnimals(
+        sessionID: UUID,
+        animalIDs: [UUID]
+    ) async throws {
+        let animalIDs = Self.uniqueIDs(animalIDs)
+        guard !animalIDs.isEmpty else {
+            return
+        }
+        let lookup = self.lookup
+
+        try await performWrite { context, herd in
+            guard let session = try lookup.herdOwned(
+                CDWorkingSession.self,
+                id: sessionID,
+                herdID: herd.id,
+                in: context
+            ) else {
+                throw WorkingRepositoryError.sessionNotFound
+            }
+            guard let status = WorkingSessionStatus(rawValue: session.statusRawValue) else {
+                throw CoreDataWorkingMappingError.invalidSessionStatus(
+                    sessionID: session.id,
+                    value: session.statusRawValue
+                )
+            }
+            guard status == .active else {
+                throw WorkingRepositoryError.sessionAlreadyFinished
+            }
+            guard let sourcePasture = session.sourcePasture else {
+                throw WorkingRepositoryError.pastureNotFound
+            }
+            guard sourcePasture.herd.id == herd.id,
+                  sourcePasture.id == session.sourcePastureIDSnapshot else {
+                throw CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
+                    relationship: "WorkingSession.sourcePasture",
+                    expectedID: session.sourcePastureIDSnapshot,
+                    actualID: sourcePasture.id
+                )
+            }
+
+            let animals = try CoreDataAnimalMutation.fetchAnimals(
+                ids: animalIDs,
+                herd: herd,
+                in: context
+            )
+            guard animals.count == animalIDs.count else {
+                throw WorkingRepositoryError.animalNotFound
+            }
+
+            let existingAnimalIDs = Set(
+                ((session.queueItems?.allObjects as? [CDWorkingQueueItem]) ?? [])
+                    .map(\.animalIDSnapshot)
+            )
+            let candidates = animals.map {
+                WorkingCollectionCandidate(
+                    animalID: $0.id,
+                    activeSessionID: $0.activeWorkingSession?.id
+                )
+            }
+            try WorkingCollectionRules.validateCollection(
+                existingAnimalIDs: existingAnimalIDs,
+                candidates: candidates,
+                sessionID: session.id
+            )
+
+            guard try animals.allSatisfy({
+                try Self.isEligibleForCollection($0, sourcePasture: sourcePasture)
+            }) else {
+                throw WorkingRepositoryError.animalNotEligibleForCollection
+            }
+
+            for animal in animals.sorted(by: Self.animalTagOrder) {
+                try Self.collect(
+                    animal,
+                    into: session,
+                    from: sourcePasture,
+                    herd: herd,
+                    lookup: lookup,
+                    in: context
+                )
+            }
+        }
+    }
+
+    private func performWrite<Result: Sendable>(
+        _ operation: @escaping @Sendable (
+            NSManagedObjectContext,
+            CDHerd
+        ) throws -> Result
+    ) async throws -> Result {
+        guard let herdID = selection.currentHerdID else {
+            throw HerdRepositoryError.missingHerd
+        }
+
+        let gate = workingWriteGate
+        await gate.acquire()
+        await animalWriteBoundary.beginAnimalWrite()
+
+        do {
+            try pastureResidentWriteCoordinator.beginWorkingWrite()
+        } catch {
+            animalWriteBoundary.endAnimalWrite()
+            await gate.release()
+            throw error
+        }
+
+        let lookup = self.lookup
+        let animalWriteBoundary = self.animalWriteBoundary
+        do {
+            let result = try await transactionExecutor.performWrite(
+                afterTransaction: {
+                    animalWriteBoundary.endAnimalWrite()
+                }
+            ) { context in
+                guard let herd = try lookup.herd(id: herdID, in: context) else {
+                    throw HerdRepositoryError.missingHerd
+                }
+                return try operation(context, herd)
+            }
+            pastureResidentWriteCoordinator.endWorkingWrite()
+            await gate.release()
+            return result
+        } catch {
+            pastureResidentWriteCoordinator.endWorkingWrite()
+            await gate.release()
+            throw error
         }
     }
 
@@ -355,3 +573,151 @@ final class CoreDataWorkingRepository:
         }
     }
 }
+
+private extension CoreDataWorkingRepository {
+    nonisolated static func uniqueIDs(_ ids: [UUID]) -> [UUID] {
+        ids.reduce(into: [UUID]()) { result, id in
+            guard !result.contains(id) else { return }
+            result.append(id)
+        }
+    }
+
+    nonisolated static func animalsForSessionStart(
+        requestedIDs: [UUID]?,
+        sourcePasture: CDPasture,
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws -> [CDAnimal] {
+        if let requestedIDs {
+            let animals = try CoreDataAnimalMutation.fetchAnimals(
+                ids: requestedIDs,
+                herd: herd,
+                in: context
+            )
+            guard animals.count == requestedIDs.count else {
+                throw WorkingRepositoryError.animalNotFound
+            }
+            return animals
+        }
+
+        let animals = try CoreDataAnimalMutation.fetchAnimals(
+            herd: herd,
+            in: context
+        )
+        let eligible = try animals.filter {
+            try isEligibleForCollection($0, sourcePasture: sourcePasture)
+        }
+        guard !eligible.isEmpty else {
+            throw WorkingRepositoryError.noEligibleAnimals
+        }
+        return eligible
+    }
+
+    nonisolated static func validateStartAnimals(
+        _ animals: [CDAnimal],
+        sourcePasture: CDPasture
+    ) throws {
+        if animals.contains(where: { $0.activeWorkingSession != nil }) {
+            throw WorkingRepositoryError.animalAlreadyInAnotherSession
+        }
+
+        guard try animals.allSatisfy({
+            try isEligibleForCollection($0, sourcePasture: sourcePasture)
+        }) else {
+            throw WorkingRepositoryError.animalNotEligibleForCollection
+        }
+    }
+
+    nonisolated static func isEligibleForCollection(
+        _ animal: CDAnimal,
+        sourcePasture: CDPasture
+    ) throws -> Bool {
+        try CoreDataAnimalProjection.status(animal) == .active
+            && !animal.isArchived
+            && animal.currentPasture?.id == sourcePasture.id
+            && animal.activeWorkingSession == nil
+    }
+
+    nonisolated static func collect(
+        _ animal: CDAnimal,
+        into session: CDWorkingSession,
+        from sourcePasture: CDPasture,
+        herd: CDHerd,
+        lookup: CoreDataLookup,
+        in context: NSManagedObjectContext
+    ) throws {
+        guard animal.herd.id == herd.id,
+              sourcePasture.herd.id == herd.id,
+              session.herd.id == herd.id else {
+            throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                relationship: "Working collection",
+                expectedHerdID: herd.id,
+                actualHerdID: animal.herd.id
+            )
+        }
+
+        let primary = CoreDataAnimalProjection.primaryTagFields(
+            CoreDataAnimalProjection.managedTags(animal)
+        )
+        let damPrimary = animal.dam.map {
+            CoreDataAnimalProjection.primaryTagFields(
+                CoreDataAnimalProjection.managedTags($0)
+            )
+        }
+        if let dam = animal.dam, dam.herd.id != herd.id {
+            throw CoreDataWorkingRepositoryError.invalidHerdOwnership(
+                relationship: "WorkingQueueItem.animal.dam",
+                expectedHerdID: herd.id,
+                actualHerdID: dam.herd.id
+            )
+        }
+
+        let item = CDWorkingQueueItem(context: context)
+        item.id = try CoreDataAnimalMutation.uniqueID(
+            for: CDWorkingQueueItem.self,
+            herdID: herd.id,
+            lookup: lookup,
+            in: context
+        )
+        item.statusRawValue = WorkingQueueStatus.queued.rawValue
+        item.completedAt = nil
+        item.animalIDSnapshot = animal.id
+        item.animalTagNumberSnapshot = primary.number
+        item.animalTagColorIDSnapshot = primary.colorID
+        item.animalNameSnapshot = animal.name
+        item.animalSexRawValueSnapshot = try CoreDataAnimalProjection.sex(animal).rawValue
+        item.animalDamDisplayTagNumberSnapshot = animal.dam == nil ? nil : damPrimary?.number
+        item.animalDamDisplayTagColorIDSnapshot = damPrimary?.colorID
+        item.collectedFromPastureIDSnapshot = sourcePasture.id
+        item.collectedFromPastureNameSnapshot = sourcePasture.name
+        item.destinationPastureIDSnapshot = nil
+        item.destinationPastureNameSnapshot = nil
+        item.herd = herd
+        item.session = session
+        item.animal = animal
+        item.collectedFromPasture = sourcePasture
+        item.destinationPasture = nil
+
+        animal.currentPasture = nil
+        animal.activeWorkingSession = session
+        CoreDataAnimalMutation.rotateRevision(animal)
+    }
+
+    nonisolated static func animalTagOrder(
+        _ lhs: CDAnimal,
+        _ rhs: CDAnimal
+    ) -> Bool {
+        let lhsTag = CoreDataAnimalProjection.primaryTagFields(
+            CoreDataAnimalProjection.managedTags(lhs)
+        ).number
+        let rhsTag = CoreDataAnimalProjection.primaryTagFields(
+            CoreDataAnimalProjection.managedTags(rhs)
+        ).number
+        let comparison = lhsTag.localizedStandardCompare(rhsTag)
+        if comparison != .orderedSame {
+            return comparison == .orderedAscending
+        }
+        return lhs.id.uuidString < rhs.id.uuidString
+    }
+}
+
