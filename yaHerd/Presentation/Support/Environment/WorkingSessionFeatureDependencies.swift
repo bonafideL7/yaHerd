@@ -146,7 +146,7 @@ private struct MissingWorkingRepository: WorkingRepository {
         throw missing("Working session animal editor repository")
     }
 
-    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) throws {
+    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) async throws {
         throw missing("Working animal collector")
     }
 
