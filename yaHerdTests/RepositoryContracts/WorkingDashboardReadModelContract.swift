@@ -34,7 +34,7 @@ enum WorkingDashboardReadModelContract {
             using: fixture.workingFixture
         )
         let controlWorking = fixture.workingFixture.makeWorkingRepository()
-        let controlSessionID = try await controlWorking.startSession(
+        let controlSessionID = try controlWorking.startSession(
             input: WorkingSessionStartInput(
                 date: WorkingRepositoryContract.date(year: 2026, month: 9, day: 20, hour: 8),
                 sourcePastureID: controlSource.id,
@@ -84,7 +84,7 @@ enum WorkingDashboardReadModelContract {
         )
 
         let targetWorking = fixture.workingFixture.makeWorkingRepository()
-        let targetSessionID = try await targetWorking.startSession(
+        let targetSessionID = try targetWorking.startSession(
             input: WorkingSessionStartInput(
                 date: WorkingRepositoryContract.date(year: 2026, month: 9, day: 21, hour: 9),
                 sourcePastureID: targetSource.id,
@@ -105,7 +105,7 @@ enum WorkingDashboardReadModelContract {
             line: line
         )
 
-        try await targetWorking.collectAnimals(sessionID: targetSessionID, animalIDs: [second.id])
+        try targetWorking.collectAnimals(sessionID: targetSessionID, animalIDs: [second.id])
         try await assertSessionProjection(
             sessionID: targetSessionID,
             expectedStatus: .active,
