@@ -36,7 +36,8 @@ actor CoreDataReadModelActor:
     DashboardQueryReading,
     HomeFieldCheckQueryReading,
     HomeWorkingQueryReading,
-    AnimalListQueryReading
+    AnimalListQueryReading,
+    AnimalListFilteredQueryReading
 {
     private let contextFactory: CoreDataContextFactory
     private let lookup: CoreDataLookup
@@ -178,11 +179,31 @@ actor CoreDataReadModelActor:
     func fetchAnimalSummaryPage(
         _ request: ReadPageRequest
     ) async throws -> AnimalSummaryPage {
+        try await fetchAnimalSummaryPage(
+            matching: nil,
+            page: request
+        )
+    }
+
+    func fetchAnimalSummaryPage(
+        matching query: AnimalListFilterQuery,
+        page: ReadPageRequest
+    ) async throws -> AnimalSummaryPage {
+        try await fetchAnimalSummaryPage(
+            matching: Optional(query),
+            page: page
+        )
+    }
+
+    private func fetchAnimalSummaryPage(
+        matching query: AnimalListFilterQuery?,
+        page: ReadPageRequest
+    ) async throws -> AnimalSummaryPage {
         try Task.checkCancellation()
         let herdID = try await selectedHerdID()
         let context = contextFactory.makeReadContext()
         let lookup = self.lookup
-        let requestedCount = request.limit + 1
+        let requestedCount = page.limit + 1
 
         return try await context.perform {
             try Task.checkCancellation()
@@ -196,25 +217,35 @@ actor CoreDataReadModelActor:
                 in: context
             )
 
+            let animalPredicate = Self.animalListPredicate(
+                query: query,
+                herd: herd
+            )
+            let untaggedPredicate = NSCompoundPredicate(
+                andPredicateWithSubpredicates: [
+                    animalPredicate,
+                    Self.missingPrimaryTagPredicate()
+                ]
+            )
             let untaggedCountRequest = NSFetchRequest<CDAnimal>(
                 entityName: CDAnimal.coreDataEntityName
             )
-            untaggedCountRequest.predicate = Self.untaggedAnimalPredicate(herd: herd)
+            untaggedCountRequest.predicate = untaggedPredicate
             let untaggedCount = try context.count(for: untaggedCountRequest)
 
             var candidates: [CDAnimal] = []
             candidates.reserveCapacity(requestedCount)
 
-            if request.offset < untaggedCount {
+            if page.offset < untaggedCount {
                 let untaggedRequest = NSFetchRequest<CDAnimal>(
                     entityName: CDAnimal.coreDataEntityName
                 )
-                untaggedRequest.predicate = Self.untaggedAnimalPredicate(herd: herd)
+                untaggedRequest.predicate = untaggedPredicate
                 untaggedRequest.sortDescriptors = [
                     NSSortDescriptor(key: "name", ascending: true),
                     NSSortDescriptor(key: "id", ascending: true)
                 ]
-                untaggedRequest.fetchOffset = request.offset
+                untaggedRequest.fetchOffset = page.offset
                 untaggedRequest.fetchLimit = requestedCount
                 untaggedRequest.relationshipKeyPathsForPrefetching =
                     Self.animalSummaryPrefetchPaths
@@ -222,21 +253,15 @@ actor CoreDataReadModelActor:
                 candidates.append(contentsOf: try context.fetch(untaggedRequest))
             }
 
-            if candidates.count < requestedCount {
-                let taggedOffset = max(request.offset - untaggedCount, 0)
+            if candidates.count < requestedCount,
+               query?.recordIssue != .missingTag {
+                let taggedOffset = max(page.offset - untaggedCount, 0)
                 let tagRequest = NSFetchRequest<CDAnimalTag>(
                     entityName: CDAnimalTag.coreDataEntityName
                 )
-                tagRequest.predicate = NSPredicate(
-                    format: """
-                    herd == %@ AND
-                    animal.herd == %@ AND
-                    isActive == YES AND
-                    isPrimary == YES AND
-                    number != ""
-                    """,
-                    herd,
-                    herd
+                tagRequest.predicate = Self.taggedAnimalListPredicate(
+                    query: query,
+                    herd: herd
                 )
                 tagRequest.sortDescriptors = [
                     NSSortDescriptor(key: "number", ascending: true),
@@ -245,19 +270,8 @@ actor CoreDataReadModelActor:
                 ]
                 tagRequest.fetchOffset = taggedOffset
                 tagRequest.fetchLimit = requestedCount - candidates.count
-                tagRequest.relationshipKeyPathsForPrefetching = [
-                    "animal",
-                    "animal.tags",
-                    "animal.dam",
-                    "animal.dam.tags",
-                    "animal.currentPasture",
-                    "animal.activeWorkingSession",
-                    "animal.pregnancyChecks",
-                    "animal.healthRecords",
-                    "animal.movementRecords",
-                    "animal.statusRecords",
-                    "animal.damOffspring"
-                ]
+                tagRequest.relationshipKeyPathsForPrefetching =
+                    Self.taggedAnimalSummaryPrefetchPaths
 
                 let tags = try context.fetch(tagRequest)
                 for tag in tags {
@@ -281,16 +295,24 @@ actor CoreDataReadModelActor:
                 }
             }
 
+            var candidateIDs = Set<UUID>()
             for animal in candidates {
+                guard candidateIDs.insert(animal.id).inserted else {
+                    throw CoreDataPersistenceError.duplicateApplicationID(
+                        entity: CDAnimal.coreDataEntityName,
+                        id: animal.id,
+                        herdID: herdID
+                    )
+                }
                 try Self.validateAnimalReadRelationships(
                     animal,
                     herdID: herdID
                 )
             }
 
-            let hasMore = candidates.count > request.limit
+            let hasMore = candidates.count > page.limit
             return AnimalSummaryPage(
-                animals: try candidates.prefix(request.limit).map {
+                animals: try candidates.prefix(page.limit).map {
                     try CoreDataAnimalProjection.summary($0)
                 },
                 hasMore: hasMore
@@ -942,12 +964,23 @@ actor CoreDataReadModelActor:
         "damOffspring"
     ]
 
-    private static func untaggedAnimalPredicate(
-        herd: CDHerd
-    ) -> NSPredicate {
+    private static let taggedAnimalSummaryPrefetchPaths = [
+        "animal",
+        "animal.tags",
+        "animal.dam",
+        "animal.dam.tags",
+        "animal.currentPasture",
+        "animal.activeWorkingSession",
+        "animal.pregnancyChecks",
+        "animal.healthRecords",
+        "animal.movementRecords",
+        "animal.statusRecords",
+        "animal.damOffspring"
+    ]
+
+    private static func missingPrimaryTagPredicate() -> NSPredicate {
         NSPredicate(
             format: """
-            herd == %@ AND
             SUBQUERY(
                 tags,
                 $tag,
@@ -955,9 +988,260 @@ actor CoreDataReadModelActor:
                 $tag.isPrimary == YES AND
                 $tag.number != ""
             ).@count == 0
-            """,
-            herd
+            """
         )
+    }
+
+    private static func animalListPredicate(
+        query: AnimalListFilterQuery?,
+        herd: CDHerd
+    ) -> NSPredicate {
+        var predicates: [NSPredicate] = [
+            NSPredicate(format: "herd == %@", herd)
+        ]
+        guard let query else {
+            return NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+        }
+
+        if !query.showRemovedStatuses {
+            predicates.append(
+                NSPredicate(
+                    format: "statusRawValue == %@",
+                    AnimalStatus.active.rawValue
+                )
+            )
+        }
+        if !query.showArchivedRecords {
+            predicates.append(NSPredicate(format: "isArchived == NO"))
+        }
+        if let sex = query.sex {
+            predicates.append(
+                NSPredicate(format: "sexRawValue == %@", sex.rawValue)
+            )
+        }
+        if let status = query.status {
+            predicates.append(
+                NSPredicate(format: "statusRawValue == %@", status.rawValue)
+            )
+        }
+
+        switch query.pasture {
+        case .any:
+            break
+        case .noPasture:
+            predicates.append(NSPredicate(format: "activeWorkingSession == nil"))
+            predicates.append(NSPredicate(format: "currentPasture == nil"))
+        case .pasture(let pastureID):
+            predicates.append(
+                NSPredicate(
+                    format: "currentPasture.id == %@",
+                    pastureID as NSUUID
+                )
+            )
+        }
+
+        switch query.location {
+        case .any:
+            break
+        case .pasture:
+            predicates.append(NSPredicate(format: "activeWorkingSession == nil"))
+        case .workingPen:
+            predicates.append(NSPredicate(format: "activeWorkingSession != nil"))
+        }
+
+        switch query.recordIssue {
+        case .any:
+            break
+        case .missingPasture:
+            predicates.append(
+                NSPredicate(
+                    format: "statusRawValue == %@",
+                    AnimalStatus.active.rawValue
+                )
+            )
+            predicates.append(NSPredicate(format: "isArchived == NO"))
+            predicates.append(NSPredicate(format: "activeWorkingSession == nil"))
+            predicates.append(NSPredicate(format: "currentPasture == nil"))
+        case .missingTag:
+            predicates.append(
+                NSPredicate(
+                    format: "statusRawValue == %@",
+                    AnimalStatus.active.rawValue
+                )
+            )
+            predicates.append(NSPredicate(format: "isArchived == NO"))
+            predicates.append(missingPrimaryTagPredicate())
+        case .unknownSex:
+            predicates.append(
+                NSPredicate(
+                    format: "statusRawValue == %@",
+                    AnimalStatus.active.rawValue
+                )
+            )
+            predicates.append(NSPredicate(format: "isArchived == NO"))
+            predicates.append(
+                NSPredicate(format: "sexRawValue == %@", Sex.unknown.rawValue)
+            )
+        case .archivedActive:
+            predicates.append(
+                NSPredicate(
+                    format: "statusRawValue == %@",
+                    AnimalStatus.active.rawValue
+                )
+            )
+            predicates.append(NSPredicate(format: "isArchived == YES"))
+        }
+
+        let search = query.searchText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !search.isEmpty {
+            predicates.append(
+                NSCompoundPredicate(
+                    orPredicateWithSubpredicates: [
+                        NSPredicate(
+                            format: "name CONTAINS[cd] %@",
+                            search
+                        ),
+                        NSPredicate(
+                            format: """
+                            SUBQUERY(
+                                tags,
+                                $tag,
+                                $tag.isActive == YES AND
+                                $tag.isPrimary == YES AND
+                                $tag.number CONTAINS[cd] %@
+                            ).@count > 0
+                            """,
+                            search
+                        )
+                    ]
+                )
+            )
+        }
+
+        return NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+    }
+
+    private static func taggedAnimalListPredicate(
+        query: AnimalListFilterQuery?,
+        herd: CDHerd
+    ) -> NSPredicate {
+        var predicates: [NSPredicate] = [
+            NSPredicate(format: "herd == %@", herd),
+            NSPredicate(format: "animal.herd == %@", herd),
+            NSPredicate(format: "isActive == YES"),
+            NSPredicate(format: "isPrimary == YES"),
+            NSPredicate(format: "number != """)
+        ]
+        guard let query else {
+            return NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+        }
+
+        if !query.showRemovedStatuses {
+            predicates.append(
+                NSPredicate(
+                    format: "animal.statusRawValue == %@",
+                    AnimalStatus.active.rawValue
+                )
+            )
+        }
+        if !query.showArchivedRecords {
+            predicates.append(NSPredicate(format: "animal.isArchived == NO"))
+        }
+        if let sex = query.sex {
+            predicates.append(
+                NSPredicate(format: "animal.sexRawValue == %@", sex.rawValue)
+            )
+        }
+        if let status = query.status {
+            predicates.append(
+                NSPredicate(format: "animal.statusRawValue == %@", status.rawValue)
+            )
+        }
+
+        switch query.pasture {
+        case .any:
+            break
+        case .noPasture:
+            predicates.append(NSPredicate(format: "animal.activeWorkingSession == nil"))
+            predicates.append(NSPredicate(format: "animal.currentPasture == nil"))
+        case .pasture(let pastureID):
+            predicates.append(
+                NSPredicate(
+                    format: "animal.currentPasture.id == %@",
+                    pastureID as NSUUID
+                )
+            )
+        }
+
+        switch query.location {
+        case .any:
+            break
+        case .pasture:
+            predicates.append(NSPredicate(format: "animal.activeWorkingSession == nil"))
+        case .workingPen:
+            predicates.append(NSPredicate(format: "animal.activeWorkingSession != nil"))
+        }
+
+        switch query.recordIssue {
+        case .any:
+            break
+        case .missingPasture:
+            predicates.append(
+                NSPredicate(
+                    format: "animal.statusRawValue == %@",
+                    AnimalStatus.active.rawValue
+                )
+            )
+            predicates.append(NSPredicate(format: "animal.isArchived == NO"))
+            predicates.append(NSPredicate(format: "animal.activeWorkingSession == nil"))
+            predicates.append(NSPredicate(format: "animal.currentPasture == nil"))
+        case .missingTag:
+            return NSPredicate(value: false)
+        case .unknownSex:
+            predicates.append(
+                NSPredicate(
+                    format: "animal.statusRawValue == %@",
+                    AnimalStatus.active.rawValue
+                )
+            )
+            predicates.append(NSPredicate(format: "animal.isArchived == NO"))
+            predicates.append(
+                NSPredicate(
+                    format: "animal.sexRawValue == %@",
+                    Sex.unknown.rawValue
+                )
+            )
+        case .archivedActive:
+            predicates.append(
+                NSPredicate(
+                    format: "animal.statusRawValue == %@",
+                    AnimalStatus.active.rawValue
+                )
+            )
+            predicates.append(NSPredicate(format: "animal.isArchived == YES"))
+        }
+
+        let search = query.searchText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !search.isEmpty {
+            predicates.append(
+                NSCompoundPredicate(
+                    orPredicateWithSubpredicates: [
+                        NSPredicate(
+                            format: "animal.name CONTAINS[cd] %@",
+                            search
+                        ),
+                        NSPredicate(
+                            format: "number CONTAINS[cd] %@",
+                            search
+                        )
+                    ]
+                )
+            )
+        }
+
+        return NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
     }
 
     private static let unresolvedFindingStatusRawValues = [
