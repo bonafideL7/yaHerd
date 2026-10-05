@@ -148,7 +148,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             otherWorking.fetchSessionDetail(id: otherSessionID)
         )
 
-        XCTAssertEqual(Set(try primaryWorking.fetchSessions().map(\.id)), [primarySessionID])
+        XCTAssertEqual(Set(try primaryWorking.fetchSessions().map(\.id)), Set([primarySessionID]))
         XCTAssertNil(try primaryWorking.fetchSessionDetail(id: otherSessionID))
         XCTAssertNil(
             try primaryWorking.fetchQueueItemEditor(
@@ -156,7 +156,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 queueItemID: try XCTUnwrap(otherBefore.queueItems.first?.id)
             )
         )
-        XCTAssertEqual(Set(try primaryWorking.fetchTemplates().map(\.id)), [primaryTemplateID])
+        XCTAssertEqual(Set(try primaryWorking.fetchTemplates().map(\.id)), Set([primaryTemplateID]))
         XCTAssertNil(try primaryWorking.fetchTemplateDetail(id: otherTemplateID))
 
         await XCTAssertThrowsErrorAsync(
@@ -177,8 +177,8 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             try otherWorking.fetchSessionDetail(id: otherSessionID),
             otherBefore
         )
-        XCTAssertEqual(Set(try otherWorking.fetchSessions().map(\.id)), [otherSessionID])
-        XCTAssertEqual(Set(try otherWorking.fetchTemplates().map(\.id)), [otherTemplateID])
+        XCTAssertEqual(Set(try otherWorking.fetchSessions().map(\.id)), Set([otherSessionID]))
+        XCTAssertEqual(Set(try otherWorking.fetchTemplates().map(\.id)), Set([otherTemplateID]))
         XCTAssertNil(try otherWorking.fetchSessionDetail(id: primarySessionID))
         XCTAssertNil(try otherWorking.fetchTemplateDetail(id: primaryTemplateID))
     }
