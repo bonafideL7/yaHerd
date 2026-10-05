@@ -40,6 +40,22 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         try AnimalRepositoryContract.assertDeleteRemovesAggregate(using: environment.repositoryFixture)
     }
 
+    func testMilestone9AnimalListPaginationAndPastureOptions() async throws {
+        let environment = try await makeReadModelEnvironment()
+        let fixture = AnimalListReadProjectionContractFixture(
+            animalFixture: environment.repositoryFixture,
+            makeAnimalListQueryReader: {
+                environment.makeAnimalListQueryReader()
+            },
+            seedAnimalWithID: { id, input in
+                try environment.seedAnimalWithID(id, input: input)
+            }
+        )
+
+        try await AnimalRepositoryContract
+            .assertAsyncAnimalListPaginationAndPastureOptions(using: fixture)
+    }
+
     func testMilestone5AnimalAggregateTransactionContract() async throws {
         let taggedEnvironment = try await makeEnvironment()
         let untaggedEnvironment = try await makeEnvironment()
@@ -1445,6 +1461,29 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
         return try CoreDataAnimalContractEnvironment(assembly: assembly)
     }
+
+    private func makeReadModelEnvironment() async throws -> CoreDataAnimalContractEnvironment {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yaHerd-M9-AnimalList-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        let storeURL = directory.appendingPathComponent(
+            CoreDataPersistentContainer.storeFileName
+        )
+
+        do {
+            let assembly = try await CoreDataPersistenceAssembly.load(storeURL: storeURL)
+            return try CoreDataAnimalContractEnvironment(
+                assembly: assembly,
+                temporaryStoreDirectory: directory
+            )
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
+    }
 }
 
 private actor CoreDataAnimalAsyncCommitBarrier {
@@ -1508,11 +1547,21 @@ private final class CoreDataAnimalContractEnvironment {
     let assembly: CoreDataPersistenceAssembly
     let selection = CoreDataAnimalContractSelection()
     let herdID = UUID()
+    private let temporaryStoreDirectory: URL?
 
-    init(assembly: CoreDataPersistenceAssembly) throws {
+    init(
+        assembly: CoreDataPersistenceAssembly,
+        temporaryStoreDirectory: URL? = nil
+    ) throws {
         self.assembly = assembly
+        self.temporaryStoreDirectory = temporaryStoreDirectory
         selection.currentHerdID = herdID
         try seedHerd()
+    }
+
+    deinit {
+        guard let temporaryStoreDirectory else { return }
+        try? FileManager.default.removeItem(at: temporaryStoreDirectory)
     }
 
     var repositoryFixture: AnimalRepositoryContractFixture {
@@ -1535,6 +1584,122 @@ private final class CoreDataAnimalContractEnvironment {
 
     func makeTagColorRepository() -> CoreDataTagColorRepository {
         CoreDataTagColorRepository(selection: selection, assembly: assembly)
+    }
+
+    func makeAnimalListQueryReader() -> CoreDataReadModelActor {
+        CoreDataReadModelActor(
+            assembly: assembly,
+            currentHerdID: { self.selection.currentHerdID }
+        )
+    }
+
+    func seedAnimalWithID(
+        _ animalID: UUID,
+        input: AnimalInput
+    ) throws -> AnimalDetailSnapshot {
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            guard let herd = try assembly.lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            if try assembly.lookup.herdOwned(
+                CDAnimal.self,
+                id: animalID,
+                herdID: herdID,
+                in: context
+            ) != nil {
+                throw CoreDataPersistenceError.duplicateApplicationID(
+                    entity: CDAnimal.coreDataEntityName,
+                    id: animalID,
+                    herdID: herdID
+                )
+            }
+
+            let pasture = try CoreDataAnimalMutation.resolvePasture(
+                id: input.pastureID,
+                herdID: herdID,
+                lookup: assembly.lookup,
+                in: context
+            )
+            let sire = try CoreDataAnimalMutation.resolveAnimal(
+                id: input.sireID,
+                herdID: herdID,
+                lookup: assembly.lookup,
+                in: context
+            )
+            let dam = try CoreDataAnimalMutation.resolveAnimal(
+                id: input.damID,
+                herdID: herdID,
+                lookup: assembly.lookup,
+                in: context
+            )
+            let statusReference = try CoreDataAnimalMutation.resolveStatusReference(
+                id: input.statusReferenceID,
+                herdID: herdID,
+                lookup: assembly.lookup,
+                in: context
+            )
+            try CoreDataAnimalMutation.validateAnimal(
+                birthDate: input.birthDate,
+                status: input.status,
+                saleDate: input.saleDate,
+                deathDate: input.deathDate,
+                animalID: animalID,
+                sire: sire,
+                dam: dam
+            )
+
+            let animal = CDAnimal(context: context)
+            animal.id = animalID
+            animal.editorRevision = UUID()
+            animal.name = input.name
+            animal.sexRawValue = input.sex.rawValue
+            animal.birthDate = input.birthDate
+            animal.statusRawValue = input.status.rawValue
+            animal.saleDate = input.saleDate
+            animal.salePrice = input.salePrice.map { NSNumber(value: $0) }
+            animal.reasonSold = input.reasonSold
+            animal.deathDate = input.deathDate
+            animal.causeOfDeath = input.causeOfDeath
+            animal.isArchived = false
+            animal.archivedAt = nil
+            animal.archiveReason = nil
+            animal.distinguishingFeaturesData = try CoreDataAnimalPayloadCodec
+                .encodeDistinguishingFeatures(input.distinguishingFeatures)
+            animal.herd = herd
+            animal.statusReference = statusReference
+            animal.currentPasture = pasture
+            animal.sire = sire
+            animal.dam = dam
+            animal.activeWorkingSession = nil
+
+            let normalizedTagNumber = input.tagNumber
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !normalizedTagNumber.isEmpty {
+                let tag = CDAnimalTag(context: context)
+                tag.id = UUID()
+                tag.number = normalizedTagNumber
+                tag.isPrimary = true
+                tag.isActive = true
+                tag.assignedAt = Date(timeIntervalSinceReferenceDate: 2_000)
+                tag.removedAt = nil
+                tag.color = try CoreDataAnimalMutation.resolveTagColor(
+                    id: input.tagColorID,
+                    herd: herd,
+                    lookup: assembly.lookup,
+                    in: context
+                )
+                tag.herd = herd
+                tag.animal = animal
+            }
+
+            try context.save()
+        }
+
+        guard let detail = try makeAnimalRepository().fetchAnimalDetail(id: animalID) else {
+            throw AnimalValidationError.animalNotFound
+        }
+        return detail
     }
 
     func tagColorRowCount(id: UUID) throws -> Int {
