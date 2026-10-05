@@ -468,7 +468,7 @@ enum HomeSupportingReadModelContract {
 
     private static func assertTreatmentTemplateHomeState(
         expectedTemplateIDs: [UUID],
-        immediateRepository: any WorkingRepository,
+        immediateRepository: any WorkingContractRepository,
         fixture: HomeSupportingReadModelContractFixture,
         file: StaticString,
         line: UInt
