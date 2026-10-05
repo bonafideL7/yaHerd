@@ -58,9 +58,16 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
+            try context.setQueryGenerationFrom(.current)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+
+            try Self.validateUnresolvedFindingAggregationGraph(
+                herd: herd,
+                herdID: herdID,
+                in: context
+            )
 
             let sessionRequest = NSFetchRequest<CDFieldCheckSession>(
                 entityName: CDFieldCheckSession.coreDataEntityName
@@ -70,11 +77,11 @@ actor CoreDataReadModelActor:
                 herd == %@ AND (
                     completedAt == nil OR
                     SUBQUERY(animalChecks, $check, $check.missingConfirmedAt != nil).@count > 0 OR
-                    SUBQUERY(findings, $finding, $finding.statusRawValue != %@).@count > 0
+                    SUBQUERY(findings, $finding, $finding.statusRawValue IN %@).@count > 0
                 )
                 """,
                 herd,
-                FieldCheckFindingStatus.resolved.rawValue
+                Self.unresolvedFindingStatusRawValues
             )
             sessionRequest.sortDescriptors = [
                 NSSortDescriptor(key: "startedAt", ascending: false),
@@ -99,9 +106,10 @@ actor CoreDataReadModelActor:
                 entityName: CDFieldCheckFinding.coreDataEntityName
             )
             findingRequest.predicate = NSPredicate(
-                format: "herd == %@ AND statusRawValue != %@",
+                format: "herd == %@ AND session.herd == %@ AND statusRawValue IN %@",
                 herd,
-                FieldCheckFindingStatus.resolved.rawValue
+                herd,
+                Self.unresolvedFindingStatusRawValues
             )
             let openFindingCount = try context.count(for: findingRequest)
 
@@ -202,6 +210,46 @@ actor CoreDataReadModelActor:
 
     private static func normalizedLimit(_ requestedLimit: Int) -> Int {
         min(max(requestedLimit, 1), ReadPageRequest.maximumLimit)
+    }
+
+    private static let unresolvedFindingStatusRawValues = [
+        FieldCheckFindingStatus.open.rawValue,
+        FieldCheckFindingStatus.monitoring.rawValue
+    ]
+
+    private static let validFindingStatusRawValues = FieldCheckFindingStatus.allCases.map(\.rawValue)
+
+    private static func validateUnresolvedFindingAggregationGraph(
+        herd: CDHerd,
+        herdID: UUID,
+        in context: NSManagedObjectContext
+    ) throws {
+        let corruptRequest = NSFetchRequest<CDFieldCheckFinding>(
+            entityName: CDFieldCheckFinding.coreDataEntityName
+        )
+        corruptRequest.predicate = NSPredicate(
+            format: """
+            herd == %@ AND (
+                session.herd != %@ OR
+                NOT (statusRawValue IN %@)
+            )
+            """,
+            herd,
+            herd,
+            validFindingStatusRawValues
+        )
+        corruptRequest.fetchLimit = 1
+        corruptRequest.relationshipKeyPathsForPrefetching = ["session"]
+
+        guard let finding = try context.fetch(corruptRequest).first else {
+            return
+        }
+
+        try validateFindingRelationship(
+            finding,
+            herdID: herdID
+        )
+        _ = try FieldCheckMapper.makeFindingSnapshot(from: finding)
     }
 
     private static func validateFieldCheckWarningGraph(
