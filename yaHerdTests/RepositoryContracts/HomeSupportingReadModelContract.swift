@@ -63,6 +63,7 @@ enum HomeSupportingReadModelContract {
         )
 
         let writer = fixture.makeFieldCheckRepository()
+        let homeReader = fixture.makeHomeFieldCheckQueryReader()
         let controlSessionID = try await writer.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
@@ -84,6 +85,7 @@ enum HomeSupportingReadModelContract {
             expectedWarningSessionIDs: [],
             expectedOpenFindingCount: 0,
             immediateRepository: writer,
+            reader: homeReader,
             fixture: fixture,
             file: file,
             line: line
@@ -100,6 +102,7 @@ enum HomeSupportingReadModelContract {
             expectedWarningSessionIDs: [unfinishedSessionID],
             expectedOpenFindingCount: 0,
             immediateRepository: writer,
+            reader: homeReader,
             fixture: fixture,
             file: file,
             line: line
@@ -127,6 +130,7 @@ enum HomeSupportingReadModelContract {
             expectedWarningSessionIDs: [missingSessionID, unfinishedSessionID],
             expectedOpenFindingCount: 0,
             immediateRepository: writer,
+            reader: homeReader,
             fixture: fixture,
             file: file,
             line: line
@@ -167,6 +171,7 @@ enum HomeSupportingReadModelContract {
             ],
             expectedOpenFindingCount: 1,
             immediateRepository: writer,
+            reader: homeReader,
             fixture: fixture,
             file: file,
             line: line
@@ -208,6 +213,7 @@ enum HomeSupportingReadModelContract {
             ],
             expectedOpenFindingCount: 2,
             immediateRepository: writer,
+            reader: homeReader,
             fixture: fixture,
             file: file,
             line: line
@@ -228,6 +234,7 @@ enum HomeSupportingReadModelContract {
             ],
             expectedOpenFindingCount: 1,
             immediateRepository: writer,
+            reader: homeReader,
             fixture: fixture,
             file: file,
             line: line
@@ -247,6 +254,7 @@ enum HomeSupportingReadModelContract {
             ],
             expectedOpenFindingCount: 0,
             immediateRepository: writer,
+            reader: homeReader,
             fixture: fixture,
             file: file,
             line: line
@@ -263,6 +271,7 @@ enum HomeSupportingReadModelContract {
             expectedWarningSessionIDs: [unfinishedSessionID],
             expectedOpenFindingCount: 0,
             immediateRepository: writer,
+            reader: homeReader,
             fixture: fixture,
             file: file,
             line: line
@@ -273,6 +282,7 @@ enum HomeSupportingReadModelContract {
             expectedWarningSessionIDs: [],
             expectedOpenFindingCount: 0,
             immediateRepository: writer,
+            reader: homeReader,
             fixture: fixture,
             file: file,
             line: line
@@ -300,6 +310,7 @@ enum HomeSupportingReadModelContract {
         line: UInt = #line
     ) async throws {
         let working = fixture.makeWorkingTemplateRepository()
+        let homeReader = fixture.makeHomeWorkingQueryReader()
 
         let controlID = try working.createTemplate(
             name: "Zulu Home Control",
@@ -318,6 +329,7 @@ enum HomeSupportingReadModelContract {
         try await assertTreatmentTemplateHomeState(
             expectedTemplateIDs: [targetID, controlID],
             immediateRepository: working,
+            reader: homeReader,
             fixture: fixture,
             file: file,
             line: line
@@ -343,6 +355,7 @@ enum HomeSupportingReadModelContract {
         try await assertTreatmentTemplateHomeState(
             expectedTemplateIDs: [targetID, controlID],
             immediateRepository: working,
+            reader: homeReader,
             fixture: fixture,
             file: file,
             line: line
@@ -358,14 +371,14 @@ enum HomeSupportingReadModelContract {
         XCTAssertEqual(updatedTarget.name, "Alpha Home Target Updated", file: file, line: line)
         XCTAssertEqual(updatedTarget.treatmentCount, 3, file: file, line: line)
 
-        let firstOnly = try await fixture.makeHomeWorkingQueryReader()
-            .fetchHomeTreatmentTemplates(limit: 1)
+        let firstOnly = try await homeReader.fetchHomeTreatmentTemplates(limit: 1)
         XCTAssertEqual(firstOnly, [updatedTarget], file: file, line: line)
 
         try working.deleteTemplates(ids: [targetID])
         try await assertTreatmentTemplateHomeState(
             expectedTemplateIDs: [controlID],
             immediateRepository: working,
+            reader: homeReader,
             fixture: fixture,
             file: file,
             line: line
@@ -390,6 +403,7 @@ enum HomeSupportingReadModelContract {
         try await assertTreatmentTemplateHomeState(
             expectedTemplateIDs: [],
             immediateRepository: working,
+            reader: homeReader,
             fixture: fixture,
             file: file,
             line: line
@@ -400,6 +414,7 @@ enum HomeSupportingReadModelContract {
         expectedWarningSessionIDs: [UUID],
         expectedOpenFindingCount: Int,
         immediateRepository: any FieldCheckRepository,
+        reader: any HomeFieldCheckQueryReading,
         fixture: HomeSupportingReadModelContractFixture,
         file: StaticString,
         line: UInt
@@ -413,14 +428,25 @@ enum HomeSupportingReadModelContract {
             line: line
         )
 
-        let freshRepository = fixture.fixture.makeFieldCheckRepository()
+        let freshRepository = fixture.makeFieldCheckRepository()
         let allSessions = try freshRepository.fetchSessions()
         let openFindings = try freshRepository.fetchOpenFindings(limit: 250)
         XCTAssertEqual(immediateSessions, allSessions, file: file, line: line)
         XCTAssertEqual(immediateOpenFindings, openFindings, file: file, line: line)
 
-        let records = try await fixture.makeHomeFieldCheckQueryReader()
+        let records = try await reader.fetchHomeFieldCheckRecords()
+        let freshRecords = try await fixture.makeHomeFieldCheckQueryReader()
             .fetchHomeFieldCheckRecords()
+        XCTAssertEqual(
+            freshRecords.sessions,
+            records.sessions,
+            "A long-lived Home Field Check reader and a fresh reader must observe the same committed state.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(freshRecords.openFindings, records.openFindings, file: file, line: line)
+        XCTAssertEqual(freshRecords.openFindingCount, records.openFindingCount, file: file, line: line)
+        XCTAssertEqual(freshRecords.hasHistory, records.hasHistory, file: file, line: line)
         XCTAssertEqual(records.sessions.map(\.id), expectedWarningSessionIDs, file: file, line: line)
         XCTAssertEqual(records.openFindingCount, expectedOpenFindingCount, file: file, line: line)
         XCTAssertEqual(records.hasHistory, !allSessions.isEmpty, file: file, line: line)
@@ -478,6 +504,7 @@ enum HomeSupportingReadModelContract {
     private static func assertTreatmentTemplateHomeState(
         expectedTemplateIDs: [UUID],
         immediateRepository: any HomeWorkingTreatmentTemplateContractRepository,
+        reader: any HomeWorkingQueryReading,
         fixture: HomeSupportingReadModelContractFixture,
         file: StaticString,
         line: UInt
@@ -487,8 +514,16 @@ enum HomeSupportingReadModelContract {
         XCTAssertEqual(immediate, authoritative, file: file, line: line)
         XCTAssertEqual(authoritative.map(\.id), expectedTemplateIDs, file: file, line: line)
 
-        let production = try await fixture.makeHomeWorkingQueryReader()
+        let production = try await reader.fetchHomeTreatmentTemplates(limit: 250)
+        let freshProduction = try await fixture.makeHomeWorkingQueryReader()
             .fetchHomeTreatmentTemplates(limit: 250)
+        XCTAssertEqual(
+            freshProduction,
+            production,
+            "A long-lived Home treatment-template reader and a fresh reader must observe the same committed state.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(production, authoritative, file: file, line: line)
 
         let home = HomeService().makeSnapshot(
