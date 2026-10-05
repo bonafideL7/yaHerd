@@ -2,14 +2,70 @@ import Foundation
 import XCTest
 @testable import yaHerd
 
-/// Permanent persistence-neutral behavioral contract for `WorkingRepository` implementations.
+/// Test-only, persistence-neutral Working surface used by the permanent behavioral contracts.
 ///
-/// These assertions protect Domain-visible Working behavior that must survive the Core Data cutover.
-/// The contract intentionally has no SwiftData runner. The production Core Data repository will
-/// execute it once the Working persistence surface is implemented.
+/// Reads and treatment-template operations retain the current synchronous Domain shape. Working
+/// session/queue mutations are async here so the same contract can execute the implementation-only
+/// Core Data repository before the Milestone 10 runtime cutover, without changing production ports
+/// or adding a SwiftData runner.
+@MainActor
+protocol WorkingContractRepository {
+    func fetchSessions() throws -> [WorkingSessionSummary]
+    func fetchSessionDetail(id: UUID) throws -> WorkingSessionDetailSnapshot?
+    func fetchQueueItemEditor(
+        sessionID: UUID,
+        queueItemID: UUID
+    ) throws -> WorkingQueueItemEditorSnapshot?
+
+    func fetchTemplates() throws -> [WorkingTreatmentTemplateSummary]
+    func fetchTemplateDetail(id: UUID) throws -> WorkingTreatmentTemplateDetailSnapshot?
+    @discardableResult
+    func createTemplate(name: String, items: [WorkingTreatmentPlanItem]) throws -> UUID
+    func updateTemplate(id: UUID, name: String, items: [WorkingTreatmentPlanItem]) throws
+    func deleteTemplates(ids: [UUID]) throws
+
+    @discardableResult
+    func startSession(input: WorkingSessionStartInput) async throws -> UUID
+    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) async throws
+    func complete(
+        queueItemID: UUID,
+        inSessionID sessionID: UUID,
+        treatmentEntries: [WorkingTreatmentEntryInput],
+        pregnancyCheck: WorkingPregnancyCheckInput?,
+        markCastrated: Bool,
+        observationNotes: String
+    ) async throws
+    func saveEdits(
+        forQueueItemID queueItemID: UUID,
+        inSessionID sessionID: UUID,
+        input: WorkingSessionAnimalEditInput
+    ) async throws
+    func updateSessionTreatments(
+        id: UUID,
+        plannedTreatments: [WorkingTreatmentPlanItem]
+    ) async throws
+    @discardableResult
+    func replacePrimaryTag(
+        forQueueItemID queueItemID: UUID,
+        inSessionID sessionID: UUID,
+        input: WorkingTagReplacementInput
+    ) async throws -> WorkingQueueItemEditorSnapshot
+    func deleteWorkData(
+        forQueueItemID queueItemID: UUID,
+        inSessionID sessionID: UUID
+    ) async throws
+    func completeSession(
+        id: UUID,
+        assignments: [WorkingQueueDestinationAssignment]
+    ) async throws
+    func reopenSession(id: UUID) async throws
+    func deleteSession(id: UUID) async throws
+}
+
+/// Permanent persistence-neutral behavioral contract for Working persistence implementations.
 @MainActor
 struct WorkingRepositoryContractFixture {
-    let makeWorkingRepository: () -> any WorkingRepository
+    let makeWorkingRepository: () -> any WorkingContractRepository
     let makeAnimalRepository: () -> any AnimalRepository
     let makePastureRepository: () -> any PastureRepository
     let makeTagColorRepository: () -> any TagColorRepository
