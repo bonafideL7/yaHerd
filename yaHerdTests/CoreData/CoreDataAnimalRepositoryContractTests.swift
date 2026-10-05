@@ -1669,7 +1669,7 @@ private final class CoreDataAnimalContractEnvironment {
                 herdID: herdID,
                 in: context
             ) else {
-                throw CoreDataAnimalRepositoryError.aggregateNotFound(animalID)
+                throw AnimalValidationError.animalNotFound
             }
 
             let sourcePasture = animal.currentPasture
