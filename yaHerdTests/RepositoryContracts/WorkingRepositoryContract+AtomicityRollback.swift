@@ -107,7 +107,7 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Start Rollback Source", using: fixture)
         let first = try makeAnimal(name: "Start Rollback One", tagNumber: "SR101", sex: .female, pastureID: source.id, using: fixture)
         let second = try makeAnimal(name: "Start Rollback Two", tagNumber: "SR102", sex: .male, pastureID: source.id, using: fixture)
@@ -125,7 +125,7 @@ extension WorkingRepositoryContract {
         var stagedSessionID: UUID?
         var stagedQueueItemIDs = Set<UUID>()
 
-        XCTAssertThrowsError(
+        await XCTAssertThrowsErrorAsync(
             try failureInjection.startSessionFailingAfterQueueStaged(input),
             file: file,
             line: line
@@ -157,13 +157,13 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Collect Rollback Source", using: fixture)
         let existing = try makeAnimal(name: "Collect Existing", tagNumber: "CR100", sex: .female, pastureID: source.id, using: fixture)
         let firstCandidate = try makeAnimal(name: "Collect Candidate One", tagNumber: "CR101", sex: .female, pastureID: source.id, using: fixture)
         let secondCandidate = try makeAnimal(name: "Collect Candidate Two", tagNumber: "CR102", sex: .male, pastureID: source.id, using: fixture)
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 2),
                 sourcePastureID: source.id,
@@ -178,7 +178,7 @@ extension WorkingRepositoryContract {
         let beforeSecond = try XCTUnwrap(fixture.makeAnimalRepository().fetchAnimalDetail(id: secondCandidate.id), file: file, line: line)
         var stagedQueueIDs = Set<UUID>()
 
-        XCTAssertThrowsError(
+        await XCTAssertThrowsErrorAsync(
             try failureInjection.collectAnimalsFailingAfterQueueStaged(
                 sessionID,
                 [firstCandidate.id, secondCandidate.id]
@@ -214,7 +214,7 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Completion Rollback Source", using: fixture)
         let animal = try makeAnimal(
             name: "Working Completion Rollback Cow",
@@ -225,7 +225,7 @@ extension WorkingRepositoryContract {
         )
         let treatmentID = UUID()
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 3),
                 sourcePastureID: source.id,
@@ -259,7 +259,7 @@ extension WorkingRepositoryContract {
         )
         let beforeRaw = try failureInjection.persistedWorkDataIDs(sessionID, animal.id)
 
-        XCTAssertThrowsError(
+        await XCTAssertThrowsErrorAsync(
             try failureInjection.completeQueueItemFailingAfterMutationStaged(
                 sessionID,
                 queueItemID,
@@ -333,13 +333,13 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Data Rollback Source", using: fixture)
         let destination = try makePasture(named: "Working Data Rollback Destination", using: fixture)
         let animal = try makeAnimal(name: "Data Rollback Cow", tagNumber: "DR201", sex: .female, pastureID: source.id, using: fixture)
         let treatmentID = UUID()
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 3),
                 sourcePastureID: source.id,
@@ -349,7 +349,7 @@ extension WorkingRepositoryContract {
             )
         )
         let queueItemID = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID)?.queueItems.first?.id, file: file, line: line)
-        try repository.complete(
+        try await repository.complete(
             queueItemID: queueItemID,
             inSessionID: sessionID,
             treatmentEntries: [
@@ -398,7 +398,7 @@ extension WorkingRepositoryContract {
             observationNotes: "Replacement rollback observation"
         )
 
-        XCTAssertThrowsError(
+        await XCTAssertThrowsErrorAsync(
             try failureInjection.replaceWorkDataFailingAfterMutationStaged(
                 sessionID,
                 queueItemID,
@@ -438,7 +438,7 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Reset Rollback Source", using: fixture)
         let destination = try makePasture(named: "Working Reset Rollback Destination", using: fixture)
         let animal = try makeAnimal(
@@ -450,7 +450,7 @@ extension WorkingRepositoryContract {
         )
         let treatmentID = UUID()
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 4),
                 sourcePastureID: source.id,
@@ -466,7 +466,7 @@ extension WorkingRepositoryContract {
             file: file,
             line: line
         )
-        try repository.saveEdits(
+        try await repository.saveEdits(
             forQueueItemID: queueItemID,
             inSessionID: sessionID,
             input: WorkingSessionAnimalEditInput(
@@ -512,7 +512,7 @@ extension WorkingRepositoryContract {
         )
         let beforeRaw = try failureInjection.persistedWorkDataIDs(sessionID, animal.id)
 
-        XCTAssertThrowsError(
+        await XCTAssertThrowsErrorAsync(
             try failureInjection.deleteWorkDataFailingAfterCleanupStaged(
                 sessionID,
                 queueItemID
@@ -567,7 +567,7 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Tag Rollback Source", using: fixture)
         let replacementColor = TagColorSnapshot(
             name: "Working Tag Rollback Color",
@@ -583,7 +583,7 @@ extension WorkingRepositoryContract {
             using: fixture
         )
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 4),
                 sourcePastureID: source.id,
@@ -618,7 +618,7 @@ extension WorkingRepositoryContract {
         let beforeRawTagIDs = try failureInjection.persistedAnimalTagIDs(animal.id)
         var stagedReplacementTagID: UUID?
 
-        XCTAssertThrowsError(
+        await XCTAssertThrowsErrorAsync(
             try failureInjection.replacePrimaryTagFailingAfterMutationStaged(
                 sessionID,
                 queueItemID,
@@ -691,7 +691,7 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeWorkingRepository()
         let firstID = try repository.createTemplate(
             name: "Working Delete Rollback Alpha",
@@ -720,7 +720,7 @@ extension WorkingRepositoryContract {
         let beforeRawIDs = try failureInjection.persistedTemplateIDs()
         var stagedIDs = Set<UUID>()
 
-        XCTAssertThrowsError(
+        await XCTAssertThrowsErrorAsync(
             try failureInjection.deleteTemplatesFailingAfterDeletionStaged(
                 [firstID, secondID]
             ),
@@ -782,13 +782,13 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Finish Rollback Source", using: fixture)
         let destination = try makePasture(named: "Working Finish Rollback Destination", using: fixture)
         let first = try makeAnimal(name: "Finish Rollback One", tagNumber: "FR301", sex: .female, pastureID: source.id, using: fixture)
         let second = try makeAnimal(name: "Finish Rollback Two", tagNumber: "FR302", sex: .male, pastureID: source.id, using: fixture)
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 5),
                 sourcePastureID: source.id,
@@ -849,7 +849,7 @@ extension WorkingRepositoryContract {
         var stagedMovedAnimalID: UUID?
         var stagedDestinationQueueItemIDs = Set<UUID>()
 
-        XCTAssertThrowsError(
+        await XCTAssertThrowsErrorAsync(
             try failureInjection.completeSessionFailingAfterMovementStaged(sessionID, assignments),
             file: file,
             line: line
@@ -923,13 +923,13 @@ extension WorkingRepositoryContract {
         failureInjection: WorkingRollbackFailureInjection,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Delete Rollback Source", using: fixture)
         let first = try makeAnimal(name: "Delete Rollback One", tagNumber: "XR401", sex: .female, pastureID: source.id, using: fixture)
         let second = try makeAnimal(name: "Delete Rollback Two", tagNumber: "XR402", sex: .female, pastureID: source.id, using: fixture)
         let treatmentID = UUID()
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 6),
                 sourcePastureID: source.id,
@@ -940,7 +940,7 @@ extension WorkingRepositoryContract {
         )
         let beforeSession = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID), file: file, line: line)
         let firstQueueID = try XCTUnwrap(beforeSession.queueItems.first { $0.animalID == first.id }?.id, file: file, line: line)
-        try repository.complete(
+        try await repository.complete(
             queueItemID: firstQueueID,
             inSessionID: sessionID,
             treatmentEntries: [
@@ -976,7 +976,7 @@ extension WorkingRepositoryContract {
         let beforeQueueIDs = try failureInjection.persistedQueueItemIDs()
         var stagedRestoredAnimalID: UUID?
 
-        XCTAssertThrowsError(
+        await XCTAssertThrowsErrorAsync(
             try failureInjection.deleteSessionFailingAfterCleanupStaged(sessionID),
             file: file,
             line: line
