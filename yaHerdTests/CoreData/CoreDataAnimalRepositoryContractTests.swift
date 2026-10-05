@@ -40,6 +40,45 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         try AnimalRepositoryContract.assertDeleteRemovesAggregate(using: environment.repositoryFixture)
     }
 
+    func testMilestone9ActiveHerdLifecyclePropagatesToDashboard() async throws {
+        let environment = try await makeReadModelEnvironment()
+        let fixture = AnimalActiveHerdReadProjectionContractFixture(
+            animalFixture: environment.repositoryFixture,
+            makeAnimalListQueryReader: {
+                environment.makeAnimalListQueryReader()
+            },
+            makeDashboardQueryReader: {
+                environment.makeDashboardQueryReader()
+            }
+        )
+
+        try await AnimalRepositoryContract
+            .assertActiveHerdLifecyclePropagatesToPastureAndDashboard(
+                using: fixture
+            )
+    }
+
+    func testMilestone9PastureRenamePropagatesToDashboard() async throws {
+        let environment = try await makeReadModelEnvironment()
+        let fixture = AnimalPastureRenameReadProjectionContractFixture(
+            animalFixture: environment.repositoryFixture,
+            makeAggregateReader: {
+                environment.makeAnimalRepository()
+            },
+            makeAnimalListQueryReader: {
+                environment.makeAnimalListQueryReader()
+            },
+            makeDashboardQueryReader: {
+                environment.makeDashboardQueryReader()
+            }
+        )
+
+        try await AnimalRepositoryContract
+            .assertPastureRenamePropagatesToLiveAnimalProjections(
+                using: fixture
+            )
+    }
+
     func testMilestone9AnimalListPaginationAndPastureOptions() async throws {
         let environment = try await makeReadModelEnvironment()
         let fixture = AnimalListReadProjectionContractFixture(
@@ -1587,6 +1626,13 @@ private final class CoreDataAnimalContractEnvironment {
     }
 
     func makeAnimalListQueryReader() -> CoreDataReadModelActor {
+        CoreDataReadModelActor(
+            assembly: assembly,
+            currentHerdID: { self.selection.currentHerdID }
+        )
+    }
+
+    func makeDashboardQueryReader() -> CoreDataReadModelActor {
         CoreDataReadModelActor(
             assembly: assembly,
             currentHerdID: { self.selection.currentHerdID }
