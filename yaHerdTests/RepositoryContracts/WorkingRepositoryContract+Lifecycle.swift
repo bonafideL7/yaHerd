@@ -836,13 +836,13 @@ extension WorkingRepositoryContract {
             line: line
         )
 
-        try assertSessionAlreadyFinished(file: file, line: line) {
+        await assertSessionAlreadyFinished(file: file, line: line) {
             try await fixture.makeWorkingRepository().collectAnimals(
                 sessionID: sessionID,
                 animalIDs: [collectionCandidate.id]
             )
         }
-        try assertSessionAlreadyFinished(file: file, line: line) {
+        await assertSessionAlreadyFinished(file: file, line: line) {
             try await fixture.makeWorkingRepository().complete(
                 queueItemID: queueItemID,
                 inSessionID: sessionID,
@@ -852,7 +852,7 @@ extension WorkingRepositoryContract {
                 observationNotes: "Should not persist"
             )
         }
-        try assertSessionAlreadyFinished(file: file, line: line) {
+        await assertSessionAlreadyFinished(file: file, line: line) {
             try await fixture.makeWorkingRepository().saveEdits(
                 forQueueItemID: queueItemID,
                 inSessionID: sessionID,
@@ -867,19 +867,19 @@ extension WorkingRepositoryContract {
                 )
             )
         }
-        try assertSessionAlreadyFinished(file: file, line: line) {
+        await assertSessionAlreadyFinished(file: file, line: line) {
             try await fixture.makeWorkingRepository().deleteWorkData(
                 forQueueItemID: queueItemID,
                 inSessionID: sessionID
             )
         }
-        try assertSessionAlreadyFinished(file: file, line: line) {
+        await assertSessionAlreadyFinished(file: file, line: line) {
             try await fixture.makeWorkingRepository().updateSessionTreatments(
                 id: sessionID,
                 plannedTreatments: [WorkingTreatmentPlanItem(id: treatment.id, name: "Should Not Persist")]
             )
         }
-        try assertSessionAlreadyFinished(file: file, line: line) {
+        await assertSessionAlreadyFinished(file: file, line: line) {
             _ = try await fixture.makeWorkingRepository().replacePrimaryTag(
                 forQueueItemID: queueItemID,
                 inSessionID: sessionID,
@@ -926,10 +926,10 @@ extension WorkingRepositoryContract {
     private static func assertSessionAlreadyFinished(
         file: StaticString,
         line: UInt,
-        operation: () throws -> Void
-    ) throws {
-        XCTAssertThrowsError(
-            try operation(),
+        operation: () async throws -> Void
+    ) async {
+        await XCTAssertThrowsErrorAsync(
+            try await operation(),
             file: file,
             line: line
         ) { error in
