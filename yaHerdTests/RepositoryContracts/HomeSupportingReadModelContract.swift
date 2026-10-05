@@ -9,9 +9,19 @@ import XCTest
 /// and feature-local read semantics. This contract owns only the requirement that committed feature
 /// state is projected consistently through the production async Home readers.
 @MainActor
+protocol HomeWorkingTreatmentTemplateContractRepository:
+    WorkingTreatmentTemplateListReader,
+    WorkingTreatmentTemplateCreating,
+    WorkingTreatmentTemplateUpdating,
+    WorkingTreatmentTemplateDeleting
+{}
+
+@MainActor
 struct HomeSupportingReadModelContractFixture {
-    let fieldCheckFixture: FieldCheckRepositoryContractFixture
-    let workingFixture: WorkingRepositoryContractFixture
+    let makeFieldCheckRepository: () -> any FieldCheckRepository
+    let makeAnimalRepository: () -> any AnimalRepository
+    let makePastureCreator: () -> any PastureCreating
+    let makeWorkingTemplateRepository: () -> any HomeWorkingTreatmentTemplateContractRepository
     let makeHomeFieldCheckQueryReader: () -> any HomeFieldCheckQueryReading
     let makeHomeWorkingQueryReader: () -> any HomeWorkingQueryReading
 }
@@ -23,8 +33,7 @@ enum HomeSupportingReadModelContract {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async throws {
-        let fieldCheckFixture = fixture.fieldCheckFixture
-        let pasture = try fieldCheckFixture.makePastureRepository().create(
+        let pasture = try fixture.makePastureCreator().create(
             input: PastureInput(
                 name: "Home Field Check Contract Pasture",
                 acreage: 20,
@@ -32,7 +41,7 @@ enum HomeSupportingReadModelContract {
                 targetAcresPerHead: 1.5
             )
         )
-        _ = try fieldCheckFixture.makeAnimalRepository().create(
+        _ = try fixture.makeAnimalRepository().create(
             input: AnimalInput(
                 name: "Home Field Check Contract Cow",
                 tagNumber: "HFC01",
@@ -53,7 +62,7 @@ enum HomeSupportingReadModelContract {
             )
         )
 
-        let writer = fieldCheckFixture.makeFieldCheckRepository()
+        let writer = fixture.makeFieldCheckRepository()
         let controlSessionID = try await writer.createSession(
             input: FieldCheckSessionStartInput(
                 pastureID: pasture.id,
@@ -64,7 +73,7 @@ enum HomeSupportingReadModelContract {
         try await writer.completeSession(id: controlSessionID)
 
         let controlBefore = try XCTUnwrap(
-            fieldCheckFixture.makeFieldCheckRepository()
+            fixture.makeFieldCheckRepository()
                 .fetchSessions()
                 .first { $0.id == controlSessionID },
             file: file,
@@ -270,7 +279,7 @@ enum HomeSupportingReadModelContract {
         )
 
         let controlAfter = try XCTUnwrap(
-            fieldCheckFixture.makeFieldCheckRepository()
+            fixture.makeFieldCheckRepository()
                 .fetchSessions()
                 .first { $0.id == controlSessionID },
             file: file,
@@ -290,7 +299,7 @@ enum HomeSupportingReadModelContract {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async throws {
-        let working = fixture.workingFixture.makeWorkingRepository()
+        let working = fixture.makeWorkingTemplateRepository()
 
         let controlID = try working.createTemplate(
             name: "Zulu Home Control",
@@ -315,7 +324,7 @@ enum HomeSupportingReadModelContract {
         )
 
         let controlBefore = try XCTUnwrap(
-            fixture.workingFixture.makeWorkingRepository()
+            fixture.makeWorkingTemplateRepository()
                 .fetchTemplates()
                 .first { $0.id == controlID },
             file: file,
@@ -340,7 +349,7 @@ enum HomeSupportingReadModelContract {
         )
 
         let updatedTarget = try XCTUnwrap(
-            fixture.workingFixture.makeWorkingRepository()
+            fixture.makeWorkingTemplateRepository()
                 .fetchTemplates()
                 .first { $0.id == targetID },
             file: file,
@@ -363,7 +372,7 @@ enum HomeSupportingReadModelContract {
         )
 
         let controlAfterTargetDeletion = try XCTUnwrap(
-            fixture.workingFixture.makeWorkingRepository()
+            fixture.makeWorkingTemplateRepository()
                 .fetchTemplates()
                 .first { $0.id == controlID },
             file: file,
@@ -404,7 +413,7 @@ enum HomeSupportingReadModelContract {
             line: line
         )
 
-        let freshRepository = fixture.fieldCheckFixture.makeFieldCheckRepository()
+        let freshRepository = fixture.fixture.makeFieldCheckRepository()
         let allSessions = try freshRepository.fetchSessions()
         let openFindings = try freshRepository.fetchOpenFindings(limit: 250)
         XCTAssertEqual(immediateSessions, allSessions, file: file, line: line)
@@ -468,13 +477,13 @@ enum HomeSupportingReadModelContract {
 
     private static func assertTreatmentTemplateHomeState(
         expectedTemplateIDs: [UUID],
-        immediateRepository: any WorkingContractRepository,
+        immediateRepository: any HomeWorkingTreatmentTemplateContractRepository,
         fixture: HomeSupportingReadModelContractFixture,
         file: StaticString,
         line: UInt
     ) async throws {
         let immediate = try immediateRepository.fetchTemplates()
-        let authoritative = try fixture.workingFixture.makeWorkingRepository().fetchTemplates()
+        let authoritative = try fixture.makeWorkingTemplateRepository().fetchTemplates()
         XCTAssertEqual(immediate, authoritative, file: file, line: line)
         XCTAssertEqual(authoritative.map(\.id), expectedTemplateIDs, file: file, line: line)
 
