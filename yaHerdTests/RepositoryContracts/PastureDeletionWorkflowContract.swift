@@ -211,7 +211,7 @@ enum PastureDeletionWorkflowContract {
             )
         )
         let workingRepository = fixture.makeWorkingRepository()
-        let workingSessionID = try workingRepository.startSession(
+        let workingSessionID = try await workingRepository.startSession(
             input: WorkingSessionStartInput(
                 date: workingStartedAt,
                 sourcePastureID: firstPasture.id,
@@ -233,7 +233,7 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
-        try workingRepository.complete(
+        try await workingRepository.complete(
             queueItemID: workingQueueItemID,
             inSessionID: workingSessionID,
             treatmentEntries: [
@@ -288,7 +288,7 @@ enum PastureDeletionWorkflowContract {
         XCTAssertNotNil(workingEditorBeforeDeletion.pregnancyCheck, file: file, line: line)
         let workingAnimalAgeInMonthsBeforeDeletion = workingEditorBeforeDeletion.animalAgeInMonths
 
-        try workingRepository.saveEdits(
+        try await workingRepository.saveEdits(
             forQueueItemID: workingQueueItemID,
             inSessionID: workingSessionID,
             input: WorkingSessionAnimalEditInput(
@@ -348,7 +348,7 @@ enum PastureDeletionWorkflowContract {
             line: line
         )
 
-        let finishedWorkingSessionID = try workingRepository.startSession(
+        let finishedWorkingSessionID = try await workingRepository.startSession(
             input: WorkingSessionStartInput(
                 date: finishedWorkingStartedAt,
                 sourcePastureID: secondPasture.id,
@@ -370,7 +370,7 @@ enum PastureDeletionWorkflowContract {
             file: file,
             line: line
         )
-        try workingRepository.complete(
+        try await workingRepository.complete(
             queueItemID: finishedWorkingQueueItemID,
             inSessionID: finishedWorkingSessionID,
             treatmentEntries: [],
@@ -403,7 +403,7 @@ enum PastureDeletionWorkflowContract {
             line: line
         )
         XCTAssertTrue(finishedWorkingEditorBeforeDeletion.castrationPerformedInSession, file: file, line: line)
-        try workingRepository.completeSession(
+        try await workingRepository.completeSession(
             id: finishedWorkingSessionID,
             assignments: [
                 WorkingQueueDestinationAssignment(
@@ -419,7 +419,7 @@ enum PastureDeletionWorkflowContract {
         )
         XCTAssertEqual(finishedWorkingSessionBeforeDeletion.status, .finished, file: file, line: line)
 
-        let controlWorkingSessionID = try workingRepository.startSession(
+        let controlWorkingSessionID = try await workingRepository.startSession(
             input: WorkingSessionStartInput(
                 date: controlWorkingStartedAt,
                 sourcePastureID: controlPasture.id,
