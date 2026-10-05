@@ -25,6 +25,16 @@ struct AnimalPastureRenameReadProjectionContractFixture {
 }
 
 @MainActor
+struct AnimalListFilteredQueryContractFixture {
+    let animalFixture: AnimalRepositoryContractFixture
+    let makeFilteredQueryReader: () -> any AnimalListFilteredQueryReading
+
+    /// Setup-only control used to establish live Working ownership for location-filter coverage.
+    /// The target runner must update the same isolated backing store used by the fixture.
+    let assignWorkingOwnership: (_ animalID: UUID) throws -> Void
+}
+
+@MainActor
 struct AnimalListReadProjectionContractFixture {
     let animalFixture: AnimalRepositoryContractFixture
     let makeAnimalListQueryReader: () -> any AnimalListQueryReading
@@ -1950,6 +1960,241 @@ extension AnimalRepositoryContract {
         )
     }
 
+    static func assertFilteredAnimalListQueryReduction(
+        using fixture: AnimalListFilteredQueryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        let repository = fixture.animalFixture.makeAnimalRepository()
+        let pastures = fixture.animalFixture.makePastureRepository()
+        let pastureAlpha = try pastures.create(
+            input: PastureInput(
+                name: "Filtered Alpha Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let pastureBeta = try pastures.create(
+            input: PastureInput(
+                name: "Filtered Beta Pasture",
+                acreage: 24,
+                usableAcreage: 22,
+                targetAcresPerHead: 1.5
+            )
+        )
+
+        // Construct before writes so a long-lived reader must observe later commits.
+        let reader = fixture.makeFilteredQueryReader()
+
+        let alpha = try repository.create(
+            input: readModelAnimalInput(
+                name: "Filtered Alpha Cow",
+                tagNumber: "A100",
+                sex: .female,
+                birthDate: contractDate(year: 2018, month: 1, day: 1),
+                pastureID: pastureAlpha.id
+            )
+        )
+        let beta = try repository.create(
+            input: readModelAnimalInput(
+                name: "Filtered Beta Bull",
+                tagNumber: "B200",
+                sex: .male,
+                birthDate: contractDate(year: 2017, month: 2, day: 2),
+                pastureID: pastureBeta.id
+            )
+        )
+        let untagged = try repository.create(
+            input: readModelAnimalInput(
+                name: "Filtered No Pasture",
+                tagNumber: "",
+                sex: .unknown,
+                birthDate: contractDate(year: 2019, month: 3, day: 3)
+            )
+        )
+        let removed = try repository.create(
+            input: readModelAnimalInput(
+                name: "Filtered Removed Cow",
+                tagNumber: "D300",
+                sex: .female,
+                birthDate: contractDate(year: 2016, month: 4, day: 4),
+                status: .dead,
+                pastureID: pastureAlpha.id,
+                deathDate: contractDate(year: 2026, month: 1, day: 1),
+                causeOfDeath: "Filtered query contract"
+            )
+        )
+        let archived = try repository.create(
+            input: readModelAnimalInput(
+                name: "Filtered Archived Cow",
+                tagNumber: "C250",
+                sex: .female,
+                birthDate: contractDate(year: 2015, month: 5, day: 5),
+                pastureID: pastureAlpha.id
+            )
+        )
+        try repository.archive(ids: [archived.id])
+
+        let working = try repository.create(
+            input: readModelAnimalInput(
+                name: "Filtered Working Bull",
+                tagNumber: "W400",
+                sex: .male,
+                birthDate: contractDate(year: 2017, month: 6, day: 6),
+                pastureID: pastureBeta.id
+            )
+        )
+        try fixture.assignWorkingOwnership(working.id)
+
+        try await assertFilteredQueryIDs(
+            [untagged.id, alpha.id, beta.id, working.id],
+            query: AnimalListFilterQuery(),
+            reader: reader,
+            file: file,
+            line: line
+        )
+        try await assertFilteredQueryIDs(
+            [alpha.id],
+            query: AnimalListFilterQuery(searchText: "alpha"),
+            reader: reader,
+            file: file,
+            line: line
+        )
+        try await assertFilteredQueryIDs(
+            [beta.id],
+            query: AnimalListFilterQuery(searchText: "b200"),
+            reader: reader,
+            file: file,
+            line: line
+        )
+        try await assertFilteredQueryIDs(
+            [alpha.id],
+            query: AnimalListFilterQuery(sex: .female),
+            reader: reader,
+            file: file,
+            line: line
+        )
+        try await assertFilteredQueryIDs(
+            [removed.id],
+            query: AnimalListFilterQuery(
+                status: .dead,
+                showRemovedStatuses: true
+            ),
+            reader: reader,
+            file: file,
+            line: line
+        )
+        try await assertFilteredQueryIDs(
+            [alpha.id],
+            query: AnimalListFilterQuery(
+                pasture: .pasture(pastureAlpha.id)
+            ),
+            reader: reader,
+            file: file,
+            line: line
+        )
+        try await assertFilteredQueryIDs(
+            [untagged.id],
+            query: AnimalListFilterQuery(pasture: .noPasture),
+            reader: reader,
+            file: file,
+            line: line
+        )
+        try await assertFilteredQueryIDs(
+            [untagged.id, alpha.id, beta.id],
+            query: AnimalListFilterQuery(location: .pasture),
+            reader: reader,
+            file: file,
+            line: line
+        )
+        try await assertFilteredQueryIDs(
+            [working.id],
+            query: AnimalListFilterQuery(location: .workingPen),
+            reader: reader,
+            file: file,
+            line: line
+        )
+        try await assertFilteredQueryIDs(
+            [untagged.id],
+            query: AnimalListFilterQuery(recordIssue: .missingPasture),
+            reader: reader,
+            file: file,
+            line: line
+        )
+        try await assertFilteredQueryIDs(
+            [untagged.id],
+            query: AnimalListFilterQuery(recordIssue: .missingTag),
+            reader: reader,
+            file: file,
+            line: line
+        )
+        try await assertFilteredQueryIDs(
+            [untagged.id],
+            query: AnimalListFilterQuery(recordIssue: .unknownSex),
+            reader: reader,
+            file: file,
+            line: line
+        )
+        try await assertFilteredQueryIDs(
+            [archived.id],
+            query: AnimalListFilterQuery(
+                recordIssue: .archivedActive,
+                showArchivedRecords: true
+            ),
+            reader: reader,
+            file: file,
+            line: line
+        )
+
+        let allVisible = try await fetchFilteredAnimalListContractPages(
+            reader: reader,
+            query: AnimalListFilterQuery(
+                showRemovedStatuses: true,
+                showArchivedRecords: true
+            ),
+            pageSize: 2,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            Set(allVisible.map(\.id)),
+            Set([alpha.id, beta.id, untagged.id, removed.id, archived.id, working.id]),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            allVisible.count,
+            Set(allVisible.map(\.id)).count,
+            "Filtered paging must not duplicate identities across page boundaries.",
+            file: file,
+            line: line
+        )
+
+        let freshReader = fixture.makeFilteredQueryReader()
+        let freshDefault = try await fetchFilteredAnimalListContractPages(
+            reader: freshReader,
+            query: AnimalListFilterQuery(),
+            pageSize: 2,
+            file: file,
+            line: line
+        )
+        let immediateDefault = try await fetchFilteredAnimalListContractPages(
+            reader: reader,
+            query: AnimalListFilterQuery(),
+            pageSize: 2,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            freshDefault,
+            immediateDefault,
+            "Long-lived and fresh filtered readers must observe the same committed state.",
+            file: file,
+            line: line
+        )
+    }
+
     /// Freezes the production async Animal-list paging contract used by `AnimalListViewModel`.
     ///
     /// The list caller advances offsets by the number of returned records while `hasMore` is true,
@@ -2157,6 +2402,66 @@ extension AnimalRepositoryContract {
             file: file,
             line: line
         )
+    }
+
+    private static func assertFilteredQueryIDs(
+        _ expectedIDs: [UUID],
+        query: AnimalListFilterQuery,
+        reader: any AnimalListFilteredQueryReading,
+        file: StaticString,
+        line: UInt
+    ) async throws {
+        let animals = try await fetchFilteredAnimalListContractPages(
+            reader: reader,
+            query: query,
+            pageSize: 2,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            animals.map(\.id),
+            expectedIDs,
+            file: file,
+            line: line
+        )
+    }
+
+    private static func fetchFilteredAnimalListContractPages(
+        reader: any AnimalListFilteredQueryReading,
+        query: AnimalListFilterQuery,
+        pageSize: Int,
+        file: StaticString,
+        line: UInt
+    ) async throws -> [AnimalSummary] {
+        var animals: [AnimalSummary] = []
+        var offset = 0
+
+        while animals.count < 100 {
+            let page = try await reader.fetchAnimalSummaryPage(
+                matching: query,
+                page: ReadPageRequest(offset: offset, limit: pageSize)
+            )
+            animals.append(contentsOf: page.animals)
+            guard page.hasMore else {
+                return animals
+            }
+            guard !page.animals.isEmpty else {
+                XCTFail(
+                    "A filtered page with hasMore must return at least one Animal.",
+                    file: file,
+                    line: line
+                )
+                return animals
+            }
+            offset += page.animals.count
+        }
+
+        XCTFail(
+            "Filtered Animal-list paging did not converge.",
+            file: file,
+            line: line
+        )
+        return animals
     }
 
     private static func fetchAnimalListContractPages(
