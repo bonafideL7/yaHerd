@@ -49,11 +49,11 @@ struct WorkingHistoricalPersistenceInspection {
 struct WorkingRollbackFailureInjection {
     let startSessionFailingAfterQueueStaged: (
         _ input: WorkingSessionStartInput
-    ) throws -> Void
+    ) async throws -> Void
     let collectAnimalsFailingAfterQueueStaged: (
         _ sessionID: UUID,
         _ animalIDs: [UUID]
-    ) throws -> Void
+    ) async throws -> Void
     let completeQueueItemFailingAfterMutationStaged: (
         _ sessionID: UUID,
         _ queueItemID: UUID,
@@ -61,31 +61,31 @@ struct WorkingRollbackFailureInjection {
         _ pregnancyCheck: WorkingPregnancyCheckInput?,
         _ markCastrated: Bool,
         _ observationNotes: String
-    ) throws -> Void
+    ) async throws -> Void
     let replaceWorkDataFailingAfterMutationStaged: (
         _ sessionID: UUID,
         _ queueItemID: UUID,
         _ input: WorkingSessionAnimalEditInput
-    ) throws -> Void
+    ) async throws -> Void
     let replacePrimaryTagFailingAfterMutationStaged: (
         _ sessionID: UUID,
         _ queueItemID: UUID,
         _ input: WorkingTagReplacementInput
-    ) throws -> Void
+    ) async throws -> Void
     let deleteWorkDataFailingAfterCleanupStaged: (
         _ sessionID: UUID,
         _ queueItemID: UUID
-    ) throws -> Void
+    ) async throws -> Void
     let completeSessionFailingAfterMovementStaged: (
         _ sessionID: UUID,
         _ assignments: [WorkingQueueDestinationAssignment]
-    ) throws -> Void
+    ) async throws -> Void
     let deleteSessionFailingAfterCleanupStaged: (
         _ sessionID: UUID
-    ) throws -> Void
+    ) async throws -> Void
     let deleteTemplatesFailingAfterDeletionStaged: (
         _ templateIDs: [UUID]
-    ) throws -> Void
+    ) async throws -> Void
     let persistedQueueItemIDs: () throws -> Set<UUID>
     let persistedWorkDataIDs: (
         _ sessionID: UUID,
@@ -112,7 +112,7 @@ extension WorkingRepositoryContract {
         let first = try makeAnimal(name: "Start Rollback One", tagNumber: "SR101", sex: .female, pastureID: source.id, using: fixture)
         let second = try makeAnimal(name: "Start Rollback Two", tagNumber: "SR102", sex: .male, pastureID: source.id, using: fixture)
         let beforeSessions = try fixture.makeWorkingRepository().fetchSessions()
-        let beforeQueueIDs = try failureInjection.persistedQueueItemIDs()
+        let beforeQueueIDs = try await failureInjection.persistedQueueItemIDs()
         let beforeFirst = try XCTUnwrap(fixture.makeAnimalRepository().fetchAnimalDetail(id: first.id), file: file, line: line)
         let beforeSecond = try XCTUnwrap(fixture.makeAnimalRepository().fetchAnimalDetail(id: second.id), file: file, line: line)
         let input = WorkingSessionStartInput(
@@ -126,7 +126,7 @@ extension WorkingRepositoryContract {
         var stagedQueueItemIDs = Set<UUID>()
 
         await XCTAssertThrowsErrorAsync(
-            try failureInjection.startSessionFailingAfterQueueStaged(input),
+            try await failureInjection.startSessionFailingAfterQueueStaged(input),
             file: file,
             line: line
         ) { error in
@@ -142,7 +142,7 @@ extension WorkingRepositoryContract {
         XCTAssertFalse(stagedQueueItemIDs.isEmpty, "The start failpoint must identify at least one staged queue row.", file: file, line: line)
         XCTAssertEqual(try fixture.makeWorkingRepository().fetchSessions(), beforeSessions, file: file, line: line)
         XCTAssertNil(try fixture.makeWorkingRepository().fetchSessionDetail(id: failedSessionID), file: file, line: line)
-        let afterQueueIDs = try failureInjection.persistedQueueItemIDs()
+        let afterQueueIDs = try await failureInjection.persistedQueueItemIDs()
         XCTAssertEqual(afterQueueIDs, beforeQueueIDs, "Failed session start must not leave orphaned queue rows.", file: file, line: line)
         XCTAssertTrue(stagedQueueItemIDs.isDisjoint(with: afterQueueIDs), file: file, line: line)
 
@@ -173,13 +173,13 @@ extension WorkingRepositoryContract {
             )
         )
         let beforeSession = try XCTUnwrap(fixture.makeWorkingRepository().fetchSessionDetail(id: sessionID), file: file, line: line)
-        let beforeQueueIDs = try failureInjection.persistedQueueItemIDs()
+        let beforeQueueIDs = try await failureInjection.persistedQueueItemIDs()
         let beforeFirst = try XCTUnwrap(fixture.makeAnimalRepository().fetchAnimalDetail(id: firstCandidate.id), file: file, line: line)
         let beforeSecond = try XCTUnwrap(fixture.makeAnimalRepository().fetchAnimalDetail(id: secondCandidate.id), file: file, line: line)
         var stagedQueueIDs = Set<UUID>()
 
         await XCTAssertThrowsErrorAsync(
-            try failureInjection.collectAnimalsFailingAfterQueueStaged(
+            try await failureInjection.collectAnimalsFailingAfterQueueStaged(
                 sessionID,
                 [firstCandidate.id, secondCandidate.id]
             ),
@@ -202,7 +202,7 @@ extension WorkingRepositoryContract {
             file: file,
             line: line
         )
-        let afterQueueIDs = try failureInjection.persistedQueueItemIDs()
+        let afterQueueIDs = try await failureInjection.persistedQueueItemIDs()
         XCTAssertEqual(afterQueueIDs, beforeQueueIDs, "Failed collection must not leak staged queue rows.", file: file, line: line)
         XCTAssertTrue(stagedQueueIDs.isDisjoint(with: afterQueueIDs), file: file, line: line)
         XCTAssertEqual(try fixture.makeAnimalRepository().fetchAnimalDetail(id: firstCandidate.id), beforeFirst, file: file, line: line)
@@ -257,10 +257,10 @@ extension WorkingRepositoryContract {
         let beforeTimeline = Set(
             try fixture.makeAnimalRepository().fetchTimeline(id: animal.id)
         )
-        let beforeRaw = try failureInjection.persistedWorkDataIDs(sessionID, animal.id)
+        let beforeRaw = try await failureInjection.persistedWorkDataIDs(sessionID, animal.id)
 
         await XCTAssertThrowsErrorAsync(
-            try failureInjection.completeQueueItemFailingAfterMutationStaged(
+            try await failureInjection.completeQueueItemFailingAfterMutationStaged(
                 sessionID,
                 queueItemID,
                 [
@@ -320,7 +320,7 @@ extension WorkingRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try failureInjection.persistedWorkDataIDs(sessionID, animal.id),
+            try await failureInjection.persistedWorkDataIDs(sessionID, animal.id),
             beforeRaw,
             "Failed initial queue completion must not leak newly inserted treatment/pregnancy/health children.",
             file: file,
@@ -379,7 +379,7 @@ extension WorkingRepositoryContract {
             line: line
         )
         let beforeTimeline = Set(try fixture.makeAnimalRepository().fetchTimeline(id: animal.id))
-        let beforeRaw = try failureInjection.persistedWorkDataIDs(sessionID, animal.id)
+        let beforeRaw = try await failureInjection.persistedWorkDataIDs(sessionID, animal.id)
         let replacementInput = WorkingSessionAnimalEditInput(
             status: .inProgress,
             completedAt: beforeEditor.completedAt,
@@ -399,7 +399,7 @@ extension WorkingRepositoryContract {
         )
 
         await XCTAssertThrowsErrorAsync(
-            try failureInjection.replaceWorkDataFailingAfterMutationStaged(
+            try await failureInjection.replaceWorkDataFailingAfterMutationStaged(
                 sessionID,
                 queueItemID,
                 replacementInput
@@ -425,7 +425,7 @@ extension WorkingRepositoryContract {
         )
         XCTAssertEqual(Set(try fixture.makeAnimalRepository().fetchTimeline(id: animal.id)), beforeTimeline, file: file, line: line)
         XCTAssertEqual(
-            try failureInjection.persistedWorkDataIDs(sessionID, animal.id),
+            try await failureInjection.persistedWorkDataIDs(sessionID, animal.id),
             beforeRaw,
             "Failed work-data replacement must not leave orphaned replacement children or delete original children.",
             file: file,
@@ -510,10 +510,10 @@ extension WorkingRepositoryContract {
         let beforeTimeline = Set(
             try fixture.makeAnimalRepository().fetchTimeline(id: animal.id)
         )
-        let beforeRaw = try failureInjection.persistedWorkDataIDs(sessionID, animal.id)
+        let beforeRaw = try await failureInjection.persistedWorkDataIDs(sessionID, animal.id)
 
         await XCTAssertThrowsErrorAsync(
-            try failureInjection.deleteWorkDataFailingAfterCleanupStaged(
+            try await failureInjection.deleteWorkDataFailingAfterCleanupStaged(
                 sessionID,
                 queueItemID
             ),
@@ -554,7 +554,7 @@ extension WorkingRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try failureInjection.persistedWorkDataIDs(sessionID, animal.id),
+            try await failureInjection.persistedWorkDataIDs(sessionID, animal.id),
             beforeRaw,
             "Failed work-data reset must restore every removed child row.",
             file: file,
@@ -615,11 +615,11 @@ extension WorkingRepositoryContract {
             file: file,
             line: line
         )
-        let beforeRawTagIDs = try failureInjection.persistedAnimalTagIDs(animal.id)
+        let beforeRawTagIDs = try await failureInjection.persistedAnimalTagIDs(animal.id)
         var stagedReplacementTagID: UUID?
 
         await XCTAssertThrowsErrorAsync(
-            try failureInjection.replacePrimaryTagFailingAfterMutationStaged(
+            try await failureInjection.replacePrimaryTagFailingAfterMutationStaged(
                 sessionID,
                 queueItemID,
                 WorkingTagReplacementInput(
@@ -675,7 +675,7 @@ extension WorkingRepositoryContract {
             file: file,
             line: line
         )
-        let afterRawTagIDs = try failureInjection.persistedAnimalTagIDs(animal.id)
+        let afterRawTagIDs = try await failureInjection.persistedAnimalTagIDs(animal.id)
         XCTAssertEqual(
             afterRawTagIDs,
             beforeRawTagIDs,
@@ -717,11 +717,11 @@ extension WorkingRepositoryContract {
             file: file,
             line: line
         )
-        let beforeRawIDs = try failureInjection.persistedTemplateIDs()
+        let beforeRawIDs = try await failureInjection.persistedTemplateIDs()
         var stagedIDs = Set<UUID>()
 
         await XCTAssertThrowsErrorAsync(
-            try failureInjection.deleteTemplatesFailingAfterDeletionStaged(
+            try await failureInjection.deleteTemplatesFailingAfterDeletionStaged(
                 [firstID, secondID]
             ),
             file: file,
@@ -769,7 +769,7 @@ extension WorkingRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try failureInjection.persistedTemplateIDs(),
+            try await failureInjection.persistedTemplateIDs(),
             beforeRawIDs,
             "Failed batch deletion must not physically remove a subset of requested templates.",
             file: file,
@@ -841,7 +841,7 @@ extension WorkingRepositoryContract {
         let beforeFirstTimeline = Set(
             try fixture.makeAnimalRepository().fetchTimeline(id: first.id)
         )
-        let beforeMovementIDs = try failureInjection.persistedMovementRecordIDs([first.id])
+        let beforeMovementIDs = try await failureInjection.persistedMovementRecordIDs([first.id])
         let assignments = [
             WorkingQueueDestinationAssignment(queueItemID: firstQueueID, destinationPastureID: destination.id),
             WorkingQueueDestinationAssignment(queueItemID: secondQueueID, destinationPastureID: nil)
@@ -850,7 +850,7 @@ extension WorkingRepositoryContract {
         var stagedDestinationQueueItemIDs = Set<UUID>()
 
         await XCTAssertThrowsErrorAsync(
-            try failureInjection.completeSessionFailingAfterMovementStaged(sessionID, assignments),
+            try await failureInjection.completeSessionFailingAfterMovementStaged(sessionID, assignments),
             file: file,
             line: line
         ) { error in
@@ -910,7 +910,7 @@ extension WorkingRepositoryContract {
             line: line
         )
         XCTAssertEqual(
-            try failureInjection.persistedMovementRecordIDs([first.id]),
+            try await failureInjection.persistedMovementRecordIDs([first.id]),
             beforeMovementIDs,
             "Failed session completion must not leave a movement row for the live part of a mixed live/orphan queue.",
             file: file,
@@ -972,12 +972,12 @@ extension WorkingRepositoryContract {
         let beforeFirst = try XCTUnwrap(fixture.makeAnimalRepository().fetchAnimalDetail(id: first.id), file: file, line: line)
         let beforeSecond = try XCTUnwrap(fixture.makeAnimalRepository().fetchAnimalDetail(id: second.id), file: file, line: line)
         let beforeFirstTimeline = Set(try fixture.makeAnimalRepository().fetchTimeline(id: first.id))
-        let beforeWorkData = try failureInjection.persistedWorkDataIDs(sessionID, first.id)
-        let beforeQueueIDs = try failureInjection.persistedQueueItemIDs()
+        let beforeWorkData = try await failureInjection.persistedWorkDataIDs(sessionID, first.id)
+        let beforeQueueIDs = try await failureInjection.persistedQueueItemIDs()
         var stagedRestoredAnimalID: UUID?
 
         await XCTAssertThrowsErrorAsync(
-            try failureInjection.deleteSessionFailingAfterCleanupStaged(sessionID),
+            try await failureInjection.deleteSessionFailingAfterCleanupStaged(sessionID),
             file: file,
             line: line
         ) { error in
@@ -1000,7 +1000,7 @@ extension WorkingRepositoryContract {
         XCTAssertEqual(try fixture.makeAnimalRepository().fetchAnimalDetail(id: first.id), beforeFirst, file: file, line: line)
         XCTAssertEqual(try fixture.makeAnimalRepository().fetchAnimalDetail(id: second.id), beforeSecond, file: file, line: line)
         XCTAssertEqual(Set(try fixture.makeAnimalRepository().fetchTimeline(id: first.id)), beforeFirstTimeline, file: file, line: line)
-        XCTAssertEqual(try failureInjection.persistedWorkDataIDs(sessionID, first.id), beforeWorkData, file: file, line: line)
-        XCTAssertEqual(try failureInjection.persistedQueueItemIDs(), beforeQueueIDs, file: file, line: line)
+        XCTAssertEqual(try await failureInjection.persistedWorkDataIDs(sessionID, first.id), beforeWorkData, file: file, line: line)
+        XCTAssertEqual(try await failureInjection.persistedQueueItemIDs(), beforeQueueIDs, file: file, line: line)
     }
 }
