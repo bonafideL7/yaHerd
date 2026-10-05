@@ -287,6 +287,14 @@ actor CoreDataReadModelActor:
         _ sessions: [CDFieldCheckSession],
         herdID: UUID
     ) throws {
+        let allChecks = sessions.flatMap {
+            ($0.animalChecks?.allObjects as? [CDFieldCheckAnimalCheck]) ?? []
+        }
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(
+            allChecks,
+            herdID: herdID
+        )
+
         for session in sessions {
             guard session.herd.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
