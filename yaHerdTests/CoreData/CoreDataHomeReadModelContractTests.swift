@@ -25,16 +25,45 @@ private final class CoreDataHomeReadModelContractEnvironment {
     let assembly: CoreDataPersistenceAssembly
     let selection = CoreDataHomeReadModelContractSelection()
     let herdID = UUID()
+    private let temporaryStoreDirectory: URL
 
     static func make() async throws -> CoreDataHomeReadModelContractEnvironment {
-        let assembly = try await CoreDataPersistenceAssembly.inMemory()
-        return try CoreDataHomeReadModelContractEnvironment(assembly: assembly)
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yaHerd-M9-Home-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        let storeURL = directory.appendingPathComponent(
+            CoreDataPersistentContainer.storeFileName
+        )
+
+        do {
+            let assembly = try await CoreDataPersistenceAssembly.load(
+                storeURL: storeURL
+            )
+            return try CoreDataHomeReadModelContractEnvironment(
+                assembly: assembly,
+                temporaryStoreDirectory: directory
+            )
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
     }
 
-    init(assembly: CoreDataPersistenceAssembly) throws {
+    init(
+        assembly: CoreDataPersistenceAssembly,
+        temporaryStoreDirectory: URL
+    ) throws {
         self.assembly = assembly
+        self.temporaryStoreDirectory = temporaryStoreDirectory
         selection.currentHerdID = herdID
         try seedHerd()
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(at: temporaryStoreDirectory)
     }
 
     var fixture: HomeSupportingReadModelContractFixture {
