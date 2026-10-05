@@ -94,14 +94,14 @@ private final class CoreDataHomeReadModelContractEnvironment {
             },
             makeHomeFieldCheckQueryReader: {
                 CoreDataReadModelActor(
-                    selection: self.selection,
-                    assembly: self.assembly
+                    assembly: self.assembly,
+                    currentHerdID: { self.selection.currentHerdID }
                 )
             },
             makeHomeWorkingQueryReader: {
                 CoreDataReadModelActor(
-                    selection: self.selection,
-                    assembly: self.assembly
+                    assembly: self.assembly,
+                    currentHerdID: { self.selection.currentHerdID }
                 )
             }
         )
