@@ -592,7 +592,7 @@ actor CoreDataReadModelActor:
             }
             return lhs.0.id.uuidString < rhs.0.id.uuidString
         }
-        .map(\.1)
+        .map { $0.1 }
     }
 
     private static func dashboardAnimalRecord(
@@ -748,6 +748,14 @@ actor CoreDataReadModelActor:
             herdID: herdID
         )
         for item in queueItems {
+            guard item.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDWorkingQueueItem.coreDataEntityName,
+                    id: item.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: item.herd.id
+                )
+            }
             guard item.session.objectID == session.objectID else {
                 throw CoreDataReadModelError.invalidSessionRelationship(
                     entity: CDWorkingQueueItem.coreDataEntityName,
@@ -808,6 +816,56 @@ actor CoreDataReadModelActor:
                 expectedHerdID: herdID,
                 actualHerdID: dam.herd.id
             )
+        }
+
+        for tag in CoreDataAnimalProjection.managedTags(animal) {
+            guard tag.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDAnimalTag.coreDataEntityName,
+                    id: tag.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: tag.herd.id
+                )
+            }
+            if let color = tag.color,
+               color.herd.id != herdID {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDTagColorDefinition.coreDataEntityName,
+                    id: color.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: color.herd.id
+                )
+            }
+        }
+        for record in CoreDataAnimalProjection.managedHealthRecords(animal) {
+            guard record.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDHealthRecord.coreDataEntityName,
+                    id: record.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: record.herd.id
+                )
+            }
+        }
+        for check in CoreDataAnimalProjection.managedPregnancyChecks(animal) {
+            guard check.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDPregnancyCheck.coreDataEntityName,
+                    id: check.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: check.herd.id
+                )
+            }
+        }
+        for offspring in CoreDataAnimalProjection.managedMaternalOffspring(animal) {
+            guard offspring.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDAnimal.coreDataEntityName,
+                    id: offspring.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: offspring.herd.id
+                )
+            }
         }
     }
 
