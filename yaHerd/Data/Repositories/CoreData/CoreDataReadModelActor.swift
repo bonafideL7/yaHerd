@@ -40,7 +40,6 @@ actor CoreDataReadModelActor:
     private let lookup: CoreDataLookup
     private let currentHerdID: @MainActor @Sendable () -> UUID?
 
-    @MainActor
     init(
         selection: any CurrentHerdSelectionReading,
         assembly: CoreDataPersistenceAssembly
