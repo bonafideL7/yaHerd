@@ -31,6 +31,25 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         }
     }
 
+    func testHomeFieldCheckReadRejectsDuplicateAnimalCheckIDsAcrossWarningSessions() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let duplicateCheckID = try environment.seedDuplicateAnimalCheckIDsAcrossWarningSessions()
+        let reader = environment.fixture.makeHomeFieldCheckQueryReader()
+
+        await XCTAssertThrowsErrorAsync(
+            try await reader.fetchHomeFieldCheckRecords()
+        ) { error in
+            XCTAssertEqual(
+                error as? CoreDataPersistenceError,
+                .duplicateApplicationID(
+                    entity: CDFieldCheckAnimalCheck.coreDataEntityName,
+                    id: duplicateCheckID,
+                    herdID: environment.herdID
+                )
+            )
+        }
+    }
+
     func testTreatmentTemplatesPropagateToCoreDataHomeReadModel() async throws {
         let environment = try await CoreDataHomeReadModelContractEnvironment.make()
         try await HomeSupportingReadModelContract.assertTreatmentTemplatesPropagateToHomeReadModel(
@@ -124,6 +143,55 @@ private final class CoreDataHomeReadModelContractEnvironment {
                 )
             }
         )
+    }
+
+    func seedDuplicateAnimalCheckIDsAcrossWarningSessions() throws -> UUID {
+        let duplicateCheckID = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+
+        return try context.performAndWait {
+            guard let herd = try assembly.lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+
+            for index in 0..<2 {
+                let session = CDFieldCheckSession(context: context)
+                session.id = UUID()
+                session.startedAt = Date(timeIntervalSinceReferenceDate: 9_000 + Double(index))
+                session.completedAt = nil
+                session.notes = ""
+                session.expectedHeadCountSnapshot = 1
+                session.quickCowCount = 0
+                session.quickHeiferCount = 0
+                session.quickCalfCount = 0
+                session.quickBullCount = 0
+                session.quickSteerCount = 0
+                session.pastureIDSnapshot = UUID()
+                session.pastureNameSnapshot = "Duplicate Check Pasture \(index)"
+                session.pastureArchivedAt = nil
+                session.herd = herd
+
+                let check = CDFieldCheckAnimalCheck(context: context)
+                check.id = duplicateCheckID
+                check.animalIDSnapshot = UUID()
+                check.rosterTagNumberSnapshot = "DUP-\(index)"
+                check.rosterTagColorIDSnapshot = nil
+                check.damRosterTagNumberSnapshot = nil
+                check.damRosterTagColorIDSnapshot = nil
+                check.animalNameSnapshot = "Duplicate Check Cow \(index)"
+                check.animalSexRawValueSnapshot = Sex.female.rawValue
+                check.animalTypeRawValueSnapshot = AnimalType.cow.rawValue
+                check.wasExpectedAtStart = true
+                check.countedAt = nil
+                check.missingConfirmedAt = nil
+                check.herd = herd
+                check.session = session
+                check.animal = nil
+            }
+
+            try context.save()
+            return duplicateCheckID
+        }
     }
 
     func seedDuplicateUnresolvedFindingIDsAcrossSessions() throws -> UUID {
