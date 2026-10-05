@@ -8,7 +8,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Plan Source", using: fixture)
         let replacementColor = TagColorSnapshot(
             name: "Working Replacement Tag Color",
@@ -20,7 +20,7 @@ extension WorkingRepositoryContract {
         let originalTagID = try XCTUnwrap(animal.activeTags.first { $0.isPrimary }?.id, file: file, line: line)
         let originalTreatment = WorkingTreatmentPlanItem(id: UUID(), name: "Original Vaccine")
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 9, day: 26),
                 sourcePastureID: source.id,
@@ -43,7 +43,7 @@ extension WorkingRepositoryContract {
                 suggestedDose: WorkingTreatmentDose(amount: 1, unit: .dose, route: .oral)
             )
         ]
-        try repository.updateSessionTreatments(id: sessionID, plannedTreatments: updatedTreatments)
+        try await repository.updateSessionTreatments(id: sessionID, plannedTreatments: updatedTreatments)
 
         let afterPlanReload = try XCTUnwrap(
             fixture.makeWorkingRepository().fetchSessionDetail(id: sessionID),
@@ -59,8 +59,8 @@ extension WorkingRepositoryContract {
         XCTAssertEqual(editorAfterPlan.plannedTreatments, updatedTreatments, file: file, line: line)
 
         let duplicateID = UUID()
-        XCTAssertThrowsError(
-            try fixture.makeWorkingRepository().updateSessionTreatments(
+        await XCTAssertThrowsErrorAsync(
+            try await fixture.makeWorkingRepository().updateSessionTreatments(
                 id: sessionID,
                 plannedTreatments: [
                     WorkingTreatmentPlanItem(id: duplicateID, name: "Duplicate One"),
@@ -80,8 +80,8 @@ extension WorkingRepositoryContract {
             line: line
         )
 
-        XCTAssertThrowsError(
-            try fixture.makeWorkingRepository().updateSessionTreatments(
+        await XCTAssertThrowsErrorAsync(
+            try await fixture.makeWorkingRepository().updateSessionTreatments(
                 id: sessionID,
                 plannedTreatments: [
                     WorkingTreatmentPlanItem(
@@ -112,7 +112,7 @@ extension WorkingRepositoryContract {
             line: line
         )
 
-        let replacement = try fixture.makeWorkingRepository().replacePrimaryTag(
+        let replacement = try await fixture.makeWorkingRepository().replacePrimaryTag(
             forQueueItemID: queueItemID,
             inSessionID: sessionID,
             input: WorkingTagReplacementInput(number: "  901  ", colorID: replacementColor.id)
@@ -156,8 +156,8 @@ extension WorkingRepositoryContract {
             line: line
         )
 
-        XCTAssertThrowsError(
-            try fixture.makeWorkingRepository().replacePrimaryTag(
+        await XCTAssertThrowsErrorAsync(
+            try await fixture.makeWorkingRepository().replacePrimaryTag(
                 forQueueItemID: queueItemID,
                 inSessionID: sessionID,
                 input: WorkingTagReplacementInput(number: "   ", colorID: nil)
@@ -175,7 +175,7 @@ extension WorkingRepositoryContract {
         XCTAssertEqual(afterInvalidReplacement.activeTags, animalAfterReplacement.activeTags, file: file, line: line)
         XCTAssertEqual(afterInvalidReplacement.inactiveTags, animalAfterReplacement.inactiveTags, file: file, line: line)
 
-        try fixture.makeWorkingRepository().completeSession(
+        try await fixture.makeWorkingRepository().completeSession(
             id: sessionID,
             assignments: [
                 WorkingQueueDestinationAssignment(
@@ -221,7 +221,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeWorkingRepository()
         let firstItems = [
             WorkingTreatmentPlanItem(
@@ -334,7 +334,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Template Snapshot Source", using: fixture)
         let animal = try makeAnimal(name: "Template Snapshot Cow", tagNumber: "TS101", sex: .female, pastureID: source.id, using: fixture)
         let repository = fixture.makeWorkingRepository()
@@ -347,7 +347,7 @@ extension WorkingRepositoryContract {
         ]
         let templateID = try repository.createTemplate(name: "Snapshot Template", items: originalItems)
         let template = try XCTUnwrap(repository.fetchTemplateDetail(id: templateID), file: file, line: line)
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 7),
                 sourcePastureID: source.id,
@@ -409,7 +409,7 @@ extension WorkingRepositoryContract {
         let laterSessionPlan = [
             WorkingTreatmentPlanItem(id: UUID(), name: "Later Session-Only Treatment")
         ]
-        try fixture.makeWorkingRepository().updateSessionTreatments(
+        try await fixture.makeWorkingRepository().updateSessionTreatments(
             id: sessionID,
             plannedTreatments: laterSessionPlan
         )
@@ -438,7 +438,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Treatment History Source", using: fixture)
         let animal = try makeAnimal(name: "Treatment History Cow", tagNumber: "TH201", sex: .female, pastureID: source.id, using: fixture)
         let originalTreatmentID = UUID()
@@ -446,7 +446,7 @@ extension WorkingRepositoryContract {
             WorkingTreatmentPlanItem(id: originalTreatmentID, name: "Historical Vaccine")
         ]
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 8),
                 sourcePastureID: source.id,
@@ -457,7 +457,7 @@ extension WorkingRepositoryContract {
         )
         let queueItemID = try XCTUnwrap(repository.fetchSessionDetail(id: sessionID)?.queueItems.first?.id, file: file, line: line)
         let recordDate = date(year: 2026, month: 10, day: 8, hour: 9)
-        try repository.complete(
+        try await repository.complete(
             queueItemID: queueItemID,
             inSessionID: sessionID,
             treatmentEntries: [
@@ -484,7 +484,7 @@ extension WorkingRepositoryContract {
         let replacementPlan = [
             WorkingTreatmentPlanItem(id: UUID(), name: "Current Plan Treatment")
         ]
-        try fixture.makeWorkingRepository().updateSessionTreatments(
+        try await fixture.makeWorkingRepository().updateSessionTreatments(
             id: sessionID,
             plannedTreatments: replacementPlan
         )
@@ -518,7 +518,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Historical Animal Source", using: fixture)
         let tagColorRepository = fixture.makeTagColorRepository()
         let calfColor = TagColorSnapshot(
@@ -553,7 +553,7 @@ extension WorkingRepositoryContract {
         )
 
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 11),
                 sourcePastureID: source.id,
@@ -569,7 +569,7 @@ extension WorkingRepositoryContract {
         )
         let queueItem = try XCTUnwrap(started.queueItems.first, file: file, line: line)
 
-        try repository.saveEdits(
+        try await repository.saveEdits(
             forQueueItemID: queueItem.id,
             inSessionID: sessionID,
             input: WorkingSessionAnimalEditInput(
@@ -582,7 +582,7 @@ extension WorkingRepositoryContract {
                 observationNotes: ""
             )
         )
-        try repository.completeSession(
+        try await repository.completeSession(
             id: sessionID,
             assignments: [
                 WorkingQueueDestinationAssignment(
@@ -669,7 +669,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let repository = fixture.makeWorkingRepository()
         let originalItems = [
             WorkingTreatmentPlanItem(
@@ -762,7 +762,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working Immutable Display Source", using: fixture)
         let tagColorRepository = fixture.makeTagColorRepository()
         let originalCalfColor = TagColorSnapshot(
@@ -823,7 +823,7 @@ extension WorkingRepositoryContract {
         )
 
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 16),
                 sourcePastureID: source.id,
@@ -837,7 +837,7 @@ extension WorkingRepositoryContract {
             file: file,
             line: line
         )
-        try repository.saveEdits(
+        try await repository.saveEdits(
             forQueueItemID: queueItemID,
             inSessionID: sessionID,
             input: WorkingSessionAnimalEditInput(
@@ -850,7 +850,7 @@ extension WorkingRepositoryContract {
                 observationNotes: ""
             )
         )
-        try repository.completeSession(
+        try await repository.completeSession(
             id: sessionID,
             assignments: [
                 WorkingQueueDestinationAssignment(
@@ -1002,7 +1002,7 @@ extension WorkingRepositoryContract {
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let source = try makePasture(named: "Working History Source Original", using: fixture)
         let destination = try makePasture(named: "Working History Destination Original", using: fixture)
         let animal = try makeAnimal(
@@ -1014,7 +1014,7 @@ extension WorkingRepositoryContract {
         )
 
         let repository = fixture.makeWorkingRepository()
-        let sessionID = try repository.startSession(
+        let sessionID = try await repository.startSession(
             input: WorkingSessionStartInput(
                 date: date(year: 2026, month: 10, day: 18),
                 sourcePastureID: source.id,
@@ -1028,7 +1028,7 @@ extension WorkingRepositoryContract {
             file: file,
             line: line
         )
-        try repository.saveEdits(
+        try await repository.saveEdits(
             forQueueItemID: queueItemID,
             inSessionID: sessionID,
             input: WorkingSessionAnimalEditInput(
@@ -1041,7 +1041,7 @@ extension WorkingRepositoryContract {
                 observationNotes: ""
             )
         )
-        try repository.completeSession(
+        try await repository.completeSession(
             id: sessionID,
             assignments: [
                 WorkingQueueDestinationAssignment(
