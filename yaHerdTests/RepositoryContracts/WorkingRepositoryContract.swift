@@ -62,12 +62,23 @@ protocol WorkingContractRepository {
     func deleteSession(id: UUID) async throws
 }
 
+@MainActor
+protocol WorkingContractPastureRepository {
+    @discardableResult
+    func create(input: PastureInput) throws -> PastureDetailSnapshot
+
+    @discardableResult
+    func update(id: UUID, input: PastureInput) throws -> PastureDetailSnapshot
+
+    func fetchPastureDetail(id: UUID) throws -> PastureDetailSnapshot?
+}
+
 /// Permanent persistence-neutral behavioral contract for Working persistence implementations.
 @MainActor
 struct WorkingRepositoryContractFixture {
     let makeWorkingRepository: () -> any WorkingContractRepository
     let makeAnimalRepository: () -> any AnimalRepository
-    let makePastureRepository: () -> any PastureRepository
+    let makePastureRepository: () -> any WorkingContractPastureRepository
     let makeTagColorRepository: () -> any TagColorRepository
 }
 
