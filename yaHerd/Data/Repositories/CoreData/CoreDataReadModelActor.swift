@@ -41,12 +41,12 @@ actor CoreDataReadModelActor:
     private let currentHerdID: @MainActor @Sendable () -> UUID?
 
     init(
-        selection: any CurrentHerdSelectionReading,
-        assembly: CoreDataPersistenceAssembly
+        assembly: CoreDataPersistenceAssembly,
+        currentHerdID: @escaping @MainActor @Sendable () -> UUID?
     ) {
         self.contextFactory = assembly.contextFactory
         self.lookup = assembly.lookup
-        self.currentHerdID = { selection.currentHerdID }
+        self.currentHerdID = currentHerdID
     }
 
     func fetchHomeFieldCheckRecords() async throws -> HomeFieldCheckRecords {
