@@ -262,7 +262,15 @@ actor CoreDataReadModelActor:
 
         var seenIDs = Set<UUID>()
         for row in try context.fetch(idRequest) {
-            guard let id = row["id"] as? UUID else {
+            let id: UUID?
+            if let value = row["id"] as? UUID {
+                id = value
+            } else if let value = row["id"] as? NSUUID {
+                id = value as UUID
+            } else {
+                id = nil
+            }
+            guard let id else {
                 continue
             }
             guard seenIDs.insert(id).inserted else {
