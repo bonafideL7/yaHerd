@@ -12,6 +12,25 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         )
     }
 
+    func testHomeFieldCheckReadRejectsDuplicateFindingIDsAcrossSessions() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let duplicateFindingID = try environment.seedDuplicateUnresolvedFindingIDsAcrossSessions()
+        let reader = environment.fixture.makeHomeFieldCheckQueryReader()
+
+        await XCTAssertThrowsErrorAsync(
+            try await reader.fetchHomeFieldCheckRecords()
+        ) { error in
+            XCTAssertEqual(
+                error as? CoreDataPersistenceError,
+                .duplicateApplicationID(
+                    entity: CDFieldCheckFinding.coreDataEntityName,
+                    id: duplicateFindingID,
+                    herdID: environment.herdID
+                )
+            )
+        }
+    }
+
     func testTreatmentTemplatesPropagateToCoreDataHomeReadModel() async throws {
         let environment = try await CoreDataHomeReadModelContractEnvironment.make()
         try await HomeSupportingReadModelContract.assertTreatmentTemplatesPropagateToHomeReadModel(
@@ -105,6 +124,56 @@ private final class CoreDataHomeReadModelContractEnvironment {
                 )
             }
         )
+    }
+
+    func seedDuplicateUnresolvedFindingIDsAcrossSessions() throws -> UUID {
+        let duplicateFindingID = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+
+        return try context.performAndWait {
+            guard let herd = try assembly.lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+
+            for index in 0..<2 {
+                let session = CDFieldCheckSession(context: context)
+                session.id = UUID()
+                session.startedAt = Date(timeIntervalSinceReferenceDate: 10_000 + Double(index))
+                session.completedAt = nil
+                session.notes = ""
+                session.expectedHeadCountSnapshot = 0
+                session.quickCowCount = 0
+                session.quickHeiferCount = 0
+                session.quickCalfCount = 0
+                session.quickBullCount = 0
+                session.quickSteerCount = 0
+                session.pastureIDSnapshot = UUID()
+                session.pastureNameSnapshot = "Duplicate ID Pasture \(index)"
+                session.pastureArchivedAt = nil
+                session.herd = herd
+
+                let finding = CDFieldCheckFinding(context: context)
+                finding.id = duplicateFindingID
+                finding.recordedAt = Date(
+                    timeIntervalSinceReferenceDate: 10_100 + Double(index)
+                )
+                finding.typeRawValue = FieldCheckFindingType.generalObservation.rawValue
+                finding.severityRawValue = FieldCheckFindingSeverity.info.rawValue
+                finding.statusRawValue = FieldCheckFindingStatus.open.rawValue
+                finding.note = "Duplicate unresolved finding"
+                finding.animalIDSnapshot = nil
+                finding.animalDisplayTagNumberSnapshot = nil
+                finding.animalDisplayTagColorIDSnapshot = nil
+                finding.animalNameSnapshot = nil
+                finding.pastureNameSnapshot = session.pastureNameSnapshot
+                finding.herd = herd
+                finding.session = session
+                finding.animal = nil
+            }
+
+            try context.save()
+            return duplicateFindingID
+        }
     }
 
     private func seedHerd() throws {
