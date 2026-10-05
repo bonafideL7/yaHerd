@@ -18,6 +18,57 @@ struct AnimalSummaryPage: Sendable {
     let hasMore: Bool
 }
 
+enum AnimalListQueryPastureFilter: Hashable, Sendable {
+    case any
+    case noPasture
+    case pasture(UUID)
+}
+
+enum AnimalListQueryLocationFilter: Hashable, Sendable {
+    case any
+    case pasture
+    case workingPen
+}
+
+enum AnimalListQueryRecordIssueFilter: Hashable, Sendable {
+    case any
+    case missingPasture
+    case missingTag
+    case unknownSex
+    case archivedActive
+}
+
+struct AnimalListFilterQuery: Hashable, Sendable {
+    let searchText: String
+    let sex: Sex?
+    let status: AnimalStatus?
+    let pasture: AnimalListQueryPastureFilter
+    let location: AnimalListQueryLocationFilter
+    let recordIssue: AnimalListQueryRecordIssueFilter
+    let showRemovedStatuses: Bool
+    let showArchivedRecords: Bool
+
+    init(
+        searchText: String = "",
+        sex: Sex? = nil,
+        status: AnimalStatus? = nil,
+        pasture: AnimalListQueryPastureFilter = .any,
+        location: AnimalListQueryLocationFilter = .any,
+        recordIssue: AnimalListQueryRecordIssueFilter = .any,
+        showRemovedStatuses: Bool = false,
+        showArchivedRecords: Bool = false
+    ) {
+        self.searchText = searchText
+        self.sex = sex
+        self.status = status
+        self.pasture = pasture
+        self.location = location
+        self.recordIssue = recordIssue
+        self.showRemovedStatuses = showRemovedStatuses
+        self.showArchivedRecords = showArchivedRecords
+    }
+}
+
 struct HomeFieldCheckRecords: Sendable {
     /// Every session that can contribute an unfinished, flagged, or missing warning row.
     let sessions: [FieldCheckSessionSummary]
@@ -46,4 +97,11 @@ protocol HomeWorkingQueryReading: Sendable {
 protocol AnimalListQueryReading: Sendable {
     func fetchAnimalSummaryPage(_ request: ReadPageRequest) async throws -> AnimalSummaryPage
     func fetchAnimalPastureOptions(limit: Int) async throws -> [PastureOption]
+}
+
+protocol AnimalListFilteredQueryReading: Sendable {
+    func fetchAnimalSummaryPage(
+        matching query: AnimalListFilterQuery,
+        page: ReadPageRequest
+    ) async throws -> AnimalSummaryPage
 }
