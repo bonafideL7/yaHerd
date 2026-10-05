@@ -240,15 +240,39 @@ actor CoreDataReadModelActor:
         corruptRequest.fetchLimit = 1
         corruptRequest.relationshipKeyPathsForPrefetching = ["session"]
 
-        guard let finding = try context.fetch(corruptRequest).first else {
-            return
+        if let finding = try context.fetch(corruptRequest).first {
+            try validateFindingRelationship(
+                finding,
+                herdID: herdID
+            )
+            _ = try FieldCheckMapper.makeFindingSnapshot(from: finding)
         }
 
-        try validateFindingRelationship(
-            finding,
-            herdID: herdID
+        let idRequest = NSFetchRequest<NSDictionary>(
+            entityName: CDFieldCheckFinding.coreDataEntityName
         )
-        _ = try FieldCheckMapper.makeFindingSnapshot(from: finding)
+        idRequest.resultType = .dictionaryResultType
+        idRequest.propertiesToFetch = ["id"]
+        idRequest.predicate = NSPredicate(
+            format: "herd == %@ AND session.herd == %@ AND statusRawValue IN %@",
+            herd,
+            herd,
+            unresolvedFindingStatusRawValues
+        )
+
+        var seenIDs = Set<UUID>()
+        for row in try context.fetch(idRequest) {
+            guard let id = row["id"] as? UUID else {
+                continue
+            }
+            guard seenIDs.insert(id).inserted else {
+                throw CoreDataPersistenceError.duplicateApplicationID(
+                    entity: CDFieldCheckFinding.coreDataEntityName,
+                    id: id,
+                    herdID: herdID
+                )
+            }
+        }
     }
 
     private static func validateFieldCheckWarningGraph(
