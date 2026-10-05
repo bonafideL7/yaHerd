@@ -945,7 +945,7 @@ enum PastureRepositoryEdgeCaseContract {
         )
 
         let working = fixture.makeWorkingRepository()
-        let sessionID = try await working.startSession(
+        let sessionID = try working.startSession(
             input: WorkingSessionStartInput(
                 date: Date(timeIntervalSince1970: 1_781_300_000),
                 sourcePastureID: sourcePasture.id,
@@ -980,7 +980,7 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(queuedItemAtStart.status, .queued, file: file, line: line)
         XCTAssertNil(queuedItemAtStart.completedAt, file: file, line: line)
 
-        try await working.complete(
+        try working.complete(
             queueItemID: queueItemID,
             inSessionID: sessionID,
             treatmentEntries: [],
@@ -994,7 +994,7 @@ enum PastureRepositoryEdgeCaseContract {
             line: line
         )
         let completedAt = try XCTUnwrap(completedQueueItem.completedAt, file: file, line: line)
-        try await working.saveEdits(
+        try working.saveEdits(
             forQueueItemID: queueItemID,
             inSessionID: sessionID,
             input: WorkingSessionAnimalEditInput(
@@ -1132,7 +1132,7 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertNil(queuedEditorAfterDeletion.destinationPastureID, file: file, line: line)
 
         let postDeletionNotes = "Updated after pasture deletion"
-        try await postDeletionWorking.saveEdits(
+        try postDeletionWorking.saveEdits(
             forQueueItemID: queueItemID,
             inSessionID: sessionID,
             input: WorkingSessionAnimalEditInput(
@@ -1160,7 +1160,7 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(editorAfterPostDeletionWrite.observationNotes, postDeletionNotes, file: file, line: line)
 
         let queuedPostDeletionNotes = "Queued completion after pasture deletion"
-        try await postDeletionWorking.complete(
+        try postDeletionWorking.complete(
             queueItemID: queuedItemID,
             inSessionID: sessionID,
             treatmentEntries: [],
@@ -1395,7 +1395,7 @@ extension PastureRepositoryEdgeCaseContract {
         )
 
         let working = fixture.makeWorkingRepository()
-        let sessionID = try await working.startSession(
+        let sessionID = try working.startSession(
             input: WorkingSessionStartInput(
                 date: Date(timeIntervalSince1970: 1_781_500_000),
                 sourcePastureID: source.id,
@@ -1440,7 +1440,7 @@ extension PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(inWorkingPen.location, .workingPen, file: file, line: line)
         XCTAssertNil(inWorkingPen.pastureID, file: file, line: line)
 
-        try await fixture.makeWorkingRepository().deleteSession(id: sessionID)
+        try fixture.makeWorkingRepository().deleteSession(id: sessionID)
 
         XCTAssertNil(
             try fixture.makeWorkingRepository().fetchSessionDetail(id: sessionID),
@@ -1515,7 +1515,7 @@ extension PastureRepositoryEdgeCaseContract {
         )
 
         let working = fixture.makeWorkingRepository()
-        let sessionID = try await working.startSession(
+        let sessionID = try working.startSession(
             input: WorkingSessionStartInput(
                 date: Date(timeIntervalSince1970: 1_781_600_000),
                 sourcePastureID: source.id,
@@ -1551,8 +1551,8 @@ extension PastureRepositoryEdgeCaseContract {
             try fixture.makeAnimalRepository().fetchTimeline(id: animal.id)
         )
 
-        await XCTAssertThrowsErrorAsync(
-            try await fixture.makeWorkingRepository().completeSession(
+        XCTAssertThrowsError(
+            try fixture.makeWorkingRepository().completeSession(
                 id: sessionID,
                 assignments: [
                     WorkingQueueDestinationAssignment(
@@ -1587,7 +1587,7 @@ extension PastureRepositoryEdgeCaseContract {
             line: line
         )
 
-        try await fixture.makeWorkingRepository().completeSession(
+        try fixture.makeWorkingRepository().completeSession(
             id: sessionID,
             assignments: [
                 WorkingQueueDestinationAssignment(
