@@ -79,6 +79,22 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             )
     }
 
+    func testMilestone9FilteredAnimalListQueryReduction() async throws {
+        let environment = try await makeReadModelEnvironment()
+        let fixture = AnimalListFilteredQueryContractFixture(
+            animalFixture: environment.repositoryFixture,
+            makeFilteredQueryReader: {
+                environment.makeAnimalListQueryReader()
+            },
+            assignWorkingOwnership: { animalID in
+                try environment.assignWorkingOwnership(animalID: animalID)
+            }
+        )
+
+        try await AnimalRepositoryContract
+            .assertFilteredAnimalListQueryReduction(using: fixture)
+    }
+
     func testMilestone9AnimalListPaginationAndPastureOptions() async throws {
         let environment = try await makeReadModelEnvironment()
         let fixture = AnimalListReadProjectionContractFixture(
@@ -1637,6 +1653,44 @@ private final class CoreDataAnimalContractEnvironment {
             assembly: assembly,
             currentHerdID: { self.selection.currentHerdID }
         )
+    }
+
+    func assignWorkingOwnership(
+        animalID: UUID
+    ) throws {
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            guard let herd = try assembly.lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            guard let animal = try assembly.lookup.herdOwned(
+                CDAnimal.self,
+                id: animalID,
+                herdID: herdID,
+                in: context
+            ) else {
+                throw CoreDataAnimalRepositoryError.aggregateNotFound(animalID)
+            }
+
+            let sourcePasture = animal.currentPasture
+            let session = CDWorkingSession(context: context)
+            session.id = UUID()
+            session.date = Date(timeIntervalSinceReferenceDate: 70_000)
+            session.statusRawValue = WorkingSessionStatus.active.rawValue
+            session.treatmentTemplateNameSnapshot = "Filtered Query Working"
+            session.plannedTreatmentsData = try JSONEncoder().encode(
+                [WorkingTreatmentPlanItem]()
+            )
+            session.sourcePastureIDSnapshot = sourcePasture?.id ?? UUID()
+            session.sourcePastureNameSnapshot = sourcePasture?.name ?? "No Pasture"
+            session.herd = herd
+            session.sourcePasture = sourcePasture
+
+            animal.activeWorkingSession = session
+            animal.currentPasture = nil
+            CoreDataAnimalMutation.rotateRevision(animal)
+            try context.save()
+        }
     }
 
     func seedAnimalWithID(
