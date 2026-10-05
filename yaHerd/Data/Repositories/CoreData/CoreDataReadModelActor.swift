@@ -14,6 +14,7 @@ enum CoreDataReadModelError: LocalizedError, Equatable, Sendable {
         expectedSessionID: UUID,
         actualSessionID: UUID
     )
+    case inconsistentOpenFindingCount(expected: Int, fetched: Int)
 
     var errorDescription: String? {
         switch self {
@@ -21,6 +22,8 @@ enum CoreDataReadModelError: LocalizedError, Equatable, Sendable {
             return "The read-model relationship belongs to another herd."
         case .invalidSessionRelationship:
             return "The read-model relationship points to another session."
+        case .inconsistentOpenFindingCount:
+            return "The Field Check Home read changed while its finding count was being resolved."
         }
     }
 }
@@ -109,12 +112,11 @@ actor CoreDataReadModelActor:
                     NSSortDescriptor(key: "recordedAt", ascending: false),
                     NSSortDescriptor(key: "id", ascending: true)
                 ]
-                guard let finding = try context.fetch(findingRequest).first else {
-                    throw CoreDataReadModelError.invalidSessionRelationship(
-                        entity: CDFieldCheckFinding.coreDataEntityName,
-                        id: UUID(),
-                        expectedSessionID: UUID(),
-                        actualSessionID: UUID()
+                let fetchedFindings = try context.fetch(findingRequest)
+                guard let finding = fetchedFindings.first else {
+                    throw CoreDataReadModelError.inconsistentOpenFindingCount(
+                        expected: 1,
+                        fetched: fetchedFindings.count
                     )
                 }
                 try Self.validateFindingRelationship(
