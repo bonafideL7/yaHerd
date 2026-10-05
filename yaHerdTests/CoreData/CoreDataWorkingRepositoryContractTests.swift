@@ -59,6 +59,130 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         try await run { try await WorkingRepositoryContract.assertCompletedQueueHistoryIgnoresLaterPastureRenames(using: $0.fixture) }
     }
 
+    func testWorkingCoreDataReadsAndMutationsStayWithinSelectedHerd() async throws {
+        let environment = try await CoreDataWorkingContractEnvironment.make()
+        let primaryPasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Primary Working Herd Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let primaryAnimal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(
+                name: "Primary Working Cow",
+                tagNumber: "WH-PRIMARY",
+                pastureID: primaryPasture.id
+            )
+        )
+        let primaryWorking = environment.makeWorkingRepository()
+        let primarySessionID = try await primaryWorking.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 200_000),
+                sourcePastureID: primaryPasture.id,
+                treatmentTemplateName: "Primary Working Session",
+                plannedTreatments: [],
+                animalIDs: [primaryAnimal.id]
+            )
+        )
+        let primaryTemplateID = try primaryWorking.createTemplate(
+            name: "Primary Working Template",
+            items: []
+        )
+
+        let otherHerdID = UUID()
+        try environment.seedAdditionalHerd(
+            id: otherHerdID,
+            name: "Other Working Contract Herd"
+        )
+        let otherSelection = CoreDataWorkingContractSelection()
+        otherSelection.currentHerdID = otherHerdID
+        let otherPastures = CoreDataPastureRepository(
+            selection: otherSelection,
+            assembly: environment.assembly
+        )
+        let otherAnimals = CoreDataAnimalRepository(
+            selection: otherSelection,
+            assembly: environment.assembly
+        )
+        let otherWorking = CoreDataWorkingContractAdapter(
+            working: CoreDataWorkingRepository(
+                selection: otherSelection,
+                assembly: environment.assembly
+            ),
+            templates: CoreDataWorkingTreatmentTemplateRepository(
+                selection: otherSelection,
+                assembly: environment.assembly
+            )
+        )
+        let otherPasture = try otherPastures.create(
+            input: PastureInput(
+                name: "Other Working Herd Pasture",
+                acreage: 24,
+                usableAcreage: 21,
+                targetAcresPerHead: 1.75
+            )
+        )
+        let otherAnimal = try otherAnimals.create(
+            input: Self.animalInput(
+                name: "Other Working Cow",
+                tagNumber: "WH-OTHER",
+                pastureID: otherPasture.id
+            )
+        )
+        let otherSessionID = try await otherWorking.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 201_000),
+                sourcePastureID: otherPasture.id,
+                treatmentTemplateName: "Other Working Session",
+                plannedTreatments: [],
+                animalIDs: [otherAnimal.id]
+            )
+        )
+        let otherTemplateID = try otherWorking.createTemplate(
+            name: "Other Working Template",
+            items: []
+        )
+        let otherBefore = try XCTUnwrap(
+            otherWorking.fetchSessionDetail(id: otherSessionID)
+        )
+
+        XCTAssertEqual(Set(try primaryWorking.fetchSessions().map(\.id)), [primarySessionID])
+        XCTAssertNil(try primaryWorking.fetchSessionDetail(id: otherSessionID))
+        XCTAssertNil(
+            try primaryWorking.fetchQueueItemEditor(
+                sessionID: otherSessionID,
+                queueItemID: try XCTUnwrap(otherBefore.queueItems.first?.id)
+            )
+        )
+        XCTAssertEqual(Set(try primaryWorking.fetchTemplates().map(\.id)), [primaryTemplateID])
+        XCTAssertNil(try primaryWorking.fetchTemplateDetail(id: otherTemplateID))
+
+        await XCTAssertThrowsErrorAsync(
+            try await primaryWorking.updateSessionTreatments(
+                id: otherSessionID,
+                plannedTreatments: []
+            )
+        ) { error in
+            XCTAssertEqual(error as? WorkingRepositoryError, .sessionNotFound)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await primaryWorking.deleteSession(id: otherSessionID)
+        ) { error in
+            XCTAssertEqual(error as? WorkingRepositoryError, .sessionNotFound)
+        }
+
+        XCTAssertEqual(
+            try otherWorking.fetchSessionDetail(id: otherSessionID),
+            otherBefore
+        )
+        XCTAssertEqual(Set(try otherWorking.fetchSessions().map(\.id)), [otherSessionID])
+        XCTAssertEqual(Set(try otherWorking.fetchTemplates().map(\.id)), [otherTemplateID])
+        XCTAssertNil(try otherWorking.fetchSessionDetail(id: primarySessionID))
+        XCTAssertNil(try otherWorking.fetchTemplateDetail(id: primaryTemplateID))
+    }
+
     func testWorkingCoreDataRollbackContracts() async throws {
         try await run {
             try await WorkingRepositoryContract.assertSessionStartFailureRollsBackAllStagedState(
@@ -114,6 +238,31 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 failureInjection: $0.failureInjection
             )
         }
+    }
+
+    private static func animalInput(
+        name: String,
+        tagNumber: String,
+        pastureID: UUID
+    ) -> AnimalInput {
+        AnimalInput(
+            name: name,
+            tagNumber: tagNumber,
+            tagColorID: nil,
+            sex: .female,
+            birthDate: Date(timeIntervalSinceReferenceDate: 100_000),
+            status: .active,
+            pastureID: pastureID,
+            sireID: nil,
+            damID: nil,
+            distinguishingFeatures: [],
+            saleDate: nil,
+            salePrice: nil,
+            reasonSold: nil,
+            deathDate: nil,
+            causeOfDeath: nil,
+            statusReferenceID: nil
+        )
     }
 
     private func run(
@@ -406,6 +555,21 @@ private final class CoreDataWorkingContractEnvironment {
             selection: selection,
             assembly: assembly
         )
+    }
+
+    func seedAdditionalHerd(
+        id: UUID,
+        name: String
+    ) throws {
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let herd = CDHerd(context: context)
+            herd.id = id
+            herd.name = name
+            herd.createdAt = Date(timeIntervalSinceReferenceDate: 2_000)
+            herd.updatedAt = herd.createdAt
+            try context.save()
+        }
     }
 
     private func seedHerd() throws {
