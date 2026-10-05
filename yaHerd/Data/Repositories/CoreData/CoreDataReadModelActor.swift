@@ -190,6 +190,12 @@ actor CoreDataReadModelActor:
                 throw HerdRepositoryError.missingHerd
             }
 
+            try Self.validateAnimalApplicationIDs(
+                herd: herd,
+                herdID: herdID,
+                in: context
+            )
+
             let untaggedCountRequest = NSFetchRequest<CDAnimal>(
                 entityName: CDAnimal.coreDataEntityName
             )
@@ -247,7 +253,10 @@ actor CoreDataReadModelActor:
                     "animal.currentPasture",
                     "animal.activeWorkingSession",
                     "animal.pregnancyChecks",
-                    "animal.healthRecords"
+                    "animal.healthRecords",
+                    "animal.movementRecords",
+                    "animal.statusRecords",
+                    "animal.damOffspring"
                 ]
 
                 let tags = try context.fetch(tagRequest)
@@ -272,15 +281,11 @@ actor CoreDataReadModelActor:
                 }
             }
 
-            var seenAnimalIDs = Set<UUID>()
             for animal in candidates {
-                guard seenAnimalIDs.insert(animal.id).inserted else {
-                    throw CoreDataPersistenceError.duplicateApplicationID(
-                        entity: CDAnimal.coreDataEntityName,
-                        id: animal.id,
-                        herdID: herdID
-                    )
-                }
+                try Self.validateAnimalReadRelationships(
+                    animal,
+                    herdID: herdID
+                )
             }
 
             let hasMore = candidates.count > request.limit
@@ -522,6 +527,41 @@ actor CoreDataReadModelActor:
         min(max(requestedLimit, 1), ReadPageRequest.maximumLimit)
     }
 
+    private static func validateAnimalApplicationIDs(
+        herd: CDHerd,
+        herdID: UUID,
+        in context: NSManagedObjectContext
+    ) throws {
+        let request = NSFetchRequest<NSDictionary>(
+            entityName: CDAnimal.coreDataEntityName
+        )
+        request.resultType = .dictionaryResultType
+        request.propertiesToFetch = ["id"]
+        request.predicate = NSPredicate(format: "herd == %@", herd)
+
+        var seenIDs = Set<UUID>()
+        for row in try context.fetch(request) {
+            let id: UUID?
+            if let value = row["id"] as? UUID {
+                id = value
+            } else if let value = row["id"] as? NSUUID {
+                id = value as UUID
+            } else {
+                id = nil
+            }
+            guard let id else {
+                continue
+            }
+            guard seenIDs.insert(id).inserted else {
+                throw CoreDataPersistenceError.duplicateApplicationID(
+                    entity: CDAnimal.coreDataEntityName,
+                    id: id,
+                    herdID: herdID
+                )
+            }
+        }
+    }
+
     private static let dashboardAnimalPrefetchPaths = [
         "tags",
         "dam",
@@ -570,7 +610,7 @@ actor CoreDataReadModelActor:
         herdID: UUID
     ) throws -> [DashboardAnimalRecord] {
         try animals.map { animal -> (CDAnimal, DashboardAnimalRecord) in
-            try validateDashboardAnimalRelationships(
+            try validateAnimalReadRelationships(
                 animal,
                 herdID: herdID
             )
@@ -778,7 +818,7 @@ actor CoreDataReadModelActor:
         )
     }
 
-    private static func validateDashboardAnimalRelationships(
+    private static func validateAnimalReadRelationships(
         _ animal: CDAnimal,
         herdID: UUID
     ) throws {
@@ -867,6 +907,26 @@ actor CoreDataReadModelActor:
                 )
             }
         }
+        for movement in CoreDataAnimalProjection.managedMovementRecords(animal) {
+            guard movement.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDMovementRecord.coreDataEntityName,
+                    id: movement.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: movement.herd.id
+                )
+            }
+        }
+        for statusRecord in CoreDataAnimalProjection.managedStatusRecords(animal) {
+            guard statusRecord.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDStatusRecord.coreDataEntityName,
+                    id: statusRecord.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: statusRecord.herd.id
+                )
+            }
+        }
     }
 
     private static let animalSummaryPrefetchPaths = [
@@ -876,7 +936,10 @@ actor CoreDataReadModelActor:
         "currentPasture",
         "activeWorkingSession",
         "pregnancyChecks",
-        "healthRecords"
+        "healthRecords",
+        "movementRecords",
+        "statusRecords",
+        "damOffspring"
     ]
 
     private static func untaggedAnimalPredicate(
