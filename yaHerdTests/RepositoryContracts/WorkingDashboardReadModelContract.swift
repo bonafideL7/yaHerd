@@ -34,7 +34,7 @@ enum WorkingDashboardReadModelContract {
             using: fixture.workingFixture
         )
         let controlWorking = fixture.workingFixture.makeWorkingRepository()
-        let controlSessionID = try controlWorking.startSession(
+        let controlSessionID = try await controlWorking.startSession(
             input: WorkingSessionStartInput(
                 date: WorkingRepositoryContract.date(year: 2026, month: 9, day: 20, hour: 8),
                 sourcePastureID: controlSource.id,
@@ -84,7 +84,7 @@ enum WorkingDashboardReadModelContract {
         )
 
         let targetWorking = fixture.workingFixture.makeWorkingRepository()
-        let targetSessionID = try targetWorking.startSession(
+        let targetSessionID = try await targetWorking.startSession(
             input: WorkingSessionStartInput(
                 date: WorkingRepositoryContract.date(year: 2026, month: 9, day: 21, hour: 9),
                 sourcePastureID: targetSource.id,
@@ -105,7 +105,7 @@ enum WorkingDashboardReadModelContract {
             line: line
         )
 
-        try targetWorking.collectAnimals(sessionID: targetSessionID, animalIDs: [second.id])
+        try await targetWorking.collectAnimals(sessionID: targetSessionID, animalIDs: [second.id])
         try await assertSessionProjection(
             sessionID: targetSessionID,
             expectedStatus: .active,
@@ -134,7 +134,7 @@ enum WorkingDashboardReadModelContract {
             line: line
         )
 
-        try targetWorking.complete(
+        try await targetWorking.complete(
             queueItemID: firstQueueItemID,
             inSessionID: targetSessionID,
             treatmentEntries: [],
@@ -154,7 +154,7 @@ enum WorkingDashboardReadModelContract {
             line: line
         )
 
-        try targetWorking.saveEdits(
+        try await targetWorking.saveEdits(
             forQueueItemID: secondQueueItemID,
             inSessionID: targetSessionID,
             input: WorkingSessionAnimalEditInput(
@@ -179,7 +179,7 @@ enum WorkingDashboardReadModelContract {
             line: line
         )
 
-        try targetWorking.deleteWorkData(
+        try await targetWorking.deleteWorkData(
             forQueueItemID: firstQueueItemID,
             inSessionID: targetSessionID
         )
@@ -195,7 +195,7 @@ enum WorkingDashboardReadModelContract {
             line: line
         )
 
-        try targetWorking.saveEdits(
+        try await targetWorking.saveEdits(
             forQueueItemID: secondQueueItemID,
             inSessionID: targetSessionID,
             input: WorkingSessionAnimalEditInput(
@@ -221,7 +221,7 @@ enum WorkingDashboardReadModelContract {
         )
 
         for queueItemID in [firstQueueItemID, secondQueueItemID] {
-            try targetWorking.complete(
+            try await targetWorking.complete(
                 queueItemID: queueItemID,
                 inSessionID: targetSessionID,
                 treatmentEntries: [],
@@ -242,7 +242,7 @@ enum WorkingDashboardReadModelContract {
             line: line
         )
 
-        try targetWorking.completeSession(
+        try await targetWorking.completeSession(
             id: targetSessionID,
             assignments: [
                 WorkingQueueDestinationAssignment(
@@ -266,7 +266,7 @@ enum WorkingDashboardReadModelContract {
             line: line
         )
 
-        try targetWorking.reopenSession(id: targetSessionID)
+        try await targetWorking.reopenSession(id: targetSessionID)
         try await assertSessionProjection(
             sessionID: targetSessionID,
             expectedStatus: .active,
@@ -279,7 +279,7 @@ enum WorkingDashboardReadModelContract {
             line: line
         )
 
-        try targetWorking.deleteSession(id: targetSessionID)
+        try await targetWorking.deleteSession(id: targetSessionID)
         try await assertSessionAbsent(
             sessionID: targetSessionID,
             expectedActiveSessionID: controlSessionID,
@@ -317,7 +317,7 @@ enum WorkingDashboardReadModelContract {
             line: line
         )
 
-        try fixture.workingFixture.makeWorkingRepository().deleteSession(id: controlSessionID)
+        try await fixture.workingFixture.makeWorkingRepository().deleteSession(id: controlSessionID)
         try await assertSessionAbsent(
             sessionID: controlSessionID,
             expectedActiveSessionID: nil,
