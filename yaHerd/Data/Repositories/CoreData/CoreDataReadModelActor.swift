@@ -34,7 +34,8 @@ enum CoreDataReadModelError: LocalizedError, Equatable, Sendable {
 /// Animal-list reads do not serialize through one actor or one managed-object context.
 actor CoreDataReadModelActor:
     HomeFieldCheckQueryReading,
-    HomeWorkingQueryReading
+    HomeWorkingQueryReading,
+    AnimalListQueryReading
 {
     private let contextFactory: CoreDataContextFactory
     private let lookup: CoreDataLookup
@@ -47,6 +48,191 @@ actor CoreDataReadModelActor:
         self.contextFactory = assembly.contextFactory
         self.lookup = assembly.lookup
         self.currentHerdID = currentHerdID
+    }
+
+    func fetchAnimalSummaryPage(
+        _ request: ReadPageRequest
+    ) async throws -> AnimalSummaryPage {
+        try Task.checkCancellation()
+        let herdID = try await selectedHerdID()
+        let context = contextFactory.makeReadContext()
+        let lookup = self.lookup
+        let requestedCount = request.limit + 1
+
+        return try await context.perform {
+            try Task.checkCancellation()
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+
+            let untaggedCountRequest = NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            )
+            untaggedCountRequest.predicate = Self.untaggedAnimalPredicate(herd: herd)
+            let untaggedCount = try context.count(for: untaggedCountRequest)
+
+            var candidates: [CDAnimal] = []
+            candidates.reserveCapacity(requestedCount)
+
+            if request.offset < untaggedCount {
+                let untaggedRequest = NSFetchRequest<CDAnimal>(
+                    entityName: CDAnimal.coreDataEntityName
+                )
+                untaggedRequest.predicate = Self.untaggedAnimalPredicate(herd: herd)
+                untaggedRequest.sortDescriptors = [
+                    NSSortDescriptor(key: "name", ascending: true),
+                    NSSortDescriptor(key: "id", ascending: true)
+                ]
+                untaggedRequest.fetchOffset = request.offset
+                untaggedRequest.fetchLimit = requestedCount
+                untaggedRequest.relationshipKeyPathsForPrefetching =
+                    Self.animalSummaryPrefetchPaths
+
+                candidates.append(contentsOf: try context.fetch(untaggedRequest))
+            }
+
+            if candidates.count < requestedCount {
+                let taggedOffset = max(request.offset - untaggedCount, 0)
+                let tagRequest = NSFetchRequest<CDAnimalTag>(
+                    entityName: CDAnimalTag.coreDataEntityName
+                )
+                tagRequest.predicate = NSPredicate(
+                    format: """
+                    herd == %@ AND
+                    animal.herd == %@ AND
+                    isActive == YES AND
+                    isPrimary == YES AND
+                    number != ""
+                    """,
+                    herd,
+                    herd
+                )
+                tagRequest.sortDescriptors = [
+                    NSSortDescriptor(key: "number", ascending: true),
+                    NSSortDescriptor(key: "animal.name", ascending: true),
+                    NSSortDescriptor(key: "animal.id", ascending: true)
+                ]
+                tagRequest.fetchOffset = taggedOffset
+                tagRequest.fetchLimit = requestedCount - candidates.count
+                tagRequest.relationshipKeyPathsForPrefetching = [
+                    "animal",
+                    "animal.tags",
+                    "animal.dam",
+                    "animal.dam.tags",
+                    "animal.currentPasture",
+                    "animal.activeWorkingSession",
+                    "animal.pregnancyChecks",
+                    "animal.healthRecords"
+                ]
+
+                let tags = try context.fetch(tagRequest)
+                for tag in tags {
+                    guard tag.herd.id == herdID else {
+                        throw CoreDataReadModelError.invalidHerdOwnership(
+                            entity: CDAnimalTag.coreDataEntityName,
+                            id: tag.id,
+                            expectedHerdID: herdID,
+                            actualHerdID: tag.herd.id
+                        )
+                    }
+                    guard tag.animal.herd.id == herdID else {
+                        throw CoreDataReadModelError.invalidHerdOwnership(
+                            entity: CDAnimal.coreDataEntityName,
+                            id: tag.animal.id,
+                            expectedHerdID: herdID,
+                            actualHerdID: tag.animal.herd.id
+                        )
+                    }
+                    candidates.append(tag.animal)
+                }
+            }
+
+            var seenAnimalIDs = Set<UUID>()
+            for animal in candidates {
+                guard seenAnimalIDs.insert(animal.id).inserted else {
+                    throw CoreDataPersistenceError.duplicateApplicationID(
+                        entity: CDAnimal.coreDataEntityName,
+                        id: animal.id,
+                        herdID: herdID
+                    )
+                }
+            }
+
+            let hasMore = candidates.count > request.limit
+            return AnimalSummaryPage(
+                animals: try candidates.prefix(request.limit).map {
+                    try CoreDataAnimalProjection.summary($0)
+                },
+                hasMore: hasMore
+            )
+        }
+    }
+
+    func fetchAnimalPastureOptions(
+        limit: Int
+    ) async throws -> [PastureOption] {
+        try Task.checkCancellation()
+        let herdID = try await selectedHerdID()
+        let context = contextFactory.makeReadContext()
+        let lookup = self.lookup
+        let pageSize = Self.normalizedLimit(limit)
+
+        return try await context.perform {
+            try Task.checkCancellation()
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+
+            var offset = 0
+            var options: [PastureOption] = []
+            var seenIDs = Set<UUID>()
+
+            while true {
+                try Task.checkCancellation()
+
+                let request = NSFetchRequest<CDPasture>(
+                    entityName: CDPasture.coreDataEntityName
+                )
+                request.predicate = NSPredicate(format: "herd == %@", herd)
+                request.sortDescriptors = [
+                    NSSortDescriptor(key: "name", ascending: true),
+                    NSSortDescriptor(key: "sortOrder", ascending: true),
+                    NSSortDescriptor(key: "id", ascending: true)
+                ]
+                request.fetchOffset = offset
+                request.fetchLimit = pageSize
+
+                let pastures = try context.fetch(request)
+                for pasture in pastures {
+                    guard pasture.herd.id == herdID else {
+                        throw CoreDataReadModelError.invalidHerdOwnership(
+                            entity: CDPasture.coreDataEntityName,
+                            id: pasture.id,
+                            expectedHerdID: herdID,
+                            actualHerdID: pasture.herd.id
+                        )
+                    }
+                    guard seenIDs.insert(pasture.id).inserted else {
+                        throw CoreDataPersistenceError.duplicateApplicationID(
+                            entity: CDPasture.coreDataEntityName,
+                            id: pasture.id,
+                            herdID: herdID
+                        )
+                    }
+                    options.append(
+                        PastureOption(
+                            id: pasture.id,
+                            name: pasture.name
+                        )
+                    )
+                }
+
+                guard pastures.count == pageSize else {
+                    return options
+                }
+                offset += pastures.count
+            }
+        }
     }
 
     func fetchHomeFieldCheckRecords() async throws -> HomeFieldCheckRecords {
@@ -209,6 +395,34 @@ actor CoreDataReadModelActor:
 
     private static func normalizedLimit(_ requestedLimit: Int) -> Int {
         min(max(requestedLimit, 1), ReadPageRequest.maximumLimit)
+    }
+
+    private static let animalSummaryPrefetchPaths = [
+        "tags",
+        "dam",
+        "dam.tags",
+        "currentPasture",
+        "activeWorkingSession",
+        "pregnancyChecks",
+        "healthRecords"
+    ]
+
+    private static func untaggedAnimalPredicate(
+        herd: CDHerd
+    ) -> NSPredicate {
+        NSPredicate(
+            format: """
+            herd == %@ AND
+            SUBQUERY(
+                tags,
+                $tag,
+                $tag.isActive == YES AND
+                $tag.isPrimary == YES AND
+                $tag.number != ""
+            ).@count == 0
+            """,
+            herd
+        )
     }
 
     private static let unresolvedFindingStatusRawValues = [
