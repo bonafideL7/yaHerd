@@ -143,7 +143,9 @@ enum CoreDataAnimalProjection {
             inactiveTags: inactiveTags.map(tagSnapshot),
             location: animal.activeWorkingSession == nil ? .pasture : .workingPen,
             maternalOffspringCountIncludingArchived: managedMaternalOffspring(animal).count,
-            maternalOffspring: try maternalOffspring.map(summary)
+            maternalOffspring: try maternalOffspring.map { offspring in
+                try summary(offspring)
+            }
         )
     }
 
