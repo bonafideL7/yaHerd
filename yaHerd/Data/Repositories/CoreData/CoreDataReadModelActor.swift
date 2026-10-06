@@ -296,25 +296,14 @@ actor CoreDataReadModelActor:
                     ],
                     in: context
                 )
-            case .animalType:
+            case .animalType, .sex, .status, .pasture:
                 guard let query else {
                     throw CoreDataReadModelError.inconsistentAnimalPage(
                         expected: requestedCount,
                         fetched: 0
                     )
                 }
-                candidates = try Self.fetchAnimalTypeQueryCandidates(
-                    query: query,
-                    herd: herd,
-                    herdID: herdID,
-                    referenceDate: referenceDate,
-                    calendar: calendar,
-                    offset: page.offset,
-                    limit: requestedCount,
-                    in: context
-                )
-            case .sex, .status, .pasture:
-                candidates = try Self.fetchGroupedTagOrderedCandidates(
+                candidates = try Self.fetchLightweightSortedQueryCandidates(
                     query: query,
                     herd: herd,
                     herdID: herdID,
@@ -363,9 +352,9 @@ actor CoreDataReadModelActor:
 
     private static let animalTypeScanBatchSize = 250
 
-    private struct AnimalTypeQueryCandidate {
+    private struct AnimalListQueryCandidate {
         let animal: CDAnimal
-        let animalType: AnimalType
+        let animalType: AnimalType?
         let sex: Sex
         let status: AnimalStatus
         let displayTagNumber: String
@@ -383,7 +372,7 @@ actor CoreDataReadModelActor:
         in context: NSManagedObjectContext
     ) throws -> [CDAnimal] {
         if let query, query.animalType != nil {
-            return try fetchAnimalTypeQueryCandidates(
+            return try fetchLightweightSortedQueryCandidates(
                 query: query,
                 herd: herd,
                 herdID: herd.id,
@@ -408,111 +397,19 @@ actor CoreDataReadModelActor:
         return try context.fetch(request)
     }
 
-    private static func fetchGroupedTagOrderedCandidates(
-        query: AnimalListFilterQuery?,
-        herd: CDHerd,
-        herdID: UUID,
-        referenceDate: Date,
-        calendar: Calendar,
-        offset: Int,
-        limit: Int,
-        in context: NSManagedObjectContext
-    ) throws -> [CDAnimal] {
-        guard let query else {
-            return try fetchTagOrderedCandidates(
-                query: nil,
-                herd: herd,
-                herdID: herdID,
-                referenceDate: referenceDate,
-                calendar: calendar,
-                offset: offset,
-                limit: limit,
-                ascending: true,
-                in: context
-            )
-        }
-        if query.animalType != nil {
-            return try fetchAnimalTypeQueryCandidates(
-                query: query,
-                herd: herd,
-                herdID: herdID,
-                referenceDate: referenceDate,
-                calendar: calendar,
-                offset: offset,
-                limit: limit,
-                in: context
-            )
-        }
-
-        let groups = try animalListSortGroups(
-            sortOrder: query.sortOrder,
-            herd: herd,
-            in: context
-        )
-        let basePredicate = animalListPredicate(
-            query: query,
-            herd: herd
-        )
-
-        var remainingOffset = offset
-        var candidates: [CDAnimal] = []
-        candidates.reserveCapacity(limit)
-
-        for group in groups {
-            try Task.checkCancellation()
-            let countRequest = NSFetchRequest<CDAnimal>(
-                entityName: CDAnimal.coreDataEntityName
-            )
-            countRequest.predicate = NSCompoundPredicate(
-                andPredicateWithSubpredicates: [
-                    basePredicate,
-                    group.animalPredicate
-                ]
-            )
-            let groupCount = try context.count(for: countRequest)
-
-            if remainingOffset >= groupCount {
-                remainingOffset -= groupCount
-                continue
-            }
-
-            let fetched = try fetchRawTagOrderedCandidates(
-                query: query,
-                herd: herd,
-                herdID: herdID,
-                additionalAnimalPredicate: group.animalPredicate,
-                additionalTagPredicate: group.tagPredicate,
-                offset: remainingOffset,
-                limit: limit - candidates.count,
-                ascending: true,
-                in: context
-            )
-            candidates.append(contentsOf: fetched)
-            remainingOffset = 0
-
-            if candidates.count >= limit {
-                break
-            }
-        }
-
-        return candidates
-    }
-
     private static func fetchTagOrderedCandidates(
         query: AnimalListFilterQuery?,
         herd: CDHerd,
         herdID: UUID,
         referenceDate: Date,
         calendar: Calendar,
-        additionalAnimalPredicate: NSPredicate? = nil,
-        additionalTagPredicate: NSPredicate? = nil,
         offset: Int,
         limit: Int,
         ascending: Bool,
         in context: NSManagedObjectContext
     ) throws -> [CDAnimal] {
         if let query, query.animalType != nil {
-            return try fetchAnimalTypeQueryCandidates(
+            return try fetchLightweightSortedQueryCandidates(
                 query: query,
                 herd: herd,
                 herdID: herdID,
@@ -524,236 +421,9 @@ actor CoreDataReadModelActor:
             )
         }
 
-        return try fetchRawTagOrderedCandidates(
-            query: query,
-            herd: herd,
-            herdID: herdID,
-            additionalAnimalPredicate: additionalAnimalPredicate,
-            additionalTagPredicate: additionalTagPredicate,
-            offset: offset,
-            limit: limit,
-            ascending: ascending,
-            in: context
-        )
-    }
-
-    private static func fetchAnimalTypeQueryCandidates(
-        query: AnimalListFilterQuery,
-        herd: CDHerd,
-        herdID: UUID,
-        referenceDate: Date,
-        calendar: Calendar,
-        offset: Int,
-        limit: Int,
-        in context: NSManagedObjectContext
-    ) throws -> [CDAnimal] {
-        let predicate = animalListPredicate(
+        let animalPredicate = animalListPredicate(
             query: query,
             herd: herd
-        )
-        var sourceOffset = 0
-        var candidates: [AnimalTypeQueryCandidate] = []
-
-        while true {
-            try Task.checkCancellation()
-            let request = NSFetchRequest<CDAnimal>(
-                entityName: CDAnimal.coreDataEntityName
-            )
-            request.predicate = predicate
-            request.sortDescriptors = [
-                NSSortDescriptor(key: "id", ascending: true)
-            ]
-            request.fetchOffset = sourceOffset
-            request.fetchLimit = animalTypeScanBatchSize
-            request.relationshipKeyPathsForPrefetching =
-                animalTypeQueryPrefetchPaths
-
-            let batch = try context.fetch(request)
-            if batch.isEmpty {
-                break
-            }
-
-            for animal in batch {
-                try validateAnimalTypeRelationships(
-                    animal,
-                    herdID: herdID
-                )
-                let type = try CoreDataAnimalProjection.animalType(
-                    animal,
-                    now: referenceDate,
-                    calendar: calendar
-                )
-                if let selectedType = query.animalType,
-                   type != selectedType {
-                    continue
-                }
-
-                candidates.append(
-                    AnimalTypeQueryCandidate(
-                        animal: animal,
-                        animalType: type,
-                        sex: try CoreDataAnimalProjection.sex(animal),
-                        status: try CoreDataAnimalProjection.status(animal),
-                        displayTagNumber: animalListDisplayTagNumber(animal),
-                        pastureSortKey: animalListPastureSortKey(animal)
-                    )
-                )
-            }
-
-            sourceOffset += batch.count
-            if batch.count < animalTypeScanBatchSize {
-                break
-            }
-        }
-
-        candidates.sort { lhs, rhs in
-            animalTypeQueryCandidatePrecedes(
-                lhs,
-                rhs,
-                sortOrder: query.sortOrder
-            )
-        }
-
-        return Array(
-            candidates
-                .dropFirst(offset)
-                .prefix(limit)
-                .map(\.animal)
-        )
-    }
-
-    private static func animalTypeQueryCandidatePrecedes(
-        _ lhs: AnimalTypeQueryCandidate,
-        _ rhs: AnimalTypeQueryCandidate,
-        sortOrder: AnimalListQuerySortOrder
-    ) -> Bool {
-        switch sortOrder {
-        case .tagAscending:
-            return animalTypeCandidateTagAscending(lhs, rhs)
-        case .tagDescending:
-            let tagOrder = lhs.displayTagNumber.localizedStandardCompare(
-                rhs.displayTagNumber
-            )
-            if tagOrder != .orderedSame {
-                return tagOrder == .orderedDescending
-            }
-            return animalTypeCandidateStableTieBreak(lhs, rhs)
-        case .birthDateNewest:
-            if lhs.animal.birthDate != rhs.animal.birthDate {
-                return lhs.animal.birthDate > rhs.animal.birthDate
-            }
-            return animalTypeCandidateStableTieBreak(lhs, rhs)
-        case .birthDateOldest:
-            if lhs.animal.birthDate != rhs.animal.birthDate {
-                return lhs.animal.birthDate < rhs.animal.birthDate
-            }
-            return animalTypeCandidateStableTieBreak(lhs, rhs)
-        case .sex:
-            if lhs.sex.rawValue != rhs.sex.rawValue {
-                return lhs.sex.rawValue < rhs.sex.rawValue
-            }
-            return animalTypeCandidateTagAscending(lhs, rhs)
-        case .animalType:
-            let lhsKey = animalTypeSortKey(lhs.animalType)
-            let rhsKey = animalTypeSortKey(rhs.animalType)
-            if lhsKey != rhsKey {
-                return lhsKey < rhsKey
-            }
-            return animalTypeCandidateTagAscending(lhs, rhs)
-        case .status:
-            if lhs.status.rawValue != rhs.status.rawValue {
-                return lhs.status.rawValue < rhs.status.rawValue
-            }
-            return animalTypeCandidateTagAscending(lhs, rhs)
-        case .pasture:
-            if lhs.pastureSortKey != rhs.pastureSortKey {
-                return lhs.pastureSortKey < rhs.pastureSortKey
-            }
-            return animalTypeCandidateTagAscending(lhs, rhs)
-        }
-    }
-
-    private static func animalTypeCandidateTagAscending(
-        _ lhs: AnimalTypeQueryCandidate,
-        _ rhs: AnimalTypeQueryCandidate
-    ) -> Bool {
-        let tagOrder = lhs.displayTagNumber.localizedStandardCompare(
-            rhs.displayTagNumber
-        )
-        if tagOrder != .orderedSame {
-            return tagOrder == .orderedAscending
-        }
-        return animalTypeCandidateStableTieBreak(lhs, rhs)
-    }
-
-    private static func animalTypeCandidateStableTieBreak(
-        _ lhs: AnimalTypeQueryCandidate,
-        _ rhs: AnimalTypeQueryCandidate
-    ) -> Bool {
-        let nameOrder = lhs.animal.name.localizedStandardCompare(
-            rhs.animal.name
-        )
-        if nameOrder != .orderedSame {
-            return nameOrder == .orderedAscending
-        }
-        return lhs.animal.id.uuidString < rhs.animal.id.uuidString
-    }
-
-    private static func animalTypeSortKey(_ type: AnimalType) -> Int {
-        switch type {
-        case .calf: return 0
-        case .heifer: return 1
-        case .steer: return 2
-        case .cow: return 3
-        case .bull: return 4
-        }
-    }
-
-    private static func animalListDisplayTagNumber(
-        _ animal: CDAnimal
-    ) -> String {
-        let primary = CoreDataAnimalProjection.managedTags(animal)
-            .first { $0.isActive && $0.isPrimary }
-        return primary?.number
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    }
-
-    private static func animalListPastureSortKey(
-        _ animal: CDAnimal
-    ) -> String {
-        if animal.activeWorkingSession != nil {
-            return "0-working-pen"
-        }
-        if let name = animal.currentPasture?.name, !name.isEmpty {
-            return "1-\(name.lowercased())"
-        }
-        return "2-no-pasture"
-    }
-
-    private static func fetchRawTagOrderedCandidates(
-        query: AnimalListFilterQuery?,
-        herd: CDHerd,
-        herdID: UUID,
-        additionalAnimalPredicate: NSPredicate? = nil,
-        additionalTagPredicate: NSPredicate? = nil,
-        offset: Int,
-        limit: Int,
-        ascending: Bool,
-        in context: NSManagedObjectContext
-    ) throws -> [CDAnimal] {
-        guard limit > 0 else { return [] }
-
-        var animalPredicates = [
-            animalListPredicate(
-                query: query,
-                herd: herd
-            )
-        ]
-        if let additionalAnimalPredicate {
-            animalPredicates.append(additionalAnimalPredicate)
-        }
-        let animalPredicate = NSCompoundPredicate(
-            andPredicateWithSubpredicates: animalPredicates
         )
         let untaggedPredicate = NSCompoundPredicate(
             andPredicateWithSubpredicates: [
@@ -761,18 +431,9 @@ actor CoreDataReadModelActor:
                 missingPrimaryTagPredicate()
             ]
         )
-
-        var tagPredicates = [
-            taggedAnimalListPredicate(
-                query: query,
-                herd: herd
-            )
-        ]
-        if let additionalTagPredicate {
-            tagPredicates.append(additionalTagPredicate)
-        }
-        let tagPredicate = NSCompoundPredicate(
-            andPredicateWithSubpredicates: tagPredicates
+        let tagPredicate = taggedAnimalListPredicate(
+            query: query,
+            herd: herd
         )
 
         let untaggedCountRequest = NSFetchRequest<CDAnimal>(
@@ -848,10 +509,7 @@ actor CoreDataReadModelActor:
 
         if ascending {
             if offset < untaggedCount {
-                try fetchUntagged(
-                    offset: offset,
-                    limit: limit
-                )
+                try fetchUntagged(offset: offset, limit: limit)
             }
             if candidates.count < limit {
                 try fetchTagged(
@@ -861,10 +519,7 @@ actor CoreDataReadModelActor:
             }
         } else {
             if offset < taggedCount {
-                try fetchTagged(
-                    offset: offset,
-                    limit: limit
-                )
+                try fetchTagged(offset: offset, limit: limit)
             }
             if candidates.count < limit {
                 try fetchUntagged(
@@ -877,113 +532,221 @@ actor CoreDataReadModelActor:
         return candidates
     }
 
-    private struct AnimalListSortGroup {
-        let animalPredicate: NSPredicate
-        let tagPredicate: NSPredicate
+    private static func fetchLightweightSortedQueryCandidates(
+        query: AnimalListFilterQuery,
+        herd: CDHerd,
+        herdID: UUID,
+        referenceDate: Date,
+        calendar: Calendar,
+        offset: Int,
+        limit: Int,
+        in context: NSManagedObjectContext
+    ) throws -> [CDAnimal] {
+        let predicate = animalListPredicate(
+            query: query,
+            herd: herd
+        )
+        let needsAnimalType =
+            query.animalType != nil || query.sortOrder == .animalType
+        var prefetchPaths = ["tags"]
+        if query.sortOrder == .pasture {
+            prefetchPaths.append(contentsOf: [
+                "currentPasture",
+                "activeWorkingSession"
+            ])
+        }
+        if needsAnimalType {
+            prefetchPaths.append(contentsOf: [
+                "healthRecords",
+                "damOffspring"
+            ])
+        }
+
+        var sourceOffset = 0
+        var candidates: [AnimalListQueryCandidate] = []
+
+        while true {
+            try Task.checkCancellation()
+            let request = NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            )
+            request.predicate = predicate
+            request.sortDescriptors = [
+                NSSortDescriptor(key: "id", ascending: true)
+            ]
+            request.fetchOffset = sourceOffset
+            request.fetchLimit = animalTypeScanBatchSize
+            request.relationshipKeyPathsForPrefetching = prefetchPaths
+
+            let batch = try context.fetch(request)
+            if batch.isEmpty {
+                break
+            }
+
+            for animal in batch {
+                let type: AnimalType?
+                if needsAnimalType {
+                    try validateAnimalTypeRelationships(
+                        animal,
+                        herdID: herdID
+                    )
+                    type = try CoreDataAnimalProjection.animalType(
+                        animal,
+                        now: referenceDate,
+                        calendar: calendar
+                    )
+                } else {
+                    type = nil
+                }
+
+                if let selectedType = query.animalType,
+                   type != selectedType {
+                    continue
+                }
+
+                candidates.append(
+                    AnimalListQueryCandidate(
+                        animal: animal,
+                        animalType: type,
+                        sex: try CoreDataAnimalProjection.sex(animal),
+                        status: try CoreDataAnimalProjection.status(animal),
+                        displayTagNumber: animalListDisplayTagNumber(animal),
+                        pastureSortKey: query.sortOrder == .pasture
+                            ? animalListPastureSortKey(animal)
+                            : ""
+                    )
+                )
+            }
+
+            sourceOffset += batch.count
+            if batch.count < animalTypeScanBatchSize {
+                break
+            }
+        }
+
+        candidates.sort { lhs, rhs in
+            animalListQueryCandidatePrecedes(
+                lhs,
+                rhs,
+                sortOrder: query.sortOrder
+            )
+        }
+
+        return Array(
+            candidates
+                .dropFirst(offset)
+                .prefix(limit)
+                .map(\.animal)
+        )
     }
 
-    private static func animalListSortGroups(
-        sortOrder: AnimalListQuerySortOrder,
-        herd: CDHerd,
-        in context: NSManagedObjectContext
-    ) throws -> [AnimalListSortGroup] {
+    private static func animalListQueryCandidatePrecedes(
+        _ lhs: AnimalListQueryCandidate,
+        _ rhs: AnimalListQueryCandidate,
+        sortOrder: AnimalListQuerySortOrder
+    ) -> Bool {
         switch sortOrder {
+        case .tagAscending:
+            return animalListCandidateTagAscending(lhs, rhs)
+        case .tagDescending:
+            let tagOrder = lhs.displayTagNumber.localizedStandardCompare(
+                rhs.displayTagNumber
+            )
+            if tagOrder != .orderedSame {
+                return tagOrder == .orderedDescending
+            }
+            return animalListCandidateStableTieBreak(lhs, rhs)
+        case .birthDateNewest:
+            if lhs.animal.birthDate != rhs.animal.birthDate {
+                return lhs.animal.birthDate > rhs.animal.birthDate
+            }
+            return animalListCandidateStableTieBreak(lhs, rhs)
+        case .birthDateOldest:
+            if lhs.animal.birthDate != rhs.animal.birthDate {
+                return lhs.animal.birthDate < rhs.animal.birthDate
+            }
+            return animalListCandidateStableTieBreak(lhs, rhs)
         case .sex:
-            return Sex.allCases
-                .sorted { $0.rawValue < $1.rawValue }
-                .map { sex in
-                    AnimalListSortGroup(
-                        animalPredicate: NSPredicate(
-                            format: "sexRawValue == %@",
-                            sex.rawValue
-                        ),
-                        tagPredicate: NSPredicate(
-                            format: "animal.sexRawValue == %@",
-                            sex.rawValue
-                        )
-                    )
-                }
+            if lhs.sex.rawValue != rhs.sex.rawValue {
+                return lhs.sex.rawValue < rhs.sex.rawValue
+            }
+            return animalListCandidateTagAscending(lhs, rhs)
+        case .animalType:
+            let lhsKey = animalTypeSortKey(lhs.animalType)
+            let rhsKey = animalTypeSortKey(rhs.animalType)
+            if lhsKey != rhsKey {
+                return lhsKey < rhsKey
+            }
+            return animalListCandidateTagAscending(lhs, rhs)
         case .status:
-            return AnimalStatus.allCases
-                .sorted { $0.rawValue < $1.rawValue }
-                .map { status in
-                    AnimalListSortGroup(
-                        animalPredicate: NSPredicate(
-                            format: "statusRawValue == %@",
-                            status.rawValue
-                        ),
-                        tagPredicate: NSPredicate(
-                            format: "animal.statusRawValue == %@",
-                            status.rawValue
-                        )
-                    )
-                }
+            if lhs.status.rawValue != rhs.status.rawValue {
+                return lhs.status.rawValue < rhs.status.rawValue
+            }
+            return animalListCandidateTagAscending(lhs, rhs)
         case .pasture:
-            var groups = [
-                AnimalListSortGroup(
-                    animalPredicate: NSPredicate(
-                        format: "activeWorkingSession != nil"
-                    ),
-                    tagPredicate: NSPredicate(
-                        format: "animal.activeWorkingSession != nil"
-                    )
-                )
-            ]
-
-            let pastureRequest = NSFetchRequest<CDPasture>(
-                entityName: CDPasture.coreDataEntityName
-            )
-            pastureRequest.predicate = NSPredicate(format: "herd == %@", herd)
-            let pastures = try context.fetch(pastureRequest)
-            var namesByKey: [String: String] = [:]
-            for pasture in pastures where !pasture.name.isEmpty {
-                let key = pasture.name.lowercased()
-                if namesByKey[key] == nil {
-                    namesByKey[key] = pasture.name
-                }
+            if lhs.pastureSortKey != rhs.pastureSortKey {
+                return lhs.pastureSortKey < rhs.pastureSortKey
             }
-
-            for name in namesByKey.keys.sorted().compactMap({ namesByKey[$0] }) {
-                groups.append(
-                    AnimalListSortGroup(
-                        animalPredicate: NSPredicate(
-                            format: """
-                            activeWorkingSession == nil AND
-                            currentPasture.name ==[c] %@
-                            """,
-                            name
-                        ),
-                        tagPredicate: NSPredicate(
-                            format: """
-                            animal.activeWorkingSession == nil AND
-                            animal.currentPasture.name ==[c] %@
-                            """,
-                            name
-                        )
-                    )
-                )
-            }
-
-            groups.append(
-                AnimalListSortGroup(
-                    animalPredicate: NSPredicate(
-                        format: """
-                        activeWorkingSession == nil AND
-                        (currentPasture == nil OR currentPasture.name == "")
-                        """
-                    ),
-                    tagPredicate: NSPredicate(
-                        format: """
-                        animal.activeWorkingSession == nil AND
-                        (animal.currentPasture == nil OR animal.currentPasture.name == "")
-                        """
-                    )
-                )
-            )
-            return groups
-        case .tagAscending, .tagDescending, .birthDateNewest, .birthDateOldest, .animalType:
-            return []
+            return animalListCandidateTagAscending(lhs, rhs)
         }
+    }
+
+    private static func animalListCandidateTagAscending(
+        _ lhs: AnimalListQueryCandidate,
+        _ rhs: AnimalListQueryCandidate
+    ) -> Bool {
+        let tagOrder = lhs.displayTagNumber.localizedStandardCompare(
+            rhs.displayTagNumber
+        )
+        if tagOrder != .orderedSame {
+            return tagOrder == .orderedAscending
+        }
+        return animalListCandidateStableTieBreak(lhs, rhs)
+    }
+
+    private static func animalListCandidateStableTieBreak(
+        _ lhs: AnimalListQueryCandidate,
+        _ rhs: AnimalListQueryCandidate
+    ) -> Bool {
+        let nameOrder = lhs.animal.name.localizedStandardCompare(
+            rhs.animal.name
+        )
+        if nameOrder != .orderedSame {
+            return nameOrder == .orderedAscending
+        }
+        return lhs.animal.id.uuidString < rhs.animal.id.uuidString
+    }
+
+    private static func animalTypeSortKey(_ type: AnimalType?) -> Int {
+        switch type {
+        case .calf: return 0
+        case .heifer: return 1
+        case .steer: return 2
+        case .cow: return 3
+        case .bull: return 4
+        case nil: return Int.max
+        }
+    }
+
+    private static func animalListDisplayTagNumber(
+        _ animal: CDAnimal
+    ) -> String {
+        let primary = CoreDataAnimalProjection.managedTags(animal)
+            .first { $0.isActive && $0.isPrimary }
+        return primary?.number
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private static func animalListPastureSortKey(
+        _ animal: CDAnimal
+    ) -> String {
+        if animal.activeWorkingSession != nil {
+            return "0-working-pen"
+        }
+        if let name = animal.currentPasture?.name, !name.isEmpty {
+            return "1-\(name.lowercased())"
+        }
+        return "2-no-pasture"
     }
 
     private static func hydrateAnimalSummaryCandidates(
@@ -1891,14 +1654,6 @@ actor CoreDataReadModelActor:
             )
         }
     }
-
-    private static let animalTypeQueryPrefetchPaths = [
-        "tags",
-        "healthRecords",
-        "damOffspring",
-        "currentPasture",
-        "activeWorkingSession"
-    ]
 
     private static let animalSummaryPrefetchPaths = [
         "tags",
