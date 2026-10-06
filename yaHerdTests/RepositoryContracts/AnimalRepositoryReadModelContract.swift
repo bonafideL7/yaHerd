@@ -2147,6 +2147,112 @@ extension AnimalRepositoryContract {
             line: line
         )
 
+        let calendar = Calendar.current
+        let referenceDate = Date()
+        let adultBirthDate = try XCTUnwrap(
+            calendar.date(byAdding: .month, value: -30, to: referenceDate),
+            file: file,
+            line: line
+        )
+        let calfBirthDate = try XCTUnwrap(
+            calendar.date(byAdding: .month, value: -6, to: referenceDate),
+            file: file,
+            line: line
+        )
+
+        let typeCow = try repository.create(
+            input: readModelAnimalInput(
+                name: "Filtered Type Cow",
+                tagNumber: "T300",
+                sex: .female,
+                birthDate: adultBirthDate,
+                pastureID: pastureAlpha.id
+            )
+        )
+        let typeCalf = try repository.create(
+            input: readModelAnimalInput(
+                name: "Filtered Type Calf",
+                tagNumber: "T100",
+                sex: .female,
+                birthDate: calfBirthDate,
+                pastureID: pastureAlpha.id,
+                damID: typeCow.id
+            )
+        )
+        let typeSteer = try repository.create(
+            input: readModelAnimalInput(
+                name: "Filtered Type Steer",
+                tagNumber: "T200",
+                sex: .male,
+                birthDate: adultBirthDate,
+                pastureID: pastureBeta.id
+            )
+        )
+        _ = try repository.addHealthRecord(
+            animalID: typeSteer.id,
+            input: HealthRecordInput(
+                date: referenceDate,
+                treatment: "  BaNdEd \n",
+                notes: "Animal Type query normalization contract"
+            )
+        )
+
+        let authoritativeVisible = try repository.fetchAnimals()
+            .filter { $0.status == .active && !$0.isArchived }
+        let authoritativeByID = Dictionary(
+            uniqueKeysWithValues: authoritativeVisible.map { ($0.id, $0) }
+        )
+        XCTAssertEqual(authoritativeByID[typeCalf.id]?.animalType, .calf, file: file, line: line)
+        XCTAssertEqual(authoritativeByID[alpha.id]?.animalType, .heifer, file: file, line: line)
+        XCTAssertEqual(authoritativeByID[typeSteer.id]?.animalType, .steer, file: file, line: line)
+        XCTAssertEqual(authoritativeByID[typeCow.id]?.animalType, .cow, file: file, line: line)
+        XCTAssertEqual(authoritativeByID[beta.id]?.animalType, .bull, file: file, line: line)
+
+        for type in AnimalType.allCases {
+            let expected = expectedAnimalListQueryOrder(
+                authoritativeVisible.filter { $0.animalType == type },
+                sortOrder: .tagAscending
+            )
+            try await assertFilteredQueryIDs(
+                expected.map(\.id),
+                query: AnimalListFilterQuery(animalType: type),
+                reader: reader,
+                file: file,
+                line: line
+            )
+        }
+
+        let sortOrders: [AnimalListQuerySortOrder] = [
+            .tagAscending,
+            .tagDescending,
+            .birthDateNewest,
+            .birthDateOldest,
+            .sex,
+            .animalType,
+            .status,
+            .pasture
+        ]
+        for sortOrder in sortOrders {
+            let expected = expectedAnimalListQueryOrder(
+                authoritativeVisible,
+                sortOrder: sortOrder
+            )
+            let actual = try await fetchFilteredAnimalListContractPages(
+                reader: reader,
+                query: AnimalListFilterQuery(sortOrder: sortOrder),
+                pageSize: 2,
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(
+                actual.map(\.id),
+                expected.map(\.id),
+                "Filtered Animal-list sort order \(sortOrder.rawValue) must remain deterministic across page boundaries.",
+                file: file,
+                line: line
+            )
+        }
+
         let allVisible = try await fetchFilteredAnimalListContractPages(
             reader: reader,
             query: AnimalListFilterQuery(
@@ -2159,7 +2265,17 @@ extension AnimalRepositoryContract {
         )
         XCTAssertEqual(
             Set(allVisible.map(\.id)),
-            Set([alpha.id, beta.id, untagged.id, removed.id, archived.id, working.id]),
+            Set([
+                alpha.id,
+                beta.id,
+                untagged.id,
+                removed.id,
+                archived.id,
+                working.id,
+                typeCow.id,
+                typeCalf.id,
+                typeSteer.id
+            ]),
             file: file,
             line: line
         )
@@ -2424,6 +2540,106 @@ extension AnimalRepositoryContract {
             file: file,
             line: line
         )
+    }
+
+    private static func expectedAnimalListQueryOrder(
+        _ animals: [AnimalSummary],
+        sortOrder: AnimalListQuerySortOrder
+    ) -> [AnimalSummary] {
+        animals.sorted { lhs, rhs in
+            switch sortOrder {
+            case .tagAscending:
+                return animalListTagAscending(lhs, rhs)
+            case .tagDescending:
+                let tagOrder = lhs.displayTagNumber.localizedStandardCompare(
+                    rhs.displayTagNumber
+                )
+                if tagOrder != .orderedSame {
+                    return tagOrder == .orderedDescending
+                }
+                return animalListStableTieBreak(lhs, rhs)
+            case .birthDateNewest:
+                if lhs.birthDate != rhs.birthDate {
+                    return lhs.birthDate > rhs.birthDate
+                }
+                return animalListStableTieBreak(lhs, rhs)
+            case .birthDateOldest:
+                if lhs.birthDate != rhs.birthDate {
+                    return lhs.birthDate < rhs.birthDate
+                }
+                return animalListStableTieBreak(lhs, rhs)
+            case .sex:
+                if lhs.sex.rawValue != rhs.sex.rawValue {
+                    return lhs.sex.rawValue < rhs.sex.rawValue
+                }
+                return animalListTagAscending(lhs, rhs)
+            case .animalType:
+                let lhsKey = animalListTypeSortKey(lhs.animalType)
+                let rhsKey = animalListTypeSortKey(rhs.animalType)
+                if lhsKey != rhsKey {
+                    return lhsKey < rhsKey
+                }
+                return animalListTagAscending(lhs, rhs)
+            case .status:
+                if lhs.status.rawValue != rhs.status.rawValue {
+                    return lhs.status.rawValue < rhs.status.rawValue
+                }
+                return animalListTagAscending(lhs, rhs)
+            case .pasture:
+                let lhsKey = animalListPastureSortKey(lhs)
+                let rhsKey = animalListPastureSortKey(rhs)
+                if lhsKey != rhsKey {
+                    return lhsKey < rhsKey
+                }
+                return animalListTagAscending(lhs, rhs)
+            }
+        }
+    }
+
+    private static func animalListTagAscending(
+        _ lhs: AnimalSummary,
+        _ rhs: AnimalSummary
+    ) -> Bool {
+        let tagOrder = lhs.displayTagNumber.localizedStandardCompare(
+            rhs.displayTagNumber
+        )
+        if tagOrder != .orderedSame {
+            return tagOrder == .orderedAscending
+        }
+        return animalListStableTieBreak(lhs, rhs)
+    }
+
+    private static func animalListStableTieBreak(
+        _ lhs: AnimalSummary,
+        _ rhs: AnimalSummary
+    ) -> Bool {
+        let nameOrder = lhs.name.localizedStandardCompare(rhs.name)
+        if nameOrder != .orderedSame {
+            return nameOrder == .orderedAscending
+        }
+        return lhs.id.uuidString < rhs.id.uuidString
+    }
+
+    private static func animalListTypeSortKey(_ type: AnimalType) -> Int {
+        switch type {
+        case .calf: return 0
+        case .heifer: return 1
+        case .steer: return 2
+        case .cow: return 3
+        case .bull: return 4
+        }
+    }
+
+    private static func animalListPastureSortKey(
+        _ animal: AnimalSummary
+    ) -> String {
+        if animal.location == .workingPen {
+            return "0-working-pen"
+        }
+        if let pastureName = animal.pastureName, !pastureName.isEmpty {
+            return "1-\(pastureName.lowercased())"
+        }
+        return "2-no-pasture"
     }
 
     private static func fetchFilteredAnimalListContractPages(
@@ -2889,6 +3105,7 @@ extension AnimalRepositoryContract {
         birthDate: Date,
         status: AnimalStatus = .active,
         pastureID: UUID? = nil,
+        damID: UUID? = nil,
         deathDate: Date? = nil,
         causeOfDeath: String? = nil,
         statusReferenceID: UUID? = nil,
@@ -2903,7 +3120,7 @@ extension AnimalRepositoryContract {
             status: status,
             pastureID: pastureID,
             sireID: nil,
-            damID: nil,
+            damID: damID,
             distinguishingFeatures: distinguishingFeatures,
             saleDate: nil,
             salePrice: nil,
