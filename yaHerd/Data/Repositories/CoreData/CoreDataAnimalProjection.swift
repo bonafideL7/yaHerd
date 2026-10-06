@@ -29,7 +29,11 @@ enum CoreDataAnimalProjection {
         let kindOrder: Int
     }
 
-    static func summary(_ animal: CDAnimal) throws -> AnimalSummary {
+    static func summary(
+        _ animal: CDAnimal,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) throws -> AnimalSummary {
         try CoreDataAnimalMutation.validateOwnedGraphIdentity(animal)
         let tags = managedTags(animal)
         let primary = primaryTagFields(tags)
@@ -67,7 +71,11 @@ enum CoreDataAnimalProjection {
                 : (damPrimary?.number.isEmpty == false ? damPrimary?.number : AnimalDisplayTagFormatter.untaggedPlaceholder),
             damDisplayTagColorID: damPrimary?.colorID,
             sex: sex,
-            animalType: try animalType(animal),
+            animalType: try animalType(
+                animal,
+                now: now,
+                calendar: calendar
+            ),
             firstDistinguishingFeature: try distinguishingFeatures(animal)
                 .firstOrderedDistinguishingFeatureDescription,
             birthDate: animal.birthDate,
@@ -341,14 +349,20 @@ enum CoreDataAnimalProjection {
         )
     }
 
-    static func animalType(_ animal: CDAnimal) throws -> AnimalType {
+    static func animalType(
+        _ animal: CDAnimal,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) throws -> AnimalType {
         AnimalTypeClassifier.classify(
             sex: try sex(animal),
             birthDate: animal.birthDate,
             hasMaternalOffspring: !managedMaternalOffspring(animal).isEmpty,
             hasCastrationOrBandingRecord: managedHealthRecords(animal).contains {
                 AnimalTypeClassifier.isCastrationOrBandingTreatment($0.treatment)
-            }
+            },
+            now: now,
+            calendar: calendar
         )
     }
 
