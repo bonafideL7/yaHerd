@@ -649,8 +649,10 @@ actor CoreDataReadModelActor:
 
     private static let dashboardAnimalPrefetchPaths = [
         "tags",
+        "tags.color",
         "dam",
         "dam.tags",
+        "dam.tags.color",
         "currentPasture",
         "activeWorkingSession",
         "pregnancyChecks",
@@ -1041,8 +1043,10 @@ actor CoreDataReadModelActor:
 
     private static let animalSummaryPrefetchPaths = [
         "tags",
+        "tags.color",
         "dam",
         "dam.tags",
+        "dam.tags.color",
         "currentPasture",
         "activeWorkingSession",
         "pregnancyChecks",
@@ -1055,8 +1059,10 @@ actor CoreDataReadModelActor:
     private static let taggedAnimalSummaryPrefetchPaths = [
         "animal",
         "animal.tags",
+        "animal.tags.color",
         "animal.dam",
         "animal.dam.tags",
+        "animal.dam.tags.color",
         "animal.currentPasture",
         "animal.activeWorkingSession",
         "animal.pregnancyChecks",
