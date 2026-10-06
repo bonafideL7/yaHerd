@@ -1131,7 +1131,7 @@ actor CoreDataReadModelActor:
             NSPredicate(format: "animal.herd == %@", herd),
             NSPredicate(format: "isActive == YES"),
             NSPredicate(format: "isPrimary == YES"),
-            NSPredicate(format: "number != """)
+            NSPredicate(format: "number != ''")
         ]
         guard let query else {
             return NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
