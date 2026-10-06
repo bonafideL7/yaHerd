@@ -15,6 +15,11 @@ enum CoreDataReadModelError: LocalizedError, Equatable, Sendable {
         actualSessionID: UUID
     )
     case inconsistentOpenFindingCount(expected: Int, fetched: Int)
+    case invalidActivePrimaryTagCardinality(
+        animalID: UUID,
+        activeTagCount: Int,
+        primaryTagCount: Int
+    )
 
     var errorDescription: String? {
         switch self {
@@ -24,6 +29,8 @@ enum CoreDataReadModelError: LocalizedError, Equatable, Sendable {
             return "The read-model relationship points to another session."
         case .inconsistentOpenFindingCount:
             return "The Field Check Home read changed while its finding count was being resolved."
+        case .invalidActivePrimaryTagCardinality:
+            return "The read-model Animal tag graph has an invalid active primary-tag state."
         }
     }
 }
@@ -212,6 +219,11 @@ actor CoreDataReadModelActor:
             }
 
             try Self.validateAnimalApplicationIDs(
+                herd: herd,
+                herdID: herdID,
+                in: context
+            )
+            try Self.validateAnimalListTagIntegrity(
                 herd: herd,
                 herdID: herdID,
                 in: context
@@ -584,6 +596,57 @@ actor CoreDataReadModelActor:
         }
     }
 
+    private static func validateAnimalListTagIntegrity(
+        herd: CDHerd,
+        herdID: UUID,
+        in context: NSManagedObjectContext
+    ) throws {
+        let crossHerdTagRequest = NSFetchRequest<CDAnimalTag>(
+            entityName: CDAnimalTag.coreDataEntityName
+        )
+        crossHerdTagRequest.predicate = NSPredicate(
+            format: "animal.herd == %@ AND herd != %@",
+            herd,
+            herd
+        )
+        crossHerdTagRequest.fetchLimit = 1
+        crossHerdTagRequest.relationshipKeyPathsForPrefetching = ["herd", "animal"]
+
+        if let tag = try context.fetch(crossHerdTagRequest).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDAnimalTag.coreDataEntityName,
+                id: tag.id,
+                expectedHerdID: herdID,
+                actualHerdID: tag.herd.id
+            )
+        }
+
+        let cardinalityRequest = NSFetchRequest<CDAnimal>(
+            entityName: CDAnimal.coreDataEntityName
+        )
+        cardinalityRequest.predicate = NSPredicate(
+            format: """
+            herd == %@ AND
+            SUBQUERY(tags, $tag, $tag.isActive == YES).@count > 0 AND
+            SUBQUERY(
+                tags,
+                $tag,
+                $tag.isActive == YES AND $tag.isPrimary == YES
+            ).@count != 1
+            """,
+            herd
+        )
+        cardinalityRequest.fetchLimit = 1
+        cardinalityRequest.relationshipKeyPathsForPrefetching = ["tags"]
+
+        if let animal = try context.fetch(cardinalityRequest).first {
+            try validateTagRelationships(
+                animal,
+                herdID: herdID
+            )
+        }
+    }
+
     private static let dashboardAnimalPrefetchPaths = [
         "tags",
         "dam",
@@ -870,35 +933,25 @@ actor CoreDataReadModelActor:
                 actualHerdID: session.herd.id
             )
         }
-        if let dam = animal.dam,
-           dam.herd.id != herdID {
-            throw CoreDataReadModelError.invalidHerdOwnership(
-                entity: CDAnimal.coreDataEntityName,
-                id: dam.id,
-                expectedHerdID: herdID,
-                actualHerdID: dam.herd.id
+        if let dam = animal.dam {
+            guard dam.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDAnimal.coreDataEntityName,
+                    id: dam.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: dam.herd.id
+                )
+            }
+            try validateTagRelationships(
+                dam,
+                herdID: herdID
             )
         }
 
-        for tag in CoreDataAnimalProjection.managedTags(animal) {
-            guard tag.herd.id == herdID else {
-                throw CoreDataReadModelError.invalidHerdOwnership(
-                    entity: CDAnimalTag.coreDataEntityName,
-                    id: tag.id,
-                    expectedHerdID: herdID,
-                    actualHerdID: tag.herd.id
-                )
-            }
-            if let color = tag.color,
-               color.herd.id != herdID {
-                throw CoreDataReadModelError.invalidHerdOwnership(
-                    entity: CDTagColorDefinition.coreDataEntityName,
-                    id: color.id,
-                    expectedHerdID: herdID,
-                    actualHerdID: color.herd.id
-                )
-            }
-        }
+        try validateTagRelationships(
+            animal,
+            herdID: herdID
+        )
         for record in CoreDataAnimalProjection.managedHealthRecords(animal) {
             guard record.herd.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
@@ -948,6 +1001,41 @@ actor CoreDataReadModelActor:
                     actualHerdID: statusRecord.herd.id
                 )
             }
+        }
+    }
+
+    private static func validateTagRelationships(
+        _ animal: CDAnimal,
+        herdID: UUID
+    ) throws {
+        let tags = CoreDataAnimalProjection.managedTags(animal)
+        for tag in tags {
+            guard tag.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDAnimalTag.coreDataEntityName,
+                    id: tag.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: tag.herd.id
+                )
+            }
+            if let color = tag.color,
+               color.herd.id != herdID {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDTagColorDefinition.coreDataEntityName,
+                    id: color.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: color.herd.id
+                )
+            }
+        }
+
+        let activeTags = tags.filter(\.isActive)
+        guard activeTags.isEmpty || activeTags.filter(\.isPrimary).count == 1 else {
+            throw CoreDataReadModelError.invalidActivePrimaryTagCardinality(
+                animalID: animal.id,
+                activeTagCount: activeTags.count,
+                primaryTagCount: activeTags.filter(\.isPrimary).count
+            )
         }
     }
 
