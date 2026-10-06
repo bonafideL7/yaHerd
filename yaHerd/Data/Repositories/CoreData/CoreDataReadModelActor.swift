@@ -1346,6 +1346,128 @@ actor CoreDataReadModelActor:
         }
     }
 
+    private static func validateAnimalListQueryIntegrity(
+        query: AnimalListFilterQuery?,
+        herd: CDHerd,
+        herdID: UUID,
+        in context: NSManagedObjectContext
+    ) throws {
+        let invalidEnumRequest = NSFetchRequest<CDAnimal>(
+            entityName: CDAnimal.coreDataEntityName
+        )
+        invalidEnumRequest.predicate = NSPredicate(
+            format: """
+            herd == %@ AND (
+                NOT (sexRawValue IN %@) OR
+                NOT (statusRawValue IN %@)
+            )
+            """,
+            herd,
+            Sex.allCases.map(\.rawValue),
+            AnimalStatus.allCases.map(\.rawValue)
+        )
+        invalidEnumRequest.fetchLimit = 1
+
+        if let animal = try context.fetch(invalidEnumRequest).first {
+            _ = try CoreDataAnimalProjection.sex(animal)
+            _ = try CoreDataAnimalProjection.status(animal)
+        }
+
+        let invalidPastureRequest = NSFetchRequest<CDAnimal>(
+            entityName: CDAnimal.coreDataEntityName
+        )
+        invalidPastureRequest.predicate = NSPredicate(
+            format: """
+            herd == %@ AND
+            currentPasture != nil AND
+            currentPasture.herd != %@
+            """,
+            herd,
+            herd
+        )
+        invalidPastureRequest.fetchLimit = 1
+        invalidPastureRequest.relationshipKeyPathsForPrefetching = ["currentPasture"]
+
+        if let animal = try context.fetch(invalidPastureRequest).first,
+           let pasture = animal.currentPasture {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDPasture.coreDataEntityName,
+                id: pasture.id,
+                expectedHerdID: herdID,
+                actualHerdID: pasture.herd.id
+            )
+        }
+
+        let invalidWorkingRequest = NSFetchRequest<CDAnimal>(
+            entityName: CDAnimal.coreDataEntityName
+        )
+        invalidWorkingRequest.predicate = NSPredicate(
+            format: """
+            herd == %@ AND
+            activeWorkingSession != nil AND
+            activeWorkingSession.herd != %@
+            """,
+            herd,
+            herd
+        )
+        invalidWorkingRequest.fetchLimit = 1
+        invalidWorkingRequest.relationshipKeyPathsForPrefetching = ["activeWorkingSession"]
+
+        if let animal = try context.fetch(invalidWorkingRequest).first,
+           let session = animal.activeWorkingSession {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDWorkingSession.coreDataEntityName,
+                id: session.id,
+                expectedHerdID: herdID,
+                actualHerdID: session.herd.id
+            )
+        }
+
+        guard query?.animalType != nil || query?.sortOrder == .animalType else {
+            return
+        }
+
+        let invalidHealthRequest = NSFetchRequest<CDHealthRecord>(
+            entityName: CDHealthRecord.coreDataEntityName
+        )
+        invalidHealthRequest.predicate = NSPredicate(
+            format: "animal.herd == %@ AND herd != %@",
+            herd,
+            herd
+        )
+        invalidHealthRequest.fetchLimit = 1
+        invalidHealthRequest.relationshipKeyPathsForPrefetching = ["animal", "herd"]
+
+        if let record = try context.fetch(invalidHealthRequest).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDHealthRecord.coreDataEntityName,
+                id: record.id,
+                expectedHerdID: herdID,
+                actualHerdID: record.herd.id
+            )
+        }
+
+        let invalidOffspringRequest = NSFetchRequest<CDAnimal>(
+            entityName: CDAnimal.coreDataEntityName
+        )
+        invalidOffspringRequest.predicate = NSPredicate(
+            format: "dam.herd == %@ AND herd != %@",
+            herd,
+            herd
+        )
+        invalidOffspringRequest.fetchLimit = 1
+        invalidOffspringRequest.relationshipKeyPathsForPrefetching = ["dam", "herd"]
+
+        if let offspring = try context.fetch(invalidOffspringRequest).first {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDAnimal.coreDataEntityName,
+                id: offspring.id,
+                expectedHerdID: herdID,
+                actualHerdID: offspring.herd.id
+            )
+        }
+    }
+
     private static let dashboardAnimalPrefetchPaths = [
         "tags",
         "tags.color",
@@ -1705,6 +1827,42 @@ actor CoreDataReadModelActor:
         }
     }
 
+    private static func validateAnimalTypeRelationships(
+        _ animal: CDAnimal,
+        herdID: UUID
+    ) throws {
+        guard animal.herd.id == herdID else {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDAnimal.coreDataEntityName,
+                id: animal.id,
+                expectedHerdID: herdID,
+                actualHerdID: animal.herd.id
+            )
+        }
+
+        for record in CoreDataAnimalProjection.managedHealthRecords(animal) {
+            guard record.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDHealthRecord.coreDataEntityName,
+                    id: record.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: record.herd.id
+                )
+            }
+        }
+
+        for offspring in CoreDataAnimalProjection.managedMaternalOffspring(animal) {
+            guard offspring.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDAnimal.coreDataEntityName,
+                    id: offspring.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: offspring.herd.id
+                )
+            }
+        }
+    }
+
     private static func validateTagRelationships(
         _ animal: CDAnimal,
         herdID: UUID
@@ -1739,6 +1897,17 @@ actor CoreDataReadModelActor:
             )
         }
     }
+
+    private static let animalTypeEvaluationPrefetchPaths = [
+        "healthRecords",
+        "damOffspring"
+    ]
+
+    private static let taggedAnimalTypeEvaluationPrefetchPaths = [
+        "animal",
+        "animal.healthRecords",
+        "animal.damOffspring"
+    ]
 
     private static let animalSummaryPrefetchPaths = [
         "tags",
