@@ -2222,6 +2222,7 @@ extension AnimalRepositoryContract {
             )
         }
 
+        let authoritativeAll = try repository.fetchAnimals()
         let sortOrders: [AnimalListQuerySortOrder] = [
             .tagAscending,
             .tagDescending,
@@ -2234,12 +2235,16 @@ extension AnimalRepositoryContract {
         ]
         for sortOrder in sortOrders {
             let expected = expectedAnimalListQueryOrder(
-                authoritativeVisible,
+                authoritativeAll,
                 sortOrder: sortOrder
             )
             let actual = try await fetchFilteredAnimalListContractPages(
                 reader: reader,
-                query: AnimalListFilterQuery(sortOrder: sortOrder),
+                query: AnimalListFilterQuery(
+                    showRemovedStatuses: true,
+                    showArchivedRecords: true,
+                    sortOrder: sortOrder
+                ),
                 pageSize: 2,
                 file: file,
                 line: line
