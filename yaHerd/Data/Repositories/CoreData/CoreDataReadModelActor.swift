@@ -15,6 +15,7 @@ enum CoreDataReadModelError: LocalizedError, Equatable, Sendable {
         actualSessionID: UUID
     )
     case inconsistentOpenFindingCount(expected: Int, fetched: Int)
+    case inconsistentAnimalPage(expected: Int, fetched: Int)
     case invalidActivePrimaryTagCardinality(
         animalID: UUID,
         activeTagCount: Int,
@@ -29,6 +30,8 @@ enum CoreDataReadModelError: LocalizedError, Equatable, Sendable {
             return "The read-model relationship points to another session."
         case .inconsistentOpenFindingCount:
             return "The Field Check Home read changed while its finding count was being resolved."
+        case .inconsistentAnimalPage:
+            return "The Animal-list read changed while its page was being resolved."
         case .invalidActivePrimaryTagCardinality:
             return "The read-model Animal tag graph has an invalid active primary-tag state."
         }
@@ -230,7 +233,7 @@ actor CoreDataReadModelActor:
                 herdID: herdID,
                 in: context
             )
-            try Self.validateAnimalListSortPartitionIntegrity(
+            try Self.validateAnimalListQueryIntegrity(
                 query: query,
                 herd: herd,
                 herdID: herdID,
@@ -293,7 +296,18 @@ actor CoreDataReadModelActor:
                     ],
                     in: context
                 )
-            case .sex, .animalType, .status, .pasture:
+            case .animalType:
+                candidates = try Self.fetchAnimalTypeOrderedCandidates(
+                    query: query,
+                    herd: herd,
+                    herdID: herdID,
+                    referenceDate: referenceDate,
+                    calendar: calendar,
+                    offset: page.offset,
+                    limit: requestedCount,
+                    in: context
+                )
+            case .sex, .status, .pasture:
                 candidates = try Self.fetchGroupedTagOrderedCandidates(
                     query: query,
                     herd: herd,
@@ -306,8 +320,14 @@ actor CoreDataReadModelActor:
                 )
             }
 
+            let hydratedCandidates = try Self.hydrateAnimalSummaryCandidates(
+                candidates,
+                herd: herd,
+                in: context
+            )
+
             var candidateIDs = Set<UUID>()
-            for animal in candidates {
+            for animal in hydratedCandidates {
                 guard candidateIDs.insert(animal.id).inserted else {
                     throw CoreDataPersistenceError.duplicateApplicationID(
                         entity: CDAnimal.coreDataEntityName,
@@ -321,9 +341,9 @@ actor CoreDataReadModelActor:
                 )
             }
 
-            let hasMore = candidates.count > page.limit
+            let hasMore = hydratedCandidates.count > page.limit
             return AnimalSummaryPage(
-                animals: try candidates.prefix(page.limit).map {
+                animals: try hydratedCandidates.prefix(page.limit).map {
                     try CoreDataAnimalProjection.summary(
                         $0,
                         now: referenceDate,
@@ -335,6 +355,8 @@ actor CoreDataReadModelActor:
         }
     }
 
+    private static let animalTypeScanBatchSize = 250
+
     private static func fetchDirectAnimalCandidates(
         query: AnimalListFilterQuery?,
         herd: CDHerd,
@@ -345,20 +367,71 @@ actor CoreDataReadModelActor:
         sortDescriptors: [NSSortDescriptor],
         in context: NSManagedObjectContext
     ) throws -> [CDAnimal] {
-        let request = NSFetchRequest<CDAnimal>(
-            entityName: CDAnimal.coreDataEntityName
-        )
-        request.predicate = animalListPredicate(
+        let predicate = animalListPredicate(
             query: query,
-            herd: herd,
-            referenceDate: referenceDate,
-            calendar: calendar
+            herd: herd
         )
-        request.sortDescriptors = sortDescriptors
-        request.fetchOffset = offset
-        request.fetchLimit = limit
-        request.relationshipKeyPathsForPrefetching = animalSummaryPrefetchPaths
-        return try context.fetch(request)
+        guard let targetType = query?.animalType else {
+            let request = NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            )
+            request.predicate = predicate
+            request.sortDescriptors = sortDescriptors
+            request.fetchOffset = offset
+            request.fetchLimit = limit
+            return try context.fetch(request)
+        }
+
+        var sourceOffset = 0
+        var matchingOffset = offset
+        var matches: [CDAnimal] = []
+        matches.reserveCapacity(limit)
+
+        while matches.count < limit {
+            try Task.checkCancellation()
+            let request = NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            )
+            request.predicate = predicate
+            request.sortDescriptors = sortDescriptors
+            request.fetchOffset = sourceOffset
+            request.fetchLimit = animalTypeScanBatchSize
+            request.relationshipKeyPathsForPrefetching = animalTypeEvaluationPrefetchPaths
+
+            let batch = try context.fetch(request)
+            if batch.isEmpty {
+                break
+            }
+
+            for animal in batch {
+                try validateAnimalTypeRelationships(
+                    animal,
+                    herdID: herd.id
+                )
+                guard try CoreDataAnimalProjection.animalType(
+                    animal,
+                    now: referenceDate,
+                    calendar: calendar
+                ) == targetType else {
+                    continue
+                }
+                if matchingOffset > 0 {
+                    matchingOffset -= 1
+                    continue
+                }
+                matches.append(animal)
+                if matches.count == limit {
+                    break
+                }
+            }
+
+            sourceOffset += batch.count
+            if batch.count < animalTypeScanBatchSize {
+                break
+            }
+        }
+
+        return matches
     }
 
     private static func fetchGroupedTagOrderedCandidates(
@@ -388,34 +461,24 @@ actor CoreDataReadModelActor:
         let groups = try animalListSortGroups(
             sortOrder: query.sortOrder,
             herd: herd,
-            referenceDate: referenceDate,
-            calendar: calendar,
             in: context
         )
-        let basePredicate = animalListPredicate(
-            query: query,
-            herd: herd,
-            referenceDate: referenceDate,
-            calendar: calendar
-        )
-
         var remainingOffset = offset
         var candidates: [CDAnimal] = []
         candidates.reserveCapacity(limit)
 
         for group in groups {
             try Task.checkCancellation()
-            let groupPredicate = NSCompoundPredicate(
-                andPredicateWithSubpredicates: [
-                    basePredicate,
-                    group.animalPredicate
-                ]
+            let groupCount = try matchingAnimalCount(
+                query: query,
+                herd: herd,
+                herdID: herdID,
+                additionalPredicate: group.animalPredicate,
+                targetType: query.animalType,
+                referenceDate: referenceDate,
+                calendar: calendar,
+                in: context
             )
-            let countRequest = NSFetchRequest<CDAnimal>(
-                entityName: CDAnimal.coreDataEntityName
-            )
-            countRequest.predicate = groupPredicate
-            let groupCount = try context.count(for: countRequest)
 
             if remainingOffset >= groupCount {
                 remainingOffset -= groupCount
@@ -430,6 +493,7 @@ actor CoreDataReadModelActor:
                 calendar: calendar,
                 additionalAnimalPredicate: group.animalPredicate,
                 additionalTagPredicate: group.tagPredicate,
+                targetType: query.animalType,
                 offset: remainingOffset,
                 limit: limit - candidates.count,
                 ascending: true,
@@ -446,6 +510,142 @@ actor CoreDataReadModelActor:
         return candidates
     }
 
+    private static func fetchAnimalTypeOrderedCandidates(
+        query: AnimalListFilterQuery?,
+        herd: CDHerd,
+        herdID: UUID,
+        referenceDate: Date,
+        calendar: Calendar,
+        offset: Int,
+        limit: Int,
+        in context: NSManagedObjectContext
+    ) throws -> [CDAnimal] {
+        let orderedTypes: [AnimalType]
+        if let selectedType = query?.animalType {
+            orderedTypes = [selectedType]
+        } else {
+            orderedTypes = [.calf, .heifer, .steer, .cow, .bull]
+        }
+
+        var remainingOffset = offset
+        var candidates: [CDAnimal] = []
+        candidates.reserveCapacity(limit)
+
+        for type in orderedTypes {
+            try Task.checkCancellation()
+            let groupCount = try matchingAnimalCount(
+                query: query,
+                herd: herd,
+                herdID: herdID,
+                additionalPredicate: nil,
+                targetType: type,
+                referenceDate: referenceDate,
+                calendar: calendar,
+                in: context
+            )
+
+            if remainingOffset >= groupCount {
+                remainingOffset -= groupCount
+                continue
+            }
+
+            let fetched = try fetchTagOrderedCandidates(
+                query: query,
+                herd: herd,
+                herdID: herdID,
+                referenceDate: referenceDate,
+                calendar: calendar,
+                targetType: type,
+                offset: remainingOffset,
+                limit: limit - candidates.count,
+                ascending: true,
+                in: context
+            )
+            candidates.append(contentsOf: fetched)
+            remainingOffset = 0
+
+            if candidates.count >= limit {
+                break
+            }
+        }
+
+        return candidates
+    }
+
+    private static func matchingAnimalCount(
+        query: AnimalListFilterQuery?,
+        herd: CDHerd,
+        herdID: UUID,
+        additionalPredicate: NSPredicate?,
+        targetType: AnimalType?,
+        referenceDate: Date,
+        calendar: Calendar,
+        in context: NSManagedObjectContext
+    ) throws -> Int {
+        var predicates = [
+            animalListPredicate(
+                query: query,
+                herd: herd
+            )
+        ]
+        if let additionalPredicate {
+            predicates.append(additionalPredicate)
+        }
+        let predicate = NSCompoundPredicate(
+            andPredicateWithSubpredicates: predicates
+        )
+
+        guard let targetType else {
+            let request = NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            )
+            request.predicate = predicate
+            return try context.count(for: request)
+        }
+
+        var sourceOffset = 0
+        var count = 0
+        while true {
+            try Task.checkCancellation()
+            let request = NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            )
+            request.predicate = predicate
+            request.sortDescriptors = [
+                NSSortDescriptor(key: "id", ascending: true)
+            ]
+            request.fetchOffset = sourceOffset
+            request.fetchLimit = animalTypeScanBatchSize
+            request.relationshipKeyPathsForPrefetching = animalTypeEvaluationPrefetchPaths
+
+            let batch = try context.fetch(request)
+            if batch.isEmpty {
+                break
+            }
+
+            for animal in batch {
+                try validateAnimalTypeRelationships(
+                    animal,
+                    herdID: herdID
+                )
+                if try CoreDataAnimalProjection.animalType(
+                    animal,
+                    now: referenceDate,
+                    calendar: calendar
+                ) == targetType {
+                    count += 1
+                }
+            }
+
+            sourceOffset += batch.count
+            if batch.count < animalTypeScanBatchSize {
+                break
+            }
+        }
+
+        return count
+    }
+
     private static func fetchTagOrderedCandidates(
         query: AnimalListFilterQuery?,
         herd: CDHerd,
@@ -454,9 +654,92 @@ actor CoreDataReadModelActor:
         calendar: Calendar,
         additionalAnimalPredicate: NSPredicate? = nil,
         additionalTagPredicate: NSPredicate? = nil,
+        targetType: AnimalType? = nil,
         offset: Int,
         limit: Int,
         ascending: Bool,
+        in context: NSManagedObjectContext
+    ) throws -> [CDAnimal] {
+        let effectiveTargetType = targetType ?? query?.animalType
+        guard let effectiveTargetType else {
+            return try fetchRawTagOrderedCandidates(
+                query: query,
+                herd: herd,
+                herdID: herdID,
+                additionalAnimalPredicate: additionalAnimalPredicate,
+                additionalTagPredicate: additionalTagPredicate,
+                offset: offset,
+                limit: limit,
+                ascending: ascending,
+                evaluateAnimalType: false,
+                in: context
+            )
+        }
+
+        var sourceOffset = 0
+        var matchingOffset = offset
+        var matches: [CDAnimal] = []
+        matches.reserveCapacity(limit)
+
+        while matches.count < limit {
+            try Task.checkCancellation()
+            let batch = try fetchRawTagOrderedCandidates(
+                query: query,
+                herd: herd,
+                herdID: herdID,
+                additionalAnimalPredicate: additionalAnimalPredicate,
+                additionalTagPredicate: additionalTagPredicate,
+                offset: sourceOffset,
+                limit: animalTypeScanBatchSize,
+                ascending: ascending,
+                evaluateAnimalType: true,
+                in: context
+            )
+            if batch.isEmpty {
+                break
+            }
+
+            for animal in batch {
+                try validateAnimalTypeRelationships(
+                    animal,
+                    herdID: herdID
+                )
+                guard try CoreDataAnimalProjection.animalType(
+                    animal,
+                    now: referenceDate,
+                    calendar: calendar
+                ) == effectiveTargetType else {
+                    continue
+                }
+                if matchingOffset > 0 {
+                    matchingOffset -= 1
+                    continue
+                }
+                matches.append(animal)
+                if matches.count == limit {
+                    break
+                }
+            }
+
+            sourceOffset += batch.count
+            if batch.count < animalTypeScanBatchSize {
+                break
+            }
+        }
+
+        return matches
+    }
+
+    private static func fetchRawTagOrderedCandidates(
+        query: AnimalListFilterQuery?,
+        herd: CDHerd,
+        herdID: UUID,
+        additionalAnimalPredicate: NSPredicate? = nil,
+        additionalTagPredicate: NSPredicate? = nil,
+        offset: Int,
+        limit: Int,
+        ascending: Bool,
+        evaluateAnimalType: Bool,
         in context: NSManagedObjectContext
     ) throws -> [CDAnimal] {
         guard limit > 0 else { return [] }
@@ -464,9 +747,7 @@ actor CoreDataReadModelActor:
         var animalPredicates = [
             animalListPredicate(
                 query: query,
-                herd: herd,
-                referenceDate: referenceDate,
-                calendar: calendar
+                herd: herd
             )
         ]
         if let additionalAnimalPredicate {
@@ -485,9 +766,7 @@ actor CoreDataReadModelActor:
         var tagPredicates = [
             taggedAnimalListPredicate(
                 query: query,
-                herd: herd,
-                referenceDate: referenceDate,
-                calendar: calendar
+                herd: herd
             )
         ]
         if let additionalTagPredicate {
@@ -529,7 +808,10 @@ actor CoreDataReadModelActor:
             ]
             request.fetchOffset = streamOffset
             request.fetchLimit = streamLimit
-            request.relationshipKeyPathsForPrefetching = animalSummaryPrefetchPaths
+            if evaluateAnimalType {
+                request.relationshipKeyPathsForPrefetching =
+                    animalTypeEvaluationPrefetchPaths
+            }
             candidates.append(contentsOf: try context.fetch(request))
         }
 
@@ -546,7 +828,9 @@ actor CoreDataReadModelActor:
             ]
             request.fetchOffset = streamOffset
             request.fetchLimit = streamLimit
-            request.relationshipKeyPathsForPrefetching = taggedAnimalSummaryPrefetchPaths
+            request.relationshipKeyPathsForPrefetching = evaluateAnimalType
+                ? taggedAnimalTypeEvaluationPrefetchPaths
+                : ["animal"]
 
             for tag in try context.fetch(request) {
                 guard tag.herd.id == herdID else {
@@ -608,8 +892,6 @@ actor CoreDataReadModelActor:
     private static func animalListSortGroups(
         sortOrder: AnimalListQuerySortOrder,
         herd: CDHerd,
-        referenceDate: Date,
-        calendar: Calendar,
         in context: NSManagedObjectContext
     ) throws -> [AnimalListSortGroup] {
         switch sortOrder {
@@ -643,29 +925,6 @@ actor CoreDataReadModelActor:
                         )
                     )
                 }
-        case .animalType:
-            return [
-                AnimalType.calf,
-                .heifer,
-                .steer,
-                .cow,
-                .bull
-            ].map { type in
-                AnimalListSortGroup(
-                    animalPredicate: animalTypePredicate(
-                        type,
-                        referenceDate: referenceDate,
-                        calendar: calendar,
-                        keyPrefix: ""
-                    ),
-                    tagPredicate: animalTypePredicate(
-                        type,
-                        referenceDate: referenceDate,
-                        calendar: calendar,
-                        keyPrefix: "animal."
-                    )
-                )
-            }
         case .pasture:
             var groups = [
                 AnimalListSortGroup(
@@ -729,8 +988,46 @@ actor CoreDataReadModelActor:
                 )
             )
             return groups
-        case .tagAscending, .tagDescending, .birthDateNewest, .birthDateOldest:
+        case .tagAscending, .tagDescending, .birthDateNewest, .birthDateOldest, .animalType:
             return []
+        }
+    }
+
+    private static func hydrateAnimalSummaryCandidates(
+        _ candidates: [CDAnimal],
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws -> [CDAnimal] {
+        let ids = candidates.map(\.id)
+        guard !ids.isEmpty else { return [] }
+
+        let request = NSFetchRequest<CDAnimal>(
+            entityName: CDAnimal.coreDataEntityName
+        )
+        request.predicate = NSPredicate(
+            format: "herd == %@ AND id IN %@",
+            herd,
+            ids
+        )
+        request.relationshipKeyPathsForPrefetching = animalSummaryPrefetchPaths
+        let fetched = try context.fetch(request)
+
+        guard fetched.count == ids.count else {
+            throw CoreDataReadModelError.inconsistentAnimalPage(
+                expected: ids.count,
+                fetched: fetched.count
+            )
+        }
+
+        let byID = Dictionary(uniqueKeysWithValues: fetched.map { ($0.id, $0) })
+        return try ids.map { id in
+            guard let animal = byID[id] else {
+                throw CoreDataReadModelError.inconsistentAnimalPage(
+                    expected: ids.count,
+                    fetched: fetched.count
+                )
+            }
+            return animal
         }
     }
 
