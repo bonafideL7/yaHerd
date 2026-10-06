@@ -38,34 +38,51 @@ enum AnimalListQueryRecordIssueFilter: Hashable, Sendable {
     case archivedActive
 }
 
+enum AnimalListQuerySortOrder: String, Hashable, Sendable {
+    case tagAscending
+    case tagDescending
+    case birthDateNewest
+    case birthDateOldest
+    case sex
+    case animalType
+    case status
+    case pasture
+}
+
 struct AnimalListFilterQuery: Hashable, Sendable {
     let searchText: String
     let sex: Sex?
+    let animalType: AnimalType?
     let status: AnimalStatus?
     let pasture: AnimalListQueryPastureFilter
     let location: AnimalListQueryLocationFilter
     let recordIssue: AnimalListQueryRecordIssueFilter
     let showRemovedStatuses: Bool
     let showArchivedRecords: Bool
+    let sortOrder: AnimalListQuerySortOrder
 
     init(
         searchText: String = "",
         sex: Sex? = nil,
+        animalType: AnimalType? = nil,
         status: AnimalStatus? = nil,
         pasture: AnimalListQueryPastureFilter = .any,
         location: AnimalListQueryLocationFilter = .any,
         recordIssue: AnimalListQueryRecordIssueFilter = .any,
         showRemovedStatuses: Bool = false,
-        showArchivedRecords: Bool = false
+        showArchivedRecords: Bool = false,
+        sortOrder: AnimalListQuerySortOrder = .tagAscending
     ) {
         self.searchText = searchText
         self.sex = sex
+        self.animalType = animalType
         self.status = status
         self.pasture = pasture
         self.location = location
         self.recordIssue = recordIssue
         self.showRemovedStatuses = showRemovedStatuses
         self.showArchivedRecords = showArchivedRecords
+        self.sortOrder = sortOrder
     }
 }
 
