@@ -30,6 +30,7 @@ struct NewWorkingSessionView: View {
     @State private var selectedAnimalIDs: Set<UUID> = []
     @State private var showingAnimalPicker = false
     @State private var startedRoute: StartedWorkingSessionSetupRoute?
+    @State private var isStarting = false
 
     private let suggestedPastureID: UUID?
     private let wrapsInNavigationStack: Bool
@@ -60,12 +61,16 @@ struct NewWorkingSessionView: View {
     }
 
     private var canStart: Bool {
-        dataAccessMode.allowsDataMutations
+        !isStarting
+            && dataAccessMode.allowsDataMutations
             && selectedPasture != nil
             && includedAnimalCount > 0
     }
 
     private var startStatusText: String? {
+        if isStarting {
+            return "Starting session…"
+        }
         if !dataAccessMode.allowsDataMutations {
             return "Recovery mode is read-only. New sessions cannot be saved."
         }
@@ -260,7 +265,12 @@ struct NewWorkingSessionView: View {
     }
 
     private func startSession() {
-        guard dataAccessMode.allowsDataMutations, let pastureID = selectedPastureID else { return }
+        guard !isStarting,
+              dataAccessMode.allowsDataMutations,
+              let pastureID = selectedPastureID else {
+            return
+        }
+
         let cleanedTreatments = plannedTreatments
             .map {
                 WorkingTreatmentPlanItem(
@@ -271,21 +281,26 @@ struct NewWorkingSessionView: View {
             }
             .filter { !$0.name.isEmpty }
 
-        do {
-            let sessionID = try viewModel.startSession(
-                date: date,
-                pastureID: pastureID,
-                treatmentTemplateName: selectedTemplateName,
-                plannedTreatments: cleanedTreatments,
-                animalIDs: specifiesAnimals ? Array(selectedAnimalIDs) : nil
-            )
-            if let onSessionCreated {
-                onSessionCreated(sessionID)
-            } else {
-                startedRoute = StartedWorkingSessionSetupRoute(id: sessionID)
+        isStarting = true
+        Task { @MainActor in
+            defer { isStarting = false }
+
+            do {
+                let sessionID = try await viewModel.startSession(
+                    date: date,
+                    pastureID: pastureID,
+                    treatmentTemplateName: selectedTemplateName,
+                    plannedTreatments: cleanedTreatments,
+                    animalIDs: specifiesAnimals ? Array(selectedAnimalIDs) : nil
+                )
+                if let onSessionCreated {
+                    onSessionCreated(sessionID)
+                } else {
+                    startedRoute = StartedWorkingSessionSetupRoute(id: sessionID)
+                }
+            } catch {
+                viewModel.errorMessage = UserVisibleErrorMessage.make(error)
             }
-        } catch {
-            viewModel.errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
