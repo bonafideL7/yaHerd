@@ -1,6 +1,6 @@
 import Foundation
 
-struct DashboardHealthRecordClassifier {
+struct DashboardHealthRecordClassifier: Sendable {
     func category(for treatment: String) -> String {
         let cleaned = treatment.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = cleaned.lowercased()
