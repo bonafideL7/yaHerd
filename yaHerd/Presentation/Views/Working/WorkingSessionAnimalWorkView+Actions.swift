@@ -63,7 +63,14 @@ extension WorkingSessionAnimalWorkView {
             requiresNumber: true
         ) { number, colorID, _ in
             guard allowsEditing else { return }
-            viewModel.replacePrimaryTag(number: number, colorID: colorID)
+            isMutatingWork = true
+            Task { @MainActor in
+                defer { isMutatingWork = false }
+                await viewModel.replacePrimaryTag(number: number, colorID: colorID)
+                if viewModel.errorMessage != nil {
+                    showingError = true
+                }
+            }
         }
     }
 
@@ -172,17 +179,24 @@ extension WorkingSessionAnimalWorkView {
             including: entry.id
         )
 
-        do {
-            try repository.updateSessionTreatments(
-                id: snapshot.sessionID,
-                plannedTreatments: updatedItems
-            )
-            treatmentEntries[index].name = trimmedName
-            treatmentEntries[index].isPlanned = true
-            viewModel.load()
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-            showingError = true
+        isMutatingWork = true
+        Task { @MainActor in
+            defer { isMutatingWork = false }
+
+            do {
+                try await repository.updateSessionTreatments(
+                    id: snapshot.sessionID,
+                    plannedTreatments: updatedItems
+                )
+                if treatmentEntries.indices.contains(index) {
+                    treatmentEntries[index].name = trimmedName
+                    treatmentEntries[index].isPlanned = true
+                }
+                viewModel.load()
+            } catch {
+                errorMessage = UserVisibleErrorMessage.make(error)
+                showingError = true
+            }
         }
     }
 
@@ -329,16 +343,21 @@ extension WorkingSessionAnimalWorkView {
             observationNotes: observationNotes
         )
 
-        do {
-            try repository.saveEdits(
-                forQueueItemID: snapshot.id,
-                inSessionID: snapshot.sessionID,
-                input: input
-            )
-            dismiss()
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-            showingError = true
+        isMutatingWork = true
+        Task { @MainActor in
+            defer { isMutatingWork = false }
+
+            do {
+                try await repository.saveEdits(
+                    forQueueItemID: snapshot.id,
+                    inSessionID: snapshot.sessionID,
+                    input: input
+                )
+                dismiss()
+            } catch {
+                errorMessage = UserVisibleErrorMessage.make(error)
+                showingError = true
+            }
         }
     }
 
@@ -387,15 +406,21 @@ extension WorkingSessionAnimalWorkView {
 
     func deleteWorkData() {
         guard allowsEditing, let snapshot else { return }
-        do {
-            try repository.deleteWorkData(
-                forQueueItemID: snapshot.id,
-                inSessionID: snapshot.sessionID
-            )
-            dismiss()
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-            showingError = true
+
+        isMutatingWork = true
+        Task { @MainActor in
+            defer { isMutatingWork = false }
+
+            do {
+                try await repository.deleteWorkData(
+                    forQueueItemID: snapshot.id,
+                    inSessionID: snapshot.sessionID
+                )
+                dismiss()
+            } catch {
+                errorMessage = UserVisibleErrorMessage.make(error)
+                showingError = true
+            }
         }
     }
 }
