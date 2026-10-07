@@ -35,6 +35,16 @@ struct AnimalListFilteredQueryContractFixture {
 }
 
 @MainActor
+struct AnimalReferenceQueryContractFixture {
+    let animalFixture: AnimalRepositoryContractFixture
+    let makeReferenceQueryReader: () -> any AnimalReferenceQueryReading
+
+    /// Setup-only control used to move one active Animal into the Working Pen while preserving
+    /// the same isolated backing store used by the reference-query reader.
+    let assignWorkingOwnership: (_ animalID: UUID) throws -> Void
+}
+
+@MainActor
 struct AnimalListReadProjectionContractFixture {
     let animalFixture: AnimalRepositoryContractFixture
     let makeAnimalListQueryReader: () -> any AnimalListQueryReading
@@ -2316,6 +2326,253 @@ extension AnimalRepositoryContract {
         )
     }
 
+    static func assertAnimalReferenceQueryReduction(
+        using fixture: AnimalReferenceQueryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        let repository = fixture.animalFixture.makeAnimalRepository()
+        let pastures = fixture.animalFixture.makePastureRepository()
+        let north = try pastures.create(
+            input: PastureInput(
+                name: "Reference North Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let south = try pastures.create(
+            input: PastureInput(
+                name: "Reference South Pasture",
+                acreage: 24,
+                usableAcreage: 22,
+                targetAcresPerHead: 1.5
+            )
+        )
+
+        // Construct before writes so the long-lived actor must resolve fresh committed state.
+        let reader = fixture.makeReferenceQueryReader()
+
+        let northA2 = try repository.create(
+            input: readModelAnimalInput(
+                name: "Reference North A2",
+                tagNumber: "A2",
+                sex: .female,
+                birthDate: contractDate(year: 2019, month: 1, day: 1),
+                pastureID: north.id
+            )
+        )
+        let northA10 = try repository.create(
+            input: readModelAnimalInput(
+                name: "Reference North A10",
+                tagNumber: "A10",
+                sex: .female,
+                birthDate: contractDate(year: 2019, month: 1, day: 2),
+                pastureID: north.id
+            )
+        )
+        let northArchived = try repository.create(
+            input: readModelAnimalInput(
+                name: "Reference North Archived",
+                tagNumber: "A20",
+                sex: .female,
+                birthDate: contractDate(year: 2019, month: 1, day: 3),
+                pastureID: north.id
+            )
+        )
+        try repository.archive(ids: [northArchived.id])
+        _ = try repository.create(
+            input: readModelAnimalInput(
+                name: "Reference North Removed",
+                tagNumber: "A30",
+                sex: .female,
+                birthDate: contractDate(year: 2019, month: 1, day: 4),
+                status: .dead,
+                pastureID: north.id,
+                deathDate: contractDate(year: 2026, month: 1, day: 1),
+                causeOfDeath: "Reference query contract"
+            )
+        )
+
+        let southTagged = try repository.create(
+            input: readModelAnimalInput(
+                name: "Reference Search Name",
+                tagNumber: "A10",
+                sex: .female,
+                birthDate: contractDate(year: 2020, month: 1, day: 1),
+                pastureID: south.id
+            )
+        )
+        let southUntagged = try repository.create(
+            input: readModelAnimalInput(
+                name: "A3",
+                tagNumber: "",
+                sex: .female,
+                birthDate: contractDate(year: 2020, month: 1, day: 2),
+                pastureID: south.id
+            )
+        )
+        let southExcluded = try repository.create(
+            input: readModelAnimalInput(
+                name: "Reference Excluded",
+                tagNumber: "A2",
+                sex: .female,
+                birthDate: contractDate(year: 2020, month: 1, day: 3),
+                pastureID: south.id
+            )
+        )
+        let unassigned = try repository.create(
+            input: readModelAnimalInput(
+                name: "Reference Unassigned",
+                tagNumber: "U1",
+                sex: .female,
+                birthDate: contractDate(year: 2020, month: 1, day: 4)
+            )
+        )
+        let working = try repository.create(
+            input: readModelAnimalInput(
+                name: "Reference Working",
+                tagNumber: "W1",
+                sex: .male,
+                birthDate: contractDate(year: 2018, month: 1, day: 1),
+                pastureID: north.id
+            )
+        )
+        try fixture.assignWorkingOwnership(working.id)
+
+        let workingPasture = try await fetchAnimalReferenceContractPages(
+            reader: reader,
+            query: AnimalReferenceQuery(
+                pastureScope: .pasture(north.id),
+                location: .pasture,
+                sortOrder: .displayTag
+            ),
+            pageSize: 1,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            workingPasture.map(\.id),
+            [northA2.id, northA10.id],
+            "Working reference candidates must reduce to active, unarchived live residents before natural tag ordering and paging.",
+            file: file,
+            line: line
+        )
+
+        let fieldCandidates = try await fetchAnimalReferenceContractPages(
+            reader: reader,
+            query: AnimalReferenceQuery(
+                pastureScope: .notPasture(north.id),
+                excludedAnimalIDs: [southExcluded.id],
+                sortOrder: .displayTagOrName
+            ),
+            pageSize: 2,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            fieldCandidates.map(\.id),
+            [southUntagged.id, southTagged.id, unassigned.id, working.id],
+            "Field Check candidates must exclude the current Pasture and already-tracked IDs before applying display-tag-or-name ordering.",
+            file: file,
+            line: line
+        )
+
+        let tagSearch = try await fetchAnimalReferenceContractPages(
+            reader: reader,
+            query: AnimalReferenceQuery(
+                searchText: "A10",
+                pastureScope: .notPasture(north.id),
+                sortOrder: .displayTagOrName
+            ),
+            pageSize: 2,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(tagSearch.map(\.id), [southTagged.id], file: file, line: line)
+
+        let nameSearch = try await fetchAnimalReferenceContractPages(
+            reader: reader,
+            query: AnimalReferenceQuery(
+                searchText: "Search Name",
+                pastureScope: .notPasture(north.id),
+                sortOrder: .displayTagOrName
+            ),
+            pageSize: 2,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(nameSearch.map(\.id), [southTagged.id], file: file, line: line)
+
+        let pastureSearch = try await fetchAnimalReferenceContractPages(
+            reader: reader,
+            query: AnimalReferenceQuery(
+                searchText: "South Pasture",
+                pastureScope: .notPasture(north.id),
+                sortOrder: .displayTagOrName
+            ),
+            pageSize: 2,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            pastureSearch.map(\.id),
+            [southExcluded.id, southUntagged.id, southTagged.id],
+            "Raw Pasture-name search must reduce in Core Data before paging.",
+            file: file,
+            line: line
+        )
+
+        let assignedOnly = try await fetchAnimalReferenceContractPages(
+            reader: reader,
+            query: AnimalReferenceQuery(
+                pastureScope: .assignedPasture,
+                sortOrder: .displayTagOrName
+            ),
+            pageSize: 2,
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(assignedOnly.contains { $0.id == unassigned.id }, file: file, line: line)
+        XCTAssertFalse(assignedOnly.contains { $0.id == working.id }, file: file, line: line)
+
+        XCTAssertTrue(try await reader.containsAnimal(id: northA2.id), file: file, line: line)
+        XCTAssertFalse(try await reader.containsAnimal(id: UUID()), file: file, line: line)
+
+        let freshReader = fixture.makeReferenceQueryReader()
+        let freshWorkingPasture = try await fetchAnimalReferenceContractPages(
+            reader: freshReader,
+            query: AnimalReferenceQuery(
+                pastureScope: .pasture(north.id),
+                location: .pasture,
+                sortOrder: .displayTag
+            ),
+            pageSize: 1,
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            freshWorkingPasture,
+            workingPasture,
+            "Long-lived and fresh reference readers must observe the same committed candidate set.",
+            file: file,
+            line: line
+        )
+
+        try repository.delete(ids: [northA2.id])
+        XCTAssertFalse(
+            try await reader.containsAnimal(id: northA2.id),
+            "A long-lived identity reader must observe committed deletion through a fresh read context.",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            try await fixture.makeReferenceQueryReader().containsAnimal(id: northA2.id),
+            file: file,
+            line: line
+        )
+    }
+
     /// Freezes the production async Animal-list paging contract used by `AnimalListViewModel`.
     ///
     /// The list caller advances offsets by the number of returned records while `hasMore` is true,
@@ -2645,6 +2902,44 @@ extension AnimalRepositoryContract {
             return "1-\(pastureName.lowercased())"
         }
         return "2-no-pasture"
+    }
+
+    private static func fetchAnimalReferenceContractPages(
+        reader: any AnimalReferenceQueryReading,
+        query: AnimalReferenceQuery,
+        pageSize: Int,
+        file: StaticString,
+        line: UInt
+    ) async throws -> [AnimalSummary] {
+        var animals: [AnimalSummary] = []
+        var offset = 0
+
+        while animals.count < 100 {
+            let page = try await reader.fetchAnimalReferencePage(
+                matching: query,
+                page: ReadPageRequest(offset: offset, limit: pageSize)
+            )
+            animals.append(contentsOf: page.animals)
+            guard page.hasMore else {
+                return animals
+            }
+            guard !page.animals.isEmpty else {
+                XCTFail(
+                    "An Animal reference page with hasMore must return at least one Animal.",
+                    file: file,
+                    line: line
+                )
+                return animals
+            }
+            offset += page.animals.count
+        }
+
+        XCTFail(
+            "Animal reference paging did not converge.",
+            file: file,
+            line: line
+        )
+        return animals
     }
 
     private static func fetchFilteredAnimalListContractPages(
