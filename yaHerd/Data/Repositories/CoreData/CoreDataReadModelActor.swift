@@ -394,7 +394,7 @@ actor CoreDataReadModelActor:
         }
     }
 
-    private static let animalTypeScanBatchSize = 250
+    private static let animalLightweightScanBatchSize = 250
 
     private struct AnimalListQueryCandidate {
         let animal: CDAnimal
@@ -434,7 +434,7 @@ actor CoreDataReadModelActor:
                 NSSortDescriptor(key: "id", ascending: true)
             ]
             request.fetchOffset = sourceOffset
-            request.fetchLimit = animalTypeScanBatchSize
+            request.fetchLimit = animalLightweightScanBatchSize
             request.relationshipKeyPathsForPrefetching = ["tags"]
 
             let batch = try context.fetch(request)
@@ -456,7 +456,7 @@ actor CoreDataReadModelActor:
             )
 
             sourceOffset += batch.count
-            if batch.count < animalTypeScanBatchSize {
+            if batch.count < animalLightweightScanBatchSize {
                 break
             }
         }
@@ -556,7 +556,7 @@ actor CoreDataReadModelActor:
                 NSSortDescriptor(key: "id", ascending: true)
             ]
             request.fetchOffset = sourceOffset
-            request.fetchLimit = animalTypeScanBatchSize
+            request.fetchLimit = animalLightweightScanBatchSize
             request.relationshipKeyPathsForPrefetching = prefetchPaths
 
             let batch = try context.fetch(request)
@@ -600,7 +600,7 @@ actor CoreDataReadModelActor:
             }
 
             sourceOffset += batch.count
-            if batch.count < animalTypeScanBatchSize {
+            if batch.count < animalLightweightScanBatchSize {
                 break
             }
         }
