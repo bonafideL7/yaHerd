@@ -94,17 +94,24 @@ final class HomeServiceTests: XCTestCase {
             workingSessions: []
         )
         let dashboardReader = DashboardUseCaseReader(records: records)
+        let deriver = DashboardHomeDerivationProbe()
 
-        let dashboard = try await LoadDashboardUseCase(repository: dashboardReader)
-            .execute(configuration: configuration)
+        let dashboard = try await LoadDashboardUseCase(
+            repository: dashboardReader,
+            deriver: deriver
+        )
+        .execute(configuration: configuration)
         let expectedDashboard = DashboardService().makeSnapshot(
             records: records,
             configuration: configuration
         )
         XCTAssertEqual(dashboard, expectedDashboard)
 
-        let activeAnimals = try await LoadDashboardAnimalListUseCase(repository: dashboardReader)
-            .execute(kind: .active, configuration: configuration)
+        let activeAnimals = try await LoadDashboardAnimalListUseCase(
+            repository: dashboardReader,
+            deriver: deriver
+        )
+        .execute(kind: .active, configuration: configuration)
         XCTAssertEqual(
             activeAnimals,
             DashboardService().makeAnimalList(
@@ -114,8 +121,11 @@ final class HomeServiceTests: XCTestCase {
             )
         )
 
-        let pastureItems = try await LoadDashboardPastureListUseCase(repository: dashboardReader)
-            .execute(configuration: configuration)
+        let pastureItems = try await LoadDashboardPastureListUseCase(
+            repository: dashboardReader,
+            deriver: deriver
+        )
+        .execute(configuration: configuration)
         XCTAssertEqual(
             pastureItems,
             DashboardService().makeSnapshot(
@@ -137,7 +147,8 @@ final class HomeServiceTests: XCTestCase {
         let home = try await LoadHomeUseCase(
             dashboardRepository: dashboardReader,
             fieldCheckRepository: HomeFieldCheckUseCaseReader(records: fieldCheckRecords),
-            workingRepository: HomeWorkingUseCaseReader(templates: [])
+            workingRepository: HomeWorkingUseCaseReader(templates: []),
+            deriver: deriver
         )
         .execute(configuration: configuration, now: now)
 
@@ -152,6 +163,15 @@ final class HomeServiceTests: XCTestCase {
             now: now
         )
         XCTAssertEqual(home, expectedHome)
+        XCTAssertEqual(
+            await deriver.recordedCalls(),
+            [
+                .dashboardSnapshot,
+                .dashboardAnimalList(.active),
+                .dashboardPastureList,
+                .homeSnapshot
+            ]
+        )
     }
 
     private var configuration: DashboardConfiguration {
@@ -230,6 +250,85 @@ final class HomeServiceTests: XCTestCase {
 
     private func date(year: Int, month: Int, day: Int) -> Date {
         Calendar(identifier: .gregorian).date(from: DateComponents(year: year, month: month, day: day))!
+    }
+}
+
+
+private enum DashboardHomeDerivationProbeCall: Hashable, Sendable {
+    case dashboardSnapshot
+    case dashboardAnimalList(DashboardAnimalListKind)
+    case dashboardPastureList
+    case homeSnapshot
+}
+
+private actor DashboardHomeDerivationProbe: DashboardHomeDeriving {
+    private let dashboardService = DashboardService()
+    private let homeService = HomeService()
+    private var calls: [DashboardHomeDerivationProbeCall] = []
+
+    func recordedCalls() -> [DashboardHomeDerivationProbeCall] {
+        calls
+    }
+
+    func makeDashboardSnapshot(
+        records: DashboardRecords,
+        configuration: DashboardConfiguration,
+        now: Date
+    ) -> DashboardSnapshot {
+        calls.append(.dashboardSnapshot)
+        return dashboardService.makeSnapshot(
+            records: records,
+            configuration: configuration,
+            now: now
+        )
+    }
+
+    func makeDashboardAnimalList(
+        kind: DashboardAnimalListKind,
+        records: DashboardRecords,
+        configuration: DashboardConfiguration,
+        now: Date
+    ) -> [DashboardAnimalItem] {
+        calls.append(.dashboardAnimalList(kind))
+        return dashboardService.makeAnimalList(
+            kind: kind,
+            records: records,
+            configuration: configuration,
+            now: now
+        )
+    }
+
+    func makeDashboardPastureList(
+        records: DashboardRecords,
+        configuration: DashboardConfiguration,
+        now: Date
+    ) -> [DashboardPastureItem] {
+        calls.append(.dashboardPastureList)
+        return dashboardService.makeSnapshot(
+            records: records,
+            configuration: configuration,
+            now: now
+        ).pastures
+    }
+
+    func makeHomeSnapshot(
+        dashboardRecords: DashboardRecords,
+        fieldCheckRecords: HomeFieldCheckRecords,
+        treatmentTemplates: [WorkingTreatmentTemplateSummary],
+        configuration: DashboardConfiguration,
+        now: Date
+    ) -> HomeSnapshot {
+        calls.append(.homeSnapshot)
+        return homeService.makeSnapshot(
+            dashboardRecords: dashboardRecords,
+            fieldCheckSessions: fieldCheckRecords.sessions,
+            openFindings: fieldCheckRecords.openFindings,
+            treatmentTemplates: treatmentTemplates,
+            openFindingCount: fieldCheckRecords.openFindingCount,
+            hasFieldCheckHistory: fieldCheckRecords.hasHistory,
+            configuration: configuration,
+            now: now
+        )
     }
 }
 
