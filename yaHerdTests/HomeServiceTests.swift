@@ -74,6 +74,61 @@ final class HomeServiceTests: XCTestCase {
         XCTAssertTrue(snapshot.hasRecordsCleanupRows)
     }
 
+    func testDashboardAndHomeUseCasesPreserveSnapshotsAcrossSendableReadBoundary() async throws {
+        let now = date(year: 2026, month: 1, day: 10)
+        let pastureID = UUID()
+        let records = DashboardRecords(
+            animals: [
+                animal(
+                    tag: "20",
+                    sex: .female,
+                    status: .active,
+                    isArchived: false,
+                    pastureID: pastureID,
+                    location: .pasture
+                )
+            ],
+            pastures: [
+                pasture(id: pastureID, name: "North", activeAnimalCount: 1)
+            ],
+            workingSessions: []
+        )
+        let dashboardReader = DashboardUseCaseReader(records: records)
+
+        let dashboard = try await LoadDashboardUseCase(repository: dashboardReader)
+            .execute(configuration: configuration)
+        let expectedDashboard = DashboardService().makeSnapshot(
+            records: records,
+            configuration: configuration
+        )
+        XCTAssertEqual(dashboard, expectedDashboard)
+
+        let fieldCheckRecords = HomeFieldCheckRecords(
+            sessions: [],
+            openFindings: [],
+            openFindingCount: 0,
+            hasHistory: false
+        )
+        let home = try await LoadHomeUseCase(
+            dashboardRepository: dashboardReader,
+            fieldCheckRepository: HomeFieldCheckUseCaseReader(records: fieldCheckRecords),
+            workingRepository: HomeWorkingUseCaseReader(templates: [])
+        )
+        .execute(configuration: configuration, now: now)
+
+        let expectedHome = HomeService().makeSnapshot(
+            dashboardRecords: records,
+            fieldCheckSessions: [],
+            openFindings: [],
+            treatmentTemplates: [],
+            openFindingCount: 0,
+            hasFieldCheckHistory: false,
+            configuration: configuration,
+            now: now
+        )
+        XCTAssertEqual(home, expectedHome)
+    }
+
     private var configuration: DashboardConfiguration {
         DashboardConfiguration()
     }
@@ -150,5 +205,52 @@ final class HomeServiceTests: XCTestCase {
 
     private func date(year: Int, month: Int, day: Int) -> Date {
         Calendar(identifier: .gregorian).date(from: DateComponents(year: year, month: month, day: day))!
+    }
+}
+
+
+private actor DashboardUseCaseReader: DashboardQueryReading {
+    let records: DashboardRecords
+
+    init(records: DashboardRecords) {
+        self.records = records
+    }
+
+    func fetchDashboardRecords() async throws -> DashboardRecords {
+        records
+    }
+
+    func fetchDashboardAnimalRecords(
+        kind _: DashboardAnimalListKind
+    ) async throws -> [DashboardAnimalRecord] {
+        records.animals
+    }
+
+    func fetchDashboardPastureRecords() async throws -> [DashboardPastureRecord] {
+        records.pastures
+    }
+}
+
+private actor HomeFieldCheckUseCaseReader: HomeFieldCheckQueryReading {
+    let records: HomeFieldCheckRecords
+
+    init(records: HomeFieldCheckRecords) {
+        self.records = records
+    }
+
+    func fetchHomeFieldCheckRecords() async throws -> HomeFieldCheckRecords {
+        records
+    }
+}
+
+private actor HomeWorkingUseCaseReader: HomeWorkingQueryReading {
+    let templates: [WorkingTreatmentTemplateSummary]
+
+    init(templates: [WorkingTreatmentTemplateSummary]) {
+        self.templates = templates
+    }
+
+    func fetchHomeTreatmentTemplates(limit _: Int) async throws -> [WorkingTreatmentTemplateSummary] {
+        templates
     }
 }
