@@ -174,7 +174,7 @@ private final class WorkingSessionCompletionRepositorySpy: WorkingFinishSessionR
     func completeSession(
         id: UUID,
         assignments: [WorkingQueueDestinationAssignment]
-    ) throws {
+    ) async throws {
         completionCalls.append(CompletionCall(sessionID: id, assignments: assignments))
     }
 }
