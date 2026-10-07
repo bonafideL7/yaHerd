@@ -1,7 +1,6 @@
 import Foundation
 
-@MainActor
-struct LoadHomeUseCase {
+struct LoadHomeUseCase: Sendable {
     let dashboardRepository: any DashboardQueryReading
     let fieldCheckRepository: any HomeFieldCheckQueryReading
     let workingRepository: any HomeWorkingQueryReading
