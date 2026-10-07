@@ -2162,7 +2162,7 @@ extension AnimalRepositoryContract {
 
         let typeCow = try repository.create(
             input: readModelAnimalInput(
-                name: "Filtered Type Cow",
+                name: "Filtered Sort A2",
                 tagNumber: "T300",
                 sex: .female,
                 birthDate: adultBirthDate,
@@ -2181,7 +2181,7 @@ extension AnimalRepositoryContract {
         )
         let typeSteer = try repository.create(
             input: readModelAnimalInput(
-                name: "Filtered Type Steer",
+                name: "Filtered Sort A10",
                 tagNumber: "T200",
                 sex: .male,
                 birthDate: adultBirthDate,
