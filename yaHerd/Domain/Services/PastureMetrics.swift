@@ -1,6 +1,6 @@
 import Foundation
 
-struct PastureMetrics: Hashable {
+struct PastureMetrics: Hashable, Sendable {
     let acres: Double
     let activeAnimals: Int
     let targetAcresPerHead: Double?
