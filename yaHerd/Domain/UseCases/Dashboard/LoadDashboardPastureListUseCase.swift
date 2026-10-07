@@ -1,17 +1,25 @@
 import Foundation
 
-struct LoadDashboardPastureListUseCase: Sendable {
+@MainActor
+struct LoadDashboardPastureListUseCase {
     let repository: any DashboardQueryReading
-    let service: DashboardService
+    let deriver: any DashboardHomeDeriving
 
-    init(repository: any DashboardQueryReading, service: DashboardService = DashboardService()) {
+    init(
+        repository: any DashboardQueryReading,
+        deriver: any DashboardHomeDeriving = DashboardHomeDerivationActor()
+    ) {
         self.repository = repository
-        self.service = service
+        self.deriver = deriver
     }
 
     func execute(configuration: DashboardConfiguration) async throws -> [DashboardPastureItem] {
         let pastures = try await repository.fetchDashboardPastureRecords()
         let records = DashboardRecords(animals: [], pastures: pastures, workingSessions: [])
-        return service.makeSnapshot(records: records, configuration: configuration).pastures
+        return await deriver.makeDashboardPastureList(
+            records: records,
+            configuration: configuration,
+            now: .now
+        )
     }
 }
