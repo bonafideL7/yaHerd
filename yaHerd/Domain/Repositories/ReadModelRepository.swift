@@ -86,6 +86,40 @@ struct AnimalListFilterQuery: Hashable, Sendable {
     }
 }
 
+enum AnimalReferencePastureScope: Hashable, Sendable {
+    case any
+    case pasture(UUID)
+    case notPasture(UUID)
+    case assignedPasture
+}
+
+enum AnimalReferenceSortOrder: Hashable, Sendable {
+    case displayTag
+    case displayTagOrName
+}
+
+struct AnimalReferenceQuery: Hashable, Sendable {
+    let searchText: String
+    let pastureScope: AnimalReferencePastureScope
+    let location: AnimalListQueryLocationFilter
+    let excludedAnimalIDs: [UUID]
+    let sortOrder: AnimalReferenceSortOrder
+
+    init(
+        searchText: String = "",
+        pastureScope: AnimalReferencePastureScope = .any,
+        location: AnimalListQueryLocationFilter = .any,
+        excludedAnimalIDs: [UUID] = [],
+        sortOrder: AnimalReferenceSortOrder = .displayTag
+    ) {
+        self.searchText = searchText
+        self.pastureScope = pastureScope
+        self.location = location
+        self.excludedAnimalIDs = excludedAnimalIDs
+        self.sortOrder = sortOrder
+    }
+}
+
 struct HomeFieldCheckRecords: Sendable {
     /// Every session that can contribute an unfinished, flagged, or missing warning row.
     let sessions: [FieldCheckSessionSummary]
@@ -121,4 +155,13 @@ protocol AnimalListFilteredQueryReading: Sendable {
         matching query: AnimalListFilterQuery,
         page: ReadPageRequest
     ) async throws -> AnimalSummaryPage
+}
+
+protocol AnimalReferenceQueryReading: Sendable {
+    func fetchAnimalReferencePage(
+        matching query: AnimalReferenceQuery,
+        page: ReadPageRequest
+    ) async throws -> AnimalSummaryPage
+
+    func containsAnimal(id: UUID) async throws -> Bool
 }
