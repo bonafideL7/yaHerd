@@ -1,16 +1,24 @@
 import Foundation
 
-struct LoadDashboardUseCase: Sendable {
+@MainActor
+struct LoadDashboardUseCase {
     let repository: any DashboardQueryReading
-    let service: DashboardService
+    let deriver: any DashboardHomeDeriving
 
-    init(repository: any DashboardQueryReading, service: DashboardService = DashboardService()) {
+    init(
+        repository: any DashboardQueryReading,
+        deriver: any DashboardHomeDeriving = DashboardHomeDerivationActor()
+    ) {
         self.repository = repository
-        self.service = service
+        self.deriver = deriver
     }
 
     func execute(configuration: DashboardConfiguration) async throws -> DashboardSnapshot {
         let records = try await repository.fetchDashboardRecords()
-        return service.makeSnapshot(records: records, configuration: configuration)
+        return await deriver.makeDashboardSnapshot(
+            records: records,
+            configuration: configuration,
+            now: .now
+        )
     }
 }
