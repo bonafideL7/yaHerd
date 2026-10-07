@@ -20,6 +20,7 @@ struct WorkingCollectAnimalsView: View {
     @State private var errorMessage: String?
     @State private var showingError = false
     @State private var searchText: String = ""
+    @State private var isCollecting = false
 
     private var eligibleAnimals: [AnimalSummary] {
         guard let session, session.isSourcePastureAvailable else { return [] }
@@ -83,7 +84,8 @@ struct WorkingCollectAnimalsView: View {
                         collectSelected()
                     }
                     .disabled(
-                        selectedAnimalIDs.isEmpty
+                        isCollecting
+                            || selectedAnimalIDs.isEmpty
                             || session?.isSourcePastureAvailable != true
                     )
                     .disabledWhenDataReadOnly()
@@ -112,13 +114,26 @@ struct WorkingCollectAnimalsView: View {
     }
 
     private func collectSelected() {
-        guard session?.isSourcePastureAvailable == true else { return }
-        do {
-            try repository.collectAnimals(sessionID: sessionID, animalIDs: Array(selectedAnimalIDs))
-            dismiss()
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-            showingError = true
+        guard !isCollecting,
+              session?.isSourcePastureAvailable == true else {
+            return
+        }
+
+        let animalIDs = Array(selectedAnimalIDs)
+        isCollecting = true
+        Task { @MainActor in
+            defer { isCollecting = false }
+
+            do {
+                try await repository.collectAnimals(
+                    sessionID: sessionID,
+                    animalIDs: animalIDs
+                )
+                dismiss()
+            } catch {
+                errorMessage = UserVisibleErrorMessage.make(error)
+                showingError = true
+            }
         }
     }
 }
