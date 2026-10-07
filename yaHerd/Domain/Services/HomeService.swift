@@ -1,6 +1,6 @@
 import Foundation
 
-struct HomeService {
+struct HomeService: Sendable {
     private let dashboardService: DashboardService
 
     init(dashboardService: DashboardService = DashboardService()) {
