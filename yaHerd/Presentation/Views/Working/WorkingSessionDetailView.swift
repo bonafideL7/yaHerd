@@ -24,6 +24,7 @@ struct WorkingSessionDetailView: View {
     @State private var showingReopenConfirmation = false
     @State private var errorMessage: String?
     @State private var showingError = false
+    @State private var isMutatingSession = false
 
     init(sessionID: UUID) {
         _viewModel = StateObject(
@@ -100,7 +101,7 @@ struct WorkingSessionDetailView: View {
             Button("Reopen Session") {
                 reopenSession()
             }
-            .disabledWhenDataReadOnly()
+            .disabled(!dataAccessMode.allowsDataMutations || isMutatingSession)
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("The session will become editable again. Animals remain in their current pastures and are not automatically returned to the working pen.")
@@ -109,7 +110,7 @@ struct WorkingSessionDetailView: View {
             Button("Delete", role: .destructive) {
                 deleteSession()
             }
-            .disabledWhenDataReadOnly()
+            .disabled(!dataAccessMode.allowsDataMutations || isMutatingSession)
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(deleteConfirmationMessage)
@@ -467,9 +468,17 @@ struct WorkingSessionDetailView: View {
     }
 
     private func reopenSession() {
-        viewModel.reopenSession()
-        animalFilter = .all
-        searchText = ""
+        guard !isMutatingSession else { return }
+        isMutatingSession = true
+
+        Task { @MainActor in
+            defer { isMutatingSession = false }
+            await viewModel.reopenSession()
+            if viewModel.errorMessage == nil {
+                animalFilter = .all
+                searchText = ""
+            }
+        }
     }
 
     private func resetFilterForCompletedSession() {
@@ -484,13 +493,22 @@ struct WorkingSessionDetailView: View {
     }
 
     private func deleteSession() {
-        guard let sessionID = viewModel.session?.id else { return }
-        do {
-            try repository.deleteSession(id: sessionID)
-            dismiss()
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-            showingError = true
+        guard !isMutatingSession,
+              let sessionID = viewModel.session?.id else {
+            return
+        }
+        isMutatingSession = true
+
+        Task { @MainActor in
+            defer { isMutatingSession = false }
+
+            do {
+                try await repository.deleteSession(id: sessionID)
+                dismiss()
+            } catch {
+                errorMessage = UserVisibleErrorMessage.make(error)
+                showingError = true
+            }
         }
     }
 }
