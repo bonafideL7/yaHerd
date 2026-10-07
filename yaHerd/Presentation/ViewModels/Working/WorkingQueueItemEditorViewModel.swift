@@ -35,9 +35,9 @@ final class WorkingQueueItemEditorViewModel: ObservableObject {
         }
     }
 
-    func replacePrimaryTag(number: String, colorID: UUID?) {
+    func replacePrimaryTag(number: String, colorID: UUID?) async {
         do {
-            snapshot = try repository.replacePrimaryTag(
+            snapshot = try await repository.replacePrimaryTag(
                 forQueueItemID: queueItemID,
                 inSessionID: sessionID,
                 input: WorkingTagReplacementInput(number: number, colorID: colorID)
