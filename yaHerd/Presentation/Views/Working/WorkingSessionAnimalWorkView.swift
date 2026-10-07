@@ -46,6 +46,7 @@ struct WorkingSessionAnimalWorkView: View {
     @State var savedVaccinationName: String?
     @State var errorMessage: String?
     @State var showingError = false
+    @State var isMutatingWork = false
 
     init(sessionID: UUID, queueItemID: UUID) {
         _viewModel = StateObject(
@@ -77,7 +78,7 @@ struct WorkingSessionAnimalWorkView: View {
     }
 
     var allowsEditing: Bool {
-        dataAccessMode.allowsDataMutations && !isSessionLocked
+        dataAccessMode.allowsDataMutations && !isSessionLocked && !isMutatingWork
     }
 
     var isFemale: Bool {
