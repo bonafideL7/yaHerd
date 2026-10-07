@@ -242,28 +242,16 @@ actor CoreDataReadModelActor:
 
             let candidates: [CDAnimal]
             switch query?.sortOrder ?? .tagAscending {
-            case .tagAscending:
-                candidates = try Self.fetchTagOrderedCandidates(
+            case .tagAscending, .tagDescending:
+                candidates = try Self.fetchLightweightSortedQueryCandidates(
                     query: query,
+                    sortOrder: query?.sortOrder ?? .tagAscending,
                     herd: herd,
                     herdID: herdID,
                     referenceDate: referenceDate,
                     calendar: calendar,
                     offset: page.offset,
                     limit: requestedCount,
-                    ascending: true,
-                    in: context
-                )
-            case .tagDescending:
-                candidates = try Self.fetchTagOrderedCandidates(
-                    query: query,
-                    herd: herd,
-                    herdID: herdID,
-                    referenceDate: referenceDate,
-                    calendar: calendar,
-                    offset: page.offset,
-                    limit: requestedCount,
-                    ascending: false,
                     in: context
                 )
             case .birthDateNewest:
@@ -305,6 +293,7 @@ actor CoreDataReadModelActor:
                 }
                 candidates = try Self.fetchLightweightSortedQueryCandidates(
                     query: query,
+                    sortOrder: query.sortOrder,
                     herd: herd,
                     herdID: herdID,
                     referenceDate: referenceDate,
@@ -374,6 +363,7 @@ actor CoreDataReadModelActor:
         if let query, query.animalType != nil {
             return try fetchLightweightSortedQueryCandidates(
                 query: query,
+                sortOrder: query.sortOrder,
                 herd: herd,
                 herdID: herd.id,
                 referenceDate: referenceDate,
@@ -397,143 +387,9 @@ actor CoreDataReadModelActor:
         return try context.fetch(request)
     }
 
-    private static func fetchTagOrderedCandidates(
-        query: AnimalListFilterQuery?,
-        herd: CDHerd,
-        herdID: UUID,
-        referenceDate: Date,
-        calendar: Calendar,
-        offset: Int,
-        limit: Int,
-        ascending: Bool,
-        in context: NSManagedObjectContext
-    ) throws -> [CDAnimal] {
-        if let query, query.animalType != nil {
-            return try fetchLightweightSortedQueryCandidates(
-                query: query,
-                herd: herd,
-                herdID: herdID,
-                referenceDate: referenceDate,
-                calendar: calendar,
-                offset: offset,
-                limit: limit,
-                in: context
-            )
-        }
-
-        let animalPredicate = animalListPredicate(
-            query: query,
-            herd: herd
-        )
-        let untaggedPredicate = NSCompoundPredicate(
-            andPredicateWithSubpredicates: [
-                animalPredicate,
-                missingPrimaryTagPredicate()
-            ]
-        )
-        let tagPredicate = taggedAnimalListPredicate(
-            query: query,
-            herd: herd
-        )
-
-        let untaggedCountRequest = NSFetchRequest<CDAnimal>(
-            entityName: CDAnimal.coreDataEntityName
-        )
-        untaggedCountRequest.predicate = untaggedPredicate
-        let untaggedCount = try context.count(for: untaggedCountRequest)
-
-        let taggedCount: Int
-        if query?.recordIssue == .missingTag {
-            taggedCount = 0
-        } else {
-            let taggedCountRequest = NSFetchRequest<CDAnimalTag>(
-                entityName: CDAnimalTag.coreDataEntityName
-            )
-            taggedCountRequest.predicate = tagPredicate
-            taggedCount = try context.count(for: taggedCountRequest)
-        }
-
-        var candidates: [CDAnimal] = []
-        candidates.reserveCapacity(limit)
-
-        func fetchUntagged(offset streamOffset: Int, limit streamLimit: Int) throws {
-            guard streamLimit > 0 else { return }
-            let request = NSFetchRequest<CDAnimal>(
-                entityName: CDAnimal.coreDataEntityName
-            )
-            request.predicate = untaggedPredicate
-            request.sortDescriptors = [
-                NSSortDescriptor(key: "name", ascending: true),
-                NSSortDescriptor(key: "id", ascending: true)
-            ]
-            request.fetchOffset = streamOffset
-            request.fetchLimit = streamLimit
-            candidates.append(contentsOf: try context.fetch(request))
-        }
-
-        func fetchTagged(offset streamOffset: Int, limit streamLimit: Int) throws {
-            guard streamLimit > 0, query?.recordIssue != .missingTag else { return }
-            let request = NSFetchRequest<CDAnimalTag>(
-                entityName: CDAnimalTag.coreDataEntityName
-            )
-            request.predicate = tagPredicate
-            request.sortDescriptors = [
-                NSSortDescriptor(key: "number", ascending: ascending),
-                NSSortDescriptor(key: "animal.name", ascending: true),
-                NSSortDescriptor(key: "animal.id", ascending: true)
-            ]
-            request.fetchOffset = streamOffset
-            request.fetchLimit = streamLimit
-            request.relationshipKeyPathsForPrefetching = ["animal"]
-
-            for tag in try context.fetch(request) {
-                guard tag.herd.id == herdID else {
-                    throw CoreDataReadModelError.invalidHerdOwnership(
-                        entity: CDAnimalTag.coreDataEntityName,
-                        id: tag.id,
-                        expectedHerdID: herdID,
-                        actualHerdID: tag.herd.id
-                    )
-                }
-                guard tag.animal.herd.id == herdID else {
-                    throw CoreDataReadModelError.invalidHerdOwnership(
-                        entity: CDAnimal.coreDataEntityName,
-                        id: tag.animal.id,
-                        expectedHerdID: herdID,
-                        actualHerdID: tag.animal.herd.id
-                    )
-                }
-                candidates.append(tag.animal)
-            }
-        }
-
-        if ascending {
-            if offset < untaggedCount {
-                try fetchUntagged(offset: offset, limit: limit)
-            }
-            if candidates.count < limit {
-                try fetchTagged(
-                    offset: max(offset - untaggedCount, 0),
-                    limit: limit - candidates.count
-                )
-            }
-        } else {
-            if offset < taggedCount {
-                try fetchTagged(offset: offset, limit: limit)
-            }
-            if candidates.count < limit {
-                try fetchUntagged(
-                    offset: max(offset - taggedCount, 0),
-                    limit: limit - candidates.count
-                )
-            }
-        }
-
-        return candidates
-    }
-
     private static func fetchLightweightSortedQueryCandidates(
-        query: AnimalListFilterQuery,
+        query: AnimalListFilterQuery?,
+        sortOrder: AnimalListQuerySortOrder,
         herd: CDHerd,
         herdID: UUID,
         referenceDate: Date,
@@ -547,9 +403,9 @@ actor CoreDataReadModelActor:
             herd: herd
         )
         let needsAnimalType =
-            query.animalType != nil || query.sortOrder == .animalType
+            query?.animalType != nil || sortOrder == .animalType
         var prefetchPaths = ["tags"]
-        if query.sortOrder == .pasture {
+        if sortOrder == .pasture {
             prefetchPaths.append(contentsOf: [
                 "currentPasture",
                 "activeWorkingSession"
@@ -599,7 +455,7 @@ actor CoreDataReadModelActor:
                     type = nil
                 }
 
-                if let selectedType = query.animalType,
+                if let selectedType = query?.animalType,
                    type != selectedType {
                     continue
                 }
@@ -611,7 +467,7 @@ actor CoreDataReadModelActor:
                         sex: try CoreDataAnimalProjection.sex(animal),
                         status: try CoreDataAnimalProjection.status(animal),
                         displayTagNumber: animalListDisplayTagNumber(animal),
-                        pastureSortKey: query.sortOrder == .pasture
+                        pastureSortKey: sortOrder == .pasture
                             ? animalListPastureSortKey(animal)
                             : ""
                     )
@@ -628,7 +484,7 @@ actor CoreDataReadModelActor:
             animalListQueryCandidatePrecedes(
                 lhs,
                 rhs,
-                sortOrder: query.sortOrder
+                sortOrder: sortOrder
             )
         }
 
