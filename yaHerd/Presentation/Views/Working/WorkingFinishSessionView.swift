@@ -21,6 +21,7 @@ struct WorkingFinishSessionView: View {
     @State private var showingUnfinishedConfirmation = false
     @State private var errorMessage: String?
     @State private var showingError = false
+    @State private var isFinishing = false
 
     init(sessionID: UUID) {
         _viewModel = StateObject(
@@ -68,7 +69,8 @@ struct WorkingFinishSessionView: View {
     }
 
     private var canFinish: Bool {
-        guard dataAccessMode.allowsDataMutations,
+        guard !isFinishing,
+              dataAccessMode.allowsDataMutations,
               viewModel.hasLoadedPastureOptions,
               let session,
               session.status == .active,
@@ -421,7 +423,7 @@ struct WorkingFinishSessionView: View {
     }
 
     private func completeSession() {
-        guard let session, canFinish else { return }
+        guard !isFinishing, let session, canFinish else { return }
 
         let assignments = orderedItems.map { item in
             let destinationPastureID = exceptionAnimalIDs.contains(item.id)
@@ -434,15 +436,20 @@ struct WorkingFinishSessionView: View {
             )
         }
 
-        do {
-            try CompleteWorkingSessionUseCase(repository: repository).execute(
-                sessionID: session.id,
-                assignments: assignments
-            )
-            dismiss()
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-            showingError = true
+        isFinishing = true
+        Task { @MainActor in
+            defer { isFinishing = false }
+
+            do {
+                try await CompleteWorkingSessionUseCase(repository: repository).execute(
+                    sessionID: session.id,
+                    assignments: assignments
+                )
+                dismiss()
+            } catch {
+                errorMessage = UserVisibleErrorMessage.make(error)
+                showingError = true
+            }
         }
     }
 
