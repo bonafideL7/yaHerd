@@ -46,7 +46,6 @@ enum CoreDataAppHerdBootstrapper {
             let request = NSFetchRequest<CDHerd>(
                 entityName: CDHerd.coreDataEntityName
             )
-            request.fetchLimit = 2
             request.sortDescriptors = [
                 NSSortDescriptor(
                     key: "createdAt",
@@ -69,7 +68,6 @@ enum CoreDataAppHerdBootstrapper {
             let request = NSFetchRequest<CDHerd>(
                 entityName: CDHerd.coreDataEntityName
             )
-            request.fetchLimit = 2
             let existing = try context.fetch(request)
 
             if existing.count == 1 {
