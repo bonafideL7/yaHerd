@@ -74,7 +74,7 @@ final class HomeServiceTests: XCTestCase {
         XCTAssertTrue(snapshot.hasRecordsCleanupRows)
     }
 
-    func testDashboardAndHomeUseCasesPreserveSnapshotsAcrossSendableReadBoundary() async throws {
+    func testDashboardAndHomeUseCasesDelegateDerivationThroughActorBoundary() async throws {
         let now = date(year: 2026, month: 1, day: 10)
         let pastureID = UUID()
         let records = DashboardRecords(
@@ -163,8 +163,9 @@ final class HomeServiceTests: XCTestCase {
             now: now
         )
         XCTAssertEqual(home, expectedHome)
+        let recordedDerivationCalls = await deriver.recordedCalls()
         XCTAssertEqual(
-            await deriver.recordedCalls(),
+            recordedDerivationCalls,
             [
                 .dashboardSnapshot,
                 .dashboardAnimalList(.active),
