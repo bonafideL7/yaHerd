@@ -2536,8 +2536,10 @@ extension AnimalRepositoryContract {
         XCTAssertFalse(assignedOnly.contains { $0.id == unassigned.id }, file: file, line: line)
         XCTAssertFalse(assignedOnly.contains { $0.id == working.id }, file: file, line: line)
 
-        XCTAssertTrue(try await reader.containsAnimal(id: northA2.id), file: file, line: line)
-        XCTAssertFalse(try await reader.containsAnimal(id: UUID()), file: file, line: line)
+        let containsNorthA2 = try await reader.containsAnimal(id: northA2.id)
+        XCTAssertTrue(containsNorthA2, file: file, line: line)
+        let containsMissingAnimal = try await reader.containsAnimal(id: UUID())
+        XCTAssertFalse(containsMissingAnimal, file: file, line: line)
 
         let freshReader = fixture.makeReferenceQueryReader()
         let freshWorkingPasture = try await fetchAnimalReferenceContractPages(
@@ -2560,17 +2562,16 @@ extension AnimalRepositoryContract {
         )
 
         try repository.delete(ids: [northA2.id])
+        let longLivedContainsDeleted = try await reader.containsAnimal(id: northA2.id)
         XCTAssertFalse(
-            try await reader.containsAnimal(id: northA2.id),
+            longLivedContainsDeleted,
             "A long-lived identity reader must observe committed deletion through a fresh read context.",
             file: file,
             line: line
         )
-        XCTAssertFalse(
-            try await fixture.makeReferenceQueryReader().containsAnimal(id: northA2.id),
-            file: file,
-            line: line
-        )
+        let freshContainsDeleted = try await fixture.makeReferenceQueryReader()
+            .containsAnimal(id: northA2.id)
+        XCTAssertFalse(freshContainsDeleted, file: file, line: line)
     }
 
     /// Freezes the production async Animal-list paging contract used by `AnimalListViewModel`.
