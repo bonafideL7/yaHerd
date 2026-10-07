@@ -1,6 +1,6 @@
 import Foundation
 
-struct DashboardAlert: Identifiable, Hashable {
+struct DashboardAlert: Identifiable, Hashable, Sendable {
     let id = UUID()
     let title: String
     let message: String?
