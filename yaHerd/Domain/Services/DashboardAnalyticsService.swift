@@ -1,6 +1,6 @@
 import Foundation
 
-struct DashboardAnalyticsService {
+struct DashboardAnalyticsService: Sendable {
     private let calendar: Calendar
     private let healthRecordClassifier: DashboardHealthRecordClassifier
 
