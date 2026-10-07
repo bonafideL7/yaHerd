@@ -1,21 +1,22 @@
 import Foundation
 
-struct LoadHomeUseCase: Sendable {
+@MainActor
+struct LoadHomeUseCase {
     let dashboardRepository: any DashboardQueryReading
     let fieldCheckRepository: any HomeFieldCheckQueryReading
     let workingRepository: any HomeWorkingQueryReading
-    let service: HomeService
+    let deriver: any DashboardHomeDeriving
 
     init(
         dashboardRepository: any DashboardQueryReading,
         fieldCheckRepository: any HomeFieldCheckQueryReading,
         workingRepository: any HomeWorkingQueryReading,
-        service: HomeService = HomeService()
+        deriver: any DashboardHomeDeriving = DashboardHomeDerivationActor()
     ) {
         self.dashboardRepository = dashboardRepository
         self.fieldCheckRepository = fieldCheckRepository
         self.workingRepository = workingRepository
-        self.service = service
+        self.deriver = deriver
     }
 
     func execute(
@@ -31,13 +32,10 @@ struct LoadHomeUseCase: Sendable {
             let fieldChecks = try await fieldCheckRecords
             let templates = try await treatmentTemplates
 
-            return service.makeSnapshot(
+            return await deriver.makeHomeSnapshot(
                 dashboardRecords: dashboard,
-                fieldCheckSessions: fieldChecks.sessions,
-                openFindings: fieldChecks.openFindings,
+                fieldCheckRecords: fieldChecks,
                 treatmentTemplates: templates,
-                openFindingCount: fieldChecks.openFindingCount,
-                hasFieldCheckHistory: fieldChecks.hasHistory,
                 configuration: configuration,
                 now: now
             )
