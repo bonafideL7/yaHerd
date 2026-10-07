@@ -1,7 +1,6 @@
 import Foundation
 
-@MainActor
-struct LoadDashboardUseCase {
+struct LoadDashboardUseCase: Sendable {
     let repository: any DashboardQueryReading
     let service: DashboardService
 
