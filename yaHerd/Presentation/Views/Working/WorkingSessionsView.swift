@@ -16,6 +16,7 @@ struct WorkingSessionsView: View {
     @State private var showingDeleteAlert = false
     @State private var errorMessage: String?
     @State private var showingError = false
+    @State private var isDeletingSession = false
     @State private var startedRoute: StartedWorkingSessionRoute?
 
     private let onSessionStarted: ((UUID) -> Void)?
@@ -113,7 +114,7 @@ struct WorkingSessionsView: View {
             presenting: pendingSession
         ) { session in
             Button("Delete", role: .destructive) { deleteSession(session) }
-                .disabledWhenDataReadOnly()
+                .disabled(!dataAccessMode.allowsDataMutations || isDeletingSession)
             Button("Cancel", role: .cancel) {}
         } message: { session in
             if session.status == .active {
@@ -170,12 +171,20 @@ struct WorkingSessionsView: View {
     }
 
     private func deleteSession(_ session: WorkingSessionSummary) {
-        do {
-            try repository.deleteSession(id: session.id)
-            viewModel.load()
-        } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
-            showingError = true
+        guard !isDeletingSession else { return }
+        isDeletingSession = true
+
+        Task { @MainActor in
+            defer { isDeletingSession = false }
+
+            do {
+                try await repository.deleteSession(id: session.id)
+                sessionPendingDeleteID = nil
+                viewModel.load()
+            } catch {
+                errorMessage = UserVisibleErrorMessage.make(error)
+                showingError = true
+            }
         }
     }
 }
