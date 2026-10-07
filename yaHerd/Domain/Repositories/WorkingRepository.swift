@@ -28,20 +28,20 @@ protocol WorkingQueueItemEditorReader {
 @MainActor
 protocol WorkingSessionStarting {
     @discardableResult
-    func startSession(input: WorkingSessionStartInput) throws -> UUID
+    func startSession(input: WorkingSessionStartInput) async throws -> UUID
 }
 
 @MainActor
 extension WorkingSessionStarting {
     @discardableResult
-    func startSession(input: WorkingSessionStartInput) throws -> UUID {
+    func startSession(input: WorkingSessionStartInput) async throws -> UUID {
         throw WorkingRepositoryError.sessionStartUnavailable
     }
 }
 
 @MainActor
 protocol WorkingAnimalCollecting {
-    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) throws
+    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) async throws
 }
 
 @MainActor
@@ -53,7 +53,7 @@ protocol WorkingQueueItemCompleting {
         pregnancyCheck: WorkingPregnancyCheckInput?,
         markCastrated: Bool,
         observationNotes: String
-    ) throws
+    ) async throws
 }
 
 @MainActor
@@ -62,7 +62,7 @@ protocol WorkingQueueItemEditSaving {
         forQueueItemID queueItemID: UUID,
         inSessionID sessionID: UUID,
         input: WorkingSessionAnimalEditInput
-    ) throws
+    ) async throws
 }
 
 @MainActor
@@ -70,7 +70,7 @@ protocol WorkingSessionTreatmentUpdating {
     func updateSessionTreatments(
         id: UUID,
         plannedTreatments: [WorkingTreatmentPlanItem]
-    ) throws
+    ) async throws
 }
 
 @MainActor
@@ -78,7 +78,7 @@ extension WorkingSessionTreatmentUpdating {
     func updateSessionTreatments(
         id: UUID,
         plannedTreatments: [WorkingTreatmentPlanItem]
-    ) throws {
+    ) async throws {
         throw WorkingRepositoryError.sessionTreatmentUpdateUnavailable
     }
 }
@@ -90,7 +90,7 @@ protocol WorkingPrimaryTagReplacing {
         forQueueItemID queueItemID: UUID,
         inSessionID sessionID: UUID,
         input: WorkingTagReplacementInput
-    ) throws -> WorkingQueueItemEditorSnapshot
+    ) async throws -> WorkingQueueItemEditorSnapshot
 }
 
 @MainActor
@@ -100,19 +100,19 @@ extension WorkingPrimaryTagReplacing {
         forQueueItemID queueItemID: UUID,
         inSessionID sessionID: UUID,
         input: WorkingTagReplacementInput
-    ) throws -> WorkingQueueItemEditorSnapshot {
+    ) async throws -> WorkingQueueItemEditorSnapshot {
         throw WorkingRepositoryError.tagReplacementUnavailable
     }
 }
 
 @MainActor
 protocol WorkingQueueItemDataDeleting {
-    func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) throws
+    func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) async throws
 }
 
 @MainActor
 protocol WorkingSessionDeleting {
-    func deleteSession(id: UUID) throws
+    func deleteSession(id: UUID) async throws
 }
 
 @MainActor
@@ -120,17 +120,17 @@ protocol WorkingSessionCompleting {
     func completeSession(
         id: UUID,
         assignments: [WorkingQueueDestinationAssignment]
-    ) throws
+    ) async throws
 }
 
 @MainActor
 protocol WorkingSessionReopening {
-    func reopenSession(id: UUID) throws
+    func reopenSession(id: UUID) async throws
 }
 
 @MainActor
 extension WorkingSessionReopening {
-    func reopenSession(id: UUID) throws {
+    func reopenSession(id: UUID) async throws {
         throw WorkingRepositoryError.sessionReopenUnavailable
     }
 }
