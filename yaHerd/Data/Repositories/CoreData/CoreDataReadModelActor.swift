@@ -47,7 +47,8 @@ actor CoreDataReadModelActor:
     HomeFieldCheckQueryReading,
     HomeWorkingQueryReading,
     AnimalListQueryReading,
-    AnimalListFilteredQueryReading
+    AnimalListFilteredQueryReading,
+    AnimalReferenceQueryReading
 {
     private let contextFactory: CoreDataContextFactory
     private let lookup: CoreDataLookup
@@ -288,6 +289,111 @@ actor CoreDataReadModelActor:
         }
     }
 
+    func fetchAnimalReferencePage(
+        matching query: AnimalReferenceQuery,
+        page: ReadPageRequest
+    ) async throws -> AnimalSummaryPage {
+        try Task.checkCancellation()
+        let herdID = try await selectedHerdID()
+        let context = contextFactory.makeReadContext()
+        let lookup = self.lookup
+        let requestedCount = page.limit + 1
+        let referenceDate = Date()
+        let calendar = Calendar.current
+
+        return try await context.perform {
+            try Task.checkCancellation()
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+
+            try Self.validateAnimalApplicationIDs(
+                herd: herd,
+                herdID: herdID,
+                in: context
+            )
+            try Self.validateAnimalListTagIntegrity(
+                herd: herd,
+                herdID: herdID,
+                in: context
+            )
+            try Self.validateAnimalListQueryIntegrity(
+                query: nil,
+                herd: herd,
+                herdID: herdID,
+                in: context
+            )
+
+            let candidates = try Self.fetchAnimalReferenceCandidates(
+                query: query,
+                herd: herd,
+                offset: page.offset,
+                limit: requestedCount,
+                in: context
+            )
+            let hydratedCandidates = try Self.hydrateAnimalSummaryCandidates(
+                candidates,
+                herd: herd,
+                in: context
+            )
+
+            for animal in hydratedCandidates {
+                try Self.validateAnimalReadRelationships(
+                    animal,
+                    herdID: herdID
+                )
+            }
+
+            let hasMore = hydratedCandidates.count > page.limit
+            return AnimalSummaryPage(
+                animals: try hydratedCandidates.prefix(page.limit).map {
+                    try CoreDataAnimalProjection.summary(
+                        $0,
+                        now: referenceDate,
+                        calendar: calendar
+                    )
+                },
+                hasMore: hasMore
+            )
+        }
+    }
+
+    func containsAnimal(id: UUID) async throws -> Bool {
+        try Task.checkCancellation()
+        let herdID = try await selectedHerdID()
+        let context = contextFactory.makeReadContext()
+        let lookup = self.lookup
+
+        return try await context.perform {
+            try Task.checkCancellation()
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+
+            let request = NSFetchRequest<NSDictionary>(
+                entityName: CDAnimal.coreDataEntityName
+            )
+            request.resultType = .dictionaryResultType
+            request.propertiesToFetch = ["id"]
+            request.predicate = NSPredicate(
+                format: "herd == %@ AND id == %@",
+                herd,
+                id as NSUUID
+            )
+            request.fetchLimit = 2
+
+            let rows = try context.fetch(request)
+            guard rows.count <= 1 else {
+                throw CoreDataPersistenceError.duplicateApplicationID(
+                    entity: CDAnimal.coreDataEntityName,
+                    id: id,
+                    herdID: herdID
+                )
+            }
+            return !rows.isEmpty
+        }
+    }
+
     private static let animalTypeScanBatchSize = 250
 
     private struct AnimalListQueryCandidate {
@@ -297,6 +403,113 @@ actor CoreDataReadModelActor:
         let status: AnimalStatus
         let displayTagNumber: String
         let pastureSortKey: String
+    }
+
+    private struct AnimalReferenceCandidate {
+        let animal: CDAnimal
+        let displayTagNumber: String
+    }
+
+    private static func fetchAnimalReferenceCandidates(
+        query: AnimalReferenceQuery,
+        herd: CDHerd,
+        offset: Int,
+        limit: Int,
+        in context: NSManagedObjectContext
+    ) throws -> [CDAnimal] {
+        let predicate = animalReferencePredicate(
+            query: query,
+            herd: herd
+        )
+        var sourceOffset = 0
+        var candidates: [AnimalReferenceCandidate] = []
+
+        while true {
+            try Task.checkCancellation()
+            let request = NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            )
+            request.predicate = predicate
+            request.sortDescriptors = [
+                NSSortDescriptor(key: "id", ascending: true)
+            ]
+            request.fetchOffset = sourceOffset
+            request.fetchLimit = animalTypeScanBatchSize
+            request.relationshipKeyPathsForPrefetching = ["tags"]
+
+            let batch = try context.fetch(request)
+            if batch.isEmpty {
+                break
+            }
+
+            candidates.append(
+                contentsOf: batch.map {
+                    AnimalReferenceCandidate(
+                        animal: $0,
+                        displayTagNumber: CoreDataAnimalProjection
+                            .primaryTagFields(
+                                CoreDataAnimalProjection.managedTags($0)
+                            )
+                            .number
+                    )
+                }
+            )
+
+            sourceOffset += batch.count
+            if batch.count < animalTypeScanBatchSize {
+                break
+            }
+        }
+
+        candidates.sort {
+            animalReferenceCandidatePrecedes(
+                $0,
+                $1,
+                sortOrder: query.sortOrder
+            )
+        }
+
+        return Array(
+            candidates
+                .dropFirst(offset)
+                .prefix(limit)
+                .map(\.animal)
+        )
+    }
+
+    private static func animalReferenceCandidatePrecedes(
+        _ lhs: AnimalReferenceCandidate,
+        _ rhs: AnimalReferenceCandidate,
+        sortOrder: AnimalReferenceSortOrder
+    ) -> Bool {
+        let lhsKey: String
+        let rhsKey: String
+
+        switch sortOrder {
+        case .displayTag:
+            lhsKey = lhs.displayTagNumber
+            rhsKey = rhs.displayTagNumber
+        case .displayTagOrName:
+            lhsKey = lhs.displayTagNumber.isEmpty
+                ? lhs.animal.name
+                : lhs.displayTagNumber
+            rhsKey = rhs.displayTagNumber.isEmpty
+                ? rhs.animal.name
+                : rhs.displayTagNumber
+        }
+
+        let keyOrder = lhsKey.localizedStandardCompare(rhsKey)
+        if keyOrder != .orderedSame {
+            return keyOrder == .orderedAscending
+        }
+
+        let nameOrder = lhs.animal.name.localizedStandardCompare(
+            rhs.animal.name
+        )
+        if nameOrder != .orderedSame {
+            return nameOrder == .orderedAscending
+        }
+        return lhs.animal.id.uuidString < rhs.animal.id.uuidString
     }
 
     private static func fetchLightweightSortedQueryCandidates(
@@ -1572,6 +1785,97 @@ actor CoreDataReadModelActor:
                                 $tag.number CONTAINS[cd] %@
                             ).@count > 0
                             """,
+                            search
+                        )
+                    ]
+                )
+            )
+        }
+
+        return NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+    }
+
+    private static func animalReferencePredicate(
+        query: AnimalReferenceQuery,
+        herd: CDHerd
+    ) -> NSPredicate {
+        var predicates: [NSPredicate] = [
+            NSPredicate(format: "herd == %@", herd),
+            NSPredicate(
+                format: "statusRawValue == %@",
+                AnimalStatus.active.rawValue
+            ),
+            NSPredicate(format: "isArchived == NO")
+        ]
+
+        switch query.pastureScope {
+        case .any:
+            break
+        case .pasture(let pastureID):
+            predicates.append(
+                NSPredicate(
+                    format: "currentPasture.id == %@",
+                    pastureID as NSUUID
+                )
+            )
+        case .notPasture(let pastureID):
+            predicates.append(
+                NSCompoundPredicate(
+                    orPredicateWithSubpredicates: [
+                        NSPredicate(format: "currentPasture == nil"),
+                        NSPredicate(
+                            format: "currentPasture.id != %@",
+                            pastureID as NSUUID
+                        )
+                    ]
+                )
+            )
+        case .assignedPasture:
+            predicates.append(NSPredicate(format: "currentPasture != nil"))
+        }
+
+        switch query.location {
+        case .any:
+            break
+        case .pasture:
+            predicates.append(NSPredicate(format: "activeWorkingSession == nil"))
+        case .workingPen:
+            predicates.append(NSPredicate(format: "activeWorkingSession != nil"))
+        }
+
+        if !query.excludedAnimalIDs.isEmpty {
+            predicates.append(
+                NSPredicate(
+                    format: "NOT (id IN %@)",
+                    query.excludedAnimalIDs.map { $0 as NSUUID }
+                )
+            )
+        }
+
+        let search = query.searchText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !search.isEmpty {
+            predicates.append(
+                NSCompoundPredicate(
+                    orPredicateWithSubpredicates: [
+                        NSPredicate(
+                            format: "name CONTAINS[cd] %@",
+                            search
+                        ),
+                        NSPredicate(
+                            format: """
+                            SUBQUERY(
+                                tags,
+                                $tag,
+                                $tag.isActive == YES AND
+                                $tag.isPrimary == YES AND
+                                $tag.number CONTAINS[cd] %@
+                            ).@count > 0
+                            """,
+                            search
+                        ),
+                        NSPredicate(
+                            format: "currentPasture.name CONTAINS[cd] %@",
                             search
                         )
                     ]
