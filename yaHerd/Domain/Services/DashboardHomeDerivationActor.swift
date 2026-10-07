@@ -30,16 +30,8 @@ protocol DashboardHomeDeriving: Actor {
 }
 
 actor DashboardHomeDerivationActor: DashboardHomeDeriving {
-    private let dashboardService: DashboardService
-    private let homeService: HomeService
-
-    init(
-        dashboardService: DashboardService = DashboardService(),
-        homeService: HomeService = HomeService()
-    ) {
-        self.dashboardService = dashboardService
-        self.homeService = homeService
-    }
+    private let dashboardService = DashboardService()
+    private let homeService = HomeService()
 
     func makeDashboardSnapshot(
         records: DashboardRecords,
