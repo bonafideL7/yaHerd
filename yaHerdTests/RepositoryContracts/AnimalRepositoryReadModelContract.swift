@@ -1990,7 +1990,7 @@ extension AnimalRepositoryContract {
         let alpha = try repository.create(
             input: readModelAnimalInput(
                 name: "Filtered Alpha Cow",
-                tagNumber: "A100",
+                tagNumber: "A2",
                 sex: .female,
                 birthDate: contractDate(year: 2018, month: 1, day: 1),
                 pastureID: pastureAlpha.id
@@ -1999,7 +1999,7 @@ extension AnimalRepositoryContract {
         let beta = try repository.create(
             input: readModelAnimalInput(
                 name: "Filtered Beta Bull",
-                tagNumber: "B200",
+                tagNumber: "A10",
                 sex: .male,
                 birthDate: contractDate(year: 2017, month: 2, day: 2),
                 pastureID: pastureBeta.id
@@ -2063,7 +2063,7 @@ extension AnimalRepositoryContract {
         )
         try await assertFilteredQueryIDs(
             [beta.id],
-            query: AnimalListFilterQuery(searchText: "b200"),
+            query: AnimalListFilterQuery(searchText: "a10"),
             reader: reader,
             file: file,
             line: line
@@ -2387,7 +2387,7 @@ extension AnimalRepositoryContract {
         let pageFive = try animalRepository.create(
             input: readModelAnimalInput(
                 name: "Paging Five",
-                tagNumber: "PAGE05",
+                tagNumber: "PAGE10",
                 sex: .female,
                 birthDate: contractDate(year: 2020, month: 1, day: 5)
             )
@@ -2395,7 +2395,7 @@ extension AnimalRepositoryContract {
         let pageFour = try animalRepository.create(
             input: readModelAnimalInput(
                 name: "Paging Four",
-                tagNumber: "PAGE04",
+                tagNumber: "PAGE2",
                 sex: .female,
                 birthDate: contractDate(year: 2020, month: 1, day: 4)
             )
