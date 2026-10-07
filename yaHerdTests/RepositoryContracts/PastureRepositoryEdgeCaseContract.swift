@@ -876,7 +876,7 @@ enum PastureRepositoryEdgeCaseContract {
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pastures = fixture.makePastureRepository()
         let sourcePasture = try pastures.create(
             input: PastureInput(
@@ -945,7 +945,7 @@ enum PastureRepositoryEdgeCaseContract {
         )
 
         let working = fixture.makeWorkingRepository()
-        let sessionID = try working.startSession(
+        let sessionID = try await working.startSession(
             input: WorkingSessionStartInput(
                 date: Date(timeIntervalSince1970: 1_781_300_000),
                 sourcePastureID: sourcePasture.id,
@@ -980,7 +980,7 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(queuedItemAtStart.status, .queued, file: file, line: line)
         XCTAssertNil(queuedItemAtStart.completedAt, file: file, line: line)
 
-        try working.complete(
+        try await working.complete(
             queueItemID: queueItemID,
             inSessionID: sessionID,
             treatmentEntries: [],
@@ -994,7 +994,7 @@ enum PastureRepositoryEdgeCaseContract {
             line: line
         )
         let completedAt = try XCTUnwrap(completedQueueItem.completedAt, file: file, line: line)
-        try working.saveEdits(
+        try await working.saveEdits(
             forQueueItemID: queueItemID,
             inSessionID: sessionID,
             input: WorkingSessionAnimalEditInput(
@@ -1132,7 +1132,7 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertNil(queuedEditorAfterDeletion.destinationPastureID, file: file, line: line)
 
         let postDeletionNotes = "Updated after pasture deletion"
-        try postDeletionWorking.saveEdits(
+        try await postDeletionWorking.saveEdits(
             forQueueItemID: queueItemID,
             inSessionID: sessionID,
             input: WorkingSessionAnimalEditInput(
@@ -1160,7 +1160,7 @@ enum PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(editorAfterPostDeletionWrite.observationNotes, postDeletionNotes, file: file, line: line)
 
         let queuedPostDeletionNotes = "Queued completion after pasture deletion"
-        try postDeletionWorking.complete(
+        try await postDeletionWorking.complete(
             queueItemID: queuedItemID,
             inSessionID: sessionID,
             treatmentEntries: [],
@@ -1363,7 +1363,7 @@ extension PastureRepositoryEdgeCaseContract {
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pastureRepository = fixture.makePastureRepository()
         let source = try pastureRepository.create(
             input: PastureInput(
@@ -1395,7 +1395,7 @@ extension PastureRepositoryEdgeCaseContract {
         )
 
         let working = fixture.makeWorkingRepository()
-        let sessionID = try working.startSession(
+        let sessionID = try await working.startSession(
             input: WorkingSessionStartInput(
                 date: Date(timeIntervalSince1970: 1_781_500_000),
                 sourcePastureID: source.id,
@@ -1440,7 +1440,7 @@ extension PastureRepositoryEdgeCaseContract {
         XCTAssertEqual(inWorkingPen.location, .workingPen, file: file, line: line)
         XCTAssertNil(inWorkingPen.pastureID, file: file, line: line)
 
-        try fixture.makeWorkingRepository().deleteSession(id: sessionID)
+        try await fixture.makeWorkingRepository().deleteSession(id: sessionID)
 
         XCTAssertNil(
             try fixture.makeWorkingRepository().fetchSessionDetail(id: sessionID),
@@ -1475,7 +1475,7 @@ extension PastureRepositoryEdgeCaseContract {
         using fixture: PastureDeletionWorkflowContractFixture,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) throws {
+    ) async throws {
         let pastures = fixture.makePastureRepository()
         let source = try pastures.create(
             input: PastureInput(
@@ -1515,7 +1515,7 @@ extension PastureRepositoryEdgeCaseContract {
         )
 
         let working = fixture.makeWorkingRepository()
-        let sessionID = try working.startSession(
+        let sessionID = try await working.startSession(
             input: WorkingSessionStartInput(
                 date: Date(timeIntervalSince1970: 1_781_600_000),
                 sourcePastureID: source.id,
@@ -1551,8 +1551,8 @@ extension PastureRepositoryEdgeCaseContract {
             try fixture.makeAnimalRepository().fetchTimeline(id: animal.id)
         )
 
-        XCTAssertThrowsError(
-            try fixture.makeWorkingRepository().completeSession(
+        do {
+            try await fixture.makeWorkingRepository().completeSession(
                 id: sessionID,
                 assignments: [
                     WorkingQueueDestinationAssignment(
@@ -1560,11 +1560,19 @@ extension PastureRepositoryEdgeCaseContract {
                         destinationPastureID: nil
                     )
                 ]
-            ),
-            file: file,
-            line: line
-        ) { error in
-            XCTAssertEqual(error as? WorkingRepositoryError, .pastureNotFound, file: file, line: line)
+            )
+            XCTFail(
+                "Expected completion to reject a missing live destination.",
+                file: file,
+                line: line
+            )
+        } catch {
+            XCTAssertEqual(
+                error as? WorkingRepositoryError,
+                .pastureNotFound,
+                file: file,
+                line: line
+            )
         }
 
         XCTAssertEqual(
@@ -1587,7 +1595,7 @@ extension PastureRepositoryEdgeCaseContract {
             line: line
         )
 
-        try fixture.makeWorkingRepository().completeSession(
+        try await fixture.makeWorkingRepository().completeSession(
             id: sessionID,
             assignments: [
                 WorkingQueueDestinationAssignment(
