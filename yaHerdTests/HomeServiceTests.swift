@@ -103,6 +103,31 @@ final class HomeServiceTests: XCTestCase {
         )
         XCTAssertEqual(dashboard, expectedDashboard)
 
+        let activeAnimals = try await LoadDashboardAnimalListUseCase(repository: dashboardReader)
+            .execute(kind: .active, configuration: configuration)
+        XCTAssertEqual(
+            activeAnimals,
+            DashboardService().makeAnimalList(
+                kind: .active,
+                records: records,
+                configuration: configuration
+            )
+        )
+
+        let pastureItems = try await LoadDashboardPastureListUseCase(repository: dashboardReader)
+            .execute(configuration: configuration)
+        XCTAssertEqual(
+            pastureItems,
+            DashboardService().makeSnapshot(
+                records: DashboardRecords(
+                    animals: [],
+                    pastures: records.pastures,
+                    workingSessions: []
+                ),
+                configuration: configuration
+            ).pastures
+        )
+
         let fieldCheckRecords = HomeFieldCheckRecords(
             sessions: [],
             openFindings: [],
