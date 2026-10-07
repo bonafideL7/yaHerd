@@ -7,7 +7,7 @@ struct CompleteWorkingSessionUseCase {
     func execute(
         sessionID: UUID,
         assignments: [WorkingQueueDestinationAssignment]
-    ) throws {
+    ) async throws {
         guard let session = try repository.fetchSessionDetail(id: sessionID) else {
             throw WorkingRepositoryError.sessionNotFound
         }
@@ -25,6 +25,6 @@ struct CompleteWorkingSessionUseCase {
             throw WorkingRepositoryError.assignmentSetDoesNotMatchSession
         }
 
-        try repository.completeSession(id: sessionID, assignments: assignments)
+        try await repository.completeSession(id: sessionID, assignments: assignments)
     }
 }
