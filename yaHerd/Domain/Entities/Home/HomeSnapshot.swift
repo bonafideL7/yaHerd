@@ -1,6 +1,6 @@
 import Foundation
 
-struct HomeSnapshot: Equatable {
+struct HomeSnapshot: Equatable, Sendable {
     let activeSession: DashboardWorkingSessionSummary?
     let alerts: [DashboardAlert]
     let activeAnimalRecords: [DashboardAnimalRecord]
