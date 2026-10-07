@@ -1,6 +1,6 @@
 import Foundation
 
-struct DashboardService {
+struct DashboardService: Sendable {
     private let analyticsService: DashboardAnalyticsService
 
     init(analyticsService: DashboardAnalyticsService = DashboardAnalyticsService()) {
