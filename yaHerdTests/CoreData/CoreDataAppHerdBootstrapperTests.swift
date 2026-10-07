@@ -34,11 +34,11 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertEqual(herds.first?.updatedAt, timestamp)
     }
 
-    func testBootstrapRejectsAmbiguousMultipleHerdRoots() async throws {
+    func testBootstrapRejectsAmbiguousMultipleHerdRootsAndReportsActualCount() async throws {
         let assembly = try await CoreDataPersistenceAssembly.inMemory()
 
         try await assembly.transactionExecutor.performWrite { context in
-            for index in 0..<2 {
+            for index in 0..<3 {
                 let herd = CDHerd(context: context)
                 herd.id = UUID()
                 herd.name = "Herd \(index)"
@@ -53,7 +53,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             )
             XCTFail("Expected multiple-herd bootstrap failure")
         } catch let error as CoreDataAppHerdBootstrapError {
-            XCTAssertEqual(error, .multipleLocalHerds(count: 2))
+            XCTAssertEqual(error, .multipleLocalHerds(count: 3))
         }
     }
 
