@@ -3,7 +3,7 @@ import XCTest
 
 @MainActor
 final class WorkingSessionCompletionUseCaseTests: XCTestCase {
-    func testCompletesSessionAfterValidatingAssignments() throws {
+    func testCompletesSessionAfterValidatingAssignments() async throws {
         let firstID = UUID()
         let secondID = UUID()
         let sessionID = UUID()
@@ -15,7 +15,7 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
             WorkingQueueDestinationAssignment(queueItemID: secondID, destinationPastureID: nil)
         ]
 
-        try CompleteWorkingSessionUseCase(repository: repository).execute(
+        try await CompleteWorkingSessionUseCase(repository: repository).execute(
             sessionID: sessionID,
             assignments: assignments
         )
@@ -25,7 +25,7 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
         XCTAssertEqual(repository.completionCalls.first?.assignments, assignments)
     }
 
-    func testRejectsDuplicateAssignmentsBeforeMutation() {
+    func testRejectsDuplicateAssignmentsBeforeMutation() async {
         let queueItemID = UUID()
         let sessionID = UUID()
         let repository = WorkingSessionCompletionRepositorySpy(
@@ -36,18 +36,19 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
             WorkingQueueDestinationAssignment(queueItemID: queueItemID, destinationPastureID: nil)
         ]
 
-        XCTAssertThrowsError(
-            try CompleteWorkingSessionUseCase(repository: repository).execute(
+        do {
+            try await CompleteWorkingSessionUseCase(repository: repository).execute(
                 sessionID: sessionID,
                 assignments: assignments
             )
-        ) { error in
+            XCTFail("Expected duplicate assignment validation failure")
+        } catch {
             XCTAssertEqual(error as? WorkingRepositoryError, .duplicateQueueItemAssignments)
         }
         XCTAssertTrue(repository.completionCalls.isEmpty)
     }
 
-    func testRejectsIncompleteAssignmentSetBeforeMutation() {
+    func testRejectsIncompleteAssignmentSetBeforeMutation() async {
         let firstID = UUID()
         let secondID = UUID()
         let sessionID = UUID()
@@ -55,14 +56,15 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
             session: makeSession(id: sessionID, queueItemIDs: [firstID, secondID])
         )
 
-        XCTAssertThrowsError(
-            try CompleteWorkingSessionUseCase(repository: repository).execute(
+        do {
+            try await CompleteWorkingSessionUseCase(repository: repository).execute(
                 sessionID: sessionID,
                 assignments: [
                     WorkingQueueDestinationAssignment(queueItemID: firstID, destinationPastureID: nil)
                 ]
             )
-        ) { error in
+            XCTFail("Expected incomplete assignment validation failure")
+        } catch {
             XCTAssertEqual(error as? WorkingRepositoryError, .assignmentSetDoesNotMatchSession)
         }
         XCTAssertTrue(repository.completionCalls.isEmpty)
@@ -97,18 +99,19 @@ final class WorkingSessionCompletionUseCaseTests: XCTestCase {
         XCTAssertNil(viewModel.errorMessage)
     }
 
-    func testRejectsFinishedSessionBeforeMutation() {
+    func testRejectsFinishedSessionBeforeMutation() async {
         let sessionID = UUID()
         let repository = WorkingSessionCompletionRepositorySpy(
             session: makeSession(id: sessionID, queueItemIDs: [], status: .finished)
         )
 
-        XCTAssertThrowsError(
-            try CompleteWorkingSessionUseCase(repository: repository).execute(
+        do {
+            try await CompleteWorkingSessionUseCase(repository: repository).execute(
                 sessionID: sessionID,
                 assignments: []
             )
-        ) { error in
+            XCTFail("Expected finished-session validation failure")
+        } catch {
             XCTAssertEqual(error as? WorkingRepositoryError, .sessionAlreadyFinished)
         }
         XCTAssertTrue(repository.completionCalls.isEmpty)
