@@ -1241,7 +1241,7 @@ enum AnimalAggregateCrossFeatureRevisionContract {
             )
         )
 
-        let replacement = try probe.makeWorkingTagReplacer().replacePrimaryTag(
+        let replacement = try await probe.makeWorkingTagReplacer().replacePrimaryTag(
             forQueueItemID: probe.queueItemID,
             inSessionID: probe.sessionID,
             input: probe.replacementInput
