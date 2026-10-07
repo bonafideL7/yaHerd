@@ -240,69 +240,18 @@ actor CoreDataReadModelActor:
                 in: context
             )
 
-            let candidates: [CDAnimal]
-            switch query?.sortOrder ?? .tagAscending {
-            case .tagAscending, .tagDescending:
-                candidates = try Self.fetchLightweightSortedQueryCandidates(
-                    query: query,
-                    sortOrder: query?.sortOrder ?? .tagAscending,
-                    herd: herd,
-                    herdID: herdID,
-                    referenceDate: referenceDate,
-                    calendar: calendar,
-                    offset: page.offset,
-                    limit: requestedCount,
-                    in: context
-                )
-            case .birthDateNewest:
-                candidates = try Self.fetchDirectAnimalCandidates(
-                    query: query,
-                    herd: herd,
-                    referenceDate: referenceDate,
-                    calendar: calendar,
-                    offset: page.offset,
-                    limit: requestedCount,
-                    sortDescriptors: [
-                        NSSortDescriptor(key: "birthDate", ascending: false),
-                        NSSortDescriptor(key: "name", ascending: true),
-                        NSSortDescriptor(key: "id", ascending: true)
-                    ],
-                    in: context
-                )
-            case .birthDateOldest:
-                candidates = try Self.fetchDirectAnimalCandidates(
-                    query: query,
-                    herd: herd,
-                    referenceDate: referenceDate,
-                    calendar: calendar,
-                    offset: page.offset,
-                    limit: requestedCount,
-                    sortDescriptors: [
-                        NSSortDescriptor(key: "birthDate", ascending: true),
-                        NSSortDescriptor(key: "name", ascending: true),
-                        NSSortDescriptor(key: "id", ascending: true)
-                    ],
-                    in: context
-                )
-            case .animalType, .sex, .status, .pasture:
-                guard let query else {
-                    throw CoreDataReadModelError.inconsistentAnimalPage(
-                        expected: requestedCount,
-                        fetched: 0
-                    )
-                }
-                candidates = try Self.fetchLightweightSortedQueryCandidates(
-                    query: query,
-                    sortOrder: query.sortOrder,
-                    herd: herd,
-                    herdID: herdID,
-                    referenceDate: referenceDate,
-                    calendar: calendar,
-                    offset: page.offset,
-                    limit: requestedCount,
-                    in: context
-                )
-            }
+            let sortOrder = query?.sortOrder ?? .tagAscending
+            let candidates = try Self.fetchLightweightSortedQueryCandidates(
+                query: query,
+                sortOrder: sortOrder,
+                herd: herd,
+                herdID: herdID,
+                referenceDate: referenceDate,
+                calendar: calendar,
+                offset: page.offset,
+                limit: requestedCount,
+                in: context
+            )
 
             let hydratedCandidates = try Self.hydrateAnimalSummaryCandidates(
                 candidates,
@@ -348,43 +297,6 @@ actor CoreDataReadModelActor:
         let status: AnimalStatus
         let displayTagNumber: String
         let pastureSortKey: String
-    }
-
-    private static func fetchDirectAnimalCandidates(
-        query: AnimalListFilterQuery?,
-        herd: CDHerd,
-        referenceDate: Date,
-        calendar: Calendar,
-        offset: Int,
-        limit: Int,
-        sortDescriptors: [NSSortDescriptor],
-        in context: NSManagedObjectContext
-    ) throws -> [CDAnimal] {
-        if let query, query.animalType != nil {
-            return try fetchLightweightSortedQueryCandidates(
-                query: query,
-                sortOrder: query.sortOrder,
-                herd: herd,
-                herdID: herd.id,
-                referenceDate: referenceDate,
-                calendar: calendar,
-                offset: offset,
-                limit: limit,
-                in: context
-            )
-        }
-
-        let request = NSFetchRequest<CDAnimal>(
-            entityName: CDAnimal.coreDataEntityName
-        )
-        request.predicate = animalListPredicate(
-            query: query,
-            herd: herd
-        )
-        request.sortDescriptors = sortDescriptors
-        request.fetchOffset = offset
-        request.fetchLimit = limit
-        return try context.fetch(request)
     }
 
     private static func fetchLightweightSortedQueryCandidates(
