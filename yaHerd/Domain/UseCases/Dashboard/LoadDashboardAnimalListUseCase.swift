@@ -1,12 +1,16 @@
 import Foundation
 
-struct LoadDashboardAnimalListUseCase: Sendable {
+@MainActor
+struct LoadDashboardAnimalListUseCase {
     let repository: any DashboardQueryReading
-    let service: DashboardService
+    let deriver: any DashboardHomeDeriving
 
-    init(repository: any DashboardQueryReading, service: DashboardService = DashboardService()) {
+    init(
+        repository: any DashboardQueryReading,
+        deriver: any DashboardHomeDeriving = DashboardHomeDerivationActor()
+    ) {
         self.repository = repository
-        self.service = service
+        self.deriver = deriver
     }
 
     func execute(
@@ -15,6 +19,11 @@ struct LoadDashboardAnimalListUseCase: Sendable {
     ) async throws -> [DashboardAnimalItem] {
         let animals = try await repository.fetchDashboardAnimalRecords(kind: kind)
         let records = DashboardRecords(animals: animals, pastures: [], workingSessions: [])
-        return service.makeAnimalList(kind: kind, records: records, configuration: configuration)
+        return await deriver.makeDashboardAnimalList(
+            kind: kind,
+            records: records,
+            configuration: configuration,
+            now: .now
+        )
     }
 }
