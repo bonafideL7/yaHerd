@@ -59,9 +59,9 @@ final class WorkingSessionDetailViewModel: ObservableObject {
         }
     }
 
-    func reopenSession() {
+    func reopenSession() async {
         do {
-            try repository.reopenSession(id: sessionID)
+            try await repository.reopenSession(id: sessionID)
             load()
         } catch {
             errorMessage = UserVisibleErrorMessage.make(error)
