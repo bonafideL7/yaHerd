@@ -437,25 +437,25 @@ struct MutationPublishingWorkingRepository: WorkingRepository {
         try base.fetchQueueItemEditor(sessionID: sessionID, queueItemID: queueItemID)
     }
 
-    func startSession(input: WorkingSessionStartInput) throws -> UUID {
+    func startSession(input: WorkingSessionStartInput) async throws -> UUID {
         try writePolicy.validateCanWrite()
-        let sessionID = try base.startSession(input: input)
+        let sessionID = try await base.startSession(input: input)
         mutationRecorder.recordSuccessfulMutation(reason: .working)
         return sessionID
     }
 
-    func reopenSession(id: UUID) throws {
+    func reopenSession(id: UUID) async throws {
         try writePolicy.validateCanWrite()
-        try base.reopenSession(id: id)
+        try await base.reopenSession(id: id)
         mutationRecorder.recordSuccessfulMutation(reason: .working)
     }
 
     func updateSessionTreatments(
         id: UUID,
         plannedTreatments: [WorkingTreatmentPlanItem]
-    ) throws {
+    ) async throws {
         try writePolicy.validateCanWrite()
-        try base.updateSessionTreatments(id: id, plannedTreatments: plannedTreatments)
+        try await base.updateSessionTreatments(id: id, plannedTreatments: plannedTreatments)
         mutationRecorder.recordSuccessfulMutation(reason: .working)
     }
 
@@ -463,9 +463,9 @@ struct MutationPublishingWorkingRepository: WorkingRepository {
         forQueueItemID queueItemID: UUID,
         inSessionID sessionID: UUID,
         input: WorkingTagReplacementInput
-    ) throws -> WorkingQueueItemEditorSnapshot {
+    ) async throws -> WorkingQueueItemEditorSnapshot {
         try writePolicy.validateCanWrite()
-        let snapshot = try base.replacePrimaryTag(
+        let snapshot = try await base.replacePrimaryTag(
             forQueueItemID: queueItemID,
             inSessionID: sessionID,
             input: input
@@ -474,9 +474,9 @@ struct MutationPublishingWorkingRepository: WorkingRepository {
         return snapshot
     }
 
-    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) throws {
+    func collectAnimals(sessionID: UUID, animalIDs: [UUID]) async throws {
         try writePolicy.validateCanWrite()
-        try base.collectAnimals(sessionID: sessionID, animalIDs: animalIDs)
+        try await base.collectAnimals(sessionID: sessionID, animalIDs: animalIDs)
         mutationRecorder.recordSuccessfulMutation(reason: .working)
     }
 
@@ -487,9 +487,9 @@ struct MutationPublishingWorkingRepository: WorkingRepository {
         pregnancyCheck: WorkingPregnancyCheckInput?,
         markCastrated: Bool,
         observationNotes: String
-    ) throws {
+    ) async throws {
         try writePolicy.validateCanWrite()
-        try base.complete(
+        try await base.complete(
             queueItemID: queueItemID,
             inSessionID: sessionID,
             treatmentEntries: treatmentEntries,
@@ -504,30 +504,30 @@ struct MutationPublishingWorkingRepository: WorkingRepository {
         forQueueItemID queueItemID: UUID,
         inSessionID sessionID: UUID,
         input: WorkingSessionAnimalEditInput
-    ) throws {
+    ) async throws {
         try writePolicy.validateCanWrite()
-        try base.saveEdits(forQueueItemID: queueItemID, inSessionID: sessionID, input: input)
+        try await base.saveEdits(forQueueItemID: queueItemID, inSessionID: sessionID, input: input)
         mutationRecorder.recordSuccessfulMutation(reason: .working)
     }
 
-    func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) throws {
+    func deleteWorkData(forQueueItemID queueItemID: UUID, inSessionID sessionID: UUID) async throws {
         try writePolicy.validateCanWrite()
-        try base.deleteWorkData(forQueueItemID: queueItemID, inSessionID: sessionID)
+        try await base.deleteWorkData(forQueueItemID: queueItemID, inSessionID: sessionID)
         mutationRecorder.recordSuccessfulMutation(reason: .working)
     }
 
-    func deleteSession(id: UUID) throws {
+    func deleteSession(id: UUID) async throws {
         try writePolicy.validateCanWrite()
-        try base.deleteSession(id: id)
+        try await base.deleteSession(id: id)
         mutationRecorder.recordSuccessfulMutation(reason: .working)
     }
 
     func completeSession(
         id: UUID,
         assignments: [WorkingQueueDestinationAssignment]
-    ) throws {
+    ) async throws {
         try writePolicy.validateCanWrite()
-        try base.completeSession(id: id, assignments: assignments)
+        try await base.completeSession(id: id, assignments: assignments)
         mutationRecorder.recordSuccessfulMutation(reason: .working)
     }
 
@@ -550,7 +550,6 @@ struct MutationPublishingWorkingRepository: WorkingRepository {
         mutationRecorder.recordSuccessfulMutation(reason: .working)
     }
 }
-
 struct MutationPublishingSampleDataSeeder: SampleDataSeeding {
     let base: any SampleDataSeeding
     let mutationRecorder: any SuccessfulMutationRecording
