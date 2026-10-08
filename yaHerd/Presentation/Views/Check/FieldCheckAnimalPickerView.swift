@@ -355,7 +355,9 @@ private struct FieldCheckAnimalPickerStatusPills: View {
 struct FieldCheckTrackedAnimalPickerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.fieldCheckFeatureDependencies) private var fieldCheckDependencies
-    private var animalRepository: any AnimalListRepository { fieldCheckDependencies.animalListRepository }
+    private var animalReferenceQueryReader: (any AnimalReferenceQueryReading)? {
+        fieldCheckDependencies.animalReferenceQueryReader
+    }
 
     @State private var model = FieldCheckTrackedAnimalPickerViewModel()
     @State private var pendingAnimal: AnimalSummary?
@@ -381,7 +383,21 @@ struct FieldCheckTrackedAnimalPickerView: View {
     var body: some View {
         List {
             Section {
-                if eligibleAnimals.isEmpty {
+                if model.isLoading || !model.hasLoaded {
+                    if model.loadErrorMessage != nil {
+                        ContentUnavailableView {
+                            Label("Unable to Load Animals", systemImage: "exclamationmark.triangle")
+                        } description: {
+                            Text(model.loadErrorMessage ?? "Animal candidates are unavailable.")
+                        } actions: {
+                            Button("Retry") {
+                                refreshCandidates()
+                            }
+                        }
+                    } else {
+                        ProgressView("Loading eligible animals…")
+                    }
+                } else if eligibleAnimals.isEmpty {
                     ContentUnavailableView(
                         "No Animals Available",
                         systemImage: "tag",
@@ -424,8 +440,16 @@ struct FieldCheckTrackedAnimalPickerView: View {
         .interactiveDismissDisabled(model.isSubmittingSelection)
         .searchable(text: $model.searchText, prompt: "Search animals")
         .task {
-            if !model.hasLoaded {
-                model.load(using: animalRepository)
+            await model.load(for: session, using: animalReferenceQueryReader)
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    refreshCandidates()
+                } label: {
+                    Label("Refresh Eligible Animals", systemImage: "arrow.clockwise")
+                }
+                .disabled(model.isLoading || model.isSubmittingSelection)
             }
         }
         .confirmationDialog(
@@ -455,7 +479,8 @@ struct FieldCheckTrackedAnimalPickerView: View {
     }
 
     private func selectPendingAnimal(_ animal: AnimalSummary) {
-        guard model.beginSelectionSubmission() else {
+        guard eligibleAnimals.contains(where: { $0.id == animal.id }),
+              model.beginSelectionSubmission() else {
             return
         }
 
@@ -467,6 +492,13 @@ struct FieldCheckTrackedAnimalPickerView: View {
             if await onSelect(animal.id) {
                 dismiss()
             }
+        }
+    }
+
+    private func refreshCandidates() {
+        pendingAnimal = nil
+        Task { @MainActor in
+            await model.load(for: session, using: animalReferenceQueryReader)
         }
     }
 
