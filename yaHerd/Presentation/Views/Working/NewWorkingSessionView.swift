@@ -108,6 +108,8 @@ struct NewWorkingSessionView: View {
         }
         .navigationTitle("Start Working Session")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(isStarting)
+        .interactiveDismissDisabled(isStarting)
         .task {
             viewModel.configure(
                 pastureRepository: pastureRepository,
@@ -137,6 +139,7 @@ struct NewWorkingSessionView: View {
             if wrapsInNavigationStack {
                 ToolbarItem(placement: .cancellationAction) {
                     ToolbarCancelButton { dismiss() }
+                        .disabled(isStarting)
                 }
             }
         }
