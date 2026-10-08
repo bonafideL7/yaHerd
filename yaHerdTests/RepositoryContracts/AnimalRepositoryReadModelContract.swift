@@ -2594,6 +2594,60 @@ extension AnimalRepositoryContract {
         let freshContainsDeleted = try await fixture.makeReferenceQueryReader()
             .containsAnimal(id: northA2.id)
         XCTAssertFalse(freshContainsDeleted, file: file, line: line)
+
+        // Persist enough real Core Data Animals to cross the private reader's
+        // 250-record snapshot hydration boundary. Fake page readers cannot
+        // detect a missing, reordered or duplicated row in that Core Data loop.
+        var snapshotBatchIDs: [UUID] = []
+        for index in 0..<260 {
+            let suffix = String(format: "%03d", index)
+            let created = try repository.create(
+                input: readModelAnimalInput(
+                    name: "Snapshot Chunk \(suffix)",
+                    tagNumber: "SNAP\(suffix)",
+                    sex: .female,
+                    birthDate: contractDate(year: 2020, month: 1, day: 1),
+                    pastureID: north.id
+                )
+            )
+            snapshotBatchIDs.append(created.id)
+        }
+
+        let multiBatchSnapshot = try await reader.fetchAnimalReferenceSnapshot(
+            matching: AnimalReferenceQuery(
+                pastureScope: .pasture(north.id),
+                location: .pasture,
+                sortOrder: .displayTag
+            )
+        )
+        let expectedBatchIDs = [northA10.id] + snapshotBatchIDs
+        XCTAssertEqual(
+            multiBatchSnapshot.map(\.id),
+            expectedBatchIDs,
+            "Complete Core Data reference snapshots must preserve every Animal and the natural tag order across the internal 250-record hydration boundary.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            Set(multiBatchSnapshot.map(\.id)).count,
+            expectedBatchIDs.count,
+            "Core Data snapshot hydration must not duplicate application UUIDs at a batch boundary.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            multiBatchSnapshot[250].displayTagNumber,
+            "SNAP249",
+            "The first hydrated record after a 250-record boundary must preserve the correct tag metadata.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            multiBatchSnapshot.last?.name,
+            "Snapshot Chunk 259",
+            file: file,
+            line: line
+        )
     }
 
     /// Freezes the production async Animal-list paging contract used by `AnimalListViewModel`.
