@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 nonisolated struct PastureFeatureDependencies {
-    let listRepository: any PastureListRepository
+    let listRepository: any PastureListManagingRepository
     let createRepository: any PastureCreateRepository
     let detailRepository: any PastureDetailEditingRepository
     let groupListRepository: any PastureGroupListRepository
@@ -15,7 +15,7 @@ nonisolated struct PastureFeatureDependencies {
     let mutationStream: any ApplicationMutationStreaming
 
     nonisolated init(
-        listRepository: any PastureListRepository,
+        listRepository: any PastureListManagingRepository,
         createRepository: any PastureCreateRepository,
         detailRepository: any PastureDetailEditingRepository,
         groupListRepository: any PastureGroupListRepository,
@@ -68,7 +68,7 @@ nonisolated struct PastureFeatureDependencies {
 
     @MainActor
     static func preview(
-        listRepository: (any PastureListRepository)? = nil,
+        listRepository: (any PastureListManagingRepository)? = nil,
         createRepository: (any PastureCreateRepository)? = nil,
         detailRepository: (any PastureDetailEditingRepository)? = nil,
         groupListRepository: (any PastureGroupListRepository)? = nil,
