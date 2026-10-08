@@ -464,8 +464,15 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
             pastureID: UUID()
         )
         let resident = makeTrackedCandidate(tag: "RESIDENT", pastureID: destinationID)
+        let unassigned = makeTrackedCandidate(tag: "FC0998", pastureID: nil)
+        let workingPen = makeTrackedCandidate(
+            tag: "FC0999",
+            pastureID: UUID(),
+            location: .workingPen
+        )
+        let expected = sourceAnimals + [unassigned, workingPen]
         let reader = FieldCheckTrackedCandidateQuerySpy(
-            animals: sourceAnimals + [alreadyChecked, resident]
+            animals: sourceAnimals + [alreadyChecked, resident, unassigned, workingPen]
         )
         let model = FieldCheckTrackedAnimalPickerViewModel()
         await model.load(for: session, using: reader)
@@ -475,7 +482,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         XCTAssertEqual(model.eligibleAnimals(
             forPastureID: destinationID,
             excluding: Set(session.animalChecks.compactMap(\.animalID))
-        ).map(\.id), sourceAnimals.map(\.id))
+        ).map(\.id), expected.map(\.id))
         let query = await reader.lastQuery()
         XCTAssertEqual(query?.pastureScope, .notPasture(destinationID))
         XCTAssertEqual(query?.location, .any)
@@ -561,7 +568,8 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
     private func makeTrackedCandidate(
         id: UUID = UUID(),
         tag: String,
-        pastureID: UUID?
+        pastureID: UUID?,
+        location: AnimalLocation = .pasture
     ) -> AnimalSummary {
         AnimalSummary(
             id: id,
@@ -578,7 +586,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
             isArchived: false,
             pastureID: pastureID,
             pastureName: pastureID == nil ? nil : "Other",
-            location: .pasture
+            location: location
         )
     }
 
