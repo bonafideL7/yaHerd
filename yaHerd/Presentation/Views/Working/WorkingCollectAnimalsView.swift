@@ -9,7 +9,9 @@ struct WorkingCollectAnimalsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     private var repository: any WorkingCollectAnimalsRepository { workingDependencies.collectAnimalsRepository }
-    private var animalSummaryReader: any AnimalSummaryReading { workingDependencies.animalSummaryReader }
+    private var animalReferenceQueryReader: (any AnimalReferenceQueryReading)? {
+        workingDependencies.animalReferenceQueryReader
+    }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     let sessionID: UUID
@@ -21,6 +23,10 @@ struct WorkingCollectAnimalsView: View {
     @State private var showingError = false
     @State private var searchText: String = ""
     @State private var isCollecting = false
+    @State private var isLoading = true
+    @State private var loadErrorMessage: String?
+    @State private var loadToken = UUID()
+    @State private var alertTitle = "Can’t Save"
 
     private var eligibleAnimals: [AnimalSummary] {
         guard let session, session.isSourcePastureAvailable else { return [] }
@@ -69,8 +75,18 @@ struct WorkingCollectAnimalsView: View {
                 }
             }
             .overlay {
-                if session == nil {
-                    ProgressView()
+                if isLoading {
+                    ProgressView("Loading eligible animals…")
+                } else if session == nil {
+                    ContentUnavailableView {
+                        Label("Unable to Load Session", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(loadErrorMessage ?? "The session is no longer available.")
+                    } actions: {
+                        Button("Retry") {
+                            Task { await load() }
+                        }
+                    }
                 }
             }
             .environment(\.editMode, .constant(.active))
@@ -78,7 +94,7 @@ struct WorkingCollectAnimalsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled(isCollecting)
             .searchable(text: $searchText, prompt: "Search tag")
-            .task { load() }
+            .task { await load() }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Move") {
@@ -86,7 +102,9 @@ struct WorkingCollectAnimalsView: View {
                     }
                     .disabled(
                         isCollecting
+                            || isLoading
                             || selectedAnimalIDs.isEmpty
+                            || !selectedAnimalIDs.isSubset(of: Set(availableAnimals.map(\.id)))
                             || session?.isSourcePastureAvailable != true
                     )
                     .disabledWhenDataReadOnly()
@@ -96,7 +114,7 @@ struct WorkingCollectAnimalsView: View {
                         .disabled(isCollecting)
                 }
             }
-            .alert("Can’t Save", isPresented: $showingError) {
+            .alert(alertTitle, isPresented: $showingError) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(errorMessage ?? "")
@@ -104,19 +122,57 @@ struct WorkingCollectAnimalsView: View {
         }
     }
 
-    private func load() {
+    @MainActor
+    private func load() async {
+        guard !isCollecting else { return }
+        let token = UUID()
+        loadToken = token
+        isLoading = true
+        session = nil
+        availableAnimals = []
+        selectedAnimalIDs = []
+        loadErrorMessage = nil
+
         do {
-            session = try repository.fetchSessionDetail(id: sessionID)
-            availableAnimals = try animalSummaryReader.fetchAnimals()
-            errorMessage = nil
+            guard let loadedSession = try repository.fetchSessionDetail(id: sessionID) else {
+                throw WorkingCollectCandidateError.missingSession
+            }
+            let candidates: [AnimalSummary]
+            if loadedSession.isSourcePastureAvailable, loadedSession.sourcePastureID != nil {
+                guard let animalReferenceQueryReader else {
+                    throw WorkingCollectCandidateError.queryUnavailable
+                }
+                candidates = try await WorkingCollectAnimalsEligibility.loadCandidates(
+                    for: loadedSession,
+                    using: animalReferenceQueryReader
+                )
+            } else {
+                candidates = []
+            }
+            try Task.checkCancellation()
+            guard token == loadToken else { return }
+            session = loadedSession
+            availableAnimals = candidates
+            isLoading = false
+        } catch is CancellationError {
+            if token == loadToken {
+                isLoading = false
+            }
         } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+            guard token == loadToken else { return }
+            isLoading = false
+            loadErrorMessage = UserVisibleErrorMessage.make(error)
+            errorMessage = loadErrorMessage
+            alertTitle = "Can’t Load"
             showingError = true
         }
     }
 
     private func collectSelected() {
         guard !isCollecting,
+              !isLoading,
+              !selectedAnimalIDs.isEmpty,
+              selectedAnimalIDs.isSubset(of: Set(availableAnimals.map(\.id))),
               session?.isSourcePastureAvailable == true else {
             return
         }
@@ -127,6 +183,16 @@ struct WorkingCollectAnimalsView: View {
             defer { isCollecting = false }
 
             do {
+                // A different screen may have collected Animals while this
+                // modal was open. Recheck source/queue identity before write.
+                guard let current = try repository.fetchSessionDetail(id: sessionID),
+                      current.isSourcePastureAvailable,
+                      current.sourcePastureID == session?.sourcePastureID,
+                      Set(animalIDs).isDisjoint(
+                        with: Set(current.queueItems.compactMap(\.animalID))
+                      ) else {
+                    throw WorkingCollectCandidateError.staleSession
+                }
                 try await repository.collectAnimals(
                     sessionID: sessionID,
                     animalIDs: animalIDs
@@ -134,6 +200,7 @@ struct WorkingCollectAnimalsView: View {
                 dismiss()
             } catch {
                 errorMessage = UserVisibleErrorMessage.make(error)
+                alertTitle = "Can’t Save"
                 showingError = true
             }
         }
@@ -141,6 +208,47 @@ struct WorkingCollectAnimalsView: View {
 }
 
 enum WorkingCollectAnimalsEligibility {
+    /// The M9 read service owns Herd, activity, archive, and location filters.
+    /// Hold pages off-screen until all pages succeed, so Move cannot act on
+    /// a partial list after a transient store read failure.
+    @MainActor
+    static func loadCandidates(
+        for session: WorkingSessionDetailSnapshot,
+        using reader: any AnimalReferenceQueryReading
+    ) async throws -> [AnimalSummary] {
+        guard session.isSourcePastureAvailable,
+              let sourcePastureID = session.sourcePastureID else { return [] }
+
+        let excludedIDs = Set(session.queueItems.compactMap(\.animalID))
+        let query = AnimalReferenceQuery(
+            pastureScope: .pasture(sourcePastureID),
+            location: .pasture,
+            excludedAnimalIDs: Array(excludedIDs),
+            sortOrder: .displayTag
+        )
+        var animals: [AnimalSummary] = []
+        var offset = 0
+        while true {
+            try Task.checkCancellation()
+            let page = try await reader.fetchAnimalReferencePage(
+                matching: query,
+                page: ReadPageRequest(offset: offset, limit: ReadPageRequest.maximumLimit)
+            )
+            try Task.checkCancellation()
+            animals.append(contentsOf: page.animals)
+            if !page.hasMore { break }
+            guard !page.animals.isEmpty else {
+                throw WorkingCollectCandidateError.incompletePage
+            }
+            offset += page.animals.count
+        }
+        return candidates(
+            from: animals,
+            sourcePastureID: sourcePastureID,
+            existingAnimalIDs: excludedIDs
+        )
+    }
+
     static func candidates(
         from animals: [AnimalSummary],
         sourcePastureID: UUID?,
@@ -154,6 +262,26 @@ enum WorkingCollectAnimalsEligibility {
                 && animal.pastureID == sourcePastureID
                 && animal.location == .pasture
                 && !existingAnimalIDs.contains(animal.id)
+        }
+    }
+}
+
+private enum WorkingCollectCandidateError: LocalizedError {
+    case missingSession
+    case queryUnavailable
+    case incompletePage
+    case staleSession
+
+    var errorDescription: String? {
+        switch self {
+        case .missingSession:
+            "The Working session could not be found. Close this picker and reopen the session."
+        case .queryUnavailable:
+            "The Core Data animal lookup is unavailable. Close the picker and retry."
+        case .incompletePage:
+            "The eligible animal list could not be loaded completely. Retry before collecting."
+        case .staleSession:
+            "The Working session changed while this picker was open. Refresh the session and choose the animals again."
         }
     }
 }
