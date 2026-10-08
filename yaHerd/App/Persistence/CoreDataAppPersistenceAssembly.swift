@@ -155,6 +155,7 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
             workingSessionFeatureDependencies: WorkingSessionFeatureDependencies(
                 repository: workingRepository,
                 animalSummaryReader: animalRepository,
+                animalReferenceQueryReader: animalListQueryReader,
                 pastureReferenceReader: pastureRepository,
                 mutationStream: mutationCenter
             ),
