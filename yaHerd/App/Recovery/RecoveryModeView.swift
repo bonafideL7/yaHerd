@@ -89,7 +89,7 @@ struct RecoveryModeView: View {
         .disabled(controller.isPreparingExport)
 
         Text(
-          "Creates a TAR archive with storage diagnostics and copies of discoverable Core Data SQLite, WAL, and SHM files. Keep it private because it may contain herd records."
+          "Creates a TAR archive with storage diagnostics, Core Data SQLite/WAL/SHM files, and any recognized legacy yaHerd storage files. Legacy files are preserved without conversion. Keep the archive private."
         )
         .font(.caption)
         .foregroundStyle(.secondary)
