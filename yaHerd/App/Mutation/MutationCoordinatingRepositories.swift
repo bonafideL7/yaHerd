@@ -213,6 +213,20 @@ struct MutationPublishingPastureRepository: PastureRepository {
 }
 
 @MainActor
+struct MutationPublishingPastureDeletionCommand: PastureDeletionPerforming {
+    let base: any PastureDeletionPerforming
+    let mutationRecorder: any SuccessfulMutationRecording
+    let writePolicy: LocalDataWritePolicy
+
+    func deletePastures(ids: [UUID], archivedAt: Date) async throws {
+        guard !ids.isEmpty else { return }
+        try writePolicy.validateCanWrite()
+        try await base.deletePastures(ids: ids, archivedAt: archivedAt)
+        mutationRecorder.recordSuccessfulMutation(reason: .pasture)
+    }
+}
+
+@MainActor
 struct MutationPublishingDashboardRepository: DashboardRepository {
     let base: any DashboardRepository
     let mutationRecorder: any SuccessfulMutationRecording
