@@ -74,6 +74,141 @@ final class PastureUseCaseTests: XCTestCase {
         XCTAssertTrue(repository.reorderedIDs.isEmpty)
     }
 
+    func testAtomicPastureDeleteBuildsOneOrderedPlanAndPublishesAfterCommit() async throws {
+        let first = UUID()
+        let empty = UUID()
+        let animalA = UUID()
+        let animalB = UUID()
+        let archivedAt = Date(timeIntervalSinceReferenceDate: 740_000)
+
+        let reader = PastureDeleteRepositorySpy()
+        reader.existingIDs = [first, empty]
+        reader.residentAnimalsByPastureID[first] = [
+            PastureTestSupport.makeAnimalSummary(id: animalB),
+            PastureTestSupport.makeAnimalSummary(id: animalA)
+        ]
+        let writer = AtomicPastureDeletionWriterSpy()
+        let center = ApplicationMutationCenter()
+        let command = MutationPublishingPastureDeletionCommand(
+            base: DeletePasturesAtomicallyUseCase(
+                pastureReader: reader,
+                transactionWriter: writer
+            ),
+            mutationRecorder: ApplicationMutationPipeline(center: center),
+            writePolicy: LocalDataWritePolicy(dataAccessMode: .readWrite)
+        )
+
+        try await command.deletePastures(ids: [first, empty], archivedAt: archivedAt)
+
+        XCTAssertEqual(reader.validateCalls, [[first, empty]])
+        XCTAssertEqual(reader.fetchedResidentPastureIDs, [first, empty])
+        XCTAssertTrue(reader.deletedIDs.isEmpty, "The atomic writer alone must delete Pastures.")
+        XCTAssertEqual(writer.plans.count, 1)
+
+        let plan = try XCTUnwrap(writer.plans.first)
+        XCTAssertEqual(
+            plan.expectedStates,
+            [
+                PastureDeletionExpectedState(
+                    pastureID: first,
+                    residentAnimalIDs: Set([animalA, animalB])
+                ),
+                PastureDeletionExpectedState(
+                    pastureID: empty,
+                    residentAnimalIDs: []
+                )
+            ]
+        )
+        XCTAssertEqual(
+            plan.operations,
+            [
+                .moveAnimals(
+                    animalIDs: [animalA, animalB].sorted {
+                        $0.uuidString < $1.uuidString
+                    },
+                    fromPastureID: first,
+                    toPastureID: nil
+                ),
+                .archiveFieldChecks(pastureIDs: [first, empty], archivedAt: archivedAt),
+                .deletePastures(ids: [first, empty])
+            ]
+        )
+        XCTAssertEqual(center.currentSequence, 1)
+        XCTAssertEqual(center.pastureRevision, 1)
+        XCTAssertEqual(center.homeRevision, 1)
+        XCTAssertEqual(center.animalRevision, 1)
+        XCTAssertEqual(center.fieldCheckRevision, 1)
+    }
+
+    func testAtomicPastureDeleteRejectsInvalidInputAndFailedWritesWithoutPublication() async {
+        let pastureID = UUID()
+        let missingID = UUID()
+        let reader = PastureDeleteRepositorySpy()
+        reader.existingIDs = [pastureID]
+        let writer = AtomicPastureDeletionWriterSpy()
+        let center = ApplicationMutationCenter()
+        let command = MutationPublishingPastureDeletionCommand(
+            base: DeletePasturesAtomicallyUseCase(
+                pastureReader: reader,
+                transactionWriter: writer
+            ),
+            mutationRecorder: ApplicationMutationPipeline(center: center),
+            writePolicy: LocalDataWritePolicy(dataAccessMode: .readWrite)
+        )
+        let date = Date(timeIntervalSinceReferenceDate: 740_001)
+
+        try? await command.deletePastures(ids: [], archivedAt: date)
+        XCTAssertTrue(reader.validateCalls.isEmpty)
+        XCTAssertTrue(writer.plans.isEmpty)
+        XCTAssertEqual(center.currentSequence, 0)
+
+        do {
+            try await command.deletePastures(ids: [pastureID, pastureID], archivedAt: date)
+            XCTFail("Expected duplicate Pasture IDs to fail before any lookup.")
+        } catch {
+            XCTAssertEqual(error as? PastureRepositoryError, .duplicatePastureIDs)
+        }
+        XCTAssertTrue(reader.validateCalls.isEmpty)
+
+        do {
+            try await command.deletePastures(ids: [missingID], archivedAt: date)
+            XCTFail("Expected a missing Pasture to fail before transaction submission.")
+        } catch {
+            XCTAssertEqual(
+                error as? PastureRepositoryError,
+                .pastureIDsNotFound([missingID])
+            )
+        }
+        XCTAssertTrue(writer.plans.isEmpty)
+
+        writer.errorToThrow = PastureTestError.forced
+        do {
+            try await command.deletePastures(ids: [pastureID], archivedAt: date)
+            XCTFail("Expected the failed atomic write to propagate.")
+        } catch {
+            XCTAssertEqual(error as? PastureTestError, .forced)
+        }
+        XCTAssertEqual(writer.plans.count, 1)
+        XCTAssertEqual(center.currentSequence, 0)
+
+        let recovery = MutationPublishingPastureDeletionCommand(
+            base: DeletePasturesAtomicallyUseCase(
+                pastureReader: reader,
+                transactionWriter: writer
+            ),
+            mutationRecorder: ApplicationMutationPipeline(center: center),
+            writePolicy: LocalDataWritePolicy(dataAccessMode: .recoveryReadOnly)
+        )
+        do {
+            try await recovery.deletePastures(ids: [pastureID], archivedAt: date)
+            XCTFail("Expected recovery mode to reject the deletion.")
+        } catch {
+            XCTAssertTrue(error is LocalDataWritePolicy.WriteError)
+        }
+        XCTAssertEqual(writer.plans.count, 1)
+        XCTAssertEqual(center.currentSequence, 0)
+    }
+
     func testDeletePasturesCoordinatesAnimalUnassignmentFieldCheckArchiveAndPastureDelete() async throws {
         let pastureID = UUID()
         let animalID = UUID()
@@ -201,4 +336,15 @@ final class PastureUseCaseTests: XCTestCase {
         XCTAssertNil(repository.assignmentCalls.first?.groupID)
     }
 
+}
+
+@MainActor
+private final class AtomicPastureDeletionWriterSpy: PastureDeletionTransactionWriting {
+    private(set) var plans: [DeletePasturesTransactionPlan] = []
+    var errorToThrow: Error?
+
+    func deletePastures(_ plan: DeletePasturesTransactionPlan) async throws {
+        plans.append(plan)
+        if let errorToThrow { throw errorToThrow }
+    }
 }
