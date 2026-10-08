@@ -145,6 +145,12 @@ protocol HomeWorkingQueryReading: Sendable {
     func fetchHomeTreatmentTemplates(limit: Int) async throws -> [WorkingTreatmentTemplateSummary]
 }
 
+/// A full Animal list must come from one Core Data query generation.
+/// Independent pages are still available for separately paginated UIs.
+protocol AnimalListSnapshotReading: Sendable {
+    func fetchAnimalSummarySnapshot() async throws -> [AnimalSummary]
+}
+
 protocol AnimalListQueryReading: Sendable {
     func fetchAnimalSummaryPage(_ request: ReadPageRequest) async throws -> AnimalSummaryPage
     func fetchAnimalPastureOptions(limit: Int) async throws -> [PastureOption]
