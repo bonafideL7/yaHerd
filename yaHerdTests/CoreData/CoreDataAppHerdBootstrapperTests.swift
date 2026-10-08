@@ -246,7 +246,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             in: root,
             fileManager: fileManager
         )
-        XCTAssertEqual(artifacts.map(\\.lastPathComponent), [
+        XCTAssertEqual(artifacts.map(\.lastPathComponent), [
             legacyStore.lastPathComponent,
             legacyJournal.lastPathComponent
         ])
@@ -257,8 +257,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 fileManager: fileManager
             )
         ) { error in
-            guard case .legacyStoreFound(let files) =
-                error as? CoreDataLegacyStorePreflightError else {
+            guard let typedError = error as? CoreDataLegacyStorePreflightError,
+                  case .legacyStoreFound(let files) = typedError else {
                 XCTFail("Expected a recognized legacy store.")
                 return
             }
