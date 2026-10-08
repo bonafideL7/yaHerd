@@ -105,7 +105,6 @@ final class SwiftDataPersistenceAssembly: PersistenceAssembly {
                 mutationStream: mutationCenter
             ),
             homeFeatureDependencies: HomeFeatureDependencies(
-                dashboardReader: dashboardRepository,
                 fieldCheckOverviewReader: fieldCheckRepository,
                 dashboardQueryReader: dashboardQueryReader,
                 homeFieldCheckQueryReader: homeFieldCheckQueryReader,
