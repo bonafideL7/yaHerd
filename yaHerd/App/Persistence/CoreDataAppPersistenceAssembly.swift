@@ -13,6 +13,32 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
         self.selection = AppCurrentHerdSelection(currentHerdID: currentHerdID)
     }
 
+    /// Production launch keeps one durable store and one selected Herd for all features.
+    static func load(at storeURL: URL) async throws -> CoreDataAppPersistenceAssembly {
+        let assembly = try await CoreDataPersistenceAssembly.load(storeURL: storeURL)
+        let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: assembly
+        )
+        return CoreDataAppPersistenceAssembly(
+            assembly: assembly,
+            currentHerdID: herdID
+        )
+    }
+
+    /// A failed disk open must never trigger a SwiftData fallback or write to
+    /// the failed store. Bootstrap this temporary Herd before enabling read-only
+    /// application policy so all UI dependencies can still render safely.
+    static func inMemoryRecovery() async throws -> CoreDataAppPersistenceAssembly {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: assembly
+        )
+        return CoreDataAppPersistenceAssembly(
+            assembly: assembly,
+            currentHerdID: herdID
+        )
+    }
+
     func makeDependencies(dataAccessMode: AppDataAccessMode) -> AppDependencies {
         let mutationCenter = ApplicationMutationCenter()
         let recorder = ApplicationMutationPipeline(center: mutationCenter)
