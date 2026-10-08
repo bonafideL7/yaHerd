@@ -84,7 +84,7 @@ struct WorkingCollectAnimalsView: View {
                         Text(loadErrorMessage ?? "The session is no longer available.")
                     } actions: {
                         Button("Retry") {
-                            Task { await load() }
+                            Task { @MainActor in await load() }
                         }
                     }
                 } else if eligibleAnimals.isEmpty {
@@ -108,7 +108,7 @@ struct WorkingCollectAnimalsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        Task { await load() }
+                        Task { @MainActor in await load() }
                     } label: {
                         Label("Refresh Eligible Animals", systemImage: "arrow.clockwise")
                     }
