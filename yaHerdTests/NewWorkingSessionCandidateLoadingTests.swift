@@ -3,6 +3,93 @@ import XCTest
 
 @MainActor
 final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
+    func testFailedTemplateListKeepsSetupBlockedAfterSuccessfulCandidatePages() async {
+        let pastureID = UUID()
+        let animal = makeCandidate(tag: "T01", pastureID: pastureID)
+        let reader = WorkingSetupCandidateReader(animalsByPasture: [pastureID: [animal]])
+        let model = NewWorkingSessionViewModel(
+            pastureRepository: WorkingSetupPastureReader(pastureID: pastureID),
+            animalReferenceQueryReader: reader,
+            workingRepository: WorkingSetupTemplateRepository(failList: true)
+        )
+
+        model.load()
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertFalse(model.hasLoadedSetupSuccessfully)
+        XCTAssertTrue(model.pastures.isEmpty, "Do not publish Pastures without the required templates.")
+        XCTAssertTrue(model.templates.isEmpty)
+        let setupError = model.setupLoadErrorMessage
+        XCTAssertNotNil(setupError)
+        XCTAssertEqual(model.errorMessage, setupError)
+
+        // Even if a candidate request completes, it has no authority to clear
+        // setup failures or make an incomplete Working setup usable.
+        await model.loadEligibleAnimals(pastureID: pastureID)
+        XCTAssertEqual(model.eligibleAnimals(pastureID: pastureID).map(\\.id), [animal.id])
+        XCTAssertFalse(model.hasLoadedSetupSuccessfully)
+        XCTAssertEqual(model.setupLoadErrorMessage, setupError)
+        XCTAssertEqual(model.errorMessage, setupError)
+
+        model.errorMessage = nil // user dismisses the alert
+        XCTAssertEqual(model.setupLoadErrorMessage, setupError)
+        XCTAssertFalse(model.hasLoadedSetupSuccessfully)
+
+        // Retrying both healthy setup readers restores one complete setup.
+        model.configure(
+            pastureRepository: WorkingSetupPastureReader(pastureID: pastureID),
+            animalReferenceQueryReader: reader,
+            workingRepository: WorkingSetupTemplateRepository()
+        )
+        model.load()
+        XCTAssertTrue(model.hasLoadedSetupSuccessfully)
+        XCTAssertNil(model.setupLoadErrorMessage)
+        XCTAssertEqual(model.pastures.map(\\.id), [pastureID])
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testFailedPastureReadCannotExposeTemplatesOrEnableSetup() async {
+        let pastureID = UUID()
+        let model = NewWorkingSessionViewModel(
+            pastureRepository: WorkingSetupPastureReader(pastureID: pastureID, shouldFail: true),
+            animalReferenceQueryReader: WorkingSetupCandidateReader(
+                animalsByPasture: [pastureID: [makeCandidate(tag: "P01", pastureID: pastureID)]]
+            ),
+            workingRepository: WorkingSetupTemplateRepository()
+        )
+        model.load()
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertFalse(model.hasLoadedSetupSuccessfully)
+        XCTAssertTrue(model.pastures.isEmpty)
+        XCTAssertTrue(model.templates.isEmpty)
+        let error = model.setupLoadErrorMessage
+        XCTAssertNotNil(error)
+
+        await model.loadEligibleAnimals(pastureID: pastureID)
+        XCTAssertEqual(model.setupLoadErrorMessage, error)
+        XCTAssertEqual(model.errorMessage, error)
+        XCTAssertFalse(model.hasLoadedSetupSuccessfully)
+    }
+
+    func testCandidateRefreshDoesNotEraseTemplateDetailFailure() async {
+        let pastureID = UUID()
+        let model = NewWorkingSessionViewModel(
+            pastureRepository: WorkingSetupPastureReader(pastureID: pastureID),
+            animalReferenceQueryReader: WorkingSetupCandidateReader(
+                animalsByPasture: [pastureID: [makeCandidate(tag: "D01", pastureID: pastureID)]]
+            ),
+            workingRepository: WorkingSetupTemplateRepository(failDetail: true)
+        )
+        model.load()
+        XCTAssertTrue(model.hasLoadedSetupSuccessfully)
+        XCTAssertNil(model.templateDetail(id: UUID()))
+        let templateError = model.errorMessage
+        XCTAssertNotNil(templateError)
+
+        await model.loadEligibleAnimals(pastureID: pastureID)
+        XCTAssertEqual(model.loadedPastureID, pastureID)
+        XCTAssertEqual(model.errorMessage, templateError)
+    }
+
     func testSelectedPastureLoadsEveryPageWithoutShowingAnotherPasture() async {
         let firstPastureID = UUID()
         let secondPastureID = UUID()
@@ -197,6 +284,53 @@ private actor WorkingSetupCandidateReader: AnimalReferenceQueryReading {
     func containsAnimal(id: UUID) async throws -> Bool {
         animalsByPasture.values.contains { animals in
             animals.contains { $0.id == id }
+        }
+    }
+}
+
+@MainActor
+private struct WorkingSetupPastureReader: PastureReferenceDataReader {
+    let pastureID: UUID
+    var shouldFail = false
+
+    func fetchPastureOptions() throws -> [PastureOption] {
+        if shouldFail {
+            throw WorkingSetupReadError.pastureUnavailable
+        }
+        return [PastureOption(id: pastureID, name: "Setup Pasture")]
+    }
+}
+
+@MainActor
+private struct WorkingSetupTemplateRepository: NewWorkingSessionRepository {
+    var failList = false
+    var failDetail = false
+
+    func fetchTemplates() throws -> [WorkingTreatmentTemplateSummary] {
+        if failList {
+            throw WorkingSetupReadError.templatesUnavailable
+        }
+        return []
+    }
+
+    func fetchTemplateDetail(id: UUID) throws -> WorkingTreatmentTemplateDetailSnapshot? {
+        if failDetail {
+            throw WorkingSetupReadError.templateDetailUnavailable
+        }
+        return nil
+    }
+}
+
+private enum WorkingSetupReadError: LocalizedError {
+    case pastureUnavailable
+    case templatesUnavailable
+    case templateDetailUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .pastureUnavailable: "Test Pasture reference read failed."
+        case .templatesUnavailable: "Test Working template list read failed."
+        case .templateDetailUnavailable: "Test Working template detail read failed."
         }
     }
 }
