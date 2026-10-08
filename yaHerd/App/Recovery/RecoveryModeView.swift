@@ -146,9 +146,9 @@ struct RecoveryModeView: View {
   }
 
   @ViewBuilder
-  private var repairResultView: some View {
-    if let repairResult = controller.storeCheckResult {
-      switch repairResult {
+  private var storeCheckResultView: some View {
+    if let storeCheckResult = controller.storeCheckResult {
+      switch storeCheckResult {
       case .succeeded(let message):
         Label(message, systemImage: "checkmark.circle.fill")
           .font(.caption)
