@@ -111,7 +111,7 @@ final class CoreDataWorkingAppRepository: WorkingRepository {
         inSessionID sessionID: UUID,
         input: WorkingTagReplacementInput
     ) async throws -> WorkingQueueItemEditorSnapshot {
-        try await working.replacePrimaryTag(
+        return try await working.replacePrimaryTag(
             forQueueItemID: queueItemID,
             inSessionID: sessionID,
             input: input
