@@ -337,6 +337,22 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertEqual(center.pastureRevision, 2)
         XCTAssertEqual(center.animalRevision, 1)
         XCTAssertEqual(center.workingSessionRevision, 1)
+        XCTAssertEqual(
+            dependencies.homeFeatureDependencies.mutationStream.homeRevision,
+            2
+        )
+        XCTAssertEqual(
+            dependencies.fieldCheckFeatureDependencies.mutationStream.fieldCheckRevision,
+            2
+        )
+        XCTAssertEqual(
+            dependencies.workingSessionFeatureDependencies.mutationStream.workingSessionRevision,
+            1
+        )
+        XCTAssertEqual(
+            dependencies.animalFeatureDependencies.mutationStream.animalRevision,
+            1
+        )
 
         var workingEventIterator = center.events(after: 1).makeAsyncIterator()
         let workingEvent = await workingEventIterator.next()
