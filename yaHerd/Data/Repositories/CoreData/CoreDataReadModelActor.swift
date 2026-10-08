@@ -54,13 +54,13 @@ actor CoreDataReadModelActor:
     private let lookup: CoreDataLookup
     private let currentHerdID: @MainActor @Sendable () -> UUID?
 
+    @MainActor
     init(
-        contextFactory: CoreDataContextFactory,
-        lookup: CoreDataLookup,
+        assembly: CoreDataPersistenceAssembly,
         currentHerdID: @escaping @MainActor @Sendable () -> UUID?
     ) {
-        self.contextFactory = contextFactory
-        self.lookup = lookup
+        self.contextFactory = assembly.contextFactory
+        self.lookup = assembly.lookup
         self.currentHerdID = currentHerdID
     }
 
