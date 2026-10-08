@@ -6,9 +6,9 @@ struct DashboardPastureListView: View {
     @State private var viewModel = DashboardPastureListViewModel()
     @State private var filter: DashboardPastureFilter = .all
 
-    private let repository: any DashboardReadWriting
+    private let repository: any PastureGrazingMarking
 
-    init(repository: any DashboardReadWriting, initialFilter: DashboardPastureFilter = .all) {
+    init(repository: any PastureGrazingMarking, initialFilter: DashboardPastureFilter = .all) {
         self.repository = repository
         _filter = State(initialValue: initialFilter)
     }
