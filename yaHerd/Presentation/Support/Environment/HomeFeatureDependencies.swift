@@ -2,7 +2,6 @@ import Foundation
 import SwiftUI
 
 nonisolated struct HomeFeatureDependencies {
-    let dashboardReader: any DashboardRecordReading
     let fieldCheckOverviewReader: any FieldCheckOverviewReading
     let dashboardQueryReader: any DashboardQueryReading
     let homeFieldCheckQueryReader: any HomeFieldCheckQueryReading
@@ -10,14 +9,12 @@ nonisolated struct HomeFeatureDependencies {
     let mutationStream: any ApplicationMutationStreaming
 
     nonisolated init(
-        dashboardReader: any DashboardRecordReading,
         fieldCheckOverviewReader: any FieldCheckOverviewReading,
         dashboardQueryReader: any DashboardQueryReading,
         homeFieldCheckQueryReader: any HomeFieldCheckQueryReading,
         homeWorkingQueryReader: any HomeWorkingQueryReading,
         mutationStream: any ApplicationMutationStreaming
     ) {
-        self.dashboardReader = dashboardReader
         self.fieldCheckOverviewReader = fieldCheckOverviewReader
         self.dashboardQueryReader = dashboardQueryReader
         self.homeFieldCheckQueryReader = homeFieldCheckQueryReader
@@ -27,7 +24,6 @@ nonisolated struct HomeFeatureDependencies {
 
     @MainActor
     static func preview(
-        dashboardReader: (any DashboardRecordReading)? = nil,
         fieldCheckOverviewReader: (any FieldCheckOverviewReading)? = nil,
         dashboardQueryReader: (any DashboardQueryReading)? = nil,
         homeFieldCheckQueryReader: (any HomeFieldCheckQueryReading)? = nil,
@@ -35,7 +31,6 @@ nonisolated struct HomeFeatureDependencies {
         mutationStream: (any ApplicationMutationStreaming)? = nil
     ) -> Self {
         Self(
-            dashboardReader: dashboardReader ?? MissingHomeDashboardReader(),
             fieldCheckOverviewReader: fieldCheckOverviewReader ?? MissingHomeFieldCheckOverviewReader(),
             dashboardQueryReader: dashboardQueryReader ?? MissingHomeDashboardQueryReader(),
             homeFieldCheckQueryReader: homeFieldCheckQueryReader ?? MissingHomeFieldCheckQueryReader(),
@@ -53,14 +48,6 @@ private enum MissingHomeFeatureDependencyError: LocalizedError {
         case .dependency(let name):
             return "\(name) has not been configured."
         }
-    }
-}
-
-private struct MissingHomeDashboardReader: DashboardRecordReading {
-    nonisolated init(environmentFallback _: Void = ()) {}
-
-    func fetchDashboardRecords() throws -> DashboardRecords {
-        throw MissingHomeFeatureDependencyError.dependency("Home dashboard reader")
     }
 }
 
@@ -147,7 +134,6 @@ private struct MissingHomeMutationStream: ApplicationMutationStreaming {
 private struct HomeFeatureDependenciesKey: EnvironmentKey {
     static var defaultValue: HomeFeatureDependencies {
         HomeFeatureDependencies(
-            dashboardReader: MissingHomeDashboardReader(),
             fieldCheckOverviewReader: MissingHomeFieldCheckOverviewReader(),
             dashboardQueryReader: MissingHomeDashboardQueryReader(),
             homeFieldCheckQueryReader: MissingHomeFieldCheckQueryReader(),
