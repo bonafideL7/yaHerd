@@ -11,6 +11,7 @@ nonisolated struct PastureFeatureDependencies {
     let referenceReader: any PastureReferenceDataReader
     let animalMover: any AnimalPastureMoving
     let fieldCheckArchiveWriter: any FieldCheckPastureArchiveWriter
+    let deletionCommand: any PastureDeletionPerforming
     let mutationStream: any ApplicationMutationStreaming
 
     nonisolated init(
@@ -23,6 +24,7 @@ nonisolated struct PastureFeatureDependencies {
         referenceReader: any PastureReferenceDataReader,
         animalMover: any AnimalPastureMoving,
         fieldCheckArchiveWriter: any FieldCheckPastureArchiveWriter,
+        deletionCommand: any PastureDeletionPerforming,
         mutationStream: any ApplicationMutationStreaming
     ) {
         self.listRepository = listRepository
@@ -34,6 +36,7 @@ nonisolated struct PastureFeatureDependencies {
         self.referenceReader = referenceReader
         self.animalMover = animalMover
         self.fieldCheckArchiveWriter = fieldCheckArchiveWriter
+        self.deletionCommand = deletionCommand
         self.mutationStream = mutationStream
     }
 
@@ -54,6 +57,11 @@ nonisolated struct PastureFeatureDependencies {
             referenceReader: pastureRepository,
             animalMover: animalMover,
             fieldCheckArchiveWriter: fieldCheckArchiveWriter,
+            deletionCommand: DeletePasturesUseCase(
+                pastureRepository: pastureRepository,
+                animalRepository: animalMover,
+                fieldCheckRepository: fieldCheckArchiveWriter
+            ),
             mutationStream: mutationStream
         )
     }
@@ -69,6 +77,7 @@ nonisolated struct PastureFeatureDependencies {
         referenceReader: (any PastureReferenceDataReader)? = nil,
         animalMover: (any AnimalPastureMoving)? = nil,
         fieldCheckArchiveWriter: (any FieldCheckPastureArchiveWriter)? = nil,
+        deletionCommand: (any PastureDeletionPerforming)? = nil,
         mutationStream: (any ApplicationMutationStreaming)? = nil
     ) -> Self {
         let missingRepository = MissingPastureRepository()
@@ -82,6 +91,7 @@ nonisolated struct PastureFeatureDependencies {
             referenceReader: referenceReader ?? missingRepository,
             animalMover: animalMover ?? MissingPastureAnimalMover(),
             fieldCheckArchiveWriter: fieldCheckArchiveWriter ?? MissingPastureFieldCheckArchiveWriter(),
+            deletionCommand: deletionCommand ?? MissingPastureDeletionCommand(),
             mutationStream: mutationStream ?? InactiveApplicationMutationStream()
         )
     }
@@ -141,6 +151,14 @@ private struct MissingPastureFieldCheckArchiveWriter: FieldCheckPastureArchiveWr
     }
 }
 
+private struct MissingPastureDeletionCommand: PastureDeletionPerforming {
+    nonisolated init(environmentFallback _: Void = ()) {}
+
+    func deletePastures(ids: [UUID], archivedAt: Date) async throws {
+        throw MissingPastureFeatureDependencyError.dependency("Pasture deletion command")
+    }
+}
+
 private struct PastureFeatureDependenciesKey: EnvironmentKey {
     static var defaultValue: PastureFeatureDependencies {
         PastureFeatureDependencies(
@@ -153,6 +171,7 @@ private struct PastureFeatureDependenciesKey: EnvironmentKey {
             referenceReader: MissingPastureRepository(),
             animalMover: MissingPastureAnimalMover(),
             fieldCheckArchiveWriter: MissingPastureFieldCheckArchiveWriter(),
+            deletionCommand: MissingPastureDeletionCommand(),
             mutationStream: InactiveApplicationMutationStream()
         )
     }
