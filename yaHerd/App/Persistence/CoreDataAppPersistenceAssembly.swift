@@ -114,6 +114,11 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
             lookup: assembly.lookup,
             currentHerdID: selectedHerdID
         )
+        let parentOptionQueryReader = CoreDataReadModelActor(
+            contextFactory: assembly.contextFactory,
+            lookup: assembly.lookup,
+            currentHerdID: selectedHerdID
+        )
         let animalListRepository = BackgroundQueryingAnimalListRepository(
             base: animalRepository,
             queryReader: animalListQueryReader
@@ -127,6 +132,7 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
                 detailRepository: animalRepository,
                 timelineReader: animalRepository,
                 parentOptionReader: animalRepository,
+                parentOptionQueryReader: parentOptionQueryReader,
                 healthRecordAdder: animalRepository,
                 pregnancyCheckAdder: animalRepository,
                 pastureReferenceReader: pastureRepository,
