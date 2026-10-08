@@ -25,7 +25,7 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         // Even if a candidate request completes, it has no authority to clear
         // setup failures or make an incomplete Working setup usable.
         await model.loadEligibleAnimals(pastureID: pastureID)
-        XCTAssertEqual(model.eligibleAnimals(pastureID: pastureID).map(\\.id), [animal.id])
+        XCTAssertEqual(model.eligibleAnimals(pastureID: pastureID).map(\.id), [animal.id])
         XCTAssertFalse(model.hasLoadedSetupSuccessfully)
         XCTAssertEqual(model.setupLoadErrorMessage, setupError)
         XCTAssertEqual(model.errorMessage, setupError)
@@ -43,7 +43,7 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         model.load()
         XCTAssertTrue(model.hasLoadedSetupSuccessfully)
         XCTAssertNil(model.setupLoadErrorMessage)
-        XCTAssertEqual(model.pastures.map(\\.id), [pastureID])
+        XCTAssertEqual(model.pastures.map(\.id), [pastureID])
         XCTAssertNil(model.errorMessage)
     }
 
