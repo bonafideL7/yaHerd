@@ -36,6 +36,7 @@ struct RecoveryModeView: View {
       }
 
       Section("Storage Diagnostics") {
+        if controller.diagnosticsErrorMessage == nil {
         LabeledContent(
           "Persistent Store Files Found",
           value: controller.diagnostics.recoverableStoreFiles.count.formatted()
@@ -51,6 +52,14 @@ struct RecoveryModeView: View {
           "Last Refreshed",
           value: controller.diagnostics.generatedAt.formatted(date: .omitted, time: .standard)
         )
+
+        }
+
+        if let diagnosticsErrorMessage = controller.diagnosticsErrorMessage {
+          Text(diagnosticsErrorMessage)
+            .font(.caption)
+            .foregroundStyle(.red)
+        }
 
         if !controller.diagnostics.recoverableStoreFiles.isEmpty {
           DisclosureGroup("Store File Inventory") {
