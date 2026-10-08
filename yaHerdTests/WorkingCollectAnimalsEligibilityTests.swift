@@ -54,7 +54,8 @@ final class WorkingCollectAnimalsEligibilityTests: XCTestCase {
 
         XCTAssertEqual(animals.map(\.id), sourceAnimals.dropFirst().map(\.id))
         XCTAssertFalse(animals.contains { $0.id == existing.id || $0.id == other.id })
-        XCTAssertEqual(await reader.requestedOffsets(), [0, ReadPageRequest.maximumLimit])
+        let offsets = await reader.requestedOffsets()
+        XCTAssertEqual(offsets, [0, ReadPageRequest.maximumLimit])
         let query = await reader.latestQuery()
         XCTAssertEqual(query?.pastureScope, .pasture(sourcePastureID))
         XCTAssertEqual(query?.location, .pasture)
@@ -115,7 +116,8 @@ final class WorkingCollectAnimalsEligibilityTests: XCTestCase {
             using: reader
         )
         XCTAssertTrue(candidates.isEmpty)
-        XCTAssertTrue(await reader.requestedOffsets().isEmpty)
+        let offsets = await reader.requestedOffsets()
+        XCTAssertTrue(offsets.isEmpty)
     }
 
     private func makeSession(
