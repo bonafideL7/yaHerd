@@ -96,7 +96,8 @@ struct NewWorkingSessionView: View {
             return "Loading eligible animals…"
         }
         if viewModel.loadedPastureID != selectedPastureID {
-            return "Eligible animals could not be loaded. Reopen Working setup to retry."
+            return viewModel.candidateLoadErrorMessage
+                ?? "Eligible animals could not be loaded. Reopen Working setup to retry."
         }
         if eligibleAnimals.isEmpty {
             return "The selected pasture has no active animals available to work."
