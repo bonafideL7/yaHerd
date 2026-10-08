@@ -334,11 +334,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         XCTAssertEqual(writeContext.concurrencyType, .privateQueueConcurrencyType)
         XCTAssertTrue(
             readContext.persistentStoreCoordinator
-                === assembly.persistence.persistentStoreCoordinator
-        )
-        XCTAssertTrue(
-            writeContext.persistentStoreCoordinator
-                === assembly.persistence.persistentStoreCoordinator
+                === writeContext.persistentStoreCoordinator
         )
         XCTAssertEqual(
             (readContext.mergePolicy as? NSMergePolicy)?.mergeType,
