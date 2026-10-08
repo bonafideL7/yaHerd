@@ -10,7 +10,9 @@ import SwiftUI
 struct AnimalParentPickerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.animalFeatureDependencies) private var animalDependencies
-    private var parentOptionReader: any AnimalParentOptionReading { animalDependencies.parentOptionReader }
+    private var parentOptionQueryReader: (any AnimalParentOptionQueryReading)? {
+        animalDependencies.parentOptionQueryReader
+    }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     @State private var viewModel = AnimalParentPickerViewModel()
@@ -38,10 +40,23 @@ struct AnimalParentPickerView: View {
                 }
 
                 Section {
-                    if filtered.isEmpty {
-                        Text("No animals found")
-                            .foregroundStyle(.secondary)
-                    } else {
+                    if viewModel.isLoading {
+                        ProgressView("Loading parent choices…")
+                    } else if let error = viewModel.errorMessage {
+                        ContentUnavailableView {
+                            Label("Unable to Load Parents", systemImage: "exclamationmark.triangle")
+                        } description: {
+                            Text(error)
+                        } actions: {
+                            Button("Retry") { refreshOptions() }
+                        }
+                    } else if viewModel.hasLoaded && filtered.isEmpty {
+                        ContentUnavailableView(
+                            "No Animals Found",
+                            systemImage: "tag",
+                            description: Text("No parent options match this search.")
+                        )
+                    } else if viewModel.hasLoaded {
                         ForEach(filtered) { animal in
                             Button {
                                 onSelect(animal)
@@ -85,10 +100,22 @@ struct AnimalParentPickerView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     ToolbarCancelButton { dismiss() }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { refreshOptions() } label: {
+                        Label("Refresh Parent Choices", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(viewModel.isLoading)
+                }
             }
         }
-        .task {
-            viewModel.load(excluding: excludeAnimalID, using: parentOptionReader)
+        .task(id: excludeAnimalID) {
+            await viewModel.load(excluding: excludeAnimalID, using: parentOptionQueryReader)
+        }
+    }
+
+    private func refreshOptions() {
+        Task { @MainActor in
+            await viewModel.load(excluding: excludeAnimalID, using: parentOptionQueryReader)
         }
     }
 }
