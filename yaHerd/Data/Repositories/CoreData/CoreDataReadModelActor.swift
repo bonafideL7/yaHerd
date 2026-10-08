@@ -344,7 +344,7 @@ actor CoreDataReadModelActor:
             while offset < candidates.count {
                 try Task.checkCancellation()
                 let chunk = Array(
-                    candidates.dropFirst(offset).prefix(animalLightweightScanBatchSize)
+                    candidates.dropFirst(offset).prefix(Self.animalLightweightScanBatchSize)
                 )
                 let hydrated = try Self.hydrateAnimalSummaryCandidates(
                     chunk,
