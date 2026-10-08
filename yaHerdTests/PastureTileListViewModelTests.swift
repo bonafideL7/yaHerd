@@ -80,7 +80,7 @@ final class PastureTileListViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.errorMessage, "Forced test error.")
     }
 
-    func testDeletePastureRemovesItemAndCoordinatesUseCase() {
+    func testDeletePastureRemovesItemAndCoordinatesUseCase() async {
         let pasture = PastureTestSupport.makeSummary(id: UUID(), name: "North")
         let loadRepository = PastureListReaderStub(result: .success([pasture]))
         let pastureRepository = PastureDeleteRepositorySpy()
@@ -93,9 +93,12 @@ final class PastureTileListViewModelTests: XCTestCase {
 
         await viewModel.deletePasture(
             id: pasture.id,
-            pastureRepository: pastureRepository,
-            animalRepository: animalRepository,
-            fieldCheckRepository: fieldCheckRepository
+            deletionCommand: DeletePasturesUseCase(
+                pastureRepository: pastureRepository,
+                animalRepository: animalRepository,
+                fieldCheckRepository: fieldCheckRepository
+            ),
+            orderingRepository: pastureRepository
         )
 
         XCTAssertTrue(viewModel.items.isEmpty)
@@ -116,13 +119,168 @@ final class PastureTileListViewModelTests: XCTestCase {
 
         await viewModel.deletePasture(
             id: pasture.id,
-            pastureRepository: pastureRepository,
-            animalRepository: animalRepository,
-            fieldCheckRepository: fieldCheckRepository
+            deletionCommand: DeletePasturesUseCase(
+                pastureRepository: pastureRepository,
+                animalRepository: animalRepository,
+                fieldCheckRepository: fieldCheckRepository
+            ),
+            orderingRepository: pastureRepository
         )
 
         XCTAssertEqual(viewModel.items, [pasture])
         XCTAssertNotNil(viewModel.errorMessage)
         XCTAssertTrue(pastureRepository.deletedIDs.isEmpty)
+    }
+    func testAtomicDeleteWaitsBeforeChangingRowsAndBlocksDuplicateRequests() async {
+        let first = PastureTestSupport.makeSummary(name: "First")
+        let second = PastureTestSupport.makeSummary(name: "Second")
+        let reader = PastureListReaderStub(result: .success([first, second]))
+        let ordering = PastureOrderingSpy()
+        let deletion = ControlledPastureDeletionCommand()
+        deletion.shouldSuspend = true
+        let viewModel = PastureTileListViewModel()
+        viewModel.load(using: reader)
+        viewModel.requestDelete(first)
+
+        let running = Task { @MainActor in
+            await viewModel.deletePasture(
+                id: first.id,
+                deletionCommand: deletion,
+                orderingRepository: ordering
+            )
+        }
+
+        await deletion.waitUntilStarted()
+        XCTAssertTrue(viewModel.isDeletingPastures)
+        XCTAssertEqual(viewModel.items, [first, second])
+        XCTAssertEqual(viewModel.pasturePendingDeletion, first)
+
+        await viewModel.deletePasture(
+            id: first.id,
+            deletionCommand: deletion,
+            orderingRepository: ordering
+        )
+        XCTAssertEqual(deletion.requestedIDs, [[first.id]])
+        XCTAssertTrue(ordering.reorderedIDs.isEmpty)
+
+        deletion.finishSuspendedWrite()
+        await running.value
+
+        XCTAssertFalse(viewModel.isDeletingPastures)
+        XCTAssertEqual(viewModel.items, [second])
+        XCTAssertNil(viewModel.pasturePendingDeletion)
+        XCTAssertEqual(ordering.reorderedIDs, [[second.id]])
+        XCTAssertNil(viewModel.errorMessage)
+    }
+
+    func testAtomicDeleteFailureLeavesRowsAndPendingConfirmationIntact() async {
+        let pasture = PastureTestSupport.makeSummary(name: "North")
+        let reader = PastureListReaderStub(result: .success([pasture]))
+        let ordering = PastureOrderingSpy()
+        let deletion = ControlledPastureDeletionCommand()
+        deletion.errorToThrow = PastureTestError.forced
+        let viewModel = PastureTileListViewModel()
+        viewModel.load(using: reader)
+        viewModel.requestDelete(pasture)
+
+        await viewModel.deletePasture(
+            id: pasture.id,
+            deletionCommand: deletion,
+            orderingRepository: ordering
+        )
+
+        XCTAssertEqual(viewModel.items, [pasture])
+        XCTAssertEqual(viewModel.pasturePendingDeletion, pasture)
+        XCTAssertEqual(viewModel.errorMessage, "Forced test error.")
+        XCTAssertTrue(ordering.reorderedIDs.isEmpty)
+        XCTAssertFalse(viewModel.isDeletingPastures)
+    }
+
+    func testCommittedDeletionStaysDeletedIfReorderingFails() async {
+        let deleted = PastureTestSupport.makeSummary(name: "Deleted")
+        let retained = PastureTestSupport.makeSummary(name: "Retained")
+        let reader = PastureListReaderStub(result: .success([deleted, retained]))
+        let ordering = PastureOrderingSpy()
+        ordering.errorToThrow = PastureTestError.forced
+        let deletion = ControlledPastureDeletionCommand()
+        let viewModel = PastureTileListViewModel()
+        viewModel.load(using: reader)
+        viewModel.requestDelete(deleted)
+
+        await viewModel.deletePasture(
+            id: deleted.id,
+            deletionCommand: deletion,
+            orderingRepository: ordering
+        )
+
+        XCTAssertEqual(deletion.requestedIDs, [[deleted.id]])
+        XCTAssertEqual(viewModel.items, [retained])
+        XCTAssertNil(viewModel.pasturePendingDeletion)
+        XCTAssertTrue(viewModel.errorMessage?.contains("were deleted") == true)
+        XCTAssertFalse(viewModel.isDeletingPastures)
+    }
+
+    func testEmptyOrInvalidDeletionOffsetsDoNotSubmitCommands() async {
+        let pasture = PastureTestSupport.makeSummary(name: "North")
+        let reader = PastureListReaderStub(result: .success([pasture]))
+        let ordering = PastureOrderingSpy()
+        let deletion = ControlledPastureDeletionCommand()
+        let viewModel = PastureTileListViewModel()
+        viewModel.load(using: reader)
+
+        await viewModel.deletePastures(
+            at: IndexSet([4, 7]),
+            deletionCommand: deletion,
+            orderingRepository: ordering
+        )
+        await viewModel.deletePastures(
+            at: [],
+            deletionCommand: deletion,
+            orderingRepository: ordering
+        )
+
+        XCTAssertTrue(deletion.requestedIDs.isEmpty)
+        XCTAssertTrue(ordering.reorderedIDs.isEmpty)
+        XCTAssertEqual(viewModel.items, [pasture])
+    }
+
+}
+
+@MainActor
+private final class ControlledPastureDeletionCommand: PastureDeletionPerforming {
+    private(set) var requestedIDs: [[UUID]] = []
+    private(set) var archivedDates: [Date] = []
+    var errorToThrow: Error?
+    var shouldSuspend = false
+
+    private var startedWaiter: CheckedContinuation<Void, Never>?
+    private var pendingCompletion: CheckedContinuation<Void, Never>?
+
+    func deletePastures(ids: [UUID], archivedAt: Date) async throws {
+        requestedIDs.append(ids)
+        archivedDates.append(archivedAt)
+        startedWaiter?.resume()
+        startedWaiter = nil
+
+        if shouldSuspend {
+            await withCheckedContinuation { continuation in
+                pendingCompletion = continuation
+            }
+        }
+        if let errorToThrow {
+            throw errorToThrow
+        }
+    }
+
+    func waitUntilStarted() async {
+        guard requestedIDs.isEmpty else { return }
+        await withCheckedContinuation { continuation in
+            startedWaiter = continuation
+        }
+    }
+
+    func finishSuspendedWrite() {
+        pendingCompletion?.resume()
+        pendingCompletion = nil
     }
 }
