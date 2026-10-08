@@ -114,8 +114,8 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         XCTAssertEqual(model.loadedPastureID, firstPastureID)
         XCTAssertEqual(model.eligibleAnimals(pastureID: firstPastureID).map(\.id), first.map(\.id))
         XCTAssertTrue(model.eligibleAnimals(pastureID: secondPastureID).isEmpty)
-        let offsets = await reader.requestedOffsets(for: firstPastureID)
-        XCTAssertEqual(offsets, [0, ReadPageRequest.maximumLimit])
+        let snapshotCount = await reader.snapshotRequestCount(for: firstPastureID)
+        XCTAssertEqual(snapshotCount, 1)
 
         model.clearCandidates(for: secondPastureID)
         XCTAssertTrue(model.isLoadingAnimals)
@@ -131,7 +131,7 @@ final class NewWorkingSessionCandidateLoadingTests: XCTestCase {
         XCTAssertFalse(model.isLoadingAnimals)
     }
 
-    func testLaterPageFailureNeverPublishesPartialCandidatesAndAllowsRetry() async {
+    func testFailedSnapshotHydrationNeverPublishesPartialCandidatesAndAllowsRetry() async {
         let pastureID = UUID()
         let animals = (0..<505).map {
             makeCandidate(tag: String(format: "%03d", $0), pastureID: pastureID)
@@ -219,6 +219,7 @@ private actor WorkingSetupCandidateReader: AnimalReferenceQueryReading {
     private let animalsByPasture: [UUID: [AnimalSummary]]
     private let pausedPastureID: UUID?
     private var requests: [UUID: [Int]] = [:]
+    private var snapshotRequests: [UUID: Int] = [:]
     private var failureOffset: Int?
     private var pausedRequest: CheckedContinuation<Void, Never>?
     private var pausedRequestEntered: CheckedContinuation<Void, Never>?
@@ -238,6 +239,9 @@ private actor WorkingSetupCandidateReader: AnimalReferenceQueryReading {
 
     func requestedOffsets(for pastureID: UUID) -> [Int] {
         requests[pastureID] ?? []
+    }
+    func snapshotRequestCount(for pastureID: UUID) -> Int {
+        snapshotRequests[pastureID, default: 0]
     }
 
     func waitForPausedRequest() async {
@@ -279,6 +283,33 @@ private actor WorkingSetupCandidateReader: AnimalReferenceQueryReading {
             animals: animals,
             hasMore: page.offset + animals.count < all.count
         )
+    }
+
+    func fetchAnimalReferenceSnapshot(
+        matching query: AnimalReferenceQuery
+    ) async throws -> [AnimalSummary] {
+        guard case .pasture(let pastureID) = query.pastureScope,
+              query.location == .pasture else {
+            throw WorkingSetupCandidateTestError.pageFailure
+        }
+
+        snapshotRequests[pastureID, default: 0] += 1
+        if pausedPastureID == pastureID {
+            await withCheckedContinuation { continuation in
+                pausedRequest = continuation
+                hasPausedRequest = true
+                pausedRequestEntered?.resume()
+                pausedRequestEntered = nil
+            }
+        }
+        let all = animalsByPasture[pastureID] ?? []
+        // Represents a failed internal hydration chunk inside one snapshot,
+        // not multiple independently pinned context generations.
+        if let failureOffset,
+           failureOffset < all.count {
+            throw WorkingSetupCandidateTestError.pageFailure
+        }
+        return all
     }
 
     func containsAnimal(id: UUID) async throws -> Bool {
