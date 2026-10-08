@@ -128,6 +128,7 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
             animalFeatureDependencies: AnimalFeatureDependencies(
                 listRepository: animalListRepository,
                 listQueryReader: animalListQueryReader,
+                listSnapshotReader: animalListQueryReader,
                 editorRepository: animalRepository,
                 detailRepository: animalRepository,
                 timelineReader: animalRepository,
