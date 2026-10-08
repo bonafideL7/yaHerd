@@ -95,6 +95,18 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             .assertFilteredAnimalListQueryReduction(using: fixture)
     }
 
+    func testMilestone10AsyncSharedParentOptions() async throws {
+        let environment = try await makeReadModelEnvironment()
+        let fixture = AnimalParentOptionQueryContractFixture(
+            animalFixture: environment.repositoryFixture,
+            makeParentQueryReader: {
+                environment.makeAnimalListQueryReader()
+            }
+        )
+        try await AnimalRepositoryContract
+            .assertAsyncParentOptionQueryMatchesExistingProjection(using: fixture)
+    }
+
     func testMilestone9CrossFeatureAnimalReferenceQueries() async throws {
         let environment = try await makeReadModelEnvironment()
         let fixture = AnimalReferenceQueryContractFixture(
