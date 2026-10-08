@@ -74,7 +74,7 @@ final class DashboardViewModel {
     func markPastureGrazedToday(
         pastureID: UUID,
         configuration: DashboardConfiguration,
-        using repository: any DashboardReadWriting
+        using repository: any PastureGrazingMarking
     ) {
         let date = Date.now
         do {
