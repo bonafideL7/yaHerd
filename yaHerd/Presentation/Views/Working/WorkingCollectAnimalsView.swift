@@ -96,6 +96,14 @@ struct WorkingCollectAnimalsView: View {
             .searchable(text: $searchText, prompt: "Search tag")
             .task { await load() }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        Task { await load() }
+                    } label: {
+                        Label("Refresh Eligible Animals", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(isLoading || isCollecting)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Move") {
                         collectSelected()
@@ -132,6 +140,8 @@ struct WorkingCollectAnimalsView: View {
         availableAnimals = []
         selectedAnimalIDs = []
         loadErrorMessage = nil
+        errorMessage = nil
+        showingError = false
 
         do {
             guard let loadedSession = try repository.fetchSessionDetail(id: sessionID) else {
