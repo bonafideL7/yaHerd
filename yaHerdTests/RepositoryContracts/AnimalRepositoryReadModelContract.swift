@@ -2459,6 +2459,28 @@ extension AnimalRepositoryContract {
             line: line
         )
 
+        let fullReferenceSnapshot = try await reader.fetchAnimalReferenceSnapshot(
+            matching: AnimalReferenceQuery(
+                pastureScope: .pasture(north.id),
+                location: .pasture,
+                sortOrder: .displayTag
+            )
+        )
+        XCTAssertEqual(
+            fullReferenceSnapshot,
+            workingPasture,
+            "A complete reference snapshot must preserve the same selected-Herd candidates, natural order, identity, and hydrated metadata as paging.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            Set(fullReferenceSnapshot.map(\.id)).count,
+            fullReferenceSnapshot.count,
+            "One query generation must not duplicate an Animal across internal hydration batches.",
+            file: file,
+            line: line
+        )
+
         let fieldCandidates = try await fetchAnimalReferenceContractPages(
             reader: reader,
             query: AnimalReferenceQuery(
