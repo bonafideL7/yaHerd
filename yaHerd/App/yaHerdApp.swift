@@ -5,50 +5,61 @@
 //  Created by mm on 11/28/25.
 //
 
-import SwiftData
 import SwiftUI
 
 @main
 struct yaHerdApp: App {
-    private let bootstrapState: AppBootstrapState
+    @State private var bootstrapState: AppBootstrapState = .loading
+    @State private var bootstrapStarted = false
+
     private let applicationSettings: ApplicationSettings
 
     init() {
-        let applicationSettings = ApplicationSettings()
-        self.applicationSettings = applicationSettings
-        self.bootstrapState = Self.bootstrap()
+        self.applicationSettings = ApplicationSettings()
     }
 
     var body: some Scene {
         WindowGroup {
-            switch bootstrapState {
-            case .ready(let runtime):
-                RunningAppView(
-                    runtime: runtime,
-                    applicationSettings: applicationSettings
-                )
+            Group {
+                switch bootstrapState {
+                case .loading:
+                    ProgressView("Opening yaHerd…")
 
-            case .storageUnavailable(let message):
-                StartupStorageFailureView(message: message)
+                case .ready(let runtime):
+                    RunningAppView(
+                        runtime: runtime,
+                        applicationSettings: applicationSettings
+                    )
+
+                case .storageUnavailable(let message):
+                    StartupStorageFailureView(message: message)
+                }
+            }
+            .task {
+                guard !bootstrapStarted else { return }
+                bootstrapStarted = true
+                bootstrapState = await Self.bootstrap()
             }
         }
     }
 
-    private static func bootstrap() -> AppBootstrapState {
+    @MainActor
+    private static func bootstrap() async -> AppBootstrapState {
         do {
-            let container = try ModelContainerFactory.makeContainer()
-            try Self.runStartupDataMigrations(in: container.mainContext)
+            let storeURL = try CoreDataPersistentContainer.defaultStoreURL()
+            let persistence = try await CoreDataAppPersistenceAssembly.load(
+                at: storeURL
+            )
+            let dependencies = persistence.makeDependencies(
+                dataAccessMode: .readWrite
+            )
 
             AppLaunchDiagnostics.record(actualStorageMode: .local)
 
-            let persistence = Self.makePersistenceRuntime(
-                modelContainer: container
-            )
-
             return .ready(
                 AppRuntime(
-                    persistenceLifetime: persistence.assembly,
-                    dependencies: persistence.dependencies,
+                    persistenceLifetime: persistence,
+                    dependencies: dependencies,
                     dataAccessMode: .readWrite,
                     recoveryContext: nil,
                     storageError: nil
@@ -56,27 +67,22 @@ struct yaHerdApp: App {
             )
         } catch {
             let primaryError = error
-
             do {
-                let fallbackContainer = try ModelContainerFactory.makeRecoveryContainer()
-
+                let persistence = try await CoreDataAppPersistenceAssembly.inMemoryRecovery()
                 let startupMessage = """
-                Persistent storage could not be opened. yaHerd is running in recovery mode, and changes from this session will not be saved. Original error: \(primaryError.localizedDescription)
+                Persistent Core Data storage could not be opened. yaHerd is running                 in read-only recovery mode. Changes from this session will not be                 saved. Original error: \(primaryError.localizedDescription)
                 """
-
+                let dependencies = persistence.makeDependencies(
+                    dataAccessMode: .recoveryReadOnly
+                )
                 AppLaunchDiagnostics.record(
                     actualStorageMode: .recovery,
                     startupError: startupMessage
                 )
-
-                let persistence = Self.makePersistenceRuntime(
-                    modelContainer: fallbackContainer,
-                    dataAccessMode: .recoveryReadOnly
-                )
                 return .ready(
                     AppRuntime(
-                        persistenceLifetime: persistence.assembly,
-                        dependencies: persistence.dependencies,
+                        persistenceLifetime: persistence,
+                        dependencies: dependencies,
                         dataAccessMode: .recoveryReadOnly,
                         recoveryContext: RecoveryModeContext(
                             startupError: startupMessage
@@ -86,66 +92,30 @@ struct yaHerdApp: App {
                 )
             } catch {
                 let startupMessage = """
-                Persistent storage could not be opened, and the in-memory recovery store could not be started. No data was loaded and changes are disabled.
+                Persistent Core Data storage could not be opened, and the in-memory                 Core Data recovery store could not be started. No data was loaded and                 changes are disabled.
 
-                Primary container error: \(primaryError.localizedDescription)
+                Primary store error: \(primaryError.localizedDescription)
                 In-memory recovery error: \(error.localizedDescription)
                 """
-
                 AppLaunchDiagnostics.record(
                     actualStorageMode: .unavailable,
                     startupError: startupMessage
                 )
-
                 return .storageUnavailable(startupMessage)
             }
         }
     }
-
-    private static func makePersistenceRuntime(
-        modelContainer: ModelContainer,
-        dataAccessMode: AppDataAccessMode = .readWrite
-    ) -> AppPersistenceRuntime {
-        let persistenceAssembly: any PersistenceAssembly = SwiftDataPersistenceAssembly(
-            modelContainer: modelContainer
-        )
-        let dependencies = persistenceAssembly.makeDependencies(
-            dataAccessMode: dataAccessMode
-        )
-        return AppPersistenceRuntime(
-            assembly: persistenceAssembly,
-            dependencies: dependencies
-        )
-    }
-
-    private static func runStartupDataMigrations(in context: ModelContext) throws {
-        try DefaultHerdBootstrapper.ensureDefaultHerdForAppLaunch(in: context)
-        try FieldCheckHistoricalSnapshotMigrator.runIfNeeded(in: context)
-
-        try SwiftDataTagColorRepository(
-            context: context,
-            duplicateResolutionPolicy: .stableSortOrderWins
-        ).prepareLibraryForWritableUse()
-    }
-
-    static func makeSchema() -> Schema {
-        ModelContainerFactory.schema
-    }
 }
 
 private enum AppBootstrapState {
+    case loading
     case ready(AppRuntime)
     case storageUnavailable(String)
 }
 
-private struct AppPersistenceRuntime {
-    let assembly: any PersistenceAssembly
-    let dependencies: AppDependencies
-}
-
 private struct AppRuntime {
-    // Retain the selected persistence implementation for the lifetime of the running app without
-    // exposing its concrete container to SwiftUI or Presentation.
+    // Retain the one Core Data assembly for the app lifetime. Presentation sees
+    // only the persistence-neutral feature dependencies and access mode.
     let persistenceLifetime: any PersistenceAssembly
     let dependencies: AppDependencies
     let dataAccessMode: AppDataAccessMode
