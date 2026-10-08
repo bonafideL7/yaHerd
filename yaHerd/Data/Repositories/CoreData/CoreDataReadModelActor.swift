@@ -48,7 +48,8 @@ actor CoreDataReadModelActor:
     HomeWorkingQueryReading,
     AnimalListQueryReading,
     AnimalListFilteredQueryReading,
-    AnimalReferenceQueryReading
+    AnimalReferenceQueryReading,
+    AnimalParentOptionQueryReading
 {
     private let contextFactory: CoreDataContextFactory
     private let lookup: CoreDataLookup
@@ -294,6 +295,50 @@ actor CoreDataReadModelActor:
     /// Resolve the complete reference cohort against one pinned Core Data query
     /// generation. Separate fetchAnimalReferencePage calls each create a new
     /// context and are not safe to combine when writes occur between pages.
+    /// Parent choices differ from cross-feature active candidate lists:
+    /// non-archived inactive/deceased Animals remain available, as before.
+    /// Resolve one coherent selected-Herd cohort off the UI actor.
+    func fetchParentOptions(excluding excludedAnimalID: UUID?) async throws -> [AnimalParentOption] {
+        try Task.checkCancellation()
+        let herdID = try await selectedHerdID()
+        let context = contextFactory.makeReadContext()
+        let lookup = self.lookup
+
+        return try await context.perform {
+            try Task.checkCancellation()
+            try context.setQueryGenerationFrom(.current)
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            try Self.validateAnimalApplicationIDs(herd: herd, herdID: herdID, in: context)
+            try Self.validateAnimalListTagIntegrity(herd: herd, herdID: herdID, in: context)
+
+            let request = NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            )
+            var predicates: [NSPredicate] = [
+                NSPredicate(format: "herd == %@", herd),
+                NSPredicate(format: "isArchived == NO")
+            ]
+            if let excludedAnimalID {
+                predicates.append(NSPredicate(format: "id != %@", excludedAnimalID as NSUUID))
+            }
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: predicates)
+            request.fetchBatchSize = Self.animalLightweightScanBatchSize
+
+            var options: [AnimalParentOption] = []
+            for animal in try context.fetch(request) {
+                try Task.checkCancellation()
+                options.append(try CoreDataAnimalProjection.parentOption(animal))
+            }
+            return options.sorted { left, right in
+                let order = left.displayName.localizedStandardCompare(right.displayName)
+                if order != .orderedSame { return order == .orderedAscending }
+                return left.id.uuidString < right.id.uuidString
+            }
+        }
+    }
+
     func fetchAnimalReferenceSnapshot(
         matching query: AnimalReferenceQuery
     ) async throws -> [AnimalSummary] {
