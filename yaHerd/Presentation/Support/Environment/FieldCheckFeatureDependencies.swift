@@ -7,6 +7,7 @@ nonisolated struct FieldCheckFeatureDependencies {
     let sessionDetailRepository: any FieldCheckSessionDetailRepository
     let animalDetailRepository: any FieldCheckAnimalDetailRepository
     let animalListRepository: any AnimalListRepository
+    let animalReferenceQueryReader: (any AnimalReferenceQueryReading)?
     let animalRepository: any AnimalDetailRepository
     let pastureReferenceReader: any PastureReferenceDataReader
     let mutationStream: any ApplicationMutationStreaming
@@ -17,6 +18,7 @@ nonisolated struct FieldCheckFeatureDependencies {
         sessionDetailRepository: any FieldCheckSessionDetailRepository,
         animalDetailRepository: any FieldCheckAnimalDetailRepository,
         animalListRepository: any AnimalListRepository,
+        animalReferenceQueryReader: (any AnimalReferenceQueryReading)? = nil,
         animalRepository: any AnimalDetailRepository,
         pastureReferenceReader: any PastureReferenceDataReader,
         mutationStream: any ApplicationMutationStreaming
@@ -26,6 +28,7 @@ nonisolated struct FieldCheckFeatureDependencies {
         self.sessionDetailRepository = sessionDetailRepository
         self.animalDetailRepository = animalDetailRepository
         self.animalListRepository = animalListRepository
+        self.animalReferenceQueryReader = animalReferenceQueryReader
         self.animalRepository = animalRepository
         self.pastureReferenceReader = pastureReferenceReader
         self.mutationStream = mutationStream
@@ -35,6 +38,7 @@ nonisolated struct FieldCheckFeatureDependencies {
     init(
         repository: any FieldCheckRepository,
         animalRepository: any AnimalRepository,
+        animalReferenceQueryReader: (any AnimalReferenceQueryReading)? = nil,
         pastureReferenceReader: any PastureReferenceDataReader,
         mutationStream: any ApplicationMutationStreaming
     ) {
@@ -44,6 +48,7 @@ nonisolated struct FieldCheckFeatureDependencies {
             sessionDetailRepository: repository,
             animalDetailRepository: repository,
             animalListRepository: animalRepository,
+            animalReferenceQueryReader: animalReferenceQueryReader,
             animalRepository: animalRepository,
             pastureReferenceReader: pastureReferenceReader,
             mutationStream: mutationStream
@@ -57,6 +62,7 @@ nonisolated struct FieldCheckFeatureDependencies {
         sessionDetailRepository: (any FieldCheckSessionDetailRepository)? = nil,
         animalDetailRepository: (any FieldCheckAnimalDetailRepository)? = nil,
         animalListRepository: (any AnimalListRepository)? = nil,
+        animalReferenceQueryReader: (any AnimalReferenceQueryReading)? = nil,
         animalRepository: (any AnimalDetailRepository)? = nil,
         pastureReferenceReader: (any PastureReferenceDataReader)? = nil,
         mutationStream: (any ApplicationMutationStreaming)? = nil
@@ -69,6 +75,7 @@ nonisolated struct FieldCheckFeatureDependencies {
             sessionDetailRepository: sessionDetailRepository ?? missingRepository,
             animalDetailRepository: animalDetailRepository ?? missingRepository,
             animalListRepository: animalListRepository ?? missingAnimalRepository,
+            animalReferenceQueryReader: animalReferenceQueryReader,
             animalRepository: animalRepository ?? missingAnimalRepository,
             pastureReferenceReader: pastureReferenceReader ?? MissingFieldCheckPastureReferenceReader(),
             mutationStream: mutationStream ?? InactiveApplicationMutationStream()
