@@ -223,13 +223,11 @@ final class RecoveryModeController: ObservableObject {
       .fileSizeKey,
       .contentModificationDateKey
     ]
-    guard let files = try? fileManager.contentsOfDirectory(
+    let files = (try? fileManager.contentsOfDirectory(
       at: directory,
       includingPropertiesForKeys: Array(keys),
       options: [.skipsHiddenFiles]
-    ) else {
-      return []
-    }
+    )) ?? []
 
     let coreDataFiles = files.compactMap { url -> RecoverableStoreFile? in
       guard allowedNames.contains(url.lastPathComponent),
