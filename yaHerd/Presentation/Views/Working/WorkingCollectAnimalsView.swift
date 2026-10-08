@@ -87,6 +87,16 @@ struct WorkingCollectAnimalsView: View {
                             Task { await load() }
                         }
                     }
+                } else if eligibleAnimals.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Eligible Animals", systemImage: "list.bullet")
+                    } description: {
+                        Text(
+                            searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                ? "No active animals are available to collect from this session’s source pasture."
+                                : "No animals match the search."
+                        )
+                    }
                 }
             }
             .environment(\.editMode, .constant(.active))
