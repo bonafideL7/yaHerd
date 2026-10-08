@@ -11,6 +11,7 @@ final class PastureTileListViewModel {
     var draggedPasture: PastureSummary?
     var pasturePendingDeletion: PastureSummary?
     var errorMessage: String?
+    private(set) var isDeletingPastures = false
 
     private var dragStartOrder: [PastureSummary] = []
     private var hasLoaded = false
@@ -127,46 +128,53 @@ final class PastureTileListViewModel {
 
     func deletePastures(
         at offsets: IndexSet,
-        pastureRepository: any PastureDeleteRepository & PastureOrdering,
-        animalRepository: any AnimalPastureMoving,
-        fieldCheckRepository: any FieldCheckPastureArchiveWriter
+        deletionCommand: any PastureDeletionPerforming,
+        orderingRepository: any PastureOrdering
     ) async {
-        let originalItems = items
-        let ids: [UUID] = offsets.sorted().reduce(into: []) { result, index in
-            guard items.indices.contains(index) else { return }
-            result.append(items[index].id)
+        guard !isDeletingPastures else { return }
+
+        let ids = offsets.sorted().compactMap { index in
+            items.indices.contains(index) ? items[index].id : nil
+        }
+        guard !ids.isEmpty else { return }
+
+        isDeletingPastures = true
+        defer { isDeletingPastures = false }
+
+        // Do not optimistically erase records: the command may fail before commit.
+        do {
+            try await deletionCommand.deletePastures(ids: ids, archivedAt: .now)
+        } catch {
+            errorMessage = UserVisibleErrorMessage.make(error)
+            return
         }
 
-        items = items.enumerated()
-            .filter { !offsets.contains($0.offset) }
-            .map(\.element)
+        let deletedIDs = Set(ids)
+        items.removeAll { deletedIDs.contains($0.id) }
+        clearPendingDeletion()
 
+        // Ordering is a separate operation after the deletion has committed.
+        // A reorder failure must never restore deleted rows in the UI.
         do {
-            try await DeletePasturesUseCase(
-                pastureRepository: pastureRepository,
-                animalRepository: animalRepository,
-                fieldCheckRepository: fieldCheckRepository
-            ).execute(ids: ids)
-            try persistPastureOrder(using: pastureRepository)
-            clearPendingDeletion()
+            try persistPastureOrder(using: orderingRepository)
+            errorMessage = nil
         } catch {
-            items = originalItems
-            errorMessage = UserVisibleErrorMessage.make(error)
+            errorMessage = "Pastures were deleted, but the remaining order could not be saved: "
+                + UserVisibleErrorMessage.make(error)
         }
     }
 
     func deletePasture(
         id: UUID,
-        pastureRepository: any PastureDeleteRepository & PastureOrdering,
-        animalRepository: any AnimalPastureMoving,
-        fieldCheckRepository: any FieldCheckPastureArchiveWriter
+        deletionCommand: any PastureDeletionPerforming,
+        orderingRepository: any PastureOrdering
     ) async {
-        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        guard !isDeletingPastures,
+              let index = items.firstIndex(where: { $0.id == id }) else { return }
         await deletePastures(
             at: IndexSet(integer: index),
-            pastureRepository: pastureRepository,
-            animalRepository: animalRepository,
-            fieldCheckRepository: fieldCheckRepository
+            deletionCommand: deletionCommand,
+            orderingRepository: orderingRepository
         )
     }
 
