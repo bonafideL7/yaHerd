@@ -76,6 +76,7 @@ struct WorkingCollectAnimalsView: View {
             .environment(\.editMode, .constant(.active))
             .navigationTitle("Collect")
             .navigationBarTitleDisplayMode(.inline)
+            .interactiveDismissDisabled(isCollecting)
             .searchable(text: $searchText, prompt: "Search tag")
             .task { load() }
             .toolbar {
@@ -92,6 +93,7 @@ struct WorkingCollectAnimalsView: View {
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     ToolbarCancelButton { dismiss() }
+                        .disabled(isCollecting)
                 }
             }
             .alert("Can’t Save", isPresented: $showingError) {
