@@ -70,6 +70,8 @@ struct WorkingSessionDetailView: View {
         }
         .navigationTitle(viewModel.session?.sourcePastureName ?? "Working Session")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(isMutatingSession)
+        .interactiveDismissDisabled(isMutatingSession)
         .navigationSubtitle(navigationSubtitle)
         .toolbar {
             if let session = viewModel.session {
@@ -383,6 +385,7 @@ struct WorkingSessionDetailView: View {
                     !session.isSourcePastureAvailable
                         || session.sourcePastureID == nil
                         || !dataAccessMode.allowsDataMutations
+                        || isMutatingSession
                 )
 
                 Button {
@@ -391,7 +394,11 @@ struct WorkingSessionDetailView: View {
                     Text(remainingItemCount(in: session) == 0 ? "Finish" : "Review")
                 }
                 .tint(remainingItemCount(in: session) == 0 ? Color.accentColor : Color.orange)
-                .disabled(session.queueItems.isEmpty || !dataAccessMode.allowsDataMutations)
+                .disabled(
+                    session.queueItems.isEmpty
+                        || !dataAccessMode.allowsDataMutations
+                        || isMutatingSession
+                )
             }
 
             Menu {
@@ -401,7 +408,7 @@ struct WorkingSessionDetailView: View {
                     } label: {
                         Label("Reopen Session", systemImage: "lock.open")
                     }
-                    .disabled(!dataAccessMode.allowsDataMutations)
+                    .disabled(!dataAccessMode.allowsDataMutations || isMutatingSession)
                 }
 
                 Button(role: .destructive) {
@@ -416,6 +423,7 @@ struct WorkingSessionDetailView: View {
                     .foregroundStyle(.primary)
             }
             .accessibilityLabel("Session Actions")
+            .disabled(isMutatingSession)
         }
     }
 
