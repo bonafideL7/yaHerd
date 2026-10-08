@@ -3,6 +3,44 @@ import XCTest
 @testable import yaHerd
 
 final class WorkingQueueEditorIdentityTests: XCTestCase {
+    func testAsyncSireExistenceResultCannotEraseAnotherSelection() {
+        let checkedID = UUID()
+        let newerID = UUID()
+
+        XCTAssertTrue(
+            WorkingQueueEditorIdentity.shouldClearSelectedSire(
+                checkedSireID: checkedID,
+                currentSireID: checkedID,
+                stillExists: false
+            ),
+            "A confirmed deletion clears only the selected sire that was checked."
+        )
+        XCTAssertFalse(
+            WorkingQueueEditorIdentity.shouldClearSelectedSire(
+                checkedSireID: checkedID,
+                currentSireID: newerID,
+                stillExists: false
+            ),
+            "A deleted earlier sire must not clear a different selection made while the read awaited."
+        )
+        XCTAssertFalse(
+            WorkingQueueEditorIdentity.shouldClearSelectedSire(
+                checkedSireID: checkedID,
+                currentSireID: nil,
+                stillExists: false
+            ),
+            "A user's explicit clear must remain cleared."
+        )
+        XCTAssertFalse(
+            WorkingQueueEditorIdentity.shouldClearSelectedSire(
+                checkedSireID: checkedID,
+                currentSireID: checkedID,
+                stillExists: true
+            ),
+            "Existing sire identities, including archived records, retain the current draft."
+        )
+    }
+
     func testChangedSourcePastureRequiresReviewWhenUsingSourcePasture() {
         let presented = WorkingQueueEditorSourcePastureReference(
             id: UUID(),
