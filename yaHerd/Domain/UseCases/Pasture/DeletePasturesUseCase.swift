@@ -1,10 +1,16 @@
 import Foundation
 
 @MainActor
-struct DeletePasturesUseCase {
+struct DeletePasturesUseCase: PastureDeletionPerforming {
     let pastureRepository: any PastureDeleteRepository
     let animalRepository: any AnimalPastureMoving
     let fieldCheckRepository: any FieldCheckPastureArchiveWriter
+
+    // Transitional implementation supplied by the current single-stack runtime.
+    // The final M10 Core Data assembly supplies DeletePasturesAtomicallyUseCase instead.
+    func deletePastures(ids: [UUID], archivedAt: Date) async throws {
+        try await execute(ids: ids, archivedAt: archivedAt)
+    }
 
     func execute(ids: [UUID], archivedAt: Date = .now) async throws {
         guard !ids.isEmpty else { return }
