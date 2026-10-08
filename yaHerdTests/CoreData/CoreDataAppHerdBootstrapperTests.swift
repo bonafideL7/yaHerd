@@ -239,8 +239,10 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
         let legacyStore = root.appendingPathComponent("yaHerdStore.store")
         let legacyJournal = root.appendingPathComponent("yaHerdStore.store-wal")
+        let rollbackJournal = root.appendingPathComponent("yaHerdStore.store-journal")
         try Data("legacy data".utf8).write(to: legacyStore)
-        try Data("legacy journal".utf8).write(to: legacyJournal)
+        try Data("legacy wal".utf8).write(to: legacyJournal)
+        try Data("legacy rollback journal".utf8).write(to: rollbackJournal)
 
         let artifacts = CoreDataLegacyStorePreflight.legacyArtifacts(
             in: root,
@@ -248,6 +250,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
         XCTAssertEqual(artifacts.map(\.lastPathComponent), [
             legacyStore.lastPathComponent,
+            rollbackJournal.lastPathComponent,
             legacyJournal.lastPathComponent
         ])
 
@@ -264,6 +267,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             }
             XCTAssertEqual(Set(files), Set([
                 legacyStore.lastPathComponent,
+                rollbackJournal.lastPathComponent,
                 legacyJournal.lastPathComponent
             ]))
         }
@@ -279,6 +283,50 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 fileManager: fileManager
             )
         )
+    }
+
+    func testFirstOpenRejectsOrphanedRollbackJournalsWithoutModifyingThem() throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory
+            .appendingPathComponent("yaHerd-orphaned-journals-\(UUID().uuidString)", isDirectory: true)
+        let storeDirectory = root.appendingPathComponent("yaHerd", isDirectory: true)
+        try manager.createDirectory(at: storeDirectory, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: root) }
+
+        let store = storeDirectory.appendingPathComponent(CoreDataPersistentContainer.storeFileName)
+        let legacyJournal = root.appendingPathComponent("default.store-journal")
+        let legacyBytes = Data("legacy rollback".utf8)
+        try legacyBytes.write(to: legacyJournal)
+
+        // A rollback journal without its legacy main file still blocks first open.
+        XCTAssertThrowsError(try CoreDataLegacyStorePreflight.ensureSafeFirstOpen(at: store, fileManager: manager)) { error in
+            guard case .legacyStoreFound(let files) = error as? CoreDataLegacyStorePreflightError else {
+                XCTFail("Expected orphaned legacy rollback journal protection.")
+                return
+            }
+            XCTAssertEqual(files, [legacyJournal.lastPathComponent])
+        }
+        XCTAssertFalse(manager.fileExists(atPath: store.path))
+        XCTAssertEqual(try Data(contentsOf: legacyJournal), legacyBytes)
+
+        try manager.removeItem(at: legacyJournal)
+
+        let coreDataJournal = URL(fileURLWithPath: store.path + "-journal")
+        let coreDataBytes = Data("core data rollback".utf8)
+        try coreDataBytes.write(to: coreDataJournal)
+        XCTAssertThrowsError(try CoreDataLegacyStorePreflight.ensureSafeFirstOpen(at: store, fileManager: manager)) { error in
+            guard case .orphanedCoreDataSidecars(let files) = error as? CoreDataLegacyStorePreflightError else {
+                XCTFail("Expected orphaned Core Data rollback journal protection.")
+                return
+            }
+            XCTAssertEqual(files, [coreDataJournal.lastPathComponent])
+        }
+        XCTAssertFalse(manager.fileExists(atPath: store.path))
+        XCTAssertEqual(try Data(contentsOf: coreDataJournal), coreDataBytes)
+
+        // Once the parent store exists, it remains authoritative even with journals.
+        try Data("existing core data".utf8).write(to: store)
+        XCTAssertNoThrow(try CoreDataLegacyStorePreflight.ensureSafeFirstOpen(at: store, fileManager: manager))
     }
 
     @MainActor
@@ -438,6 +486,29 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         controller.prepareExport()
         XCTAssertNil(controller.exportErrorMessage)
         XCTAssertNotNil(controller.exportDocument)
+
+        // Rollback journals are part of the required recovery payload, including
+        // legacy journals without their main database.
+        controller.clearPreparedExport()
+        let coreDataJournal = URL(fileURLWithPath: storeFile.path + "-journal")
+        let legacyJournal = root.appendingPathComponent("default.store-journal")
+        try Data("core rollback".utf8).write(to: coreDataJournal)
+        try Data("legacy rollback".utf8).write(to: legacyJournal)
+        controller.refreshDiagnostics()
+        XCTAssertNil(controller.diagnosticsErrorMessage)
+        XCTAssertEqual(
+            Set(controller.diagnostics.recoverableStoreFiles.map(\.archiveName)),
+            Set([
+                storeFile.lastPathComponent,
+                coreDataJournal.lastPathComponent,
+                "LegacyAppSupport/default.store-journal"
+            ])
+        )
+        controller.prepareExport()
+        XCTAssertNil(controller.exportErrorMessage)
+        XCTAssertNotNil(controller.exportDocument)
+        XCTAssertTrue(manager.fileExists(atPath: coreDataJournal.path))
+        XCTAssertTrue(manager.fileExists(atPath: legacyJournal.path))
     }
 
 }
