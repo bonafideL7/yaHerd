@@ -425,8 +425,12 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         )
     }
 
-    func testTrackedAnimalPickerSubmissionGateRejectsReentryUntilFinished() {
+    func testTrackedAnimalPickerSubmissionGateRejectsReentryUntilFinished() async {
         let model = FieldCheckTrackedAnimalPickerViewModel()
+        let session = makeDetail(sessionID: UUID(), quickCowCount: 0)
+        let reader = FieldCheckTrackedCandidateQuerySpy(animals: [])
+        XCTAssertFalse(model.beginSelectionSubmission(), "Submission requires a complete candidate load.")
+        await model.load(for: session, using: reader)
 
         XCTAssertTrue(model.beginSelectionSubmission())
         XCTAssertTrue(model.isSubmittingSelection)
@@ -441,6 +445,140 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         XCTAssertTrue(
             model.beginSelectionSubmission(),
             "The picker should accept a new selection after the prior submission finishes."
+        )
+    }
+
+    func testTrackedPickerUsesCompletePastureScopedCohortAndExcludesChecks() async {
+        let session = makeDetail(sessionID: UUID(), quickCowCount: 0)
+        let destinationID = try! XCTUnwrap(session.pastureID)
+        let checkedID = try! XCTUnwrap(session.animalChecks.first?.animalID)
+        let sourceAnimals = (0..<505).map { index in
+            makeTrackedCandidate(
+                tag: String(format: "FC%04d", index),
+                pastureID: UUID()
+            )
+        }
+        let alreadyChecked = makeTrackedCandidate(
+            id: checkedID,
+            tag: "ALREADY",
+            pastureID: UUID()
+        )
+        let resident = makeTrackedCandidate(tag: "RESIDENT", pastureID: destinationID)
+        let reader = FieldCheckTrackedCandidateQuerySpy(
+            animals: sourceAnimals + [alreadyChecked, resident]
+        )
+        let model = FieldCheckTrackedAnimalPickerViewModel()
+        await model.load(for: session, using: reader)
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertFalse(model.isLoading)
+        XCTAssertNil(model.loadErrorMessage)
+        XCTAssertEqual(model.eligibleAnimals(
+            forPastureID: destinationID,
+            excluding: Set(session.animalChecks.compactMap(\\.animalID))
+        ).map(\\.id), sourceAnimals.map(\\.id))
+        let query = await reader.lastQuery()
+        XCTAssertEqual(query?.pastureScope, .notPasture(destinationID))
+        XCTAssertEqual(query?.location, .any)
+        XCTAssertTrue(query?.excludedAnimalIDs.contains(checkedID) == true)
+        let count = await reader.fetchCount()
+        XCTAssertEqual(count, 1, "Large rosters must use one consistent snapshot, not concatenated offset pages.")
+    }
+
+    func testTrackedPickerFailureClearsCandidatesAndAllowsRefresh() async {
+        let session = makeDetail(sessionID: UUID(), quickCowCount: 0)
+        let candidate = makeTrackedCandidate(tag: "READY", pastureID: UUID())
+        let reader = FieldCheckTrackedCandidateQuerySpy(animals: [candidate])
+        let model = FieldCheckTrackedAnimalPickerViewModel()
+        await model.load(for: session, using: reader)
+        XCTAssertEqual(model.animals.map(\\.id), [candidate.id])
+
+        await reader.setFailure(true)
+        await model.load(for: session, using: reader)
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertFalse(model.beginSelectionSubmission())
+        XCTAssertTrue(model.animals.isEmpty)
+        XCTAssertNotNil(model.loadErrorMessage)
+
+        await reader.setFailure(false)
+        await model.load(for: session, using: reader)
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertNil(model.loadErrorMessage)
+        XCTAssertEqual(model.animals.map(\\.id), [candidate.id])
+    }
+
+    func testTrackedPickerRejectsArchivedPastureWithoutQuery() async {
+        let active = makeDetail(sessionID: UUID(), quickCowCount: 0)
+        let archived = FieldCheckSessionDetailSnapshot(
+            id: active.id,
+            startedAt: active.startedAt,
+            completedAt: active.completedAt,
+            notes: active.notes,
+            pastureID: active.pastureID,
+            pastureName: active.pastureName,
+            pastureArchivedAt: .now,
+            isPastureArchived: true,
+            expectedHeadCountSnapshot: active.expectedHeadCountSnapshot,
+            quickCowCount: active.quickCowCount,
+            quickHeiferCount: active.quickHeiferCount,
+            quickCalfCount: active.quickCalfCount,
+            quickBullCount: active.quickBullCount,
+            quickSteerCount: active.quickSteerCount,
+            animalChecks: active.animalChecks,
+            findings: active.findings
+        )
+        let reader = FieldCheckTrackedCandidateQuerySpy(
+            animals: [makeTrackedCandidate(tag: "NO", pastureID: UUID())]
+        )
+        let model = FieldCheckTrackedAnimalPickerViewModel()
+        await model.load(for: archived, using: reader)
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertFalse(model.beginSelectionSubmission())
+        XCTAssertTrue(model.animals.isEmpty)
+        let count = await reader.fetchCount()
+        XCTAssertEqual(count, 0)
+    }
+
+    func testOlderTrackedPickerQueryCannotOverwriteRefreshedCohort() async {
+        let session = makeDetail(sessionID: UUID(), quickCowCount: 0)
+        let candidate = makeTrackedCandidate(tag: "NEW", pastureID: UUID())
+        let reader = FieldCheckTrackedCandidateQuerySpy(
+            animals: [candidate],
+            pauseFirst: true
+        )
+        let model = FieldCheckTrackedAnimalPickerViewModel()
+        let old = Task { @MainActor in
+            await model.load(for: session, using: reader)
+        }
+        await reader.waitUntilPaused()
+        await model.load(for: session, using: reader)
+        XCTAssertEqual(model.animals.map(\\.id), [candidate.id])
+        await reader.releasePaused()
+        await old.value
+        XCTAssertEqual(model.animals.map(\\.id), [candidate.id])
+        XCTAssertTrue(model.hasLoaded)
+    }
+
+    private func makeTrackedCandidate(
+        id: UUID = UUID(),
+        tag: String,
+        pastureID: UUID?
+    ) -> AnimalSummary {
+        AnimalSummary(
+            id: id,
+            name: "Tracked \\(tag)",
+            displayTagNumber: tag,
+            displayTagColorID: nil,
+            damDisplayTagNumber: nil,
+            damDisplayTagColorID: nil,
+            sex: .female,
+            animalType: .cow,
+            firstDistinguishingFeature: nil,
+            birthDate: .distantPast,
+            status: .active,
+            isArchived: false,
+            pastureID: pastureID,
+            pastureName: pastureID == nil ? nil : "Other",
+            location: .pasture
         )
     }
 
@@ -775,5 +913,72 @@ private enum FieldCheckSessionDetailTestError: LocalizedError {
         case .setCountedFailure:
             return "Injected set-counted failure."
         }
+    }
+}
+
+private enum FieldCheckTrackedCandidateTestError: Error {
+    case queryFailure
+}
+
+private actor FieldCheckTrackedCandidateQuerySpy: AnimalReferenceQueryReading {
+    private let animals: [AnimalSummary]
+    private var shouldFail = false
+    private var queries: [AnimalReferenceQuery] = []
+    private let pauseFirst: Bool
+    private var paused: CheckedContinuation<Void, Never>?
+    private var entered: CheckedContinuation<Void, Never>?
+    private var firstEntered = false
+
+    init(animals: [AnimalSummary], pauseFirst: Bool = false) {
+        self.animals = animals
+        self.pauseFirst = pauseFirst
+    }
+
+    func setFailure(_ value: Bool) { shouldFail = value }
+    func fetchCount() -> Int { queries.count }
+    func lastQuery() -> AnimalReferenceQuery? { queries.last }
+
+    func waitUntilPaused() async {
+        if firstEntered { return }
+        await withCheckedContinuation { entered = $0 }
+    }
+
+    func releasePaused() {
+        paused?.resume()
+        paused = nil
+    }
+
+    func fetchAnimalReferenceSnapshot(
+        matching query: AnimalReferenceQuery
+    ) async throws -> [AnimalSummary] {
+        queries.append(query)
+        if pauseFirst && queries.count == 1 {
+            await withCheckedContinuation { continuation in
+                paused = continuation
+                firstEntered = true
+                entered?.resume()
+                entered = nil
+            }
+        }
+        if shouldFail { throw FieldCheckTrackedCandidateTestError.queryFailure }
+        let excluded = Set(query.excludedAnimalIDs)
+        return animals.filter { animal in
+            guard case .notPasture(let pastureID) = query.pastureScope else { return false }
+            return animal.pastureID != pastureID
+                && animal.status == .active
+                && !animal.isArchived
+                && !excluded.contains(animal.id)
+        }
+    }
+
+    func fetchAnimalReferencePage(
+        matching query: AnimalReferenceQuery,
+        page: ReadPageRequest
+    ) async throws -> AnimalSummaryPage {
+        throw FieldCheckTrackedCandidateTestError.queryFailure
+    }
+
+    func containsAnimal(id: UUID) async throws -> Bool {
+        animals.contains { $0.id == id }
     }
 }
