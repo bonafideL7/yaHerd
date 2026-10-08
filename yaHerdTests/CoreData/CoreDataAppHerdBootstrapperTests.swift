@@ -392,4 +392,52 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         selection.select(nil)
         XCTAssertNil(selection.currentHerdID)
     }
+
+    @MainActor
+    func testRecoveryExportDistinguishesAbsentDirectoryFromEnumerationFailure() throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory
+            .appendingPathComponent("yaHerd-recovery-inventory-\(UUID().uuidString)", isDirectory: true)
+        try manager.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: root) }
+
+        let controller = RecoveryModeController(
+            context: RecoveryModeContext(startupError: "Store unavailable"),
+            applicationSupportURL: root
+        )
+
+        // Absent Core Data directory is an actual empty inventory.
+        XCTAssertNil(controller.diagnosticsErrorMessage)
+        XCTAssertTrue(controller.diagnostics.recoverableStoreFiles.isEmpty)
+        controller.prepareExport()
+        XCTAssertNil(controller.exportErrorMessage)
+        XCTAssertNotNil(controller.exportDocument)
+
+        controller.clearPreparedExport()
+
+        // A path that exists but cannot be enumerated is not an empty directory.
+        let storeDirectory = root.appendingPathComponent("yaHerd", isDirectory: true)
+        try Data("not a directory".utf8).write(to: storeDirectory)
+        controller.refreshDiagnostics()
+        XCTAssertNotNil(controller.diagnosticsErrorMessage)
+        XCTAssertTrue(controller.diagnostics.recoverableStoreFiles.isEmpty)
+        controller.prepareExport()
+        XCTAssertNil(controller.exportDocument)
+        XCTAssertNotNil(controller.exportErrorMessage)
+
+        // Once access is restored, diagnostics and export recover without restart.
+        try manager.removeItem(at: storeDirectory)
+        try manager.createDirectory(at: storeDirectory, withIntermediateDirectories: true)
+        let storeFile = storeDirectory.appendingPathComponent(
+            CoreDataPersistentContainer.storeFileName
+        )
+        try Data("store data".utf8).write(to: storeFile)
+        controller.refreshDiagnostics()
+        XCTAssertNil(controller.diagnosticsErrorMessage)
+        XCTAssertEqual(controller.diagnostics.recoverableStoreFiles.count, 1)
+        controller.prepareExport()
+        XCTAssertNil(controller.exportErrorMessage)
+        XCTAssertNotNil(controller.exportDocument)
+    }
+
 }
