@@ -142,12 +142,14 @@ struct WorkingSessionsView: View {
             } label: {
                 WorkingSessionRow(session: session)
             }
+            .disabled(isDeletingSession)
         } else {
             NavigationLink {
                 WorkingSessionDetailView(sessionID: session.id)
             } label: {
                 WorkingSessionRow(session: session)
             }
+            .disabled(isDeletingSession)
         }
     }
 
