@@ -71,6 +71,8 @@ struct WorkingSessionsView: View {
             }
         }
         .navigationTitle("Working Sessions")
+        .navigationBarBackButtonHidden(isDeletingSession)
+        .interactiveDismissDisabled(isDeletingSession)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
