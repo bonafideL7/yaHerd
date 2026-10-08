@@ -2459,7 +2459,7 @@ extension AnimalRepositoryContract {
             )
         )
         try repository.archive(ids: [northArchived.id])
-        _ = try repository.create(
+        let northDead = try repository.create(
             input: readModelAnimalInput(
                 name: "Reference North Removed",
                 tagNumber: "A30",
