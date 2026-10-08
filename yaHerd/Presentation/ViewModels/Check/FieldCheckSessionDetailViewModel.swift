@@ -802,23 +802,82 @@ private enum FieldCheckAnimalDetailMutationError: LocalizedError {
 final class FieldCheckTrackedAnimalPickerViewModel {
     private(set) var animals: [AnimalSummary] = []
     private(set) var isSubmittingSelection = false
+    private(set) var isLoading = false
+    private(set) var hasLoaded = false
+    private(set) var loadErrorMessage: String?
     var searchText = ""
     var errorMessage: String?
-    var hasLoaded = false
 
-    func load(using repository: any AnimalSummaryReading) {
-        defer { hasLoaded = true }
+    @ObservationIgnored private var loadToken = UUID()
+
+    /// Read the complete eligible cohort from one pinned Core Data generation.
+    /// Do not publish any candidates until that snapshot has succeeded.
+    func load(
+        for session: FieldCheckSessionDetailSnapshot,
+        using reader: (any AnimalReferenceQueryReading)?
+    ) async {
+        guard !isSubmittingSelection else { return }
+        let token = UUID()
+        loadToken = token
+        animals = []
+        isLoading = true
+        hasLoaded = false
+        loadErrorMessage = nil
+        errorMessage = nil
+
+        guard let destinationPastureID = session.pastureID,
+              !session.isPastureArchived,
+              !session.isCompleted else {
+            isLoading = false
+            loadErrorMessage = "This Field Check no longer has an active destination pasture."
+            errorMessage = loadErrorMessage
+            return
+        }
+
+        guard let reader else {
+            isLoading = false
+            loadErrorMessage = "The Field Check Animal reference lookup is not configured."
+            errorMessage = loadErrorMessage
+            return
+        }
+
+        let checkedIDs = Set(session.animalChecks.compactMap(\.animalID))
+        let query = AnimalReferenceQuery(
+            pastureScope: .notPasture(destinationPastureID),
+            location: .any,
+            excludedAnimalIDs: Array(checkedIDs),
+            sortOrder: .displayTagOrName
+        )
 
         do {
-            animals = try repository.fetchAnimals()
-            errorMessage = nil
+            let snapshot = try await reader.fetchAnimalReferenceSnapshot(matching: query)
+            try Task.checkCancellation()
+            guard loadToken == token else { return }
+
+            // Retain the original picker rules as a presentation-level safety
+            // boundary, independent of the M9 query's filtering.
+            animals = snapshot.filter {
+                $0.status == .active
+                    && !$0.isArchived
+                    && $0.pastureID != destinationPastureID
+                    && !checkedIDs.contains($0.id)
+            }
+            hasLoaded = true
+            isLoading = false
+        } catch is CancellationError {
+            if loadToken == token {
+                isLoading = false
+            }
         } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+            guard loadToken == token else { return }
+            isLoading = false
+            loadErrorMessage = UserVisibleErrorMessage.make(error)
+            errorMessage = loadErrorMessage
         }
     }
 
     func beginSelectionSubmission() -> Bool {
-        guard !isSubmittingSelection else {
+        guard !isSubmittingSelection, hasLoaded, !isLoading else {
             return false
         }
         isSubmittingSelection = true
@@ -833,6 +892,7 @@ final class FieldCheckTrackedAnimalPickerViewModel {
         forPastureID pastureID: UUID?,
         excluding checkedAnimalIDs: Set<UUID>
     ) -> [AnimalSummary] {
+        guard hasLoaded else { return [] }
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
 
         return animals
