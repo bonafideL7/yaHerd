@@ -4,6 +4,7 @@ import SwiftUI
 nonisolated struct AnimalFeatureDependencies {
     let listRepository: any AnimalListRepository
     let listQueryReader: any AnimalListQueryReading
+    let listSnapshotReader: (any AnimalListSnapshotReading)?
     let editorRepository: any AnimalEditorRepository
     let detailRepository: any AnimalDetailRepository
     let timelineReader: any AnimalTimelineReading
@@ -18,6 +19,7 @@ nonisolated struct AnimalFeatureDependencies {
     nonisolated init(
         listRepository: any AnimalListRepository,
         listQueryReader: any AnimalListQueryReading,
+        listSnapshotReader: (any AnimalListSnapshotReading)? = nil,
         editorRepository: any AnimalEditorRepository,
         detailRepository: any AnimalDetailRepository,
         timelineReader: any AnimalTimelineReading,
@@ -31,6 +33,7 @@ nonisolated struct AnimalFeatureDependencies {
     ) {
         self.listRepository = listRepository
         self.listQueryReader = listQueryReader
+        self.listSnapshotReader = listSnapshotReader
         self.editorRepository = editorRepository
         self.detailRepository = detailRepository
         self.timelineReader = timelineReader
@@ -47,6 +50,7 @@ nonisolated struct AnimalFeatureDependencies {
     init(
         repository: any AnimalRepository,
         listQueryReader: any AnimalListQueryReading,
+        listSnapshotReader: (any AnimalListSnapshotReading)? = nil,
         parentOptionQueryReader: (any AnimalParentOptionQueryReading)? = nil,
         pastureReferenceReader: any PastureReferenceDataReader,
         sampleDataSeeder: (any SampleDataSeeding)?,
@@ -55,6 +59,7 @@ nonisolated struct AnimalFeatureDependencies {
         self.init(
             listRepository: repository,
             listQueryReader: listQueryReader,
+            listSnapshotReader: listSnapshotReader,
             editorRepository: repository,
             detailRepository: repository,
             timelineReader: repository,
@@ -72,6 +77,7 @@ nonisolated struct AnimalFeatureDependencies {
     static func preview(
         listRepository: (any AnimalListRepository)? = nil,
         listQueryReader: (any AnimalListQueryReading)? = nil,
+        listSnapshotReader: (any AnimalListSnapshotReading)? = nil,
         editorRepository: (any AnimalEditorRepository)? = nil,
         detailRepository: (any AnimalDetailRepository)? = nil,
         timelineReader: (any AnimalTimelineReading)? = nil,
@@ -87,6 +93,7 @@ nonisolated struct AnimalFeatureDependencies {
         return Self(
             listRepository: listRepository ?? missingRepository,
             listQueryReader: listQueryReader ?? MissingAnimalListQueryReader(),
+            listSnapshotReader: listSnapshotReader,
             editorRepository: editorRepository ?? missingRepository,
             detailRepository: detailRepository ?? missingRepository,
             timelineReader: timelineReader ?? missingRepository,
