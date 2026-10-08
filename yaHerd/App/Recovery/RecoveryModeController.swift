@@ -103,10 +103,16 @@ final class RecoveryModeController: ObservableObject {
       // Reading the current store verifies that this is a usable Core Data
       // graph rather than merely an openable empty SQLite file.
       let context = assembly.contextFactory.makeReadContext()
-      _ = try context.performAndWait {
+      let herdCount = try context.performAndWait {
         try context.count(for: NSFetchRequest<CDHerd>(
           entityName: CDHerd.coreDataEntityName
         ))
+      }
+      guard herdCount == 1 else {
+        if herdCount == 0 {
+          throw HerdRepositoryError.missingHerd
+        }
+        throw CoreDataAppHerdBootstrapError.multipleLocalHerds(count: herdCount)
       }
       storeCheckResult = .succeeded(
         "The persistent Core Data store opened read-only. No repair, migration, or write was performed. Recovery mode stays read-only for this launch. Restart yaHerd to retry normal storage."
