@@ -5,6 +5,110 @@ import XCTest
 
 @MainActor
 final class CoreDataHomeReadModelContractTests: XCTestCase {
+    func testCoreDataGrazingCommandRefreshesDashboardAndPreservesOtherPastures() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let pastures = CoreDataPastureRepository(
+            selection: environment.selection,
+            assembly: environment.assembly
+        )
+        let grazed = try pastures.create(
+            input: PastureInput(
+                name: "Grazed Pasture",
+                acreage: 30,
+                usableAcreage: 28,
+                targetAcresPerHead: 2
+            )
+        )
+        let control = try pastures.create(
+            input: PastureInput(
+                name: "Untouched Pasture",
+                acreage: 24,
+                usableAcreage: 22,
+                targetAcresPerHead: 2
+            )
+        )
+        let beforeControl = try XCTUnwrap(
+            pastures.fetchPastureDetail(id: control.id)
+        )
+        let readModel = CoreDataReadModelActor(
+            assembly: environment.assembly,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        let grazingDate = Date(timeIntervalSinceReferenceDate: 700_000)
+
+        let mutationCenter = ApplicationMutationCenter()
+        let marker = MutationPublishingPastureGrazingMarker(
+            base: pastures,
+            mutationRecorder: ApplicationMutationPipeline(center: mutationCenter),
+            writePolicy: LocalDataWritePolicy(dataAccessMode: .readWrite)
+        )
+        let priorSequence = mutationCenter.currentSequence
+        marker.markPastureGrazedToday(id: grazed.id, on: grazingDate)
+
+        XCTAssertEqual(mutationCenter.currentSequence, priorSequence + 1)
+        XCTAssertEqual(
+            try pastures.fetchPastureDetail(id: grazed.id)?.lastGrazedDate,
+            grazingDate
+        )
+        XCTAssertEqual(
+            try pastures.fetchPastureDetail(id: control.id),
+            beforeControl
+        )
+
+        let dashboard = try await readModel.fetchDashboardPastureRecords()
+        XCTAssertEqual(
+            dashboard.first(where: { $0.id == grazed.id })?.lastGrazedDate,
+            grazingDate
+        )
+        XCTAssertEqual(
+            dashboard.first(where: { $0.id == control.id })?.lastGrazedDate,
+            beforeControl.lastGrazedDate
+        )
+
+        XCTAssertThrowsError(
+            try marker.markPastureGrazedToday(id: UUID(), on: Date())
+        ) { error in
+            XCTAssertEqual(error as? PastureValidationError, .pastureNotFound)
+        }
+        XCTAssertEqual(
+            mutationCenter.currentSequence,
+            priorSequence + 1,
+            "A failed Core Data grazing mutation must not publish success."
+        )
+        XCTAssertEqual(
+            try pastures.fetchPastureDetail(id: grazed.id)?.lastGrazedDate,
+            grazingDate
+        )
+    }
+
+    func testRecoveryGrazingCommandRejectsWritesWithoutPublishing() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let pastures = CoreDataPastureRepository(
+            selection: environment.selection,
+            assembly: environment.assembly
+        )
+        let pasture = try pastures.create(
+            input: PastureInput(
+                name: "Read Only Pasture",
+                acreage: nil,
+                usableAcreage: nil,
+                targetAcresPerHead: nil
+            )
+        )
+        let center = ApplicationMutationCenter()
+        let marker = MutationPublishingPastureGrazingMarker(
+            base: pastures,
+            mutationRecorder: ApplicationMutationPipeline(center: center),
+            writePolicy: LocalDataWritePolicy(dataAccessMode: .recoveryReadOnly)
+        )
+
+        XCTAssertThrowsError(
+            try marker.markPastureGrazedToday(id: pasture.id, on: Date())
+        )
+        XCTAssertEqual(center.currentSequence, 0)
+        XCTAssertNil(try pastures.fetchPastureDetail(id: pasture.id)?.lastGrazedDate)
+    }
+
     func testFieldCheckStatePropagatesToCoreDataHomeReadModel() async throws {
         let environment = try await CoreDataHomeReadModelContractEnvironment.make()
         try await HomeSupportingReadModelContract.assertFieldCheckStatePropagatesToHomeReadModel(
