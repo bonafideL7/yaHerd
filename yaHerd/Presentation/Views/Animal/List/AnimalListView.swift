@@ -15,7 +15,7 @@ struct AnimalListView: View {
     @Environment(\.animalFeatureDependencies) private var animalDependencies
     private var animalListRepository: any AnimalListRepository { animalDependencies.listRepository }
     private var pastureReferenceDataReader: any PastureReferenceDataReader { animalDependencies.pastureReferenceReader }
-    private var sampleDataSeeder: any SampleDataSeeding { animalDependencies.sampleDataSeeder }
+    private var sampleDataSeeder: (any SampleDataSeeding)? { animalDependencies.sampleDataSeeder }
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(ApplicationSettings.self) private var applicationSettings
@@ -400,8 +400,8 @@ struct AnimalListView: View {
             colorScheme: colorScheme,
             onStartInlineEntry: beginNewInlineEntry,
             onAddAnimal: presentAddAnimal,
-            onAddSampleData: seedSampleData,
-            onAddLargeSampleData: seedLargeSampleData,
+            onAddSampleData: sampleDataSeeder == nil ? nil : seedSampleData,
+            onAddLargeSampleData: sampleDataSeeder == nil ? nil : seedLargeSampleData,
             onClearFilters: clearAllFilters,
             onShowInactive: { showRemovedStatusesBinding.wrappedValue = true },
             onShowArchivedRecords: { showArchivedRecordsBinding.wrappedValue = true }
@@ -502,12 +502,12 @@ struct AnimalListView: View {
     }
 
     private func seedSampleData() {
-        sampleDataSeeder.seedSampleDataIfNeeded()
+        sampleDataSeeder?.seedSampleDataIfNeeded()
         reload()
     }
 
     private func seedLargeSampleData() {
-        sampleDataSeeder.seedLargeSampleDataIfNeeded()
+        sampleDataSeeder?.seedLargeSampleDataIfNeeded()
         reload()
     }
 
