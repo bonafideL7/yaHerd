@@ -35,6 +35,12 @@ struct AnimalListFilteredQueryContractFixture {
 }
 
 @MainActor
+struct AnimalParentOptionQueryContractFixture {
+    let animalFixture: AnimalRepositoryContractFixture
+    let makeParentQueryReader: () -> any AnimalParentOptionQueryReading
+}
+
+@MainActor
 struct AnimalReferenceQueryContractFixture {
     let animalFixture: AnimalRepositoryContractFixture
     let makeReferenceQueryReader: () -> any AnimalReferenceQueryReading
@@ -2324,6 +2330,77 @@ extension AnimalRepositoryContract {
             file: file,
             line: line
         )
+    }
+
+    /// The shared sire/dam chooser must retain M5's *non-archived*, not
+    /// active-only, parent semantics under a fresh selected-Herd Core Data read.
+    static func assertAsyncParentOptionQueryMatchesExistingProjection(
+        using fixture: AnimalParentOptionQueryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        let repository = fixture.animalFixture.makeAnimalRepository()
+        let reader = fixture.makeParentQueryReader()
+
+        let bull = try repository.create(input: readModelAnimalInput(
+            name: "Parent Bull", tagNumber: "P2",
+            tagColorID: TagColorDefaults.whiteID, sex: .male,
+            birthDate: contractDate(year: 2020, month: 1, day: 1)
+        ))
+        let cow = try repository.create(input: readModelAnimalInput(
+            name: "Parent Cow", tagNumber: "P10", sex: .female,
+            birthDate: contractDate(year: 2020, month: 1, day: 2)
+        ))
+        let deceased = try repository.create(input: readModelAnimalInput(
+            name: "Deceased Parent", tagNumber: "D1", sex: .male,
+            birthDate: contractDate(year: 2018, month: 1, day: 1),
+            status: .dead,
+            deathDate: contractDate(year: 2026, month: 1, day: 1),
+            causeOfDeath: "Parent option read contract"
+        ))
+        let archived = try repository.create(input: readModelAnimalInput(
+            name: "Archived Parent", tagNumber: "A1", sex: .female,
+            birthDate: contractDate(year: 2020, month: 1, day: 3)
+        ))
+        try repository.archive(ids: [archived.id])
+        let excluded = try repository.create(input: readModelAnimalInput(
+            name: "Subject Animal", tagNumber: "SELF", sex: .female,
+            birthDate: contractDate(year: 2020, month: 1, day: 4)
+        ))
+        let untagged = try repository.create(input: readModelAnimalInput(
+            name: "Named Untagged", tagNumber: "", sex: .female,
+            birthDate: contractDate(year: 2020, month: 1, day: 5)
+        ))
+
+        let options = try await reader.fetchParentOptions(excluding: excluded.id)
+        let originalProjection = try repository.fetchParentOptions(excluding: excluded.id)
+        XCTAssertEqual(
+            options,
+            originalProjection,
+            "The async selected-Herd parent chooser must preserve the exact existing parent-option metadata and natural display-name ordering.",
+            file: file, line: line
+        )
+        XCTAssertEqual(Set(options.map(\.id)).count, 4, file: file, line: line)
+        XCTAssertTrue(options.contains { $0.id == deceased.id }, "Inactive non-archived parents remain visible.", file: file, line: line)
+        XCTAssertFalse(options.contains { $0.id == archived.id || $0.id == excluded.id }, file: file, line: line)
+        XCTAssertEqual(options.first(where: { $0.id == bull.id })?.sex, .male, file: file, line: line)
+        XCTAssertEqual(options.first(where: { $0.id == bull.id })?.displayTagColorID, TagColorDefaults.whiteID, file: file, line: line)
+        XCTAssertEqual(options.first(where: { $0.id == untagged.id })?.displayName, "Named Untagged", file: file, line: line)
+        XCTAssertTrue(options.contains { $0.id == cow.id }, file: file, line: line)
+
+        // A long-lived actor must allocate a new private context on every
+        // query rather than keeping yesterday's parent-choice snapshot.
+        try repository.archive(ids: [bull.id])
+        let afterArchive = try await reader.fetchParentOptions(excluding: excluded.id)
+        XCTAssertFalse(afterArchive.contains { $0.id == bull.id }, file: file, line: line)
+        try repository.restore(ids: [bull.id])
+        let afterRestore = try await reader.fetchParentOptions(excluding: excluded.id)
+        XCTAssertTrue(afterRestore.contains { $0.id == bull.id }, file: file, line: line)
+
+        try repository.delete(ids: [deceased.id])
+        let afterDelete = try await reader.fetchParentOptions(excluding: excluded.id)
+        XCTAssertFalse(afterDelete.contains { $0.id == deceased.id }, file: file, line: line)
+        XCTAssertEqual(afterDelete, try repository.fetchParentOptions(excluding: excluded.id), file: file, line: line)
     }
 
     static func assertAnimalReferenceQueryReduction(
