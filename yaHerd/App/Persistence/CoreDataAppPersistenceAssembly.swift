@@ -68,19 +68,23 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
             selectedHerdSelection.currentHerdID
         }
         let dashboardQueryReader = CoreDataReadModelActor(
-            assembly: assembly,
+            contextFactory: assembly.contextFactory,
+            lookup: assembly.lookup,
             currentHerdID: selectedHerdID
         )
         let homeFieldCheckQueryReader = CoreDataReadModelActor(
-            assembly: assembly,
+            contextFactory: assembly.contextFactory,
+            lookup: assembly.lookup,
             currentHerdID: selectedHerdID
         )
         let homeWorkingQueryReader = CoreDataReadModelActor(
-            assembly: assembly,
+            contextFactory: assembly.contextFactory,
+            lookup: assembly.lookup,
             currentHerdID: selectedHerdID
         )
         let animalListQueryReader = CoreDataReadModelActor(
-            assembly: assembly,
+            contextFactory: assembly.contextFactory,
+            lookup: assembly.lookup,
             currentHerdID: selectedHerdID
         )
         let animalListRepository = BackgroundQueryingAnimalListRepository(
