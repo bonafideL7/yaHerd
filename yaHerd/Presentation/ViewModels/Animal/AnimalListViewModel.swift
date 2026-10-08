@@ -34,13 +34,15 @@ final class AnimalListViewModel {
     func observe(
         using repository: any AnimalListRepository,
         pastureRepository: any PastureReferenceDataReader,
-        mutationStream: any ApplicationMutationStreaming
+        mutationStream: any ApplicationMutationStreaming,
+        snapshotReader: (any AnimalListSnapshotReading)? = nil
     ) async {
         let startingRevision = mutationStream.animalRevision
         if !hasLoaded || lastLoadedRevision < startingRevision {
             if await reloadAndWait(
                 using: repository,
-                pastureRepository: pastureRepository
+                pastureRepository: pastureRepository,
+                snapshotReader: snapshotReader
             ) {
                 lastLoadedRevision = startingRevision
             }
@@ -53,7 +55,8 @@ final class AnimalListViewModel {
             guard !Task.isCancelled else { return }
             if await reloadAndWait(
                 using: repository,
-                pastureRepository: pastureRepository
+                pastureRepository: pastureRepository,
+                snapshotReader: snapshotReader
             ) {
                 lastLoadedRevision = revision
             }
@@ -62,15 +65,17 @@ final class AnimalListViewModel {
 
     func loadIfNeeded(
         using repository: any AnimalListRepository,
-        pastureRepository: any PastureReferenceDataReader
+        pastureRepository: any PastureReferenceDataReader,
+        snapshotReader: (any AnimalListSnapshotReading)? = nil
     ) {
         guard !hasLoaded, !isLoading else { return }
-        load(using: repository, pastureRepository: pastureRepository)
+        load(using: repository, pastureRepository: pastureRepository, snapshotReader: snapshotReader)
     }
 
     func load(
         using repository: any AnimalListRepository,
-        pastureRepository: any PastureReferenceDataReader
+        pastureRepository: any PastureReferenceDataReader,
+        snapshotReader: (any AnimalListSnapshotReading)? = nil
     ) {
         loadGeneration += 1
         let generation = loadGeneration
@@ -89,7 +94,11 @@ final class AnimalListViewModel {
         isLoading = true
         loadTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.loadUsingReadModel(queryReader, generation: generation)
+            await self.loadUsingReadModel(
+                queryReader,
+                snapshotReader: snapshotReader,
+                generation: generation
+            )
         }
     }
 
@@ -179,9 +188,10 @@ final class AnimalListViewModel {
 
     private func reloadAndWait(
         using repository: any AnimalListRepository,
-        pastureRepository: any PastureReferenceDataReader
+        pastureRepository: any PastureReferenceDataReader,
+        snapshotReader: (any AnimalListSnapshotReading)?
     ) async -> Bool {
-        load(using: repository, pastureRepository: pastureRepository)
+        load(using: repository, pastureRepository: pastureRepository, snapshotReader: snapshotReader)
         let currentLoadTask = loadTask
         await currentLoadTask?.value
         return hasLoaded && errorMessage == nil
@@ -189,6 +199,7 @@ final class AnimalListViewModel {
 
     private func loadUsingReadModel(
         _ reader: any AnimalListQueryReading,
+        snapshotReader: (any AnimalListSnapshotReading)?,
         generation: Int
     ) async {
         defer {
@@ -201,7 +212,16 @@ final class AnimalListViewModel {
         do {
             let loaded = try await PerformanceLog.measureAsync("AnimalList.load") {
                 async let pastureOptions = reader.fetchAnimalPastureOptions(limit: 500)
-                let animals = try await fetchAllAnimalPages(using: reader)
+                let animals: [AnimalSummary]
+                if let snapshotReader {
+                    // A full-list reload must not concatenate page snapshots
+                    // from different committed Core Data generations.
+                    animals = try await snapshotReader.fetchAnimalSummarySnapshot()
+                } else {
+                    // Pre-cutover repositories and isolated test readers retain
+                    // their existing paging behavior without touching SwiftData.
+                    animals = try await fetchAllAnimalPages(using: reader)
+                }
                 return (animals, try await pastureOptions)
             }
 
