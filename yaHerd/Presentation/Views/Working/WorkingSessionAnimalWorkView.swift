@@ -224,7 +224,7 @@ struct WorkingSessionAnimalWorkView: View {
                 refreshDestinationPasturesAfterMutation()
                 guard !refreshSessionSourcePastureAfterMutation() else { return }
             case .local(.animal):
-                revalidateSelectedSireAfterMutation()
+                await revalidateSelectedSireAfterMutation()
             case .local:
                 break
             }
