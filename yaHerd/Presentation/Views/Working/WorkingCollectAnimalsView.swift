@@ -246,22 +246,13 @@ enum WorkingCollectAnimalsEligibility {
             excludedAnimalIDs: Array(excludedIDs),
             sortOrder: .displayTag
         )
-        var animals: [AnimalSummary] = []
-        var offset = 0
-        while true {
-            try Task.checkCancellation()
-            let page = try await reader.fetchAnimalReferencePage(
-                matching: query,
-                page: ReadPageRequest(offset: offset, limit: ReadPageRequest.maximumLimit)
-            )
-            try Task.checkCancellation()
-            animals.append(contentsOf: page.animals)
-            if !page.hasMore { break }
-            guard !page.animals.isEmpty else {
-                throw WorkingCollectCandidateError.incompletePage
-            }
-            offset += page.animals.count
-        }
+        // One reference cohort from one pinned Core Data query generation:
+        // independent offset pages can skip/duplicate eligible Animals if
+        // another transaction changes the roster between requests.
+        let animals = try await reader.fetchAnimalReferenceSnapshot(
+            matching: query
+        )
+        try Task.checkCancellation()
         return candidates(
             from: animals,
             sourcePastureID: sourcePastureID,
