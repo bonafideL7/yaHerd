@@ -7,6 +7,7 @@ final class CoreDataPastureRepository:
     PastureDetailReader,
     PastureResidentAnimalReader,
     PastureReferenceDataReader,
+    PastureGrazingMarking,
     PastureExistenceChecking,
     PastureNameChecking,
     PastureCreating,
@@ -92,6 +93,20 @@ final class CoreDataPastureRepository:
                 .sorted {
                     $0.displayTagNumber.localizedStandardCompare($1.displayTagNumber) == .orderedAscending
                 }
+        }
+    }
+
+    func markPastureGrazedToday(id: UUID, on date: Date) throws {
+        try performWrite { context, herd in
+            guard let pasture = try self.lookup.herdOwned(
+                CDPasture.self,
+                id: id,
+                herdID: herd.id,
+                in: context
+            ) else {
+                throw PastureValidationError.pastureNotFound
+            }
+            pasture.lastGrazedDate = date
         }
     }
 
