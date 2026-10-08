@@ -58,9 +58,9 @@ final class NewWorkingSessionViewModel: ObservableObject {
             pastures = []
             templates = []
             hasLoadedSetupSuccessfully = false
+            clearCandidates(for: nil)
             setupLoadErrorMessage = UserVisibleErrorMessage.make(error)
             errorMessage = setupLoadErrorMessage
-            clearCandidates(for: nil)
         }
         hasLoaded = true
     }
@@ -91,7 +91,9 @@ final class NewWorkingSessionViewModel: ObservableObject {
         guard let animalReferenceQueryReader else {
             isLoadingAnimals = false
             candidateLoadErrorMessage = "Working animal reference query is not configured."
-            errorMessage = candidateLoadErrorMessage
+            if errorMessage == nil {
+                errorMessage = candidateLoadErrorMessage
+            }
             return
         }
 
@@ -141,7 +143,9 @@ final class NewWorkingSessionViewModel: ObservableObject {
                   requestedPastureID == pastureID else { return }
             isLoadingAnimals = false
             candidateLoadErrorMessage = UserVisibleErrorMessage.make(error)
-            errorMessage = candidateLoadErrorMessage
+            if errorMessage == nil {
+                errorMessage = candidateLoadErrorMessage
+            }
         }
     }
 
