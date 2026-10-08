@@ -83,7 +83,7 @@ final class NewWorkingSessionViewModel: ObservableObject {
 
     /// Fetch only active, non-archived Animals physically in the selected Pasture.
     /// M9's Core Data reference reader owns filtering, sorting and Herd scoping.
-    /// Publish only a complete page sequence; partial pages must not enable Start.
+    /// Publish only a complete snapshot; partial results must not enable Start.
     func loadEligibleAnimals(pastureID: UUID?) async {
         clearCandidates(for: pastureID)
         let loadToken = candidateLoadToken
@@ -102,30 +102,14 @@ final class NewWorkingSessionViewModel: ObservableObject {
             location: .pasture,
             sortOrder: .displayTag
         )
-        var candidates: [AnimalSummary] = []
-        var offset = 0
-
         do {
-            while true {
-                try Task.checkCancellation()
-                let page = try await animalReferenceQueryReader.fetchAnimalReferencePage(
-                    matching: query,
-                    page: ReadPageRequest(offset: offset, limit: ReadPageRequest.maximumLimit)
-                )
-                try Task.checkCancellation()
-                guard candidateLoadToken == loadToken,
-                      requestedPastureID == pastureID else { return }
-
-                candidates.append(contentsOf: page.animals)
-                if !page.hasMore { break }
-
-                // An inconsistent empty page with hasMore must not spin forever
-                // or make a partially loaded working setup usable.
-                guard !page.animals.isEmpty else {
-                    throw WorkingSessionCandidateLoadingError.emptyIntermediatePage
-                }
-                offset += page.animals.count
-            }
+            // The cohort must come from one pinned Core Data generation. Each
+            // independently requested offset page could otherwise skip or
+            // duplicate Animals if the Pasture changes during loading.
+            let candidates = try await animalReferenceQueryReader.fetchAnimalReferenceSnapshot(
+                matching: query
+            )
+            try Task.checkCancellation()
 
             guard candidateLoadToken == loadToken,
                   requestedPastureID == pastureID else { return }
@@ -183,10 +167,3 @@ final class NewWorkingSessionViewModel: ObservableObject {
     }
 }
 
-private enum WorkingSessionCandidateLoadingError: LocalizedError {
-    case emptyIntermediatePage
-
-    var errorDescription: String? {
-        "Unable to finish loading eligible animals. Reopen Working setup and try again."
-    }
-}
