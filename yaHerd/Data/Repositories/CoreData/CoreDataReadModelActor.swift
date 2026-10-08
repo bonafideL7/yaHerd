@@ -47,6 +47,7 @@ actor CoreDataReadModelActor:
     HomeFieldCheckQueryReading,
     HomeWorkingQueryReading,
     AnimalListQueryReading,
+    AnimalListSnapshotReading,
     AnimalListFilteredQueryReading,
     AnimalReferenceQueryReading,
     AnimalParentOptionQueryReading
@@ -186,6 +187,64 @@ actor CoreDataReadModelActor:
                 herdID: herdID,
                 context: context
             )
+        }
+    }
+
+    /// Resolve the unfiltered Animal list in one generation rather than
+    /// concatenating independently pinned pages across concurrent writes.
+    func fetchAnimalSummarySnapshot() async throws -> [AnimalSummary] {
+        try Task.checkCancellation()
+        let herdID = try await selectedHerdID()
+        let context = contextFactory.makeReadContext()
+        let lookup = self.lookup
+        let referenceDate = Date()
+        let calendar = Calendar.current
+
+        return try await context.perform {
+            try Task.checkCancellation()
+            try context.setQueryGenerationFrom(.current)
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            try Self.validateAnimalApplicationIDs(herd: herd, herdID: herdID, in: context)
+            try Self.validateAnimalListTagIntegrity(herd: herd, herdID: herdID, in: context)
+            try Self.validateAnimalListQueryIntegrity(
+                query: nil, herd: herd, herdID: herdID, in: context
+            )
+
+            let candidates = try Self.fetchLightweightSortedQueryCandidates(
+                query: nil,
+                sortOrder: .tagAscending,
+                herd: herd,
+                herdID: herdID,
+                referenceDate: referenceDate,
+                calendar: calendar,
+                offset: 0,
+                limit: Int.max,
+                in: context
+            )
+            var summaries: [AnimalSummary] = []
+            summaries.reserveCapacity(candidates.count)
+            var offset = 0
+            while offset < candidates.count {
+                try Task.checkCancellation()
+                let chunk = Array(
+                    candidates.dropFirst(offset).prefix(Self.animalLightweightScanBatchSize)
+                )
+                let hydrated = try Self.hydrateAnimalSummaryCandidates(
+                    chunk, herd: herd, in: context
+                )
+                for animal in hydrated {
+                    try Self.validateAnimalReadRelationships(animal, herdID: herdID)
+                    summaries.append(
+                        try CoreDataAnimalProjection.summary(
+                            animal, now: referenceDate, calendar: calendar
+                        )
+                    )
+                }
+                offset += chunk.count
+            }
+            return summaries
         }
     }
 
