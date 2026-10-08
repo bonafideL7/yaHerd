@@ -54,6 +54,9 @@ final class AnimalParentPickerViewModel {
         formattedTag: (AnimalParentOption) -> String
     ) -> [AnimalParentOption] {
         guard hasLoaded else { return [] }
+        // Determine whether the suggested-sex filter is usable once per
+        // render, not once per Animal in a large, complete parent cohort.
+        let hasSuggested = items.contains { suggestedSexes.contains($0.sex) }
 
         return items
             .filter { animal in
@@ -66,7 +69,6 @@ final class AnimalParentPickerViewModel {
             }
             .filter { animal in
                 guard !showAllSexes else { return true }
-                let hasSuggested = items.contains { suggestedSexes.contains($0.sex) }
                 guard hasSuggested else { return true }
                 return suggestedSexes.contains(animal.sex)
             }
