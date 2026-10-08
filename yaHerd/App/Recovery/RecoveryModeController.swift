@@ -23,16 +23,20 @@ final class RecoveryModeController: ObservableObject {
   @Published private(set) var exportErrorMessage: String?
   @Published private(set) var storeCheckResult: StoreCheckResult?
   @Published private(set) var diagnostics = RecoveryStorageDiagnostics.empty
+  @Published private(set) var diagnosticsErrorMessage: String?
 
   private let fileManager: FileManager
+  private let applicationSupportURL: URL?
 
   init(
     context: RecoveryModeContext,
     fileManager: FileManager = .default,
+    applicationSupportURL: URL? = nil,
     automaticallyRefreshDiagnostics: Bool = true
   ) {
     self.context = context
     self.fileManager = fileManager
+    self.applicationSupportURL = applicationSupportURL
 
     if automaticallyRefreshDiagnostics {
       refreshDiagnostics()
@@ -53,6 +57,10 @@ final class RecoveryModeController: ObservableObject {
     refreshDiagnostics()
 
     do {
+      // An incomplete inventory must not be exported as a successful backup.
+      if let diagnosticsErrorMessage {
+        throw RecoveryStoreInventoryError.unavailable(diagnosticsErrorMessage)
+      }
       let entries = try makeRecoveryArchiveEntries()
       let archive = try RecoveryTarArchiveBuilder.makeArchive(entries: entries)
       exportDocument = RecoveryArchiveDocument(data: archive)
@@ -73,17 +81,24 @@ final class RecoveryModeController: ObservableObject {
   }
 
   func refreshDiagnostics() {
-    diagnostics = RecoveryStorageDiagnostics(
-      generatedAt: .now,
-      recoverableStoreFiles: recoverableStoreFiles().map { file in
-        RecoveryStoreFileDiagnostic(
-          archiveName: file.archiveName,
-          originalFilename: file.url.lastPathComponent,
-          byteCount: file.byteCount,
-          modifiedAt: file.modifiedAt
-        )
-      }
-    )
+    do {
+      let files = try recoverableStoreFiles()
+      diagnostics = RecoveryStorageDiagnostics(
+        generatedAt: .now,
+        recoverableStoreFiles: files.map { file in
+          RecoveryStoreFileDiagnostic(
+            archiveName: file.archiveName,
+            originalFilename: file.url.lastPathComponent,
+            byteCount: file.byteCount,
+            modifiedAt: file.modifiedAt
+          )
+        }
+      )
+      diagnosticsErrorMessage = nil
+    } catch {
+      diagnostics = .empty
+      diagnosticsErrorMessage = UserVisibleErrorMessage.make(error)
+    }
   }
 
   /// A non-mutating probe of the existing Core Data store. This never runs a
@@ -125,7 +140,7 @@ final class RecoveryModeController: ObservableObject {
   }
 
   private func makeRecoveryArchiveEntries() throws -> [RecoveryArchiveEntry] {
-    let storeFiles = recoverableStoreFiles()
+    let storeFiles = try recoverableStoreFiles()
     let diagnosticsData = try makeDiagnosticsJSON(
       snapshot: diagnostics,
       storeFiles: storeFiles
@@ -201,12 +216,12 @@ final class RecoveryModeController: ObservableObject {
     )
   }
 
-  private func recoverableStoreFiles() -> [RecoverableStoreFile] {
-    guard let appSupportURL = fileManager.urls(
+  private func recoverableStoreFiles() throws -> [RecoverableStoreFile] {
+    guard let appSupportURL = applicationSupportURL ?? fileManager.urls(
       for: .applicationSupportDirectory,
       in: .userDomainMask
     ).first else {
-      return []
+      throw RecoveryStoreInventoryError.unavailable("Application Support directory is unavailable.")
     }
 
     // This path mirrors CoreDataPersistentContainer.defaultStoreURL without
@@ -223,18 +238,22 @@ final class RecoveryModeController: ObservableObject {
       .fileSizeKey,
       .contentModificationDateKey
     ]
-    let files = (try? fileManager.contentsOfDirectory(
-      at: directory,
-      includingPropertiesForKeys: Array(keys),
-      options: [.skipsHiddenFiles]
-    )) ?? []
+    let files: [URL]
+    do {
+      files = try fileManager.contentsOfDirectory(
+        at: directory,
+        includingPropertiesForKeys: Array(keys),
+        options: [.skipsHiddenFiles]
+      )
+    } catch CocoaError.fileNoSuchFile {
+      // No Core Data directory exists on a fresh or preflight-blocked launch.
+      files = []
+    }
 
-    let coreDataFiles = files.compactMap { url -> RecoverableStoreFile? in
-      guard allowedNames.contains(url.lastPathComponent),
-            let values = try? url.resourceValues(forKeys: keys),
-            values.isRegularFile == true else {
-        return nil
-      }
+    let coreDataFiles = try files.compactMap { url -> RecoverableStoreFile? in
+      guard allowedNames.contains(url.lastPathComponent) else { return nil }
+      let values = try url.resourceValues(forKeys: keys)
+      guard values.isRegularFile == true else { return nil }
       return RecoverableStoreFile(
         url: url,
         archiveName: url.lastPathComponent,
@@ -245,19 +264,19 @@ final class RecoveryModeController: ObservableObject {
 
     // A fresh Core Data launch is blocked when older local store files exist.
     // Make those original files exportable without opening or migrating them.
-    let legacyFiles = CoreDataLegacyStorePreflight.legacyArtifacts(
+    let legacyFiles = try CoreDataLegacyStorePreflight.legacyArtifacts(
       in: appSupportURL,
       fileManager: fileManager
     ).map { url -> RecoverableStoreFile in
-      let values = try? url.resourceValues(forKeys: keys)
+      let values = try url.resourceValues(forKeys: keys)
       let sourceFolder = url.deletingLastPathComponent().lastPathComponent == "yaHerd"
         ? "LegacyYaHerd"
         : "LegacyAppSupport"
       return RecoverableStoreFile(
         url: url,
         archiveName: "\(sourceFolder)/\(url.lastPathComponent)",
-        byteCount: values?.fileSize ?? 0,
-        modifiedAt: values?.contentModificationDate ?? .distantPast
+        byteCount: values.fileSize ?? 0,
+        modifiedAt: values.contentModificationDate ?? .distantPast
       )
     }
 
@@ -271,4 +290,15 @@ private struct RecoverableStoreFile {
   let archiveName: String
   let byteCount: Int
   let modifiedAt: Date
+}
+
+private enum RecoveryStoreInventoryError: LocalizedError {
+  case unavailable(String)
+
+  var errorDescription: String? {
+    switch self {
+    case .unavailable(let message):
+      return "Recovery store inventory failed: \(message)"
+    }
+  }
 }
