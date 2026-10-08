@@ -21,7 +21,7 @@ Milestone 10 requires that every **active production** dependency path resolve t
 
 ## Coverage and test ownership
 
-`Info/MILESTONE_10_CORE_DATA_RUNTIME_CUTOVER_MATRIX.md` contains **22 materially distinct behaviors** with the repository's **14 required dimensions**. Every evaluation is qualified; the only remaining `Unverified:` cell is the **dormant Dashboard pasture-grazing interaction**, described below. The main cutover, recovery, and read adaptations are otherwise mapped to permanent M3–M9 contracts and focused M10 presentation/app-graph tests.
+`Info/MILESTONE_10_CORE_DATA_RUNTIME_CUTOVER_MATRIX.md` contains **22 materially distinct behaviors** with the repository's **14 required dimensions**. Every evaluation is qualified, and no M10 evaluation cell remains `Unverified:`. The dormant Dashboard pasture-grazing **UI activation** is explicitly `Delegated:` to a separate Dashboard pasture-list navigation and grazing-action activation work item. Its existing Core Data writer and read projection are covered by permanent M4/M9 contracts; that inactive UI integration is not evidence of an incomplete active Core Data runtime cutover.
 
 Examples of existing contracts that substantiate the runtime boundary:
 
@@ -35,11 +35,11 @@ Examples of existing contracts that substantiate the runtime boundary:
 
 ## Deliberately excluded / outstanding
 
-1. **Dashboard pasture grazing UI:** `DashboardPastureListView` contains a dormant swipe action, but no active navigation destination constructs this view. `DashboardRoute.pastureList` exists as an unused route value. The Core Data grazing writer and contract exist, but there is **no active caller** and no injected grazing command in the running Home graph. Therefore, M10 does not claim that the dormant interaction is verified or enabled. Activating it requires a separately owned Dashboard navigation/UX and injection change, not a hidden or unused M10 dependency.
+1. **Dashboard pasture grazing UI:** `DashboardPastureListView` contains a dormant swipe action, but no active navigation destination constructs this view. `DashboardRoute.pastureList` exists as an unused route value. The Core Data grazing writer and contract exist, but there is **no active caller** and no injected grazing command in the running Home graph. Therefore, M10 does not claim that the dormant interaction is verified or enabled. The M10 matrix delegates its end-to-end success path to the **Dashboard pasture-list navigation and grazing-action activation work item**, responsible for mounting the route, injecting the Core Data-backed `PastureGrazingMarking` dependency and verifying the swipe action and failure/recovery experience.
 2. **Existing SwiftData local stores:** M10 protects legacy bytes and supplies recovery/export; it does **not** migrate them. Legacy-data transfer/release upgrade handling requires an explicit product and data-preservation decision **before shipping the cutover to users with old local stores**. Do not interpret the M10 runtime gate as proof that an existing user's data is accessible after upgrading. Do not delete the only legacy data copy during M11 cleanup.
 3. **Unused SwiftData implementations:** Legacy source remains compiled but uninstantiated in the production graph. Deletion is Milestone 11's task, not evidence of a hybrid M10 runtime.
 4. **Architecture enforcement and final release confidence:** Static checks preventing a future SwiftData or synchronization bridge reintroduction, plus final Core Data hardening and release-level testing, belong to Milestone 12 / release qualification.
 
 ## Exit decision
 
-The **M10 single-runtime composition gate is ready to close** on the merged code. Do not activate unused Dashboard UI merely to remove an `Unverified:` status, and do not begin M11 by deleting legacy user files. M11 may remove obsolete compiled SwiftData implementation **after** preserving recognized legacy data and recording an explicit upgrade/migration policy; its removal and final architecture tests remain separate gates.
+The **M10 single-runtime composition gate is ready to close** on the merged code. Do not activate unused Dashboard UI merely to create an unnecessary M10 success path: its future interaction is explicitly delegated, not considered verified. Do not begin M11 by deleting legacy user files. M11 may remove obsolete compiled SwiftData implementation **after** preserving recognized legacy data and recording an explicit upgrade/migration policy; its removal and final architecture tests remain separate gates.
