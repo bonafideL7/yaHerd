@@ -191,6 +191,7 @@ struct NewWorkingSessionView: View {
                         }
                     }
                     .labelsHidden()
+                    .disabled(isStarting)
                 }
             }
 
