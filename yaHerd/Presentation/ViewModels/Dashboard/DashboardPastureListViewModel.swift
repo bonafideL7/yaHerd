@@ -40,7 +40,7 @@ final class DashboardPastureListViewModel {
     func markPastureGrazedToday(
         pastureID: UUID,
         configuration _: DashboardConfiguration,
-        using repository: any DashboardReadWriting
+        using repository: any PastureGrazingMarking
     ) {
         let date = Date.now
         do {
