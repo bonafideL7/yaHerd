@@ -223,6 +223,64 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.storeURL.path))
     }
 
+    func testLegacyStorePreflightBlocksSilentFirstCoreDataOpenAndAllowsExistingCoreData() throws {
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory
+            .appendingPathComponent("yaHerd-legacy-preflight-\(UUID().uuidString)", isDirectory: true)
+        let coreDataDirectory = root.appendingPathComponent("yaHerd", isDirectory: true)
+        try fileManager.createDirectory(
+            at: coreDataDirectory,
+            withIntermediateDirectories: true
+        )
+        defer { try? fileManager.removeItem(at: root) }
+
+        let newStore = coreDataDirectory.appendingPathComponent(
+            CoreDataPersistentContainer.storeFileName
+        )
+        let legacyStore = root.appendingPathComponent("yaHerdStore.store")
+        let legacyJournal = root.appendingPathComponent("yaHerdStore.store-wal")
+        try Data("legacy data".utf8).write(to: legacyStore)
+        try Data("legacy journal".utf8).write(to: legacyJournal)
+
+        let artifacts = CoreDataLegacyStorePreflight.legacyArtifacts(
+            in: root,
+            fileManager: fileManager
+        )
+        XCTAssertEqual(artifacts.map(\\.lastPathComponent), [
+            legacyStore.lastPathComponent,
+            legacyJournal.lastPathComponent
+        ])
+
+        XCTAssertThrowsError(
+            try CoreDataLegacyStorePreflight.ensureSafeFirstOpen(
+                at: newStore,
+                fileManager: fileManager
+            )
+        ) { error in
+            guard case .legacyStoreFound(let files) =
+                error as? CoreDataLegacyStorePreflightError else {
+                XCTFail("Expected a recognized legacy store.")
+                return
+            }
+            XCTAssertEqual(Set(files), Set([
+                legacyStore.lastPathComponent,
+                legacyJournal.lastPathComponent
+            ]))
+        }
+        XCTAssertFalse(fileManager.fileExists(atPath: newStore.path))
+        XCTAssertTrue(fileManager.fileExists(atPath: legacyStore.path))
+
+        // A migrated Core Data store is authoritative even when archived
+        // legacy files are still present for backup.
+        try Data("new store exists".utf8).write(to: newStore)
+        XCTAssertNoThrow(
+            try CoreDataLegacyStorePreflight.ensureSafeFirstOpen(
+                at: newStore,
+                fileManager: fileManager
+            )
+        )
+    }
+
     @MainActor
     func testAppCurrentHerdSelectionExposesOnlyTheSelectedApplicationID() {
         let firstID = UUID()
