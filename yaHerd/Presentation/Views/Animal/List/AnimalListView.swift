@@ -323,7 +323,8 @@ struct AnimalListView: View {
             await viewModel.observe(
                 using: repository,
                 pastureRepository: pastureReferenceDataReader,
-                mutationStream: animalDependencies.mutationStream
+                mutationStream: animalDependencies.mutationStream,
+                snapshotReader: animalDependencies.listSnapshotReader
             )
         }
         .onChange(of: searchTextValue) { _, _ in
