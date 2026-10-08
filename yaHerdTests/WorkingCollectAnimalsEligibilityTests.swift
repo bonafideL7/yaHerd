@@ -29,7 +29,7 @@ final class WorkingCollectAnimalsEligibilityTests: XCTestCase {
     }
 
 
-    func testCollectCandidateQueryPagesOnlySourcePastureAndExcludesQueuedIDs() async throws {
+    func testCollectCandidateSnapshotExcludesQueuedIDsAcrossInternalBatches() async throws {
         let sourcePastureID = UUID()
         let otherPastureID = UUID()
         let existing = makeAnimalSummary(id: UUID(), displayTagNumber: "0000", pastureID: sourcePastureID)
@@ -62,7 +62,7 @@ final class WorkingCollectAnimalsEligibilityTests: XCTestCase {
         XCTAssertTrue(query?.excludedAnimalIDs.contains(existing.id) == true)
     }
 
-    func testCollectCandidateLaterPageFailureDoesNotProducePartialListAndRetries() async throws {
+    func testCollectSnapshotHydrationFailureDoesNotProducePartialListAndRetries() async throws {
         let pastureID = UUID()
         let candidates = (0..<507).map {
             makeAnimalSummary(
@@ -82,7 +82,7 @@ final class WorkingCollectAnimalsEligibilityTests: XCTestCase {
                 for: session,
                 using: reader
             )
-            XCTFail("Expected a failure on the second page.")
+            XCTFail("Expected a failed internal snapshot hydration batch.")
         } catch {
             XCTAssertTrue(error is WorkingCollectReferenceReadFailure)
         }
@@ -240,6 +240,45 @@ private actor WorkingCollectReferenceReader: AnimalReferenceQueryReading {
             animals: selected,
             hasMore: page.offset + selected.count < candidates.count
         )
+    }
+
+    // The test double owns one immutable cohort for the complete request.
+    // Simulated internal hydration batches may fail, but no partial cohort escapes.
+    func fetchAnimalReferenceSnapshot(
+        matching query: AnimalReferenceQuery
+    ) async throws -> [AnimalSummary] {
+        mostRecentQuery = query
+        offsets = []
+        guard case .pasture(let sourcePastureID) = query.pastureScope,
+              query.location == .pasture else {
+            throw WorkingCollectReferenceReadFailure.failed
+        }
+        let excludedIDs = Set(query.excludedAnimalIDs)
+        let candidates = animals
+            .filter {
+                $0.pastureID == sourcePastureID
+                    && $0.location == .pasture
+                    && $0.status == .active
+                    && !$0.isArchived
+                    && !excludedIDs.contains($0.id)
+            }
+            .sorted {
+                $0.displayTagNumber.localizedStandardCompare($1.displayTagNumber)
+                    == .orderedAscending
+            }
+        var results: [AnimalSummary] = []
+        for offset in stride(
+            from: 0,
+            to: max(1, candidates.count),
+            by: ReadPageRequest.maximumLimit
+        ) {
+            offsets.append(offset)
+            if failingOffset == offset {
+                throw WorkingCollectReferenceReadFailure.failed
+            }
+            results.append(contentsOf: candidates.dropFirst(offset).prefix(ReadPageRequest.maximumLimit))
+        }
+        return results
     }
 
     func containsAnimal(id: UUID) async throws -> Bool {
