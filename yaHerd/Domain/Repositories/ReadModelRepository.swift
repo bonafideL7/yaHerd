@@ -158,6 +158,13 @@ protocol AnimalListFilteredQueryReading: Sendable {
 }
 
 protocol AnimalReferenceQueryReading: Sendable {
+    /// Returns one complete, internally consistent candidate cohort. A storage
+    /// implementation must not concatenate pages obtained from different
+    /// read generations, even when it hydrates large results in batches.
+    func fetchAnimalReferenceSnapshot(
+        matching query: AnimalReferenceQuery
+    ) async throws -> [AnimalSummary]
+
     func fetchAnimalReferencePage(
         matching query: AnimalReferenceQuery,
         page: ReadPageRequest
