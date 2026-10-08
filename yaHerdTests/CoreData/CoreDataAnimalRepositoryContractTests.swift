@@ -114,6 +114,9 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             makeReferenceQueryReader: {
                 environment.makeAnimalListQueryReader()
             },
+            makeAnimalListSnapshotReader: {
+                environment.makeAnimalListQueryReader()
+            },
             assignWorkingOwnership: { animalID in
                 try environment.assignWorkingOwnership(animalID: animalID)
             }
