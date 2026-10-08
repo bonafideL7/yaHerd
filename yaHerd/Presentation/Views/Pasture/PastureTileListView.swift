@@ -3,8 +3,7 @@ import SwiftUI
 struct PastureTileListView: View {
     @Environment(\.pastureFeatureDependencies) private var pastureDependencies
     private var repository: any PastureListRepository { pastureDependencies.listRepository }
-    private var animalMover: any AnimalPastureMoving { pastureDependencies.animalMover }
-    private var fieldCheckArchiveWriter: any FieldCheckPastureArchiveWriter { pastureDependencies.fieldCheckArchiveWriter }
+    private var deletionCommand: any PastureDeletionPerforming { pastureDependencies.deletionCommand }
     @Environment(\.appDataAccessMode) private var dataAccessMode
 
     @State private var model = PastureTileListViewModel()
@@ -88,6 +87,7 @@ struct PastureTileListView: View {
                 )
             }
         }
+        .disabled(model.isDeletingPastures)
         .navigationDestination(item: $model.selectedPasture) { pasture in
             PastureDetailView(pastureID: pasture.id)
         }
@@ -101,6 +101,7 @@ struct PastureTileListView: View {
                     onOpenWorkSessions: onOpenWorkSessions,
                     onOpenSettings: onOpenSettings
                 )
+                .disabled(model.isDeletingPastures)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -109,7 +110,7 @@ struct PastureTileListView: View {
                 .allowsHitTesting(false)
         }
         .overlay(alignment: .bottomTrailing) {
-            if dataAccessMode.allowsDataMutations && !isManaging {
+            if dataAccessMode.allowsDataMutations && !isManaging && !model.isDeletingPastures {
                 PastureAddButton(onAddPasture: model.requestAddPasture)
                     .padding(.trailing, 24)
                     .padding(.bottom, 24)
@@ -130,9 +131,8 @@ struct PastureTileListView: View {
                     Task { @MainActor in
                         await model.deletePasture(
                             id: pasture.id,
-                            pastureRepository: repository,
-                            animalRepository: animalMover,
-                            fieldCheckRepository: fieldCheckArchiveWriter
+                            deletionCommand: deletionCommand,
+                            orderingRepository: repository
                         )
                     }
                 }
