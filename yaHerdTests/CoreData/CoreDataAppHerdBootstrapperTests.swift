@@ -148,6 +148,82 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     }
 
     @MainActor
+    func testAppCutoverReopensDurableCoreDataHerdAndPastures() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let first = try await CoreDataAppPersistenceAssembly.load(
+            at: harness.storeURL
+        )
+        let firstDependencies = first.makeDependencies(dataAccessMode: .readWrite)
+        let originalHerdID = try firstDependencies.herdRepository.fetchCurrentHerd().id
+        let pasture = try firstDependencies.pastureFeatureDependencies.createRepository.create(
+            input: PastureInput(
+                name: "Durable Cutover Pasture",
+                acreage: 30,
+                usableAcreage: 28,
+                targetAcresPerHead: 2
+            )
+        )
+        XCTAssertTrue(FileManager.default.fileExists(atPath: harness.storeURL.path))
+
+        let reopened = try await CoreDataAppPersistenceAssembly.load(
+            at: harness.storeURL
+        )
+        let reloadedDependencies = reopened.makeDependencies(dataAccessMode: .readWrite)
+        XCTAssertEqual(
+            try reloadedDependencies.herdRepository.fetchCurrentHerd().id,
+            originalHerdID
+        )
+        XCTAssertEqual(
+            try reloadedDependencies.pastureFeatureDependencies.listRepository
+                .fetchPastures().map(\\.id),
+            [pasture.id]
+        )
+        let dashboard = try await reloadedDependencies.homeFeatureDependencies
+            .dashboardQueryReader.fetchDashboardPastureRecords()
+        XCTAssertTrue(dashboard.contains { $0.id == pasture.id })
+        XCTAssertEqual(reloadedDependencies.applicationMutationCenter.currentSequence, 0)
+    }
+
+    @MainActor
+    func testAppCutoverRecoveryUsesOnlyInMemoryCoreDataWithReadOnlyPolicy() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let recovery = try await CoreDataAppPersistenceAssembly.inMemoryRecovery()
+        let dependencies = recovery.makeDependencies(dataAccessMode: .recoveryReadOnly)
+
+        XCTAssertNotNil(try dependencies.herdRepository.fetchCurrentHerd().id)
+        XCTAssertNil(dependencies.animalFeatureDependencies.sampleDataSeeder)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.storeURL.path))
+
+        XCTAssertThrowsError(
+            try dependencies.pastureFeatureDependencies.createRepository.create(
+                input: PastureInput(
+                    name: "Blocked Recovery Pasture",
+                    acreage: nil,
+                    usableAcreage: nil,
+                    targetAcresPerHead: nil
+                )
+            )
+        ) { error in
+            XCTAssertTrue(error is LocalDataWritePolicy.WriteError)
+        }
+
+        do {
+            try await dependencies.pastureFeatureDependencies.deletionCommand
+                .deletePastures(ids: [UUID()], archivedAt: .now)
+            XCTFail("Expected in-memory recovery deletion to be rejected.")
+        } catch {
+            XCTAssertTrue(error is LocalDataWritePolicy.WriteError)
+        }
+
+        XCTAssertTrue(
+            try dependencies.pastureFeatureDependencies.listRepository
+                .fetchPastures().isEmpty
+        )
+        XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: harness.storeURL.path))
+    }
+
+    @MainActor
     func testAppCurrentHerdSelectionExposesOnlyTheSelectedApplicationID() {
         let firstID = UUID()
         let secondID = UUID()
