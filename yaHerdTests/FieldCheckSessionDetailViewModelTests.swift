@@ -565,7 +565,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
     ) -> AnimalSummary {
         AnimalSummary(
             id: id,
-            name: "Tracked \\(tag)",
+            name: "Tracked \(tag)",
             displayTagNumber: tag,
             displayTagColorID: nil,
             damDisplayTagNumber: nil,
