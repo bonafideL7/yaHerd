@@ -13,11 +13,13 @@ struct NewWorkingSessionView: View {
 
     private var repository: any NewWorkingSessionRepository { workingDependencies.newSessionRepository }
     private var pastureRepository: any PastureReferenceDataReader { workingDependencies.pastureReferenceReader }
-    private var animalSummaryReader: any AnimalSummaryReading { workingDependencies.animalSummaryReader }
+    private var animalReferenceQueryReader: (any AnimalReferenceQueryReading)? {
+        workingDependencies.animalReferenceQueryReader
+    }
 
     @StateObject private var viewModel = NewWorkingSessionViewModel(
         pastureRepository: EmptyPastureRepository(),
-        animalSummaryReader: EmptyAnimalRepository(),
+        animalReferenceQueryReader: nil,
         workingRepository: EmptyWorkingRepository()
     )
 
@@ -62,6 +64,8 @@ struct NewWorkingSessionView: View {
 
     private var canStart: Bool {
         !isStarting
+            && viewModel.loadedPastureID == selectedPastureID
+            && !viewModel.isLoadingAnimals
             && dataAccessMode.allowsDataMutations
             && selectedPasture != nil
             && includedAnimalCount > 0
@@ -82,6 +86,12 @@ struct NewWorkingSessionView: View {
         }
         if selectedPasture == nil {
             return "Select a pasture to start."
+        }
+        if viewModel.isLoadingAnimals {
+            return "Loading eligible animals…"
+        }
+        if viewModel.loadedPastureID != selectedPastureID {
+            return "Eligible animals could not be loaded. Reopen Working setup to retry."
         }
         if eligibleAnimals.isEmpty {
             return "The selected pasture has no active animals available to work."
@@ -110,17 +120,26 @@ struct NewWorkingSessionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isStarting)
         .interactiveDismissDisabled(isStarting)
-        .task {
+        .task(id: selectedPastureID) {
             viewModel.configure(
                 pastureRepository: pastureRepository,
-                animalSummaryReader: animalSummaryReader,
+                animalReferenceQueryReader: animalReferenceQueryReader,
                 workingRepository: repository
             )
-            if !viewModel.hasLoaded { viewModel.load() }
-            seedSuggestedPastureIfNeeded()
-            resetAnimalSelection()
+            if !viewModel.hasLoaded {
+                viewModel.load()
+                seedSuggestedPastureIfNeeded()
+            }
+            let pastureID = selectedPastureID
+            await viewModel.loadEligibleAnimals(pastureID: pastureID)
+            if !Task.isCancelled && viewModel.loadedPastureID == pastureID {
+                resetAnimalSelection()
+            }
         }
-        .onChange(of: selectedPastureID) { _, _ in resetAnimalSelection() }
+        .onChange(of: selectedPastureID) { _, newPastureID in
+            viewModel.clearCandidates(for: newPastureID)
+            selectedAnimalIDs = []
+        }
         .sheet(isPresented: $showingAnimalPicker) {
             WorkingSessionAnimalSelectionView(animals: eligibleAnimals, selection: $selectedAnimalIDs)
         }
@@ -268,8 +287,7 @@ struct NewWorkingSessionView: View {
     }
 
     private func startSession() {
-        guard !isStarting,
-              dataAccessMode.allowsDataMutations,
+        guard canStart,
               let pastureID = selectedPastureID else {
             return
         }
