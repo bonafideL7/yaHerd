@@ -149,6 +149,7 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
             fieldCheckFeatureDependencies: FieldCheckFeatureDependencies(
                 repository: fieldCheckRepository,
                 animalRepository: animalRepository,
+                animalReferenceQueryReader: animalListQueryReader,
                 pastureReferenceReader: pastureRepository,
                 mutationStream: mutationCenter
             ),
