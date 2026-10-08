@@ -125,6 +125,8 @@ struct WorkingSessionAnimalWorkView: View {
         }
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(isMutatingWork)
+        .interactiveDismissDisabled(isMutatingWork)
         .toolbar {
             if snapshot != nil && !isSessionLocked {
                 workToolbar
