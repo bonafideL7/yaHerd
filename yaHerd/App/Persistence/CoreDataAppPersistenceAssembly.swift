@@ -63,8 +63,9 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
 
         // Give each independently awaited production query its own actor/executor.
         // All actors resolve the same selected Herd and the same Core Data store.
+        let selectedHerdSelection = selection
         let selectedHerdID: @MainActor @Sendable () -> UUID? = {
-            [selection] in selection.currentHerdID
+            selectedHerdSelection.currentHerdID
         }
         let dashboardQueryReader = CoreDataReadModelActor(
             assembly: assembly,
