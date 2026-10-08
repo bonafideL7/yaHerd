@@ -6,7 +6,7 @@ import XCTest
 @MainActor
 enum TestSupport {
     static func makeSchema() -> Schema {
-        yaHerdApp.makeSchema()
+        ModelContainerFactory.schema
     }
 
     static func makeModelContainer() throws -> ModelContainer {
