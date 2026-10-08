@@ -46,6 +46,9 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         marker.markPastureGrazedToday(id: grazed.id, on: grazingDate)
 
         XCTAssertEqual(mutationCenter.currentSequence, priorSequence + 1)
+        XCTAssertEqual(mutationCenter.homeRevision, 1)
+        XCTAssertEqual(mutationCenter.pastureRevision, 1)
+        XCTAssertEqual(mutationCenter.revision(for: .dashboard), 1)
         XCTAssertEqual(
             try pastures.fetchPastureDetail(id: grazed.id)?.lastGrazedDate,
             grazingDate
