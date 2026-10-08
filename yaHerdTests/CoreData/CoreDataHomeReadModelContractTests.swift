@@ -31,8 +31,7 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             pastures.fetchPastureDetail(id: control.id)
         )
         let readModel = CoreDataReadModelActor(
-            contextFactory: environment.assembly.contextFactory,
-            lookup: environment.assembly.lookup,
+            assembly: environment.assembly,
             currentHerdID: { environment.selection.currentHerdID }
         )
         let grazingDate = Date(timeIntervalSinceReferenceDate: 700_000)
@@ -240,15 +239,13 @@ private final class CoreDataHomeReadModelContractEnvironment {
             },
             makeHomeFieldCheckQueryReader: {
                 CoreDataReadModelActor(
-                    contextFactory: self.assembly.contextFactory,
-                    lookup: self.assembly.lookup,
+                    assembly: self.assembly,
                     currentHerdID: { self.selection.currentHerdID }
                 )
             },
             makeHomeWorkingQueryReader: {
                 CoreDataReadModelActor(
-                    contextFactory: self.assembly.contextFactory,
-                    lookup: self.assembly.lookup,
+                    assembly: self.assembly,
                     currentHerdID: { self.selection.currentHerdID }
                 )
             }
