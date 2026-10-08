@@ -389,7 +389,7 @@ private final class CoreDataWorkingContractEnvironment {
                 )
             },
             replacePrimaryTagFailingAfterMutationStaged: { sessionID, queueItemID, input in
-                try await self.makeCoreWorkingRepository().replacePrimaryTag(
+                _ = try await self.makeCoreWorkingRepository().replacePrimaryTag(
                     forQueueItemID: queueItemID,
                     inSessionID: sessionID,
                     input: input,
@@ -829,13 +829,6 @@ private final class CoreDataWorkingContractAdapter: WorkingContractRepository {
             inSessionID: sessionID,
             input: input
         )
-        guard let editor = try working.fetchQueueItemEditor(
-            sessionID: sessionID,
-            queueItemID: queueItemID
-        ) else {
-            throw WorkingRepositoryError.queueItemNotFound
-        }
-        return editor
     }
 
     func deleteWorkData(
