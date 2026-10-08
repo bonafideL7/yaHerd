@@ -280,7 +280,6 @@ enum WorkingCollectAnimalsEligibility {
 private enum WorkingCollectCandidateError: LocalizedError {
     case missingSession
     case queryUnavailable
-    case incompletePage
     case staleSession
 
     var errorDescription: String? {
@@ -289,8 +288,6 @@ private enum WorkingCollectCandidateError: LocalizedError {
             "The Working session could not be found. Close this picker and reopen the session."
         case .queryUnavailable:
             "The Core Data animal lookup is unavailable. Close the picker and retry."
-        case .incompletePage:
-            "The eligible animal list could not be loaded completely. Retry before collecting."
         case .staleSession:
             "The Working session changed while this picker was open. Refresh the session and choose the animals again."
         }
