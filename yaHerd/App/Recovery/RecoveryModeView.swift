@@ -115,7 +115,9 @@ struct RecoveryModeView: View {
         .foregroundStyle(.secondary)
 
         Button {
-          Task { await controller.checkPersistentStoreReadOnly() }
+          Task { @MainActor in
+            await controller.checkPersistentStoreReadOnly()
+          }
         } label: {
           if controller.isCheckingPersistentStore {
             Label("Checking Persistent Store…", systemImage: "hourglass")
