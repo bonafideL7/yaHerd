@@ -44,6 +44,7 @@ struct AnimalParentOptionQueryContractFixture {
 struct AnimalReferenceQueryContractFixture {
     let animalFixture: AnimalRepositoryContractFixture
     let makeReferenceQueryReader: () -> any AnimalReferenceQueryReading
+    let makeAnimalListSnapshotReader: () -> any AnimalListSnapshotReading
 
     /// Setup-only control used to move one active Animal into the Working Pen while preserving
     /// the same isolated backing store used by the reference-query reader.
@@ -2729,6 +2730,43 @@ extension AnimalRepositoryContract {
         XCTAssertEqual(
             multiBatchSnapshot.last?.name,
             "Snapshot Chunk 259",
+            file: file,
+            line: line
+        )
+
+        // This same persisted cohort also crosses the production Animal-list
+        // 250-record hydration boundary. Unlike active-only reference snapshots,
+        // the full list must also include archived and removed-status Animals.
+        let listReader = fixture.makeAnimalListSnapshotReader()
+        let completeRoster = try await listReader.fetchAnimalSummarySnapshot()
+        let expectedRoster = expectedAnimalListQueryOrder(
+            try repository.fetchAnimals(),
+            sortOrder: .tagAscending
+        )
+        XCTAssertGreaterThan(completeRoster.count, 250, file: file, line: line)
+        XCTAssertEqual(
+            completeRoster,
+            expectedRoster,
+            "The full list must preserve all status/archive/location metadata and exact natural ordering over internal hydration chunks.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            Set(completeRoster.map(\.id)).count,
+            completeRoster.count,
+            "No Animal application UUID may be repeated or skipped across hydration chunks.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            completeRoster.contains(where: { $0.id == northArchived.id && $0.isArchived }),
+            "Archived Animals remain in the complete list for presentation filtering.",
+            file: file,
+            line: line
+        )
+        XCTAssertTrue(
+            completeRoster.contains(where: { $0.id == northDead.id && $0.status == .dead }),
+            "Non-active Animals remain in the full roster.",
             file: file,
             line: line
         )
