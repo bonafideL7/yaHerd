@@ -234,7 +234,7 @@ final class PastureTileListViewModelTests: XCTestCase {
             orderingRepository: ordering
         )
         await viewModel.deletePastures(
-            at: [],
+            at: IndexSet(),
             deletionCommand: deletion,
             orderingRepository: ordering
         )
