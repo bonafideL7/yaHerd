@@ -9,7 +9,7 @@ import Foundation
 
 @MainActor
 final class RecoveryModeController: ObservableObject {
-  enum RepairResult: Equatable {
+  enum StoreCheckResult: Equatable {
     case succeeded(String)
     case failed(String)
   }
@@ -18,10 +18,10 @@ final class RecoveryModeController: ObservableObject {
 
   @Published var isPresentingCenter = false
   @Published private(set) var isPreparingExport = false
-  @Published private(set) var isAttemptingRepair = false
+  @Published private(set) var isCheckingPersistentStore = false
   @Published private(set) var exportDocument: RecoveryArchiveDocument?
   @Published private(set) var exportErrorMessage: String?
-  @Published private(set) var repairResult: RepairResult?
+  @Published private(set) var storeCheckResult: StoreCheckResult?
   @Published private(set) var diagnostics = RecoveryStorageDiagnostics.empty
 
   private let fileManager: FileManager
@@ -88,11 +88,11 @@ final class RecoveryModeController: ObservableObject {
 
   /// A non-mutating probe of the existing Core Data store. This never runs a
   /// schema migration, opens a writable store, or changes this recovery session.
-  func attemptPersistentStoreRepair() async {
-    guard !isAttemptingRepair else { return }
-    isAttemptingRepair = true
-    repairResult = nil
-    defer { isAttemptingRepair = false }
+  func checkPersistentStoreReadOnly() async {
+    guard !isCheckingPersistentStore else { return }
+    isCheckingPersistentStore = true
+    storeCheckResult = nil
+    defer { isCheckingPersistentStore = false }
 
     do {
       let storeURL = try CoreDataPersistentContainer.defaultStoreURL()
@@ -108,11 +108,11 @@ final class RecoveryModeController: ObservableObject {
           entityName: CDHerd.coreDataEntityName
         ))
       }
-      repairResult = .succeeded(
+      storeCheckResult = .succeeded(
         "The persistent Core Data store opened read-only. No repair, migration, or write was performed. Recovery mode stays read-only for this launch. Restart yaHerd to retry normal storage."
       )
     } catch {
-      repairResult = .failed(
+      storeCheckResult = .failed(
         "The persistent Core Data store still could not be opened read-only: \(UserVisibleErrorMessage.make(error))"
       )
     }
@@ -151,7 +151,7 @@ final class RecoveryModeController: ObservableObject {
     ]
 
     for file in storeFiles {
-      guard let data = try? Data(contentsOf: file.url, options: [.mappedIfSafe]) else { continue }
+      let data = try Data(contentsOf: file.url, options: [.mappedIfSafe])
       entries.append(
         RecoveryArchiveEntry(
           path: "Storage/\(file.archiveName)",
