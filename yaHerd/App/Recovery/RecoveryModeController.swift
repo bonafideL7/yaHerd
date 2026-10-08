@@ -138,7 +138,7 @@ final class RecoveryModeController: ObservableObject {
 
       Contents:
       - RecoveryDiagnostics.json: launch, build, and local store file inventory details.
-      - Storage/: copies of the discoverable local Core Data SQLite file and its journal sidecars.
+      - Storage/: copies of discoverable Core Data SQLite and journal files, plus identified legacy files preserved for backup (without migration).
 
       Keep this archive private. Store files may contain herd and animal records.
       """
@@ -231,7 +231,7 @@ final class RecoveryModeController: ObservableObject {
       return []
     }
 
-    return files.compactMap { url -> RecoverableStoreFile? in
+    let coreDataFiles = files.compactMap { url -> RecoverableStoreFile? in
       guard allowedNames.contains(url.lastPathComponent),
             let values = try? url.resourceValues(forKeys: keys),
             values.isRegularFile == true else {
@@ -244,7 +244,27 @@ final class RecoveryModeController: ObservableObject {
         modifiedAt: values.contentModificationDate ?? .distantPast
       )
     }
-    .sorted { $0.archiveName < $1.archiveName }
+
+    // A fresh Core Data launch is blocked when older local store files exist.
+    // Make those original files exportable without opening or migrating them.
+    let legacyFiles = CoreDataLegacyStorePreflight.legacyArtifacts(
+      in: appSupportURL,
+      fileManager: fileManager
+    ).map { url -> RecoverableStoreFile in
+      let values = try? url.resourceValues(forKeys: keys)
+      let sourceFolder = url.deletingLastPathComponent().lastPathComponent == "yaHerd"
+        ? "LegacyYaHerd"
+        : "LegacyAppSupport"
+      return RecoverableStoreFile(
+        url: url,
+        archiveName: "\(sourceFolder)/\(url.lastPathComponent)",
+        byteCount: values?.fileSize ?? 0,
+        modifiedAt: values?.contentModificationDate ?? .distantPast
+      )
+    }
+
+    return (coreDataFiles + legacyFiles)
+      .sorted { $0.archiveName < $1.archiveName }
   }
 }
 
