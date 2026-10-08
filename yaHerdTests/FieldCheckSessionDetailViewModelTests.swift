@@ -448,10 +448,10 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         )
     }
 
-    func testTrackedPickerUsesCompletePastureScopedCohortAndExcludesChecks() async {
+    func testTrackedPickerUsesCompletePastureScopedCohortAndExcludesChecks() async throws {
         let session = makeDetail(sessionID: UUID(), quickCowCount: 0)
-        let destinationID = try! XCTUnwrap(session.pastureID)
-        let checkedID = try! XCTUnwrap(session.animalChecks.first?.animalID)
+        let destinationID = try XCTUnwrap(session.pastureID)
+        let checkedID = try XCTUnwrap(session.animalChecks.first?.animalID)
         let sourceAnimals = (0..<505).map { index in
             makeTrackedCandidate(
                 tag: String(format: "FC%04d", index),
@@ -474,8 +474,8 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         XCTAssertNil(model.loadErrorMessage)
         XCTAssertEqual(model.eligibleAnimals(
             forPastureID: destinationID,
-            excluding: Set(session.animalChecks.compactMap(\\.animalID))
-        ).map(\\.id), sourceAnimals.map(\\.id))
+            excluding: Set(session.animalChecks.compactMap(\.animalID))
+        ).map(\.id), sourceAnimals.map(\.id))
         let query = await reader.lastQuery()
         XCTAssertEqual(query?.pastureScope, .notPasture(destinationID))
         XCTAssertEqual(query?.location, .any)
@@ -490,7 +490,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         let reader = FieldCheckTrackedCandidateQuerySpy(animals: [candidate])
         let model = FieldCheckTrackedAnimalPickerViewModel()
         await model.load(for: session, using: reader)
-        XCTAssertEqual(model.animals.map(\\.id), [candidate.id])
+        XCTAssertEqual(model.animals.map(\.id), [candidate.id])
 
         await reader.setFailure(true)
         await model.load(for: session, using: reader)
@@ -503,7 +503,7 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         await model.load(for: session, using: reader)
         XCTAssertTrue(model.hasLoaded)
         XCTAssertNil(model.loadErrorMessage)
-        XCTAssertEqual(model.animals.map(\\.id), [candidate.id])
+        XCTAssertEqual(model.animals.map(\.id), [candidate.id])
     }
 
     func testTrackedPickerRejectsArchivedPastureWithoutQuery() async {
@@ -551,10 +551,10 @@ final class FieldCheckSessionDetailViewModelTests: XCTestCase {
         }
         await reader.waitUntilPaused()
         await model.load(for: session, using: reader)
-        XCTAssertEqual(model.animals.map(\\.id), [candidate.id])
+        XCTAssertEqual(model.animals.map(\.id), [candidate.id])
         await reader.releasePaused()
         await old.value
-        XCTAssertEqual(model.animals.map(\\.id), [candidate.id])
+        XCTAssertEqual(model.animals.map(\.id), [candidate.id])
         XCTAssertTrue(model.hasLoaded)
     }
 
