@@ -4,8 +4,8 @@
 //
 
 import Combine
+@preconcurrency import CoreData
 import Foundation
-import SwiftData
 
 @MainActor
 final class RecoveryModeController: ObservableObject {
@@ -17,7 +17,6 @@ final class RecoveryModeController: ObservableObject {
   let context: RecoveryModeContext
 
   @Published var isPresentingCenter = false
-  @Published var hasAcknowledgedRepairRisk = false
   @Published private(set) var isPreparingExport = false
   @Published private(set) var isAttemptingRepair = false
   @Published private(set) var exportDocument: RecoveryArchiveDocument?
@@ -87,25 +86,36 @@ final class RecoveryModeController: ObservableObject {
     )
   }
 
-  func attemptPersistentStoreRepair() {
-    guard hasAcknowledgedRepairRisk, !isAttemptingRepair else { return }
-
+  /// A non-mutating probe of the existing Core Data store. This never runs a
+  /// schema migration, opens a writable store, or changes this recovery session.
+  func attemptPersistentStoreRepair() async {
+    guard !isAttemptingRepair else { return }
     isAttemptingRepair = true
     repairResult = nil
+    defer { isAttemptingRepair = false }
 
     do {
-      let container = try ModelContainerFactory.makeContainer()
-      _ = try container.mainContext.fetchCount(FetchDescriptor<Herd>())
+      let storeURL = try CoreDataPersistentContainer.defaultStoreURL()
+      let assembly = try await CoreDataPersistenceAssembly.load(
+        storeURL: storeURL,
+        accessMode: .readOnly
+      )
+      // Reading the current store verifies that this is a usable Core Data
+      // graph rather than merely an openable empty SQLite file.
+      let context = assembly.contextFactory.makeReadContext()
+      _ = try context.performAndWait {
+        try context.count(for: NSFetchRequest<CDHerd>(
+          entityName: CDHerd.coreDataEntityName
+        ))
+      }
       repairResult = .succeeded(
-        "The persistent store opened successfully using the production migration plan. Recovery mode remains read-only for this launch. Force quit and reopen yaHerd to return to normal storage."
+        "The persistent Core Data store opened read-only. No repair, migration, or write was performed. Recovery mode stays read-only for this launch. Restart yaHerd to retry normal storage."
       )
     } catch {
       repairResult = .failed(
-        "The persistent store still could not be opened: \(UserVisibleErrorMessage.make(error))"
+        "The persistent Core Data store still could not be opened read-only: \(UserVisibleErrorMessage.make(error))"
       )
     }
-
-    isAttemptingRepair = false
   }
 
   private func makeRecoveryArchiveEntries() throws -> [RecoveryArchiveEntry] {
@@ -122,7 +132,7 @@ final class RecoveryModeController: ObservableObject {
 
       Contents:
       - RecoveryDiagnostics.json: launch, build, and local store file inventory details.
-      - Storage/: copies of discoverable yaHerd SwiftData store files.
+      - Storage/: copies of the discoverable local Core Data SQLite file and its journal sidecars.
 
       Keep this archive private. Store files may contain herd and animal records.
       """
@@ -186,59 +196,49 @@ final class RecoveryModeController: ObservableObject {
   }
 
   private func recoverableStoreFiles() -> [RecoverableStoreFile] {
-    guard
-      let applicationSupportURL = fileManager.urls(
-        for: .applicationSupportDirectory,
-        in: .userDomainMask
-      ).first
-    else {
+    guard let appSupportURL = fileManager.urls(
+      for: .applicationSupportDirectory,
+      in: .userDomainMask
+    ).first else {
       return []
     }
 
-    let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
-    guard
-      let enumerator = fileManager.enumerator(
-        at: applicationSupportURL,
-        includingPropertiesForKeys: keys,
-        options: [.skipsHiddenFiles]
-      )
-    else {
+    // This path mirrors CoreDataPersistentContainer.defaultStoreURL without
+    // creating a directory merely to prepare diagnostics.
+    let directory = appSupportURL.appendingPathComponent("yaHerd", isDirectory: true)
+    let storeName = CoreDataPersistentContainer.storeFileName
+    let allowedNames: Set<String> = [
+      storeName,
+      storeName + "-wal",
+      storeName + "-shm"
+    ]
+    let keys: Set<URLResourceKey> = [
+      .isRegularFileKey,
+      .fileSizeKey,
+      .contentModificationDateKey
+    ]
+    guard let files = try? fileManager.contentsOfDirectory(
+      at: directory,
+      includingPropertiesForKeys: Array(keys),
+      options: [.skipsHiddenFiles]
+    ) else {
       return []
     }
 
-    var results: [RecoverableStoreFile] = []
-
-    for case let url as URL in enumerator {
-      guard let values = try? url.resourceValues(forKeys: Set(keys)),
-        values.isRegularFile == true,
-        shouldIncludeStoreFile(url)
-      else {
-        continue
+    return files.compactMap { url -> RecoverableStoreFile? in
+      guard allowedNames.contains(url.lastPathComponent),
+            let values = try? url.resourceValues(forKeys: keys),
+            values.isRegularFile == true else {
+        return nil
       }
-
-      let relativePath = url.path.replacingOccurrences(
-        of: applicationSupportURL.path + "/",
-        with: ""
-      )
-      results.append(
-        RecoverableStoreFile(
-          url: url,
-          archiveName: relativePath.replacingOccurrences(of: "/", with: "_"),
-          byteCount: values.fileSize ?? 0,
-          modifiedAt: values.contentModificationDate ?? .distantPast
-        )
+      return RecoverableStoreFile(
+        url: url,
+        archiveName: url.lastPathComponent,
+        byteCount: values.fileSize ?? 0,
+        modifiedAt: values.contentModificationDate ?? .distantPast
       )
     }
-
-    return results.sorted { $0.archiveName < $1.archiveName }
-  }
-
-  private func shouldIncludeStoreFile(_ url: URL) -> Bool {
-    let name = url.lastPathComponent.lowercased()
-    let configuredName = ModelContainerFactory.storeName.lowercased()
-    return name.contains(configuredName)
-      || name == "default.store"
-      || name.hasPrefix("default.store-")
+    .sorted { $0.archiveName < $1.archiveName }
   }
 }
 
