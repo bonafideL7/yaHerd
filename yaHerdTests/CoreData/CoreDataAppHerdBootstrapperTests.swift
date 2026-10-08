@@ -300,7 +300,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
 
         // A rollback journal without its legacy main file still blocks first open.
         XCTAssertThrowsError(try CoreDataLegacyStorePreflight.ensureSafeFirstOpen(at: store, fileManager: manager)) { error in
-            guard case .legacyStoreFound(let files) = error as? CoreDataLegacyStorePreflightError else {
+            guard let preflightError = error as? CoreDataLegacyStorePreflightError,
+                  case .legacyStoreFound(let files) = preflightError else {
                 XCTFail("Expected orphaned legacy rollback journal protection.")
                 return
             }
@@ -315,7 +316,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let coreDataBytes = Data("core data rollback".utf8)
         try coreDataBytes.write(to: coreDataJournal)
         XCTAssertThrowsError(try CoreDataLegacyStorePreflight.ensureSafeFirstOpen(at: store, fileManager: manager)) { error in
-            guard case .orphanedCoreDataSidecars(let files) = error as? CoreDataLegacyStorePreflightError else {
+            guard let preflightError = error as? CoreDataLegacyStorePreflightError,
+                  case .orphanedCoreDataSidecars(let files) = preflightError else {
                 XCTFail("Expected orphaned Core Data rollback journal protection.")
                 return
             }
