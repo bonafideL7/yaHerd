@@ -91,6 +91,30 @@ final class AnimalListViewModelReloadTests: XCTestCase {
             records.map(\.id),
             "An incomplete/failed reload must not replace the last complete Animal list."
         )
+
+        // Explicit reloads (such as add-sheet dismissal, inline creation and
+        // sample-data seeding) use this same load entry point. A successful
+        // retry must still fetch a complete snapshot, never independent pages.
+        await snapshotReader.setFailure(false)
+        model.load(
+            using: repository,
+            pastureRepository: pastureRepository,
+            snapshotReader: snapshotReader
+        )
+        for _ in 0..<100 {
+            if model.errorMessage == nil { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(model.items.map(\.id), records.map(\.id))
+        let requestCount = await snapshotReader.callCount()
+        XCTAssertEqual(requestCount, 3)
+        let independentPageRequests = await pageReader.currentRequestCount()
+        XCTAssertEqual(
+            independentPageRequests,
+            0,
+            "Repeated direct reloads must not regress to independently pinned pages."
+        )
     }
 
     func testHardDeleteRemovesAnimalFromCurrentList() async {
