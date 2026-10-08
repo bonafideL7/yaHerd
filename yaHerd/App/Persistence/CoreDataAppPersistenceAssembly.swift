@@ -15,6 +15,7 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
 
     /// Production launch keeps one durable store and one selected Herd for all features.
     static func load(at storeURL: URL) async throws -> CoreDataAppPersistenceAssembly {
+        try CoreDataLegacyStorePreflight.ensureSafeFirstOpen(at: storeURL)
         let assembly = try await CoreDataPersistenceAssembly.load(storeURL: storeURL)
         let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
             assembly: assembly
