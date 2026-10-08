@@ -58,6 +58,96 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     }
 
     @MainActor
+    func testCoreDataAppGraphSharesHerdStoreMutationsAndReadProjections() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: assembly
+        )
+        let graph = CoreDataAppPersistenceAssembly(
+            assembly: assembly,
+            currentHerdID: herdID
+        ).makeDependencies(dataAccessMode: .readWrite)
+
+        XCTAssertEqual(try graph.herdRepository.fetchCurrentHerd().id, herdID)
+        XCTAssertNil(graph.animalFeatureDependencies.sampleDataSeeder)
+
+        let pasture = try graph.pastureFeatureDependencies.createRepository.create(
+            input: PastureInput(
+                name: "App Graph Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 2
+            )
+        )
+        XCTAssertEqual(
+            try graph.pastureFeatureDependencies.listRepository.fetchPastures().map(\.id),
+            [pasture.id]
+        )
+        let dashboardAfterCreate = try await graph.homeFeatureDependencies
+            .dashboardQueryReader.fetchDashboardPastureRecords()
+        XCTAssertTrue(dashboardAfterCreate.contains { $0.id == pasture.id })
+        XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 1)
+
+        try await graph.pastureFeatureDependencies.deletionCommand.deletePastures(
+            ids: [pasture.id],
+            archivedAt: Date(timeIntervalSinceReferenceDate: 800_000)
+        )
+        XCTAssertNil(
+            try graph.pastureFeatureDependencies.detailRepository.fetchPastureDetail(
+                id: pasture.id
+            )
+        )
+        let dashboardAfterDelete = try await graph.homeFeatureDependencies
+            .dashboardQueryReader.fetchDashboardPastureRecords()
+        XCTAssertFalse(dashboardAfterDelete.contains { $0.id == pasture.id })
+        XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 2)
+        XCTAssertEqual(graph.applicationMutationCenter.animalRevision, 2)
+        XCTAssertEqual(graph.applicationMutationCenter.pastureRevision, 2)
+        XCTAssertEqual(graph.applicationMutationCenter.fieldCheckRevision, 2)
+    }
+
+    @MainActor
+    func testCoreDataAppGraphRecoveryBlocksMutationsWithoutUsingAnotherStore() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: assembly
+        )
+        let graph = CoreDataAppPersistenceAssembly(
+            assembly: assembly,
+            currentHerdID: herdID
+        ).makeDependencies(dataAccessMode: .recoveryReadOnly)
+
+        XCTAssertEqual(try graph.herdRepository.fetchCurrentHerd().id, herdID)
+        XCTAssertThrowsError(
+            try graph.pastureFeatureDependencies.createRepository.create(
+                input: PastureInput(
+                    name: "Blocked Pasture",
+                    acreage: nil,
+                    usableAcreage: nil,
+                    targetAcresPerHead: nil
+                )
+            )
+        ) { error in
+            XCTAssertTrue(error is LocalDataWritePolicy.WriteError)
+        }
+
+        do {
+            try await graph.pastureFeatureDependencies.deletionCommand.deletePastures(
+                ids: [UUID()],
+                archivedAt: Date()
+            )
+            XCTFail("Expected the recovery policy to reject deletion.")
+        } catch {
+            XCTAssertTrue(error is LocalDataWritePolicy.WriteError)
+        }
+
+        XCTAssertTrue(
+            try graph.pastureFeatureDependencies.listRepository.fetchPastures().isEmpty
+        )
+        XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 0)
+    }
+
+    @MainActor
     func testAppCurrentHerdSelectionExposesOnlyTheSelectedApplicationID() {
         let firstID = UUID()
         let secondID = UUID()
