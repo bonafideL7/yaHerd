@@ -75,7 +75,7 @@ struct RecoveryModeView: View {
         }
       }
 
-      Section("Export Before Repair") {
+      Section("Recovery Export") {
         Button {
           controller.prepareExport()
           isExporting = controller.exportDocument != nil
@@ -115,17 +115,17 @@ struct RecoveryModeView: View {
         .foregroundStyle(.secondary)
 
         Button {
-          Task { await controller.attemptPersistentStoreRepair() }
+          Task { await controller.checkPersistentStoreReadOnly() }
         } label: {
-          if controller.isAttemptingRepair {
+          if controller.isCheckingPersistentStore {
             Label("Checking Persistent Store…", systemImage: "hourglass")
           } else {
             Label("Check Persistent Store (Read Only)", systemImage: "externaldrive")
           }
         }
-        .disabled(controller.isAttemptingRepair)
+        .disabled(controller.isCheckingPersistentStore)
 
-        repairResultView
+        storeCheckResultView
       }
     }
     .navigationTitle("Storage Recovery")
@@ -141,12 +141,11 @@ struct RecoveryModeView: View {
         controller.recordExportFailure(error)
       }
     }
-
   }
 
   @ViewBuilder
   private var repairResultView: some View {
-    if let repairResult = controller.repairResult {
+    if let repairResult = controller.storeCheckResult {
       switch repairResult {
       case .succeeded(let message):
         Label(message, systemImage: "checkmark.circle.fill")
