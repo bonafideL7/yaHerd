@@ -1659,14 +1659,16 @@ private final class CoreDataAnimalContractEnvironment {
 
     func makeAnimalListQueryReader() -> CoreDataReadModelActor {
         CoreDataReadModelActor(
-            assembly: assembly,
+            contextFactory: assembly.contextFactory,
+            lookup: assembly.lookup,
             currentHerdID: { self.selection.currentHerdID }
         )
     }
 
     func makeDashboardQueryReader() -> CoreDataReadModelActor {
         CoreDataReadModelActor(
-            assembly: assembly,
+            contextFactory: assembly.contextFactory,
+            lookup: assembly.lookup,
             currentHerdID: { self.selection.currentHerdID }
         )
     }
