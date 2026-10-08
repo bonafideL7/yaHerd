@@ -157,6 +157,12 @@ protocol AnimalListFilteredQueryReading: Sendable {
     ) async throws -> AnimalSummaryPage
 }
 
+/// Asynchronous parent chooser read, distinct from active-only candidate queries.
+/// Non-archived parents remain selectable regardless of live status/location.
+protocol AnimalParentOptionQueryReading: Sendable {
+    func fetchParentOptions(excluding excludedAnimalID: UUID?) async throws -> [AnimalParentOption]
+}
+
 protocol AnimalReferenceQueryReading: Sendable {
     /// Returns one complete, internally consistent candidate cohort. A storage
     /// implementation must not concatenate pages obtained from different
