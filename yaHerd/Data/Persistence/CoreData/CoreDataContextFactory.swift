@@ -7,7 +7,7 @@ import Synchronization
 final class CoreDataContextFactory: Sendable {
     private let persistence: Mutex<CoreDataPersistentContainer>
 
-    init(persistence: CoreDataPersistentContainer) {
+    init(persistence: sending CoreDataPersistentContainer) {
         self.persistence = Mutex(persistence)
     }
 
