@@ -194,6 +194,33 @@ private struct RunningAppView: View {
     }
 }
 
+/// Scene restoration is durable state, not part of the ephemeral recovery graph.
+/// In recovery we neither read/validate the stored snapshot against a temporary
+/// Herd nor write any transient navigation routes back into SceneStorage.
+@MainActor
+enum AppNavigationSceneStorageAccess {
+    static func restore(
+        navigation: AppNavigationState,
+        from payload: String,
+        using validator: any AppNavigationRestorationValidating,
+        dataAccessMode: AppDataAccessMode
+    ) -> AppNavigationRestoreOutcome? {
+        guard !dataAccessMode.isRecoveryMode else { return nil }
+        return navigation.restorePreservingStoredSnapshot(
+            from: payload,
+            using: validator
+        )
+    }
+
+    static func payload(
+        for navigation: AppNavigationState,
+        dataAccessMode: AppDataAccessMode
+    ) -> String? {
+        guard !dataAccessMode.isRecoveryMode else { return nil }
+        return navigation.restorationPayload()
+    }
+}
+
 private struct RootAppView: View {
     let storageError: String?
     let dataAccessMode: AppDataAccessMode
@@ -226,27 +253,35 @@ private struct RootAppView: View {
             .environment(navigation)
             .task {
                 guard !hasRestoredNavigation else { return }
-                let outcome = navigation.restorePreservingStoredSnapshot(
+                let outcome = AppNavigationSceneStorageAccess.restore(
+                    navigation: navigation,
                     from: navigationRestorationPayload,
-                    using: navigationRestorationValidator
+                    using: navigationRestorationValidator,
+                    dataAccessMode: dataAccessMode
                 )
                 hasRestoredNavigation = true
+                guard let outcome else { return }
                 navigationRestorationDeferred = outcome == .deferredValidation
-                guard outcome == .applied else { return }
-                navigationRestorationPayload = navigation.restorationPayload() ?? ""
+                guard outcome == .applied,
+                      let payload = AppNavigationSceneStorageAccess.payload(
+                        for: navigation,
+                        dataAccessMode: dataAccessMode
+                      ) else { return }
+                navigationRestorationPayload = payload
             }
             .onChange(of: navigation.snapshot) { _, _ in
-                guard hasRestoredNavigation else { return }
+                guard hasRestoredNavigation, !dataAccessMode.isRecoveryMode else { return }
 
-                // If startup validation was deferred, an explicit navigation change means the
-                // user has chosen a new current state. Let that supersede the older stored snapshot
-                // rather than restoring it later and unexpectedly navigating the user backwards.
+                // Only the durable runtime may replace a deferred snapshot after user navigation.
                 navigationRestorationDeferred = false
-                guard let payload = navigation.restorationPayload() else { return }
+                guard let payload = AppNavigationSceneStorageAccess.payload(
+                    for: navigation,
+                    dataAccessMode: dataAccessMode
+                ) else { return }
                 navigationRestorationPayload = payload
             }
             .onChange(of: navigationMutationRevision) { _, _ in
-                guard hasRestoredNavigation else { return }
+                guard hasRestoredNavigation, !dataAccessMode.isRecoveryMode else { return }
 
                 if navigationRestorationDeferred {
                     let outcome = navigation.restorePreservingStoredSnapshot(
@@ -260,7 +295,12 @@ private struct RootAppView: View {
                         using: navigationRestorationValidator
                     )
                 }
-                navigationRestorationPayload = navigation.restorationPayload() ?? ""
+                if let payload = AppNavigationSceneStorageAccess.payload(
+                    for: navigation,
+                    dataAccessMode: dataAccessMode
+                ) {
+                    navigationRestorationPayload = payload
+                }
             }
             .onOpenURL { url in
                 navigation.handle(url: url)
