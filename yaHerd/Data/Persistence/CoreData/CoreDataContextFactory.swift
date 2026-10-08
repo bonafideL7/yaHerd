@@ -1,25 +1,42 @@
 @preconcurrency import CoreData
+import Synchronization
 
-final class CoreDataContextFactory {
-    private let persistence: CoreDataPersistentContainer
+/// Shares only the ability to create fresh private-queue contexts with read actors.
+/// The container is kept behind the same checked-Sendable Mutex pattern used by
+/// Core Data's write coordinators. No managed object or context is stored here.
+final class CoreDataContextFactory: Sendable {
+    private let persistence: Mutex<CoreDataPersistentContainer>
 
     init(persistence: CoreDataPersistentContainer) {
-        self.persistence = persistence
+        self.persistence = Mutex(persistence)
     }
 
     func makeReadContext() -> NSManagedObjectContext {
-        makePrivateContext(name: "CoreDataReadContext")
+        persistence.withLock { container in
+            Self.makePrivateContext(
+                name: "CoreDataReadContext",
+                using: container
+            )
+        }
     }
 
     func makeWriteContext() throws -> NSManagedObjectContext {
-        guard persistence.accessMode == .readWrite else {
-            throw CoreDataPersistenceError.readOnlyStore
+        try persistence.withLock { container in
+            guard container.accessMode == .readWrite else {
+                throw CoreDataPersistenceError.readOnlyStore
+            }
+            return Self.makePrivateContext(
+                name: "CoreDataWriteContext",
+                using: container
+            )
         }
-        return makePrivateContext(name: "CoreDataWriteContext")
     }
 
-    private func makePrivateContext(name: String) -> NSManagedObjectContext {
-        let context = persistence.makeBackgroundContext()
+    private static func makePrivateContext(
+        name: String,
+        using container: CoreDataPersistentContainer
+    ) -> NSManagedObjectContext {
+        let context = container.makeBackgroundContext()
         context.name = name
         context.mergePolicy = NSErrorMergePolicy
         context.undoManager = nil
