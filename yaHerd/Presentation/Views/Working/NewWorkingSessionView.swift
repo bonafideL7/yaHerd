@@ -203,7 +203,7 @@ struct NewWorkingSessionView: View {
                         Text("\(selectedAnimalIDs.count) selected").foregroundStyle(.secondary)
                     }
                 }
-                .disabled(eligibleAnimals.isEmpty)
+                .disabled(eligibleAnimals.isEmpty || isStarting)
             }
         } header: {
             Text("Animals")
