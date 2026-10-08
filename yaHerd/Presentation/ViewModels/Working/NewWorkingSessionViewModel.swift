@@ -14,6 +14,7 @@ final class NewWorkingSessionViewModel: ObservableObject {
     private var animalReferenceQueryReader: (any AnimalReferenceQueryReading)?
     private var workingRepository: any NewWorkingSessionRepository
     private var requestedPastureID: UUID?
+    private var candidateLoadToken = UUID()
 
     init(
         pastureRepository: any PastureReferenceDataReader,
@@ -51,6 +52,7 @@ final class NewWorkingSessionViewModel: ObservableObject {
     /// page fetch can complete. This also invalidates an older in-flight result.
     func clearCandidates(for pastureID: UUID?) {
         requestedPastureID = pastureID
+        candidateLoadToken = UUID()
         loadedPastureID = nil
         animals = []
         isLoadingAnimals = pastureID != nil
@@ -61,6 +63,7 @@ final class NewWorkingSessionViewModel: ObservableObject {
     /// Publish only a complete page sequence; partial pages must not enable Start.
     func loadEligibleAnimals(pastureID: UUID?) async {
         clearCandidates(for: pastureID)
+        let loadToken = candidateLoadToken
         guard let pastureID else { return }
         guard let animalReferenceQueryReader else {
             isLoadingAnimals = false
@@ -84,7 +87,8 @@ final class NewWorkingSessionViewModel: ObservableObject {
                     page: ReadPageRequest(offset: offset, limit: ReadPageRequest.maximumLimit)
                 )
                 try Task.checkCancellation()
-                guard requestedPastureID == pastureID else { return }
+                guard candidateLoadToken == loadToken,
+                      requestedPastureID == pastureID else { return }
 
                 candidates.append(contentsOf: page.animals)
                 if !page.hasMore { break }
@@ -97,17 +101,19 @@ final class NewWorkingSessionViewModel: ObservableObject {
                 offset += page.animals.count
             }
 
-            guard requestedPastureID == pastureID else { return }
+            guard candidateLoadToken == loadToken,
+                  requestedPastureID == pastureID else { return }
             animals = candidates
             loadedPastureID = pastureID
             isLoadingAnimals = false
             errorMessage = nil
         } catch is CancellationError {
-            if requestedPastureID == pastureID {
+            if candidateLoadToken == loadToken {
                 isLoadingAnimals = false
             }
         } catch {
-            guard requestedPastureID == pastureID else { return }
+            guard candidateLoadToken == loadToken,
+                  requestedPastureID == pastureID else { return }
             isLoadingAnimals = false
             errorMessage = UserVisibleErrorMessage.make(error)
         }
