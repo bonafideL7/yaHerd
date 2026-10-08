@@ -41,6 +41,58 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         XCTAssertEqual(viewModel.items, [freshAnimal])
     }
 
+    func testCompleteAnimalListSnapshotIsAtomicAndDoesNotFallBackToIndependentPages() async {
+        let records = (0..<525).map {
+            makeAnimal(
+                name: "Snapshot animal \($0)",
+                tagNumber: String(format: "S%04d", $0)
+            )
+        }
+        let snapshotReader = CompleteAnimalListSnapshotProbe(animals: records)
+        let pageReader = ControlledAnimalListQueryReader(
+            staleAnimal: records[0],
+            freshAnimal: records[1]
+        )
+        let repository = BackgroundQueryingAnimalListRepository(
+            base: StubAnimalListRepository(),
+            queryReader: pageReader
+        )
+        let pastureRepository = EmptyPastureReferenceDataReader()
+        let model = AnimalListViewModel()
+
+        model.load(
+            using: repository,
+            pastureRepository: pastureRepository,
+            snapshotReader: snapshotReader
+        )
+        for _ in 0..<100 {
+            if model.items.count == records.count { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(model.items.map(\.id), records.map(\.id))
+        let snapshotCalls = await snapshotReader.callCount()
+        XCTAssertEqual(snapshotCalls, 1)
+        let pageCount = await pageReader.currentRequestCount()
+        XCTAssertEqual(pageCount, 0, "Full-list reloads must not issue separately pinned page reads.")
+
+        await snapshotReader.setFailure(true)
+        model.load(
+            using: repository,
+            pastureRepository: pastureRepository,
+            snapshotReader: snapshotReader
+        )
+        for _ in 0..<100 {
+            if model.errorMessage != nil { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertNotNil(model.errorMessage)
+        XCTAssertEqual(
+            model.items.map(\.id),
+            records.map(\.id),
+            "An incomplete/failed reload must not replace the last complete Animal list."
+        )
+    }
+
     func testHardDeleteRemovesAnimalFromCurrentList() async {
         let animal = makeAnimal(name: "Animal", tagNumber: "103")
         let repository = RecordingAnimalListRepository(animals: [animal])
@@ -290,4 +342,26 @@ private final class RecordingAnimalListRepository: AnimalListRepository {
     func archive(ids: [UUID]) throws { archivedIDs.append(contentsOf: ids) }
     func restore(ids _: [UUID]) throws {}
     func move(ids _: [UUID], toPastureID _: UUID?) throws {}
+}
+
+
+private enum CompleteAnimalListSnapshotProbeError: Error {
+    case unavailable
+}
+
+private actor CompleteAnimalListSnapshotProbe: AnimalListSnapshotReading {
+    let animals: [AnimalSummary]
+    private var failing = false
+    private var requests = 0
+
+    init(animals: [AnimalSummary]) { self.animals = animals }
+
+    func setFailure(_ value: Bool) { failing = value }
+    func callCount() -> Int { requests }
+
+    func fetchAnimalSummarySnapshot() async throws -> [AnimalSummary] {
+        requests += 1
+        if failing { throw CompleteAnimalListSnapshotProbeError.unavailable }
+        return animals
+    }
 }
