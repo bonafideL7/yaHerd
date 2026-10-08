@@ -1,10 +1,6 @@
 @preconcurrency import CoreData
 
-/// Sendable boundary for constructing independent private-queue Core Data contexts.
-/// Only the immutable container reference crosses actor boundaries; each call
-/// creates a fresh context and no managed object/context is shared between actors.
-/// NSPersistentContainer supports creation of background contexts across queues.
-final class CoreDataContextFactory: @unchecked Sendable {
+final class CoreDataContextFactory {
     private let persistence: CoreDataPersistentContainer
 
     init(persistence: CoreDataPersistentContainer) {
