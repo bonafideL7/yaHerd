@@ -280,7 +280,11 @@ struct WorkingFinishSessionView: View {
                         .monospacedDigit()
                 }
             }
-            .disabled(orderedItems.isEmpty || otherPastures.isEmpty)
+            .disabled(
+                orderedItems.isEmpty
+                    || otherPastures.isEmpty
+                    || isFinishing
+            )
 
             if selectedExceptionItems.isEmpty {
                 Text(
