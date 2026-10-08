@@ -54,7 +54,7 @@ struct WorkingSessionsView: View {
                     .onDelete { offsets in
                         requestDelete(from: activeSessions, offsets: offsets)
                     }
-                    .deleteDisabled(dataAccessMode.isRecoveryMode)
+                    .deleteDisabled(dataAccessMode.isRecoveryMode || isDeletingSession)
                 }
             }
 
@@ -66,7 +66,7 @@ struct WorkingSessionsView: View {
                     .onDelete { offsets in
                         requestDelete(from: finishedSessions, offsets: offsets)
                     }
-                    .deleteDisabled(dataAccessMode.isRecoveryMode)
+                    .deleteDisabled(dataAccessMode.isRecoveryMode || isDeletingSession)
                 }
             }
         }
@@ -78,7 +78,7 @@ struct WorkingSessionsView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
-                .disabled(!dataAccessMode.allowsDataMutations)
+                .disabled(!dataAccessMode.allowsDataMutations || isDeletingSession)
             }
 
             ToolbarItem(placement: .topBarTrailing) {
@@ -88,6 +88,7 @@ struct WorkingSessionsView: View {
                     Image(systemName: "syringe")
                 }
                 .accessibilityLabel("Treatments")
+                .disabled(isDeletingSession)
             }
         }
         .task {
@@ -165,7 +166,11 @@ struct WorkingSessionsView: View {
     }
 
     private func requestDelete(from list: [WorkingSessionSummary], offsets: IndexSet) {
-        guard let index = offsets.first, index < list.count else { return }
+        guard !isDeletingSession,
+              let index = offsets.first,
+              index < list.count else {
+            return
+        }
         sessionPendingDeleteID = list[index].id
         showingDeleteAlert = true
     }
