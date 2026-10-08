@@ -14,8 +14,8 @@ struct WorkingSessionAnimalWorkView: View {
         workingDependencies.pastureReferenceReader
     }
 
-    var animalSummaryReader: any AnimalSummaryReading {
-        workingDependencies.animalSummaryReader
+    var animalReferenceQueryReader: (any AnimalReferenceQueryReading)? {
+        workingDependencies.animalReferenceQueryReader
     }
 
     var vaccinationRepository: any WorkingTreatmentTemplateCreating {
@@ -219,7 +219,7 @@ struct WorkingSessionAnimalWorkView: View {
             case .local(.sampleData):
                 refreshDestinationPasturesAfterMutation()
                 guard !refreshSessionSourcePastureAfterMutation() else { return }
-                revalidateSelectedSireAfterMutation()
+                await revalidateSelectedSireAfterMutation()
             case .local(.pasture):
                 refreshDestinationPasturesAfterMutation()
                 guard !refreshSessionSourcePastureAfterMutation() else { return }
@@ -329,20 +329,32 @@ struct WorkingSessionAnimalWorkView: View {
     }
 
     @MainActor
-    private func revalidateSelectedSireAfterMutation() {
-        guard let selectedSire else { return }
+    private func revalidateSelectedSireAfterMutation() async {
+        guard let checkedSireID = selectedSire?.id,
+              let animalReferenceQueryReader else { return }
 
         do {
-            let animalStillExists = try animalSummaryReader.fetchAnimals()
-                .contains(where: { $0.id == selectedSire.id })
-            guard !animalStillExists else { return }
+            // M9 checks this one application UUID in a fresh selected-Herd
+            // context; it intentionally includes archived Animals, matching
+            // the prior whole-Herd existence check.
+            let stillExists = try await animalReferenceQueryReader.containsAnimal(
+                id: checkedSireID
+            )
+            guard !Task.isCancelled,
+                  WorkingQueueEditorIdentity.shouldClearSelectedSire(
+                    checkedSireID: checkedSireID,
+                    currentSireID: selectedSire?.id,
+                    stillExists: stillExists
+                  ) else { return }
 
-            self.selectedSire = nil
+            // A different sire may have been selected during the suspension.
+            // Clear only the ID that was actually checked and found missing.
+            selectedSire = nil
             errorMessage = "The selected sire is no longer available. Choose another sire if you want to record one before saving."
             showingError = true
         } catch {
-            // Keep the user's current selection when reference data cannot be refreshed. The
-            // repository validates a non-nil sire ID before mutating work data and fails closed.
+            // Preserve the in-progress sire draft if this read fails. M8
+            // validates the actual sire UUID in the persisted save transaction.
         }
     }
 }
