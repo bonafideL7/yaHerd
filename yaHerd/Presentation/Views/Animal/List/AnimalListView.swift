@@ -523,7 +523,11 @@ struct AnimalListView: View {
     }
 
     private func reload() {
-        viewModel.load(using: repository, pastureRepository: pastureReferenceDataReader)
+        viewModel.load(
+            using: repository,
+            pastureRepository: pastureReferenceDataReader,
+            snapshotReader: animalDependencies.listSnapshotReader
+        )
         refreshDerivedState()
     }
 
