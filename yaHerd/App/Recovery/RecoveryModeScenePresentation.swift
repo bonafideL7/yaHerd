@@ -47,7 +47,7 @@ private struct RecoveryModeScenePresentationModifier: ViewModifier {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(
-          controller.isPreparingExport || controller.isAttemptingRepair
+          controller.isPreparingExport || controller.isCheckingPersistentStore
         )
       }
   }
