@@ -111,11 +111,19 @@ final class CoreDataWorkingAppRepository: WorkingRepository {
         inSessionID sessionID: UUID,
         input: WorkingTagReplacementInput
     ) async throws -> WorkingQueueItemEditorSnapshot {
-        return try await working.replacePrimaryTag(
+        try await working.replacePrimaryTag(
             forQueueItemID: queueItemID,
             inSessionID: sessionID,
             input: input
         )
+
+        guard let snapshot = try working.fetchQueueItemEditor(
+            sessionID: sessionID,
+            queueItemID: queueItemID
+        ) else {
+            throw WorkingRepositoryError.queueItemNotFound
+        }
+        return snapshot
     }
 
     func deleteWorkData(
