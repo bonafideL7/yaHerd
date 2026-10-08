@@ -303,17 +303,22 @@ struct NewWorkingSessionView: View {
             }
             .filter { !$0.name.isEmpty }
 
+        // Capture one coherent setup snapshot before the async command begins.
+        // Changes to form controls must not alter a submitted selection.
+        let sessionDate = date
+        let templateName = selectedTemplateName
+        let submittedAnimalIDs = specifiesAnimals ? Array(selectedAnimalIDs) : nil
         isStarting = true
         Task { @MainActor in
             defer { isStarting = false }
 
             do {
                 let sessionID = try await viewModel.startSession(
-                    date: date,
+                    date: sessionDate,
                     pastureID: pastureID,
-                    treatmentTemplateName: selectedTemplateName,
+                    treatmentTemplateName: templateName,
                     plannedTreatments: cleanedTreatments,
-                    animalIDs: specifiesAnimals ? Array(selectedAnimalIDs) : nil
+                    animalIDs: submittedAnimalIDs
                 )
                 if let onSessionCreated {
                     onSessionCreated(sessionID)
