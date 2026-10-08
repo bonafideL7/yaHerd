@@ -72,6 +72,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertNil(graph.animalFeatureDependencies.sampleDataSeeder)
         XCTAssertNotNil(graph.workingSessionFeatureDependencies.animalReferenceQueryReader)
         XCTAssertNotNil(graph.fieldCheckFeatureDependencies.animalReferenceQueryReader)
+        XCTAssertNotNil(graph.animalFeatureDependencies.parentOptionQueryReader)
 
         let pasture = try graph.pastureFeatureDependencies.createRepository.create(
             input: PastureInput(
