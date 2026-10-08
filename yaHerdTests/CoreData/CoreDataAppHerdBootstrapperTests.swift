@@ -282,6 +282,87 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     }
 
     @MainActor
+    func testCoreDataAppGraphRoutesFieldCheckAndWorkingMutationsToActiveConsumers() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: assembly
+        )
+        let dependencies = CoreDataAppPersistenceAssembly(
+            assembly: assembly,
+            currentHerdID: herdID
+        ).makeDependencies(dataAccessMode: .readWrite)
+        let center = dependencies.applicationMutationCenter
+
+        // Observe the same stream injected into the live Home, Field Check,
+        // Working and Animal feature dependency containers.
+        XCTAssertEqual(
+            dependencies.homeFeatureDependencies.mutationStream.currentSequence,
+            center.currentSequence
+        )
+        XCTAssertEqual(
+            dependencies.fieldCheckFeatureDependencies.mutationStream.currentSequence,
+            center.currentSequence
+        )
+        XCTAssertEqual(
+            dependencies.workingSessionFeatureDependencies.mutationStream.currentSequence,
+            center.currentSequence
+        )
+        XCTAssertEqual(
+            dependencies.animalFeatureDependencies.mutationStream.currentSequence,
+            center.currentSequence
+        )
+
+        center.recordSuccessfulMutation(reason: .fieldCheck)
+        XCTAssertEqual(center.currentSequence, 1)
+        XCTAssertEqual(center.homeRevision, 1)
+        XCTAssertEqual(center.dashboardRevision, 1)
+        XCTAssertEqual(center.fieldCheckRevision, 1)
+        XCTAssertEqual(center.pastureRevision, 1)
+        XCTAssertEqual(center.animalRevision, 0)
+        XCTAssertEqual(center.workingSessionRevision, 0)
+
+        var fieldEventIterator = center.events(after: 0).makeAsyncIterator()
+        let fieldEvent = await fieldEventIterator.next()
+        XCTAssertEqual(fieldEvent?.source, .local(.fieldCheck))
+        XCTAssertEqual(
+            fieldEvent?.affectedAreas,
+            Set([.home, .dashboard, .pastures, .fieldChecks])
+        )
+
+        center.recordSuccessfulMutation(reason: .working)
+        XCTAssertEqual(center.currentSequence, 2)
+        XCTAssertEqual(center.homeRevision, 2)
+        XCTAssertEqual(center.dashboardRevision, 2)
+        XCTAssertEqual(center.fieldCheckRevision, 2)
+        XCTAssertEqual(center.pastureRevision, 2)
+        XCTAssertEqual(center.animalRevision, 1)
+        XCTAssertEqual(center.workingSessionRevision, 1)
+
+        var workingEventIterator = center.events(after: 1).makeAsyncIterator()
+        let workingEvent = await workingEventIterator.next()
+        XCTAssertEqual(workingEvent?.source, .local(.working))
+        XCTAssertEqual(
+            workingEvent?.affectedAreas,
+            Set([.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions])
+        )
+
+        // New subscribers receive the latest revision even if they attach
+        // after a mutation, as the active .task observers may do on navigation.
+        var homeRevisions = center.revisions(for: .home, after: 0).makeAsyncIterator()
+        var animalRevisions = center.revisions(for: .animals, after: 0).makeAsyncIterator()
+        var workingRevisions = center.revisions(
+            for: .workingSessions,
+            after: 0
+        ).makeAsyncIterator()
+        let homeRevision = await homeRevisions.next()
+        let animalRevision = await animalRevisions.next()
+        let workingRevision = await workingRevisions.next()
+        XCTAssertEqual(homeRevision, 2)
+        XCTAssertEqual(animalRevision, 1)
+        XCTAssertEqual(workingRevision, 1)
+    }
+
+    @MainActor
     func testAppCurrentHerdSelectionExposesOnlyTheSelectedApplicationID() {
         let firstID = UUID()
         let secondID = UUID()
