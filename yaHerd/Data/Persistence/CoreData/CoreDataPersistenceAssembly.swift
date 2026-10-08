@@ -322,7 +322,6 @@ actor CoreDataAsyncSerialGate {
 }
 
 final class CoreDataPersistenceAssembly {
-    let persistence: CoreDataPersistentContainer
     let contextFactory: CoreDataContextFactory
     let transactionExecutor: CoreDataTransactionExecutor
     let animalWriteBoundary: CoreDataAnimalWriteBoundary
@@ -333,8 +332,7 @@ final class CoreDataPersistenceAssembly {
     let coordinationID: UUID
     let lookup: CoreDataLookup
 
-    init(persistence: CoreDataPersistentContainer) {
-        self.persistence = persistence
+    init(persistence: sending CoreDataPersistentContainer) {
         self.contextFactory = CoreDataContextFactory(persistence: persistence)
         self.transactionExecutor = CoreDataTransactionExecutor(contextFactory: contextFactory)
         self.animalWriteBoundary = CoreDataAnimalWriteBoundary()
