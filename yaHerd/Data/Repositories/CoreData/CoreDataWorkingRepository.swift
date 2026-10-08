@@ -463,7 +463,7 @@ final class CoreDataWorkingRepository:
         inSessionID sessionID: UUID,
         input: WorkingTagReplacementInput,
         beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil
-    ) async throws {
+    ) async throws -> WorkingQueueItemEditorSnapshot {
         let normalizedNumber = input.number.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedNumber.isEmpty else {
             throw WorkingRepositoryError.invalidTagNumber
@@ -473,7 +473,7 @@ final class CoreDataWorkingRepository:
         let colorID = input.colorID
         let lookup = self.lookup
 
-        try await performWrite(
+        return try await performWrite(
             materializingTagColorIDs: candidateBuiltInTagColorIDs([colorID]),
             beforeSave: beforeSave
         ) { context, herd in
@@ -535,6 +535,16 @@ final class CoreDataWorkingRepository:
             resolved.queueItem.animalTagNumberSnapshot = normalizedNumber
             resolved.queueItem.animalTagColorIDSnapshot = replacementColor?.id
             CoreDataAnimalMutation.rotateRevision(animal)
+
+            try Self.validateSessionGraph(
+                resolved.session,
+                herdID: herd.id
+            )
+            return try WorkingMapper.makeQueueItemEditorSnapshot(
+                session: resolved.session,
+                queueItem: resolved.queueItem,
+                animal: animal
+            )
         }
     }
 
