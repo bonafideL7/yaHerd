@@ -416,7 +416,7 @@ struct WorkingSessionDetailView: View {
                 } label: {
                     Label("Delete Session", systemImage: "trash")
                 }
-                .disabled(!dataAccessMode.allowsDataMutations)
+                .disabled(!dataAccessMode.allowsDataMutations || isMutatingSession)
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 17, weight: .semibold))
