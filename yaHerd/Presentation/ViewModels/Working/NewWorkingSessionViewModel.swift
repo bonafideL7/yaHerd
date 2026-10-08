@@ -6,6 +6,9 @@ final class NewWorkingSessionViewModel: ObservableObject {
     @Published private(set) var templates: [WorkingTreatmentTemplateSummary] = []
     @Published private(set) var animals: [AnimalSummary] = []
     @Published private(set) var hasLoaded = false
+    @Published private(set) var hasLoadedSetupSuccessfully = false
+    @Published private(set) var setupLoadErrorMessage: String?
+    @Published private(set) var candidateLoadErrorMessage: String?
     @Published private(set) var isLoadingAnimals = false
     @Published private(set) var loadedPastureID: UUID?
     @Published var errorMessage: String?
@@ -38,12 +41,26 @@ final class NewWorkingSessionViewModel: ObservableObject {
 
     func load() {
         do {
-            pastures = try pastureRepository.fetchPastureOptions()
+            // Setup is one usable form state: publish neither collection if either
+            // source fails, rather than exposing an incomplete template picker.
+            let loadedPastures = try pastureRepository.fetchPastureOptions()
                 .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-            templates = try workingRepository.fetchTemplates()
-            errorMessage = nil
+            let loadedTemplates = try workingRepository.fetchTemplates()
+
+            pastures = loadedPastures
+            templates = loadedTemplates
+            hasLoadedSetupSuccessfully = true
+            if let setupLoadErrorMessage, errorMessage == setupLoadErrorMessage {
+                errorMessage = nil
+            }
+            setupLoadErrorMessage = nil
         } catch {
-            errorMessage = UserVisibleErrorMessage.make(error)
+            pastures = []
+            templates = []
+            hasLoadedSetupSuccessfully = false
+            setupLoadErrorMessage = UserVisibleErrorMessage.make(error)
+            errorMessage = setupLoadErrorMessage
+            clearCandidates(for: nil)
         }
         hasLoaded = true
     }
@@ -51,6 +68,12 @@ final class NewWorkingSessionViewModel: ObservableObject {
     /// Drop the prior pasture's candidates immediately, before a new asynchronous
     /// page fetch can complete. This also invalidates an older in-flight result.
     func clearCandidates(for pastureID: UUID?) {
+        // Only dismiss a prior candidate-owned alert. Setup/template/submit
+        // errors are independent and must survive candidate changes.
+        if let candidateLoadErrorMessage, errorMessage == candidateLoadErrorMessage {
+            errorMessage = nil
+        }
+        candidateLoadErrorMessage = nil
         requestedPastureID = pastureID
         candidateLoadToken = UUID()
         loadedPastureID = nil
@@ -67,7 +90,8 @@ final class NewWorkingSessionViewModel: ObservableObject {
         guard let pastureID else { return }
         guard let animalReferenceQueryReader else {
             isLoadingAnimals = false
-            errorMessage = "Working animal reference query is not configured."
+            candidateLoadErrorMessage = "Working animal reference query is not configured."
+            errorMessage = candidateLoadErrorMessage
             return
         }
 
@@ -106,7 +130,8 @@ final class NewWorkingSessionViewModel: ObservableObject {
             animals = candidates
             loadedPastureID = pastureID
             isLoadingAnimals = false
-            errorMessage = nil
+            // A successful candidate request does not own setup, template,
+            // or session errors and must never clear those alerts.
         } catch is CancellationError {
             if candidateLoadToken == loadToken {
                 isLoadingAnimals = false
@@ -115,7 +140,8 @@ final class NewWorkingSessionViewModel: ObservableObject {
             guard candidateLoadToken == loadToken,
                   requestedPastureID == pastureID else { return }
             isLoadingAnimals = false
-            errorMessage = UserVisibleErrorMessage.make(error)
+            candidateLoadErrorMessage = UserVisibleErrorMessage.make(error)
+            errorMessage = candidateLoadErrorMessage
         }
     }
 
