@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 final class CoreDataPastureRepository:
-    PastureListReader,
+    PastureListManagingRepository,
     PastureDetailReader,
     PastureResidentAnimalReader,
     PastureReferenceDataReader,
