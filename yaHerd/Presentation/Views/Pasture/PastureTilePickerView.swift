@@ -10,7 +10,7 @@ import SwiftUI
 struct PastureTilePickerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.pastureFeatureDependencies) private var pastureDependencies
-    private var pastureListRepository: any PastureListRepository { pastureDependencies.listRepository }
+    private var pastureListRepository: any PastureListReader { pastureDependencies.listRepository }
     @Environment(ApplicationSettings.self) private var applicationSettings
 
     /// Called when user selects a pasture
