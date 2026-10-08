@@ -1,8 +1,8 @@
 import Foundation
 
-/// Prepared Core Data-only application graph. The final M10 startup switch supplies
-/// a loaded CoreDataPersistenceAssembly and a durable, bootstrapped Herd UUID.
-/// No feature in this graph depends on SwiftData or on a separate persistence stack.
+/// Production Core Data-only application graph. The startup loader supplies one
+/// durable or in-memory assembly and resolves its Herd before creating feature ports.
+/// No feature in this graph depends on SwiftData or on another persistence stack.
 @MainActor
 final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
     private let assembly: CoreDataPersistenceAssembly
