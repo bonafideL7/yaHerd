@@ -144,9 +144,11 @@ struct WorkingFinishSessionView: View {
             }
             .navigationTitle("Finish Session")
             .navigationBarTitleDisplayMode(.inline)
+            .interactiveDismissDisabled(isFinishing)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     ToolbarCancelButton { dismiss() }
+                        .disabled(isFinishing)
                 }
             }
             .task {
