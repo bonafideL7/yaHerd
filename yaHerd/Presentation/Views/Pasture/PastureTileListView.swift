@@ -2,7 +2,7 @@ import SwiftUI
 
 struct PastureTileListView: View {
     @Environment(\.pastureFeatureDependencies) private var pastureDependencies
-    private var repository: any PastureListRepository { pastureDependencies.listRepository }
+    private var repository: any PastureListManagingRepository { pastureDependencies.listRepository }
     private var deletionCommand: any PastureDeletionPerforming { pastureDependencies.deletionCommand }
     @Environment(\.appDataAccessMode) private var dataAccessMode
 
