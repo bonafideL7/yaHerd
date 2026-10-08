@@ -1,6 +1,6 @@
 import Foundation
 
-struct AnimalParentOption: Identifiable, Hashable {
+struct AnimalParentOption: Identifiable, Hashable, Sendable {
     let id: UUID
     let name: String
     let displayTagNumber: String
