@@ -194,7 +194,14 @@ final class AppNavigationRestorationPreflightTests: XCTestCase {
             )
 
             let intact = AppNavigationState()
-            intact.restore(from: storedPayload)
+            let durableValidator = PreflightStubNavigationValidator(
+                currentHerdResult: .success(durableHerdID),
+                animalResult: .success(true),
+                pastureResult: .success(true),
+                fieldCheckSessionResult: .success(true),
+                workingSessionResult: .success(true)
+            )
+            intact.restore(from: storedPayload, using: durableValidator)
             XCTAssertEqual(intact.snapshot, savedSnapshot)
             XCTAssertEqual(intact.selectedHerdID, durableHerdID)
             XCTAssertEqual(intact.herdRouter.path, [.animal(animalID), .pasture(pastureID)])
