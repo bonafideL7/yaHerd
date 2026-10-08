@@ -192,6 +192,7 @@ struct WorkingSessionDetailView: View {
                         } label: {
                             WorkingSessionAnimalRow(item: item)
                         }
+                        .disabled(isMutatingSession)
                     }
                 }
             } header: {
@@ -248,6 +249,7 @@ struct WorkingSessionDetailView: View {
                                 showsDestination: true
                             )
                         }
+                        .disabled(isMutatingSession)
                     }
                 }
             } header: {
