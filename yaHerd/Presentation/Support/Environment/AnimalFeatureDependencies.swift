@@ -8,6 +8,7 @@ nonisolated struct AnimalFeatureDependencies {
     let detailRepository: any AnimalDetailRepository
     let timelineReader: any AnimalTimelineReading
     let parentOptionReader: any AnimalParentOptionReading
+    let parentOptionQueryReader: (any AnimalParentOptionQueryReading)?
     let healthRecordAdder: any AnimalHealthRecordAdding
     let pregnancyCheckAdder: any AnimalPregnancyCheckAdding
     let pastureReferenceReader: any PastureReferenceDataReader
@@ -21,6 +22,7 @@ nonisolated struct AnimalFeatureDependencies {
         detailRepository: any AnimalDetailRepository,
         timelineReader: any AnimalTimelineReading,
         parentOptionReader: any AnimalParentOptionReading,
+        parentOptionQueryReader: (any AnimalParentOptionQueryReading)? = nil,
         healthRecordAdder: any AnimalHealthRecordAdding,
         pregnancyCheckAdder: any AnimalPregnancyCheckAdding,
         pastureReferenceReader: any PastureReferenceDataReader,
@@ -33,6 +35,7 @@ nonisolated struct AnimalFeatureDependencies {
         self.detailRepository = detailRepository
         self.timelineReader = timelineReader
         self.parentOptionReader = parentOptionReader
+        self.parentOptionQueryReader = parentOptionQueryReader
         self.healthRecordAdder = healthRecordAdder
         self.pregnancyCheckAdder = pregnancyCheckAdder
         self.pastureReferenceReader = pastureReferenceReader
@@ -44,6 +47,7 @@ nonisolated struct AnimalFeatureDependencies {
     init(
         repository: any AnimalRepository,
         listQueryReader: any AnimalListQueryReading,
+        parentOptionQueryReader: (any AnimalParentOptionQueryReading)? = nil,
         pastureReferenceReader: any PastureReferenceDataReader,
         sampleDataSeeder: (any SampleDataSeeding)?,
         mutationStream: any ApplicationMutationStreaming
@@ -55,6 +59,7 @@ nonisolated struct AnimalFeatureDependencies {
             detailRepository: repository,
             timelineReader: repository,
             parentOptionReader: repository,
+            parentOptionQueryReader: parentOptionQueryReader,
             healthRecordAdder: repository,
             pregnancyCheckAdder: repository,
             pastureReferenceReader: pastureReferenceReader,
@@ -71,6 +76,7 @@ nonisolated struct AnimalFeatureDependencies {
         detailRepository: (any AnimalDetailRepository)? = nil,
         timelineReader: (any AnimalTimelineReading)? = nil,
         parentOptionReader: (any AnimalParentOptionReading)? = nil,
+        parentOptionQueryReader: (any AnimalParentOptionQueryReading)? = nil,
         healthRecordAdder: (any AnimalHealthRecordAdding)? = nil,
         pregnancyCheckAdder: (any AnimalPregnancyCheckAdding)? = nil,
         pastureReferenceReader: (any PastureReferenceDataReader)? = nil,
@@ -85,6 +91,7 @@ nonisolated struct AnimalFeatureDependencies {
             detailRepository: detailRepository ?? missingRepository,
             timelineReader: timelineReader ?? missingRepository,
             parentOptionReader: parentOptionReader ?? missingRepository,
+            parentOptionQueryReader: parentOptionQueryReader,
             healthRecordAdder: healthRecordAdder ?? missingRepository,
             pregnancyCheckAdder: pregnancyCheckAdder ?? missingRepository,
             pastureReferenceReader: pastureReferenceReader ?? MissingAnimalPastureReferenceReader(),
