@@ -234,6 +234,19 @@ struct MutationPublishingDashboardRepository: DashboardRepository {
 }
 
 @MainActor
+struct MutationPublishingPastureGrazingMarker: PastureGrazingMarking {
+    let base: any PastureGrazingMarking
+    let mutationRecorder: any SuccessfulMutationRecording
+    let writePolicy: LocalDataWritePolicy
+
+    func markPastureGrazedToday(id: UUID, on date: Date) throws {
+        try writePolicy.validateCanWrite()
+        try base.markPastureGrazedToday(id: id, on: date)
+        mutationRecorder.recordSuccessfulMutation(reason: .dashboard)
+    }
+}
+
+@MainActor
 struct MutationPublishingFieldCheckRepository: FieldCheckRepository {
     let base: any FieldCheckRepository
     let mutationRecorder: any SuccessfulMutationRecording
