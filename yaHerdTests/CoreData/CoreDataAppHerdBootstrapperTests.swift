@@ -175,7 +175,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
         XCTAssertEqual(
             try reloadedDependencies.pastureFeatureDependencies.listRepository
-                .fetchPastures().map(\\.id),
+                .fetchPastures().map(\.id),
             [pasture.id]
         )
         let dashboard = try await reloadedDependencies.homeFeatureDependencies
