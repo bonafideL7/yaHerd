@@ -30,6 +30,16 @@ struct WorkingQueueEditorSourcePastureReference: Equatable {
 }
 
 enum WorkingQueueEditorIdentity {
+    /// Apply an async existence result only to the sire selection that was
+    /// checked. A newer selection must never be erased by an older read.
+    static func shouldClearSelectedSire(
+        checkedSireID: UUID,
+        currentSireID: UUID?,
+        stillExists: Bool
+    ) -> Bool {
+        !stillExists && currentSireID == checkedSireID
+    }
+
     static func sourcePastureChangeRequiresReview(
         presented: WorkingQueueEditorSourcePastureReference?,
         refreshed: WorkingQueueEditorSourcePastureReference,
