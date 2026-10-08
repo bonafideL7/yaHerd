@@ -134,7 +134,10 @@ protocol PastureDetailRepository: PastureDetailReader, PastureResidentAnimalRead
 protocol PastureDeleteRepository: PastureDeleting, PastureExistenceChecking, PastureResidentAnimalReader {}
 
 @MainActor
-protocol PastureListRepository: PastureListReader, PastureOrdering, PastureDeleteRepository {}
+protocol PastureListManagingRepository: PastureListReader, PastureOrdering {}
+
+@MainActor
+protocol PastureListRepository: PastureListManagingRepository, PastureDeleteRepository {}
 @MainActor
 protocol PastureDetailEditingRepository: PastureDetailRepository, PastureUpdateRepository {}
 @MainActor
