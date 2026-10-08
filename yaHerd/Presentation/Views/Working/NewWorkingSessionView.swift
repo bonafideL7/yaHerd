@@ -64,6 +64,7 @@ struct NewWorkingSessionView: View {
 
     private var canStart: Bool {
         !isStarting
+            && viewModel.hasLoadedSetupSuccessfully
             && viewModel.loadedPastureID == selectedPastureID
             && !viewModel.isLoadingAnimals
             && dataAccessMode.allowsDataMutations
@@ -79,7 +80,11 @@ struct NewWorkingSessionView: View {
             return "Recovery mode is read-only. New sessions cannot be saved."
         }
         if !viewModel.hasLoaded {
-            return "Loading pastures and animals…"
+            return "Loading pastures and treatment templates…"
+        }
+        if !viewModel.hasLoadedSetupSuccessfully {
+            return viewModel.setupLoadErrorMessage
+                ?? "Working setup could not be loaded. Reopen to retry."
         }
         if viewModel.pastures.isEmpty {
             return "Add a pasture before starting a working session."
@@ -130,6 +135,9 @@ struct NewWorkingSessionView: View {
                 viewModel.load()
                 seedSuggestedPastureIfNeeded()
             }
+            // A failed Pasture/template setup is not a valid form. Do not
+            // request independent candidates or allow a partial session.
+            guard viewModel.hasLoadedSetupSuccessfully else { return }
             let pastureID = selectedPastureID
             await viewModel.loadEligibleAnimals(pastureID: pastureID)
             if !Task.isCancelled && viewModel.loadedPastureID == pastureID {
