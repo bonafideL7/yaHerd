@@ -70,7 +70,9 @@ struct yaHerdApp: App {
             do {
                 let persistence = try await CoreDataAppPersistenceAssembly.inMemoryRecovery()
                 let startupMessage = """
-                Persistent Core Data storage could not be opened. yaHerd is running                 in read-only recovery mode. Changes from this session will not be                 saved. Original error: \(primaryError.localizedDescription)
+                Persistent Core Data storage could not be opened. yaHerd is running in read-only recovery mode. Changes from this session will not be saved.
+
+                Original error: \(primaryError.localizedDescription)
                 """
                 let dependencies = persistence.makeDependencies(
                     dataAccessMode: .recoveryReadOnly
@@ -92,7 +94,7 @@ struct yaHerdApp: App {
                 )
             } catch {
                 let startupMessage = """
-                Persistent Core Data storage could not be opened, and the in-memory                 Core Data recovery store could not be started. No data was loaded and                 changes are disabled.
+                Persistent Core Data storage could not be opened, and the in-memory Core Data recovery store could not be started. No data was loaded and changes are disabled.
 
                 Primary store error: \(primaryError.localizedDescription)
                 In-memory recovery error: \(error.localizedDescription)
