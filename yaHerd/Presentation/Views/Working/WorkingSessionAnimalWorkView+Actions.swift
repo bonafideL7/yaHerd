@@ -27,6 +27,7 @@ extension WorkingSessionAnimalWorkView {
                     Image(systemName: "ellipsis")
                 }
                 .accessibilityLabel("Animal Work Actions")
+                .disabled(isMutatingWork)
             }
         }
 
