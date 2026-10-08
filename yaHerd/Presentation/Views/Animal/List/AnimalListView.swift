@@ -388,6 +388,16 @@ struct AnimalListView: View {
         shouldShowFloatingControlBar ? 106 : 24
     }
 
+    private var addSampleDataAction: (() -> Void)? {
+        guard sampleDataSeeder != nil else { return nil }
+        return seedSampleData
+    }
+
+    private var addLargeSampleDataAction: (() -> Void)? {
+        guard sampleDataSeeder != nil else { return nil }
+        return seedLargeSampleData
+    }
+
     private var emptyStateView: some View {
         AnimalListEmptyStateContainer(
             configuration: emptyStateConfiguration,
@@ -400,8 +410,8 @@ struct AnimalListView: View {
             colorScheme: colorScheme,
             onStartInlineEntry: beginNewInlineEntry,
             onAddAnimal: presentAddAnimal,
-            onAddSampleData: sampleDataSeeder == nil ? nil : seedSampleData,
-            onAddLargeSampleData: sampleDataSeeder == nil ? nil : seedLargeSampleData,
+            onAddSampleData: addSampleDataAction,
+            onAddLargeSampleData: addLargeSampleDataAction,
             onClearFilters: clearAllFilters,
             onShowInactive: { showRemovedStatusesBinding.wrappedValue = true },
             onShowArchivedRecords: { showArchivedRecordsBinding.wrappedValue = true }
