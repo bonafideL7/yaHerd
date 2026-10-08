@@ -2560,6 +2560,13 @@ extension AnimalRepositoryContract {
 
         let containsNorthA2 = try await reader.containsAnimal(id: northA2.id)
         XCTAssertTrue(containsNorthA2, file: file, line: line)
+        let containsArchived = try await reader.containsAnimal(id: northArchived.id)
+        XCTAssertTrue(
+            containsArchived,
+            "Single-ID existence must include archived records for a persisted Working sire reference; eligible-candidate queries intentionally exclude them.",
+            file: file,
+            line: line
+        )
         let containsMissingAnimal = try await reader.containsAnimal(id: UUID())
         XCTAssertFalse(containsMissingAnimal, file: file, line: line)
 
