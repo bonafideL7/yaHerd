@@ -8,7 +8,6 @@ import SwiftUI
 struct RecoveryModeView: View {
   @ObservedObject var controller: RecoveryModeController
   @State private var isExporting = false
-  @State private var isShowingRepairConfirmation = false
 
   var body: some View {
     List {
@@ -90,7 +89,7 @@ struct RecoveryModeView: View {
         .disabled(controller.isPreparingExport)
 
         Text(
-          "Creates a TAR archive containing storage diagnostics and copies of discoverable yaHerd SwiftData store files. Keep the archive private because it may contain herd records."
+          "Creates a TAR archive with storage diagnostics and copies of discoverable Core Data SQLite, WAL, and SHM files. Keep it private because it may contain herd records."
         )
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -108,28 +107,23 @@ struct RecoveryModeView: View {
           .textSelection(.enabled)
       }
 
-      Section("Persistent Store Repair") {
-        Toggle(isOn: $controller.hasAcknowledgedRepairRisk) {
-          VStack(alignment: .leading, spacing: 4) {
-            Text("I understand this repair probe may open and migrate the persistent store")
-            Text(
-              "Recovery mode remains read-only until yaHerd is restarted, even when the store opens successfully."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-          }
-        }
+      Section("Read-Only Store Check") {
+        Text(
+          "Check whether the original Core Data store can open without changing its contents. This does not repair or migrate it. Recovery mode remains read-only until you restart yaHerd."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
 
-        Button(role: .destructive) {
-          isShowingRepairConfirmation = true
+        Button {
+          Task { await controller.attemptPersistentStoreRepair() }
         } label: {
           if controller.isAttemptingRepair {
-            Label("Attempting Store Repair…", systemImage: "hourglass")
+            Label("Checking Persistent Store…", systemImage: "hourglass")
           } else {
-            Label("Attempt Persistent Store Repair", systemImage: "wrench.and.screwdriver")
+            Label("Check Persistent Store (Read Only)", systemImage: "externaldrive")
           }
         }
-        .disabled(!controller.hasAcknowledgedRepairRisk || controller.isAttemptingRepair)
+        .disabled(controller.isAttemptingRepair)
 
         repairResultView
       }
@@ -147,20 +141,7 @@ struct RecoveryModeView: View {
         controller.recordExportFailure(error)
       }
     }
-    .confirmationDialog(
-      "Attempt Persistent Store Repair?",
-      isPresented: $isShowingRepairConfirmation,
-      titleVisibility: .visible
-    ) {
-      Button("Attempt Repair", role: .destructive) {
-        controller.attemptPersistentStoreRepair()
-      }
-      Button("Cancel", role: .cancel) {}
-    } message: {
-      Text(
-        "yaHerd will attempt to open the failed persistent store using the production schema migration plan. Export the storage archive first. The current launch will remain read-only."
-      )
-    }
+
   }
 
   @ViewBuilder
