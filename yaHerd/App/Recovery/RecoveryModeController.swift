@@ -228,11 +228,10 @@ final class RecoveryModeController: ObservableObject {
     // creating a directory merely to prepare diagnostics.
     let directory = appSupportURL.appendingPathComponent("yaHerd", isDirectory: true)
     let storeName = CoreDataPersistentContainer.storeFileName
-    let allowedNames: Set<String> = [
-      storeName,
-      storeName + "-wal",
-      storeName + "-shm"
-    ]
+    let allowedNames = Set(
+      ([""] + CoreDataLegacyStorePreflight.sqliteSidecarSuffixes)
+        .map { storeName + $0 }
+    )
     let keys: Set<URLResourceKey> = [
       .isRegularFileKey,
       .fileSizeKey,
