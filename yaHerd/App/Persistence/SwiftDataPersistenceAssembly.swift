@@ -38,11 +38,6 @@ final class SwiftDataPersistenceAssembly: PersistenceAssembly {
             mutationRecorder: mutationPipeline,
             writePolicy: writePolicy
         )
-        let dashboardRepository = MutationPublishingDashboardRepository(
-            base: SwiftDataDashboardRepository(context: context),
-            mutationRecorder: mutationPipeline,
-            writePolicy: writePolicy
-        )
         let workingRepository = MutationPublishingWorkingRepository(
             base: SwiftDataWorkingRepository(context: context),
             mutationRecorder: mutationPipeline,
