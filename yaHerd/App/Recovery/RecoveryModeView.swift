@@ -37,22 +37,21 @@ struct RecoveryModeView: View {
 
       Section("Storage Diagnostics") {
         if controller.diagnosticsErrorMessage == nil {
-        LabeledContent(
-          "Persistent Store Files Found",
-          value: controller.diagnostics.recoverableStoreFiles.count.formatted()
-        )
-        LabeledContent(
-          "Persistent Store File Size",
-          value: ByteCountFormatter.string(
-            fromByteCount: Int64(controller.diagnostics.recoverableStoreByteCount),
-            countStyle: .file
+          LabeledContent(
+            "Persistent Store Files Found",
+            value: controller.diagnostics.recoverableStoreFiles.count.formatted()
           )
-        )
-        LabeledContent(
-          "Last Refreshed",
-          value: controller.diagnostics.generatedAt.formatted(date: .omitted, time: .standard)
-        )
-
+          LabeledContent(
+            "Persistent Store File Size",
+            value: ByteCountFormatter.string(
+              fromByteCount: Int64(controller.diagnostics.recoverableStoreByteCount),
+              countStyle: .file
+            )
+          )
+          LabeledContent(
+            "Last Refreshed",
+            value: controller.diagnostics.generatedAt.formatted(date: .omitted, time: .standard)
+          )
         }
 
         if let diagnosticsErrorMessage = controller.diagnosticsErrorMessage {
