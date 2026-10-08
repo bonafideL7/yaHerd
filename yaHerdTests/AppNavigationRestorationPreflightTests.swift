@@ -128,6 +128,163 @@ final class AppNavigationRestorationPreflightTests: XCTestCase {
     }
 
     @MainActor
+    func testRecoveryLeavesDurableNavigationPayloadAndAllStoredIdentitiesUntouched() throws {
+        let durableHerdID = UUID()
+        let animalID = UUID()
+        let pastureID = UUID()
+        let fieldCheckID = UUID()
+        let workingID = UUID()
+
+        // Both active workflow variants use the same durable scene storage key.
+        // Recovery must preserve either payload without resolving records
+        // against its temporary Herd or replacing stored IDs after navigation.
+        for usesFieldCheck in [true, false] {
+            let saved = AppNavigationState()
+            saved.selectedHerdID = durableHerdID
+            saved.selectedTab = .herd
+            saved.herdRouter.path = [.animal(animalID), .pasture(pastureID)]
+            saved.herdRouter.searchPath = [.pasture(pastureID)]
+            saved.herdRouter.filter.pasture = .pasture(pastureID)
+            if usesFieldCheck {
+                saved.openFieldCheckArea(
+                    .session(FieldCheckSessionLaunchConfiguration(sessionID: fieldCheckID))
+                )
+            } else {
+                saved.openWorkArea(.session(workingID))
+            }
+            let storedPayload = try XCTUnwrap(saved.restorationPayload())
+            let savedSnapshot = saved.snapshot
+
+            let recoveryNavigation = AppNavigationState()
+            let initialRecoverySnapshot = recoveryNavigation.snapshot
+            let ephemeralHerdID = UUID()
+            let validator = PreflightStubNavigationValidator(
+                currentHerdResult: .success(ephemeralHerdID),
+                animalResult: .success(false),
+                pastureResult: .success(false),
+                fieldCheckSessionResult: .success(false),
+                workingSessionResult: .success(false)
+            )
+
+            XCTAssertNil(
+                AppNavigationSceneStorageAccess.restore(
+                    navigation: recoveryNavigation,
+                    from: storedPayload,
+                    using: validator,
+                    dataAccessMode: .recoveryReadOnly
+                )
+            )
+            XCTAssertEqual(recoveryNavigation.snapshot, initialRecoverySnapshot)
+            XCTAssertNil(
+                AppNavigationSceneStorageAccess.payload(
+                    for: recoveryNavigation,
+                    dataAccessMode: .recoveryReadOnly
+                )
+            )
+
+            // Even when deep links or the temporary UI change navigation,
+            // recovery still cannot generate a replacement scene payload.
+            recoveryNavigation.herdRouter.path = [.animal(UUID())]
+            recoveryNavigation.selectedHerdID = ephemeralHerdID
+            XCTAssertNil(
+                AppNavigationSceneStorageAccess.payload(
+                    for: recoveryNavigation,
+                    dataAccessMode: .recoveryReadOnly
+                )
+            )
+
+            let intact = AppNavigationState()
+            intact.restore(from: storedPayload)
+            XCTAssertEqual(intact.snapshot, savedSnapshot)
+            XCTAssertEqual(intact.selectedHerdID, durableHerdID)
+            XCTAssertEqual(intact.herdRouter.path, [.animal(animalID), .pasture(pastureID)])
+            XCTAssertEqual(intact.herdRouter.searchPath, [.pasture(pastureID)])
+            XCTAssertEqual(intact.herdRouter.filter.pasture, .pasture(pastureID))
+            if usesFieldCheck {
+                guard case .fieldCheckSession(let route) = intact.workflowRouter.route else {
+                    return XCTFail("Expected the original Field Check workflow token")
+                }
+                XCTAssertEqual(route.sessionID, fieldCheckID)
+            } else {
+                guard case .workingSession(let sessionID) = intact.workflowRouter.route else {
+                    return XCTFail("Expected the original Working session token")
+                }
+                XCTAssertEqual(sessionID, workingID)
+            }
+        }
+    }
+
+    @MainActor
+    func testHealthyRuntimeRestoresAndPersistsNavigationAfterRecovery() throws {
+        let durableHerdID = UUID()
+        let animalID = UUID()
+        let workingID = UUID()
+        let savedPayload = makePayload(
+            herdID: durableHerdID,
+            animalID: animalID,
+            workingSessionID: workingID
+        )
+
+        let recoveryNavigation = AppNavigationState()
+        let recoveryValidator = PreflightStubNavigationValidator(
+            currentHerdResult: .success(UUID()),
+            animalResult: .success(false),
+            workingSessionResult: .success(false)
+        )
+        XCTAssertNil(
+            AppNavigationSceneStorageAccess.restore(
+                navigation: recoveryNavigation,
+                from: savedPayload,
+                using: recoveryValidator,
+                dataAccessMode: .recoveryReadOnly
+            )
+        )
+        XCTAssertNil(
+            AppNavigationSceneStorageAccess.payload(
+                for: recoveryNavigation,
+                dataAccessMode: .recoveryReadOnly
+            )
+        )
+
+        let reopened = AppNavigationState()
+        let durableValidator = PreflightStubNavigationValidator(
+            currentHerdResult: .success(durableHerdID),
+            animalResult: .success(true),
+            workingSessionResult: .success(true)
+        )
+        XCTAssertEqual(
+            AppNavigationSceneStorageAccess.restore(
+                navigation: reopened,
+                from: savedPayload,
+                using: durableValidator,
+                dataAccessMode: .readWrite
+            ),
+            .applied
+        )
+        XCTAssertEqual(reopened.selectedHerdID, durableHerdID)
+        XCTAssertEqual(reopened.herdRouter.path, [.animal(animalID)])
+        guard case .workingSession(let restoredID) = reopened.workflowRouter.route else {
+            return XCTFail("Expected restored Working session after durable relaunch")
+        }
+        XCTAssertEqual(restoredID, workingID)
+
+        XCTAssertNotNil(
+            AppNavigationSceneStorageAccess.payload(
+                for: reopened,
+                dataAccessMode: .readWrite
+            )
+        )
+        reopened.herdRouter.path = [.animal(UUID())]
+        let updatedPayload = try XCTUnwrap(
+            AppNavigationSceneStorageAccess.payload(
+                for: reopened,
+                dataAccessMode: .readWrite
+            )
+        )
+        XCTAssertNotEqual(updatedPayload, savedPayload)
+    }
+
+    @MainActor
     private func makePayload(
         herdID: UUID,
         animalID: UUID? = nil,
