@@ -5,11 +5,6 @@
 
 import Foundation
 
-enum TagColorDuplicateResolutionPolicy {
-    case newestNonDefaultWins
-    case stableSortOrderWins
-}
-
 enum TagColorLibraryRules {
     static func normalizedDisplayName(_ name: String) -> String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
