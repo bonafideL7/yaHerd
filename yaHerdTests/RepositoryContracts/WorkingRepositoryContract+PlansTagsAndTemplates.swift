@@ -4,6 +4,165 @@ import XCTest
 
 @MainActor
 extension WorkingRepositoryContract {
+    /// Working has a distinct history boundary from Animal tag editing: a
+    /// replacement retires a primary tag, inserts a new tag, and updates the
+    /// session's captured queue-item display. A hidden-but-referenced custom
+    /// definition must retain its UUID across each of those writes.
+    static func assertPrimaryTagReplacementPreservesHiddenReferencedColor(
+        using fixture: WorkingRepositoryContractFixture,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        let source = try makePasture(named: "Working Hidden Color Source", using: fixture)
+        let hiddenColor = TagColorSnapshot(
+            name: "Working Hidden Magenta",
+            prefix: "WHM",
+            rgba: RGBAColor(r: 0.85, g: 0.25, b: 0.65)
+        )
+        try fixture.makeTagColorRepository().upsert(hiddenColor)
+
+        let animal = try makeAnimal(
+            name: "Hidden Color Working Cow",
+            tagNumber: "H500",
+            sex: .female,
+            pastureID: source.id,
+            using: fixture
+        )
+        let repository = fixture.makeWorkingRepository()
+        let sessionID = try await repository.startSession(
+            input: WorkingSessionStartInput(
+                date: date(year: 2026, month: 9, day: 26),
+                sourcePastureID: source.id,
+                treatmentTemplateName: nil,
+                plannedTreatments: [],
+                animalIDs: [animal.id]
+            )
+        )
+        let queueItemID = try XCTUnwrap(
+            repository.fetchSessionDetail(id: sessionID)?.queueItems.first?.id,
+            file: file, line: line
+        )
+
+        // First establish a real current reference. Deletion must therefore
+        // hide, rather than destroy, the custom color's physical definition.
+        _ = try await fixture.makeWorkingRepository().replacePrimaryTag(
+            forQueueItemID: queueItemID,
+            inSessionID: sessionID,
+            input: WorkingTagReplacementInput(number: "H501", colorID: hiddenColor.id)
+        )
+        let beforeHide = try XCTUnwrap(
+            fixture.makeAnimalRepository().fetchAnimalDetail(id: animal.id),
+            file: file, line: line
+        )
+        let previousPrimary = try XCTUnwrap(
+            beforeHide.activeTags.first { $0.isPrimary },
+            file: file, line: line
+        )
+        XCTAssertEqual(previousPrimary.colorID, hiddenColor.id, file: file, line: line)
+
+        try fixture.makeTagColorRepository().deleteColors(ids: [hiddenColor.id])
+        XCTAssertFalse(
+            try fixture.makeTagColorRepository().fetchColors().contains { $0.id == hiddenColor.id },
+            file: file, line: line
+        )
+        let retainedDefinition = try XCTUnwrap(
+            fixture.makeTagColorRepository().fetchColor(id: hiddenColor.id),
+            file: file, line: line
+        )
+        XCTAssertEqual(retainedDefinition.id, hiddenColor.id, file: file, line: line)
+        XCTAssertEqual(retainedDefinition.prefix, hiddenColor.prefix, file: file, line: line)
+
+        // The shared AnimalTagEditView now submits the original UUID instead
+        // of substituting White when its lookup fails. Exercise the exact
+        // downstream Working mutation with that preserved identity.
+        let replacement = try await fixture.makeWorkingRepository().replacePrimaryTag(
+            forQueueItemID: queueItemID,
+            inSessionID: sessionID,
+            input: WorkingTagReplacementInput(number: "H502", colorID: hiddenColor.id)
+        )
+        XCTAssertEqual(replacement.animalDisplayTagNumber, "H502", file: file, line: line)
+        XCTAssertEqual(replacement.animalDisplayTagColorID, hiddenColor.id, file: file, line: line)
+
+        let reloadedAnimal = try XCTUnwrap(
+            fixture.makeAnimalRepository().fetchAnimalDetail(id: animal.id),
+            file: file, line: line
+        )
+        let newPrimary = try XCTUnwrap(
+            reloadedAnimal.activeTags.first { $0.isPrimary },
+            file: file, line: line
+        )
+        XCTAssertEqual(newPrimary.number, "H502", file: file, line: line)
+        XCTAssertEqual(newPrimary.colorID, hiddenColor.id, file: file, line: line)
+        XCTAssertNotEqual(newPrimary.id, previousPrimary.id, file: file, line: line)
+
+        let retiredPrimary = try XCTUnwrap(
+            reloadedAnimal.inactiveTags.first { $0.id == previousPrimary.id },
+            file: file, line: line
+        )
+        XCTAssertEqual(retiredPrimary.colorID, hiddenColor.id, file: file, line: line)
+        XCTAssertEqual(retiredPrimary.number, "H501", file: file, line: line)
+        XCTAssertFalse(retiredPrimary.isActive, file: file, line: line)
+        XCTAssertNotNil(retiredPrimary.removedAt, file: file, line: line)
+
+        let reloadedQueue = try XCTUnwrap(
+            fixture.makeWorkingRepository().fetchSessionDetail(id: sessionID)?
+                .queueItems.first { $0.id == queueItemID },
+            file: file, line: line
+        )
+        XCTAssertEqual(reloadedQueue.animalDisplayTagNumber, "H502", file: file, line: line)
+        XCTAssertEqual(reloadedQueue.animalDisplayTagColorID, hiddenColor.id, file: file, line: line)
+        let reloadedEditor = try XCTUnwrap(
+            fixture.makeWorkingRepository().fetchQueueItemEditor(
+                sessionID: sessionID,
+                queueItemID: queueItemID
+            ),
+            file: file, line: line
+        )
+        XCTAssertEqual(reloadedEditor.animalDisplayTagColorID, hiddenColor.id, file: file, line: line)
+
+        // An unresolved explicit UUID fails after the Working transaction has
+        // staged retirement of the current primary. No part of the replacement
+        // may survive this failed mutation.
+        await XCTAssertThrowsErrorAsync(
+            try await fixture.makeWorkingRepository().replacePrimaryTag(
+                forQueueItemID: queueItemID,
+                inSessionID: sessionID,
+                input: WorkingTagReplacementInput(number: "H503", colorID: UUID())
+            ),
+            file: file, line: line
+        )
+        XCTAssertEqual(
+            try fixture.makeAnimalRepository().fetchAnimalDetail(id: animal.id),
+            reloadedAnimal,
+            "Unknown replacement colors must not retire or replace the active tag.",
+            file: file, line: line
+        )
+        XCTAssertEqual(
+            try fixture.makeWorkingRepository().fetchSessionDetail(id: sessionID)?
+                .queueItems.first { $0.id == queueItemID },
+            reloadedQueue,
+            "Unknown colors must not rewrite the session's queue snapshot.",
+            file: file, line: line
+        )
+
+        await XCTAssertThrowsErrorAsync(
+            try await fixture.makeWorkingRepository().replacePrimaryTag(
+                forQueueItemID: queueItemID,
+                inSessionID: sessionID,
+                input: WorkingTagReplacementInput(number: "  ", colorID: hiddenColor.id)
+            ),
+            file: file, line: line
+        ) { error in
+            XCTAssertEqual(error as? WorkingRepositoryError, .invalidTagNumber, file: file, line: line)
+        }
+        XCTAssertEqual(
+            try fixture.makeAnimalRepository().fetchAnimalDetail(id: animal.id),
+            reloadedAnimal,
+            "Invalid replacement number must not rewrite active/retired history.",
+            file: file, line: line
+        )
+    }
+
     static func assertSessionTreatmentPlanAndPrimaryTagReplacementPersist(
         using fixture: WorkingRepositoryContractFixture,
         file: StaticString = #filePath,
