@@ -129,6 +129,92 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
     }
 
 
+    /// The user-facing TagColorLibraryStore behavior previously covered only
+    /// by a SwiftData ModelContext test now runs against the active Core Data
+    /// app persistence stack. A pristine read must never create physical rows.
+    func testTagColorLibraryStoreStartsWithVirtualWhiteWithoutWriting() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = CoreDataTagColorContractEnvironment(assembly: assembly)
+        try environment.seedInitialHerd()
+
+        let initialCount = try physicalColorRowCount(in: assembly)
+        XCTAssertEqual(initialCount, 0)
+
+        let store = TagColorLibraryStore(repository: environment.fixture.makeTagColorRepository())
+        XCTAssertEqual(store.defaultColor.id, TagColorDefaults.whiteID)
+        XCTAssertEqual(store.defaultColor.name, "White")
+        XCTAssertEqual(store.defaultColorID, TagColorDefaults.whiteID)
+        XCTAssertEqual(store.resolvedColorID(nil), TagColorDefaults.whiteID)
+        XCTAssertEqual(store.editableColorID(nil), TagColorDefaults.whiteID)
+        XCTAssertNil(store.lastErrorMessage)
+
+        let reloaded = TagColorLibraryStore(
+            repository: environment.fixture.makeTagColorRepository()
+        )
+        XCTAssertEqual(reloaded.defaultColor.id, TagColorDefaults.whiteID)
+        XCTAssertEqual(reloaded.colors.map(\.id), store.colors.map(\.id))
+        XCTAssertEqual(
+            try physicalColorRowCount(in: assembly),
+            initialCount,
+            "Passive Tag Color library loading must not materialize defaults or mutate persistence."
+        )
+    }
+
+    func testTagColorLibraryStoreSelectsExactlyOnePersistedDefaultAndReloads() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = CoreDataTagColorContractEnvironment(assembly: assembly)
+        try environment.seedInitialHerd()
+
+        let store = TagColorLibraryStore(repository: environment.fixture.makeTagColorRepository())
+        let blue = try XCTUnwrap(store.colors.first { $0.id == TagColorDefaults.blueID })
+        store.setDefaultColor(id: blue.id)
+
+        XCTAssertNil(store.lastErrorMessage)
+        XCTAssertEqual(store.defaultColor.id, blue.id)
+        XCTAssertEqual(store.defaultColorID, blue.id)
+        XCTAssertEqual(store.resolvedColorID(nil), blue.id)
+        XCTAssertEqual(store.colors.filter(\.isDefault).map(\.id), [blue.id])
+
+        let fresh = TagColorLibraryStore(
+            repository: environment.fixture.makeTagColorRepository()
+        )
+        XCTAssertEqual(fresh.defaultColor.id, blue.id)
+        XCTAssertEqual(fresh.resolvedColorID(nil), blue.id)
+        XCTAssertEqual(fresh.colors.filter(\.isDefault).map(\.id), [blue.id])
+
+        let context = assembly.contextFactory.makeReadContext()
+        let physicalDefaultIDs: [UUID] = try context.performAndWait {
+            let request = NSFetchRequest<CDTagColorDefinition>(
+                entityName: CDTagColorDefinition.coreDataEntityName
+            )
+            return try context.fetch(request).filter(\.isDefault).map(\.id)
+        }
+        XCTAssertEqual(
+            physicalDefaultIDs,
+            [blue.id],
+            "The selected UI default must be the sole committed physical Core Data default."
+        )
+    }
+
+    func testCanonicalTagColorPaletteExcludesRetiredBuiltInColors() {
+        let names = Set(TagColorDefaults.seedDefaultColors().map(\.name))
+        XCTAssertFalse(names.contains("Black"))
+        XCTAssertFalse(names.contains("Brown"))
+        XCTAssertFalse(names.contains("Gray"))
+    }
+
+    private func physicalColorRowCount(
+        in assembly: CoreDataPersistenceAssembly
+    ) throws -> Int {
+        let context = assembly.contextFactory.makeReadContext()
+        return try context.performAndWait {
+            let request = NSFetchRequest<CDTagColorDefinition>(
+                entityName: CDTagColorDefinition.coreDataEntityName
+            )
+            return try context.count(for: request)
+        }
+    }
+
     func testStagedCustomInsertionAndUpdateFailuresRollbackAndRetry() async throws {
         try await runRollback { environment in
             let normal = environment.fixture.makeTagColorRepository()
