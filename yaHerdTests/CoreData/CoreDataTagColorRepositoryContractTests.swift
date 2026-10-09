@@ -186,7 +186,9 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
         try await runRollback { environment in
             let normal = environment.fixture.makeTagColorRepository()
             let baseline = try normal.fetchColors()
+            let previousDefaultID = try XCTUnwrap(baseline.first(where: \.isDefault)?.id)
             let blue = try XCTUnwrap(baseline.first { $0.name == "Blue" })
+            XCTAssertNotEqual(previousDefaultID, blue.id)
             let probe = CoreDataTagColorRollbackProbe()
             let failing = environment.makeFaultInjectingRepository(probe)
 
@@ -195,8 +197,18 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
             }
             try probe.assertContextRolledBack()
             XCTAssertEqual(try normal.fetchColors(), baseline)
+            XCTAssertEqual(
+                try normal.fetchColors().filter(\.isDefault).map(\.id),
+                [previousDefaultID],
+                "Failed default reassignment must restore the original default."
+            )
+
             try failing.setDefaultColor(id: blue.id)
-            XCTAssertEqual(try normal.fetchColors().first(where: \.isDefault)?.id, blue.id)
+            XCTAssertEqual(
+                try normal.fetchColors().filter(\.isDefault).map(\.id),
+                [blue.id],
+                "Successful reassignment must select Blue and clear the previous default."
+            )
         }
 
         try await runRollback { environment in
