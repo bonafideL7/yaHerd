@@ -22,11 +22,9 @@ PRs #127 and #128 removed the unused SwiftData app assembly, background read ada
 
 ## Contract equivalence for the four removed SwiftData tests
 
-| Legacy test | Existing Core Data permanent contract |
-| --- | --- |
-| `testSessionDetailUsesCheckStartSnapshotsAfterPastureAndAnimalChange` | `assertHistoricalSnapshotsSurviveLiveRecordChanges`: immutable Pasture name, roster tag/color/name/sex/type after live changes |
-| `testQuickCountCapacityUsesSnapshotAnimalTypeAfterAnimalTypeChanges` | `assertMutableCountsNotesAndRosterStateSurviveReload`: quick count normalizes against captured roster type after the live sex changes |
-| `testFindingUsesAnimalAndPastureSnapshotsAfterRecordsChange` | `assertHistoricalSnapshotsSurviveLiveRecordChanges`: immutable finding tag/color and Pasture name after mutations, including open-finding projection |
-| `testDamTagUsesCheckStartSnapshotAfterDamChanges` | `assertHistoricalSnapshotsSurviveLiveRecordChanges`: calf roster retains dam's original tag and color after a live dam retag |
+- `testSessionDetailUsesCheckStartSnapshotsAfterPastureAndAnimalChange` is covered by `assertHistoricalSnapshotsSurviveLiveRecordChanges`: original Pasture name, roster tag/color/name/sex/type after later live mutations.
+- `testQuickCountCapacityUsesSnapshotAnimalTypeAfterAnimalTypeChanges` is covered by `assertMutableCountsNotesAndRosterStateSurviveReload`: quick-count capacity uses the captured roster animal type after a live sex change.
+- `testFindingUsesAnimalAndPastureSnapshotsAfterRecordsChange` is covered by `assertHistoricalSnapshotsSurviveLiveRecordChanges`: immutable finding tag/color and Pasture name after mutation and a fresh Core Data read.
+- `testDamTagUsesCheckStartSnapshotAfterDamChanges` is covered by `assertHistoricalSnapshotsSurviveLiveRecordChanges`: original dam tag and color remain on the calf's roster row after dam retagging.
 
-The existing Core Data suite invokes both permanent assertions. No duplicate test needs to be added. Legacy-only SwiftData fixture declarations and all original local-data recovery protections remain available until the corresponding subsequent M11 stage.
+The Core Data suite already invokes both permanent assertions. No duplicate test is needed. Legacy-only SwiftData fixture declarations and original local-data recovery protections remain for subsequent M11 stages.
