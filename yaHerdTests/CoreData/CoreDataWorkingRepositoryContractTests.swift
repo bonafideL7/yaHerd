@@ -50,6 +50,7 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
 
     func testWorkingCoreDataPlanTagTemplateAndHistoryContracts() async throws {
         try await run { try await WorkingRepositoryContract.assertSessionTreatmentPlanAndPrimaryTagReplacementPersist(using: $0.fixture) }
+        try await run { try await WorkingRepositoryContract.assertPrimaryTagReplacementPreservesHiddenReferencedColor(using: $0.fixture) }
         try await run { try await WorkingRepositoryContract.assertTreatmentTemplateCRUDAndOrdering(using: $0.fixture) }
         try await run { try await WorkingRepositoryContract.assertTemplateChangesDoNotRewriteExistingSessionSnapshot(using: $0.fixture) }
         try await run { try await WorkingRepositoryContract.assertSessionPlanChangesDoNotDeleteRecordedTreatmentHistory(using: $0.fixture) }
