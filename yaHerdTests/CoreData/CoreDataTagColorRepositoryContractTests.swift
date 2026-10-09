@@ -298,7 +298,11 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
             let originalReferences = try fixture.referenceControl.fetchReferences()
             let originalRevision = try environment.fetchReferenceAnimalRevision()
             let probe = CoreDataTagColorRollbackProbe(
-                expectedRemap: (sourceID: incoming.id, targetID: original.id)
+                expectedRemap: (
+                    sourceID: incoming.id,
+                    targetID: original.id,
+                    originalAnimalRevision: originalRevision
+                )
             )
             let failing = environment.makeFaultInjectingRepository(probe)
             let reconciled = TagColorSnapshot(
@@ -321,6 +325,10 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
             try failing.upsert(reconciled)
             XCTAssertEqual(try fixture.referenceControl.fetchReferences().animalTagColorID, original.id)
             XCTAssertNil(try normal.fetchColor(id: incoming.id))
+            XCTAssertNotEqual(
+                try environment.fetchReferenceAnimalRevision(), originalRevision,
+                "Successful collision repair must rotate the affected Animal's editor revision."
+            )
         }
     }
 
@@ -347,7 +355,11 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
                 rgba: RGBAColor(r: 0.1, g: 0.2, b: 0.95)
             )
             let probe = CoreDataTagColorRollbackProbe(
-                expectedRemap: (sourceID: original.id, targetID: TagColorDefaults.blueID)
+                expectedRemap: (
+                    sourceID: original.id,
+                    targetID: TagColorDefaults.blueID,
+                    originalAnimalRevision: originalRevision
+                )
             )
             let failing = environment.makeFaultInjectingRepository(probe)
 
@@ -364,6 +376,10 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
             XCTAssertNil(try normal.fetchColor(id: original.id))
             XCTAssertEqual(try normal.fetchColor(id: TagColorDefaults.blueID)?.id, TagColorDefaults.blueID)
             XCTAssertEqual(try fixture.referenceControl.fetchReferences().animalTagColorID, TagColorDefaults.blueID)
+            XCTAssertNotEqual(
+                try environment.fetchReferenceAnimalRevision(), originalRevision,
+                "Successful built-in collision repair must rotate the affected Animal's editor revision."
+            )
         }
     }
 
@@ -505,9 +521,17 @@ private final class CoreDataTagColorRollbackProbe: @unchecked Sendable {
     private let lock = NSLock()
     private var failed = false
     private var rolledBackContext: NSManagedObjectContext?
-    private let expectedRemap: (sourceID: UUID, targetID: UUID)?
+    private let expectedRemap: (
+        sourceID: UUID,
+        targetID: UUID,
+        originalAnimalRevision: UUID
+    )?
 
-    init(expectedRemap: (sourceID: UUID, targetID: UUID)? = nil) {
+    init(expectedRemap: (
+        sourceID: UUID,
+        targetID: UUID,
+        originalAnimalRevision: UUID
+    )? = nil) {
         self.expectedRemap = expectedRemap
     }
 
@@ -520,6 +544,7 @@ private final class CoreDataTagColorRollbackProbe: @unchecked Sendable {
                 .compactMap { $0 as? CDTagColorDefinition }
                 .contains { $0.id == expectedRemap.sourceID }
             let tags = context.updatedObjects.compactMap { $0 as? CDAnimalTag }
+            let changedAnimals = context.updatedObjects.compactMap { $0 as? CDAnimal }
             let checks = context.updatedObjects.compactMap { $0 as? CDFieldCheckAnimalCheck }
             let findings = context.updatedObjects.compactMap { $0 as? CDFieldCheckFinding }
             let queues = context.updatedObjects.compactMap { $0 as? CDWorkingQueueItem }
@@ -538,6 +563,12 @@ private final class CoreDataTagColorRollbackProbe: @unchecked Sendable {
                           && $0.animalDamDisplayTagColorIDSnapshot == expectedRemap.targetID
                   }) else {
                 throw CoreDataTagColorInjectedFailure.referenceRemapNotStaged
+            }
+            guard changedAnimals.count == 1,
+                  let changedAnimal = changedAnimals.first,
+                  changedAnimal.editorRevision != expectedRemap.originalAnimalRevision,
+                  tags.allSatisfy({ $0.animal === changedAnimal }) else {
+                throw CoreDataTagColorInjectedFailure.animalEditorRevisionNotStaged
             }
         }
         let inject = lock.withLock { () -> Bool in
@@ -582,5 +613,6 @@ private final class CoreDataTagColorRollbackProbe: @unchecked Sendable {
 private enum CoreDataTagColorInjectedFailure: Error, Equatable {
     case noStagedMutation
     case referenceRemapNotStaged
+    case animalEditorRevisionNotStaged
     case afterStaging
 }
