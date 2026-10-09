@@ -296,6 +296,7 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
             let originalPhysical = try XCTUnwrap(normal.fetchColor(id: original.id))
             let incomingPhysical = try XCTUnwrap(normal.fetchColor(id: incoming.id))
             let originalReferences = try fixture.referenceControl.fetchReferences()
+            let originalRevision = try environment.fetchReferenceAnimalRevision()
             let probe = CoreDataTagColorRollbackProbe(
                 expectedRemap: (sourceID: incoming.id, targetID: original.id)
             )
@@ -315,6 +316,7 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
             XCTAssertEqual(try normal.fetchColor(id: original.id), originalPhysical)
             XCTAssertEqual(try normal.fetchColor(id: incoming.id), incomingPhysical)
             XCTAssertEqual(try fixture.referenceControl.fetchReferences(), originalReferences)
+            XCTAssertEqual(try environment.fetchReferenceAnimalRevision(), originalRevision)
 
             try failing.upsert(reconciled)
             XCTAssertEqual(try fixture.referenceControl.fetchReferences().animalTagColorID, original.id)
@@ -337,6 +339,7 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
             let baseline = try normal.fetchColors()
             let originalPhysical = try XCTUnwrap(normal.fetchColor(id: original.id))
             let originalReferences = try fixture.referenceControl.fetchReferences()
+            let originalRevision = try environment.fetchReferenceAnimalRevision()
             let blue = TagColorSnapshot(
                 id: TagColorDefaults.blueID,
                 name: "Blue",
@@ -355,6 +358,7 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
             XCTAssertEqual(try normal.fetchColors(), baseline)
             XCTAssertEqual(try normal.fetchColor(id: original.id), originalPhysical)
             XCTAssertEqual(try fixture.referenceControl.fetchReferences(), originalReferences)
+            XCTAssertEqual(try environment.fetchReferenceAnimalRevision(), originalRevision)
 
             try failing.upsert(blue)
             XCTAssertNil(try normal.fetchColor(id: original.id))
@@ -428,6 +432,10 @@ private final class CoreDataTagColorContractEnvironment {
                 }
             )
         )
+    }
+
+    func fetchReferenceAnimalRevision() throws -> UUID {
+        try referenceProbe.fetchAnimalEditorRevision()
     }
 
     func makeFaultInjectingRepository(
