@@ -28,8 +28,63 @@ final class TagColorLibraryHistoricalLookupTests: XCTestCase {
         XCTAssertEqual(store.definition(for: historical.id), historical)
         XCTAssertEqual(store.resolvedDefinition(tagColorID: historical.id), historical)
         XCTAssertEqual(store.resolvedColorID(historical.id), historical.id)
+        XCTAssertEqual(store.editableColorID(historical.id), historical.id)
         XCTAssertEqual(store.formattedTag(tagNumber: "42", colorID: historical.id), "HT42")
         XCTAssertEqual(repository.fetchColorIDs, [historical.id])
+    }
+
+    func testEditableColorIDPreservesExistingIdentityWhenHiddenLookupFails() throws {
+        let white = TagColorSnapshot(
+            id: TagColorDefaults.whiteID,
+            name: "White",
+            prefix: "W",
+            rgba: RGBAColor(r: 1, g: 1, b: 1),
+            isDefault: true
+        )
+        let explicitMissingColorID = UUID()
+        let repository = HistoricalLookupTagColorRepository(
+            visibleColors: [white],
+            historicalColorsByID: [:],
+            failingColorIDs: [explicitMissingColorID]
+        )
+        let store = TagColorLibraryStore(repository: repository)
+
+        // Display fallback is still White when the physical color cannot be read.
+        XCTAssertEqual(store.resolvedColorID(explicitMissingColorID), white.id)
+        XCTAssertEqual(repository.fetchColorIDs, [explicitMissingColorID])
+
+        // Editing and promoting an existing tag must not persist that fallback ID.
+        XCTAssertEqual(store.editableColorID(explicitMissingColorID), explicitMissingColorID)
+        XCTAssertEqual(repository.fetchColorIDs, [explicitMissingColorID],
+                       "Selecting an existing edit UUID must not repeat a failing lookup.")
+
+        XCTAssertEqual(store.editableColorID(nil), white.id,
+                       "New tags with no selected color still inherit the default.")
+        XCTAssertEqual(store.editableColorID(white.id), white.id,
+                       "Explicitly choosing a visible color retains the selected UUID.")
+        XCTAssertEqual(repository.fetchColorIDs, [explicitMissingColorID])
+    }
+
+    func testEditableColorIDPreservesUnknownIDWhenLookupReturnsNil() {
+        let white = TagColorSnapshot(
+            id: TagColorDefaults.whiteID,
+            name: "White",
+            prefix: "W",
+            rgba: RGBAColor(r: 1, g: 1, b: 1),
+            isDefault: true
+        )
+        let missingID = UUID()
+        let repository = HistoricalLookupTagColorRepository(
+            visibleColors: [white],
+            historicalColorsByID: [:]
+        )
+        let store = TagColorLibraryStore(repository: repository)
+
+        XCTAssertEqual(store.resolvedColorID(missingID), white.id)
+        XCTAssertEqual(store.editableColorID(missingID), missingID)
+        XCTAssertEqual(store.editableColorID(nil), white.id)
+        XCTAssertEqual(repository.fetchColorIDs, [missingID],
+                       "Editing a missing ID must preserve identity without another lookup.")
     }
 }
 
@@ -37,14 +92,17 @@ final class TagColorLibraryHistoricalLookupTests: XCTestCase {
 private final class HistoricalLookupTagColorRepository: TagColorRepository {
     private let visibleColors: [TagColorSnapshot]
     private let historicalColorsByID: [UUID: TagColorSnapshot]
+    private let failingColorIDs: Set<UUID>
     private(set) var fetchColorIDs: [UUID] = []
 
     init(
         visibleColors: [TagColorSnapshot],
-        historicalColorsByID: [UUID: TagColorSnapshot]
+        historicalColorsByID: [UUID: TagColorSnapshot],
+        failingColorIDs: Set<UUID> = []
     ) {
         self.visibleColors = visibleColors
         self.historicalColorsByID = historicalColorsByID
+        self.failingColorIDs = failingColorIDs
     }
 
     func fetchColors() throws -> [TagColorSnapshot] {
@@ -53,6 +111,9 @@ private final class HistoricalLookupTagColorRepository: TagColorRepository {
 
     func fetchColor(id: UUID) throws -> TagColorSnapshot? {
         fetchColorIDs.append(id)
+        if failingColorIDs.contains(id) {
+            throw HistoricalLookupFailure.unavailable
+        }
         return visibleColors.first { $0.id == id } ?? historicalColorsByID[id]
     }
 
@@ -61,4 +122,8 @@ private final class HistoricalLookupTagColorRepository: TagColorRepository {
     func deleteColors(ids: [UUID]) throws {}
     func reorder(colorIDs: [UUID]) throws {}
     func restoreDefaultColors() throws {}
+}
+
+private enum HistoricalLookupFailure: Error {
+    case unavailable
 }
