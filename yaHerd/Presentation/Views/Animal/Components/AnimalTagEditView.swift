@@ -62,7 +62,7 @@ struct AnimalTagEditView: View {
                 Section {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(tagColorLibrary.colors) { def in
-                            let isSelected = def.id == tagColorLibrary.resolvedColorID(colorID)
+                            let isSelected = def.id == tagColorLibrary.editableColorID(colorID)
 
                             Circle()
                                 .fill(def.color)
@@ -84,7 +84,16 @@ struct AnimalTagEditView: View {
                     }
                     .padding(.vertical, 4)
                     .onAppear {
-                        colorID = tagColorLibrary.resolvedColorID(colorID)
+                        colorID = tagColorLibrary.editableColorID(colorID)
+                    }
+
+                    if let colorID, tagColorLibrary.definition(for: colorID) == nil {
+                        Label(
+                            "The original tag color could not be loaded. Saving will preserve it unless you select another color.",
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     }
                 } header: {
                     Text("Color")
@@ -116,7 +125,7 @@ struct AnimalTagEditView: View {
                     ToolbarSaveButton(accessibilityLabel: saveButtonTitle) {
                         onSave(
                             number.trimmingCharacters(in: .whitespacesAndNewlines),
-                            tagColorLibrary.resolvedColorID(colorID),
+                            tagColorLibrary.editableColorID(colorID),
                             isPrimary
                         )
                         dismiss()
