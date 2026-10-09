@@ -296,7 +296,9 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
             let originalPhysical = try XCTUnwrap(normal.fetchColor(id: original.id))
             let incomingPhysical = try XCTUnwrap(normal.fetchColor(id: incoming.id))
             let originalReferences = try fixture.referenceControl.fetchReferences()
-            let probe = CoreDataTagColorRollbackProbe()
+            let probe = CoreDataTagColorRollbackProbe(
+                expectedRemap: (sourceID: incoming.id, targetID: original.id)
+            )
             let failing = environment.makeFaultInjectingRepository(probe)
             let reconciled = TagColorSnapshot(
                 id: incoming.id,
@@ -317,6 +319,47 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
             try failing.upsert(reconciled)
             XCTAssertEqual(try fixture.referenceControl.fetchReferences().animalTagColorID, original.id)
             XCTAssertNil(try normal.fetchColor(id: incoming.id))
+        }
+    }
+
+
+    func testStagedBuiltInIdentityMergeFailureRestoresCanonicalAndPhysicalReferences() async throws {
+        try await runRollback { environment in
+            let fixture = environment.fixture
+            let original = TagColorSnapshot(
+                name: "Blue",
+                prefix: "CBB",
+                rgba: RGBAColor(r: 0.1, g: 0.35, b: 0.7)
+            )
+            try fixture.referenceControl.seedPersistedColor(original)
+            try fixture.referenceControl.seedReferences(original.id)
+            let normal = fixture.makeTagColorRepository()
+            let baseline = try normal.fetchColors()
+            let originalPhysical = try XCTUnwrap(normal.fetchColor(id: original.id))
+            let originalReferences = try fixture.referenceControl.fetchReferences()
+            let blue = TagColorSnapshot(
+                id: TagColorDefaults.blueID,
+                name: "Blue",
+                prefix: "B",
+                rgba: RGBAColor(r: 0.1, g: 0.2, b: 0.95)
+            )
+            let probe = CoreDataTagColorRollbackProbe(
+                expectedRemap: (sourceID: original.id, targetID: TagColorDefaults.blueID)
+            )
+            let failing = environment.makeFaultInjectingRepository(probe)
+
+            XCTAssertThrowsError(try failing.upsert(blue)) {
+                XCTAssertEqual($0 as? CoreDataTagColorInjectedFailure, .afterStaging)
+            }
+            try probe.assertContextRolledBack()
+            XCTAssertEqual(try normal.fetchColors(), baseline)
+            XCTAssertEqual(try normal.fetchColor(id: original.id), originalPhysical)
+            XCTAssertEqual(try fixture.referenceControl.fetchReferences(), originalReferences)
+
+            try failing.upsert(blue)
+            XCTAssertNil(try normal.fetchColor(id: original.id))
+            XCTAssertEqual(try normal.fetchColor(id: TagColorDefaults.blueID)?.id, TagColorDefaults.blueID)
+            XCTAssertEqual(try fixture.referenceControl.fetchReferences().animalTagColorID, TagColorDefaults.blueID)
         }
     }
 
@@ -454,10 +497,40 @@ private final class CoreDataTagColorRollbackProbe: @unchecked Sendable {
     private let lock = NSLock()
     private var failed = false
     private var rolledBackContext: NSManagedObjectContext?
+    private let expectedRemap: (sourceID: UUID, targetID: UUID)?
+
+    init(expectedRemap: (sourceID: UUID, targetID: UUID)? = nil) {
+        self.expectedRemap = expectedRemap
+    }
 
     func injectOnceAfterStaging(_ context: NSManagedObjectContext) throws {
         guard context.hasChanges else {
             throw CoreDataTagColorInjectedFailure.noStagedMutation
+        }
+        if let expectedRemap {
+            let deleted = context.deletedObjects
+                .compactMap { $0 as? CDTagColorDefinition }
+                .contains { $0.id == expectedRemap.sourceID }
+            let tags = context.updatedObjects.compactMap { $0 as? CDAnimalTag }
+            let checks = context.updatedObjects.compactMap { $0 as? CDFieldCheckAnimalCheck }
+            let findings = context.updatedObjects.compactMap { $0 as? CDFieldCheckFinding }
+            let queues = context.updatedObjects.compactMap { $0 as? CDWorkingQueueItem }
+            guard deleted,
+                  tags.count >= 2,
+                  tags.allSatisfy({ $0.color?.id == expectedRemap.targetID }),
+                  checks.contains(where: {
+                      $0.rosterTagColorIDSnapshot == expectedRemap.targetID
+                          && $0.damRosterTagColorIDSnapshot == expectedRemap.targetID
+                  }),
+                  findings.contains(where: {
+                      $0.animalDisplayTagColorIDSnapshot == expectedRemap.targetID
+                  }),
+                  queues.contains(where: {
+                      $0.animalTagColorIDSnapshot == expectedRemap.targetID
+                          && $0.animalDamDisplayTagColorIDSnapshot == expectedRemap.targetID
+                  }) else {
+                throw CoreDataTagColorInjectedFailure.referenceRemapNotStaged
+            }
         }
         let inject = lock.withLock { () -> Bool in
             guard !failed else { return false }
@@ -500,5 +573,6 @@ private final class CoreDataTagColorRollbackProbe: @unchecked Sendable {
 
 private enum CoreDataTagColorInjectedFailure: Error, Equatable {
     case noStagedMutation
+    case referenceRemapNotStaged
     case afterStaging
 }
