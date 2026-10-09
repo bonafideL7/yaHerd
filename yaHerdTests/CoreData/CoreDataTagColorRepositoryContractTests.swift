@@ -128,6 +128,207 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
         }
     }
 
+
+    func testStagedCustomInsertionAndUpdateFailuresRollbackAndRetry() async throws {
+        try await runRollback { environment in
+            let normal = environment.fixture.makeTagColorRepository()
+            let inserted = TagColorSnapshot(
+                name: "Rollback Canary",
+                prefix: "RBC",
+                rgba: RGBAColor(r: 0.15, g: 0.55, b: 0.7)
+            )
+            let baseline = try normal.fetchColors()
+            let probe = CoreDataTagColorRollbackProbe()
+            let failing = environment.makeFaultInjectingRepository(probe)
+
+            XCTAssertThrowsError(try failing.upsert(inserted)) {
+                XCTAssertEqual($0 as? CoreDataTagColorInjectedFailure, .afterStaging)
+            }
+            try probe.assertContextRolledBack()
+            XCTAssertEqual(try normal.fetchColors(), baseline)
+            XCTAssertNil(try normal.fetchColor(id: inserted.id))
+            try failing.upsert(inserted)
+            XCTAssertEqual(try normal.fetchColor(id: inserted.id)?.id, inserted.id)
+        }
+
+        try await runRollback { environment in
+            let normal = environment.fixture.makeTagColorRepository()
+            let original = TagColorSnapshot(
+                name: "Rollback Original",
+                prefix: "RBO",
+                rgba: RGBAColor(r: 0.2, g: 0.4, b: 0.6)
+            )
+            try normal.upsert(original)
+            let baseline = try normal.fetchColors()
+            let baselinePhysical = try XCTUnwrap(normal.fetchColor(id: original.id))
+            let changed = TagColorSnapshot(
+                id: original.id,
+                name: "Rollback Updated",
+                prefix: "RBU",
+                rgba: RGBAColor(r: 0.8, g: 0.5, b: 0.3),
+                isDefault: true
+            )
+            let probe = CoreDataTagColorRollbackProbe()
+            let failing = environment.makeFaultInjectingRepository(probe)
+
+            XCTAssertThrowsError(try failing.upsert(changed)) {
+                XCTAssertEqual($0 as? CoreDataTagColorInjectedFailure, .afterStaging)
+            }
+            try probe.assertContextRolledBack()
+            XCTAssertEqual(try normal.fetchColors(), baseline)
+            XCTAssertEqual(try normal.fetchColor(id: original.id), baselinePhysical)
+            try failing.upsert(changed)
+            XCTAssertEqual(try normal.fetchColor(id: original.id)?.name, "Rollback Updated")
+        }
+    }
+
+    func testStagedDefaultAndReorderFailuresRollbackAndRetry() async throws {
+        try await runRollback { environment in
+            let normal = environment.fixture.makeTagColorRepository()
+            let baseline = try normal.fetchColors()
+            let blue = try XCTUnwrap(baseline.first { $0.name == "Blue" })
+            let probe = CoreDataTagColorRollbackProbe()
+            let failing = environment.makeFaultInjectingRepository(probe)
+
+            XCTAssertThrowsError(try failing.setDefaultColor(id: blue.id)) {
+                XCTAssertEqual($0 as? CoreDataTagColorInjectedFailure, .afterStaging)
+            }
+            try probe.assertContextRolledBack()
+            XCTAssertEqual(try normal.fetchColors(), baseline)
+            try failing.setDefaultColor(id: blue.id)
+            XCTAssertEqual(try normal.fetchColors().first(where: \.isDefault)?.id, blue.id)
+        }
+
+        try await runRollback { environment in
+            let normal = environment.fixture.makeTagColorRepository()
+            let a = TagColorSnapshot(
+                name: "Reorder One", prefix: "RO1",
+                rgba: RGBAColor(r: 0.2, g: 0.6, b: 0.8)
+            )
+            let b = TagColorSnapshot(
+                name: "Reorder Two", prefix: "RO2",
+                rgba: RGBAColor(r: 0.7, g: 0.5, b: 0.3)
+            )
+            try normal.upsert(a)
+            try normal.upsert(b)
+            let baseline = try normal.fetchColors()
+            let order = [b.id, a.id] + baseline.map(\.id).filter { $0 != a.id && $0 != b.id }
+            let probe = CoreDataTagColorRollbackProbe()
+            let failing = environment.makeFaultInjectingRepository(probe)
+
+            XCTAssertThrowsError(try failing.reorder(colorIDs: order)) {
+                XCTAssertEqual($0 as? CoreDataTagColorInjectedFailure, .afterStaging)
+            }
+            try probe.assertContextRolledBack()
+            XCTAssertEqual(try normal.fetchColors(), baseline)
+            try failing.reorder(colorIDs: order)
+            XCTAssertNotEqual(try normal.fetchColors(), baseline)
+        }
+    }
+
+    func testStagedReferencedHideAndDefaultRestoreFailuresRollbackAndRetry() async throws {
+        try await runRollback { environment in
+            let fixture = environment.fixture
+            let normal = fixture.makeTagColorRepository()
+            let original = TagColorSnapshot(
+                name: "Referenced Rollback",
+                prefix: "RBR",
+                rgba: RGBAColor(r: 0.45, g: 0.2, b: 0.8)
+            )
+            try normal.upsert(original)
+            try fixture.referenceControl.seedReferences(original.id)
+            let baseline = try normal.fetchColors()
+            let originalDefinition = try XCTUnwrap(normal.fetchColor(id: original.id))
+            let referencesBefore = try fixture.referenceControl.fetchReferences()
+            let probe = CoreDataTagColorRollbackProbe()
+            let failing = environment.makeFaultInjectingRepository(probe)
+
+            XCTAssertThrowsError(try failing.deleteColors(ids: [original.id])) {
+                XCTAssertEqual($0 as? CoreDataTagColorInjectedFailure, .afterStaging)
+            }
+            try probe.assertContextRolledBack()
+            XCTAssertEqual(try normal.fetchColors(), baseline)
+            XCTAssertEqual(try normal.fetchColor(id: original.id), originalDefinition)
+            XCTAssertEqual(try fixture.referenceControl.fetchReferences(), referencesBefore)
+            try failing.deleteColors(ids: [original.id])
+            XCTAssertFalse(try normal.fetchColors().contains { $0.id == original.id })
+            XCTAssertEqual(try normal.fetchColor(id: original.id)?.id, original.id)
+            XCTAssertEqual(try fixture.referenceControl.fetchReferences(), referencesBefore)
+        }
+
+        try await runRollback { environment in
+            let normal = environment.fixture.makeTagColorRepository()
+            let baseline = try normal.fetchColors()
+            let probe = CoreDataTagColorRollbackProbe()
+            let failing = environment.makeFaultInjectingRepository(probe)
+
+            XCTAssertThrowsError(try failing.restoreDefaultColors()) {
+                XCTAssertEqual($0 as? CoreDataTagColorInjectedFailure, .afterStaging)
+            }
+            try probe.assertContextRolledBack()
+            XCTAssertEqual(try normal.fetchColors(), baseline)
+            try failing.restoreDefaultColors()
+            XCTAssertEqual(
+                try normal.fetchColors().filter(\.isDefault).count,
+                1
+            )
+        }
+    }
+
+    func testStagedCustomIdentityMergeFailureRestoresAllSevenReferences() async throws {
+        try await runRollback { environment in
+            let fixture = environment.fixture
+            let original = TagColorSnapshot(
+                name: "Collision Canonical",
+                prefix: "CC",
+                rgba: RGBAColor(r: 0.2, g: 0.3, b: 0.8)
+            )
+            let incoming = TagColorSnapshot(
+                name: "Collision Incoming",
+                prefix: "CI",
+                rgba: RGBAColor(r: 0.9, g: 0.3, b: 0.4)
+            )
+            try fixture.referenceControl.seedPersistedColor(original)
+            try fixture.referenceControl.seedPersistedColor(incoming)
+            try fixture.referenceControl.seedReferences(incoming.id)
+            let normal = fixture.makeTagColorRepository()
+            let baseline = try normal.fetchColors()
+            let originalPhysical = try XCTUnwrap(normal.fetchColor(id: original.id))
+            let incomingPhysical = try XCTUnwrap(normal.fetchColor(id: incoming.id))
+            let originalReferences = try fixture.referenceControl.fetchReferences()
+            let probe = CoreDataTagColorRollbackProbe()
+            let failing = environment.makeFaultInjectingRepository(probe)
+            let reconciled = TagColorSnapshot(
+                id: incoming.id,
+                name: original.name,
+                prefix: "MER",
+                rgba: RGBAColor(r: 0.4, g: 0.6, b: 0.9)
+            )
+
+            XCTAssertThrowsError(try failing.upsert(reconciled)) {
+                XCTAssertEqual($0 as? CoreDataTagColorInjectedFailure, .afterStaging)
+            }
+            try probe.assertContextRolledBack()
+            XCTAssertEqual(try normal.fetchColors(), baseline)
+            XCTAssertEqual(try normal.fetchColor(id: original.id), originalPhysical)
+            XCTAssertEqual(try normal.fetchColor(id: incoming.id), incomingPhysical)
+            XCTAssertEqual(try fixture.referenceControl.fetchReferences(), originalReferences)
+
+            try failing.upsert(reconciled)
+            XCTAssertEqual(try fixture.referenceControl.fetchReferences().animalTagColorID, original.id)
+            XCTAssertNil(try normal.fetchColor(id: incoming.id))
+        }
+    }
+
+    private func runRollback(
+        _ assertion: (CoreDataTagColorContractEnvironment) throws -> Void
+    ) async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let environment = CoreDataTagColorContractEnvironment(assembly: assembly)
+        try environment.seedInitialHerd()
+        try assertion(environment)
+    }
+
     private func run(
         _ assertion: (TagColorRepositoryContractFixture) throws -> Void
     ) async throws {
@@ -186,6 +387,18 @@ private final class CoreDataTagColorContractEnvironment {
         )
     }
 
+    func makeFaultInjectingRepository(
+        _ probe: CoreDataTagColorRollbackProbe
+    ) -> CoreDataTagColorRepository {
+        CoreDataTagColorRepository(
+            selection: selection,
+            assembly: assembly,
+            beforeSave: { context in
+                try probe.injectOnceAfterStaging(context)
+            }
+        )
+    }
+
     func seedInitialHerd() throws {
         try seedHerd(
             id: initialHerdID,
@@ -232,3 +445,60 @@ private final class CoreDataTagColorContractSelection: CurrentHerdSelectionReadi
     var currentHerdID: UUID?
 }
 
+
+
+/// Test-only one-shot failure after a real Core Data write was staged.
+/// Capturing the write context is safe: every inspection is dispatched back to
+/// its private queue using performAndWait, even after the repository returned.
+private final class CoreDataTagColorRollbackProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var failed = false
+    private var rolledBackContext: NSManagedObjectContext?
+
+    func injectOnceAfterStaging(_ context: NSManagedObjectContext) throws {
+        guard context.hasChanges else {
+            throw CoreDataTagColorInjectedFailure.noStagedMutation
+        }
+        let inject = lock.withLock { () -> Bool in
+            guard !failed else { return false }
+            failed = true
+            rolledBackContext = context
+            return true
+        }
+        if inject {
+            throw CoreDataTagColorInjectedFailure.afterStaging
+        }
+    }
+
+    func assertContextRolledBack(
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let captured = lock.withLock { rolledBackContext }
+        let context = try XCTUnwrap(
+            captured,
+            "Fault callback must capture the actual private write context.",
+            file: file, line: line
+        )
+        try context.performAndWait {
+            XCTAssertFalse(
+                context.hasChanges,
+                "The repository must rollback staged changes within the same context.",
+                file: file, line: line
+            )
+            let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            XCTAssertFalse(
+                try context.fetch(request).isEmpty,
+                "Rollback must leave the same context usable for new fetches.",
+                file: file, line: line
+            )
+            try context.save()
+            XCTAssertFalse(context.hasChanges, file: file, line: line)
+        }
+    }
+}
+
+private enum CoreDataTagColorInjectedFailure: Error, Equatable {
+    case noStagedMutation
+    case afterStaging
+}
