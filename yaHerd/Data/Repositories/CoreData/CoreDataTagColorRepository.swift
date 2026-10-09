@@ -7,28 +7,35 @@ final class CoreDataTagColorRepository: TagColorRepository {
     private let contextFactory: CoreDataContextFactory
     private let coordinationID: UUID
     private nonisolated let lookup: CoreDataLookup
+    /// Default-nil transaction test seam. Production never supplies this
+    /// callback; it executes only after all mutations are staged, before save.
+    private let beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)?
 
     init(
         selection: any CurrentHerdSelectionReading,
         contextFactory: CoreDataContextFactory,
         coordinationID: UUID,
-        lookup: CoreDataLookup
+        lookup: CoreDataLookup,
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil
     ) {
         self.selection = selection
         self.contextFactory = contextFactory
         self.coordinationID = coordinationID
         self.lookup = lookup
+        self.beforeSave = beforeSave
     }
 
     convenience init(
         selection: any CurrentHerdSelectionReading,
-        assembly: CoreDataPersistenceAssembly
+        assembly: CoreDataPersistenceAssembly,
+        beforeSave: (@Sendable (NSManagedObjectContext) throws -> Void)? = nil
     ) {
         self.init(
             selection: selection,
             contextFactory: assembly.contextFactory,
             coordinationID: assembly.coordinationID,
-            lookup: assembly.lookup
+            lookup: assembly.lookup,
+            beforeSave: beforeSave
         )
     }
 
@@ -490,6 +497,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         )
 
         let context = try contextFactory.makeWriteContext()
+        let beforeSave = self.beforeSave
         try context.performAndWait {
             do {
                 guard let herd = try lookup.herd(id: herdID, in: context) else {
@@ -497,6 +505,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 }
                 try operation(context, herd)
                 if context.hasChanges {
+                    try beforeSave?(context)
                     do {
                         try context.save()
                     } catch {
