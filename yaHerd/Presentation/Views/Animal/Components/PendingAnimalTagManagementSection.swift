@@ -96,7 +96,7 @@ struct PendingAnimalTagManagementSection: View {
     private func syncPrimaryTag() {
         if let primary = pendingTags.first(where: { $0.isPrimary }) {
             tagNumber = primary.normalizedNumber
-            tagColorID = tagColorLibrary.resolvedColorID(primary.colorID)
+            tagColorID = tagColorLibrary.editableColorID(primary.colorID)
         } else {
             tagNumber = ""
             tagColorID = nil
