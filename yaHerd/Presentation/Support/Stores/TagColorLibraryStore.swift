@@ -47,6 +47,13 @@ final class TagColorLibraryStore: ObservableObject {
         return defaultColorID
     }
 
+    /// Unlike display fallback, editing must never replace an existing color
+    /// UUID just because its definition is hidden or a lookup temporarily fails.
+    /// Only a genuinely absent selection inherits the library default.
+    func editableColorID(_ id: UUID?) -> UUID? {
+        id ?? defaultColorID
+    }
+
     func definition(for id: UUID?) -> TagColorSnapshot? {
         guard let id else { return nil }
 
