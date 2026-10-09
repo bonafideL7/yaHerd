@@ -3,9 +3,9 @@ import Foundation
 import XCTest
 @testable import yaHerd
 
-/// M11 replacement for the first nine persistence-neutral Tag Color contract
-/// assertions. The reference-remap/history assertions require a separate real
-/// CDAnimalTag/Field Check/Working fixture and are deliberately not claimed here.
+/// M11 Core Data runner for the permanent persistence-neutral Tag Color
+/// contracts, including physical CDAnimalTag, Field Check and Working reference
+/// mutations. UI edit/picker behavior and failed-save rollback have separate owners.
 @MainActor
 final class CoreDataTagColorRepositoryContractTests: XCTestCase {
     func testBuiltInLibraryHasStableIdentityOrderingAndWhiteDefault() async throws {
@@ -73,6 +73,61 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
         }
     }
 
+
+    func testCustomColorCollisionRemapsAllPersistedReferenceCategories() async throws {
+        try await run {
+            try TagColorRepositoryContract
+                .assertNormalizedNameCollisionKeepsCanonicalIdentityAndRemapsReferences(using: $0)
+        }
+    }
+
+    func testBuiltInColorCollisionPreservesCanonicalIDAcrossPersistedReferences() async throws {
+        try await run {
+            try TagColorRepositoryContract
+                .assertBuiltInNameCollisionPreservesBuiltInIdentityAndRemapsReferences(using: $0)
+        }
+    }
+
+    func testReferencedCustomColorRemovalPreservesHistoricalLookupAndUUIDs() async throws {
+        try await run {
+            try TagColorRepositoryContract
+                .assertReferencedCustomColorRemovalPreservesHistoricalReferenceIdentity(using: $0)
+        }
+    }
+
+    func testHiddenReferencedCurrentAnimalColorResolvesThroughRealStore() async throws {
+        try await run { fixture in
+            let originalColorID = UUID()
+            let original = TagColorSnapshot(
+                id: originalColorID,
+                name: "Hidden Current Teal",
+                prefix: "HCT",
+                rgba: RGBAColor(r: 0.2, g: 0.55, b: 0.6)
+            )
+            try fixture.makeTagColorRepository().upsert(original)
+            try fixture.referenceControl.seedReferences(originalColorID)
+            try fixture.makeTagColorRepository().deleteColors(ids: [originalColorID])
+
+            let store = TagColorLibraryStore(repository: fixture.makeTagColorRepository())
+            XCTAssertFalse(store.colors.contains { $0.id == originalColorID })
+
+            let definition = try XCTUnwrap(store.definition(for: originalColorID))
+            XCTAssertEqual(definition.id, originalColorID)
+            XCTAssertEqual(definition.name, original.name)
+            XCTAssertEqual(definition.prefix, original.prefix)
+            XCTAssertEqual(definition.rgba, original.rgba)
+            XCTAssertEqual(store.resolvedColorID(originalColorID), originalColorID)
+            XCTAssertEqual(store.resolvedDefinition(tagColorID: originalColorID).id, originalColorID)
+            XCTAssertEqual(store.formattedTag(tagNumber: "31", colorID: originalColorID), "HCT31")
+
+            let physical = try fixture.referenceControl.fetchReferences()
+            XCTAssertEqual(physical.animalTagColorID, originalColorID)
+            XCTAssertEqual(physical.historicalTagColorID, originalColorID)
+            XCTAssertEqual(physical.fieldCheckRosterTagColorID, originalColorID)
+            XCTAssertEqual(physical.workingQueueTagColorIDSnapshot, originalColorID)
+        }
+    }
+
     private func run(
         _ assertion: (TagColorRepositoryContractFixture) throws -> Void
     ) async throws {
@@ -88,9 +143,14 @@ private final class CoreDataTagColorContractEnvironment {
     let assembly: CoreDataPersistenceAssembly
     let selection = CoreDataTagColorContractSelection()
     let initialHerdID = UUID()
+    private let referenceProbe: CoreDataTagColorReferenceProbe
 
     init(assembly: CoreDataPersistenceAssembly) {
         self.assembly = assembly
+        self.referenceProbe = CoreDataTagColorReferenceProbe(
+            assembly: assembly,
+            herdID: initialHerdID
+        )
         selection.currentHerdID = initialHerdID
     }
 
@@ -100,14 +160,14 @@ private final class CoreDataTagColorContractEnvironment {
                 CoreDataTagColorRepository(selection: self.selection, assembly: self.assembly)
             },
             referenceControl: TagColorReferenceTestControl(
-                seedPersistedColor: { _ in
-                    throw CoreDataTagColorContractHarnessError.referenceGraphNotConfigured
+                seedPersistedColor: { snapshot in
+                    try self.referenceProbe.seedPersistedColor(snapshot)
                 },
-                seedReferences: { _ in
-                    throw CoreDataTagColorContractHarnessError.referenceGraphNotConfigured
+                seedReferences: { id in
+                    try self.referenceProbe.seedReferences(id)
                 },
                 fetchReferences: {
-                    throw CoreDataTagColorContractHarnessError.referenceGraphNotConfigured
+                    try self.referenceProbe.fetchReferences()
                 }
             ),
             herdSelectionControl: HerdRepositorySelectionTestControl(
@@ -172,8 +232,3 @@ private final class CoreDataTagColorContractSelection: CurrentHerdSelectionReadi
     var currentHerdID: UUID?
 }
 
-private enum CoreDataTagColorContractHarnessError: Error {
-    /// The three reference-remapping contracts must not silently use stub
-    /// rows. A subsequent M11 PR will install real Core Data record fixtures.
-    case referenceGraphNotConfigured
-}
