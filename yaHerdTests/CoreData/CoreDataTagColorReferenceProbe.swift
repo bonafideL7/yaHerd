@@ -188,6 +188,24 @@ final class CoreDataTagColorReferenceProbe {
         }
     }
 
+    /// A Tag Color identity merge rotates the affected Animal editor revision.
+    /// Its original value must be restored when that transaction is rolled back.
+    func fetchAnimalEditorRevision() throws -> UUID {
+        let context = assembly.contextFactory.makeReadContext()
+        let herdID = herdID
+        let animalID = animalID
+        return try context.performAndWait {
+            let animal = try Self.required(
+                CDAnimal.self,
+                entity: CDAnimal.coreDataEntityName,
+                id: animalID,
+                herdID: herdID,
+                in: context
+            )
+            return animal.editorRevision
+        }
+    }
+
     /// Each probe uses a fresh read context and locates the same physical rows
     /// by their application IDs. A missing/duplicated row fails the contract,
     /// rather than being disguised as an empty optional UUID.
