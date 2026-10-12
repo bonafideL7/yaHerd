@@ -172,6 +172,18 @@ enum WorkingRepositoryContract {
         XCTAssertTrue(created.queueItems.allSatisfy { $0.collectedFromPastureName == "Working Contract North" }, file: file, line: line)
 
         let calfQueue = try XCTUnwrap(created.queueItems.first { $0.animalID == calf.id }, file: file, line: line)
+        XCTAssertNil(
+            try repository.fetchQueueItemEditor(sessionID: UUID(), queueItemID: calfQueue.id),
+            "An unknown session must not return an editor for a valid queue item.",
+            file: file,
+            line: line
+        )
+        XCTAssertNil(
+            try repository.fetchQueueItemEditor(sessionID: sessionID, queueItemID: UUID()),
+            "An unknown queue item must not return an editor for a valid session.",
+            file: file,
+            line: line
+        )
         XCTAssertEqual(calfQueue.animalName, "Working Calf", file: file, line: line)
         XCTAssertEqual(calfQueue.animalDisplayTagNumber, "2", file: file, line: line)
         XCTAssertEqual(calfQueue.animalDamDisplayTagNumber, "10", file: file, line: line)
