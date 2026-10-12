@@ -56,7 +56,7 @@ private struct CoreDataWorkingTreatmentPlanItemPayload: Decodable {
     }
 }
 
-extension WorkingMapper {
+enum WorkingMapper {
     static func makeSessionSummary(from session: CDWorkingSession) throws -> WorkingSessionSummary {
         let queueItems = managedQueueItems(session)
         return WorkingSessionSummary(
