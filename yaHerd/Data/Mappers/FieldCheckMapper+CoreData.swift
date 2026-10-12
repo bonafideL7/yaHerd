@@ -23,7 +23,7 @@ enum CoreDataFieldCheckMappingError: LocalizedError, Equatable, Sendable {
     }
 }
 
-extension FieldCheckMapper {
+enum FieldCheckMapper {
     static func makeAnimalCheckSnapshot(
         from check: CDFieldCheckAnimalCheck,
         needsAttention: Bool
