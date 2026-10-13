@@ -230,5 +230,4 @@ final class CoreDataWorkingTreatmentTemplateRepository:
     private nonisolated static func encodeItems(_ items: [WorkingTreatmentPlanItem]) throws -> Data {
         try JSONEncoder().encode(items)
     }
-
 }
