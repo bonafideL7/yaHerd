@@ -35,6 +35,108 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         try AnimalRepositoryContract.assertHealthAndPregnancyRecordsSurviveReload(using: environment.repositoryFixture)
     }
 
+    func testMilestone12MaternalOffspringOrderSurvivesSQLiteReopen() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let repository = environment.makeAnimalRepository()
+        let parentBirthDate = Date(timeIntervalSince1970: 1_515_000_000)
+        let sharedBirthDate = Date(timeIntervalSince1970: 1_740_000_000)
+        let olderBirthDate = Date(timeIntervalSince1970: 1_700_000_000)
+
+        func input(
+            name: String,
+            tag: String,
+            birthDate: Date,
+            damID: UUID? = nil
+        ) -> AnimalInput {
+            AnimalInput(
+                name: name,
+                tagNumber: tag,
+                tagColorID: nil,
+                sex: .female,
+                birthDate: birthDate,
+                status: .active,
+                pastureID: nil,
+                sireID: nil,
+                damID: damID,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        }
+
+        let dam = try repository.create(
+            input: input(name: "Ordering Dam", tag: "D500", birthDate: parentBirthDate)
+        )
+        let controlDam = try repository.create(
+            input: input(name: "Control Dam", tag: "D501", birthDate: parentBirthDate)
+        )
+        let first = try repository.create(
+            input: input(name: "Untagged A", tag: "", birthDate: sharedBirthDate, damID: dam.id)
+        )
+        let second = try repository.create(
+            input: input(name: "Untagged B", tag: "", birthDate: sharedBirthDate, damID: dam.id)
+        )
+        let third = try repository.create(
+            input: input(name: "Untagged C", tag: "", birthDate: sharedBirthDate, damID: dam.id)
+        )
+        let tagged = try repository.create(
+            input: input(name: "Tagged Same Date", tag: "T900", birthDate: sharedBirthDate, damID: dam.id)
+        )
+        let older = try repository.create(
+            input: input(name: "Older Calf", tag: "", birthDate: olderBirthDate, damID: dam.id)
+        )
+        try repository.archive(ids: [second.id])
+
+        // Distinct offspring must have a total order regardless of unordered
+        // Core Data relationship enumeration or archive state.
+        let equalKeyIDs = [first.id, second.id, third.id].sorted {
+            $0.uuidString < $1.uuidString
+        }
+        let expectedIDs = equalKeyIDs + [tagged.id, older.id]
+        let current = try XCTUnwrap(repository.fetchAnimalDetail(id: dam.id))
+        XCTAssertEqual(current.maternalOffspringCountIncludingArchived, 5)
+        XCTAssertEqual(current.maternalOffspring.map(\.id), expectedIDs)
+        XCTAssertEqual(current.maternalOffspring.first { $0.id == second.id }?.isArchived, true)
+        XCTAssertEqual(
+            try repository.fetchAnimalDetail(id: controlDam.id)?.maternalOffspringCountIncludingArchived,
+            0
+        )
+
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let readOnlyRepository = CoreDataAnimalRepository(
+            selection: environment.selection,
+            assembly: reopened
+        )
+        for _ in 0..<2 {
+            let reloaded = try XCTUnwrap(readOnlyRepository.fetchAnimalDetail(id: dam.id))
+            XCTAssertEqual(reloaded.maternalOffspringCountIncludingArchived, 5)
+            XCTAssertEqual(reloaded.maternalOffspring.map(\.id), expectedIDs)
+            XCTAssertEqual(reloaded.maternalOffspring.first { $0.id == second.id }?.isArchived, true)
+        }
+        let control = try XCTUnwrap(readOnlyRepository.fetchAnimalDetail(id: controlDam.id))
+        XCTAssertEqual(control.maternalOffspringCountIncludingArchived, 0)
+        XCTAssertTrue(control.maternalOffspring.isEmpty)
+
+        let readContext = reopened.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            let persistedDam = try XCTUnwrap(reopened.lookup.herdOwned(
+                CDAnimal.self,
+                id: dam.id,
+                herdID: environment.herdID,
+                in: readContext
+            ))
+            let children = (persistedDam.damOffspring?.allObjects as? [CDAnimal]) ?? []
+            XCTAssertEqual(Set(children.map(\.id)), Set(expectedIDs))
+            XCTAssertEqual(children.first { $0.id == second.id }?.isArchived, true)
+        }
+    }
+
     func testMilestone12EqualDatedPregnancyChecksUseStableSourceTieAcrossSQLiteReads() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
