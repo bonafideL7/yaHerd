@@ -20,8 +20,8 @@ failures: list[str] = []
 # imported module once for the Domain and persistence boundaries; typed imports
 # (for example, private import struct CloudKit.CKDatabase) use that same module.
 swift_import = re.compile(
-    r"^\s*(?:(?:@[_A-Za-z]\w*(?:\s*\([^()\r\n]*\))?)"
-    r"|(?:private|fileprivate|internal|package|public|open))\s+)*"
+    r"^\s*(?:@[_A-Za-z]\w*(?:\s*\([^()\r\n]*\))?\s+|"
+    r"(?:private|fileprivate|internal|package|public|open)\s+)*"
     r"import\s+(?:(?:class|struct|enum|protocol|func|var|typealias|operator|precedencegroup|macro)\s+)?"
     r"(?P<module>[_A-Za-z]\w*)\b"
 )
