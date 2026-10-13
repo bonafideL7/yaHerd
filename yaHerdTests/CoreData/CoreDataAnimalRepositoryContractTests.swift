@@ -160,6 +160,40 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         XCTAssertEqual(animalPage.animals.first { $0.id == target.id }?
             .expectedCalvingDate, expectedDueDate)
 
+        // The complete Animal list, Working/Field Check reference cohort, and
+        // the independent reference-page entry point must agree with the same
+        // persisted pregnancy check selected by the Animal page and detail readers.
+        let fullAnimalList = try await reader.fetchAnimalSummarySnapshot()
+        let snapshotTarget = try XCTUnwrap(
+            fullAnimalList.first { $0.id == target.id }
+        )
+        XCTAssertEqual(snapshotTarget.lastPregnancyCheckDate, checkDate)
+        XCTAssertEqual(snapshotTarget.lastPregnancyStatus, expectedAnimalStatus)
+        XCTAssertEqual(snapshotTarget.expectedCalvingDate, expectedDueDate)
+
+        let referenceQuery = AnimalReferenceQuery()
+        let referenceSnapshot = try await reader.fetchAnimalReferenceSnapshot(
+            matching: referenceQuery
+        )
+        let snapshotCandidate = try XCTUnwrap(
+            referenceSnapshot.first { $0.id == target.id }
+        )
+        XCTAssertEqual(snapshotCandidate.lastPregnancyCheckDate, checkDate)
+        XCTAssertEqual(snapshotCandidate.lastPregnancyStatus, expectedAnimalStatus)
+        XCTAssertEqual(snapshotCandidate.expectedCalvingDate, expectedDueDate)
+
+        let referencePage = try await reader.fetchAnimalReferencePage(
+            matching: referenceQuery,
+            page: ReadPageRequest(offset: 0, limit: 10)
+        )
+        let pageCandidate = try XCTUnwrap(
+            referencePage.animals.first { $0.id == target.id }
+        )
+        XCTAssertEqual(pageCandidate.lastPregnancyCheckDate, checkDate)
+        XCTAssertEqual(pageCandidate.lastPregnancyStatus, expectedAnimalStatus)
+        XCTAssertEqual(pageCandidate.expectedCalvingDate, expectedDueDate)
+        XCTAssertEqual(referencePage.animals.map(\.id), referenceSnapshot.map(\.id))
+
         let dashboard = try await reader.fetchDashboardRecords()
         let dashboardAnimal = try XCTUnwrap(
             dashboard.animals.first { $0.id == target.id }
