@@ -120,44 +120,109 @@ def pbx_object_body(identifier: str) -> str | None:
     )
     return found.group("body") if found else None
 
-exception_body = pbx_object_body(app_exception_id)
+# A synchronized source root may attach more than one target-specific
+# exception set. Validate the aggregate that Xcode will apply, not just
+# the original set: an additional app-target set could otherwise silently
+# remove a live Domain/Core Data source from compilation.
 app_group_body = pbx_object_body(app_root_group_id)
-if exception_body is None or app_group_body is None:
-    failures.append("yaHerd.xcodeproj: missing app-target synchronized source exception set")
+app_target_body = pbx_object_body(app_target_id)
+attached_exception_ids: list[str] = []
+
+if app_group_body is None or (
+    "isa = PBXFileSystemSynchronizedRootGroup;" not in app_group_body
+):
+    failures.append("yaHerd.xcodeproj: missing synchronized app source root")
 else:
-    if "isa = PBXFileSystemSynchronizedBuildFileExceptionSet;" not in exception_body:
-        failures.append("yaHerd.xcodeproj: app source exception has the wrong object type")
-    if not re.search(rf"\btarget\s*=\s*{app_target_id}\b", exception_body):
-        failures.append("yaHerd.xcodeproj: legacy source exceptions do not target yaHerd")
-    if app_exception_id not in app_group_body:
-        failures.append("yaHerd.xcodeproj: legacy source exception is not attached to yaHerd root group")
-    membership = re.search(r"membershipExceptions\s*=\s*\((.*?)\);", exception_body, re.S)
-    if membership is None:
-        failures.append("yaHerd.xcodeproj: app source exception has no membership paths")
+    attached = re.search(r"\bexceptions\s*=\s*\((.*?)\);", app_group_body, re.S)
+    if attached is None:
+        failures.append("yaHerd.xcodeproj: app source root has no exception list")
     else:
-        app_exclusions: list[str] = []
-        for entry in membership.group(1).splitlines():
-            entry = entry.strip()
-            if not entry:
-                continue
-            parsed = re.fullmatch(r'(?:"([^"]+)"|([A-Za-z0-9_./-]+)),', entry)
-            if parsed is None:
-                failures.append(f"yaHerd.xcodeproj: unrecognized app exclusion entry {entry!r}")
-                continue
-            app_exclusions.append(parsed.group(1) or parsed.group(2))
-        missing = expected_app_exclusions - set(app_exclusions)
-        extra = set(app_exclusions) - expected_app_exclusions
-        if missing or extra or len(app_exclusions) != len(expected_app_exclusions):
+        # Remove descriptive PBX comments before reading reference IDs.
+        references = re.sub(r"/\*.*?\*/", "", attached.group(1), flags=re.S)
+        reference_entries = references.split(",")
+        if reference_entries[-1].strip() == "":
+            reference_entries.pop()
+        for entry in reference_entries:
+            reference = entry.strip()
+            if not re.fullmatch(r"[0-9A-F]{24}", reference):
+                failures.append(
+                    f"yaHerd.xcodeproj: malformed app source exception reference {reference!r}"
+                )
+            else:
+                attached_exception_ids.append(reference)
+
+if app_exception_id not in attached_exception_ids:
+    failures.append("yaHerd.xcodeproj: original archived-source exclusion set is detached")
+if len(attached_exception_ids) != len(set(attached_exception_ids)):
+    failures.append("yaHerd.xcodeproj: duplicate attached source exception-set reference")
+
+if app_target_body is None:
+    failures.append("yaHerd.xcodeproj: app target is missing")
+else:
+    roots = re.search(
+        r"\bfileSystemSynchronizedGroups\s*=\s*\((.*?)\);",
+        app_target_body,
+        re.S,
+    )
+    if roots is None or app_root_group_id not in roots.group(1):
+        failures.append("yaHerd.xcodeproj: app target no longer includes its source root")
+
+app_exclusions: list[str] = []
+app_exception_set_count = 0
+for exception_id in attached_exception_ids:
+    exception_body = pbx_object_body(exception_id)
+    if exception_body is None:
+        failures.append(
+            f"yaHerd.xcodeproj: referenced source exception set {exception_id} is missing"
+        )
+        continue
+    if "isa = PBXFileSystemSynchronizedBuildFileExceptionSet;" not in exception_body:
+        failures.append(
+            f"yaHerd.xcodeproj: attached source exception {exception_id} has wrong object type"
+        )
+        continue
+    target = re.search(r"\btarget\s*=\s*([0-9A-F]{24})\b", exception_body)
+    if target is None:
+        failures.append(
+            f"yaHerd.xcodeproj: attached source exception {exception_id} has no target"
+        )
+        continue
+    if target.group(1) != app_target_id:
+        continue  # An attached exception for a different target cannot omit app sources.
+    app_exception_set_count += 1
+    membership = re.search(r"\bmembershipExceptions\s*=\s*\((.*?)\);", exception_body, re.S)
+    if membership is None:
+        failures.append(
+            f"yaHerd.xcodeproj: app source exception {exception_id} has no membership paths"
+        )
+        continue
+    for entry in membership.group(1).splitlines():
+        entry = entry.strip()
+        if not entry:
+            continue
+        parsed = re.fullmatch(r'(?:"([^"]+)"|([A-Za-z0-9_./-]+)),', entry)
+        if parsed is None:
             failures.append(
-                "yaHerd.xcodeproj: frozen SwiftData sources must be excluded "
-                "from app target (missing: "
-                + ", ".join(sorted(missing))
-                + "; unexpected: "
-                + ", ".join(sorted(extra))
-                + "; duplicates: "
-                + str(len(app_exclusions) != len(set(app_exclusions)))
-                + ")"
+                f"yaHerd.xcodeproj: unrecognized app exclusion entry {entry!r}"
             )
+            continue
+        app_exclusions.append(parsed.group(1) or parsed.group(2))
+
+if app_exception_set_count == 0:
+    failures.append("yaHerd.xcodeproj: no archived-source exception set targets the app")
+missing = expected_app_exclusions - set(app_exclusions)
+extra = set(app_exclusions) - expected_app_exclusions
+if missing or extra or len(app_exclusions) != len(expected_app_exclusions):
+    failures.append(
+        "yaHerd.xcodeproj: aggregate app target exclusions must equal the "
+        "frozen SwiftData source manifest plus Info.plist (missing: "
+        + ", ".join(sorted(missing))
+        + "; unexpected: "
+        + ", ".join(sorted(extra))
+        + "; duplicates: "
+        + str(len(app_exclusions) != len(set(app_exclusions)))
+        + ")"
+    )
 
 
 swiftdata_declaration = re.compile(r"^\s*@(Model|Query|ModelActor)\b")
