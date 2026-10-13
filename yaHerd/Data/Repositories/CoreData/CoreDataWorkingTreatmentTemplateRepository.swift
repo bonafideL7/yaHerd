@@ -39,7 +39,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
                 throw HerdRepositoryError.missingHerd
             }
             return try Self.fetchTemplates(herd: herd, in: context).map { template in
-                let items = try Self.decodeItems(template.itemsData)
+                let items = try WorkingMapper.treatmentTemplateItems(template)
                 return WorkingTreatmentTemplateSummary(
                     id: template.id,
                     name: template.name,
@@ -69,7 +69,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
             return WorkingTreatmentTemplateDetailSnapshot(
                 id: template.id,
                 name: template.name,
-                plannedTreatments: try Self.decodeItems(template.itemsData)
+                plannedTreatments: try WorkingMapper.treatmentTemplateItems(template)
             )
         }
     }
@@ -231,7 +231,4 @@ final class CoreDataWorkingTreatmentTemplateRepository:
         try JSONEncoder().encode(items)
     }
 
-    private nonisolated static func decodeItems(_ data: Data) throws -> [WorkingTreatmentPlanItem] {
-        try JSONDecoder().decode([WorkingTreatmentPlanItem].self, from: data)
-    }
 }
