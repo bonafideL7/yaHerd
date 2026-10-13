@@ -179,6 +179,7 @@ enum CoreDataAnimalProjection {
         var events: [TimelineProjectionEvent] = [
             TimelineProjectionEvent(
                 event: AnimalTimelineEvent(
+                    id: "birth:primary:\(animal.id.uuidString)",
                     date: animal.birthDate,
                     type: .birth,
                     title: "Birth",
@@ -193,6 +194,7 @@ enum CoreDataAnimalProjection {
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
+                        id: "birth:offspring:\(offspring.id.uuidString)",
                         date: offspring.birthDate,
                         type: .birth,
                         title: "Offspring Recorded",
@@ -208,6 +210,7 @@ enum CoreDataAnimalProjection {
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
+                        id: "health:\(record.id.uuidString)",
                         date: record.date,
                         type: .health,
                         title: record.treatment,
@@ -224,6 +227,7 @@ enum CoreDataAnimalProjection {
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
+                        id: "pregnancy:\(check.id.uuidString)",
                         date: check.date,
                         type: .pregnancy,
                         title: "Pregnancy Check: \(result.rawValue.capitalized)",
@@ -239,6 +243,7 @@ enum CoreDataAnimalProjection {
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
+                        id: "movement:\(movement.id.uuidString)",
                         date: movement.date,
                         type: .movement,
                         title: "Pasture Movement",
@@ -256,6 +261,7 @@ enum CoreDataAnimalProjection {
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
+                        id: "status:\(record.id.uuidString)",
                         date: record.date,
                         type: .status,
                         title: "Status Change",
@@ -272,6 +278,7 @@ enum CoreDataAnimalProjection {
             events.append(
                 TimelineProjectionEvent(
                     event: AnimalTimelineEvent(
+                        id: "tag:assigned:\(tag.id.uuidString)",
                         date: tag.assignedAt,
                         type: .tag,
                         title: "Tag Assigned",
@@ -285,6 +292,7 @@ enum CoreDataAnimalProjection {
                 events.append(
                     TimelineProjectionEvent(
                         event: AnimalTimelineEvent(
+                            id: "tag:retired:\(tag.id.uuidString)",
                             date: removedAt,
                             type: .tag,
                             title: "Tag Retired",
