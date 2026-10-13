@@ -312,7 +312,7 @@ At startup, `yaHerdApp.bootstrap` opens this graph through `CoreDataAppPersisten
 
 ## Core Data model rules
 
-The model is designed for local Core Data from the beginning rather than copied from the current SwiftData schema or constrained by removed CloudKit requirements.
+The active model was designed for local Core Data rather than copied from the historical SwiftData schema or constrained by removed CloudKit requirements.
 
 - Every durable entity has a dedicated required application UUID identity attribute assigned before first save.
 - Application-ID unique constraints may be used where they reinforce the identity invariant safely.
@@ -324,7 +324,7 @@ The model is designed for local Core Data from the beginning rather than copied 
 - Core Data generated/accessor types do not escape Data.
 - Do not reproduce duplicated persistence state when one relationship/record set can be authoritative. In particular, the production animal model should not maintain separate scalar primary-tag fields in addition to authoritative tag records.
 
-Do not copy the current SwiftData schema merely to reduce cutover work. Model the finished product.
+Do not reintroduce or copy the archived SwiftData schema into production. Extend the existing local Core Data model only for actual Domain requirements.
 
 ## Application mutation and UI invalidation
 
