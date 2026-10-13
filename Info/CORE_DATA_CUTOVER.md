@@ -1,14 +1,14 @@
 # Core Data Cutover Playbook
 
-> Temporary implementation instructions for replacing the current SwiftData persistence stack with the production local Core Data architecture. Delete this document when the cutover is complete and `ARCHITECTURE.md` describes the implemented system rather than the target.
+> Temporary **cutover completion checklist** retained while Milestone 12 audits the already-active local Core Data architecture. Phases 0–5 describe historical implementation order, not a request to rebuild or reintroduce SwiftData. Delete this document only after the remaining Core Data contract audit, architecture reconciliation, and legacy-data release decision are closed.
 
 `ARCHITECTURE.md` remains the authoritative clean-architecture guide throughout this work. This playbook changes persistence technology; it does not suspend or replace feature ownership, dependency direction, use-case rules, dependency-injection boundaries, mapping rules, navigation ownership, presentation responsibilities, or other persistence-independent architecture guidance.
 
 ## Non-negotiable direction
 
-This is a **replacement, not a migration**.
+This is a **runtime persistence replacement, not an automatic conversion of existing SwiftData records**.
 
-The app is not shipping on the current SwiftData persistence implementation, so development SwiftData stores do not need to survive the cutover. Optimize every change for the finished product.
+Production already uses a single Core Data graph. Legacy SwiftData database files may nevertheless exist on devices. Do not assume they are expendable development data: first-open preflight preserves recognized legacy files and journal sidecars and refuses to create an empty replacement Core Data store. Recovery can export those originals, but the running app has no importer for their animal/herd records. Whether/how to support legacy upgrades is a separate data-preservation and release decision.
 
 Do not create or preserve any of the following solely to ease transition:
 
@@ -73,9 +73,9 @@ Herd remains a logical ownership/scope root for application data. Feature reposi
 
 A repository must not rely on fetch order to choose a Herd. `HerdRepository.fetchCurrentHerd()` means the application-selected/current Herd according to local application state and repository scope, not "the first object returned by Core Data."
 
-## Implementation order
+## Original implementation order (historical)
 
-The cutover is **test-first at the persistence boundary**. Tests are divided deliberately between current-behavior characterization and end-state behavior that SwiftData does not implement.
+Phases 0–5 below record the test-first Core Data replacement design that produced the running implementation; do not repeat them merely because this checklist remains. Milestone 12 is performing Phase 6 closure against the current Core Data contracts. Historical characterization and end-state-only requirements remain distinct.
 
 ### Phase 0 — permanent behavior contracts before the physical Core Data model
 
@@ -279,4 +279,5 @@ The cutover is complete only when all of the following are true:
 - obsolete public-ID repair code is gone unless independently justified by local data integrity requirements;
 - Core Data persistence tests cover the production behavior;
 - `ARCHITECTURE.md` matches the actual implementation and still contains the broader clean-architecture guidance needed to maintain the project;
-- this file is deleted.
+- recognized original SwiftData stores and Core Data journal files remain protected by first-open/recovery flows until an explicit, separate legacy-upgrade/data-preservation release decision is made;
+- this file is deleted only after those closure conditions have been satisfied.
