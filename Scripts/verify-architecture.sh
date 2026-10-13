@@ -30,6 +30,74 @@ for path in root.rglob("*.swift"):
         )
 
 
+# Milestone 11: freeze (do not expand) the dormant SwiftData schema until an
+# explicit data-preserving upgrade decision permits its complete retirement.
+# Exact files, not a directory wildcard: new model files cannot opt themselves
+# into the temporary exception simply by residing alongside the old schema.
+legacy_swiftdata_sources = {
+    Path("yaHerd/Data/Models/Animal/Animal.swift"),
+    Path("yaHerd/Data/Models/Animal/AnimalStatusReference.swift"),
+    Path("yaHerd/Data/Models/Animal/AnimalTag.swift"),
+    Path("yaHerd/Data/Models/Animal/StatusRecord.swift"),
+    Path("yaHerd/Data/Models/Check/FieldCheckSession.swift"),
+    Path("yaHerd/Data/Models/Health/HealthRecord.swift"),
+    Path("yaHerd/Data/Models/Health/PregnancyCheck.swift"),
+    Path("yaHerd/Data/Models/Herd/Herd.swift"),
+    Path("yaHerd/Data/Models/Pasture/MovementRecord.swift"),
+    Path("yaHerd/Data/Models/Pasture/Pasture.swift"),
+    Path("yaHerd/Data/Models/Pasture/PastureGroup.swift"),
+    Path("yaHerd/Data/Models/Support/TagColorDefinition.swift"),
+    Path("yaHerd/Data/Models/Work/WorkingProtocolTemplate.swift"),
+    Path("yaHerd/Data/Models/Work/WorkingQueueItem.swift"),
+    Path("yaHerd/Data/Models/Work/WorkingSession.swift"),
+    Path("yaHerd/Data/Models/Work/WorkingTreatmentRecord.swift"),
+    Path("yaHerd/Data/Persistence/Schema/YaHerdSchemaV1.swift"),
+}
+legacy_schema_reference_sources = legacy_swiftdata_sources | {
+    Path("yaHerd/Data/Persistence/Schema/YaHerdCurrentModels.swift"),
+}
+swiftdata_import = re.compile(
+    r"^\s*(?:@preconcurrency\s+)?import\s+(?:(?:class|struct|enum|protocol|func|var|typealias)\s+)?SwiftData\b"
+)
+cloudkit_import = re.compile(
+    r"^\s*(?:@preconcurrency\s+)?import\s+(?:(?:class|struct|enum|protocol|func|var|typealias)\s+)?CloudKit\b"
+)
+swiftdata_declaration = re.compile(r"^\s*@(Model|Query|ModelActor)\b")
+swiftdata_runtime_api = re.compile(
+    r"\b(?:ModelContext|ModelContainer|ModelConfiguration|SchemaMigrationPlan|VersionedSchema)\b"
+)
+cloudkit_api = re.compile(r"\b(?:NSPersistentCloudKitContainer|CKContainer)\b")
+legacy_schema_reference = re.compile(r"\bYaHerdSchemaV1\b")
+
+for path in Path("yaHerd").rglob("*.swift"):
+    # The check covers every production source folder, not only Data/CoreData.
+    # Ignore // comment-only lines so descriptions of deprecated APIs are safe.
+    for line_number, line in enumerate(path.read_text().splitlines(), start=1):
+        code = line.split("//", 1)[0]
+        if not code.strip():
+            continue
+        if swiftdata_import.search(code) and path not in legacy_swiftdata_sources:
+            failures.append(
+                f"{path}:{line_number}: SwiftData import is forbidden outside frozen legacy model/schema files"
+            )
+        if swiftdata_declaration.search(code) and path not in legacy_swiftdata_sources:
+            failures.append(
+                f"{path}:{line_number}: SwiftData property/model macro is forbidden outside the frozen legacy schema"
+            )
+        if swiftdata_runtime_api.search(code) and path not in legacy_swiftdata_sources:
+            failures.append(
+                f"{path}:{line_number}: SwiftData runtime/schema API is forbidden outside frozen legacy declarations"
+            )
+        if legacy_schema_reference.search(code) and path not in legacy_schema_reference_sources:
+            failures.append(
+                f"{path}:{line_number}: active production code must not reference the retired SwiftData schema"
+            )
+        if cloudkit_import.search(code) or cloudkit_api.search(code):
+            failures.append(
+                f"{path}:{line_number}: CloudKit/shared persistence is not part of the local-only architecture"
+            )
+
+
 app_source = Path("yaHerd/App/yaHerdApp.swift").read_text()
 allowed_root_environment_values = {
     "appDataAccessMode",
