@@ -9,6 +9,7 @@ from pathlib import Path
 import plistlib
 import re
 import sys
+import hashlib
 
 root = Path("yaHerd/Domain")
 allowed_imports = {"Foundation"}
@@ -34,28 +35,55 @@ for path in root.rglob("*.swift"):
 # explicit data-preserving upgrade decision permits its complete retirement.
 # Exact files, not a directory wildcard: new model files cannot opt themselves
 # into the temporary exception simply by residing alongside the old schema.
-legacy_swiftdata_sources = {
-    Path("yaHerd/Data/Models/Animal/Animal.swift"),
-    Path("yaHerd/Data/Models/Animal/AnimalStatusReference.swift"),
-    Path("yaHerd/Data/Models/Animal/AnimalTag.swift"),
-    Path("yaHerd/Data/Models/Animal/StatusRecord.swift"),
-    Path("yaHerd/Data/Models/Check/FieldCheckSession.swift"),
-    Path("yaHerd/Data/Models/Health/HealthRecord.swift"),
-    Path("yaHerd/Data/Models/Health/PregnancyCheck.swift"),
-    Path("yaHerd/Data/Models/Herd/Herd.swift"),
-    Path("yaHerd/Data/Models/Pasture/MovementRecord.swift"),
-    Path("yaHerd/Data/Models/Pasture/Pasture.swift"),
-    Path("yaHerd/Data/Models/Pasture/PastureGroup.swift"),
-    Path("yaHerd/Data/Models/Support/TagColorDefinition.swift"),
-    Path("yaHerd/Data/Models/Work/WorkingProtocolTemplate.swift"),
-    Path("yaHerd/Data/Models/Work/WorkingQueueItem.swift"),
-    Path("yaHerd/Data/Models/Work/WorkingSession.swift"),
-    Path("yaHerd/Data/Models/Work/WorkingTreatmentRecord.swift"),
-    Path("yaHerd/Data/Persistence/Schema/YaHerdSchemaV1.swift"),
+legacy_swiftdata_blobs = {
+    Path("yaHerd/Data/Models/Animal/Animal.swift"): "464336aa1650225d1a9f624fb56f01e0a9df7fa2",
+    Path("yaHerd/Data/Models/Animal/AnimalStatusReference.swift"): "1818c4aaa41a5e7c545b895d6dda92de2cdb4930",
+    Path("yaHerd/Data/Models/Animal/AnimalTag.swift"): "815c31554c01905b7bf880762482b8f04192100d",
+    Path("yaHerd/Data/Models/Animal/StatusRecord.swift"): "109a55bd457e639f79b9a601e9e38daf92ce5ed6",
+    Path("yaHerd/Data/Models/Check/FieldCheckSession.swift"): "3099f739eace70ce487e40a3c80c1be8a5dfa9ba",
+    Path("yaHerd/Data/Models/Health/HealthRecord.swift"): "c0bddf52ed48cb76227247420dd8a754cb05403c",
+    Path("yaHerd/Data/Models/Health/PregnancyCheck.swift"): "5737840d022a22885db205cd5241bf4ad140938c",
+    Path("yaHerd/Data/Models/Herd/Herd.swift"): "819957a63e7fd8504bc5759d640727196f5b93f6",
+    Path("yaHerd/Data/Models/Pasture/MovementRecord.swift"): "79c7b07bcdbe359a0a2c0fbfe2fe805f23d039b1",
+    Path("yaHerd/Data/Models/Pasture/Pasture.swift"): "468c89a7f28a527bb2b31edcc88cd56c38d71790",
+    Path("yaHerd/Data/Models/Pasture/PastureGroup.swift"): "a1b2c451282f48f8f507c247d8a0941784ee8d1b",
+    Path("yaHerd/Data/Models/Support/TagColorDefinition.swift"): "2791218a0a433d665ed7219e04b6120c94b84d74",
+    Path("yaHerd/Data/Models/Work/WorkingProtocolTemplate.swift"): "5126021f43bc1b0ec4d241c954581bfa5eb5961f",
+    Path("yaHerd/Data/Models/Work/WorkingQueueItem.swift"): "d3eb4f2f670fd1ca785222b84e7ff46623b1333e",
+    Path("yaHerd/Data/Models/Work/WorkingSession.swift"): "48f899d0c2d7866c93e3861760f00e34aed8fd1b",
+    Path("yaHerd/Data/Models/Work/WorkingTreatmentRecord.swift"): "76be1fd0e98e51e5a113abd34bd676126db0bdb7",
+    Path("yaHerd/Data/Models/Work/WorkingTreatmentTerminologyCompatibility.swift"): "c2baee50fcaecad4828218b7b5c46814e7ede766",
+    Path("yaHerd/Data/Persistence/Schema/YaHerdCurrentModels.swift"): "8b8d7db05a9ac03cafe86288da39f94d2241ca47",
+    Path("yaHerd/Data/Persistence/Schema/YaHerdSchemaV1.swift"): "4a50d3965c16cfdef0eff2418f49902ccae17863",
 }
+legacy_models_root = Path("yaHerd/Data/Models")
+legacy_model_sources = {
+    path for path in legacy_swiftdata_blobs if path.is_relative_to(legacy_models_root)
+}
+legacy_schema_source = Path("yaHerd/Data/Persistence/Schema/YaHerdSchemaV1.swift")
+legacy_swiftdata_sources = legacy_model_sources | {legacy_schema_source}
 legacy_schema_reference_sources = legacy_swiftdata_sources | {
     Path("yaHerd/Data/Persistence/Schema/YaHerdCurrentModels.swift"),
 }
+
+# The file-path allowlist alone would permit new @Model declarations, relationships
+# or a container inside an existing file. Pin all archived schema-related sources,
+# including the alias files, to their existing Git blob IDs. An intentional future
+# change must explicitly update this inventory in code review.
+for path, expected_blob in legacy_swiftdata_blobs.items():
+    if not path.is_file():
+        failures.append(f"{path}: archived SwiftData declaration source is missing")
+        continue
+    contents = path.read_bytes()
+    git_blob = hashlib.sha1(
+        b"blob " + str(len(contents)).encode("ascii") + b"\0" + contents
+    ).hexdigest()
+    if git_blob != expected_blob:
+        failures.append(
+            f"{path}: archived SwiftData declarations changed; "
+            "review preservation of the legacy schema before updating its pinned blob"
+        )
+
 swiftdata_import = re.compile(
     r"^\s*(?:@preconcurrency\s+)?import\s+(?:(?:class|struct|enum|protocol|func|var|typealias)\s+)?SwiftData\b"
 )
@@ -80,13 +108,18 @@ for path in Path("yaHerd").rglob("*.swift"):
             failures.append(
                 f"{path}:{line_number}: SwiftData import is forbidden outside frozen legacy model/schema files"
             )
-        if swiftdata_declaration.search(code) and path not in legacy_swiftdata_sources:
+        declaration = swiftdata_declaration.search(code)
+        if declaration and not (
+            declaration.group(1) == "Model" and path in legacy_model_sources
+        ):
             failures.append(
-                f"{path}:{line_number}: SwiftData property/model macro is forbidden outside the frozen legacy schema"
+                f"{path}:{line_number}: SwiftData macro is forbidden outside the existing archived @Model declarations"
             )
-        if swiftdata_runtime_api.search(code) and path not in legacy_swiftdata_sources:
+        for runtime_api in swiftdata_runtime_api.finditer(code):
+            if runtime_api.group(0) == "VersionedSchema" and path == legacy_schema_source:
+                continue
             failures.append(
-                f"{path}:{line_number}: SwiftData runtime/schema API is forbidden outside frozen legacy declarations"
+                f"{path}:{line_number}: SwiftData runtime API {runtime_api.group(0)} is forbidden"
             )
         if legacy_schema_reference.search(code) and path not in legacy_schema_reference_sources:
             failures.append(
