@@ -30,10 +30,11 @@ swift_import = re.compile(
 # imports. A Swift file could otherwise leak these through transitive imports or
 # a fully-qualified CoreData.NSManagedObjectContext type annotation.
 core_data_native_type = re.compile(
-    r"\b(?:NSManagedObject(?:Context|ID|Model)?|"
-    r"NSPersistent(?:Container|Store(?:Coordinator|Description)?)|"
+    r"\b(?:NSManaged[A-Z][A-Za-z0-9_]*|NSPersistent[A-Z][A-Za-z0-9_]*|"
     r"NSFetchRequest|NSFetchedResultsController|NSEntityDescription|"
-    r"NSBatch(?:Insert|Update|Delete)Request|CD[A-Z][A-Za-z0-9_]*)\b"
+    r"NSAttributeDescription|NSRelationshipDescription|NSPropertyDescription|"
+    r"NSBatch(?:Insert|Update|Delete)Request|"
+    r"CD[A-Z][A-Za-z0-9_]*|CoreData[A-Z][A-Za-z0-9_]*)\b"
 )
 
 for path in root.rglob("*.swift"):
@@ -89,6 +90,10 @@ for path in Path("yaHerd/App").rglob("*.swift"):
                 f"{path}:{line_number}: direct CoreData import belongs in App/Persistence or RecoveryModeController"
             )
         for match in core_data_native_type.finditer(code):
+            # App composition may reference CoreData* assembly wrappers, but not
+            # NSManaged*/NSPersistent*/CD* native persistence objects.
+            if match.group(0).startswith("CoreData"):
+                continue
             failures.append(
                 f"{path}:{line_number}: App must not use {match.group(0)} outside persistence/recovery"
             )
@@ -339,7 +344,7 @@ icloud_configuration = re.compile(
     re.IGNORECASE,
 )
 configuration_files = [Path("yaHerd.xcodeproj/project.pbxproj")]
-configuration_files.extend(Path("yaHerd").rglob("*.entitlements"))
+configuration_files.extend(Path(".").rglob("*.entitlements"))
 for path in configuration_files:
     for line_number, line in enumerate(path.read_text().splitlines(), start=1):
         if icloud_configuration.search(line):
