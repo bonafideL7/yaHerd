@@ -58,7 +58,9 @@ legacy_swiftdata_blobs = {
 }
 legacy_models_root = Path("yaHerd/Data/Models")
 legacy_model_sources = {
-    path for path in legacy_swiftdata_blobs if path.is_relative_to(legacy_models_root)
+    path for path in legacy_swiftdata_blobs
+    if path.is_relative_to(legacy_models_root)
+    and path.name != "WorkingTreatmentTerminologyCompatibility.swift"
 }
 legacy_schema_source = Path("yaHerd/Data/Persistence/Schema/YaHerdSchemaV1.swift")
 legacy_swiftdata_sources = legacy_model_sources | {legacy_schema_source}
