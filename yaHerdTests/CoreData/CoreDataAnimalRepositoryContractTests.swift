@@ -35,6 +35,152 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         try AnimalRepositoryContract.assertHealthAndPregnancyRecordsSurviveReload(using: environment.repositoryFixture)
     }
 
+    func testMilestone12PastureReadOrderSurvivesSQLiteReopenAndSubsetReorder() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let pastures = environment.makePastureRepository()
+        let animals = environment.makeAnimalRepository()
+
+        func pastureInput(_ name: String) -> PastureInput {
+            PastureInput(name: name, acreage: 10, usableAcreage: 9, targetAcresPerHead: 1.5)
+        }
+        func animalInput(_ name: String, tag: String, pastureID: UUID) -> AnimalInput {
+            AnimalInput(
+                name: name, tagNumber: tag, tagColorID: nil, sex: .female,
+                birthDate: Date(timeIntervalSince1970: 1_700_000_000),
+                status: .active, pastureID: pastureID, sireID: nil, damID: nil,
+                distinguishingFeatures: [], saleDate: nil, salePrice: nil,
+                reasonSold: nil, deathDate: nil, causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        }
+
+        let firstPasture = try pastures.create(input: pastureInput("First"))
+        let secondPasture = try pastures.create(input: pastureInput("Second"))
+        let controlPasture = try pastures.create(input: pastureInput("Control"))
+        let firstGroup = try pastures.createGroup(
+            input: PastureGroupInput(name: "First Rotation", grazeDays: 5, restDays: 20)
+        )
+        let secondGroup = try pastures.createGroup(
+            input: PastureGroupInput(name: "Second Rotation", grazeDays: 7, restDays: 21)
+        )
+        let controlGroup = try pastures.createGroup(
+            input: PastureGroupInput(name: "Control Rotation", grazeDays: 4, restDays: 16)
+        )
+        try pastures.assignPasture(id: firstPasture.id, toGroupID: firstGroup.id)
+        try pastures.assignPasture(id: secondPasture.id, toGroupID: firstGroup.id)
+        try pastures.assignPasture(id: controlPasture.id, toGroupID: controlGroup.id)
+
+        let untaggedA = try animals.create(
+            input: animalInput("Untagged A", tag: "", pastureID: firstPasture.id)
+        )
+        let untaggedB = try animals.create(
+            input: animalInput("Untagged B", tag: "", pastureID: firstPasture.id)
+        )
+        let tagged = try animals.create(
+            input: animalInput("Tagged", tag: "A20", pastureID: firstPasture.id)
+        )
+        let archived = try animals.create(
+            input: animalInput("Archived", tag: "", pastureID: firstPasture.id)
+        )
+        let controlAnimal = try animals.create(
+            input: animalInput("Control Animal", tag: "", pastureID: controlPasture.id)
+        )
+        try animals.archive(ids: [archived.id])
+
+        // Simulate an existing SQLite graph with equal persisted ordering keys.
+        // The repository normally protects exact duplicate names on create/update,
+        // but a read must still preserve identity when persisted values tie.
+        let writeContext = try assembly.contextFactory.makeWriteContext()
+        try writeContext.performAndWait {
+            for id in [firstPasture.id, secondPasture.id] {
+                let pasture = try XCTUnwrap(assembly.lookup.herdOwned(
+                    CDPasture.self, id: id, herdID: environment.herdID, in: writeContext
+                ))
+                pasture.name = "Same Pasture"
+                pasture.sortOrder = 7
+            }
+            for id in [firstGroup.id, secondGroup.id] {
+                let group = try XCTUnwrap(assembly.lookup.herdOwned(
+                    CDPastureGroup.self, id: id, herdID: environment.herdID, in: writeContext
+                ))
+                group.name = "Same Rotation"
+            }
+            try writeContext.save()
+        }
+
+        let tiedPastureIDs = [firstPasture.id, secondPasture.id].sorted {
+            $0.uuidString < $1.uuidString
+        }
+        let tiedGroupIDs = [firstGroup.id, secondGroup.id].sorted {
+            $0.uuidString < $1.uuidString
+        }
+        let tiedResidentIDs = [untaggedA.id, untaggedB.id].sorted {
+            $0.uuidString < $1.uuidString
+        }
+
+        func assertReadOrder(_ repository: CoreDataPastureRepository) throws {
+            let residents = try repository.fetchResidentAnimals(pastureID: firstPasture.id)
+            XCTAssertEqual(Set(residents.map(\.id)), Set([untaggedA.id, untaggedB.id, tagged.id]))
+            XCTAssertEqual(
+                residents.filter { $0.displayTagNumber.isEmpty }.map(\.id),
+                tiedResidentIDs
+            )
+            XCTAssertFalse(residents.contains { $0.id == archived.id || $0.id == controlAnimal.id })
+
+            let list = try repository.fetchPastures()
+            XCTAssertEqual(list.map(\.id), [controlPasture.id] + tiedPastureIDs)
+            XCTAssertEqual(list.filter { tiedPastureIDs.contains($0.id) }.map(\.sortOrder), [7, 7])
+            let options = try repository.fetchPastureOptions()
+            XCTAssertEqual(options.map(\.id), [controlPasture.id] + tiedPastureIDs)
+            XCTAssertEqual(
+                try repository.fetchPastureGroups().map(\.id),
+                [controlGroup.id] + tiedGroupIDs
+            )
+            let detail = try XCTUnwrap(repository.fetchPastureGroupDetail(id: firstGroup.id))
+            XCTAssertEqual(detail.pastures.map(\.id), tiedPastureIDs)
+            XCTAssertEqual(
+                try repository.fetchPastureGroupDetail(id: controlGroup.id)?.pastures.map(\.id),
+                [controlPasture.id]
+            )
+            XCTAssertEqual(try repository.fetchResidentAnimals(pastureID: controlPasture.id).map(\.id), [controlAnimal.id])
+        }
+
+        try assertReadOrder(pastures)
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let readOnlyPastures = CoreDataPastureRepository(
+            selection: environment.selection, assembly: reopened
+        )
+        for _ in 0..<2 {
+            try assertReadOrder(readOnlyPastures)
+        }
+
+        // A subset reorder must use the same total order for untouched records.
+        try pastures.reorder(ids: [controlPasture.id])
+        XCTAssertEqual(
+            try pastures.fetchPastures().map(\.id),
+            [controlPasture.id] + tiedPastureIDs
+        )
+        XCTAssertEqual(
+            try pastures.fetchPastures().map(\.sortOrder),
+            [0, 1, 2]
+        )
+        XCTAssertEqual(
+            try pastures.fetchPastureGroupDetail(id: firstGroup.id)?.pastures.map(\.id),
+            tiedPastureIDs
+        )
+
+        let afterReorder = try await harness.makeAssembly(accessMode: .readOnly)
+        let reloaded = CoreDataPastureRepository(
+            selection: environment.selection, assembly: afterReorder
+        )
+        XCTAssertEqual(try reloaded.fetchPastures().map(\.id), [controlPasture.id] + tiedPastureIDs)
+        XCTAssertEqual(try reloaded.fetchPastureGroupDetail(id: firstGroup.id)?.pastures.map(\.id), tiedPastureIDs)
+        XCTAssertEqual(Set(try reloaded.fetchResidentAnimals(pastureID: firstPasture.id).map(\.id)),
+                       Set([untaggedA.id, untaggedB.id, tagged.id]))
+    }
+
     func testMilestone12MaternalOffspringOrderSurvivesSQLiteReopen() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
