@@ -481,6 +481,128 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
         }
     }
 
+    func testConflictingDefaultReadUsesRepairPriorityAcrossSQLiteReopen() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = CoreDataTagColorContractEnvironment(assembly: assembly)
+        try environment.seedInitialHerd()
+
+        let first = TagColorSnapshot(
+            id: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
+            name: "Earlier Amber",
+            prefix: "EA",
+            rgba: RGBAColor(r: 0.85, g: 0.45, b: 0.2),
+            sortOrder: 1,
+            isDefault: true,
+            createdAt: Date(timeIntervalSinceReferenceDate: 100),
+            updatedAt: Date(timeIntervalSinceReferenceDate: 200)
+        )
+        let preferred = TagColorSnapshot(
+            id: UUID(uuidString: "22222222-2222-4222-8222-222222222222")!,
+            name: "Newer Teal",
+            prefix: "NT",
+            rgba: RGBAColor(r: 0.2, g: 0.6, b: 0.65),
+            sortOrder: 15,
+            isDefault: true,
+            createdAt: Date(timeIntervalSinceReferenceDate: 100),
+            updatedAt: Date(timeIntervalSinceReferenceDate: 300)
+        )
+        try environment.fixture.referenceControl.seedPersistedColor(first)
+        try environment.fixture.referenceControl.seedPersistedColor(preferred)
+
+        let repository = environment.fixture.makeTagColorRepository()
+        let firstRead = try repository.fetchColors()
+        XCTAssertEqual(firstRead.filter(\.isDefault).map(\.id), [preferred.id])
+        XCTAssertTrue(try XCTUnwrap(repository.fetchColor(id: first.id)).isDefault)
+        XCTAssertTrue(try XCTUnwrap(repository.fetchColor(id: preferred.id)).isDefault)
+
+        // Reading projects an exclusive default but must not heal the physical rows.
+        let passiveReadOnlyAssembly = try await harness.makeAssembly(accessMode: .readOnly)
+        let readSelection = CoreDataTagColorContractSelection()
+        readSelection.currentHerdID = environment.initialHerdID
+        let reader = CoreDataTagColorRepository(
+            selection: readSelection,
+            assembly: passiveReadOnlyAssembly
+        )
+        XCTAssertEqual(try reader.fetchColors().filter(\.isDefault).map(\.id), [preferred.id])
+        XCTAssertTrue(try XCTUnwrap(reader.fetchColor(id: first.id)).isDefault)
+        XCTAssertTrue(try XCTUnwrap(reader.fetchColor(id: preferred.id)).isDefault)
+
+        // An unrelated write repairs duplicate defaults without silently
+        // selecting a different color from the one shown by passive reads.
+        let control = TagColorSnapshot(
+            name: "Control Violet",
+            prefix: "CV",
+            rgba: RGBAColor(r: 0.5, g: 0.3, b: 0.7)
+        )
+        try repository.upsert(control)
+        XCTAssertEqual(try repository.fetchColors().filter(\.isDefault).map(\.id), [preferred.id])
+        XCTAssertFalse(try XCTUnwrap(repository.fetchColor(id: first.id)).isDefault)
+        XCTAssertTrue(try XCTUnwrap(repository.fetchColor(id: preferred.id)).isDefault)
+        XCTAssertEqual(try repository.fetchColor(id: control.id)?.id, control.id)
+
+        let freshAssembly = try await harness.makeAssembly(accessMode: .readOnly)
+        let fresh = CoreDataTagColorRepository(
+            selection: readSelection,
+            assembly: freshAssembly
+        )
+        XCTAssertEqual(try fresh.fetchColors().filter(\.isDefault).map(\.id), [preferred.id])
+        XCTAssertFalse(try XCTUnwrap(fresh.fetchColor(id: first.id)).isDefault)
+        XCTAssertTrue(try XCTUnwrap(fresh.fetchColor(id: preferred.id)).isDefault)
+    }
+
+    func testTiedDefaultsStayConsistentThroughPartialReorderRestoreAndExplicitSelection() async throws {
+        try await runRollback { environment in
+            let timestamp = Date(timeIntervalSinceReferenceDate: 400)
+            let amber = TagColorSnapshot(
+                id: UUID(uuidString: "33333333-3333-4333-8333-333333333333")!,
+                name: "Amber Control",
+                prefix: "AC",
+                rgba: RGBAColor(r: 0.9, g: 0.5, b: 0.1),
+                sortOrder: 20,
+                isDefault: true,
+                createdAt: timestamp,
+                updatedAt: timestamp
+            )
+            let zinc = TagColorSnapshot(
+                id: UUID(uuidString: "44444444-4444-4444-8444-444444444444")!,
+                name: "Zinc Control",
+                prefix: "ZC",
+                rgba: RGBAColor(r: 0.4, g: 0.4, b: 0.6),
+                sortOrder: 20,
+                isDefault: true,
+                createdAt: timestamp,
+                updatedAt: timestamp
+            )
+            try environment.fixture.referenceControl.seedPersistedColor(amber)
+            try environment.fixture.referenceControl.seedPersistedColor(zinc)
+            let repo = environment.fixture.makeTagColorRepository()
+
+            XCTAssertEqual(try repo.fetchColors().filter(\.isDefault).map(\.id), [amber.id])
+            XCTAssertEqual(
+                try repo.fetchColors().filter { $0.id == amber.id || $0.id == zinc.id }
+                    .map(\.id),
+                [amber.id, zinc.id],
+                "The library must preserve stable display order when sortOrder ties."
+            )
+
+            // Reordering a virtual built-in must not adopt its default flag or
+            // change the preferred persisted color.
+            try repo.reorder(colorIDs: [TagColorDefaults.blueID])
+            XCTAssertEqual(try repo.fetchColors().filter(\.isDefault).map(\.id), [amber.id])
+
+            try repo.restoreDefaultColors()
+            XCTAssertEqual(try repo.fetchColors().filter(\.isDefault).map(\.id), [amber.id])
+            XCTAssertTrue(try XCTUnwrap(repo.fetchColor(id: amber.id)).isDefault)
+            XCTAssertFalse(try XCTUnwrap(repo.fetchColor(id: zinc.id)).isDefault)
+
+            // An explicit new selection always wins over repair precedence.
+            try repo.setDefaultColor(id: zinc.id)
+            XCTAssertEqual(try repo.fetchColors().filter(\.isDefault).map(\.id), [zinc.id])
+            XCTAssertTrue(try XCTUnwrap(repo.fetchColor(id: zinc.id)).isDefault)
+        }
+    }
+
     private func runRollback(
         _ assertion: (CoreDataTagColorContractEnvironment) throws -> Void
     ) async throws {
