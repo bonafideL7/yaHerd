@@ -610,7 +610,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let persistedHerdIDs = try readContext.performAndWait {
             try readContext.fetch(
                 NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
-            ).compactMap(\\.id)
+            ).compactMap(\.id)
         }
         XCTAssertEqual(persistedHerdIDs, [originalHerdID])
     }
