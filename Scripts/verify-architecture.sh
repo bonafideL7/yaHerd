@@ -26,20 +26,72 @@ swift_import = re.compile(
     r"(?P<module>[_A-Za-z]\w*)\b"
 )
 
+# Match native persistence APIs and generated CD* model types independently of
+# imports. A Swift file could otherwise leak these through transitive imports or
+# a fully-qualified CoreData.NSManagedObjectContext type annotation.
+core_data_native_type = re.compile(
+    r"\b(?:NSManagedObject(?:Context|ID|Model)?|"
+    r"NSPersistent(?:Container|Store(?:Coordinator|Description)?)|"
+    r"NSFetchRequest|NSFetchedResultsController|NSEntityDescription|"
+    r"NSBatch(?:Insert|Update|Delete)Request|CD[A-Z][A-Za-z0-9_]*)\b"
+)
+
 for path in root.rglob("*.swift"):
-    source = path.read_text()
-    for line_number, line in enumerate(source.splitlines(), start=1):
-        match = swift_import.match(line)
-        if match and match.group("module") not in allowed_imports:
+    for line_number, line in enumerate(path.read_text().splitlines(), start=1):
+        code = line.split("//", 1)[0]
+        imported = swift_import.match(code)
+        if imported and imported.group("module") not in allowed_imports:
             failures.append(
-                f'{path}:{line_number}: Domain imports platform framework {match.group("module")}'
+                f'{path}:{line_number}: Domain imports platform framework {imported.group("module")}'
             )
 
-    for match in re.finditer(r"\b(?:CK[A-Z][A-Za-z0-9_]*|NSManagedObject|ModelContext|SwiftUI\.View|UIViewController)\b", source):
-        line_number = source.count("\n", 0, match.start()) + 1
-        failures.append(
-            f"{path}:{line_number}: Domain references platform type {match.group(0)}"
-        )
+        for match in re.finditer(
+            r"\b(?:CK[A-Z][A-Za-z0-9_]*|ModelContext|SwiftUI\.View|UIViewController)\b",
+            code,
+        ):
+            failures.append(
+                f"{path}:{line_number}: Domain references platform type {match.group(0)}"
+            )
+        for match in core_data_native_type.finditer(code):
+            failures.append(
+                f"{path}:{line_number}: Domain references Core Data persistence type {match.group(0)}"
+            )
+
+# Presentation must not acquire managed-object dependencies even by using a
+# generated model class without explicitly importing the CoreData module.
+presentation_root = Path("yaHerd/Presentation")
+for path in presentation_root.rglob("*.swift"):
+    for line_number, line in enumerate(path.read_text().splitlines(), start=1):
+        code = line.split("//", 1)[0]
+        imported = swift_import.match(code)
+        if imported and imported.group("module") == "CoreData":
+            failures.append(
+                f"{path}:{line_number}: Presentation must not import CoreData"
+            )
+        for match in core_data_native_type.finditer(code):
+            failures.append(
+                f"{path}:{line_number}: Presentation must use Domain snapshots instead of {match.group(0)}"
+            )
+
+# App may compose the persistence assembly without importing or exchanging
+# managed contexts. The Core Data recovery probe is the one existing exception:
+# it inspects the local store read-only for recovery diagnostics.
+app_persistence_root = Path("yaHerd/App/Persistence")
+recovery_probe_path = Path("yaHerd/App/Recovery/RecoveryModeController.swift")
+for path in Path("yaHerd/App").rglob("*.swift"):
+    if path.is_relative_to(app_persistence_root) or path == recovery_probe_path:
+        continue
+    for line_number, line in enumerate(path.read_text().splitlines(), start=1):
+        code = line.split("//", 1)[0]
+        imported = swift_import.match(code)
+        if imported and imported.group("module") == "CoreData":
+            failures.append(
+                f"{path}:{line_number}: direct CoreData import belongs in App/Persistence or RecoveryModeController"
+            )
+        for match in core_data_native_type.finditer(code):
+            failures.append(
+                f"{path}:{line_number}: App must not use {match.group(0)} outside persistence/recovery"
+            )
 
 
 # Milestone 11: preserve the closed original SwiftData schema outside the app
@@ -225,10 +277,29 @@ swiftdata_declaration = re.compile(r"^\s*@(Model|Query|ModelActor)\b")
 swiftdata_runtime_api = re.compile(
     r"\b(?:ModelContext|ModelContainer|ModelConfiguration|SchemaMigrationPlan|VersionedSchema)\b"
 )
-cloudkit_api = re.compile(r"\b(?:NSPersistentCloudKitContainer|CKContainer)\b")
+# These are cloud transport / remote-store primitives, not generic local
+# history, file export, or domain sharing concepts.
+cloudkit_api = re.compile(
+    r"\b(?:CloudKit|CK[A-Z][A-Za-z0-9_]*|"
+    r"NSPersistentCloudKitContainer|NSPersistentStoreRemoteChangeNotification|"
+    r"NSPersistentStoreRemoteChangeNotificationPostOptionKey|"
+    r"NSUbiquitousKeyValueStore|UICloudSharingController|"
+    r"cloudKitContainerOptions)\b"
+)
 legacy_schema_reference = re.compile(r"\bYaHerdSchemaV1\b")
+# Reject recognizable reintroductions of the retired cloud/sync bridge, even
+# before a new transport type is referenced in the body.
+cloud_bridge_filename = re.compile(
+    r"(?:CloudKit|CloudSync|SyncBridge|SyncScheduler|ShareBridge|"
+    r"SharedStore|MirrorStore|CollaborationBridge)",
+    re.IGNORECASE,
+)
 
 for path in Path("yaHerd").rglob("*.swift"):
+    if cloud_bridge_filename.search(path.stem):
+        failures.append(
+            f"{path}: cloud/sync/shared persistence bridge source is forbidden"
+        )
     # The check covers every production source folder, not only Data/CoreData.
     # Ignore // comment-only lines so descriptions of deprecated APIs are safe.
     for line_number, line in enumerate(path.read_text().splitlines(), start=1):
@@ -256,7 +327,24 @@ for path in Path("yaHerd").rglob("*.swift"):
             )
         if module == "CloudKit" or cloudkit_api.search(code):
             failures.append(
-                f"{path}:{line_number}: CloudKit/shared persistence is not part of the local-only architecture"
+                f"{path}:{line_number}: cloud/sync/shared persistence is not part of the local-only architecture"
+            )
+
+# The source tree is not the only way to enable CloudKit: an Xcode capability or
+# provisioning entitlement can reintroduce iCloud persistence. Guard those
+# declarations without blocking unrelated capabilities (e.g. keychain access).
+icloud_configuration = re.compile(
+    r"\b(?:com\.apple\.developer\.(?:icloud|ubiquity)[A-Za-z0-9_.-]*|"
+    r"com\.apple\.iCloud|iCloud\.[A-Za-z0-9_.-]+|CloudKit)\b",
+    re.IGNORECASE,
+)
+configuration_files = [Path("yaHerd.xcodeproj/project.pbxproj")]
+configuration_files.extend(Path("yaHerd").rglob("*.entitlements"))
+for path in configuration_files:
+    for line_number, line in enumerate(path.read_text().splitlines(), start=1):
+        if icloud_configuration.search(line):
+            failures.append(
+                f"{path}:{line_number}: iCloud/CloudKit persistence capability is forbidden"
             )
 
 
