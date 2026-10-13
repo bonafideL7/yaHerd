@@ -181,8 +181,9 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             lookup: environment.assembly.lookup,
             currentHerdID: { environment.selection.currentHerdID }
         )
+        let originalHome = try await reader.fetchHomeTreatmentTemplates(limit: 10)
         XCTAssertEqual(
-            try await reader.fetchHomeTreatmentTemplates(limit: 10),
+            originalHome,
             [WorkingTreatmentTemplateSummary(
                 id: controlID, name: "Healthy Control", treatmentCount: 1
             )]
