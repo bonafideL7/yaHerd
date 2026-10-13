@@ -105,7 +105,7 @@ struct AnimalTimelineView: View {
 }
 
 struct DayGroup: Identifiable {
-    let id = UUID()
+    var id: Date { date }
     let date: Date
     let events: [AnimalTimelineEvent]
 
