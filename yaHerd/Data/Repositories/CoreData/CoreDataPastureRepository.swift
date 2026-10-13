@@ -90,8 +90,10 @@ final class CoreDataPastureRepository:
             )
             return try residents
                 .map { try CoreDataAnimalProjection.summary($0) }
-                .sorted {
-                    $0.displayTagNumber.localizedStandardCompare($1.displayTagNumber) == .orderedAscending
+                .sorted { left, right in
+                    let tagOrder = left.displayTagNumber.localizedStandardCompare(right.displayTagNumber)
+                    if tagOrder != .orderedSame { return tagOrder == .orderedAscending }
+                    return left.id.uuidString < right.id.uuidString
                 }
         }
     }
@@ -115,7 +117,11 @@ final class CoreDataPastureRepository:
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
             return try Self.fetchPastures(herd: herd, in: context)
-                .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+                .sorted { left, right in
+                    let nameOrder = left.name.localizedStandardCompare(right.name)
+                    if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+                    return left.id.uuidString < right.id.uuidString
+                }
                 .map { PastureOption(id: $0.id, name: $0.name) }
         }
     }
@@ -358,14 +364,21 @@ final class CoreDataPastureRepository:
     private nonisolated static func fetchPastures(herd: CDHerd, in context: NSManagedObjectContext) throws -> [CDPasture] {
         let request = NSFetchRequest<CDPasture>(entityName: CDPasture.coreDataEntityName)
         request.predicate = NSPredicate(format: "herd == %@", herd)
-        request.sortDescriptors = [NSSortDescriptor(key: "sortOrder", ascending: true), NSSortDescriptor(key: "name", ascending: true)]
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "sortOrder", ascending: true),
+            NSSortDescriptor(key: "name", ascending: true),
+            NSSortDescriptor(key: "id", ascending: true)
+        ]
         return try context.fetch(request)
     }
 
     private nonisolated static func fetchGroups(herd: CDHerd, in context: NSManagedObjectContext) throws -> [CDPastureGroup] {
         let request = NSFetchRequest<CDPastureGroup>(entityName: CDPastureGroup.coreDataEntityName)
         request.predicate = NSPredicate(format: "herd == %@", herd)
-        request.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "name", ascending: true),
+            NSSortDescriptor(key: "id", ascending: true)
+        ]
         return try context.fetch(request)
     }
 
@@ -403,13 +416,17 @@ final class CoreDataPastureRepository:
     private nonisolated static func groupDetail(_ group: CDPastureGroup) -> PastureGroupDetailSnapshot {
         let pastures = (group.pastures as? Set<CDPasture> ?? []).map(summary).sorted {
             if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
-            return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            let nameOrder = $0.name.localizedStandardCompare($1.name)
+            if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+            return $0.id.uuidString < $1.id.uuidString
         }
         return PastureGroupDetailSnapshot(id: group.id, name: group.name, grazeDays: Int(group.grazeDays), restDays: Int(group.restDays), pastures: pastures)
     }
 
     private nonisolated static func pastureSort(_ lhs: CDPasture, _ rhs: CDPasture) -> Bool {
         if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
-        return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        let nameOrder = lhs.name.localizedStandardCompare(rhs.name)
+        if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+        return lhs.id.uuidString < rhs.id.uuidString
     }
 }
