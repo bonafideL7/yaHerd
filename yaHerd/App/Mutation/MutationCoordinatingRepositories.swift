@@ -577,20 +577,3 @@ struct MutationPublishingWorkingRepository: WorkingRepository {
         mutationRecorder.recordSuccessfulMutation(reason: .working)
     }
 }
-struct MutationPublishingSampleDataSeeder: SampleDataSeeding {
-    let base: any SampleDataSeeding
-    let mutationRecorder: any SuccessfulMutationRecording
-    let writePolicy: LocalDataWritePolicy
-
-    func seedSampleDataIfNeeded() {
-        guard writePolicy.canWrite else { return }
-        base.seedSampleDataIfNeeded()
-        mutationRecorder.recordSuccessfulMutation(reason: .sampleData)
-    }
-
-    func seedLargeSampleDataIfNeeded() {
-        guard writePolicy.canWrite else { return }
-        base.seedLargeSampleDataIfNeeded()
-        mutationRecorder.recordSuccessfulMutation(reason: .sampleData)
-    }
-}

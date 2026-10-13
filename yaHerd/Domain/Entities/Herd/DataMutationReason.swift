@@ -6,5 +6,4 @@ enum DataMutationReason: Equatable, Sendable {
     case fieldCheck
     case working
     case tagColor
-    case sampleData
 }
