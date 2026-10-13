@@ -47,7 +47,7 @@ swiftui_core_data_accessor = re.compile(
 # review of whether it introduces remote/shared persistence; a package product
 # must also be approved in the Xcode build graph below. Keep tests excluded.
 approved_production_imports = {
-    "Foundation", "SwiftUI", "CoreData", "Combine", "OSLog", "os",
+    "Foundation", "SwiftUI", "CoreData", "Combine", "Dispatch", "OSLog", "os",
     "UIKit", "Observation", "Synchronization", "UniformTypeIdentifiers",
     "Charts", "LucideIcons",
 }
