@@ -15,6 +15,6 @@ Review scope: `CoreDataAnimalRepository.fetchAnimalDetail` and `fetchAnimalAggre
 
 ## Static review and execution policy
 
-Before production editing: traced the Core Data relationship, the complete detail projection, `fetchAnimalDetail`, `create/update` return paths, direct SwiftUI offspring rendering, timeline sorting and M5/M9 ownership. Extend the existing `CoreDataAnimalRepositoryContractTests` SQLite suite; do not create a separate fixture runner. Build, tests, scripts, lint and CI verification are not run unless explicitly requested by the user under `AGENTS.md`.
+Design-first audit traced the Core Data relationship, all 12 direct `CoreDataAnimalProjection.detail` entry points (two reads and ten mutation-return paths), direct SwiftUI offspring rendering, timeline sorting and M5/M9 ownership. The shared SQLite regression also exercises the independent aggregate editing reader in immediate and read-only reopened contexts. Extend the existing `CoreDataAnimalRepositoryContractTests` SQLite suite; do not create a separate fixture runner. Build, tests, scripts, lint and CI verification are not run unless explicitly requested by the user under `AGENTS.md`.
 
 Legacy SwiftData upgrades remain an independent unresolved release decision; retain `Info/CORE_DATA_CUTOVER.md`.
