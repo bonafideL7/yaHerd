@@ -36,6 +36,20 @@ core_data_native_type = re.compile(
     r"NSBatch(?:Insert|Update|Delete)Request|"
     r"CD[A-Z][A-Za-z0-9_]*|CoreData[A-Z][A-Za-z0-9_]*)\b"
 )
+# SwiftUI exposes its Core Data environment and fetch wrappers without a
+# CoreData import or any NSManagedObject type in the caller.
+swiftui_core_data_accessor = re.compile(
+    r"\b(?:managedObjectContext|FetchRequest|SectionedFetchRequest|"
+    r"FetchedResults|SectionedFetchResults)\b"
+)
+# Deliberate production import allowlist. Adding a framework requires a
+# review of whether it introduces remote/shared persistence; a package product
+# must also be approved in the Xcode build graph below. Keep tests excluded.
+approved_production_imports = {
+    "Foundation", "SwiftUI", "CoreData", "Combine", "OSLog", "os",
+    "UIKit", "Observation", "Synchronization", "UniformTypeIdentifiers",
+    "LucideIcons",
+}
 
 for path in root.rglob("*.swift"):
     for line_number, line in enumerate(path.read_text().splitlines(), start=1):
@@ -73,6 +87,10 @@ for path in presentation_root.rglob("*.swift"):
             failures.append(
                 f"{path}:{line_number}: Presentation must use Domain snapshots instead of {match.group(0)}"
             )
+        for match in swiftui_core_data_accessor.finditer(code):
+            failures.append(
+                f"{path}:{line_number}: Presentation must not use SwiftUI Core Data accessor {match.group(0)}"
+            )
 
 # App may compose the persistence assembly without importing or exchanging
 # managed contexts. The Core Data recovery probe is the one existing exception:
@@ -96,6 +114,10 @@ for path in Path("yaHerd/App").rglob("*.swift"):
                 continue
             failures.append(
                 f"{path}:{line_number}: App must not use {match.group(0)} outside persistence/recovery"
+            )
+        for match in swiftui_core_data_accessor.finditer(code):
+            failures.append(
+                f"{path}:{line_number}: App must not use SwiftUI Core Data accessor {match.group(0)} outside persistence/recovery"
             )
 
 
@@ -313,6 +335,11 @@ for path in Path("yaHerd").rglob("*.swift"):
             continue
         imported = swift_import.match(code)
         module = imported.group("module") if imported else None
+        if module and module not in approved_production_imports:
+            failures.append(
+                f"{path}:{line_number}: unapproved production import {module}; "
+                "review local-only persistence boundary before approving this module"
+            )
         if module == "SwiftData":
             failures.append(
                 f"{path}:{line_number}: SwiftData import is forbidden in production code"
@@ -351,6 +378,63 @@ for path in configuration_files:
             failures.append(
                 f"{path}:{line_number}: iCloud/CloudKit persistence capability is forbidden"
             )
+
+# An unapproved remote persistence SDK can enter via Swift Package Manager
+# without using CloudKit APIs. Review both compiled package products and
+# repository references: a product/URL rename must fail closed.
+approved_package_urls = {"https://github.com/JakubMazur/lucide-icons-swift.git"}
+approved_package_products = {"LucideIcons"}
+package_project = project_text
+remote_package_section = re.search(
+    r"/\* Begin XCRemoteSwiftPackageReference section \*/(.*?)"
+    r"/\* End XCRemoteSwiftPackageReference section \*/",
+    package_project, re.S,
+)
+package_product_section = re.search(
+    r"/\* Begin XCSwiftPackageProductDependency section \*/(.*?)"
+    r"/\* End XCSwiftPackageProductDependency section \*/",
+    package_project, re.S,
+)
+remote_package_urls = (
+    re.findall(r'\brepositoryURL\s*=\s*"([^"]+)"', remote_package_section.group(1))
+    if remote_package_section else []
+)
+package_products = (
+    re.findall(r'\bproductName\s*=\s*"?([A-Za-z_][A-Za-z0-9_]*)"?\s*;',
+               package_product_section.group(1))
+    if package_product_section else []
+)
+# Count the actual package reference/product objects, not just matched names:
+# a malformed or new local package must not evade the approved remote URL list.
+if (package_project.count("isa = XCRemoteSwiftPackageReference;") != len(remote_package_urls)
+        or "isa = XCLocalSwiftPackageReference;" in package_project
+        or package_project.count("isa = XCSwiftPackageProductDependency;") != len(package_products)
+        or set(remote_package_urls) != approved_package_urls
+        or set(package_products) != approved_package_products
+        or len(remote_package_urls) != len(approved_package_urls)
+        or len(package_products) != len(approved_package_products)):
+    failures.append(
+        "yaHerd.xcodeproj: production Swift package references/products must "
+        "remain the approved LucideIcons dependency only"
+    )
+
+# The resolved package graph can also change independently of the project.
+package_lockfile = Path("yaHerd.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")
+try:
+    import json
+    pins = json.loads(package_lockfile.read_text())["pins"]
+    locked_dependencies = {
+        (pin["identity"], pin["location"])
+        for pin in pins
+    }
+    if (len(pins) != 1 or locked_dependencies != {
+        ("lucide-icons-swift", "https://github.com/JakubMazur/lucide-icons-swift.git")
+    }):
+        failures.append(
+            f"{package_lockfile}: unapproved Swift package lockfile dependency"
+        )
+except (OSError, ValueError, KeyError, TypeError) as error:
+    failures.append(f"{package_lockfile}: cannot inspect Swift package pins: {error}")
 
 
 app_source = Path("yaHerd/App/yaHerdApp.swift").read_text()
