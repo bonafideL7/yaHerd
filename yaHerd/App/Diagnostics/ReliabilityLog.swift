@@ -1,6 +1,5 @@
 import Foundation
 import OSLog
-import SwiftData
 
 /// Centralized reliability logging for persistence and user-visible failures.
 enum ReliabilityLog {
@@ -27,29 +26,6 @@ enum ReliabilityLog {
         userVisibleError.error(
             "message=\(message, privacy: .public) error=\(String(describing: error), privacy: .public)"
         )
-    }
-}
-
-enum PersistenceLog {
-    @discardableResult
-    nonisolated static func fetch<T>(_ operation: String, _ work: () throws -> T) rethrows -> T {
-        try PerformanceLog.measure("SwiftData.fetch.\(operation)", work)
-    }
-
-    nonisolated static func save(_ context: ModelContext, operation: String) throws {
-        do {
-            try PerformanceLog.measure("SwiftData.save.\(operation)") {
-                try context.save()
-            }
-            ReliabilityLog.persistenceEvent(operation, detail: "SwiftData save completed")
-        } catch {
-            ReliabilityLog.persistenceFailure(operation, error: error)
-            throw error
-        }
-    }
-
-    nonisolated static func decodeFailure(_ operation: String, error: Error) {
-        ReliabilityLog.persistenceFailure(operation, error: error)
     }
 }
 
