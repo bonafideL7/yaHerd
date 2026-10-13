@@ -925,9 +925,9 @@ extension AnimalRepositoryContract {
             file: file,
             line: line
         )
-        let unrelatedTimelineBefore = timelineSignatures(
-            try animalRepository.fetchTimeline(id: unrelated.id)
-        )
+        let unrelatedTimelineBeforeRecords = try animalRepository.fetchTimeline(id: unrelated.id)
+        let unrelatedTimelineBefore = timelineSignatures(unrelatedTimelineBeforeRecords)
+        let unrelatedTimelineIDsBefore = unrelatedTimelineBeforeRecords.map(\.id)
         let sourcePastureBefore = try XCTUnwrap(
             pastureRepository.fetchPastureDetail(id: sourcePasture.id),
             file: file,
@@ -1251,6 +1251,13 @@ extension AnimalRepositoryContract {
         XCTAssertEqual(
             multisetCounts(timelineSignatures(try freshAnimalRepository.fetchTimeline(id: unrelated.id))),
             multisetCounts(unrelatedTimelineBefore),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            try freshAnimalRepository.fetchTimeline(id: unrelated.id).map(\.id),
+            unrelatedTimelineIDsBefore,
+            "An unrelated Animal must retain stable timeline IDs across another Pasture's rename.",
             file: file,
             line: line
         )
