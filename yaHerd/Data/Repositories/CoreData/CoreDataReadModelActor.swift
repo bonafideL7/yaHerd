@@ -1161,10 +1161,7 @@ actor CoreDataReadModelActor:
             )
 
             return try templates.map { template in
-                let items = try JSONDecoder().decode(
-                    [WorkingTreatmentPlanItem].self,
-                    from: template.itemsData
-                )
+                let items = try WorkingMapper.treatmentTemplateItems(template)
                 return WorkingTreatmentTemplateSummary(
                     id: template.id,
                     name: template.name,
