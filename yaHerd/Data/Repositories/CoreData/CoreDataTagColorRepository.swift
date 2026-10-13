@@ -62,7 +62,7 @@ final class CoreDataTagColorRepository: TagColorRepository {
         }
 
         var snapshots = Array(snapshotsByName.values) + Array(persistedBuiltIns.values)
-        if let persistedDefaultID = persisted.first(where: \.isDefault)?.id {
+        if let persistedDefaultID = Self.preferredDefaultID(in: persisted) {
             for index in snapshots.indices {
                 snapshots[index].isDefault = snapshots[index].id == persistedDefaultID
             }
@@ -316,7 +316,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
         ) { context, herd in
             var colors = try Self.fetchManagedColors(herd: herd, in: context)
             let persistedIDs = Set(colors.map(\.id))
-            let existingDefaultID = colors.first { $0.isDefault && !$0.isHidden }?.id
+            let existingDefaultID = Self.preferredDefaultID(
+                in: colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
+            )
             for builtIn in Self.seedBuiltIns()
                 where order[builtIn.id] != nil && !persistedIDs.contains(builtIn.id) {
                 var snapshot = builtIn
@@ -354,7 +356,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 }
             }
 
-            let existingDefaultID = colors.first(where: { $0.isDefault && !$0.isDeleted && !$0.isHidden })?.id
+            let existingDefaultID = Self.preferredDefaultID(
+                in: colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
+            )
             let currentBuiltInIDs = Set(Self.seedBuiltIns().map(\.id))
             for defaultColor in Self.seedBuiltIns() {
                 let normalizedDefaultName = TagColorLibraryRules.normalizedNameKey(defaultColor.name)
@@ -723,18 +727,33 @@ final class CoreDataTagColorRepository: TagColorRepository {
     private nonisolated static func normalizeDefaults(in colors: [CDTagColorDefinition]) throws {
         let defaults = colors.filter { $0.isDefault && !$0.isDeleted }
         guard defaults.count > 1 else { return }
-        let selected = defaults.sorted {
-            if $0.updatedAt != $1.updatedAt { return $0.updatedAt > $1.updatedAt }
-            return $0.sortOrder < $1.sortOrder
-        }.first
-        for color in defaults where color !== selected {
+        let visible = defaults.filter { !$0.isHidden }
+        let selectedID = preferredDefaultID(in: visible.map(snapshot))
+            ?? preferredDefaultID(in: defaults.map(snapshot))
+        for color in defaults where color.id != selectedID {
             color.isDefault = false
             color.updatedAt = .now
         }
     }
 
+    /// This same persisted-metadata priority drives passive reads and the
+    /// normalization performed by unrelated Tag Color mutations.
+    private nonisolated static func preferredDefaultID(
+        in colors: [TagColorSnapshot]
+    ) -> UUID? {
+        colors.filter(\.isDefault).min { lhs, rhs in
+            if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
+            if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
+            let nameOrder = lhs.name.localizedStandardCompare(rhs.name)
+            if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }?.id
+    }
+
     private nonisolated static func snapshotSort(_ lhs: TagColorSnapshot, _ rhs: TagColorSnapshot) -> Bool {
         if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
-        return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        let nameOrder = lhs.name.localizedStandardCompare(rhs.name)
+        if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+        return lhs.id.uuidString < rhs.id.uuidString
     }
 }
