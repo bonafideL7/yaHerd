@@ -110,7 +110,7 @@ final class RecoveryModeController: ObservableObject {
     defer { isCheckingPersistentStore = false }
 
     do {
-      let storeURL = try CoreDataPersistentContainer.defaultStoreURL()
+      let storeURL = try existingCoreDataStoreURL()
       let assembly = try await CoreDataPersistenceAssembly.load(
         storeURL: storeURL,
         accessMode: .readOnly
@@ -216,13 +216,39 @@ final class RecoveryModeController: ObservableObject {
     )
   }
 
-  private func recoverableStoreFiles() throws -> [RecoverableStoreFile] {
-    guard let appSupportURL = applicationSupportURL ?? fileManager.urls(
+  /// Unlike the normal launch helper, the diagnostic check must not create
+  /// Application Support, the yaHerd directory, or a replacement SQLite store.
+  /// Resolve the same location used by the recovery file inventory.
+  private func existingCoreDataStoreURL() throws -> URL {
+    let directory = try applicationSupportDirectoryURL()
+      .appendingPathComponent("yaHerd", isDirectory: true)
+    let storeURL = directory.appendingPathComponent(
+      CoreDataPersistentContainer.storeFileName
+    )
+
+    guard fileManager.fileExists(atPath: storeURL.path) else {
+      throw RecoveryStoreProbeError.missingMainStore
+    }
+    let values = try storeURL.resourceValues(forKeys: [.isRegularFileKey])
+    guard values.isRegularFile == true else {
+      throw RecoveryStoreProbeError.invalidMainStore
+    }
+
+    return storeURL
+  }
+
+  private func applicationSupportDirectoryURL() throws -> URL {
+    guard let url = applicationSupportURL ?? fileManager.urls(
       for: .applicationSupportDirectory,
       in: .userDomainMask
     ).first else {
       throw RecoveryStoreInventoryError.unavailable("Application Support directory is unavailable.")
     }
+    return url
+  }
+
+  private func recoverableStoreFiles() throws -> [RecoverableStoreFile] {
+    let appSupportURL = try applicationSupportDirectoryURL()
 
     // This path mirrors CoreDataPersistentContainer.defaultStoreURL without
     // creating a directory merely to prepare diagnostics.
@@ -298,6 +324,20 @@ private enum RecoveryStoreInventoryError: LocalizedError {
     switch self {
     case .unavailable(let message):
       return "Recovery store inventory failed: \(message)"
+    }
+  }
+}
+
+private enum RecoveryStoreProbeError: LocalizedError {
+  case missingMainStore
+  case invalidMainStore
+
+  var errorDescription: String? {
+    switch self {
+    case .missingMainStore:
+      "The Core Data SQLite store does not exist. No replacement store was created."
+    case .invalidMainStore:
+      "The Core Data store path is not a regular file. No repair or replacement was attempted."
     }
   }
 }
