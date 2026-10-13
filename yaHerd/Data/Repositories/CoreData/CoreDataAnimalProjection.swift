@@ -40,7 +40,14 @@ enum CoreDataAnimalProjection {
         let damPrimary = animal.dam.map { primaryTagFields(managedTags($0)) }
 
         let pregnancyChecks = managedPregnancyChecks(animal)
-        let latestPregnancyCheck = pregnancyChecks.max { $0.date < $1.date }
+        // Prefer the newest date, then the smallest persisted UUID on ties.
+        // Match WorkingMapper.makeQueueItemEditorSnapshot's pregnancy-check ordering.
+        let latestPregnancyCheck = pregnancyChecks.max { lhs, rhs in
+            if lhs.date != rhs.date {
+                return lhs.date < rhs.date
+            }
+            return lhs.id.uuidString > rhs.id.uuidString
+        }
         let latestPregnancyResult = try latestPregnancyCheck.map {
             try pregnancyResult($0)
         }
