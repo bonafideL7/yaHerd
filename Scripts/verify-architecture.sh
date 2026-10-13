@@ -15,12 +15,13 @@ root = Path("yaHerd/Domain")
 allowed_imports = {"Foundation"}
 failures: list[str] = []
 
-# Swift imports may carry one or more attributes, including argument-bearing
-# attributes such as @_spi(Internal), before the import keyword. Parse the
-# imported module once for both the Domain and persistence boundaries; typed
-# imports (for example, import struct CloudKit.CKDatabase) use that same module.
+# Swift imports may carry attributes such as @_spi(Internal), access-level
+# modifiers such as 'private' and 'package' (Swift 6), or both. Extract the
+# imported module once for the Domain and persistence boundaries; typed imports
+# (for example, private import struct CloudKit.CKDatabase) use that same module.
 swift_import = re.compile(
-    r"^\s*(?:@[_A-Za-z]\w*(?:\s*\([^()\r\n]*\))?\s+)*"
+    r"^\s*(?:(?:@[_A-Za-z]\w*(?:\s*\([^()\r\n]*\))?)"
+    r"|(?:private|fileprivate|internal|package|public|open))\s+)*"
     r"import\s+(?:(?:class|struct|enum|protocol|func|var|typealias|operator|precedencegroup|macro)\s+)?"
     r"(?P<module>[_A-Za-z]\w*)\b"
 )
