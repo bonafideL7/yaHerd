@@ -102,6 +102,10 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let current = try XCTUnwrap(repository.fetchAnimalDetail(id: dam.id))
         XCTAssertEqual(current.maternalOffspringCountIncludingArchived, 5)
         XCTAssertEqual(current.maternalOffspring.map(\.id), expectedIDs)
+        XCTAssertEqual(
+            try repository.fetchAnimalAggregateForEditing(id: dam.id)?.animal.maternalOffspring.map(\.id),
+            expectedIDs
+        )
         XCTAssertEqual(current.maternalOffspring.first { $0.id == second.id }?.isArchived, true)
         XCTAssertEqual(
             try repository.fetchAnimalDetail(id: controlDam.id)?.maternalOffspringCountIncludingArchived,
@@ -117,6 +121,11 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             let reloaded = try XCTUnwrap(readOnlyRepository.fetchAnimalDetail(id: dam.id))
             XCTAssertEqual(reloaded.maternalOffspringCountIncludingArchived, 5)
             XCTAssertEqual(reloaded.maternalOffspring.map(\.id), expectedIDs)
+            XCTAssertEqual(
+                try readOnlyRepository.fetchAnimalAggregateForEditing(id: dam.id)?
+                    .animal.maternalOffspring.map(\.id),
+                expectedIDs
+            )
             XCTAssertEqual(reloaded.maternalOffspring.first { $0.id == second.id }?.isArchived, true)
         }
         let control = try XCTUnwrap(readOnlyRepository.fetchAnimalDetail(id: controlDam.id))
