@@ -97,6 +97,69 @@ for path, expected_blob in legacy_swiftdata_blobs.items():
             "review preservation of the legacy schema before updating its pinned blob"
         )
 
+# The remaining legacy SwiftData declarations are preserved as source data
+# for an explicit later upgrade decision, but must not be compiled into the
+# Core Data-only application. This project uses a filesystem-synchronized
+# source root: target-specific membership exceptions, not a build phase file
+# list, determine whether its Swift files are compiled. The app exception set
+# already excludes Info.plist and must exclude precisely these 19 sources.
+project_path = Path("yaHerd.xcodeproj/project.pbxproj")
+project_text = project_path.read_text()
+app_exception_id = "8D2190483009470D00DE8E34"
+app_target_id = "8D40A2892EDAA29E00C89DD2"
+app_root_group_id = "8D40A28C2EDAA29E00C89DD2"
+expected_app_exclusions = {"Info.plist"} | {
+    path.relative_to(Path("yaHerd")).as_posix()
+    for path in legacy_swiftdata_blobs
+}
+
+def pbx_object_body(identifier: str) -> str | None:
+    found = re.search(
+        rf"(?ms)^\s*{identifier}\b[^\n]*=\s*\{{(?P<body>.*?)^\s*\}};",
+        project_text,
+    )
+    return found.group("body") if found else None
+
+exception_body = pbx_object_body(app_exception_id)
+app_group_body = pbx_object_body(app_root_group_id)
+if exception_body is None or app_group_body is None:
+    failures.append("yaHerd.xcodeproj: missing app-target synchronized source exception set")
+else:
+    if "isa = PBXFileSystemSynchronizedBuildFileExceptionSet;" not in exception_body:
+        failures.append("yaHerd.xcodeproj: app source exception has the wrong object type")
+    if not re.search(rf"\btarget\s*=\s*{app_target_id}\b", exception_body):
+        failures.append("yaHerd.xcodeproj: legacy source exceptions do not target yaHerd")
+    if app_exception_id not in app_group_body:
+        failures.append("yaHerd.xcodeproj: legacy source exception is not attached to yaHerd root group")
+    membership = re.search(r"membershipExceptions\s*=\s*\((.*?)\);", exception_body, re.S)
+    if membership is None:
+        failures.append("yaHerd.xcodeproj: app source exception has no membership paths")
+    else:
+        app_exclusions: list[str] = []
+        for entry in membership.group(1).splitlines():
+            entry = entry.strip()
+            if not entry:
+                continue
+            parsed = re.fullmatch(r'(?:"([^"]+)"|([A-Za-z0-9_./-]+)),', entry)
+            if parsed is None:
+                failures.append(f"yaHerd.xcodeproj: unrecognized app exclusion entry {entry!r}")
+                continue
+            app_exclusions.append(parsed.group(1) or parsed.group(2))
+        missing = expected_app_exclusions - set(app_exclusions)
+        extra = set(app_exclusions) - expected_app_exclusions
+        if missing or extra or len(app_exclusions) != len(expected_app_exclusions):
+            failures.append(
+                "yaHerd.xcodeproj: frozen SwiftData sources must be excluded "
+                "from app target (missing: "
+                + ", ".join(sorted(missing))
+                + "; unexpected: "
+                + ", ".join(sorted(extra))
+                + "; duplicates: "
+                + str(len(app_exclusions) != len(set(app_exclusions)))
+                + ")"
+            )
+
+
 swiftdata_declaration = re.compile(r"^\s*@(Model|Query|ModelActor)\b")
 swiftdata_runtime_api = re.compile(
     r"\b(?:ModelContext|ModelContainer|ModelConfiguration|SchemaMigrationPlan|VersionedSchema)\b"
