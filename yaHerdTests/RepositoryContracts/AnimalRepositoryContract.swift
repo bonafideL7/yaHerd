@@ -382,6 +382,14 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloadedSummary.firstDistinguishingFeature, "White blaze", file: file, line: line)
 
         let timeline = try reloadedRepository.fetchTimeline(id: created.id)
+        XCTAssertEqual(
+            timeline.map(\.id),
+            try fixture.makeAnimalRepository().fetchTimeline(id: created.id).map(\.id),
+            "Status, movement, birth and tag event identities must survive a fresh read.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(Set(timeline.map(\.id)).count, timeline.count, file: file, line: line)
         XCTAssertTrue(
             timeline.contains {
                 guard case .status = $0.type else { return false }
@@ -1069,6 +1077,31 @@ enum AnimalRepositoryContract {
         XCTAssertNotNil(retiredTag.removedAt, file: file, line: line)
 
         let timeline = try reloadedRepository.fetchTimeline(id: created.id)
+        let assignedOriginal = try XCTUnwrap(
+            timeline.first { isTagEvent($0, title: "Tag Assigned", number: "403") },
+            file: file,
+            line: line
+        )
+        let retiredOriginal = try XCTUnwrap(
+            timeline.first { isTagEvent($0, title: "Tag Retired", number: "403") },
+            file: file,
+            line: line
+        )
+        XCTAssertNotEqual(
+            assignedOriginal.id,
+            retiredOriginal.id,
+            "Assignment and retirement events for the same persisted tag need different identities.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(Set(timeline.map(\.id)).count, timeline.count, file: file, line: line)
+        XCTAssertEqual(
+            timeline.map(\.id),
+            try fixture.makeAnimalRepository().fetchTimeline(id: created.id).map(\.id),
+            "Tag event identities must survive a fresh repository read.",
+            file: file,
+            line: line
+        )
         XCTAssertTrue(
             timeline.contains { isTagEvent($0, title: "Tag Assigned", number: "402") },
             "Adding the replacement tag must create assignment history for tag 402.",
@@ -1320,6 +1353,26 @@ enum AnimalRepositoryContract {
         XCTAssertEqual(reloadedDam.maternalOffspringCountIncludingArchived, 1, file: file, line: line)
         XCTAssertTrue(reloadedDam.maternalOffspring.contains { $0.id == calf.id }, file: file, line: line)
 
+        let maternalTimeline = try reloadedRepository.fetchTimeline(id: dam.id)
+        let primaryBirth = try XCTUnwrap(
+            maternalTimeline.first { $0.title == "Birth" },
+            file: file,
+            line: line
+        )
+        let offspringBirth = try XCTUnwrap(
+            maternalTimeline.first { $0.title == "Offspring Recorded" },
+            file: file,
+            line: line
+        )
+        XCTAssertNotEqual(primaryBirth.id, offspringBirth.id, file: file, line: line)
+        XCTAssertEqual(
+            maternalTimeline.map(\.id),
+            try fixture.makeAnimalRepository().fetchTimeline(id: dam.id).map(\.id),
+            "Primary and offspring birth identities must remain stable across fresh reads.",
+            file: file,
+            line: line
+        )
+
         try reloadedRepository.archive(ids: [calf.id])
         reloadedDam = try XCTUnwrap(
             fixture.makeAnimalRepository().fetchAnimalDetail(id: dam.id),
@@ -1508,6 +1561,14 @@ enum AnimalRepositoryContract {
 
         let reloadedRepository = fixture.makeAnimalRepository()
         let timeline = try reloadedRepository.fetchTimeline(id: animal.id)
+        XCTAssertEqual(Set(timeline.map(\.id)).count, timeline.count, file: file, line: line)
+        XCTAssertEqual(
+            timeline.map(\.id),
+            try fixture.makeAnimalRepository().fetchTimeline(id: animal.id).map(\.id),
+            "Health, pregnancy, birth and tag identities must be reproducible from persisted records.",
+            file: file,
+            line: line
+        )
         XCTAssertTrue(
             timeline.contains {
                 isHealthEvent(
