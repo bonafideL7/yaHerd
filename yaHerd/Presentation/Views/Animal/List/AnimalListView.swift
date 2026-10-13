@@ -15,7 +15,6 @@ struct AnimalListView: View {
     @Environment(\.animalFeatureDependencies) private var animalDependencies
     private var animalListRepository: any AnimalListRepository { animalDependencies.listRepository }
     private var pastureReferenceDataReader: any PastureReferenceDataReader { animalDependencies.pastureReferenceReader }
-    private var sampleDataSeeder: (any SampleDataSeeding)? { animalDependencies.sampleDataSeeder }
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(ApplicationSettings.self) private var applicationSettings
@@ -389,16 +388,6 @@ struct AnimalListView: View {
         shouldShowFloatingControlBar ? 106 : 24
     }
 
-    private var addSampleDataAction: (() -> Void)? {
-        guard sampleDataSeeder != nil else { return nil }
-        return seedSampleData
-    }
-
-    private var addLargeSampleDataAction: (() -> Void)? {
-        guard sampleDataSeeder != nil else { return nil }
-        return seedLargeSampleData
-    }
-
     private var emptyStateView: some View {
         AnimalListEmptyStateContainer(
             configuration: emptyStateConfiguration,
@@ -411,8 +400,6 @@ struct AnimalListView: View {
             colorScheme: colorScheme,
             onStartInlineEntry: beginNewInlineEntry,
             onAddAnimal: presentAddAnimal,
-            onAddSampleData: addSampleDataAction,
-            onAddLargeSampleData: addLargeSampleDataAction,
             onClearFilters: clearAllFilters,
             onShowInactive: { showRemovedStatusesBinding.wrappedValue = true },
             onShowArchivedRecords: { showArchivedRecordsBinding.wrappedValue = true }
@@ -510,16 +497,6 @@ struct AnimalListView: View {
         refreshDerivedState()
         selectedAnimalIDs.removeAll()
         batchMode = false
-    }
-
-    private func seedSampleData() {
-        sampleDataSeeder?.seedSampleDataIfNeeded()
-        reload()
-    }
-
-    private func seedLargeSampleData() {
-        sampleDataSeeder?.seedLargeSampleDataIfNeeded()
-        reload()
     }
 
     private func reload() {

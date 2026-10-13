@@ -137,7 +137,6 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
                 healthRecordAdder: animalRepository,
                 pregnancyCheckAdder: animalRepository,
                 pastureReferenceReader: pastureRepository,
-                sampleDataSeeder: nil,
                 mutationStream: mutationCenter
             ),
             pastureFeatureDependencies: PastureFeatureDependencies(

@@ -216,10 +216,6 @@ struct WorkingSessionAnimalWorkView: View {
             guard !Task.isCancelled else { return }
 
             switch event.source {
-            case .local(.sampleData):
-                refreshDestinationPasturesAfterMutation()
-                guard !refreshSessionSourcePastureAfterMutation() else { return }
-                await revalidateSelectedSireAfterMutation()
             case .local(.pasture):
                 refreshDestinationPasturesAfterMutation()
                 guard !refreshSessionSourcePastureAfterMutation() else { return }

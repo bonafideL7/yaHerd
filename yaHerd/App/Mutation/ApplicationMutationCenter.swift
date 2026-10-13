@@ -191,8 +191,6 @@ final class ApplicationMutationCenter: ApplicationMutationStreaming {
             return [.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions]
         case .tagColor:
             return [.home, .dashboard, .animals, .pastures, .fieldChecks, .workingSessions]
-        case .sampleData:
-            return Set(ApplicationFeatureArea.allCases)
         }
     }
 }

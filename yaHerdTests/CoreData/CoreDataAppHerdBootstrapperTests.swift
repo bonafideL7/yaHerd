@@ -69,7 +69,6 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         ).makeDependencies(dataAccessMode: .readWrite)
 
         XCTAssertEqual(try graph.herdRepository.fetchCurrentHerd().id, herdID)
-        XCTAssertNil(graph.animalFeatureDependencies.sampleDataSeeder)
         XCTAssertNotNil(graph.workingSessionFeatureDependencies.animalReferenceQueryReader)
         XCTAssertNotNil(graph.fieldCheckFeatureDependencies.animalReferenceQueryReader)
         XCTAssertNotNil(graph.animalFeatureDependencies.parentOptionQueryReader)
@@ -195,7 +194,6 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         let dependencies = recovery.makeDependencies(dataAccessMode: .recoveryReadOnly)
 
         XCTAssertNotNil(try dependencies.herdRepository.fetchCurrentHerd().id)
-        XCTAssertNil(dependencies.animalFeatureDependencies.sampleDataSeeder)
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.storeURL.path))
 
         XCTAssertThrowsError(
