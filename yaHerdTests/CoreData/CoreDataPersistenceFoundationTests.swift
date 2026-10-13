@@ -472,6 +472,190 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         }
     }
 
+    func testSQLiteReopenRollsBackStagedUpdateDeleteAndInsertWhenOperationThrows() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let writer = try await harness.makeAssembly()
+        let lookup = CoreDataLookup()
+        let herdID = UUID()
+        let removedPastureID = UUID()
+        let controlPastureID = UUID()
+        let rejectedPastureID = UUID()
+        let originalUpdatedAt = Date(timeIntervalSince1970: 100)
+
+        try await writer.transactionExecutor.performWrite { context in
+            let herd = Self.makeHerd(id: herdID, name: "Original Herd", in: context)
+            _ = Self.makePasture(
+                id: removedPastureID, name: "Original Pasture", herd: herd, in: context
+            )
+            _ = Self.makePasture(
+                id: controlPastureID, name: "Control Pasture", herd: herd, in: context
+            )
+        }
+
+        do {
+            try await writer.transactionExecutor.performWrite { context in
+                let herd = try XCTUnwrap(lookup.herd(id: herdID, in: context))
+                let pasture = try XCTUnwrap(lookup.herdOwned(
+                    CDPasture.self, id: removedPastureID, herdID: herdID, in: context
+                ))
+                herd.name = "Uncommitted Herd"
+                herd.updatedAt = Date(timeIntervalSince1970: 200)
+                context.delete(pasture)
+                _ = Self.makePasture(
+                    id: rejectedPastureID,
+                    name: "Uncommitted Pasture",
+                    herd: herd,
+                    in: context
+                )
+                throw ProbeError.injectedFailure
+            }
+            XCTFail("The post-staging error must propagate.")
+        } catch {
+            XCTAssertTrue(error is ProbeError)
+        }
+
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let context = reopened.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let herd = try XCTUnwrap(reopened.lookup.herd(id: herdID, in: context))
+            XCTAssertEqual(herd.name, "Original Herd")
+            XCTAssertEqual(herd.createdAt, originalUpdatedAt)
+            XCTAssertEqual(herd.updatedAt, originalUpdatedAt)
+
+            let original = try XCTUnwrap(reopened.lookup.herdOwned(
+                CDPasture.self, id: removedPastureID, herdID: herdID, in: context
+            ))
+            XCTAssertEqual(original.name, "Original Pasture")
+            XCTAssertEqual(original.herd.id, herdID)
+            let control = try XCTUnwrap(reopened.lookup.herdOwned(
+                CDPasture.self, id: controlPastureID, herdID: herdID, in: context
+            ))
+            XCTAssertEqual(control.name, "Control Pasture")
+            XCTAssertEqual(control.herd.id, herdID)
+            XCTAssertNil(try reopened.lookup.herdOwned(
+                CDPasture.self, id: rejectedPastureID, herdID: herdID, in: context
+            ))
+        }
+    }
+
+    func testSQLiteReopenRollsBackMixedActualSaveFailureAndAllowsNextCommit() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let writer = try await harness.makeAssembly()
+        let lookup = CoreDataLookup()
+        let herdID = UUID()
+        let pastureID = UUID()
+        let controlPastureID = UUID()
+        let rejectedPastureID = UUID()
+        let invalidHerdID = UUID()
+        let committedPastureID = UUID()
+        let originalUpdatedAt = Date(timeIntervalSince1970: 100)
+        let committedUpdatedAt = Date(timeIntervalSince1970: 300)
+
+        try await writer.transactionExecutor.performWrite { context in
+            let herd = Self.makeHerd(id: herdID, name: "Stable Herd", in: context)
+            _ = Self.makePasture(
+                id: pastureID, name: "Stable Pasture", herd: herd, in: context
+            )
+            _ = Self.makePasture(
+                id: controlPastureID, name: "Control Pasture", herd: herd, in: context
+            )
+        }
+
+        do {
+            try await writer.transactionExecutor.performWrite { context in
+                let herd = try XCTUnwrap(lookup.herd(id: herdID, in: context))
+                let pasture = try XCTUnwrap(lookup.herdOwned(
+                    CDPasture.self, id: pastureID, herdID: herdID, in: context
+                ))
+                herd.name = "Rejected Herd Rename"
+                herd.updatedAt = Date(timeIntervalSince1970: 200)
+                pasture.name = "Rejected Pasture Rename"
+                _ = Self.makePasture(
+                    id: rejectedPastureID, name: "Rejected Insert", herd: herd, in: context
+                )
+
+                let invalid = CDHerd(context: context)
+                invalid.id = invalidHerdID
+                invalid.createdAt = originalUpdatedAt
+                invalid.updatedAt = originalUpdatedAt
+                // Required name is absent: Core Data's actual save must fail validation.
+            }
+            XCTFail("The mixed transaction must fail during Core Data save.")
+        } catch let error as CoreDataPersistenceError {
+            guard case .saveFailed = error else {
+                XCTFail("Expected saveFailed, received \(error).")
+                return
+            }
+        } catch {
+            XCTFail("Expected CoreDataPersistenceError, received \(type(of: error)).")
+            return
+        }
+
+        let failedReopen = try await harness.makeAssembly(accessMode: .readOnly)
+        let failedContext = failedReopen.contextFactory.makeReadContext()
+        try failedContext.performAndWait {
+            let herd = try XCTUnwrap(failedReopen.lookup.herd(id: herdID, in: failedContext))
+            XCTAssertEqual(herd.name, "Stable Herd")
+            XCTAssertEqual(herd.createdAt, originalUpdatedAt)
+            XCTAssertEqual(herd.updatedAt, originalUpdatedAt)
+            let pasture = try XCTUnwrap(failedReopen.lookup.herdOwned(
+                CDPasture.self, id: pastureID, herdID: herdID, in: failedContext
+            ))
+            XCTAssertEqual(pasture.name, "Stable Pasture")
+            XCTAssertEqual(pasture.herd.id, herdID)
+            XCTAssertNil(try failedReopen.lookup.herdOwned(
+                CDPasture.self, id: rejectedPastureID, herdID: herdID, in: failedContext
+            ))
+            XCTAssertNil(try failedReopen.lookup.herd(id: invalidHerdID, in: failedContext))
+            let control = try XCTUnwrap(failedReopen.lookup.herdOwned(
+                CDPasture.self, id: controlPastureID, herdID: herdID, in: failedContext
+            ))
+            XCTAssertEqual(control.name, "Control Pasture")
+            XCTAssertEqual(control.herd.id, herdID)
+        }
+
+        try await writer.transactionExecutor.performWrite { context in
+            let herd = try XCTUnwrap(lookup.herd(id: herdID, in: context))
+            herd.name = "Committed Herd Rename"
+            herd.updatedAt = committedUpdatedAt
+            _ = Self.makePasture(
+                id: committedPastureID, name: "Committed Insert", herd: herd, in: context
+            )
+        }
+
+        let committedReopen = try await harness.makeAssembly(accessMode: .readOnly)
+        let committedContext = committedReopen.contextFactory.makeReadContext()
+        try committedContext.performAndWait {
+            let herd = try XCTUnwrap(committedReopen.lookup.herd(
+                id: herdID, in: committedContext
+            ))
+            XCTAssertEqual(herd.id, herdID)
+            XCTAssertEqual(herd.name, "Committed Herd Rename")
+            XCTAssertEqual(herd.createdAt, originalUpdatedAt)
+            XCTAssertEqual(herd.updatedAt, committedUpdatedAt)
+
+            let committed = try XCTUnwrap(committedReopen.lookup.herdOwned(
+                CDPasture.self, id: committedPastureID, herdID: herdID, in: committedContext
+            ))
+            XCTAssertEqual(committed.name, "Committed Insert")
+            XCTAssertEqual(committed.herd.id, herdID)
+            let original = try XCTUnwrap(committedReopen.lookup.herdOwned(
+                CDPasture.self, id: pastureID, herdID: herdID, in: committedContext
+            ))
+            XCTAssertEqual(original.name, "Stable Pasture")
+            let control = try XCTUnwrap(committedReopen.lookup.herdOwned(
+                CDPasture.self, id: controlPastureID, herdID: herdID, in: committedContext
+            ))
+            XCTAssertEqual(control.name, "Control Pasture")
+            XCTAssertNil(try committedReopen.lookup.herdOwned(
+                CDPasture.self, id: rejectedPastureID, herdID: herdID, in: committedContext
+            ))
+            XCTAssertNil(try committedReopen.lookup.herd(
+                id: invalidHerdID, in: committedContext
+            ))
+        }
+    }
+
     func testReadOnlyStoreUsesSameStoreAndRejectsTransactions() async throws {
         let harness = try CoreDataPersistenceHarness()
         let writer = try await harness.makeAssembly()
