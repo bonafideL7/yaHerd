@@ -15,13 +15,23 @@ root = Path("yaHerd/Domain")
 allowed_imports = {"Foundation"}
 failures: list[str] = []
 
+# Swift imports may carry one or more attributes, including argument-bearing
+# attributes such as @_spi(Internal), before the import keyword. Parse the
+# imported module once for both the Domain and persistence boundaries; typed
+# imports (for example, import struct CloudKit.CKDatabase) use that same module.
+swift_import = re.compile(
+    r"^\s*(?:@[_A-Za-z]\w*(?:\s*\([^()\r\n]*\))?\s+)*"
+    r"import\s+(?:(?:class|struct|enum|protocol|func|var|typealias|operator|precedencegroup|macro)\s+)?"
+    r"(?P<module>[_A-Za-z]\w*)\b"
+)
+
 for path in root.rglob("*.swift"):
     source = path.read_text()
     for line_number, line in enumerate(source.splitlines(), start=1):
-        match = re.match(r"\s*import\s+([A-Za-z0-9_]+)", line)
-        if match and match.group(1) not in allowed_imports:
+        match = swift_import.match(line)
+        if match and match.group("module") not in allowed_imports:
             failures.append(
-                f"{path}:{line_number}: Domain imports platform framework {match.group(1)}"
+                f'{path}:{line_number}: Domain imports platform framework {match.group("module")}'
             )
 
     for match in re.finditer(r"\b(?:CK[A-Z][A-Za-z0-9_]*|NSManagedObject|ModelContext|SwiftUI\.View|UIViewController)\b", source):
@@ -86,12 +96,6 @@ for path, expected_blob in legacy_swiftdata_blobs.items():
             "review preservation of the legacy schema before updating its pinned blob"
         )
 
-swiftdata_import = re.compile(
-    r"^\s*(?:@preconcurrency\s+)?import\s+(?:(?:class|struct|enum|protocol|func|var|typealias)\s+)?SwiftData\b"
-)
-cloudkit_import = re.compile(
-    r"^\s*(?:@preconcurrency\s+)?import\s+(?:(?:class|struct|enum|protocol|func|var|typealias)\s+)?CloudKit\b"
-)
 swiftdata_declaration = re.compile(r"^\s*@(Model|Query|ModelActor)\b")
 swiftdata_runtime_api = re.compile(
     r"\b(?:ModelContext|ModelContainer|ModelConfiguration|SchemaMigrationPlan|VersionedSchema)\b"
@@ -106,7 +110,9 @@ for path in Path("yaHerd").rglob("*.swift"):
         code = line.split("//", 1)[0]
         if not code.strip():
             continue
-        if swiftdata_import.search(code) and path not in legacy_swiftdata_sources:
+        imported = swift_import.match(code)
+        module = imported.group("module") if imported else None
+        if module == "SwiftData" and path not in legacy_swiftdata_sources:
             failures.append(
                 f"{path}:{line_number}: SwiftData import is forbidden outside frozen legacy model/schema files"
             )
@@ -127,7 +133,7 @@ for path in Path("yaHerd").rglob("*.swift"):
             failures.append(
                 f"{path}:{line_number}: active production code must not reference the retired SwiftData schema"
             )
-        if cloudkit_import.search(code) or cloudkit_api.search(code):
+        if module == "CloudKit" or cloudkit_api.search(code):
             failures.append(
                 f"{path}:{line_number}: CloudKit/shared persistence is not part of the local-only architecture"
             )
