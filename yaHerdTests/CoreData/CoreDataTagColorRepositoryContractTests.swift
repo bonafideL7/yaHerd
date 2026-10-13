@@ -507,11 +507,23 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
             createdAt: Date(timeIntervalSinceReferenceDate: 100),
             updatedAt: Date(timeIntervalSinceReferenceDate: 300)
         )
+        let unaffected = TagColorSnapshot(
+            id: UUID(uuidString: "55555555-5555-4555-8555-555555555555")!,
+            name: "Unrelated Olive",
+            prefix: "UO",
+            rgba: RGBAColor(r: 0.35, g: 0.55, b: 0.25),
+            sortOrder: 9,
+            createdAt: Date(timeIntervalSinceReferenceDate: 100),
+            updatedAt: Date(timeIntervalSinceReferenceDate: 150)
+        )
         try environment.fixture.referenceControl.seedPersistedColor(first)
         try environment.fixture.referenceControl.seedPersistedColor(preferred)
+        try environment.fixture.referenceControl.seedPersistedColor(unaffected)
 
         let repository = environment.fixture.makeTagColorRepository()
         let firstRead = try repository.fetchColors()
+        let library = TagColorLibraryStore(repository: repository)
+        XCTAssertEqual(library.defaultColorID, preferred.id)
         XCTAssertEqual(firstRead.filter(\.isDefault).map(\.id), [preferred.id])
         XCTAssertTrue(try XCTUnwrap(repository.fetchColor(id: first.id)).isDefault)
         XCTAssertTrue(try XCTUnwrap(repository.fetchColor(id: preferred.id)).isDefault)
@@ -540,6 +552,9 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(repository.fetchColor(id: first.id)).isDefault)
         XCTAssertTrue(try XCTUnwrap(repository.fetchColor(id: preferred.id)).isDefault)
         XCTAssertEqual(try repository.fetchColor(id: control.id)?.id, control.id)
+        XCTAssertEqual(try repository.fetchColor(id: unaffected.id), unaffected)
+        library.refresh()
+        XCTAssertEqual(library.defaultColorID, preferred.id)
 
         let freshAssembly = try await harness.makeAssembly(accessMode: .readOnly)
         let fresh = CoreDataTagColorRepository(
