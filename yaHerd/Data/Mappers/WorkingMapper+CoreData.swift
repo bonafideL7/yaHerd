@@ -9,6 +9,7 @@ enum CoreDataWorkingMappingError: Error, Equatable {
     case invalidDoseUnit(recordID: UUID, value: String)
     case invalidAdministrationRoute(recordID: UUID, value: String)
     case corruptPlannedTreatments(sessionID: UUID)
+    case corruptTreatmentTemplate(templateID: UUID)
     case corruptTreatmentRecord(recordID: UUID)
 }
 
@@ -258,16 +259,31 @@ enum WorkingMapper {
 
     static func plannedTreatments(_ session: CDWorkingSession) throws -> [WorkingTreatmentPlanItem] {
         do {
-            let items = try JSONDecoder().decode(
-                [CoreDataWorkingTreatmentPlanItemPayload].self,
-                from: session.plannedTreatmentsData
-            )
-            .map(\.domainValue)
-            try WorkingTreatmentPlanRules.validate(items)
-            return items
+            return try decodePersistedPlan(session.plannedTreatmentsData)
         } catch {
             throw CoreDataWorkingMappingError.corruptPlannedTreatments(sessionID: session.id)
         }
+    }
+
+    static func treatmentTemplateItems(
+        _ template: CDWorkingTreatmentTemplate
+    ) throws -> [WorkingTreatmentPlanItem] {
+        do {
+            return try decodePersistedPlan(template.itemsData)
+        } catch {
+            throw CoreDataWorkingMappingError.corruptTreatmentTemplate(templateID: template.id)
+        }
+    }
+
+    private static func decodePersistedPlan(
+        _ data: Data
+    ) throws -> [WorkingTreatmentPlanItem] {
+        let items = try JSONDecoder().decode(
+            [CoreDataWorkingTreatmentPlanItemPayload].self,
+            from: data
+        ).map(\.domainValue)
+        try WorkingTreatmentPlanRules.validate(items)
+        return items
     }
 
     private static func workingStatus(_ session: CDWorkingSession) throws -> WorkingSessionStatus {
