@@ -164,6 +164,106 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             using: environment.fixture
         )
     }
+
+    func testReopenedSQLiteTemplateReadDoesNotInventMissingTreatmentIdentity() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let templates = CoreDataWorkingTreatmentTemplateRepository(
+            selection: environment.selection,
+            assembly: environment.assembly
+        )
+        let controlItemID = UUID()
+        let controlID = try templates.createTemplate(
+            name: "Healthy Control",
+            items: [WorkingTreatmentPlanItem(id: controlItemID, name: "Control Treatment")]
+        )
+        let reader = CoreDataReadModelActor(
+            contextFactory: environment.assembly.contextFactory,
+            lookup: environment.assembly.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        XCTAssertEqual(
+            try await reader.fetchHomeTreatmentTemplates(limit: 10),
+            [WorkingTreatmentTemplateSummary(
+                id: controlID, name: "Healthy Control", treatmentCount: 1
+            )]
+        )
+
+        let corruptTemplateID = UUID()
+        let invalidPayload = Data(#"[{"name":"Missing Persisted UUID"}]"#.utf8)
+        let writeContext = try environment.assembly.contextFactory.makeWriteContext()
+        try writeContext.performAndWait {
+            let herd = try XCTUnwrap(
+                environment.assembly.lookup.herd(
+                    id: environment.herdID,
+                    in: writeContext
+                )
+            )
+            let corruptTemplate = CDWorkingTreatmentTemplate(context: writeContext)
+            corruptTemplate.id = corruptTemplateID
+            corruptTemplate.name = "Invalid Persisted Template"
+            corruptTemplate.itemsData = invalidPayload
+            corruptTemplate.herd = herd
+            try writeContext.save()
+        }
+
+        let reopened = try await environment.makeReadOnlyAssembly()
+        let reopenedTemplates = CoreDataWorkingTreatmentTemplateRepository(
+            selection: environment.selection,
+            assembly: reopened
+        )
+        let control = try XCTUnwrap(
+            reopenedTemplates.fetchTemplateDetail(id: controlID)
+        )
+        XCTAssertEqual(control.id, controlID)
+        XCTAssertEqual(control.name, "Healthy Control")
+        XCTAssertEqual(control.plannedTreatments.map(\.id), [controlItemID])
+        XCTAssertEqual(control.plannedTreatments.map(\.name), ["Control Treatment"])
+
+        let expectedError = CoreDataWorkingMappingError.corruptTreatmentTemplate(
+            templateID: corruptTemplateID
+        )
+        XCTAssertThrowsError(
+            try reopenedTemplates.fetchTemplateDetail(id: corruptTemplateID)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+        XCTAssertThrowsError(try reopenedTemplates.fetchTemplates()) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+
+        let reopenedHome = CoreDataReadModelActor(
+            contextFactory: reopened.contextFactory,
+            lookup: reopened.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await reopenedHome.fetchHomeTreatmentTemplates(limit: 10)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingMappingError, expectedError)
+        }
+
+        let freshContext = reopened.contextFactory.makeReadContext()
+        try freshContext.performAndWait {
+            let corrupt = try XCTUnwrap(
+                reopened.lookup.herdOwned(
+                    CDWorkingTreatmentTemplate.self,
+                    id: corruptTemplateID,
+                    herdID: environment.herdID,
+                    in: freshContext
+                )
+            )
+            XCTAssertEqual(corrupt.itemsData, invalidPayload)
+            let healthy = try XCTUnwrap(
+                reopened.lookup.herdOwned(
+                    CDWorkingTreatmentTemplate.self,
+                    id: controlID,
+                    herdID: environment.herdID,
+                    in: freshContext
+                )
+            )
+            XCTAssertEqual(healthy.name, "Healthy Control")
+        }
+    }
 }
 
 @MainActor
@@ -206,6 +306,15 @@ private final class CoreDataHomeReadModelContractEnvironment {
         self.temporaryStoreDirectory = temporaryStoreDirectory
         selection.currentHerdID = herdID
         try seedHerd()
+    }
+
+    func makeReadOnlyAssembly() async throws -> CoreDataPersistenceAssembly {
+        try await CoreDataPersistenceAssembly.load(
+            storeURL: temporaryStoreDirectory.appendingPathComponent(
+                CoreDataPersistentContainer.storeFileName
+            ),
+            accessMode: .readOnly
+        )
     }
 
     deinit {
