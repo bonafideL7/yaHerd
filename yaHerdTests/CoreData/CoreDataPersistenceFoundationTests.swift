@@ -372,6 +372,354 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         }
     }
 
+    func testPhysicalPastureDeletionPreservesCrossFeatureSnapshotsAndNullifiesLinks() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let herdID = UUID()
+        let removedPastureID = UUID()
+        let controlPastureID = UUID()
+        let fieldSessionID = UUID()
+        let workingSessionID = UUID()
+        let queueID = UUID()
+        let timestamp = Date(timeIntervalSince1970: 1_800_000_000)
+
+        try await assembly.transactionExecutor.performWrite { context in
+            let herd = Self.makeHerd(id: herdID, name: "Delete-Rule Herd", in: context)
+            let pasture = Self.makePasture(
+                id: removedPastureID,
+                name: "Original Pasture",
+                herd: herd,
+                in: context
+            )
+            _ = Self.makePasture(
+                id: controlPastureID,
+                name: "Control Pasture",
+                herd: herd,
+                in: context
+            )
+
+            let fieldSession = Self.makeFieldCheckSession(
+                id: fieldSessionID,
+                pasture: pasture,
+                herd: herd,
+                startedAt: timestamp,
+                in: context
+            )
+            fieldSession.completedAt = timestamp.addingTimeInterval(30)
+
+            let workingSession = Self.makeWorkingSession(
+                id: workingSessionID,
+                pasture: pasture,
+                herd: herd,
+                date: timestamp,
+                in: context
+            )
+            let queue = CDWorkingQueueItem(context: context)
+            queue.id = queueID
+            queue.statusRawValue = WorkingQueueStatus.queued.rawValue
+            queue.animalIDSnapshot = UUID()
+            queue.animalTagNumberSnapshot = "17"
+            queue.animalNameSnapshot = "Historical Cow"
+            queue.animalSexRawValueSnapshot = Sex.female.rawValue
+            queue.collectedFromPastureIDSnapshot = removedPastureID
+            queue.collectedFromPastureNameSnapshot = pasture.name
+            queue.destinationPastureIDSnapshot = removedPastureID
+            queue.destinationPastureNameSnapshot = pasture.name
+            queue.herd = herd
+            queue.session = workingSession
+            queue.collectedFromPasture = pasture
+            queue.destinationPasture = pasture
+        }
+
+        try await assembly.transactionExecutor.performWrite { context in
+            let pasture = try XCTUnwrap(
+                assembly.lookup.herdOwned(
+                    CDPasture.self,
+                    id: removedPastureID,
+                    herdID: herdID,
+                    in: context
+                )
+            )
+            context.delete(pasture)
+        }
+
+        let freshContext = assembly.contextFactory.makeReadContext()
+        try freshContext.performAndWait {
+            XCTAssertNil(try assembly.lookup.herdOwned(
+                CDPasture.self, id: removedPastureID, herdID: herdID, in: freshContext
+            ))
+            let control = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDPasture.self, id: controlPastureID, herdID: herdID, in: freshContext
+            ))
+            XCTAssertEqual(control.name, "Control Pasture")
+            XCTAssertNotNil(try assembly.lookup.herd(id: herdID, in: freshContext))
+
+            let fieldSession = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDFieldCheckSession.self, id: fieldSessionID, herdID: herdID, in: freshContext
+            ))
+            XCTAssertNil(fieldSession.pasture)
+            XCTAssertEqual(fieldSession.pastureIDSnapshot, removedPastureID)
+            XCTAssertEqual(fieldSession.pastureNameSnapshot, "Original Pasture")
+            XCTAssertEqual(fieldSession.completedAt, timestamp.addingTimeInterval(30))
+
+            let working = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDWorkingSession.self, id: workingSessionID, herdID: herdID, in: freshContext
+            ))
+            XCTAssertNil(working.sourcePasture)
+            XCTAssertEqual(working.sourcePastureIDSnapshot, removedPastureID)
+            XCTAssertEqual(working.sourcePastureNameSnapshot, "Original Pasture")
+
+            let queue = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDWorkingQueueItem.self, id: queueID, herdID: herdID, in: freshContext
+            ))
+            XCTAssertEqual(queue.session.id, workingSessionID)
+            XCTAssertNil(queue.collectedFromPasture)
+            XCTAssertNil(queue.destinationPasture)
+            XCTAssertEqual(queue.collectedFromPastureIDSnapshot, removedPastureID)
+            XCTAssertEqual(queue.collectedFromPastureNameSnapshot, "Original Pasture")
+            XCTAssertEqual(queue.destinationPastureIDSnapshot, removedPastureID)
+            XCTAssertEqual(queue.destinationPastureNameSnapshot, "Original Pasture")
+        }
+    }
+
+    func testPhysicalAnimalDeletionCascadesOwnedRowsAndRetainsHistoricalReferences() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let herdID = UUID()
+        let pastureID = UUID()
+        let removedAnimalID = UUID()
+        let controlAnimalID = UUID()
+        let tagID = UUID()
+        let movementID = UUID()
+        let fieldSessionID = UUID()
+        let checkID = UUID()
+        let findingID = UUID()
+        let workingSessionID = UUID()
+        let queueID = UUID()
+        let timestamp = Date(timeIntervalSince1970: 1_800_000_000)
+
+        try await assembly.transactionExecutor.performWrite { context in
+            let herd = Self.makeHerd(id: herdID, name: "Animal Delete-Rule Herd", in: context)
+            let pasture = Self.makePasture(
+                id: pastureID, name: "Animal Pasture", herd: herd, in: context
+            )
+            let animal = try Self.makeAnimal(
+                id: removedAnimalID, name: "Historical Cow", herd: herd, in: context
+            )
+            _ = try Self.makeAnimal(
+                id: controlAnimalID, name: "Control Cow", herd: herd, in: context
+            )
+            animal.currentPasture = pasture
+
+            let tag = CDAnimalTag(context: context)
+            tag.id = tagID
+            tag.number = "17"
+            tag.isPrimary = true
+            tag.isActive = true
+            tag.assignedAt = timestamp
+            tag.herd = herd
+            tag.animal = animal
+
+            let movement = CDMovementRecord(context: context)
+            movement.id = movementID
+            movement.date = timestamp
+            movement.toPastureIDSnapshot = pastureID
+            movement.toPastureNameSnapshot = pasture.name
+            movement.herd = herd
+            movement.animal = animal
+
+            let fieldSession = Self.makeFieldCheckSession(
+                id: fieldSessionID,
+                pasture: pasture,
+                herd: herd,
+                startedAt: timestamp,
+                in: context
+            )
+            let check = CDFieldCheckAnimalCheck(context: context)
+            check.id = checkID
+            check.animalIDSnapshot = removedAnimalID
+            check.rosterTagNumberSnapshot = "17"
+            check.animalNameSnapshot = "Historical Cow"
+            check.animalSexRawValueSnapshot = Sex.female.rawValue
+            check.animalTypeRawValueSnapshot = "cow"
+            check.wasExpectedAtStart = true
+            check.herd = herd
+            check.session = fieldSession
+            check.animal = animal
+
+            let finding = CDFieldCheckFinding(context: context)
+            finding.id = findingID
+            finding.recordedAt = timestamp
+            finding.typeRawValue = "other"
+            finding.severityRawValue = "low"
+            finding.statusRawValue = "open"
+            finding.note = "Historical finding"
+            finding.animalIDSnapshot = removedAnimalID
+            finding.animalDisplayTagNumberSnapshot = "17"
+            finding.animalNameSnapshot = "Historical Cow"
+            finding.pastureNameSnapshot = pasture.name
+            finding.herd = herd
+            finding.session = fieldSession
+            finding.animal = animal
+
+            let workingSession = Self.makeWorkingSession(
+                id: workingSessionID,
+                pasture: pasture,
+                herd: herd,
+                date: timestamp,
+                in: context
+            )
+            let queue = CDWorkingQueueItem(context: context)
+            queue.id = queueID
+            queue.statusRawValue = WorkingQueueStatus.queued.rawValue
+            queue.animalIDSnapshot = removedAnimalID
+            queue.animalTagNumberSnapshot = "17"
+            queue.animalNameSnapshot = "Historical Cow"
+            queue.animalSexRawValueSnapshot = Sex.female.rawValue
+            queue.herd = herd
+            queue.session = workingSession
+            queue.animal = animal
+        }
+
+        try await assembly.transactionExecutor.performWrite { context in
+            let animal = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDAnimal.self, id: removedAnimalID, herdID: herdID, in: context
+            ))
+            context.delete(animal)
+        }
+
+        let freshContext = assembly.contextFactory.makeReadContext()
+        try freshContext.performAndWait {
+            XCTAssertNil(try assembly.lookup.herdOwned(
+                CDAnimal.self, id: removedAnimalID, herdID: herdID, in: freshContext
+            ))
+            XCTAssertNil(try assembly.lookup.herdOwned(
+                CDAnimalTag.self, id: tagID, herdID: herdID, in: freshContext
+            ))
+            XCTAssertNil(try assembly.lookup.herdOwned(
+                CDMovementRecord.self, id: movementID, herdID: herdID, in: freshContext
+            ))
+            let control = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDAnimal.self, id: controlAnimalID, herdID: herdID, in: freshContext
+            ))
+            XCTAssertEqual(control.name, "Control Cow")
+            XCTAssertNotNil(try assembly.lookup.herd(id: herdID, in: freshContext))
+
+            let fieldSession = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDFieldCheckSession.self, id: fieldSessionID, herdID: herdID, in: freshContext
+            ))
+            XCTAssertEqual(fieldSession.pasture?.id, pastureID)
+
+            let check = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDFieldCheckAnimalCheck.self, id: checkID, herdID: herdID, in: freshContext
+            ))
+            XCTAssertEqual(check.session.id, fieldSessionID)
+            XCTAssertNil(check.animal)
+            XCTAssertEqual(check.animalIDSnapshot, removedAnimalID)
+            XCTAssertEqual(check.rosterTagNumberSnapshot, "17")
+            XCTAssertEqual(check.animalNameSnapshot, "Historical Cow")
+
+            let finding = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDFieldCheckFinding.self, id: findingID, herdID: herdID, in: freshContext
+            ))
+            XCTAssertEqual(finding.session.id, fieldSessionID)
+            XCTAssertNil(finding.animal)
+            XCTAssertEqual(finding.animalIDSnapshot, removedAnimalID)
+            XCTAssertEqual(finding.animalDisplayTagNumberSnapshot, "17")
+            XCTAssertEqual(finding.animalNameSnapshot, "Historical Cow")
+            XCTAssertEqual(finding.note, "Historical finding")
+
+            let working = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDWorkingSession.self, id: workingSessionID, herdID: herdID, in: freshContext
+            ))
+            XCTAssertEqual(working.sourcePasture?.id, pastureID)
+            let queue = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDWorkingQueueItem.self, id: queueID, herdID: herdID, in: freshContext
+            ))
+            XCTAssertEqual(queue.session.id, workingSessionID)
+            XCTAssertNil(queue.animal)
+            XCTAssertEqual(queue.animalIDSnapshot, removedAnimalID)
+            XCTAssertEqual(queue.animalTagNumberSnapshot, "17")
+            XCTAssertEqual(queue.animalNameSnapshot, "Historical Cow")
+        }
+    }
+
+    private static func makePasture(
+        id: UUID,
+        name: String,
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) -> CDPasture {
+        let pasture = CDPasture(context: context)
+        pasture.id = id
+        pasture.name = name
+        pasture.sortOrder = 0
+        pasture.herd = herd
+        return pasture
+    }
+
+    private static func makeAnimal(
+        id: UUID,
+        name: String,
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws -> CDAnimal {
+        let animal = CDAnimal(context: context)
+        animal.id = id
+        animal.editorRevision = UUID()
+        animal.name = name
+        animal.sexRawValue = Sex.female.rawValue
+        animal.birthDate = Date(timeIntervalSince1970: 1_700_000_000)
+        animal.statusRawValue = AnimalStatus.active.rawValue
+        animal.isArchived = false
+        animal.distinguishingFeaturesData = try CoreDataAnimalPayloadCodec
+            .encodeDistinguishingFeatures([])
+        animal.herd = herd
+        return animal
+    }
+
+    private static func makeFieldCheckSession(
+        id: UUID,
+        pasture: CDPasture,
+        herd: CDHerd,
+        startedAt: Date,
+        in context: NSManagedObjectContext
+    ) -> CDFieldCheckSession {
+        let session = CDFieldCheckSession(context: context)
+        session.id = id
+        session.startedAt = startedAt
+        session.notes = "Historical session"
+        session.expectedHeadCountSnapshot = 1
+        session.quickCowCount = 0
+        session.quickHeiferCount = 0
+        session.quickCalfCount = 0
+        session.quickBullCount = 0
+        session.quickSteerCount = 0
+        session.pastureIDSnapshot = pasture.id
+        session.pastureNameSnapshot = pasture.name
+        session.herd = herd
+        session.pasture = pasture
+        return session
+    }
+
+    private static func makeWorkingSession(
+        id: UUID,
+        pasture: CDPasture,
+        herd: CDHerd,
+        date: Date,
+        in context: NSManagedObjectContext
+    ) -> CDWorkingSession {
+        let session = CDWorkingSession(context: context)
+        session.id = id
+        session.date = date
+        session.statusRawValue = WorkingSessionStatus.active.rawValue
+        session.treatmentTemplateNameSnapshot = ""
+        session.plannedTreatmentsData = Data("[]".utf8)
+        session.sourcePastureIDSnapshot = pasture.id
+        session.sourcePastureNameSnapshot = pasture.name
+        session.herd = herd
+        session.sourcePasture = pasture
+        return session
+    }
+
     private static func makeHerd(
         id: UUID,
         name: String,
