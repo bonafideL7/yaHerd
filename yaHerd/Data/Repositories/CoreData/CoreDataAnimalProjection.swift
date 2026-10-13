@@ -110,13 +110,17 @@ enum CoreDataAnimalProjection {
         )
         let primary = primaryTagFields(managedTags(animal))
         let maternalOffspring = managedMaternalOffspring(animal)
-            .sorted {
-                if $0.birthDate != $1.birthDate {
-                    return $0.birthDate > $1.birthDate
+            .sorted { lhs, rhs in
+                if lhs.birthDate != rhs.birthDate {
+                    return lhs.birthDate > rhs.birthDate
                 }
-                return primaryTagFields(managedTags($0)).number.localizedStandardCompare(
-                    primaryTagFields(managedTags($1)).number
-                ) == .orderedAscending
+                let tagOrder = primaryTagFields(managedTags(lhs)).number.localizedStandardCompare(
+                    primaryTagFields(managedTags(rhs)).number
+                )
+                if tagOrder != .orderedSame {
+                    return tagOrder == .orderedAscending
+                }
+                return lhs.id.uuidString < rhs.id.uuidString
             }
 
         return AnimalDetailSnapshot(
