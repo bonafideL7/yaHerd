@@ -114,7 +114,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
                     .map { (id: $0.id, result: $0.resultRawValue, dueDate: $0.dueDate) }
             }
         XCTAssertEqual(checks.count, 2)
-        XCTAssertEqual(Set(checks.map(\\.id)).count, 2)
+        XCTAssertEqual(Set(checks.map(\.id)).count, 2)
         let winner = try XCTUnwrap(checks.min { $0.id.uuidString < $1.id.uuidString })
         let expectedPregnant = winner.result == PregnancyResult.pregnant.rawValue
         let expectedAnimalStatus: AnimalPregnancyStatus = expectedPregnant ? .pregnant : .open
@@ -189,7 +189,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             ))
             let persistedChecks = (persisted.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? []
             XCTAssertEqual(persistedChecks.count, 2)
-            XCTAssertEqual(Set(persistedChecks.map(\\.id)), Set(checks.map(\\.id)))
+            XCTAssertEqual(Set(persistedChecks.map(\.id)), Set(checks.map(\.id)))
         }
     }
 
