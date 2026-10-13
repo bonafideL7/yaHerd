@@ -35,6 +35,164 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         try AnimalRepositoryContract.assertHealthAndPregnancyRecordsSurviveReload(using: environment.repositoryFixture)
     }
 
+    func testMilestone12EqualDatedPregnancyChecksUseStableSourceTieAcrossSQLiteReads() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let pastures = environment.makePastureRepository()
+        let pasture = try pastures.create(
+            input: PastureInput(
+                name: "Pregnancy Projection Pasture",
+                acreage: 24,
+                usableAcreage: 20,
+                targetAcresPerHead: 2
+            )
+        )
+        let repository = environment.makeAnimalRepository()
+        let birthDate = Date(timeIntervalSince1970: 1_600_000_000)
+        let checkDate = Date(timeIntervalSince1970: 1_785_000_000)
+        let dueDate = Date(timeIntervalSince1970: 1_800_000_000)
+
+        func input(_ name: String, tag: String) -> AnimalInput {
+            AnimalInput(
+                name: name,
+                tagNumber: tag,
+                tagColorID: nil,
+                sex: .female,
+                birthDate: birthDate,
+                status: .active,
+                pastureID: pasture.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        }
+
+        let target = try repository.create(input: input("Tie Target", tag: "910"))
+        let control = try repository.create(input: input("Unchanged Control", tag: "911"))
+        _ = try repository.addPregnancyCheck(
+            animalID: target.id,
+            input: PregnancyCheckInput(
+                date: checkDate,
+                result: .pregnant,
+                technician: "First",
+                estimatedDaysPregnant: 90,
+                dueDate: dueDate,
+                sireAnimalID: nil
+            )
+        )
+        _ = try repository.addPregnancyCheck(
+            animalID: target.id,
+            input: PregnancyCheckInput(
+                date: checkDate,
+                result: .open,
+                technician: "Second",
+                estimatedDaysPregnant: nil,
+                dueDate: nil,
+                sireAnimalID: nil
+            )
+        )
+
+        // Determine the expected winner from persisted source IDs, not the insertion
+        // order or whichever element an NSSet happens to enumerate first.
+        let context = assembly.contextFactory.makeReadContext()
+        let checks: [(id: UUID, result: String, dueDate: Date?)] =
+            try context.performAndWait {
+                let persisted = try XCTUnwrap(assembly.lookup.herdOwned(
+                    CDAnimal.self,
+                    id: target.id,
+                    herdID: environment.herdID,
+                    in: context
+                ))
+                return ((persisted.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? [])
+                    .map { (id: $0.id, result: $0.resultRawValue, dueDate: $0.dueDate) }
+            }
+        XCTAssertEqual(checks.count, 2)
+        XCTAssertEqual(Set(checks.map(\\.id)).count, 2)
+        let winner = try XCTUnwrap(checks.min { $0.id.uuidString < $1.id.uuidString })
+        let expectedPregnant = winner.result == PregnancyResult.pregnant.rawValue
+        let expectedAnimalStatus: AnimalPregnancyStatus = expectedPregnant ? .pregnant : .open
+        let expectedDashboardStatus: DashboardPregnancyStatus = expectedPregnant ? .pregnant : .open
+        let expectedDueDate = expectedPregnant ? winner.dueDate : nil
+
+        let firstSummary = try XCTUnwrap(
+            repository.fetchAnimals().first { $0.id == target.id }
+        )
+        XCTAssertEqual(firstSummary.lastPregnancyCheckDate, checkDate)
+        XCTAssertEqual(firstSummary.lastPregnancyStatus, expectedAnimalStatus)
+        XCTAssertEqual(firstSummary.expectedCalvingDate, expectedDueDate)
+        XCTAssertEqual(try pastures.fetchResidentAnimals(pastureID: pasture.id)
+            .first { $0.id == target.id }?.lastPregnancyStatus, expectedAnimalStatus)
+
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let readOnlyRepository = CoreDataAnimalRepository(
+            selection: environment.selection,
+            assembly: reopened
+        )
+        let reloadedSummary = try XCTUnwrap(
+            readOnlyRepository.fetchAnimals().first { $0.id == target.id }
+        )
+        XCTAssertEqual(reloadedSummary.lastPregnancyCheckDate, checkDate)
+        XCTAssertEqual(reloadedSummary.lastPregnancyStatus, expectedAnimalStatus)
+        XCTAssertEqual(reloadedSummary.expectedCalvingDate, expectedDueDate)
+        XCTAssertEqual(try CoreDataPastureRepository(
+            selection: environment.selection,
+            assembly: reopened
+        ).fetchResidentAnimals(pastureID: pasture.id)
+            .first { $0.id == target.id }?.expectedCalvingDate, expectedDueDate)
+
+        let reader = CoreDataReadModelActor(
+            contextFactory: reopened.contextFactory,
+            lookup: reopened.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        let animalPage = try await reader.fetchAnimalSummaryPage(
+            ReadPageRequest(offset: 0, limit: 10)
+        )
+        XCTAssertEqual(animalPage.animals.first { $0.id == target.id }?
+            .lastPregnancyStatus, expectedAnimalStatus)
+        XCTAssertEqual(animalPage.animals.first { $0.id == target.id }?
+            .expectedCalvingDate, expectedDueDate)
+
+        let dashboard = try await reader.fetchDashboardRecords()
+        let dashboardAnimal = try XCTUnwrap(
+            dashboard.animals.first { $0.id == target.id }
+        )
+        XCTAssertEqual(dashboardAnimal.lastPregnancyStatus, expectedDashboardStatus)
+        XCTAssertEqual(dashboardAnimal.expectedCalvingDate, expectedDueDate)
+
+        let filtered = try await reader.fetchDashboardAnimalRecords(kind: .active)
+        XCTAssertEqual(filtered.first { $0.id == target.id }?
+            .lastPregnancyStatus, expectedDashboardStatus)
+        XCTAssertEqual(filtered.first { $0.id == target.id }?
+            .expectedCalvingDate, expectedDueDate)
+
+        let controlSummary = try XCTUnwrap(
+            readOnlyRepository.fetchAnimals().first { $0.id == control.id }
+        )
+        XCTAssertNil(controlSummary.lastPregnancyCheckDate)
+        XCTAssertNil(controlSummary.lastPregnancyStatus)
+        XCTAssertNil(controlSummary.expectedCalvingDate)
+        let checkContext = reopened.contextFactory.makeReadContext()
+        try checkContext.performAndWait {
+            let persisted = try XCTUnwrap(reopened.lookup.herdOwned(
+                CDAnimal.self,
+                id: target.id,
+                herdID: environment.herdID,
+                in: checkContext
+            ))
+            let persistedChecks = (persisted.pregnancyChecks?.allObjects as? [CDPregnancyCheck]) ?? []
+            XCTAssertEqual(persistedChecks.count, 2)
+            XCTAssertEqual(Set(persistedChecks.map(\\.id)), Set(checks.map(\\.id)))
+        }
+    }
+
     func testDeleteRemovesAggregate() async throws {
         let environment = try await makeEnvironment()
         try AnimalRepositoryContract.assertDeleteRemovesAggregate(using: environment.repositoryFixture)
