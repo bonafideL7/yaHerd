@@ -10,6 +10,7 @@ import plistlib
 import re
 import sys
 import hashlib
+import json
 
 root = Path("yaHerd/Domain")
 allowed_imports = {"Foundation"}
@@ -48,7 +49,7 @@ swiftui_core_data_accessor = re.compile(
 approved_production_imports = {
     "Foundation", "SwiftUI", "CoreData", "Combine", "OSLog", "os",
     "UIKit", "Observation", "Synchronization", "UniformTypeIdentifiers",
-    "LucideIcons",
+    "Charts", "LucideIcons",
 }
 
 for path in root.rglob("*.swift"):
@@ -421,7 +422,6 @@ if (package_project.count("isa = XCRemoteSwiftPackageReference;") != len(remote_
 # The resolved package graph can also change independently of the project.
 package_lockfile = Path("yaHerd.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")
 try:
-    import json
     pins = json.loads(package_lockfile.read_text())["pins"]
     locked_dependencies = {
         (pin["identity"], pin["location"])
