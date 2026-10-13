@@ -873,6 +873,21 @@ extension AnimalRepositoryContract {
         XCTAssertEqual(seedBefore.pastureName, originalPastureName, file: file, line: line)
 
         let timelineBefore = try animalRepository.fetchTimeline(id: target.id)
+        let stableTimelineIDsBefore = timelineBefore.map(\.id)
+        XCTAssertEqual(
+            Set(stableTimelineIDsBefore).count,
+            stableTimelineIDsBefore.count,
+            "Every derived Animal timeline row must have a distinct identity.",
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            stableTimelineIDsBefore,
+            try fixture.animalFixture.makeAnimalRepository().fetchTimeline(id: target.id).map(\.id),
+            "An unchanged persisted Animal timeline must keep row IDs on a separate read.",
+            file: file,
+            line: line
+        )
         let birthBefore = try primaryBirthEvent(
             in: timelineBefore,
             birthDate: targetBefore.birthDate,
@@ -1120,6 +1135,13 @@ extension AnimalRepositoryContract {
         )
 
         let timelineAfter = try freshAnimalRepository.fetchTimeline(id: target.id)
+        XCTAssertEqual(
+            timelineAfter.map(\.id),
+            stableTimelineIDsBefore,
+            "Live Pasture-name changes must not regenerate stable timeline row identity.",
+            file: file,
+            line: line
+        )
         let birthAfter = try primaryBirthEvent(
             in: timelineAfter,
             birthDate: targetAfter.birthDate,
