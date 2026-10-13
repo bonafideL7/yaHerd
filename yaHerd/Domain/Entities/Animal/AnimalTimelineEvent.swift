@@ -10,13 +10,13 @@ enum AnimalTimelineEventType {
 }
 
 struct AnimalTimelineEvent: Identifiable, Hashable {
-    let id: UUID
+    let id: String
     let date: Date
     let type: AnimalTimelineEventType
     let title: String
     let details: String?
 
-    init(id: UUID = UUID(), date: Date, type: AnimalTimelineEventType, title: String, details: String?) {
+    init(id: String, date: Date, type: AnimalTimelineEventType, title: String, details: String?) {
         self.id = id
         self.date = date
         self.type = type
