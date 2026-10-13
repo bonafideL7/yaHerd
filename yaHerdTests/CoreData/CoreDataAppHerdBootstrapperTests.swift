@@ -515,4 +515,145 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertTrue(manager.fileExists(atPath: legacyJournal.path))
     }
 
+    @MainActor
+    func testReadOnlyRecoveryProbeDoesNotCreateMissingStoreOrTouchLegacyJournal() async throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory
+            .appendingPathComponent("yaHerd-recovery-probe-missing-\(UUID().uuidString)", isDirectory: true)
+        try manager.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: root) }
+
+        let storeDirectory = root.appendingPathComponent("yaHerd", isDirectory: true)
+        let storeURL = storeDirectory.appendingPathComponent(CoreDataPersistentContainer.storeFileName)
+        let controller = RecoveryModeController(
+            context: RecoveryModeContext(startupError: "Original store unavailable"),
+            fileManager: manager,
+            applicationSupportURL: root,
+            automaticallyRefreshDiagnostics: false
+        )
+
+        await controller.checkPersistentStoreReadOnly()
+        guard case .some(.failed(let initialMessage)) = controller.storeCheckResult else {
+            XCTFail("An absent main store must fail its recovery probe.")
+            return
+        }
+        XCTAssertTrue(initialMessage.contains("does not exist"))
+        XCTAssertFalse(controller.isCheckingPersistentStore)
+        XCTAssertFalse(manager.fileExists(atPath: storeDirectory.path))
+        XCTAssertFalse(manager.fileExists(atPath: storeURL.path))
+
+        // A preflight-blocked legacy journal must not cause the probe to
+        // synthesize a replacement Core Data directory or store on retry.
+        let legacyJournal = root.appendingPathComponent("default.store-journal")
+        let originalBytes = Data("legacy journal survives diagnostic checks".utf8)
+        try originalBytes.write(to: legacyJournal)
+
+        await controller.checkPersistentStoreReadOnly()
+        guard case .some(.failed(let repeatedMessage)) = controller.storeCheckResult else {
+            XCTFail("A legacy sidecar alone must not make the Core Data probe succeed.")
+            return
+        }
+        XCTAssertTrue(repeatedMessage.contains("does not exist"))
+        XCTAssertFalse(controller.isCheckingPersistentStore)
+        XCTAssertFalse(manager.fileExists(atPath: storeDirectory.path))
+        XCTAssertEqual(try Data(contentsOf: legacyJournal), originalBytes)
+    }
+
+    @MainActor
+    func testReadOnlyRecoveryProbeRejectsEmptyHerdThenReadsExistingSQLiteOnRetry() async throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory
+            .appendingPathComponent("yaHerd-recovery-probe-existing-\(UUID().uuidString)", isDirectory: true)
+        let storeDirectory = root.appendingPathComponent("yaHerd", isDirectory: true)
+        try manager.createDirectory(at: storeDirectory, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: root) }
+
+        let storeURL = storeDirectory.appendingPathComponent(CoreDataPersistentContainer.storeFileName)
+        let writer = try await CoreDataPersistenceAssembly.load(storeURL: storeURL)
+        let controller = RecoveryModeController(
+            context: RecoveryModeContext(startupError: "Recovery session remains active"),
+            fileManager: manager,
+            applicationSupportURL: root,
+            automaticallyRefreshDiagnostics: false
+        )
+
+        // Opening a valid but unbootstrapped database is not sufficient:
+        // exactly one persisted Herd must be present.
+        await controller.checkPersistentStoreReadOnly()
+        guard case .some(.failed) = controller.storeCheckResult else {
+            XCTFail("A SQLite store with zero Herd roots must fail the recovery probe.")
+            return
+        }
+        XCTAssertFalse(controller.isCheckingPersistentStore)
+
+        let originalHerdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: writer
+        )
+        let sqliteBeforeProbe = try Data(contentsOf: storeURL)
+
+        await controller.checkPersistentStoreReadOnly()
+        guard case .some(.succeeded(let message)) = controller.storeCheckResult else {
+            XCTFail("A valid Core Data store with one Herd must pass its read-only probe.")
+            return
+        }
+        XCTAssertTrue(message.contains("read-only"))
+        XCTAssertTrue(message.contains("Restart"))
+        XCTAssertFalse(controller.isCheckingPersistentStore)
+        XCTAssertEqual(try Data(contentsOf: storeURL), sqliteBeforeProbe)
+        XCTAssertEqual(controller.context.startupError, "Recovery session remains active")
+
+        let independentlyReopened = try await CoreDataPersistenceAssembly.load(
+            storeURL: storeURL,
+            accessMode: .readOnly
+        )
+        let readContext = independentlyReopened.contextFactory.makeReadContext()
+        let persistedHerdIDs = try readContext.performAndWait {
+            try readContext.fetch(
+                NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            ).compactMap(\\.id)
+        }
+        XCTAssertEqual(persistedHerdIDs, [originalHerdID])
+    }
+
+    @MainActor
+    func testReadOnlyRecoveryProbeRejectsNonFileAndCorruptSQLiteWithoutReplacingThem() async throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory
+            .appendingPathComponent("yaHerd-recovery-probe-invalid-\(UUID().uuidString)", isDirectory: true)
+        let storeDirectory = root.appendingPathComponent("yaHerd", isDirectory: true)
+        try manager.createDirectory(at: storeDirectory, withIntermediateDirectories: true)
+        defer { try? manager.removeItem(at: root) }
+
+        let storeURL = storeDirectory.appendingPathComponent(CoreDataPersistentContainer.storeFileName)
+        let controller = RecoveryModeController(
+            context: RecoveryModeContext(startupError: "Invalid original store"),
+            fileManager: manager,
+            applicationSupportURL: root,
+            automaticallyRefreshDiagnostics: false
+        )
+
+        try manager.createDirectory(at: storeURL, withIntermediateDirectories: false)
+        await controller.checkPersistentStoreReadOnly()
+        guard case .some(.failed(let directoryMessage)) = controller.storeCheckResult else {
+            XCTFail("A directory at the SQLite path must fail the recovery probe.")
+            return
+        }
+        XCTAssertTrue(directoryMessage.contains("not a regular file"))
+        var isDirectory: ObjCBool = false
+        XCTAssertTrue(manager.fileExists(atPath: storeURL.path, isDirectory: &isDirectory))
+        XCTAssertTrue(isDirectory.boolValue)
+
+        try manager.removeItem(at: storeURL)
+        let corruptBytes = Data("original invalid sqlite payload".utf8)
+        try corruptBytes.write(to: storeURL)
+
+        await controller.checkPersistentStoreReadOnly()
+        guard case .some(.failed) = controller.storeCheckResult else {
+            XCTFail("Unreadable SQLite bytes must not pass the recovery probe.")
+            return
+        }
+        XCTAssertFalse(controller.isCheckingPersistentStore)
+        XCTAssertEqual(try Data(contentsOf: storeURL), corruptBytes)
+    }
+
 }
