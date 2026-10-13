@@ -30,25 +30,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-				Data/Models/Animal/Animal.swift,
-				Data/Models/Animal/AnimalStatusReference.swift,
-				Data/Models/Animal/AnimalTag.swift,
-				Data/Models/Animal/StatusRecord.swift,
-				Data/Models/Check/FieldCheckSession.swift,
-				Data/Models/Health/HealthRecord.swift,
-				Data/Models/Health/PregnancyCheck.swift,
-				Data/Models/Herd/Herd.swift,
-				Data/Models/Pasture/MovementRecord.swift,
-				Data/Models/Pasture/Pasture.swift,
-				Data/Models/Pasture/PastureGroup.swift,
-				Data/Models/Support/TagColorDefinition.swift,
-				Data/Models/Work/WorkingProtocolTemplate.swift,
-				Data/Models/Work/WorkingQueueItem.swift,
-				Data/Models/Work/WorkingSession.swift,
-				Data/Models/Work/WorkingTreatmentRecord.swift,
-				Data/Models/Work/WorkingTreatmentTerminologyCompatibility.swift,
-				Data/Persistence/Schema/YaHerdCurrentModels.swift,
-				Data/Persistence/Schema/YaHerdSchemaV1.swift,
 			);
 			target = 8D40A2892EDAA29E00C89DD2 /* yaHerd */;
 		};
