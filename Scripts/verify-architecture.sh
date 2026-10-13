@@ -99,6 +99,11 @@ for path, expected_blob in legacy_swiftdata_blobs.items():
 # Info.plist; another set cannot silently exclude active Core Data/Domain code.
 project_path = Path("yaHerd.xcodeproj/project.pbxproj")
 project_text = project_path.read_text()
+# The frozen archive must never be compiled by either application or test.
+# It lives outside both synchronized source roots and must not be manually
+# reattached through a file/group reference or another source root.
+if "LegacySwiftData" in project_text:
+    failures.append("yaHerd.xcodeproj: frozen SwiftData archive must not be an Xcode target source")
 app_exception_id = "8D2190483009470D00DE8E34"
 app_target_id = "8D40A2892EDAA29E00C89DD2"
 app_root_group_id = "8D40A28C2EDAA29E00C89DD2"
@@ -206,7 +211,7 @@ extra = set(app_exclusions) - expected_app_exclusions
 if missing or extra or len(app_exclusions) != len(expected_app_exclusions):
     failures.append(
         "yaHerd.xcodeproj: aggregate app target exclusions must equal the "
-        "Info.plist alone (missing: "
+        "Info.plist only (missing: "
         + ", ".join(sorted(missing))
         + "; unexpected: "
         + ", ".join(sorted(extra))
