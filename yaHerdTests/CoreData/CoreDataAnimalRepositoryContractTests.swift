@@ -122,6 +122,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
 
         func assertReadOrder(_ repository: CoreDataPastureRepository) throws {
             let residents = try repository.fetchResidentAnimals(pastureID: firstPasture.id)
+            XCTAssertEqual(residents.map(\.id), tiedResidentIDs + [tagged.id])
             XCTAssertEqual(Set(residents.map(\.id)), Set([untaggedA.id, untaggedB.id, tagged.id]))
             XCTAssertEqual(
                 residents.filter { $0.displayTagNumber.isEmpty }.map(\.id),
