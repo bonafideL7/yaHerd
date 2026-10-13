@@ -570,6 +570,8 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 date: timestamp,
                 in: context
             )
+            animal.activeWorkingSession = workingSession
+
             let queue = CDWorkingQueueItem(context: context)
             queue.id = queueID
             queue.statusRawValue = WorkingQueueStatus.queued.rawValue
@@ -583,9 +585,13 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
         }
 
         try await assembly.transactionExecutor.performWrite { context in
-            let animal = try XCTUnwrap(reopened.lookup.herdOwned(
+            let animal = try XCTUnwrap(assembly.lookup.herdOwned(
                 CDAnimal.self, id: removedAnimalID, herdID: herdID, in: context
             ))
+            let workingSession = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDWorkingSession.self, id: workingSessionID, herdID: herdID, in: context
+            ))
+            XCTAssertTrue(workingSession.activeAnimals?.contains(animal) == true)
             context.delete(animal)
         }
 
@@ -635,6 +641,7 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                 CDWorkingSession.self, id: workingSessionID, herdID: herdID, in: freshContext
             ))
             XCTAssertEqual(working.sourcePasture?.id, pastureID)
+            XCTAssertEqual(working.activeAnimals?.count ?? 0, 0)
             let queue = try XCTUnwrap(reopened.lookup.herdOwned(
                 CDWorkingQueueItem.self, id: queueID, herdID: herdID, in: freshContext
             ))
