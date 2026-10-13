@@ -23,5 +23,13 @@ Production-reader trace: `PastureDetailViewModel` consumes resident summaries; `
 - [x] Trace resident, pasture, options, groups, detail and subset-reorder paths and downstream UI callers.
 - [x] Preserve preexisting precedence before comparing UUID.
 - [x] Check no Core Data model, migration, transactions, UI, or Dashboard read-model changes needed.
-- [ ] Reconcile final patch and every matrix row with production and SQLite regression additions.
-- [ ] Record build/test status: not run under `AGENTS.md`.
+- [x] Reconciled final production/test diff with all five matrix rows and the original reader/caller paths; no other persistence projection consumes these comparator helpers.
+- [x] Build, test, lint, verification scripts, and CI were not run under `AGENTS.md`; compilation and runtime behavior remain unverified.
+
+## Final static reconciliation
+
+- Resident collection returns the same active, in-pasture animal ID set; only equal display-tag ordering changes. `AnimalSummary` data, relationships, and archive filtering are untouched.
+- Core Data pasture/group fetches now use persisted UUID only after their existing sort keys; group detail and partial reorder use the same final key in Swift comparisons. No write or migration code changed.
+- SQLite contract creates real animals, group memberships, an archived excluded resident, and an unrelated pasture/group/animal, then persists equal sort keys in the underlying local store. It asserts same-assembly and independently reopened read-only lists, options, groups, group detail, resident membership/order, and subset-reorder outcome.
+- Working, Field Check, Animal editors, pasture tiles, group screens, and deletion workflows call the same repository methods; independent M9 Dashboard/Animal-list projections are unchanged. No SwiftData code is added.
+- Source and test changes are confined to `CoreDataPastureRepository.swift` and the existing `CoreDataAnimalRepositoryContractTests.swift` runner. Tests and build have not been executed per repository verification policy.
