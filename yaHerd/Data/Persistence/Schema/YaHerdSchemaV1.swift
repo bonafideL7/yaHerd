@@ -5,11 +5,9 @@
 
 import SwiftData
 
-/// The persistent model shipped with yaHerd 1.0.
-///
-/// Keep the model list and version identifier stable after release. Any persistent
-/// model change must be introduced in a new `VersionedSchema` and connected through
-/// `YaHerdMigrationPlan`.
+/// Legacy SwiftData model declarations retained only while remaining
+/// SwiftData-only model and seed source is retired. Neither the app nor its
+/// tests create a SwiftData model container after the M10 runtime cutover.
 enum YaHerdSchemaV1: VersionedSchema {
     static var versionIdentifier: Schema.Version {
         Schema.Version(1, 0, 0)
