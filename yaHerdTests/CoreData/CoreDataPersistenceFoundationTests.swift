@@ -27,15 +27,16 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
             pasture.herd = herd
         }
 
-        let readContext = assembly.contextFactory.makeReadContext()
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let readContext = reopened.contextFactory.makeReadContext()
         try readContext.performAndWait {
             let herd = try XCTUnwrap(
-                assembly.lookup.herd(id: herdID, in: readContext)
+                reopened.lookup.herd(id: herdID, in: readContext)
             )
             XCTAssertEqual(herd.id, herdID)
 
             let pasture = try XCTUnwrap(
-                assembly.lookup.herdOwned(
+                reopened.lookup.herdOwned(
                     CDPasture.self,
                     id: pastureID,
                     herdID: herdID,
@@ -223,6 +224,181 @@ final class CoreDataPersistenceFoundationTests: XCTestCase {
                     )
                 )
             }
+        }
+    }
+
+    func testSQLiteReopenRejectsDuplicateHerdIDForRootAndOwnedLookups() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let writer = try await harness.makeAssembly()
+        let duplicateHerdID = UUID()
+        let controlHerdID = UUID()
+        let pastureID = UUID()
+
+        try await writer.transactionExecutor.performWrite { context in
+            let first = Self.makeHerd(
+                id: duplicateHerdID, name: "First Root", in: context
+            )
+            _ = Self.makeHerd(
+                id: duplicateHerdID, name: "Second Root", in: context
+            )
+            _ = Self.makeHerd(
+                id: controlHerdID, name: "Unaffected Root", in: context
+            )
+            _ = Self.makePasture(
+                id: pastureID, name: "First Root Pasture", herd: first, in: context
+            )
+        }
+
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let context = reopened.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let expectedError = CoreDataPersistenceError.duplicateApplicationID(
+                entity: CDHerd.coreDataEntityName,
+                id: duplicateHerdID,
+                herdID: nil
+            )
+            XCTAssertThrowsError(
+                try reopened.lookup.herd(id: duplicateHerdID, in: context)
+            ) { error in
+                XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+            }
+            XCTAssertThrowsError(
+                try reopened.lookup.herdOwned(
+                    CDPasture.self,
+                    id: pastureID,
+                    herdID: duplicateHerdID,
+                    in: context
+                )
+            ) { error in
+                XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+            }
+
+            XCTAssertEqual(
+                try reopened.lookup.herd(id: controlHerdID, in: context)?.name,
+                "Unaffected Root"
+            )
+            XCTAssertNil(try reopened.lookup.herdOwned(
+                CDPasture.self,
+                id: pastureID,
+                herdID: controlHerdID,
+                in: context
+            ))
+        }
+    }
+
+    func testSQLiteReopenScopesIdenticalPastureIDsToDistinctHerds() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let writer = try await harness.makeAssembly()
+        let herdAID = UUID()
+        let herdBID = UUID()
+        let sharedPastureID = UUID()
+
+        try await writer.transactionExecutor.performWrite { context in
+            let herdA = Self.makeHerd(id: herdAID, name: "Herd A", in: context)
+            let herdB = Self.makeHerd(id: herdBID, name: "Herd B", in: context)
+            _ = Self.makePasture(
+                id: sharedPastureID, name: "A Pasture", herd: herdA, in: context
+            )
+            _ = Self.makePasture(
+                id: sharedPastureID, name: "B Pasture", herd: herdB, in: context
+            )
+        }
+
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let context = reopened.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let pastureA = try XCTUnwrap(reopened.lookup.herdOwned(
+                CDPasture.self,
+                id: sharedPastureID,
+                herdID: herdAID,
+                in: context
+            ))
+            let pastureB = try XCTUnwrap(reopened.lookup.herdOwned(
+                CDPasture.self,
+                id: sharedPastureID,
+                herdID: herdBID,
+                in: context
+            ))
+
+            XCTAssertEqual(pastureA.id, sharedPastureID)
+            XCTAssertEqual(pastureA.herd.id, herdAID)
+            XCTAssertEqual(pastureA.name, "A Pasture")
+            XCTAssertEqual(pastureB.id, sharedPastureID)
+            XCTAssertEqual(pastureB.herd.id, herdBID)
+            XCTAssertEqual(pastureB.name, "B Pasture")
+            XCTAssertNil(try reopened.lookup.herdOwned(
+                CDPasture.self,
+                id: UUID(),
+                herdID: herdAID,
+                in: context
+            ))
+            XCTAssertNil(try reopened.lookup.herdOwned(
+                CDPasture.self,
+                id: sharedPastureID,
+                herdID: UUID(),
+                in: context
+            ))
+        }
+    }
+
+    func testSQLiteReopenRejectsSameHerdDuplicateWithoutHidingOtherHerd() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let writer = try await harness.makeAssembly()
+        let duplicateHerdID = UUID()
+        let controlHerdID = UUID()
+        let sharedPastureID = UUID()
+
+        try await writer.transactionExecutor.performWrite { context in
+            let duplicateHerd = Self.makeHerd(
+                id: duplicateHerdID, name: "Duplicate Child Herd", in: context
+            )
+            let controlHerd = Self.makeHerd(
+                id: controlHerdID, name: "Control Herd", in: context
+            )
+            for name in ["First Pasture", "Second Pasture"] {
+                _ = Self.makePasture(
+                    id: sharedPastureID,
+                    name: name,
+                    herd: duplicateHerd,
+                    in: context
+                )
+            }
+            _ = Self.makePasture(
+                id: sharedPastureID, name: "Control Pasture", herd: controlHerd,
+                in: context
+            )
+        }
+
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let context = reopened.contextFactory.makeReadContext()
+        try context.performAndWait {
+            XCTAssertThrowsError(
+                try reopened.lookup.herdOwned(
+                    CDPasture.self,
+                    id: sharedPastureID,
+                    herdID: duplicateHerdID,
+                    in: context
+                )
+            ) { error in
+                XCTAssertEqual(
+                    error as? CoreDataPersistenceError,
+                    .duplicateApplicationID(
+                        entity: CDPasture.coreDataEntityName,
+                        id: sharedPastureID,
+                        herdID: duplicateHerdID
+                    )
+                )
+            }
+
+            let control = try XCTUnwrap(reopened.lookup.herdOwned(
+                CDPasture.self,
+                id: sharedPastureID,
+                herdID: controlHerdID,
+                in: context
+            ))
+            XCTAssertEqual(control.id, sharedPastureID)
+            XCTAssertEqual(control.herd.id, controlHerdID)
+            XCTAssertEqual(control.name, "Control Pasture")
         }
     }
 
