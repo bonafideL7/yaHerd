@@ -53,7 +53,8 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             expectedWithoutEarlier
         )
         let asyncReader = environment.makeAnimalListQueryReader()
-        XCTAssertEqual(try await asyncReader.fetchParentOptions(excluding: nil), options)
+        let asyncOptions = try await asyncReader.fetchParentOptions(excluding: nil)
+        XCTAssertEqual(asyncOptions, options)
         let asyncExcluded = try await asyncReader.fetchParentOptions(
             excluding: tieEarlierID
         )
@@ -73,7 +74,8 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             try reopenedDirect.fetchParentOptions(excluding: tieEarlierID).map(\.id),
             expectedWithoutEarlier
         )
-        XCTAssertEqual(try await reopenedAsync.fetchParentOptions(excluding: nil), options)
+        let reopenedAsyncOptions = try await reopenedAsync.fetchParentOptions(excluding: nil)
+        XCTAssertEqual(reopenedAsyncOptions, options)
 
         let context = reopened.contextFactory.makeReadContext()
         try context.performAndWait {
