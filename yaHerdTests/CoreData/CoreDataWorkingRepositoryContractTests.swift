@@ -682,6 +682,338 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         XCTAssertEqual(try physicalTreatmentRows(in: readOnlyAssembly), baseline)
     }
 
+    func testWorkingHealthAndPregnancyApplicationIDsAreUniqueAcrossSelectedHerd() async throws {
+        enum RecordKind: CaseIterable {
+            case health
+            case pregnancy
+
+            var entityName: String {
+                switch self {
+                case .health: CDHealthRecord.coreDataEntityName
+                case .pregnancy: CDPregnancyCheck.coreDataEntityName
+                }
+            }
+        }
+
+        enum CollisionOrigin: CaseIterable {
+            case anotherWorkingSession
+            case standaloneAnimalHistory
+        }
+
+        // Both Working-to-Working and Working-to-standalone collisions are
+        // violations of the same Herd-owned history-record identity scope.
+        for kind in RecordKind.allCases {
+            for origin in CollisionOrigin.allCases {
+                let harness = try CoreDataPersistenceHarness()
+                let assembly = try await harness.makeAssembly()
+                let environment = try CoreDataWorkingContractEnvironment(assembly: assembly)
+                let primaryAnimals = environment.makeAnimalRepository()
+                let primaryWorking = environment.makeWorkingRepository()
+                let pasture = try environment.makePastureRepository().create(
+                    input: PastureInput(
+                        name: "Working History Identity Pasture",
+                        acreage: 24,
+                        usableAcreage: 20,
+                        targetAcresPerHead: 1.5
+                    )
+                )
+
+                let firstAnimal = try primaryAnimals.create(input: Self.animalInput(
+                    name: "History First Cow",
+                    tagNumber: "HI-1",
+                    pastureID: pasture.id
+                ))
+                let secondAnimal = try primaryAnimals.create(input: Self.animalInput(
+                    name: "History Second Cow",
+                    tagNumber: "HI-2",
+                    pastureID: pasture.id
+                ))
+                let controlAnimal = try primaryAnimals.create(input: Self.animalInput(
+                    name: "History Standalone Cow",
+                    tagNumber: "HI-3",
+                    pastureID: pasture.id
+                ))
+
+                func startAndWork(
+                    repository: CoreDataWorkingRepository,
+                    animalID: UUID,
+                    sourcePastureID: UUID,
+                    at date: Date
+                ) async throws -> (sessionID: UUID, queueID: UUID) {
+                    let sessionID = try await repository.startSession(
+                        input: WorkingSessionStartInput(
+                            date: date,
+                            sourcePastureID: sourcePastureID,
+                            treatmentTemplateName: "History Identity Session",
+                            plannedTreatments: [],
+                            animalIDs: [animalID]
+                        )
+                    )
+                    let queueID = try XCTUnwrap(
+                        repository.fetchSessionDetail(id: sessionID)?.queueItems.first?.id
+                    )
+                    try await repository.complete(
+                        queueItemID: queueID,
+                        inSessionID: sessionID,
+                        treatmentEntries: [],
+                        pregnancyCheck: WorkingPregnancyCheckInput(
+                            date: date,
+                            result: .open,
+                            estimatedDaysPregnant: nil,
+                            dueDate: nil,
+                            sireAnimalID: nil
+                        ),
+                        markCastrated: false,
+                        observationNotes: "Work observation"
+                    )
+                    return (sessionID, queueID)
+                }
+
+                let first = try await startAndWork(
+                    repository: primaryWorking,
+                    animalID: firstAnimal.id,
+                    sourcePastureID: pasture.id,
+                    at: Date(timeIntervalSinceReferenceDate: 380_000)
+                )
+                let second = try await startAndWork(
+                    repository: primaryWorking,
+                    animalID: secondAnimal.id,
+                    sourcePastureID: pasture.id,
+                    at: Date(timeIntervalSinceReferenceDate: 381_000)
+                )
+                let controlSessionID = try await primaryWorking.startSession(
+                    input: WorkingSessionStartInput(
+                        date: Date(timeIntervalSinceReferenceDate: 382_000),
+                        sourcePastureID: pasture.id,
+                        treatmentTemplateName: "Unmodified Working Control",
+                        plannedTreatments: [],
+                        animalIDs: [controlAnimal.id]
+                    )
+                )
+                let controlQueueID = try XCTUnwrap(
+                    primaryWorking.fetchSessionDetail(id: controlSessionID)?.queueItems.first?.id
+                )
+
+                _ = try primaryAnimals.addHealthRecord(
+                    animalID: controlAnimal.id,
+                    input: HealthRecordInput(
+                        date: Date(timeIntervalSinceReferenceDate: 382_100),
+                        treatment: "Standalone observation",
+                        notes: "Independent Animal history"
+                    )
+                )
+                _ = try primaryAnimals.addPregnancyCheck(
+                    animalID: controlAnimal.id,
+                    input: PregnancyCheckInput(
+                        date: Date(timeIntervalSinceReferenceDate: 382_200),
+                        result: .open,
+                        technician: nil,
+                        estimatedDaysPregnant: nil,
+                        dueDate: nil,
+                        sireAnimalID: nil
+                    )
+                )
+
+                let foreignHerdID = UUID()
+                try environment.seedAdditionalHerd(
+                    id: foreignHerdID,
+                    name: "Independent History Identity Herd"
+                )
+                let foreignSelection = CoreDataWorkingContractSelection()
+                foreignSelection.currentHerdID = foreignHerdID
+                let foreignPasture = try CoreDataPastureRepository(
+                    selection: foreignSelection,
+                    assembly: assembly
+                ).create(input: PastureInput(
+                    name: "Foreign History Pasture",
+                    acreage: 20,
+                    usableAcreage: 18,
+                    targetAcresPerHead: 1.5
+                ))
+                let foreignAnimal = try CoreDataAnimalRepository(
+                    selection: foreignSelection,
+                    assembly: assembly
+                ).create(input: Self.animalInput(
+                    name: "Foreign History Cow",
+                    tagNumber: "HI-F",
+                    pastureID: foreignPasture.id
+                ))
+                let foreignWorking = CoreDataWorkingRepository(
+                    selection: foreignSelection,
+                    assembly: assembly
+                )
+                let foreign = try await startAndWork(
+                    repository: foreignWorking,
+                    animalID: foreignAnimal.id,
+                    sourcePastureID: foreignPasture.id,
+                    at: Date(timeIntervalSinceReferenceDate: 383_000)
+                )
+                XCTAssertEqual(try primaryWorking.fetchSessions().count, 3)
+                XCTAssertEqual(try foreignWorking.fetchSessions().count, 1)
+
+                // Create the collision in *persisted* records, not a Domain
+                // snapshot. The independent Herd intentionally reuses the ID.
+                let writeContext = try assembly.contextFactory.makeWriteContext()
+                let duplicateID = try writeContext.performAndWait { () throws -> UUID in
+                    switch kind {
+                    case .health:
+                        let records = try writeContext.fetch(
+                            NSFetchRequest<CDHealthRecord>(
+                                entityName: CDHealthRecord.coreDataEntityName
+                            )
+                        )
+                        let source = try XCTUnwrap(records.first {
+                            $0.workingSession?.id == first.sessionID
+                        })
+                        let colliding = try XCTUnwrap(records.first {
+                            switch origin {
+                            case .anotherWorkingSession:
+                                return $0.workingSession?.id == second.sessionID
+                            case .standaloneAnimalHistory:
+                                return $0.workingSession == nil
+                                    && $0.animal.id == controlAnimal.id
+                            }
+                        })
+                        let foreignRecord = try XCTUnwrap(records.first {
+                            $0.workingSession?.id == foreign.sessionID
+                        })
+                        colliding.id = source.id
+                        foreignRecord.id = source.id
+                        try writeContext.save()
+                        return source.id
+                    case .pregnancy:
+                        let records = try writeContext.fetch(
+                            NSFetchRequest<CDPregnancyCheck>(
+                                entityName: CDPregnancyCheck.coreDataEntityName
+                            )
+                        )
+                        let source = try XCTUnwrap(records.first {
+                            $0.workingSession?.id == first.sessionID
+                        })
+                        let colliding = try XCTUnwrap(records.first {
+                            switch origin {
+                            case .anotherWorkingSession:
+                                return $0.workingSession?.id == second.sessionID
+                            case .standaloneAnimalHistory:
+                                return $0.workingSession == nil
+                                    && $0.animal.id == controlAnimal.id
+                            }
+                        })
+                        let foreignRecord = try XCTUnwrap(records.first {
+                            $0.workingSession?.id == foreign.sessionID
+                        })
+                        colliding.id = source.id
+                        foreignRecord.id = source.id
+                        try writeContext.save()
+                        return source.id
+                    }
+                }
+
+                func physicalRows(in assembly: CoreDataPersistenceAssembly) throws -> [String] {
+                    let context = assembly.contextFactory.makeReadContext()
+                    return try context.performAndWait {
+                        switch kind {
+                        case .health:
+                            return try context.fetch(NSFetchRequest<CDHealthRecord>(
+                                entityName: CDHealthRecord.coreDataEntityName
+                            )).map {
+                                [
+                                    $0.herd.id.uuidString,
+                                    $0.animal.id.uuidString,
+                                    $0.workingSession?.id.uuidString ?? "standalone",
+                                    $0.id.uuidString,
+                                    $0.treatment,
+                                    $0.notes ?? "",
+                                    String($0.date.timeIntervalSinceReferenceDate)
+                                ].joined(separator: "|")
+                            }.sorted()
+                        case .pregnancy:
+                            return try context.fetch(NSFetchRequest<CDPregnancyCheck>(
+                                entityName: CDPregnancyCheck.coreDataEntityName
+                            )).map {
+                                [
+                                    $0.herd.id.uuidString,
+                                    $0.animal.id.uuidString,
+                                    $0.workingSession?.id.uuidString ?? "standalone",
+                                    $0.id.uuidString,
+                                    $0.resultRawValue,
+                                    String($0.date.timeIntervalSinceReferenceDate)
+                                ].joined(separator: "|")
+                            }.sorted()
+                        }
+                    }
+                }
+
+                let baseline = try physicalRows(in: assembly)
+                XCTAssertEqual(baseline.count, 4)
+                let expected = CoreDataPersistenceError.duplicateApplicationID(
+                    entity: kind.entityName,
+                    id: duplicateID,
+                    herdID: environment.herdID
+                )
+                XCTAssertThrowsError(try primaryWorking.fetchSessions()) {
+                    XCTAssertEqual($0 as? CoreDataPersistenceError, expected)
+                }
+                for id in [first.sessionID, second.sessionID, controlSessionID] {
+                    XCTAssertThrowsError(try primaryWorking.fetchSessionDetail(id: id)) {
+                        XCTAssertEqual($0 as? CoreDataPersistenceError, expected)
+                    }
+                }
+                for target in [
+                    (first.sessionID, first.queueID),
+                    (second.sessionID, second.queueID),
+                    (controlSessionID, controlQueueID)
+                ] {
+                    XCTAssertThrowsError(try primaryWorking.fetchQueueItemEditor(
+                        sessionID: target.0,
+                        queueItemID: target.1
+                    )) {
+                        XCTAssertEqual($0 as? CoreDataPersistenceError, expected)
+                    }
+                }
+                XCTAssertEqual(try physicalRows(in: assembly), baseline)
+
+                // Same UUID remains legitimate in a different Herd.
+                XCTAssertEqual(try foreignWorking.fetchSessions().map(\.id), [foreign.sessionID])
+                XCTAssertNotNil(try foreignWorking.fetchSessionDetail(id: foreign.sessionID))
+                XCTAssertNotNil(try foreignWorking.fetchQueueItemEditor(
+                    sessionID: foreign.sessionID,
+                    queueItemID: foreign.queueID
+                ))
+
+                let readOnlyAssembly = try await harness.makeAssembly(accessMode: .readOnly)
+                let readOnlyPrimary = CoreDataWorkingRepository(
+                    selection: environment.selection,
+                    assembly: readOnlyAssembly
+                )
+                XCTAssertThrowsError(try readOnlyPrimary.fetchSessions()) {
+                    XCTAssertEqual($0 as? CoreDataPersistenceError, expected)
+                }
+                XCTAssertThrowsError(try readOnlyPrimary.fetchSessionDetail(
+                    id: controlSessionID
+                )) {
+                    XCTAssertEqual($0 as? CoreDataPersistenceError, expected)
+                }
+                XCTAssertThrowsError(try readOnlyPrimary.fetchQueueItemEditor(
+                    sessionID: controlSessionID,
+                    queueItemID: controlQueueID
+                )) {
+                    XCTAssertEqual($0 as? CoreDataPersistenceError, expected)
+                }
+                let readOnlyForeign = CoreDataWorkingRepository(
+                    selection: foreignSelection,
+                    assembly: readOnlyAssembly
+                )
+                XCTAssertNotNil(try readOnlyForeign.fetchSessionDetail(id: foreign.sessionID))
+                XCTAssertNotNil(try readOnlyForeign.fetchQueueItemEditor(
+                    sessionID: foreign.sessionID,
+                    queueItemID: foreign.queueID
+                ))
+                XCTAssertEqual(try physicalRows(in: readOnlyAssembly), baseline)
+            }
+        }
+    }
+
     func testWorkingCoreDataRollbackContracts() async throws {
         try await run {
             try await WorkingRepositoryContract.assertSessionStartFailureRollsBackAllStagedState(
