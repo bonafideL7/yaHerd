@@ -229,6 +229,262 @@ final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
         }
     }
 
+    func testDirectFieldCheckSessionReadsRejectForeignHerdRosterCheck() async throws {
+        let environment = try await makeEnvironment()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Roster ownership",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        _ = try environment.makeAnimalRepository().create(
+            input: AnimalInput(
+                name: "Roster animal",
+                tagNumber: "RH-1",
+                tagColorID: nil,
+                sex: .female,
+                birthDate: Date(timeIntervalSinceReferenceDate: 10_000),
+                status: .active,
+                pastureID: pasture.id,
+                sireID: nil,
+                damID: nil,
+                distinguishingFeatures: [],
+                saleDate: nil,
+                salePrice: nil,
+                reasonSold: nil,
+                deathDate: nil,
+                causeOfDeath: nil,
+                statusReferenceID: nil
+            )
+        )
+        let repository = environment.makeFieldCheckRepository()
+        let sessionID = try await repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.id,
+                startedAt: Date(timeIntervalSinceReferenceDate: 92_000),
+                notes: "Roster ownership"
+            )
+        )
+        let checkID = try XCTUnwrap(
+            repository.fetchSessionDetail(id: sessionID)?.animalChecks.first?.id
+        )
+        XCTAssertEqual(try repository.fetchSessions().map(\.id), [sessionID])
+
+        let otherHerdID = UUID()
+        try environment.seedAdditionalHerd(id: otherHerdID, name: "Other roster Herd")
+        try environment.setAnimalCheckHerd(
+            animalCheckID: checkID,
+            targetHerdID: otherHerdID
+        )
+
+        for read in [
+            { try environment.makeFieldCheckRepository().fetchSessions().count },
+            { try environment.makeFieldCheckRepository().fetchSessionDetail(id: sessionID) == nil ? 0 : 1 }
+        ] {
+            XCTAssertThrowsError(try read()) { error in
+                XCTAssertEqual(
+                    error as? CoreDataReadModelError,
+                    .invalidHerdOwnership(
+                        entity: CDFieldCheckAnimalCheck.coreDataEntityName,
+                        id: checkID,
+                        expectedHerdID: environment.herdID,
+                        actualHerdID: otherHerdID
+                    )
+                )
+            }
+        }
+    }
+
+    func testDirectFieldCheckReadsRejectFindingWithForeignHerd() async throws {
+        let environment = try await makeEnvironment()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Finding ownership",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let repository = environment.makeFieldCheckRepository()
+        let sessionID = try await repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.id,
+                startedAt: Date(timeIntervalSinceReferenceDate: 93_000),
+                notes: "Selected session"
+            )
+        )
+        try await repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSinceReferenceDate: 93_100),
+                type: .fenceIssue,
+                severity: .warning,
+                status: .open,
+                note: "Selected finding",
+                animalID: nil
+            )
+        )
+        let findingID = try XCTUnwrap(
+            repository.fetchSessionDetail(id: sessionID)?.findings.first?.id
+        )
+        let otherHerdID = UUID()
+        try environment.seedAdditionalHerd(id: otherHerdID, name: "Other finding Herd")
+        let otherSelection = CoreDataFieldCheckContractSelection()
+        otherSelection.currentHerdID = otherHerdID
+        let otherRepository = CoreDataFieldCheckRepository(
+            selection: otherSelection,
+            assembly: environment.assembly
+        )
+        let otherPasture = try CoreDataPastureRepository(
+            selection: otherSelection,
+            assembly: environment.assembly
+        ).create(
+            input: PastureInput(
+                name: "Other finding control",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let otherSessionID = try await otherRepository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: otherPasture.id,
+                startedAt: Date(timeIntervalSinceReferenceDate: 94_000),
+                notes: "Other control"
+            )
+        )
+        try await otherRepository.addFinding(
+            sessionID: otherSessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSinceReferenceDate: 94_100),
+                type: .waterIssue,
+                severity: .info,
+                status: .open,
+                note: "Newer valid control",
+                animalID: nil
+            )
+        )
+        XCTAssertEqual(try otherRepository.fetchOpenFindings(limit: 1).map(\.note), ["Newer valid control"])
+
+        try environment.setFindingHerd(
+            findingID: findingID,
+            targetHerdID: otherHerdID
+        )
+
+        XCTAssertThrowsError(
+            try environment.makeFieldCheckRepository().fetchSessionDetail(id: sessionID)
+        ) { error in
+            XCTAssertEqual(
+                error as? CoreDataReadModelError,
+                .invalidHerdOwnership(
+                    entity: CDFieldCheckFinding.coreDataEntityName,
+                    id: findingID,
+                    expectedHerdID: environment.herdID,
+                    actualHerdID: otherHerdID
+                )
+            )
+        }
+        XCTAssertThrowsError(try environment.makeFieldCheckRepository().fetchSessions())
+        // The invalid finding is *older* than the valid top result; a limit
+        // must not conceal an inconsistent session/Herd relationship.
+        XCTAssertThrowsError(
+            try otherRepository.fetchOpenFindings(limit: 1)
+        ) { error in
+            XCTAssertEqual(
+                error as? CoreDataReadModelError,
+                .invalidHerdOwnership(
+                    entity: CDFieldCheckSession.coreDataEntityName,
+                    id: sessionID,
+                    expectedHerdID: otherHerdID,
+                    actualHerdID: environment.herdID
+                )
+            )
+        }
+    }
+
+    func testDirectFieldCheckReadsRejectFindingAttachedToForeignSession() async throws {
+        let environment = try await makeEnvironment()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Cross-session ownership",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let repository = environment.makeFieldCheckRepository()
+        let sessionID = try await repository.createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: pasture.id,
+                startedAt: Date(timeIntervalSinceReferenceDate: 95_000),
+                notes: "Original session"
+            )
+        )
+        try await repository.addFinding(
+            sessionID: sessionID,
+            input: FieldCheckFindingInput(
+                recordedAt: Date(timeIntervalSinceReferenceDate: 95_100),
+                type: .fenceIssue,
+                severity: .warning,
+                status: .open,
+                note: "Original finding",
+                animalID: nil
+            )
+        )
+        let findingID = try XCTUnwrap(
+            repository.fetchSessionDetail(id: sessionID)?.findings.first?.id
+        )
+        let otherHerdID = UUID()
+        try environment.seedAdditionalHerd(id: otherHerdID, name: "Other session Herd")
+        let otherSelection = CoreDataFieldCheckContractSelection()
+        otherSelection.currentHerdID = otherHerdID
+        let otherPasture = try CoreDataPastureRepository(
+            selection: otherSelection,
+            assembly: environment.assembly
+        ).create(
+            input: PastureInput(
+                name: "Foreign session pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let otherSessionID = try await CoreDataFieldCheckRepository(
+            selection: otherSelection,
+            assembly: environment.assembly
+        ).createSession(
+            input: FieldCheckSessionStartInput(
+                pastureID: otherPasture.id,
+                startedAt: Date(timeIntervalSinceReferenceDate: 96_000),
+                notes: "Other session"
+            )
+        )
+        try environment.setFindingSession(
+            findingID: findingID,
+            targetSessionID: otherSessionID,
+            targetHerdID: otherHerdID
+        )
+
+        for read in [
+            { try environment.makeFieldCheckRepository().fetchOpenFindings(limit: 0).count },
+            { try environment.makeFieldCheckRepository().fetchSessions().count }
+        ] {
+            XCTAssertThrowsError(try read()) { error in
+                XCTAssertEqual(
+                    error as? CoreDataReadModelError,
+                    .invalidHerdOwnership(
+                        entity: CDFieldCheckSession.coreDataEntityName,
+                        id: otherSessionID,
+                        expectedHerdID: environment.herdID,
+                        actualHerdID: otherHerdID
+                    )
+                )
+            }
+        }
+    }
+
     func testSessionCreationAndReadProjections() async throws {
         let environment = try await makeEnvironment()
         try await FieldCheckRepositoryContract.assertSessionCreationAndReadProjections(
@@ -1430,6 +1686,69 @@ private final class CoreDataFieldCheckContractEnvironment {
                 throw CoreDataFieldCheckContractTestError.missingStagedAnimalCheck
             }
             check.setValue(value, forKey: key)
+            try context.save()
+        }
+    }
+
+    func setAnimalCheckHerd(
+        animalCheckID: UUID,
+        targetHerdID: UUID
+    ) throws {
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            guard let check = try assembly.lookup.herdOwned(
+                CDFieldCheckAnimalCheck.self,
+                id: animalCheckID,
+                herdID: herdID,
+                in: context
+            ), let target = try assembly.lookup.herd(id: targetHerdID, in: context) else {
+                throw CoreDataFieldCheckContractTestError.missingStagedAnimalCheck
+            }
+            check.herd = target
+            try context.save()
+        }
+    }
+
+    func setFindingHerd(
+        findingID: UUID,
+        targetHerdID: UUID
+    ) throws {
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            guard let finding = try assembly.lookup.herdOwned(
+                CDFieldCheckFinding.self,
+                id: findingID,
+                herdID: herdID,
+                in: context
+            ), let target = try assembly.lookup.herd(id: targetHerdID, in: context) else {
+                throw CoreDataFieldCheckContractTestError.missingStagedFinding
+            }
+            finding.herd = target
+            try context.save()
+        }
+    }
+
+    func setFindingSession(
+        findingID: UUID,
+        targetSessionID: UUID,
+        targetHerdID: UUID
+    ) throws {
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            guard let finding = try assembly.lookup.herdOwned(
+                CDFieldCheckFinding.self,
+                id: findingID,
+                herdID: herdID,
+                in: context
+            ), let target = try assembly.lookup.herdOwned(
+                CDFieldCheckSession.self,
+                id: targetSessionID,
+                herdID: targetHerdID,
+                in: context
+            ) else {
+                throw CoreDataFieldCheckContractTestError.missingStagedFinding
+            }
+            finding.session = target
             try context.save()
         }
     }
