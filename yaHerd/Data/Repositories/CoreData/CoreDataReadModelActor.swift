@@ -1162,6 +1162,38 @@ actor CoreDataReadModelActor:
                 throw HerdRepositoryError.missingHerd
             }
 
+            // Home projects only a limited template list, but application UUID
+            // identity remains unique across the complete selected Herd.
+            // Fetch IDs only so an off-page collision cannot be hidden by limit.
+            let identityRequest = NSFetchRequest<NSDictionary>(
+                entityName: CDWorkingTreatmentTemplate.coreDataEntityName
+            )
+            identityRequest.resultType = .dictionaryResultType
+            identityRequest.propertiesToFetch = ["id"]
+            identityRequest.predicate = NSPredicate(format: "herd == %@", herd)
+
+            var seenTemplateIDs = Set<UUID>()
+            for row in try context.fetch(identityRequest) {
+                let id: UUID?
+                if let value = row["id"] as? UUID {
+                    id = value
+                } else if let value = row["id"] as? NSUUID {
+                    id = value as UUID
+                } else {
+                    id = nil
+                }
+                guard let id else {
+                    continue
+                }
+                guard seenTemplateIDs.insert(id).inserted else {
+                    throw CoreDataPersistenceError.duplicateApplicationID(
+                        entity: CDWorkingTreatmentTemplate.coreDataEntityName,
+                        id: id,
+                        herdID: herdID
+                    )
+                }
+            }
+
             let request = NSFetchRequest<CDWorkingTreatmentTemplate>(
                 entityName: CDWorkingTreatmentTemplate.coreDataEntityName
             )
