@@ -279,21 +279,21 @@ final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
             targetHerdID: otherHerdID
         )
 
-        for read in [
-            { try environment.makeFieldCheckRepository().fetchSessions().count },
-            { try environment.makeFieldCheckRepository().fetchSessionDetail(id: sessionID) == nil ? 0 : 1 }
-        ] {
-            XCTAssertThrowsError(try read()) { error in
-                XCTAssertEqual(
-                    error as? CoreDataReadModelError,
-                    .invalidHerdOwnership(
-                        entity: CDFieldCheckAnimalCheck.coreDataEntityName,
-                        id: checkID,
-                        expectedHerdID: environment.herdID,
-                        actualHerdID: otherHerdID
-                    )
-                )
-            }
+        let expectedError = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDFieldCheckAnimalCheck.coreDataEntityName,
+            id: checkID,
+            expectedHerdID: environment.herdID,
+            actualHerdID: otherHerdID
+        )
+        XCTAssertThrowsError(
+            try environment.makeFieldCheckRepository().fetchSessions()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataReadModelError, expectedError)
+        }
+        XCTAssertThrowsError(
+            try environment.makeFieldCheckRepository().fetchSessionDetail(id: sessionID)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataReadModelError, expectedError)
         }
     }
 
@@ -467,21 +467,21 @@ final class CoreDataFieldCheckRepositoryContractTests: XCTestCase {
             targetHerdID: otherHerdID
         )
 
-        for read in [
-            { try environment.makeFieldCheckRepository().fetchOpenFindings(limit: 0).count },
-            { try environment.makeFieldCheckRepository().fetchSessions().count }
-        ] {
-            XCTAssertThrowsError(try read()) { error in
-                XCTAssertEqual(
-                    error as? CoreDataReadModelError,
-                    .invalidHerdOwnership(
-                        entity: CDFieldCheckSession.coreDataEntityName,
-                        id: otherSessionID,
-                        expectedHerdID: environment.herdID,
-                        actualHerdID: otherHerdID
-                    )
-                )
-            }
+        let expectedError = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDFieldCheckSession.coreDataEntityName,
+            id: otherSessionID,
+            expectedHerdID: environment.herdID,
+            actualHerdID: otherHerdID
+        )
+        XCTAssertThrowsError(
+            try environment.makeFieldCheckRepository().fetchOpenFindings(limit: 0)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataReadModelError, expectedError)
+        }
+        XCTAssertThrowsError(
+            try environment.makeFieldCheckRepository().fetchSessions()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataReadModelError, expectedError)
         }
     }
 
