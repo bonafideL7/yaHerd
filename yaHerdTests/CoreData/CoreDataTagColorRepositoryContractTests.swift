@@ -530,7 +530,8 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
                 color.blue = 0.6
                 color.alpha = 1
                 color.sortOrder = 5
-                color.isHidden = false
+                // Hidden corruption must still fail the complete-Herd preflight.
+                color.isHidden = name == "Second Physical Blue"
                 color.isDefault = false
                 color.createdAt = Date(timeIntervalSinceReferenceDate: 2_000)
                 color.updatedAt = color.createdAt
