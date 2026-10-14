@@ -52,7 +52,11 @@ final class CoreDataPastureRepository:
         let (context, herdID) = try makeReadScope()
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
-            return try Self.fetchPastures(herd: herd, in: context).map {
+            let pastures = try Self.fetchPastures(herd: herd, in: context)
+            if pastures.contains(where: { $0.group != nil }) {
+                _ = try Self.fetchGroups(herd: herd, in: context)
+            }
+            return try pastures.map {
                 try Self.summary($0, herdID: herdID)
             }
         }
@@ -65,6 +69,9 @@ final class CoreDataPastureRepository:
             guard try lookup.herd(id: herdID, in: context) != nil else { throw HerdRepositoryError.missingHerd }
             guard let pasture = try lookup.herdOwned(CDPasture.self, id: id, herdID: herdID, in: context) else {
                 return nil
+            }
+            if pasture.group != nil {
+                _ = try Self.fetchGroups(herd: pasture.herd, in: context)
             }
             return try Self.detail(pasture, herdID: herdID)
         }
@@ -207,7 +214,11 @@ final class CoreDataPastureRepository:
         let (context, herdID) = try makeReadScope()
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
-            return try Self.fetchGroups(herd: herd, in: context).map {
+            let groups = try Self.fetchGroups(herd: herd, in: context)
+            if groups.contains(where: { ($0.pastures?.count ?? 0) > 0 }) {
+                _ = try Self.fetchPastures(herd: herd, in: context)
+            }
+            return try groups.map {
                 try Self.groupSummary($0, herdID: herdID)
             }
         }
@@ -220,6 +231,9 @@ final class CoreDataPastureRepository:
             guard try lookup.herd(id: herdID, in: context) != nil else { throw HerdRepositoryError.missingHerd }
             guard let group = try lookup.herdOwned(CDPastureGroup.self, id: id, herdID: herdID, in: context) else {
                 return nil
+            }
+            if (group.pastures?.count ?? 0) > 0 {
+                _ = try Self.fetchPastures(herd: group.herd, in: context)
             }
             return try Self.groupDetail(group, herdID: herdID)
         }
@@ -264,6 +278,9 @@ final class CoreDataPastureRepository:
         return try performWrite { context, herd in
             guard let group = try self.lookup.herdOwned(CDPastureGroup.self, id: id, herdID: herd.id, in: context) else {
                 throw PastureValidationError.pastureGroupNotFound
+            }
+            if (group.pastures?.count ?? 0) > 0 {
+                _ = try Self.fetchPastures(herd: herd, in: context)
             }
             group.name = input.name
             group.grazeDays = Int64(input.grazeDays)
@@ -379,7 +396,9 @@ final class CoreDataPastureRepository:
             NSSortDescriptor(key: "name", ascending: true),
             NSSortDescriptor(key: "id", ascending: true)
         ]
-        return try context.fetch(request)
+        let pastures = try context.fetch(request)
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(pastures, herdID: herd.id)
+        return pastures
     }
 
     private nonisolated static func fetchGroups(herd: CDHerd, in context: NSManagedObjectContext) throws -> [CDPastureGroup] {
@@ -389,7 +408,9 @@ final class CoreDataPastureRepository:
             NSSortDescriptor(key: "name", ascending: true),
             NSSortDescriptor(key: "id", ascending: true)
         ]
-        return try context.fetch(request)
+        let groups = try context.fetch(request)
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(groups, herdID: herd.id)
+        return groups
     }
 
     // Count and membership projections must not expose foreign-Herd relationships.
