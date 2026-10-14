@@ -867,9 +867,10 @@ final class CoreDataWorkingRepository:
         return (contextFactory.makeReadContext(), herdID)
     }
 
-    // Per-session graph checks cannot detect an application ID reused in
-    // another session. Validate both complete selected-Herd Working cohorts
-    // once per direct read, before projecting either session or editor data.
+    // Per-session graph checks cannot detect an application ID reused
+    // across sessions or between Working and standalone Animal history.
+    // Validate every relevant complete selected-Herd record cohort once per
+    // direct read, before projecting session or editor data.
     private nonisolated static func validateSelectedHerdWorkingRecordIdentity(
         herd: CDHerd,
         in context: NSManagedObjectContext
