@@ -580,7 +580,7 @@ enum CoreDataAnimalReadGraphValidator {
     static func validateAnimalReadRelationships(
         _ animal: CDAnimal,
         herdID: UUID,
-        includeMaternalOffspring: Bool = true
+        validateOffspringSummaries: Bool = false
     ) throws {
         guard animal.herd.id == herdID else {
             throw CoreDataReadModelError.invalidHerdOwnership(
@@ -695,26 +695,26 @@ enum CoreDataAnimalReadGraphValidator {
                 )
             }
         }
-        if includeMaternalOffspring {
-            for offspring in CoreDataAnimalProjection.managedMaternalOffspring(animal) {
-                guard offspring.herd.id == herdID else {
-                    throw CoreDataReadModelError.invalidHerdOwnership(
-                        entity: CDAnimal.coreDataEntityName,
-                        id: offspring.id,
-                        expectedHerdID: herdID,
-                        actualHerdID: offspring.herd.id
-                    )
-                }
-                guard offspring.dam?.objectID == animal.objectID else {
-                    throw CoreDataReadModelError.invalidAnimalRelationship(
-                        entity: CDAnimal.coreDataEntityName,
-                        id: offspring.id,
-                        expectedAnimalID: animal.id,
-                        actualAnimalID: offspring.dam?.id
-                    )
-                }
+        for offspring in CoreDataAnimalProjection.managedMaternalOffspring(animal) {
+            guard offspring.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDAnimal.coreDataEntityName,
+                    id: offspring.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: offspring.herd.id
+                )
+            }
+            guard offspring.dam?.objectID == animal.objectID else {
+                throw CoreDataReadModelError.invalidAnimalRelationship(
+                    entity: CDAnimal.coreDataEntityName,
+                    id: offspring.id,
+                    expectedAnimalID: animal.id,
+                    actualAnimalID: offspring.dam?.id
+                )
+            }
+            if validateOffspringSummaries {
                 try validateAnimalReadRelationships(
-                    offspring, herdID: herdID, includeMaternalOffspring: false
+                    offspring, herdID: herdID
                 )
             }
         }
