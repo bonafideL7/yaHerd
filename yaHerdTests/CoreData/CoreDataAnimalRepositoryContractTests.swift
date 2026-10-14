@@ -20,6 +20,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
 
         XCTAssertEqual(try repository.fetchAnimalDetail(id: offspring.id)?.damID, dam.id)
         XCTAssertEqual(try repository.fetchAnimalDetail(id: control.id)?.id, control.id)
+        let controlTimelineIDs = try repository.fetchTimeline(id: control.id).map(\.id)
 
         let foreignHerdID = UUID()
         let context = try environment.assembly.contextFactory.makeWriteContext()
@@ -56,7 +57,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
 
         // Bad parent linkage remains untouched; unrelated selected-Herd reads remain usable.
         XCTAssertEqual(try repository.fetchAnimalDetail(id: control.id)?.id, control.id)
-        XCTAssertEqual(try repository.fetchTimeline(id: control.id).count, 1)
+        XCTAssertEqual(try repository.fetchTimeline(id: control.id).map(\.id), controlTimelineIDs)
         let readContext = environment.assembly.contextFactory.makeReadContext()
         try readContext.performAndWait {
             let storedDam = try XCTUnwrap(environment.assembly.lookup.herdOwned(
@@ -116,6 +117,69 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             let movement = try XCTUnwrap(readContext.fetch(request).first)
             XCTAssertEqual(movement.herd.id, foreignHerdID)
             XCTAssertEqual(movement.animal.id, animal.id)
+        }
+    }
+
+    func testMilestone12DirectAnimalReadsRejectForeignHerdTagColor() async throws {
+        let environment = try await makeEnvironment()
+        let repository = environment.makeAnimalRepository()
+        let tagged = try repository.create(
+            input: readGraphAnimalInput(name: "Colored Tag", tag: "M12-T")
+        )
+        let control = try repository.create(
+            input: readGraphAnimalInput(name: "Color Control", tag: "M12-TC")
+        )
+
+        let foreignHerdID = UUID()
+        let colorID = UUID()
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let foreignHerd = CDHerd(context: context)
+            foreignHerd.id = foreignHerdID
+            foreignHerd.name = "Foreign Tag Color Herd"
+            foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 103)
+            foreignHerd.updatedAt = foreignHerd.createdAt
+
+            let persistedAnimal = try XCTUnwrap(environment.assembly.lookup.herdOwned(
+                CDAnimal.self, id: tagged.id, herdID: environment.herdID, in: context
+            ))
+            let tag = try XCTUnwrap(
+                (persistedAnimal.tags?.allObjects as? [CDAnimalTag])?.first
+            )
+            let foreignColor = CDTagColorDefinition(context: context)
+            foreignColor.id = colorID
+            foreignColor.name = "Foreign Color"
+            foreignColor.prefix = "F"
+            foreignColor.red = 0.1
+            foreignColor.green = 0.2
+            foreignColor.blue = 0.3
+            foreignColor.alpha = 1
+            foreignColor.sortOrder = 0
+            foreignColor.isHidden = false
+            foreignColor.isDefault = false
+            foreignColor.createdAt = Date(timeIntervalSinceReferenceDate: 103)
+            foreignColor.updatedAt = foreignColor.createdAt
+            foreignColor.herd = foreignHerd
+            tag.color = foreignColor
+            try context.save()
+        }
+
+        XCTAssertThrowsError(try repository.fetchAnimals())
+        XCTAssertThrowsError(try repository.fetchAnimalDetail(id: tagged.id))
+        XCTAssertThrowsError(try repository.fetchTimeline(id: tagged.id))
+        XCTAssertThrowsError(try repository.fetchParentOptions(excluding: nil))
+        XCTAssertEqual(try repository.fetchAnimalDetail(id: control.id)?.id, control.id)
+
+        let readContext = environment.assembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            let persistedAnimal = try XCTUnwrap(environment.assembly.lookup.herdOwned(
+                CDAnimal.self, id: tagged.id, herdID: environment.herdID, in: readContext
+            ))
+            let tag = try XCTUnwrap(
+                (persistedAnimal.tags?.allObjects as? [CDAnimalTag])?.first
+            )
+            XCTAssertEqual(tag.color?.id, colorID)
+            XCTAssertEqual(tag.color?.herd.id, foreignHerdID)
         }
     }
 
