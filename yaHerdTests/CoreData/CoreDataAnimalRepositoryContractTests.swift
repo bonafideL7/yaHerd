@@ -367,6 +367,8 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             XCTAssertEqual($0 as? CoreDataReadModelError, invalidGroup)
         }
         XCTAssertEqual(try pastures.fetchPastureDetail(id: controlPasture.id)?.id, controlPasture.id)
+        // Navigation restoration checks selected-Herd identity, not the linked detail graph.
+        try pastures.validatePastureIDsExist([targetPasture.id, controlPasture.id])
 
         // Restore group ownership, then prove inverse resident counts reject foreign-Herd cattle.
         let corruptResidentContext = try environment.assembly.contextFactory.makeWriteContext()
@@ -405,6 +407,13 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             XCTAssertEqual($0 as? CoreDataReadModelError, invalidResident)
         }
         XCTAssertEqual(try pastures.fetchPastureDetail(id: controlPasture.id)?.activeAnimalCount, 0)
+        try pastures.validatePastureIDsExist([targetPasture.id, controlPasture.id])
+        let missingPastureID = UUID()
+        XCTAssertThrowsError(try pastures.validatePastureIDsExist([missingPastureID])) {
+            XCTAssertEqual(
+                $0 as? PastureRepositoryError, .pastureIDsNotFound([missingPastureID])
+            )
+        }
         // Mutation responses use the same validated detail projection and must roll back.
         XCTAssertThrowsError(try pastures.update(
             id: targetPasture.id,
@@ -494,6 +503,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         XCTAssertThrowsError(try readOnlyPastures.fetchPastureGroupDetail(id: targetGroup.id)) {
             XCTAssertEqual($0 as? CoreDataReadModelError, invalidMember)
         }
+        try readOnlyPastures.validatePastureIDsExist([localPasture.id, controlPasture.id])
         XCTAssertThrowsError(try pastures.updateGroup(
             id: targetGroup.id,
             input: PastureGroupInput(name: "Rejected Group Rename", grazeDays: 3, restDays: 12)
