@@ -228,7 +228,8 @@ final class CoreDataPastureRepository:
         guard let herdID = selection.currentHerdID else { throw HerdRepositoryError.missingHerd }
         let context = contextFactory.makeReadContext()
         return try context.performAndWait {
-            guard try lookup.herd(id: herdID, in: context) != nil else { throw HerdRepositoryError.missingHerd }
+            guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
+            _ = try Self.fetchGroups(herd: herd, in: context)
             guard let group = try lookup.herdOwned(CDPastureGroup.self, id: id, herdID: herdID, in: context) else {
                 return nil
             }
