@@ -111,6 +111,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
             requiresDefaultSlot: color.isDefault
         ) { context, herd in
             let colors = try Self.fetchManagedColors(herd: herd, in: context)
+            let originalDefaultID = Self.preferredDefaultID(
+                in: colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
+            )
             let existingByID = colors.first { $0.id == color.id }
             let nameKey = TagColorLibraryRules.normalizedNameKey(cleanedName)
             let existingByName = colors.first {
@@ -252,7 +255,10 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 )
                 context.delete(duplicate)
             }
-            try Self.normalizeDefaults(in: colors.filter { !$0.isDeleted } + [target])
+            try Self.normalizeDefaults(
+                in: colors.filter { !$0.isDeleted } + [target],
+                preserving: color.isDefault ? target.id : originalDefaultID
+            )
         }
     }
 
@@ -282,6 +288,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
         let ids = Set(ids)
         try performWrite(requiresDefaultSlot: true) { context, herd in
             let colors = try Self.fetchManagedColors(herd: herd, in: context)
+            let originalDefaultID = Self.preferredDefaultID(
+                in: colors.filter { !$0.isDeleted && !$0.isHidden }.map(Self.snapshot)
+            )
             for color in colors where ids.contains(color.id) {
                 if TagColorDefaults.defaultColorIDs.contains(color.id) {
                     if try Self.hasPersistedReferences(to: color.id, herd: herd, in: context),
@@ -304,7 +313,10 @@ final class CoreDataTagColorRepository: TagColorRepository {
                     context.delete(color)
                 }
             }
-            try Self.normalizeDefaults(in: colors.filter { !$0.isDeleted && !$0.isHidden })
+            try Self.normalizeDefaults(
+                in: colors.filter { !$0.isDeleted && !$0.isHidden },
+                preserving: originalDefaultID
+            )
         }
     }
 
@@ -334,6 +346,9 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 guard color.sortOrder != desiredSortOrder else { continue }
                 color.sortOrder = desiredSortOrder
                 color.updatedAt = .now
+            }
+            if context.hasChanges {
+                try Self.normalizeDefaults(in: colors, preserving: existingDefaultID)
             }
         }
     }
@@ -400,7 +415,8 @@ final class CoreDataTagColorRepository: TagColorRepository {
                 }
             }
             try Self.normalizeDefaults(
-                in: try Self.fetchManagedColors(herd: herd, in: context).filter { !$0.isDeleted }
+                in: try Self.fetchManagedColors(herd: herd, in: context).filter { !$0.isDeleted },
+                preserving: existingDefaultID
             )
         }
     }
@@ -724,11 +740,21 @@ final class CoreDataTagColorRepository: TagColorRepository {
         return try context.count(for: queueRequest) > 0
     }
 
-    private nonisolated static func normalizeDefaults(in colors: [CDTagColorDefinition]) throws {
+    private nonisolated static func normalizeDefaults(
+        in colors: [CDTagColorDefinition],
+        preserving defaultID: UUID? = nil
+    ) throws {
         let defaults = colors.filter { $0.isDefault && !$0.isDeleted }
         guard defaults.count > 1 else { return }
         let visible = defaults.filter { !$0.isHidden }
-        let selectedID = preferredDefaultID(in: visible.map(snapshot))
+        // Mutations such as reorder and canonical repair can update the losing
+        // default's metadata. Keep the choice shown before the mutation when
+        // that same persisted identity is still a visible, flagged default.
+        let preservedID = defaultID.flatMap { id in
+            visible.contains(where: { $0.id == id }) ? id : nil
+        }
+        let selectedID = preservedID
+            ?? preferredDefaultID(in: visible.map(snapshot))
             ?? preferredDefaultID(in: defaults.map(snapshot))
         for color in defaults where color.id != selectedID {
             color.isDefault = false
