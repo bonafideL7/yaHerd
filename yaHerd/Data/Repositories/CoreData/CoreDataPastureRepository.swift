@@ -183,6 +183,9 @@ final class CoreDataPastureRepository:
             guard let pasture = try self.lookup.herdOwned(CDPasture.self, id: id, herdID: herd.id, in: context) else {
                 throw PastureValidationError.pastureNotFound
             }
+            if pasture.group != nil {
+                _ = try Self.fetchGroups(herd: herd, in: context)
+            }
             pasture.name = input.name
             pasture.acreage = input.acreage.map(NSNumber.init(value:))
             pasture.usableAcreage = input.usableAcreage.map(NSNumber.init(value:))
