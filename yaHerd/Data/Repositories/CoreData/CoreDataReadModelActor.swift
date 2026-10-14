@@ -126,6 +126,15 @@ actor CoreDataReadModelActor:
                 sessions,
                 herdID: herdID
             )
+            // The displayed active sessions share a Herd-scoped queue identity.
+            // Validate across the fetched cohort, not only within each session.
+            let queueItems = sessions.flatMap {
+                ($0.queueItems?.allObjects as? [CDWorkingQueueItem]) ?? []
+            }
+            try CoreDataAnimalMutation.validateUniqueApplicationIDs(
+                queueItems,
+                herdID: herdID
+            )
 
             return DashboardRecords(
                 animals: try Self.dashboardAnimalRecords(
