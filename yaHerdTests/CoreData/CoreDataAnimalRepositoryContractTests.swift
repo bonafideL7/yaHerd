@@ -5,6 +5,91 @@ import XCTest
 
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
+    func testMilestone12DirectParentOptionsUseStableTieOrderAcrossSQLiteReopen() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let tieLaterID = try XCTUnwrap(UUID(
+            uuidString: "00000000-0000-0000-0000-000000000040"
+        ))
+        let tieEarlierID = try XCTUnwrap(UUID(
+            uuidString: "00000000-0000-0000-0000-000000000010"
+        ))
+        let firstControlID = try XCTUnwrap(UUID(
+            uuidString: "00000000-0000-0000-0000-000000000070"
+        ))
+        let lastControlID = try XCTUnwrap(UUID(
+            uuidString: "00000000-0000-0000-0000-000000000020"
+        ))
+
+        // Store the UUID-later untagged dam first. Both untagged Animals
+        // intentionally have the same user-visible fallback display name.
+        _ = try environment.seedAnimalWithID(
+            tieLaterID, input: readGraphAnimalInput(name: "", tag: "")
+        )
+        _ = try environment.seedAnimalWithID(
+            lastControlID, input: readGraphAnimalInput(name: "Zebra", tag: "")
+        )
+        _ = try environment.seedAnimalWithID(
+            tieEarlierID, input: readGraphAnimalInput(name: "", tag: "")
+        )
+        _ = try environment.seedAnimalWithID(
+            firstControlID, input: readGraphAnimalInput(name: "Alpha", tag: "")
+        )
+
+        let expectedIDs = [firstControlID, tieEarlierID, tieLaterID, lastControlID]
+        let direct = environment.makeAnimalRepository()
+        let options = try direct.fetchParentOptions(excluding: nil)
+        XCTAssertEqual(options.map(\.id), expectedIDs)
+        XCTAssertEqual(options.map(\.displayName), [
+            "Alpha", "Untagged dam", "Untagged dam", "Zebra"
+        ])
+        XCTAssertEqual(options.map(\.isArchived), [false, false, false, false])
+        XCTAssertEqual(try direct.fetchParentOptions(excluding: nil), options)
+
+        let expectedWithoutEarlier = [firstControlID, tieLaterID, lastControlID]
+        XCTAssertEqual(
+            try direct.fetchParentOptions(excluding: tieEarlierID).map(\.id),
+            expectedWithoutEarlier
+        )
+        let asyncReader = environment.makeAnimalListQueryReader()
+        XCTAssertEqual(try await asyncReader.fetchParentOptions(excluding: nil), options)
+        let asyncExcluded = try await asyncReader.fetchParentOptions(
+            excluding: tieEarlierID
+        )
+        XCTAssertEqual(asyncExcluded.map(\.id), expectedWithoutEarlier)
+
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let reopenedDirect = CoreDataAnimalRepository(
+            selection: environment.selection, assembly: reopened
+        )
+        let reopenedAsync = CoreDataReadModelActor(
+            contextFactory: reopened.contextFactory,
+            lookup: reopened.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        XCTAssertEqual(try reopenedDirect.fetchParentOptions(excluding: nil), options)
+        XCTAssertEqual(
+            try reopenedDirect.fetchParentOptions(excluding: tieEarlierID).map(\.id),
+            expectedWithoutEarlier
+        )
+        XCTAssertEqual(try await reopenedAsync.fetchParentOptions(excluding: nil), options)
+
+        let context = reopened.contextFactory.makeReadContext()
+        try context.performAndWait {
+            let herd = try XCTUnwrap(reopened.lookup.herd(
+                id: environment.herdID, in: context
+            ))
+            let request = NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "herd == %@", herd)
+            let persisted = try context.fetch(request)
+            XCTAssertEqual(Set(persisted.map(\.id)), Set(expectedIDs))
+            XCTAssertTrue(persisted.allSatisfy { !$0.isArchived && $0.herd.id == herd.id })
+        }
+    }
+
     func testMilestone12StatusReferenceOptionsStayOrderedAcrossSQLiteReopen() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
