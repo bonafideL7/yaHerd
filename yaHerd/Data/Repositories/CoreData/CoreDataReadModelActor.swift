@@ -1551,6 +1551,21 @@ actor CoreDataReadModelActor:
             herdID: herdID
         )
 
+        // Match the direct Pasture read contract: projecting rest-days from a
+        // linked Group is unsafe if two Groups in this Herd share a UUID.
+        // Skip the cohort read when no Pasture references a Group.
+        if pastures.contains(where: { $0.group != nil }) {
+            let groupRequest = NSFetchRequest<CDPastureGroup>(
+                entityName: CDPastureGroup.coreDataEntityName
+            )
+            groupRequest.predicate = NSPredicate(format: "herd == %@", herd)
+            let groups = try context.fetch(groupRequest)
+            try CoreDataAnimalMutation.validateUniqueApplicationIDs(
+                groups,
+                herdID: herdID
+            )
+        }
+
         return try pastures.map { pasture in
             guard pasture.herd.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
