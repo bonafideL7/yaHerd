@@ -481,6 +481,132 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
         }
     }
 
+    func testDuplicatePhysicalTagColorIDsRejectReadsAndWritesWithoutMutation() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = CoreDataTagColorContractEnvironment(assembly: assembly)
+        try environment.seedInitialHerd()
+
+        let duplicatedID = UUID(uuidString: "11111111-2222-4333-8444-555555555555")!
+        let foreignHerdID = UUID()
+        let selectedHerdID = environment.initialHerdID
+        let original = TagColorSnapshot(
+            id: duplicatedID,
+            name: "First Physical Amber",
+            prefix: "FA",
+            rgba: RGBAColor(r: 0.75, g: 0.45, b: 0.2),
+            sortOrder: 4
+        )
+        let control = TagColorSnapshot(
+            name: "Unaffected Teal",
+            prefix: "UT",
+            rgba: RGBAColor(r: 0.1, g: 0.5, b: 0.55),
+            sortOrder: 9
+        )
+        try environment.fixture.referenceControl.seedPersistedColor(original)
+        try environment.fixture.referenceControl.seedPersistedColor(control)
+
+        // Construct physically ambiguous UUIDs without passing through the
+        // uniqueness-preserving public Tag Color repository or probe.
+        let writeContext = try assembly.contextFactory.makeWriteContext()
+        try writeContext.performAndWait {
+            let request = NSFetchRequest<CDHerd>(entityName: CDHerd.coreDataEntityName)
+            request.predicate = NSPredicate(format: "id == %@", selectedHerdID as NSUUID)
+            let selectedHerd = try XCTUnwrap(writeContext.fetch(request).first)
+
+            let foreignHerd = CDHerd(context: writeContext)
+            foreignHerd.id = foreignHerdID
+            foreignHerd.name = "Independent Tag Color Herd"
+            foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 1_000)
+            foreignHerd.updatedAt = foreignHerd.createdAt
+
+            func insertColor(name: String, prefix: String, herd: CDHerd) {
+                let color = CDTagColorDefinition(context: writeContext)
+                color.id = duplicatedID
+                color.name = name
+                color.prefix = prefix
+                color.red = 0.2
+                color.green = 0.4
+                color.blue = 0.6
+                color.alpha = 1
+                color.sortOrder = 5
+                color.isHidden = false
+                color.isDefault = false
+                color.createdAt = Date(timeIntervalSinceReferenceDate: 2_000)
+                color.updatedAt = color.createdAt
+                color.herd = herd
+            }
+
+            insertColor(name: "Second Physical Blue", prefix: "SP", herd: selectedHerd)
+            insertColor(name: "Foreign Herd Blue", prefix: "FH", herd: foreignHerd)
+            try writeContext.save()
+        }
+
+        func physicalState(in assembly: CoreDataPersistenceAssembly) throws -> [String] {
+            let context = assembly.contextFactory.makeReadContext()
+            return try context.performAndWait {
+                let request = NSFetchRequest<CDTagColorDefinition>(
+                    entityName: CDTagColorDefinition.coreDataEntityName
+                )
+                return try context.fetch(request).map { color in
+                    [
+                        color.herd.id.uuidString, color.id.uuidString, color.name,
+                        color.prefix, String(color.sortOrder), String(color.isHidden),
+                        String(color.isDefault),
+                        String(color.updatedAt.timeIntervalSinceReferenceDate)
+                    ].joined(separator: "|")
+                }.sorted()
+            }
+        }
+
+        let baseline = try physicalState(in: assembly)
+        XCTAssertEqual(baseline.count, 4)
+        let repository = environment.fixture.makeTagColorRepository()
+        let expectedError = CoreDataPersistenceError.duplicateApplicationID(
+            entity: CDTagColorDefinition.coreDataEntityName,
+            id: duplicatedID,
+            herdID: selectedHerdID
+        )
+
+        XCTAssertThrowsError(try repository.fetchColors()) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertThrowsError(try repository.fetchColor(id: duplicatedID)) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertThrowsError(try repository.reorder(colorIDs: [control.id])) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertThrowsError(try repository.upsert(TagColorSnapshot(
+            name: "Unrelated New Color",
+            prefix: "NC",
+            rgba: RGBAColor(r: 0.5, g: 0.3, b: 0.1)
+        ))) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertEqual(try physicalState(in: assembly), baseline)
+
+        // The same UUID remains legitimate in another Herd, and selecting
+        // that Herd must not read or repair the first Herd's invalid rows.
+        environment.selection.currentHerdID = foreignHerdID
+        let foreignRows = try repository.fetchColors()
+        XCTAssertEqual(foreignRows.first { $0.id == duplicatedID }?.name, "Foreign Herd Blue")
+        XCTAssertEqual(try repository.fetchColor(id: duplicatedID)?.name, "Foreign Herd Blue")
+        XCTAssertEqual(try physicalState(in: assembly), baseline)
+
+        let readOnlyAssembly = try await harness.makeAssembly(accessMode: .readOnly)
+        let readOnlySelection = CoreDataTagColorContractSelection()
+        readOnlySelection.currentHerdID = selectedHerdID
+        let readOnlyRepository = CoreDataTagColorRepository(
+            selection: readOnlySelection,
+            assembly: readOnlyAssembly
+        )
+        XCTAssertThrowsError(try readOnlyRepository.fetchColors()) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertEqual(try physicalState(in: readOnlyAssembly), baseline)
+    }
+
     func testConflictingDefaultReadUsesRepairPriorityAcrossSQLiteReopen() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
