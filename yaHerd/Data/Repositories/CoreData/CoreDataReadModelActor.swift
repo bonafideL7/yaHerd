@@ -2191,6 +2191,17 @@ actor CoreDataReadModelActor:
             herdID: herdID
         )
 
+        // Home displays only warning sessions, but all of their historical
+        // findings (including resolved ones) share one Herd-scoped identity.
+        // The unresolved global count scan cannot detect resolved collisions.
+        let allFindings = sessions.flatMap {
+            ($0.findings?.allObjects as? [CDFieldCheckFinding]) ?? []
+        }
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(
+            allFindings,
+            herdID: herdID
+        )
+
         for session in sessions {
             guard session.herd.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
