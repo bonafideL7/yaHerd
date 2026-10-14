@@ -42,7 +42,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             guard case let CoreDataReadModelError.invalidHerdOwnership(
                 entity, id, expectedHerdID, actualHerdID
             ) = error else {
-                return XCTFail("Expected a cross-Herd parent read integrity failure: \\(error)")
+                return XCTFail("Expected a cross-Herd parent read integrity failure: \(error)")
             }
             XCTAssertEqual(entity, CDAnimal.coreDataEntityName)
             XCTAssertEqual(id, dam.id)
