@@ -52,7 +52,9 @@ final class CoreDataPastureRepository:
         let (context, herdID) = try makeReadScope()
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
-            return try Self.fetchPastures(herd: herd, in: context).map(Self.summary)
+            return try Self.fetchPastures(herd: herd, in: context).map {
+                try Self.summary($0, herdID: herdID)
+            }
         }
     }
 
@@ -64,7 +66,7 @@ final class CoreDataPastureRepository:
             guard let pasture = try lookup.herdOwned(CDPasture.self, id: id, herdID: herdID, in: context) else {
                 return nil
             }
-            return Self.detail(pasture)
+            return try Self.detail(pasture, herdID: herdID)
         }
     }
 
@@ -161,7 +163,7 @@ final class CoreDataPastureRepository:
             pasture.targetAcresPerHead = input.targetAcresPerHead.map(NSNumber.init(value:))
             pasture.sortOrder = (try Self.fetchPastures(herd: herd, in: context).map(\.sortOrder).max() ?? -1) + 1
             pasture.herd = herd
-            return Self.detail(pasture)
+            return try Self.detail(pasture, herdID: herd.id)
         }
     }
 
@@ -178,7 +180,7 @@ final class CoreDataPastureRepository:
             pasture.acreage = input.acreage.map(NSNumber.init(value:))
             pasture.usableAcreage = input.usableAcreage.map(NSNumber.init(value:))
             pasture.targetAcresPerHead = input.targetAcresPerHead.map(NSNumber.init(value:))
-            return Self.detail(pasture)
+            return try Self.detail(pasture, herdID: herd.id)
         }
     }
 
@@ -205,7 +207,9 @@ final class CoreDataPastureRepository:
         let (context, herdID) = try makeReadScope()
         return try context.performAndWait {
             guard let herd = try lookup.herd(id: herdID, in: context) else { throw HerdRepositoryError.missingHerd }
-            return try Self.fetchGroups(herd: herd, in: context).map(Self.groupSummary)
+            return try Self.fetchGroups(herd: herd, in: context).map {
+                try Self.groupSummary($0, herdID: herdID)
+            }
         }
     }
 
@@ -217,7 +221,7 @@ final class CoreDataPastureRepository:
             guard let group = try lookup.herdOwned(CDPastureGroup.self, id: id, herdID: herdID, in: context) else {
                 return nil
             }
-            return Self.groupDetail(group)
+            return try Self.groupDetail(group, herdID: herdID)
         }
     }
 
@@ -248,7 +252,7 @@ final class CoreDataPastureRepository:
             group.grazeDays = Int64(input.grazeDays)
             group.restDays = Int64(input.restDays)
             group.herd = herd
-            return Self.groupDetail(group)
+            return try Self.groupDetail(group, herdID: herd.id)
         }
     }
 
@@ -264,7 +268,7 @@ final class CoreDataPastureRepository:
             group.name = input.name
             group.grazeDays = Int64(input.grazeDays)
             group.restDays = Int64(input.restDays)
-            return Self.groupDetail(group)
+            return try Self.groupDetail(group, herdID: herd.id)
         }
     }
 
@@ -388,14 +392,80 @@ final class CoreDataPastureRepository:
         return try context.fetch(request)
     }
 
+    // Count and membership projections must not expose foreign-Herd relationships.
+    private nonisolated static func validateHerdOwnership(
+        entity: String,
+        id: UUID,
+        actualHerdID: UUID,
+        selectedHerdID: UUID
+    ) throws {
+        guard actualHerdID == selectedHerdID else {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: entity,
+                id: id,
+                expectedHerdID: selectedHerdID,
+                actualHerdID: actualHerdID
+            )
+        }
+    }
+
+    private nonisolated static func validatePastureReadGraph(
+        _ pasture: CDPasture,
+        herdID: UUID
+    ) throws {
+        try validateHerdOwnership(
+            entity: CDPasture.coreDataEntityName,
+            id: pasture.id,
+            actualHerdID: pasture.herd.id,
+            selectedHerdID: herdID
+        )
+        if let group = pasture.group {
+            try validateHerdOwnership(
+                entity: CDPastureGroup.coreDataEntityName,
+                id: group.id,
+                actualHerdID: group.herd.id,
+                selectedHerdID: herdID
+            )
+        }
+        for resident in pasture.animals as? Set<CDAnimal> ?? [] {
+            try validateHerdOwnership(
+                entity: CDAnimal.coreDataEntityName,
+                id: resident.id,
+                actualHerdID: resident.herd.id,
+                selectedHerdID: herdID
+            )
+        }
+    }
+
+    private nonisolated static func validateGroupReadGraph(
+        _ group: CDPastureGroup,
+        herdID: UUID
+    ) throws {
+        try validateHerdOwnership(
+            entity: CDPastureGroup.coreDataEntityName,
+            id: group.id,
+            actualHerdID: group.herd.id,
+            selectedHerdID: herdID
+        )
+        for pasture in group.pastures as? Set<CDPasture> ?? [] {
+            try validateHerdOwnership(
+                entity: CDPasture.coreDataEntityName,
+                id: pasture.id,
+                actualHerdID: pasture.herd.id,
+                selectedHerdID: herdID
+            )
+        }
+    }
+
     private nonisolated static func activeAnimalCount(_ pasture: CDPasture) -> Int {
         (pasture.animals as? Set<CDAnimal> ?? []).filter {
             !$0.isArchived && AnimalStatus(rawValue: $0.statusRawValue) == .active
         }.count
     }
 
-    private nonisolated static func summary(_ pasture: CDPasture) -> PastureSummary {
-        PastureSummary(
+    private nonisolated static func summary(_ pasture: CDPasture, herdID: UUID) throws -> PastureSummary {
+        try validatePastureReadGraph(pasture, herdID: herdID)
+        return PastureSummary(
             id: pasture.id, name: pasture.name,
             acreage: pasture.acreage?.doubleValue, usableAcreage: pasture.usableAcreage?.doubleValue,
             targetAcresPerHead: pasture.targetAcresPerHead?.doubleValue,
@@ -405,8 +475,9 @@ final class CoreDataPastureRepository:
         )
     }
 
-    private nonisolated static func detail(_ pasture: CDPasture) -> PastureDetailSnapshot {
-        PastureDetailSnapshot(
+    private nonisolated static func detail(_ pasture: CDPasture, herdID: UUID) throws -> PastureDetailSnapshot {
+        try validatePastureReadGraph(pasture, herdID: herdID)
+        return PastureDetailSnapshot(
             id: pasture.id, name: pasture.name,
             acreage: pasture.acreage?.doubleValue, usableAcreage: pasture.usableAcreage?.doubleValue,
             targetAcresPerHead: pasture.targetAcresPerHead?.doubleValue,
@@ -415,12 +486,16 @@ final class CoreDataPastureRepository:
         )
     }
 
-    private nonisolated static func groupSummary(_ group: CDPastureGroup) -> PastureGroupSummary {
-        PastureGroupSummary(id: group.id, name: group.name, grazeDays: Int(group.grazeDays), restDays: Int(group.restDays), pastureCount: group.pastures?.count ?? 0)
+    private nonisolated static func groupSummary(_ group: CDPastureGroup, herdID: UUID) throws -> PastureGroupSummary {
+        try validateGroupReadGraph(group, herdID: herdID)
+        return PastureGroupSummary(id: group.id, name: group.name, grazeDays: Int(group.grazeDays), restDays: Int(group.restDays), pastureCount: group.pastures?.count ?? 0)
     }
 
-    private nonisolated static func groupDetail(_ group: CDPastureGroup) -> PastureGroupDetailSnapshot {
-        let pastures = (group.pastures as? Set<CDPasture> ?? []).map(summary).sorted {
+    private nonisolated static func groupDetail(_ group: CDPastureGroup, herdID: UUID) throws -> PastureGroupDetailSnapshot {
+        try validateGroupReadGraph(group, herdID: herdID)
+        let pastures = try (group.pastures as? Set<CDPasture> ?? []).map {
+            try summary($0, herdID: herdID)
+        }.sorted {
             if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
             let nameOrder = $0.name.localizedStandardCompare($1.name)
             if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
