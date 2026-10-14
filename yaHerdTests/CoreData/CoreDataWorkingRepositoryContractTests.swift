@@ -234,14 +234,23 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 sourcePastureID: pasture.id,
                 treatmentTemplateName: "Second Queue Session",
                 plannedTreatments: [],
-                animalIDs: [secondAnimal.id, controlAnimal.id]
+                animalIDs: [secondAnimal.id]
+            )
+        )
+        let controlSessionID = try await primaryWorking.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 325_000),
+                sourcePastureID: pasture.id,
+                treatmentTemplateName: "Healthy Control Session",
+                plannedTreatments: [],
+                animalIDs: [controlAnimal.id]
             )
         )
         let duplicateID = try XCTUnwrap(
             primaryWorking.fetchSessionDetail(id: firstSessionID)?.queueItems.first?.id
         )
         let healthyQueueID = try XCTUnwrap(
-            primaryWorking.fetchSessionDetail(id: secondSessionID)?
+            primaryWorking.fetchSessionDetail(id: controlSessionID)?
                 .queueItems.first(where: { $0.animalID == controlAnimal.id })?.id
         )
 
@@ -345,11 +354,14 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         XCTAssertThrowsError(try primaryWorking.fetchSessionDetail(id: secondSessionID)) {
             XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
         }
+        XCTAssertThrowsError(try primaryWorking.fetchSessionDetail(id: controlSessionID)) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
+        }
         // The requested queue has a healthy UUID: the editor must still fail
         // if some other session in its selected Herd has ambiguous identities.
         XCTAssertThrowsError(
             try primaryWorking.fetchQueueItemEditor(
-                sessionID: secondSessionID,
+                sessionID: controlSessionID,
                 queueItemID: healthyQueueID
             )
         ) {
