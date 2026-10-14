@@ -566,7 +566,12 @@ final class CoreDataTagColorRepository: TagColorRepository {
             NSSortDescriptor(key: "sortOrder", ascending: true),
             NSSortDescriptor(key: "name", ascending: true)
         ]
-        return try context.fetch(request)
+        let colors = try context.fetch(request)
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(
+            colors,
+            herdID: herd.id
+        )
+        return colors
     }
 
     private nonisolated static func insert(
