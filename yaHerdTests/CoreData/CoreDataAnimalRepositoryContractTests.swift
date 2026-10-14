@@ -5,6 +5,120 @@ import XCTest
 
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
+    func testMilestone12DirectAnimalReadsRejectForeignHerdParentGraph() async throws {
+        let environment = try await makeEnvironment()
+        let repository = environment.makeAnimalRepository()
+        let dam = try repository.create(
+            input: readGraphAnimalInput(name: "Parent", tag: "M12-P")
+        )
+        let offspring = try repository.create(
+            input: readGraphAnimalInput(name: "Offspring", tag: "M12-O", damID: dam.id)
+        )
+        let control = try repository.create(
+            input: readGraphAnimalInput(name: "Control", tag: "M12-C")
+        )
+
+        XCTAssertEqual(try repository.fetchAnimalDetail(id: offspring.id)?.damID, dam.id)
+        XCTAssertEqual(try repository.fetchAnimalDetail(id: control.id)?.id, control.id)
+
+        let foreignHerdID = UUID()
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let foreignHerd = CDHerd(context: context)
+            foreignHerd.id = foreignHerdID
+            foreignHerd.name = "Foreign Herd"
+            foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 100)
+            foreignHerd.updatedAt = foreignHerd.createdAt
+
+            let persistedDam = try XCTUnwrap(environment.assembly.lookup.herdOwned(
+                CDAnimal.self, id: dam.id, herdID: environment.herdID, in: context
+            ))
+            persistedDam.herd = foreignHerd
+            try context.save()
+        }
+
+        XCTAssertThrowsError(try repository.fetchAnimalDetail(id: offspring.id)) { error in
+            guard case let CoreDataReadModelError.invalidHerdOwnership(
+                entity, id, expectedHerdID, actualHerdID
+            ) = error else {
+                return XCTFail("Expected a cross-Herd parent read integrity failure: \\(error)")
+            }
+            XCTAssertEqual(entity, CDAnimal.coreDataEntityName)
+            XCTAssertEqual(id, dam.id)
+            XCTAssertEqual(expectedHerdID, environment.herdID)
+            XCTAssertEqual(actualHerdID, foreignHerdID)
+        }
+        XCTAssertThrowsError(try repository.fetchAnimals())
+        XCTAssertThrowsError(try repository.fetchTimeline(id: offspring.id))
+        XCTAssertThrowsError(try repository.fetchAnimalAggregateForEditing(id: offspring.id))
+        XCTAssertThrowsError(try repository.fetchParentOptions(excluding: nil))
+        XCTAssertThrowsError(try repository.fetchOffspringDraftSeed(forDamID: offspring.id))
+
+        // Bad parent linkage remains untouched; unrelated selected-Herd reads remain usable.
+        XCTAssertEqual(try repository.fetchAnimalDetail(id: control.id)?.id, control.id)
+        XCTAssertEqual(try repository.fetchTimeline(id: control.id).count, 1)
+        let readContext = environment.assembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            let storedDam = try XCTUnwrap(environment.assembly.lookup.herdOwned(
+                CDAnimal.self, id: dam.id, herdID: foreignHerdID, in: readContext
+            ))
+            XCTAssertEqual(storedDam.herd.id, foreignHerdID)
+        }
+    }
+
+    func testMilestone12DirectAnimalReadsRejectForeignHerdHistoryGraph() async throws {
+        let environment = try await makeEnvironment()
+        let repository = environment.makeAnimalRepository()
+        let animal = try repository.create(
+            input: readGraphAnimalInput(name: "History", tag: "M12-H")
+        )
+        let control = try repository.create(
+            input: readGraphAnimalInput(name: "History Control", tag: "M12-HC")
+        )
+
+        let foreignHerdID = UUID()
+        let movementID = UUID()
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let foreignHerd = CDHerd(context: context)
+            foreignHerd.id = foreignHerdID
+            foreignHerd.name = "Foreign Herd"
+            foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 101)
+            foreignHerd.updatedAt = foreignHerd.createdAt
+
+            let persistedAnimal = try XCTUnwrap(environment.assembly.lookup.herdOwned(
+                CDAnimal.self, id: animal.id, herdID: environment.herdID, in: context
+            ))
+            let movement = CDMovementRecord(context: context)
+            movement.id = movementID
+            movement.date = Date(timeIntervalSinceReferenceDate: 102)
+            movement.fromPastureIDSnapshot = nil
+            movement.fromPastureNameSnapshot = "First"
+            movement.toPastureIDSnapshot = nil
+            movement.toPastureNameSnapshot = "Second"
+            movement.animal = persistedAnimal
+            movement.herd = foreignHerd
+            try context.save()
+        }
+
+        XCTAssertThrowsError(try repository.fetchAnimals())
+        XCTAssertThrowsError(try repository.fetchAnimalDetail(id: animal.id))
+        XCTAssertThrowsError(try repository.fetchTimeline(id: animal.id))
+        XCTAssertThrowsError(try repository.fetchAnimalAggregateForEditing(id: animal.id))
+        XCTAssertEqual(try repository.fetchAnimalDetail(id: control.id)?.id, control.id)
+
+        let readContext = environment.assembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            let request = NSFetchRequest<CDMovementRecord>(
+                entityName: CDMovementRecord.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "id == %@", movementID as NSUUID)
+            let movement = try XCTUnwrap(readContext.fetch(request).first)
+            XCTAssertEqual(movement.herd.id, foreignHerdID)
+            XCTAssertEqual(movement.animal.id, animal.id)
+        }
+    }
+
     func testCreateUpdateAndReload() async throws {
         let environment = try await makeEnvironment()
         try AnimalRepositoryContract.assertCreateUpdateAndReload(using: environment.repositoryFixture)
@@ -1987,6 +2101,31 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             deathDate: detail.deathDate,
             causeOfDeath: detail.causeOfDeath,
             statusReferenceID: detail.statusReferenceID
+        )
+    }
+
+    private func readGraphAnimalInput(
+        name: String,
+        tag: String,
+        damID: UUID? = nil
+    ) -> AnimalInput {
+        AnimalInput(
+            name: name,
+            tagNumber: tag,
+            tagColorID: nil,
+            sex: .female,
+            birthDate: Date(timeIntervalSinceReferenceDate: 28_000),
+            status: .active,
+            pastureID: nil,
+            sireID: nil,
+            damID: damID,
+            distinguishingFeatures: [],
+            saleDate: nil,
+            salePrice: nil,
+            reasonSold: nil,
+            deathDate: nil,
+            causeOfDeath: nil,
+            statusReferenceID: nil
         )
     }
 
