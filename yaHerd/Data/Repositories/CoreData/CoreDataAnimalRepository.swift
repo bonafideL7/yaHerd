@@ -138,8 +138,12 @@ final class CoreDataAnimalRepository:
                     )
                     return try CoreDataAnimalProjection.parentOption(animal)
                 }
-                .sorted {
-                    $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
+                .sorted { left, right in
+                    let order = left.displayName.localizedStandardCompare(right.displayName)
+                    if order != .orderedSame {
+                        return order == .orderedAscending
+                    }
+                    return left.id.uuidString < right.id.uuidString
                 }
         }
     }
