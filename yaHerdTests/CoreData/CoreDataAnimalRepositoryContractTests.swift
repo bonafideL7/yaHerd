@@ -5,6 +5,241 @@ import XCTest
 
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
+
+    func testMilestone12PastureCohortRejectsDuplicateIDsWithoutReorderingOrRepairing() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let pastures = environment.makePastureRepository()
+
+        let first = try pastures.create(input: PastureInput(
+            name: "Identity First", acreage: 12, usableAcreage: 11, targetAcresPerHead: 1
+        ))
+        let second = try pastures.create(input: PastureInput(
+            name: "Identity Second", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1
+        ))
+        let control = try pastures.create(input: PastureInput(
+            name: "Identity Control", acreage: 8, usableAcreage: 7, targetAcresPerHead: 1
+        ))
+        let group = try pastures.createGroup(input: PastureGroupInput(
+            name: "Identity Rotation", grazeDays: 5, restDays: 20
+        ))
+        try pastures.assignPasture(id: first.id, toGroupID: group.id)
+        try pastures.assignPasture(id: second.id, toGroupID: group.id)
+        XCTAssertEqual(try pastures.fetchPastureGroupDetail(id: group.id)?.pastures.count, 2)
+
+        let foreignHerdID = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let foreignHerd = CDHerd(context: context)
+            foreignHerd.id = foreignHerdID
+            foreignHerd.name = "Independent Pasture Herd"
+            foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 500)
+            foreignHerd.updatedAt = foreignHerd.createdAt
+
+            let foreignPasture = CDPasture(context: context)
+            foreignPasture.id = first.id // Legal in an independent Herd.
+            foreignPasture.name = "Independent Pasture"
+            foreignPasture.sortOrder = 0
+            foreignPasture.herd = foreignHerd
+
+            let collision = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDPasture.self, id: second.id, herdID: environment.herdID, in: context
+            ))
+            collision.id = first.id // Two physical selected-Herd rows now share an ID.
+            try context.save()
+        }
+
+        let duplicate = CoreDataPersistenceError.duplicateApplicationID(
+            entity: CDPasture.coreDataEntityName,
+            id: first.id,
+            herdID: environment.herdID
+        )
+        XCTAssertThrowsError(try pastures.fetchPastures()) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try pastures.fetchPastureOptions()) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try pastures.nameExists("Absent", excluding: nil)) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try pastures.validatePastureIDsExist([control.id])) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try pastures.fetchPastureGroupDetail(id: group.id)) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try pastures.fetchPastureGroups()) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try pastures.reorder(ids: [control.id])) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertEqual(try pastures.fetchPastureDetail(id: control.id)?.id, control.id)
+
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let reloaded = CoreDataPastureRepository(
+            selection: environment.selection, assembly: reopened
+        )
+        XCTAssertThrowsError(try reloaded.fetchPastureOptions()) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try reloaded.fetchPastureGroupDetail(id: group.id)) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+
+        let independentSelection = CoreDataAnimalContractSelection()
+        independentSelection.currentHerdID = foreignHerdID
+        let independent = CoreDataPastureRepository(
+            selection: independentSelection, assembly: reopened
+        )
+        XCTAssertEqual(try independent.fetchPastures().map(\.id), [first.id])
+        XCTAssertEqual(try independent.fetchPastureOptions().map(\.name), ["Independent Pasture"])
+
+        let inspect = reopened.contextFactory.makeReadContext()
+        try inspect.performAndWait {
+            let herd = try XCTUnwrap(reopened.lookup.herd(
+                id: environment.herdID, in: inspect
+            ))
+            let request = NSFetchRequest<CDPasture>(entityName: CDPasture.coreDataEntityName)
+            request.predicate = NSPredicate(format: "herd == %@", herd)
+            let stored = try inspect.fetch(request)
+            XCTAssertEqual(stored.count, 3)
+            XCTAssertEqual(stored.filter { $0.id == first.id }.count, 2)
+            XCTAssertEqual(Set(stored.map(\.name)), Set([
+                "Identity First", "Identity Second", "Identity Control"
+            ]))
+            XCTAssertEqual(Set(stored.map(\.sortOrder)), Set([0, 1, 2]))
+            XCTAssertEqual(stored.filter { $0.id == first.id }.compactMap { $0.group?.id },
+                           [group.id, group.id])
+            XCTAssertEqual(stored.first { $0.id == control.id }?.group, nil)
+        }
+    }
+
+    func testMilestone12PastureGroupCohortRejectsDuplicateIDsWithoutDeletingRows() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let pastures = environment.makePastureRepository()
+
+        let first = try pastures.createGroup(input: PastureGroupInput(
+            name: "Identity Group First", grazeDays: 4, restDays: 12
+        ))
+        let second = try pastures.createGroup(input: PastureGroupInput(
+            name: "Identity Group Second", grazeDays: 6, restDays: 18
+        ))
+        let control = try pastures.createGroup(input: PastureGroupInput(
+            name: "Identity Group Control", grazeDays: 3, restDays: 9
+        ))
+        let member = try pastures.create(input: PastureInput(
+            name: "Linked Pasture", acreage: 12, usableAcreage: 11, targetAcresPerHead: 1
+        ))
+        try pastures.assignPasture(id: member.id, toGroupID: first.id)
+
+        let foreignHerdID = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let foreignHerd = CDHerd(context: context)
+            foreignHerd.id = foreignHerdID
+            foreignHerd.name = "Independent Group Herd"
+            foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 600)
+            foreignHerd.updatedAt = foreignHerd.createdAt
+
+            let foreignGroup = CDPastureGroup(context: context)
+            foreignGroup.id = first.id // Independent-Herd UUID reuse is legal.
+            foreignGroup.name = "Independent Rotation"
+            foreignGroup.grazeDays = 1
+            foreignGroup.restDays = 2
+            foreignGroup.herd = foreignHerd
+
+            let collision = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDPastureGroup.self, id: second.id, herdID: environment.herdID, in: context
+            ))
+            collision.id = first.id
+            try context.save()
+        }
+
+        let duplicate = CoreDataPersistenceError.duplicateApplicationID(
+            entity: CDPastureGroup.coreDataEntityName,
+            id: first.id,
+            herdID: environment.herdID
+        )
+        XCTAssertThrowsError(try pastures.fetchPastureGroups()) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try pastures.groupNameExists("Absent", excluding: nil)) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try pastures.validatePastureGroupIDsExist([control.id])) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try pastures.fetchPastureGroupDetail(id: control.id)) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try pastures.fetchPastures()) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try pastures.fetchPastureDetail(id: member.id)) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try pastures.deleteGroups(ids: [control.id])) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try pastures.updateGroup(
+            id: control.id,
+            input: PastureGroupInput(name: "Uncommitted Rename", grazeDays: 3, restDays: 9)
+        )) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let reloaded = CoreDataPastureRepository(
+            selection: environment.selection, assembly: reopened
+        )
+        XCTAssertThrowsError(try reloaded.fetchPastureGroups()) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+        XCTAssertThrowsError(try reloaded.fetchPastureGroupDetail(id: control.id)) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
+
+        let independentSelection = CoreDataAnimalContractSelection()
+        independentSelection.currentHerdID = foreignHerdID
+        let independent = CoreDataPastureRepository(
+            selection: independentSelection, assembly: reopened
+        )
+        XCTAssertEqual(try independent.fetchPastureGroups().map(\.id), [first.id])
+        XCTAssertEqual(
+            try independent.fetchPastureGroupDetail(id: first.id)?.name,
+            "Independent Rotation"
+        )
+
+        let inspect = reopened.contextFactory.makeReadContext()
+        try inspect.performAndWait {
+            let herd = try XCTUnwrap(reopened.lookup.herd(
+                id: environment.herdID, in: inspect
+            ))
+            let request = NSFetchRequest<CDPastureGroup>(
+                entityName: CDPastureGroup.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "herd == %@", herd)
+            let stored = try inspect.fetch(request)
+            XCTAssertEqual(stored.count, 3)
+            XCTAssertEqual(stored.filter { $0.id == first.id }.count, 2)
+            XCTAssertEqual(Set(stored.map(\.name)), Set([
+                "Identity Group First", "Identity Group Second", "Identity Group Control"
+            ]))
+            XCTAssertEqual(stored.first { $0.id == control.id }?.name, "Identity Group Control")
+            XCTAssertEqual(stored.first { $0.id == control.id }?.restDays, 9)
+            let memberPasture = try XCTUnwrap(reopened.lookup.herdOwned(
+                CDPasture.self, id: member.id, herdID: environment.herdID, in: inspect
+            ))
+            XCTAssertEqual(memberPasture.group?.id, first.id)
+            XCTAssertEqual(memberPasture.group?.name, "Identity Group First")
+        }
+    }
+
     func testMilestone12DirectParentOptionsUseStableTieOrderAcrossSQLiteReopen() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
