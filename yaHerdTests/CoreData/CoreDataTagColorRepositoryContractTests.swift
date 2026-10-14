@@ -698,6 +698,60 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
         }
     }
 
+    func testRestoringCanonicalBuiltInsPreservesCustomConflictWinner() async throws {
+        try await runRollback { environment in
+            let earlier = Date(timeIntervalSinceReferenceDate: 900)
+            let later = Date(timeIntervalSinceReferenceDate: 1_200)
+            let winner = TagColorSnapshot(
+                name: "Selected Sage",
+                prefix: "SS",
+                rgba: RGBAColor(r: 0.35, g: 0.7, b: 0.4),
+                sortOrder: 17,
+                isDefault: true,
+                createdAt: earlier,
+                updatedAt: later
+            )
+            let damagedBlue = TagColorSnapshot(
+                id: TagColorDefaults.blueID,
+                name: "Outdated Azure",
+                prefix: "OA",
+                rgba: RGBAColor(r: 0.4, g: 0.45, b: 0.6),
+                sortOrder: 0,
+                isDefault: true,
+                createdAt: earlier,
+                updatedAt: earlier
+            )
+            let control = TagColorSnapshot(
+                name: "Unrelated Rose",
+                prefix: "UR",
+                rgba: RGBAColor(r: 0.75, g: 0.3, b: 0.4),
+                sortOrder: 12,
+                createdAt: earlier,
+                updatedAt: earlier
+            )
+            try environment.fixture.referenceControl.seedPersistedColor(winner)
+            try environment.fixture.referenceControl.seedPersistedColor(damagedBlue)
+            try environment.fixture.referenceControl.seedPersistedColor(control)
+            let repo = environment.fixture.makeTagColorRepository()
+            XCTAssertEqual(try repo.fetchColors().filter(\.isDefault).map(\.id), [winner.id])
+
+            try repo.restoreDefaultColors()
+
+            XCTAssertEqual(try repo.fetchColors().filter(\.isDefault).map(\.id), [winner.id])
+            XCTAssertTrue(try XCTUnwrap(repo.fetchColor(id: winner.id)).isDefault)
+            let blue = try XCTUnwrap(repo.fetchColor(id: TagColorDefaults.blueID))
+            XCTAssertFalse(blue.isDefault)
+            XCTAssertEqual(blue.name, "Blue")
+            XCTAssertEqual(blue.sortOrder, 5)
+            XCTAssertEqual(try repo.fetchColor(id: control.id), control)
+            XCTAssertEqual(
+                try environment.fixture.makeTagColorRepository().fetchColors().filter(\.isDefault).map(\.id),
+                [winner.id],
+                "A fresh context must not inherit a rebuilt built-in's newer timestamp."
+            )
+        }
+    }
+
     private func runRollback(
         _ assertion: (CoreDataTagColorContractEnvironment) throws -> Void
     ) async throws {
