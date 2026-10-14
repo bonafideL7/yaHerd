@@ -1158,6 +1158,7 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
+            try context.setQueryGenerationFrom(.current)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
