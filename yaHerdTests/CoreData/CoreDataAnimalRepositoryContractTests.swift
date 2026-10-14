@@ -78,8 +78,11 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
     func testMilestone12DirectAnimalReadsRejectForeignHerdHistoryGraph() async throws {
         let environment = try await makeEnvironment()
         let repository = environment.makeAnimalRepository()
+        let dam = try repository.create(
+            input: readGraphAnimalInput(name: "History Dam", tag: "M12-HD")
+        )
         let animal = try repository.create(
-            input: readGraphAnimalInput(name: "History", tag: "M12-H")
+            input: readGraphAnimalInput(name: "History", tag: "M12-H", damID: dam.id)
         )
         let control = try repository.create(
             input: readGraphAnimalInput(name: "History Control", tag: "M12-HC")
@@ -114,6 +117,11 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         XCTAssertThrowsError(try repository.fetchAnimalDetail(id: animal.id))
         XCTAssertThrowsError(try repository.fetchTimeline(id: animal.id))
         XCTAssertThrowsError(try repository.fetchAnimalAggregateForEditing(id: animal.id))
+        // Maternal detail and timeline materialize an offspring graph; parent options do not.
+        XCTAssertThrowsError(try repository.fetchAnimalDetail(id: dam.id))
+        XCTAssertThrowsError(try repository.fetchTimeline(id: dam.id))
+        let parentOptions = try repository.fetchParentOptions(excluding: animal.id)
+        XCTAssertTrue(parentOptions.contains { $0.id == dam.id })
         XCTAssertEqual(try repository.fetchAnimalDetail(id: control.id)?.id, control.id)
 
         let readContext = environment.assembly.contextFactory.makeReadContext()
