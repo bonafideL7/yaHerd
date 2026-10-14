@@ -307,10 +307,8 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             Set(healthyDashboard.workingSessions.map(\.id)),
             Set([firstSessionID, secondSessionID, controlSessionID])
         )
-        XCTAssertEqual(
-            try await foreignDashboard.fetchDashboardRecords().workingSessions.map(\.id),
-            [foreignSessionID]
-        )
+        let healthyForeignDashboard = try await foreignDashboard.fetchDashboardRecords()
+        XCTAssertEqual(healthyForeignDashboard.workingSessions.map(\.id), [foreignSessionID])
 
         // Physically duplicate one UUID across two different sessions in the
         // selected Herd. Reusing that UUID in another Herd must remain valid.
