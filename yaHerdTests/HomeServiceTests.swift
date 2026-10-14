@@ -175,7 +175,6 @@ final class HomeServiceTests: XCTestCase {
         )
     }
 
-
     func testDashboardDerivationKeepsIdenticalTagNameAndSessionDateRecordsStable() {
         let earlier = stableID(1)
         let later = stableID(2)
@@ -236,17 +235,19 @@ final class HomeServiceTests: XCTestCase {
         let archivedFirst = stableID(13)
         let archivedSecond = stableID(14)
         let timestamp = date(year: 2026, month: 9, day: 20)
-        let warning = FieldCheckAnimalCheckSnapshot(
-            id: stableID(20), animalID: earlier, displayTagNumber: "",
-            displayTagColorID: nil, damDisplayTagNumber: nil, damDisplayTagColorID: nil,
-            animalName: "", animalSex: .female, animalType: .cow,
-            wasExpectedAtStart: true, wasCounted: false,
-            needsAttention: true, isMissing: true
-        )
         let checks = [
-            fieldCheck(id: later, pastureID: later, startedAt: timestamp, completedAt: nil, animalChecks: [warning]),
-            fieldCheck(id: archivedFirst, pastureID: earlier, startedAt: timestamp, completedAt: timestamp, animalChecks: [warning]),
-            fieldCheck(id: earlier, pastureID: earlier, startedAt: timestamp, completedAt: nil, animalChecks: [warning])
+            fieldCheck(
+                id: later, pastureID: later, startedAt: timestamp, completedAt: nil,
+                animalChecks: [warningCheck(id: stableID(20), animalID: earlier)]
+            ),
+            fieldCheck(
+                id: archivedFirst, pastureID: earlier, startedAt: timestamp, completedAt: timestamp,
+                animalChecks: [warningCheck(id: stableID(21), animalID: earlier)]
+            ),
+            fieldCheck(
+                id: earlier, pastureID: earlier, startedAt: timestamp, completedAt: nil,
+                animalChecks: [warningCheck(id: stableID(22), animalID: earlier)]
+            )
         ]
         let records = DashboardRecords(
             animals: [
@@ -305,7 +306,7 @@ final class HomeServiceTests: XCTestCase {
                 damID: damID, damDisplayTagNumber: "Dam"
             ))
         }
-        // The earliest persisted offspring identity supplies the first nonblank
+        // The smallest persisted offspring UUID supplies the first nonblank
         // historical dam label even if the input relationship order changes.
         offspring[0] = animal(
             id: stableID(201), tag: "201", sex: .female, status: .active,
@@ -336,6 +337,16 @@ final class HomeServiceTests: XCTestCase {
         XCTAssertEqual(original.analytics.offspringByDam.map(\.damID), Array(damIDs.prefix(8)))
         XCTAssertEqual(original.analytics.offspringByDam.first?.damDisplayTagNumber, "Alpha")
         XCTAssertEqual(original.analytics.offspringByDam.first?.offspringCount, 2)
+    }
+
+    private func warningCheck(id: UUID, animalID: UUID) -> FieldCheckAnimalCheckSnapshot {
+        FieldCheckAnimalCheckSnapshot(
+            id: id, animalID: animalID, displayTagNumber: "",
+            displayTagColorID: nil, damDisplayTagNumber: nil, damDisplayTagColorID: nil,
+            animalName: "", animalSex: .female, animalType: .cow,
+            wasExpectedAtStart: true, wasCounted: false,
+            needsAttention: true, isMissing: true
+        )
     }
 
     private func stableID(_ number: Int) -> UUID {
