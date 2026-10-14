@@ -91,7 +91,7 @@ final class CoreDataWorkingRepository:
                 sessions,
                 herdID: herdID
             )
-            try Self.validateSelectedHerdQueueIdentity(herd: herd, in: context)
+            try Self.validateSelectedHerdWorkingRecordIdentity(herd: herd, in: context)
 
             return try sessions
                 .sorted {
@@ -122,7 +122,7 @@ final class CoreDataWorkingRepository:
                 return nil
             }
 
-            try Self.validateSelectedHerdQueueIdentity(herd: herd, in: context)
+            try Self.validateSelectedHerdWorkingRecordIdentity(herd: herd, in: context)
             try Self.validateSessionGraph(session, herdID: herdID)
             return try WorkingMapper.makeSessionDetail(from: session)
         }
@@ -153,7 +153,7 @@ final class CoreDataWorkingRepository:
             ) else {
                 return nil
             }
-            try Self.validateSelectedHerdQueueIdentity(herd: herd, in: context)
+            try Self.validateSelectedHerdWorkingRecordIdentity(herd: herd, in: context)
             try Self.validateQueueSessionRelationship(
                 queueItem,
                 session: session,
@@ -867,18 +867,28 @@ final class CoreDataWorkingRepository:
         return (contextFactory.makeReadContext(), herdID)
     }
 
-    // Validate the complete selected-Herd queue cohort once per direct read.
-    // Per-session validation alone misses identical application IDs in two sessions.
-    private nonisolated static func validateSelectedHerdQueueIdentity(
+    // Per-session graph checks cannot detect an application ID reused in
+    // another session. Validate both complete selected-Herd Working cohorts
+    // once per direct read, before projecting either session or editor data.
+    private nonisolated static func validateSelectedHerdWorkingRecordIdentity(
         herd: CDHerd,
         in context: NSManagedObjectContext
     ) throws {
-        let request = NSFetchRequest<CDWorkingQueueItem>(
+        let queueRequest = NSFetchRequest<CDWorkingQueueItem>(
             entityName: CDWorkingQueueItem.coreDataEntityName
         )
-        request.predicate = NSPredicate(format: "herd == %@", herd)
+        queueRequest.predicate = NSPredicate(format: "herd == %@", herd)
         try CoreDataAnimalMutation.validateUniqueApplicationIDs(
-            context.fetch(request),
+            context.fetch(queueRequest),
+            herdID: herd.id
+        )
+
+        let treatmentRequest = NSFetchRequest<CDWorkingTreatmentRecord>(
+            entityName: CDWorkingTreatmentRecord.coreDataEntityName
+        )
+        treatmentRequest.predicate = NSPredicate(format: "herd == %@", herd)
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(
+            context.fetch(treatmentRequest),
             herdID: herd.id
         )
     }
