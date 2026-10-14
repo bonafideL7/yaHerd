@@ -396,6 +396,7 @@ actor CoreDataReadModelActor:
             var options: [AnimalParentOption] = []
             for animal in try context.fetch(request) {
                 try Task.checkCancellation()
+                try Self.validateAnimalReadRelationships(animal, herdID: herdID)
                 options.append(try CoreDataAnimalProjection.parentOption(animal))
             }
             return options.sorted { left, right in
