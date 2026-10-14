@@ -183,6 +183,17 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         XCTAssertThrowsError(try pastures.fetchPastureDetail(id: member.id)) {
             XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
         }
+        // The write response projects the same linked Group as the detail reader.
+        // Validate that cohort before staging changed Pasture fields.
+        XCTAssertThrowsError(try pastures.update(
+            id: member.id,
+            input: PastureInput(
+                name: "Must Not Commit", acreage: 25,
+                usableAcreage: 20, targetAcresPerHead: 2
+            )
+        )) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
+        }
         XCTAssertThrowsError(try pastures.deleteGroups(ids: [control.id])) {
             XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
         }
@@ -237,6 +248,10 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             ))
             XCTAssertEqual(memberPasture.group?.id, first.id)
             XCTAssertEqual(memberPasture.group?.name, "Identity Group First")
+            XCTAssertEqual(memberPasture.name, "Linked Pasture")
+            XCTAssertEqual(memberPasture.acreage?.doubleValue, 12)
+            XCTAssertEqual(memberPasture.usableAcreage?.doubleValue, 11)
+            XCTAssertEqual(memberPasture.targetAcresPerHead?.doubleValue, 1)
         }
     }
 
