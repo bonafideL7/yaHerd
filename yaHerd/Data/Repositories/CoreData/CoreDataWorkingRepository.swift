@@ -91,6 +91,7 @@ final class CoreDataWorkingRepository:
                 sessions,
                 herdID: herdID
             )
+            try Self.validateSelectedHerdQueueIdentity(herd: herd, in: context)
 
             return try sessions
                 .sorted {
@@ -109,7 +110,7 @@ final class CoreDataWorkingRepository:
     func fetchSessionDetail(id: UUID) throws -> WorkingSessionDetailSnapshot? {
         let (context, herdID) = try makeReadScope()
         return try context.performAndWait {
-            guard try lookup.herd(id: herdID, in: context) != nil else {
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
             guard let session = try lookup.herdOwned(
@@ -121,6 +122,7 @@ final class CoreDataWorkingRepository:
                 return nil
             }
 
+            try Self.validateSelectedHerdQueueIdentity(herd: herd, in: context)
             try Self.validateSessionGraph(session, herdID: herdID)
             return try WorkingMapper.makeSessionDetail(from: session)
         }
@@ -132,7 +134,7 @@ final class CoreDataWorkingRepository:
     ) throws -> WorkingQueueItemEditorSnapshot? {
         let (context, herdID) = try makeReadScope()
         return try context.performAndWait {
-            guard try lookup.herd(id: herdID, in: context) != nil else {
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
             guard let session = try lookup.herdOwned(
@@ -151,6 +153,7 @@ final class CoreDataWorkingRepository:
             ) else {
                 return nil
             }
+            try Self.validateSelectedHerdQueueIdentity(herd: herd, in: context)
             try Self.validateQueueSessionRelationship(
                 queueItem,
                 session: session,
@@ -862,6 +865,22 @@ final class CoreDataWorkingRepository:
             throw HerdRepositoryError.missingHerd
         }
         return (contextFactory.makeReadContext(), herdID)
+    }
+
+    // Validate the complete selected-Herd queue cohort once per direct read.
+    // Per-session validation alone misses identical application IDs in two sessions.
+    private nonisolated static func validateSelectedHerdQueueIdentity(
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws {
+        let request = NSFetchRequest<CDWorkingQueueItem>(
+            entityName: CDWorkingQueueItem.coreDataEntityName
+        )
+        request.predicate = NSPredicate(format: "herd == %@", herd)
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(
+            context.fetch(request),
+            herdID: herd.id
+        )
     }
 
     private nonisolated static func validateSessionGraph(
