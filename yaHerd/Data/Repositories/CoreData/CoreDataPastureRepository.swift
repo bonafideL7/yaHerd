@@ -89,7 +89,13 @@ final class CoreDataPastureRepository:
                 herdID: herdID
             )
             return try residents
-                .map { try CoreDataAnimalProjection.summary($0) }
+                .map { animal in
+                    try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
+                        animal,
+                        herdID: herdID
+                    )
+                    return try CoreDataAnimalProjection.summary(animal)
+                }
                 .sorted { left, right in
                     let tagOrder = left.displayTagNumber.localizedStandardCompare(right.displayTagNumber)
                     if tagOrder != .orderedSame { return tagOrder == .orderedAscending }
