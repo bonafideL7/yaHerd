@@ -184,6 +184,207 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         XCTAssertNil(try otherWorking.fetchTemplateDetail(id: primaryTemplateID))
     }
 
+    func testWorkingQueueApplicationIDsMustBeUniqueAcrossSessionsInSelectedHerd() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataWorkingContractEnvironment(assembly: assembly)
+        let primaryWorking = environment.makeWorkingRepository()
+
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Working Queue Identity Pasture",
+                acreage: 22,
+                usableAcreage: 19,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let firstAnimal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(
+                name: "Queue Identity First Cow",
+                tagNumber: "QI-1",
+                pastureID: pasture.id
+            )
+        )
+        let secondAnimal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(
+                name: "Queue Identity Second Cow",
+                tagNumber: "QI-2",
+                pastureID: pasture.id
+            )
+        )
+        let controlAnimal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(
+                name: "Queue Identity Control Cow",
+                tagNumber: "QI-3",
+                pastureID: pasture.id
+            )
+        )
+        let firstSessionID = try await primaryWorking.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 310_000),
+                sourcePastureID: pasture.id,
+                treatmentTemplateName: "First Queue Session",
+                plannedTreatments: [],
+                animalIDs: [firstAnimal.id]
+            )
+        )
+        let secondSessionID = try await primaryWorking.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 320_000),
+                sourcePastureID: pasture.id,
+                treatmentTemplateName: "Second Queue Session",
+                plannedTreatments: [],
+                animalIDs: [secondAnimal.id, controlAnimal.id]
+            )
+        )
+        let duplicateID = try XCTUnwrap(
+            primaryWorking.fetchSessionDetail(id: firstSessionID)?.queueItems.first?.id
+        )
+        let healthyQueueID = try XCTUnwrap(
+            primaryWorking.fetchSessionDetail(id: secondSessionID)?
+                .queueItems.first(where: { $0.animalID == controlAnimal.id })?.id
+        )
+
+        let foreignHerdID = UUID()
+        try environment.seedAdditionalHerd(
+            id: foreignHerdID,
+            name: "Independent Queue Identity Herd"
+        )
+        let foreignSelection = CoreDataWorkingContractSelection()
+        foreignSelection.currentHerdID = foreignHerdID
+        let foreignPasture = try CoreDataPastureRepository(
+            selection: foreignSelection,
+            assembly: assembly
+        ).create(input: PastureInput(
+            name: "Foreign Queue Identity Pasture",
+            acreage: 20,
+            usableAcreage: 18,
+            targetAcresPerHead: 1.5
+        ))
+        let foreignAnimal = try CoreDataAnimalRepository(
+            selection: foreignSelection,
+            assembly: assembly
+        ).create(input: Self.animalInput(
+            name: "Foreign Queue Identity Cow",
+            tagNumber: "QI-FOREIGN",
+            pastureID: foreignPasture.id
+        ))
+        let foreignWorking = CoreDataWorkingRepository(
+            selection: foreignSelection,
+            assembly: assembly
+        )
+        let foreignSessionID = try await foreignWorking.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 330_000),
+                sourcePastureID: foreignPasture.id,
+                treatmentTemplateName: "Foreign Queue Session",
+                plannedTreatments: [],
+                animalIDs: [foreignAnimal.id]
+            )
+        )
+
+        // Physically duplicate one UUID across two different sessions in the
+        // selected Herd. Reusing that UUID in another Herd must remain valid.
+        let writeContext = try assembly.contextFactory.makeWriteContext()
+        try writeContext.performAndWait {
+            func queueItems(in sessionID: UUID) throws -> [CDWorkingQueueItem] {
+                let request = NSFetchRequest<CDWorkingQueueItem>(
+                    entityName: CDWorkingQueueItem.coreDataEntityName
+                )
+                request.predicate = NSPredicate(
+                    format: "session.id == %@",
+                    sessionID as NSUUID
+                )
+                return try writeContext.fetch(request)
+            }
+
+            XCTAssertEqual(try queueItems(in: firstSessionID).count, 1)
+            let collidingQueue = try XCTUnwrap(
+                queueItems(in: secondSessionID).first {
+                    $0.animalIDSnapshot == secondAnimal.id
+                }
+            )
+            let foreignQueue = try XCTUnwrap(queueItems(in: foreignSessionID).first)
+            collidingQueue.id = duplicateID
+            foreignQueue.id = duplicateID
+            try writeContext.save()
+        }
+
+        func physicalQueueState(in assembly: CoreDataPersistenceAssembly) throws -> [String] {
+            let context = assembly.contextFactory.makeReadContext()
+            return try context.performAndWait {
+                let request = NSFetchRequest<CDWorkingQueueItem>(
+                    entityName: CDWorkingQueueItem.coreDataEntityName
+                )
+                return try context.fetch(request).map {
+                    [
+                        $0.herd.id.uuidString,
+                        $0.session.id.uuidString,
+                        $0.id.uuidString,
+                        $0.animalIDSnapshot.uuidString,
+                        $0.statusRawValue
+                    ].joined(separator: "|")
+                }.sorted()
+            }
+        }
+
+        let baseline = try physicalQueueState(in: assembly)
+        XCTAssertEqual(baseline.count, 4)
+        let expectedError = CoreDataPersistenceError.duplicateApplicationID(
+            entity: CDWorkingQueueItem.coreDataEntityName,
+            id: duplicateID,
+            herdID: environment.herdID
+        )
+
+        XCTAssertThrowsError(try primaryWorking.fetchSessions()) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertThrowsError(try primaryWorking.fetchSessionDetail(id: firstSessionID)) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertThrowsError(try primaryWorking.fetchSessionDetail(id: secondSessionID)) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
+        }
+        // The requested queue has a healthy UUID: the editor must still fail
+        // if some other session in its selected Herd has ambiguous identities.
+        XCTAssertThrowsError(
+            try primaryWorking.fetchQueueItemEditor(
+                sessionID: secondSessionID,
+                queueItemID: healthyQueueID
+            )
+        ) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertEqual(try physicalQueueState(in: assembly), baseline)
+
+        let foreignDetail = try XCTUnwrap(
+            foreignWorking.fetchSessionDetail(id: foreignSessionID)
+        )
+        XCTAssertEqual(foreignDetail.queueItems.map(\.id), [duplicateID])
+        XCTAssertEqual(try foreignWorking.fetchSessions().map(\.id), [foreignSessionID])
+
+        let readOnlyAssembly = try await harness.makeAssembly(accessMode: .readOnly)
+        let readOnlyPrimary = CoreDataWorkingRepository(
+            selection: environment.selection,
+            assembly: readOnlyAssembly
+        )
+        XCTAssertThrowsError(try readOnlyPrimary.fetchSessions()) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertThrowsError(try readOnlyPrimary.fetchSessionDetail(id: firstSessionID)) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
+        }
+        let readOnlyForeign = CoreDataWorkingRepository(
+            selection: foreignSelection,
+            assembly: readOnlyAssembly
+        )
+        XCTAssertEqual(
+            try readOnlyForeign.fetchSessionDetail(id: foreignSessionID),
+            foreignDetail
+        )
+        XCTAssertEqual(try physicalQueueState(in: readOnlyAssembly), baseline)
+    }
+
     func testWorkingCoreDataRollbackContracts() async throws {
         try await run {
             try await WorkingRepositoryContract.assertSessionStartFailureRollsBackAllStagedState(
