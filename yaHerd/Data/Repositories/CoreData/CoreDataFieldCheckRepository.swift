@@ -139,6 +139,12 @@ final class CoreDataFieldCheckRepository: FieldCheckRepository {
                 findings,
                 herdID: herd.id
             )
+            for finding in findings {
+                try Self.validateFindingReadRelationship(
+                    finding,
+                    selectedHerd: herd
+                )
+            }
             let open = try findings
                 .filter { try Self.findingStatus($0) != .resolved }
                 .sorted {
@@ -941,6 +947,97 @@ private extension CoreDataFieldCheckRepository {
             findings,
             herdID: herd.id
         )
+
+        // A selected session can retain an inverse child whose Herd relationship
+        // was corrupted to another root, so scanning only herd-filtered children
+        // would miss it. Check both directions before building Domain snapshots.
+        for session in sessions {
+            for check in (session.animalChecks?.allObjects as? [CDFieldCheckAnimalCheck]) ?? [] {
+                try validateReadChildRelationship(
+                    entity: CDFieldCheckAnimalCheck.coreDataEntityName,
+                    id: check.id,
+                    childHerd: check.herd,
+                    session: check.session,
+                    selectedHerd: herd,
+                    expectedSession: session
+                )
+            }
+            for finding in (session.findings?.allObjects as? [CDFieldCheckFinding]) ?? [] {
+                try validateFindingReadRelationship(
+                    finding,
+                    selectedHerd: herd,
+                    expectedSession: session
+                )
+            }
+        }
+
+        // The reverse corruption (selected-Herd child attached to a foreign
+        // session) will not appear in a selected session's inverse collection.
+        for check in checks {
+            try validateReadChildRelationship(
+                entity: CDFieldCheckAnimalCheck.coreDataEntityName,
+                id: check.id,
+                childHerd: check.herd,
+                session: check.session,
+                selectedHerd: herd
+            )
+        }
+        for finding in findings {
+            try validateFindingReadRelationship(
+                finding,
+                selectedHerd: herd
+            )
+        }
+    }
+
+    nonisolated static func validateFindingReadRelationship(
+        _ finding: CDFieldCheckFinding,
+        selectedHerd: CDHerd,
+        expectedSession: CDFieldCheckSession? = nil
+    ) throws {
+        try validateReadChildRelationship(
+            entity: CDFieldCheckFinding.coreDataEntityName,
+            id: finding.id,
+            childHerd: finding.herd,
+            session: finding.session,
+            selectedHerd: selectedHerd,
+            expectedSession: expectedSession
+        )
+    }
+
+    nonisolated static func validateReadChildRelationship(
+        entity: String,
+        id: UUID,
+        childHerd: CDHerd,
+        session: CDFieldCheckSession,
+        selectedHerd: CDHerd,
+        expectedSession: CDFieldCheckSession? = nil
+    ) throws {
+        guard childHerd.objectID == selectedHerd.objectID else {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: entity,
+                id: id,
+                expectedHerdID: selectedHerd.id,
+                actualHerdID: childHerd.id
+            )
+        }
+        guard session.herd.objectID == selectedHerd.objectID else {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDFieldCheckSession.coreDataEntityName,
+                id: session.id,
+                expectedHerdID: selectedHerd.id,
+                actualHerdID: session.herd.id
+            )
+        }
+        if let expectedSession,
+           session.objectID != expectedSession.objectID {
+            throw CoreDataReadModelError.invalidSessionRelationship(
+                entity: entity,
+                id: id,
+                expectedSessionID: expectedSession.id,
+                actualSessionID: session.id
+            )
+        }
     }
 
     nonisolated static func requiredAnimalCheck(
