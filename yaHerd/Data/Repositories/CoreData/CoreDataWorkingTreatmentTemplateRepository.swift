@@ -211,8 +211,16 @@ final class CoreDataWorkingTreatmentTemplateRepository:
             entityName: CDWorkingTreatmentTemplate.coreDataEntityName
         )
         request.predicate = NSPredicate(format: "herd == %@", herd)
-        request.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
-        return try context.fetch(request)
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "name", ascending: true),
+            NSSortDescriptor(key: "id", ascending: true)
+        ]
+        let templates = try context.fetch(request)
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(
+            templates,
+            herdID: herd.id
+        )
+        return templates
     }
 
     private nonisolated static func templateNameExists(
