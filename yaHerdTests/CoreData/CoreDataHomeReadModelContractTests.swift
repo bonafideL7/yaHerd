@@ -324,7 +324,8 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             lookup: reopened.lookup,
             currentHerdID: { environment.selection.currentHerdID }
         )
-        XCTAssertEqual(try await homeReader.fetchHomeTreatmentTemplates(limit: 10), expected)
+        let homeTemplates = try await homeReader.fetchHomeTreatmentTemplates(limit: 10)
+        XCTAssertEqual(homeTemplates, expected)
     }
 
     func testReopenedSQLiteWorkingTemplateLibraryRejectsDuplicateApplicationIDs() async throws {
