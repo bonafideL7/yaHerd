@@ -175,17 +175,188 @@ final class HomeServiceTests: XCTestCase {
         )
     }
 
+
+    func testDashboardDerivationKeepsIdenticalTagNameAndSessionDateRecordsStable() {
+        let earlier = stableID(1)
+        let later = stableID(2)
+        let control = stableID(3)
+        let timestamp = date(year: 2026, month: 9, day: 20)
+        let firstAnimal = animal(
+            id: earlier, tag: "", sex: .female, status: .active,
+            isArchived: false, pastureID: nil, location: .pasture
+        )
+        let secondAnimal = animal(
+            id: later, tag: "", sex: .female, status: .active,
+            isArchived: false, pastureID: nil, location: .pasture
+        )
+        let taggedControl = animal(
+            id: control, tag: "19", sex: .male, status: .active,
+            isArchived: false, pastureID: control, location: .pasture
+        )
+        let firstPasture = pasture(id: earlier, name: "North", activeAnimalCount: 2)
+        let secondPasture = pasture(id: later, name: "North", activeAnimalCount: 2)
+        let controlPasture = pasture(id: control, name: "South", activeAnimalCount: 1)
+        let sessions = [
+            workingSession(id: later, date: timestamp, isActive: true),
+            workingSession(id: earlier, date: timestamp, isActive: true),
+            workingSession(id: control, date: timestamp, isActive: false),
+            workingSession(id: stableID(4), date: timestamp.addingTimeInterval(-60), isActive: true)
+        ]
+        let records = DashboardRecords(
+            animals: [secondAnimal, taggedControl, firstAnimal],
+            pastures: [secondPasture, controlPasture, firstPasture],
+            workingSessions: sessions
+        )
+        let reversed = DashboardRecords(
+            animals: records.animals.reversed(),
+            pastures: records.pastures.reversed(),
+            workingSessions: sessions.reversed()
+        )
+        let service = DashboardService()
+        let original = service.makeSnapshot(records: records, configuration: configuration)
+        let reloaded = service.makeSnapshot(records: reversed, configuration: configuration)
+
+        XCTAssertEqual(original.searchableAnimals.map(\.id), [earlier, later, control])
+        XCTAssertEqual(original.pastures.map(\.id), [earlier, later, control])
+        XCTAssertEqual(original.activeSession?.id, earlier)
+        XCTAssertEqual(original, reloaded)
+        XCTAssertEqual(
+            service.makeAnimalList(kind: .unassigned, records: records, configuration: configuration).map(\.id),
+            [earlier, later]
+        )
+        XCTAssertEqual(
+            service.makeAnimalList(kind: .unassigned, records: reversed, configuration: configuration).map(\.id),
+            [earlier, later]
+        )
+    }
+
+    func testHomeDerivationKeepsEqualKeyFieldChecksCleanupAndPastureRowsStable() {
+        let earlier = stableID(11)
+        let later = stableID(12)
+        let archivedFirst = stableID(13)
+        let archivedSecond = stableID(14)
+        let timestamp = date(year: 2026, month: 9, day: 20)
+        let warning = FieldCheckAnimalCheckSnapshot(
+            id: stableID(20), animalID: earlier, displayTagNumber: "",
+            displayTagColorID: nil, damDisplayTagNumber: nil, damDisplayTagColorID: nil,
+            animalName: "", animalSex: .female, animalType: .cow,
+            wasExpectedAtStart: true, wasCounted: false,
+            needsAttention: true, isMissing: true
+        )
+        let checks = [
+            fieldCheck(id: later, pastureID: later, startedAt: timestamp, completedAt: nil, animalChecks: [warning]),
+            fieldCheck(id: archivedFirst, pastureID: earlier, startedAt: timestamp, completedAt: timestamp, animalChecks: [warning]),
+            fieldCheck(id: earlier, pastureID: earlier, startedAt: timestamp, completedAt: nil, animalChecks: [warning])
+        ]
+        let records = DashboardRecords(
+            animals: [
+                animal(id: later, tag: "", sex: .female, status: .active, isArchived: false, pastureID: nil, location: .workingPen),
+                animal(id: archivedSecond, tag: "X", sex: .female, status: .active, isArchived: true, pastureID: nil, location: .pasture),
+                animal(id: earlier, tag: "", sex: .female, status: .active, isArchived: false, pastureID: nil, location: .workingPen),
+                animal(id: archivedFirst, tag: "X", sex: .female, status: .active, isArchived: true, pastureID: nil, location: .pasture)
+            ],
+            pastures: [
+                pasture(id: later, name: "Equal", activeAnimalCount: 1, targetAcresPerHead: nil),
+                pasture(id: earlier, name: "Equal", activeAnimalCount: 1, targetAcresPerHead: nil)
+            ],
+            workingSessions: []
+        )
+        let backwards = DashboardRecords(
+            animals: records.animals.reversed(),
+            pastures: records.pastures.reversed(),
+            workingSessions: []
+        )
+        let service = HomeService()
+        let original = service.makeSnapshot(
+            dashboardRecords: records, fieldCheckSessions: checks, openFindings: [],
+            treatmentTemplates: [], configuration: configuration, now: timestamp
+        )
+        let reloaded = service.makeSnapshot(
+            dashboardRecords: backwards, fieldCheckSessions: checks.reversed(), openFindings: [],
+            treatmentTemplates: [], configuration: configuration, now: timestamp
+        )
+
+        XCTAssertEqual(original, reloaded)
+        XCTAssertEqual(original.activeAnimalRecords.map(\.id), [earlier, later])
+        XCTAssertEqual(original.workingPenAnimalRecords.map(\.id), [earlier, later])
+        XCTAssertEqual(original.missingTagAnimals.map(\.id), [earlier, later])
+        XCTAssertEqual(original.archivedActiveRecords.map(\.id), [archivedFirst, archivedSecond])
+        XCTAssertEqual(original.activeCheckSessions.map(\.id), [earlier, later])
+        XCTAssertEqual(original.flaggedCheckSessions.map(\.id), [earlier, later, archivedFirst])
+        XCTAssertEqual(original.missingCheckSessions.map(\.id), [earlier, later, archivedFirst])
+        XCTAssertEqual(original.pasturesMissingStockingData.map(\.id), [earlier, later])
+        XCTAssertEqual(original.pastureCheckStartPastures.map(\.id), [earlier, later])
+    }
+
+    func testOffspringAnalyticsKeepsTopEightAndHistoricalDamLabelStable() {
+        let damIDs = (101...109).map(stableID)
+        var offspring = zip(damIDs, 201...209).map { damID, childNumber in
+            animal(
+                id: stableID(childNumber), tag: "\(childNumber)", sex: .female,
+                status: .active, isArchived: false, pastureID: nil, location: .pasture,
+                damID: damID, damDisplayTagNumber: "Dam"
+            )
+        }
+        // The earliest persisted offspring identity supplies the first nonblank
+        // historical dam label even if the input relationship order changes.
+        offspring[0] = animal(
+            id: stableID(201), tag: "201", sex: .female, status: .active,
+            isArchived: false, pastureID: nil, location: .pasture,
+            damID: damIDs[0], damDisplayTagNumber: "Alpha"
+        )
+        offspring.append(animal(
+            id: stableID(210), tag: "210", sex: .female, status: .active,
+            isArchived: false, pastureID: nil, location: .pasture,
+            damID: damIDs[0], damDisplayTagNumber: "Zulu"
+        ))
+        offspring.append(animal(
+            id: stableID(211), tag: "211", sex: .female, status: .active,
+            isArchived: true, pastureID: nil, location: .pasture,
+            damID: damIDs[8], damDisplayTagNumber: "Archived"
+        ))
+        let now = date(year: 2026, month: 9, day: 20)
+        let service = DashboardService()
+        let original = service.makeSnapshot(
+            records: DashboardRecords(animals: offspring, pastures: [], workingSessions: []),
+            configuration: configuration, now: now
+        )
+        let reloaded = service.makeSnapshot(
+            records: DashboardRecords(animals: offspring.reversed(), pastures: [], workingSessions: []),
+            configuration: configuration, now: now
+        )
+        XCTAssertEqual(original.analytics.offspringByDam, reloaded.analytics.offspringByDam)
+        XCTAssertEqual(original.analytics.offspringByDam.map(\.damID), Array(damIDs.prefix(8)))
+        XCTAssertEqual(original.analytics.offspringByDam.first?.damDisplayTagNumber, "Alpha")
+        XCTAssertEqual(original.analytics.offspringByDam.first?.offspringCount, 2)
+    }
+
+    private func stableID(_ number: Int) -> UUID {
+        UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", number))!
+    }
+
+    private func workingSession(id: UUID, date: Date, isActive: Bool) -> DashboardWorkingSessionRecord {
+        DashboardWorkingSessionRecord(
+            id: id, date: date, isActive: isActive, sourcePastureName: "North",
+            treatmentTemplateName: "", totalQueueItems: 0, completedQueueItems: 0
+        )
+    }
+
     private var configuration: DashboardConfiguration {
         DashboardConfiguration()
     }
 
-    private func pasture(id: UUID, name: String, activeAnimalCount: Int) -> DashboardPastureRecord {
+    private func pasture(
+        id: UUID,
+        name: String,
+        activeAnimalCount: Int,
+        targetAcresPerHead: Double? = 2
+    ) -> DashboardPastureRecord {
         DashboardPastureRecord(
             id: id,
             name: name,
             acreage: 10,
             usableAcreage: nil,
-            targetAcresPerHead: 2,
+            targetAcresPerHead: targetAcresPerHead,
             activeAnimalCount: activeAnimalCount,
             lastGrazedDate: nil,
             restDays: nil
@@ -193,19 +364,22 @@ final class HomeServiceTests: XCTestCase {
     }
 
     private func animal(
+        id: UUID = UUID(),
         tag: String,
         sex: Sex,
         status: AnimalStatus,
         isArchived: Bool,
         pastureID: UUID?,
-        location: AnimalLocation
+        location: AnimalLocation,
+        damID: UUID? = nil,
+        damDisplayTagNumber: String? = nil
     ) -> DashboardAnimalRecord {
         DashboardAnimalRecord(
-            id: UUID(),
+            id: id,
             displayTagNumber: tag,
             displayTagColorID: nil,
-            damID: nil,
-            damDisplayTagNumber: nil,
+            damID: damID,
+            damDisplayTagNumber: damDisplayTagNumber,
             damDisplayTagColorID: nil,
             sex: sex,
             animalType: .cow,
@@ -230,7 +404,8 @@ final class HomeServiceTests: XCTestCase {
         id: UUID,
         pastureID: UUID,
         startedAt: Date,
-        completedAt: Date?
+        completedAt: Date?,
+        animalChecks: [FieldCheckAnimalCheckSnapshot] = []
     ) -> FieldCheckSessionSummary {
         FieldCheckSessionSummary(
             id: id,
@@ -244,7 +419,7 @@ final class HomeServiceTests: XCTestCase {
             quickCalfCount: 0,
             quickBullCount: 0,
             quickSteerCount: 0,
-            animalChecks: [],
+            animalChecks: animalChecks,
             openFindingsCount: 0
         )
     }
