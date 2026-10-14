@@ -1,0 +1,26 @@
+# Milestone 12 — deterministic Animal Status Reference option order
+
+## Finding and design
+
+`CoreDataAnimalStatusReferenceRepository.fetchStatusReferenceOptions()` constrains the read to the selected Herd, rejects duplicate application UUIDs and invalid persisted base statuses, and returns UUID-bearing `AnimalStatusReferenceOption` values. Its Core Data request sorts only by `name`. Two valid distinct status references may share a display name, so a SQLite fetch or subsequent reload has no specified order for those equal-name rows. The editor's selection remains identified by UUID, but the visible option list can reorder.
+
+Preserve the **existing Core Data name-ascending sort** and add the persisted application `id` as the **last ascending fetch sort descriptor**. Do not replace it with a different collation, synthesize UUIDs, merge equal names, change reference records, reorder non-tied names, change status validation, or add any new table/schema/index. Existing stable UUIDs remain authoritative.
+
+### Call paths and contract ownership
+
+- Reader: `CoreDataAnimalStatusReferenceRepository.fetchStatusReferenceOptions`, exposed through `CoreDataAnimalRepository.fetchStatusReferenceOptions`, its App coordination wrapper, and the `AnimalStatusReferenceReading` contract.
+- Consumers: `LoadAnimalEditorOptionsUseCase.execute` for Animal editor options; Animal detail/editor flows use the same repository. The Field Check Animal editor dependencies forward the existing Animal repository reader.
+- **This PR:** equal-name option presentation ordering and a persisted SQLite/read-only-reopen regression in the existing `CoreDataAnimalRepositoryContractTests`.
+- **M5 permanent contracts:** status-reference identity, base-status validation, selected-Herd scoping, Animal attachment/mutation and transactions; this PR does not rewrite those contracts.
+- **Previous M12:** independent Pasture/Group, tag-color and Animal detail/list read-order/graph protection remain unaffected.
+- **Excluded:** SwiftData, schema/migration, status-reference writes, Animal mutation, UI, navigation, synchronization, and architecture changes.
+
+## Comprehensive behavioral coverage matrix
+
+| Production operation / behavior | Production callers | Success path | Error / rollback path | Clear / reset behavior | Batch / mixed-input behavior | Same-context behavior | Fresh-context reload | Production read projections | Relationships / history | Cross-feature effects | Unrelated control records | Identity / metadata | Contract owner |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Return deterministic selected-Herd Animal status-reference options when distinct UUIDs have equal names | `CoreDataAnimalStatusReferenceRepository.fetchStatusReferenceOptions` → `CoreDataAnimalRepository.fetchStatusReferenceOptions` → App mutation/coordinating repository → `LoadAnimalEditorOptionsUseCase.execute` and Animal/Field Check editor consumers | Covered: preserve name-ascending Core Data precedence, append UUID-ascending tie-break; return the original ID, name and base status for each record | Delegated: M5's existing duplicate-ID, invalid-base-status, missing-Herd and failure-propagation contracts; read change creates no writes and no rollback path | N/A: this operation only reads options; clearing a selected status reference remains an Animal editing/write contract owned by M5 | Covered: SQLite regression includes same-name valid references, distinct-name controls and a foreign-Herd same-name reference excluded by the existing Herd predicate | Covered: the same repository read twice after committed writes returns the same ordered UUIDs without mutating the context | Unverified: regression performs an independent read-only SQLite reopen and compares order, scope and original metadata; execution prohibited by `AGENTS.md` until explicitly requested | Covered: the status-option array handed to editor use cases retains its existing element type and name order; ties are now total-ordered by persisted UUID | N/A: option mapper does not traverse status-reference/Animal inverse relationships or change Animal status history; M5 owns attachment and mutation | Covered: Animal editing and the Field Check embedded Animal editor consume the same option reader without changing selection identity | Covered: distinct-name selected-Herd controls retain position; foreign-Herd option remains invisible and unmodified | Covered: stable application UUID is used only for ordering, never reassigned; stored name/base status/ownership are unchanged | This PR: equal-name ordering in the direct option read; M5: status identity, validation, scoping and writes |
+
+## Self-review and verification
+
+Trace the final reader, App pass-through, use-case and UI consumers; compare the final branch diff with the row above; verify sort descriptors retain original priority and stable IDs. Add the regression to the existing Core Data suite, not to architecture/concurrency scripts. Tests, builds, lint, verifier scripts and CI **must not be run without explicit user instruction**, so compilation/runtime behavior is not claimed as verified.
