@@ -67,7 +67,12 @@ final class CoreDataAnimalRepository:
                 throw HerdRepositoryError.missingHerd
             }
             return try CoreDataAnimalMutation.fetchAnimals(herd: herd, in: context)
-                .map { try CoreDataAnimalProjection.summary($0) }
+                .map { animal in
+                    try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
+                        animal, herdID: herdID
+                    )
+                    return try CoreDataAnimalProjection.summary(animal)
+                }
         }
     }
 
@@ -85,6 +90,9 @@ final class CoreDataAnimalRepository:
             ) else {
                 return nil
             }
+            try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
+                animal, herdID: herdID
+            )
             return try CoreDataAnimalProjection.detail(animal)
         }
     }
@@ -103,6 +111,9 @@ final class CoreDataAnimalRepository:
             ) else {
                 return []
             }
+            try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
+                animal, herdID: herdID
+            )
             return try CoreDataAnimalProjection.timeline(animal)
         }
     }
@@ -121,7 +132,12 @@ final class CoreDataAnimalRepository:
             }
             return try CoreDataAnimalMutation.fetchAnimals(herd: herd, in: context)
                 .filter { !$0.isArchived && $0.id != excludedAnimalID }
-                .map { try CoreDataAnimalProjection.parentOption($0) }
+                .map { animal in
+                    try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
+                        animal, herdID: herdID
+                    )
+                    return try CoreDataAnimalProjection.parentOption(animal)
+                }
                 .sorted {
                     $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
                 }
@@ -145,12 +161,20 @@ final class CoreDataAnimalRepository:
                 return nil
             }
 
+            try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
+                dam, herdID: herdID
+            )
             let inferredSire = try CoreDataAnimalMutation.inferSingleSire(
                 pastureID: dam.currentPasture?.id,
                 excluding: dam.id,
                 herd: herd,
                 in: context
             )
+            if let inferredSire {
+                try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
+                    inferredSire, herdID: herdID
+                )
+            }
             return OffspringDraftSeed(
                 damID: dam.id,
                 damDisplayName: try CoreDataAnimalProjection.parentOption(dam).displayName,
@@ -181,6 +205,9 @@ final class CoreDataAnimalRepository:
             ) else {
                 return nil
             }
+            try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
+                animal, herdID: herdID
+            )
             return AnimalAggregateEditSnapshot(
                 animal: try CoreDataAnimalProjection.detail(animal),
                 revision: AnimalAggregateRevision(value: animal.editorRevision)
