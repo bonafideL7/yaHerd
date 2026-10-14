@@ -405,6 +405,13 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             XCTAssertEqual($0 as? CoreDataReadModelError, invalidResident)
         }
         XCTAssertEqual(try pastures.fetchPastureDetail(id: controlPasture.id)?.activeAnimalCount, 0)
+        // Mutation responses use the same validated detail projection and must roll back.
+        XCTAssertThrowsError(try pastures.update(
+            id: targetPasture.id,
+            input: PastureInput(name: "Rejected Rename", acreage: 12, usableAcreage: 10, targetAcresPerHead: 1)
+        )) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, invalidResident)
+        }
 
         let persistedContext = environment.assembly.contextFactory.makeReadContext()
         try persistedContext.performAndWait {
@@ -417,6 +424,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
                 in: persistedContext
             ))
             XCTAssertEqual(storedPasture.group?.objectID, storedGroup.objectID)
+            XCTAssertEqual(storedPasture.name, "Graph Target")
             XCTAssertEqual(
                 (storedPasture.animals as? Set<CDAnimal>)?.first?.herd.id, foreignHerdID
             )
@@ -486,6 +494,12 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         XCTAssertThrowsError(try readOnlyPastures.fetchPastureGroupDetail(id: targetGroup.id)) {
             XCTAssertEqual($0 as? CoreDataReadModelError, invalidMember)
         }
+        XCTAssertThrowsError(try pastures.updateGroup(
+            id: targetGroup.id,
+            input: PastureGroupInput(name: "Rejected Group Rename", grazeDays: 3, restDays: 12)
+        )) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, invalidMember)
+        }
         XCTAssertEqual(
             try readOnlyPastures.fetchPastureGroupDetail(id: controlGroup.id)?.pastures.map(\.id),
             [controlPasture.id]
@@ -502,6 +516,11 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             ))
             XCTAssertEqual(storedPasture.group?.id, targetGroup.id)
             XCTAssertEqual(storedPasture.herd.id, foreignHerdID)
+            let storedGroup = try XCTUnwrap(readOnlyAssembly.lookup.herdOwned(
+                CDPastureGroup.self, id: targetGroup.id,
+                herdID: environment.herdID, in: persistedContext
+            ))
+            XCTAssertEqual(storedGroup.name, "Target Rotation")
         }
     }
 
