@@ -125,6 +125,7 @@ struct DashboardAnalyticsService {
         return grouped
             .map { damID, offspring in
                 let damTag = offspring
+                    .sorted { $0.animal.id.uuidString < $1.animal.id.uuidString }
                     .compactMap { $0.animal.damDisplayTagNumber }
                     .first(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
                     ?? "Unknown"
@@ -137,7 +138,9 @@ struct DashboardAnalyticsService {
             }
             .sorted { lhs, rhs in
                 if lhs.offspringCount != rhs.offspringCount { return lhs.offspringCount > rhs.offspringCount }
-                return lhs.damDisplayTagNumber.localizedStandardCompare(rhs.damDisplayTagNumber) == .orderedAscending
+                let order = lhs.damDisplayTagNumber.localizedStandardCompare(rhs.damDisplayTagNumber)
+                if order != .orderedSame { return order == .orderedAscending }
+                return lhs.damID.uuidString < rhs.damID.uuidString
             }
             .prefix(8)
             .map { $0 }
