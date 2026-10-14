@@ -572,3 +572,244 @@ enum CoreDataAnimalProjection {
         return components.joined(separator: " • ")
     }
 }
+
+
+/// Shared Core Data relationship integrity boundary for direct Animal reads and M9 projections.
+/// Kept outside the read-model actor so synchronous repository reads validate the same graph.
+enum CoreDataAnimalReadGraphValidator {
+static func validateAnimalReadRelationships(
+        _ animal: CDAnimal,
+        herdID: UUID,
+        includeMaternalOffspring: Bool = true
+    ) throws {
+        guard animal.herd.id == herdID else {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDAnimal.coreDataEntityName,
+                id: animal.id,
+                expectedHerdID: herdID,
+                actualHerdID: animal.herd.id
+            )
+        }
+        if let pasture = animal.currentPasture,
+           pasture.herd.id != herdID {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDPasture.coreDataEntityName,
+                id: pasture.id,
+                expectedHerdID: herdID,
+                actualHerdID: pasture.herd.id
+            )
+        }
+        if let session = animal.activeWorkingSession,
+           session.herd.id != herdID {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDWorkingSession.coreDataEntityName,
+                id: session.id,
+                expectedHerdID: herdID,
+                actualHerdID: session.herd.id
+            )
+        }
+        if let dam = animal.dam {
+            guard dam.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDAnimal.coreDataEntityName,
+                    id: dam.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: dam.herd.id
+                )
+            }
+            try validateTagRelationships(
+                dam,
+                herdID: herdID
+            )
+        }
+
+        if let sire = animal.sire {
+            try validateHerd(
+                sire.herd.id, herdID: herdID,
+                entity: CDAnimal.coreDataEntityName, id: sire.id
+            )
+            try validateTagRelationships(sire, herdID: herdID)
+        }
+        if let reference = animal.statusReference {
+            try validateHerd(
+                reference.herd.id, herdID: herdID,
+                entity: CDAnimalStatusReference.coreDataEntityName, id: reference.id
+            )
+        }
+
+        try validateTagRelationships(
+            animal,
+            herdID: herdID
+        )
+        for record in CoreDataAnimalProjection.managedHealthRecords(animal) {
+            guard record.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDHealthRecord.coreDataEntityName,
+                    id: record.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: record.herd.id
+                )
+            }
+            guard record.animal.objectID == animal.objectID else {
+                throw CoreDataReadModelError.invalidAnimalRelationship(
+                    entity: CDHealthRecord.coreDataEntityName,
+                    id: record.id,
+                    expectedAnimalID: animal.id,
+                    actualAnimalID: record.animal.id
+                )
+            }
+            if let session = record.workingSession {
+                try validateHerd(
+                    session.herd.id, herdID: herdID,
+                    entity: CDWorkingSession.coreDataEntityName, id: session.id
+                )
+            }
+        }
+        for check in CoreDataAnimalProjection.managedPregnancyChecks(animal) {
+            guard check.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDPregnancyCheck.coreDataEntityName,
+                    id: check.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: check.herd.id
+                )
+            }
+            guard check.animal.objectID == animal.objectID else {
+                throw CoreDataReadModelError.invalidAnimalRelationship(
+                    entity: CDPregnancyCheck.coreDataEntityName,
+                    id: check.id,
+                    expectedAnimalID: animal.id,
+                    actualAnimalID: check.animal.id
+                )
+            }
+            if let sire = check.sire {
+                try validateHerd(
+                    sire.herd.id, herdID: herdID,
+                    entity: CDAnimal.coreDataEntityName, id: sire.id
+                )
+            }
+            if let session = check.workingSession {
+                try validateHerd(
+                    session.herd.id, herdID: herdID,
+                    entity: CDWorkingSession.coreDataEntityName, id: session.id
+                )
+            }
+        }
+        if includeMaternalOffspring {
+        for offspring in CoreDataAnimalProjection.managedMaternalOffspring(animal) {
+            guard offspring.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDAnimal.coreDataEntityName,
+                    id: offspring.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: offspring.herd.id
+                )
+            }
+            guard offspring.dam?.objectID == animal.objectID else {
+                throw CoreDataReadModelError.invalidAnimalRelationship(
+                    entity: CDAnimal.coreDataEntityName,
+                    id: offspring.id,
+                    expectedAnimalID: animal.id,
+                    actualAnimalID: offspring.dam?.id
+                )
+            }
+            try validateAnimalReadRelationships(
+                offspring, herdID: herdID, includeMaternalOffspring: false
+            )
+        }
+        }
+        for movement in CoreDataAnimalProjection.managedMovementRecords(animal) {
+            guard movement.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDMovementRecord.coreDataEntityName,
+                    id: movement.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: movement.herd.id
+                )
+            }
+            guard movement.animal.objectID == animal.objectID else {
+                throw CoreDataReadModelError.invalidAnimalRelationship(
+                    entity: CDMovementRecord.coreDataEntityName,
+                    id: movement.id,
+                    expectedAnimalID: animal.id,
+                    actualAnimalID: movement.animal.id
+                )
+            }
+        }
+        for statusRecord in CoreDataAnimalProjection.managedStatusRecords(animal) {
+            guard statusRecord.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDStatusRecord.coreDataEntityName,
+                    id: statusRecord.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: statusRecord.herd.id
+                )
+            }
+            guard statusRecord.animal.objectID == animal.objectID else {
+                throw CoreDataReadModelError.invalidAnimalRelationship(
+                    entity: CDStatusRecord.coreDataEntityName,
+                    id: statusRecord.id,
+                    expectedAnimalID: animal.id,
+                    actualAnimalID: statusRecord.animal.id
+                )
+            }
+        }
+    }
+
+static func validateTagRelationships(
+        _ animal: CDAnimal,
+        herdID: UUID
+    ) throws {
+        let tags = CoreDataAnimalProjection.managedTags(animal)
+        for tag in tags {
+            guard tag.herd.id == herdID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDAnimalTag.coreDataEntityName,
+                    id: tag.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: tag.herd.id
+                )
+            }
+            guard tag.animal.objectID == animal.objectID else {
+                throw CoreDataReadModelError.invalidAnimalRelationship(
+                    entity: CDAnimalTag.coreDataEntityName,
+                    id: tag.id,
+                    expectedAnimalID: animal.id,
+                    actualAnimalID: tag.animal.id
+                )
+            }
+            if let color = tag.color,
+               color.herd.id != herdID {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDTagColorDefinition.coreDataEntityName,
+                    id: color.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: color.herd.id
+                )
+            }
+        }
+
+        let activeTags = tags.filter(\.isActive)
+        guard activeTags.isEmpty || activeTags.filter(\.isPrimary).count == 1 else {
+            throw CoreDataReadModelError.invalidActivePrimaryTagCardinality(
+                animalID: animal.id,
+                activeTagCount: activeTags.count,
+                primaryTagCount: activeTags.filter(\.isPrimary).count
+            )
+        }
+    }
+
+    private static func validateHerd(
+        _ actualHerdID: UUID,
+        herdID: UUID,
+        entity: String,
+        id: UUID
+    ) throws {
+        guard actualHerdID == herdID else {
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: entity, id: id,
+                expectedHerdID: herdID, actualHerdID: actualHerdID
+            )
+        }
+    }
+}
