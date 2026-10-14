@@ -605,6 +605,11 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
         XCTAssertThrowsError(try readOnlyRepository.fetchColors()) {
             XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
         }
+        readOnlySelection.currentHerdID = foreignHerdID
+        XCTAssertEqual(
+            try readOnlyRepository.fetchColor(id: duplicatedID)?.name,
+            "Foreign Herd Blue"
+        )
         XCTAssertEqual(try physicalState(in: readOnlyAssembly), baseline)
     }
 
