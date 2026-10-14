@@ -91,7 +91,7 @@ final class CoreDataAnimalRepository:
                 return nil
             }
             try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
-                animal, herdID: herdID
+                animal, herdID: herdID, validateOffspringSummaries: true
             )
             return try CoreDataAnimalProjection.detail(animal)
         }
@@ -112,7 +112,7 @@ final class CoreDataAnimalRepository:
                 return []
             }
             try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
-                animal, herdID: herdID
+                animal, herdID: herdID, validateOffspringSummaries: true
             )
             return try CoreDataAnimalProjection.timeline(animal)
         }
@@ -206,7 +206,7 @@ final class CoreDataAnimalRepository:
                 return nil
             }
             try CoreDataAnimalReadGraphValidator.validateAnimalReadRelationships(
-                animal, herdID: herdID
+                animal, herdID: herdID, validateOffspringSummaries: true
             )
             return AnimalAggregateEditSnapshot(
                 animal: try CoreDataAnimalProjection.detail(animal),
