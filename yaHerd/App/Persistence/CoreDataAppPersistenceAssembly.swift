@@ -143,6 +143,7 @@ final class CoreDataAppPersistenceAssembly: PersistenceAssembly {
                 listRepository: pastureRepository,
                 createRepository: pastureRepository,
                 detailRepository: pastureRepository,
+                existenceChecker: pastureRepository,
                 groupListRepository: pastureRepository,
                 groupDetailRepository: pastureRepository,
                 groupEditorRepository: pastureRepository,
