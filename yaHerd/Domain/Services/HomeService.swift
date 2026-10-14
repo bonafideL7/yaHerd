@@ -25,7 +25,10 @@ struct HomeService {
         let activeAnimalRecords = sortedActiveAnimalRecords(from: dashboardRecords.animals)
         let activeCheckSessions = fieldCheckSessions
             .filter { !$0.isCompleted }
-            .sorted { $0.startedAt > $1.startedAt }
+            .sorted { left, right in
+                if left.startedAt != right.startedAt { return left.startedAt > right.startedAt }
+                return left.id.uuidString < right.id.uuidString
+            }
 
         return HomeSnapshot(
             activeSession: dashboardSnapshot.activeSession,
@@ -57,7 +60,9 @@ struct HomeService {
         records
             .filter(\.isActiveInHerd)
             .sorted { lhs, rhs in
-                lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
+                let order = lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber)
+                if order != .orderedSame { return order == .orderedAscending }
+                return lhs.id.uuidString < rhs.id.uuidString
             }
     }
 
@@ -65,7 +70,9 @@ struct HomeService {
         records
             .filter { $0.isArchived && $0.status == .active }
             .sorted { lhs, rhs in
-                lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
+                let order = lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber)
+                if order != .orderedSame { return order == .orderedAscending }
+                return lhs.id.uuidString < rhs.id.uuidString
             }
     }
 
@@ -88,7 +95,8 @@ struct HomeService {
         if left.isCompleted != right.isCompleted {
             return !left.isCompleted
         }
-        return left.startedAt > right.startedAt
+        if left.startedAt != right.startedAt { return left.startedAt > right.startedAt }
+        return left.id.uuidString < right.id.uuidString
     }
 
     private func rotationReadyPastures(from pastures: [DashboardPastureItem]) -> [DashboardPastureItem] {
@@ -98,7 +106,9 @@ struct HomeService {
                 if lhs.activeAnimalCount != rhs.activeAnimalCount {
                     return lhs.activeAnimalCount < rhs.activeAnimalCount
                 }
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+                let order = lhs.name.localizedStandardCompare(rhs.name)
+                if order != .orderedSame { return order == .orderedAscending }
+                return lhs.id.uuidString < rhs.id.uuidString
             }
     }
 
@@ -109,7 +119,9 @@ struct HomeService {
                 let leftUtilization = lhs.metrics.utilizationPercent ?? 0
                 let rightUtilization = rhs.metrics.utilizationPercent ?? 0
                 if leftUtilization != rightUtilization { return leftUtilization < rightUtilization }
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+                let order = lhs.name.localizedStandardCompare(rhs.name)
+                if order != .orderedSame { return order == .orderedAscending }
+                return lhs.id.uuidString < rhs.id.uuidString
             }
     }
 
@@ -118,6 +130,10 @@ struct HomeService {
             .filter { pasture in
                 pasture.acres <= 0 || pasture.metrics.targetAcresPerHead == nil
             }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            .sorted { lhs, rhs in
+                let order = lhs.name.localizedStandardCompare(rhs.name)
+                if order != .orderedSame { return order == .orderedAscending }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
     }
 }
