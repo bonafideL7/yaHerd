@@ -91,7 +91,8 @@ struct DashboardService {
     private func activeSession(in records: DashboardRecords) -> DashboardWorkingSessionSummary? {
         records.workingSessions
             .sorted { lhs, rhs in
-                lhs.date > rhs.date
+                if lhs.date != rhs.date { return lhs.date > rhs.date }
+                return lhs.id.uuidString < rhs.id.uuidString
             }
             .first(where: { $0.isActive })
             .map { session in
@@ -123,7 +124,9 @@ struct DashboardService {
                 )
             }
             .sorted { lhs, rhs in
-                lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber) == .orderedAscending
+                let order = lhs.displayTagNumber.localizedStandardCompare(rhs.displayTagNumber)
+                if order != .orderedSame { return order == .orderedAscending }
+                return lhs.id.uuidString < rhs.id.uuidString
             }
     }
 
@@ -149,7 +152,9 @@ struct DashboardService {
                 )
             }
             .sorted { lhs, rhs in
-                lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+                let order = lhs.name.localizedStandardCompare(rhs.name)
+                if order != .orderedSame { return order == .orderedAscending }
+                return lhs.id.uuidString < rhs.id.uuidString
             }
     }
 
