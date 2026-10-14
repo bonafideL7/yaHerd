@@ -407,6 +407,20 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
         }
 
+        // Only the first physical duplicate is inside this Home page.
+        // The second has the same UUID but lies beyond the query limit.
+        // The direct library and bounded Home read must agree on corruption.
+        let liveHomeReader = CoreDataReadModelActor(
+            contextFactory: environment.assembly.contextFactory,
+            lookup: environment.assembly.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await liveHomeReader.fetchHomeTreatmentTemplates(limit: 1)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
+
         let reopened = try await environment.makeReadOnlyAssembly()
         let reopenedRepository = CoreDataWorkingTreatmentTemplateRepository(
             selection: environment.selection,
@@ -422,6 +436,11 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         )
         await XCTAssertThrowsErrorAsync(
             try await homeReader.fetchHomeTreatmentTemplates(limit: 10)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await homeReader.fetchHomeTreatmentTemplates(limit: 1)
         ) { error in
             XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
         }
