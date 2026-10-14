@@ -601,6 +601,14 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
                 "The library must preserve stable display order when sortOrder ties."
             )
 
+            // The losing record becomes newest when its order is changed;
+            // this must not override the default seen immediately before move.
+            try repo.reorder(colorIDs: [zinc.id])
+            XCTAssertEqual(try repo.fetchColors().filter(\.isDefault).map(\.id), [amber.id])
+            XCTAssertTrue(try XCTUnwrap(repo.fetchColor(id: amber.id)).isDefault)
+            XCTAssertFalse(try XCTUnwrap(repo.fetchColor(id: zinc.id)).isDefault)
+            XCTAssertEqual(try repo.fetchColor(id: zinc.id)?.sortOrder, 0)
+
             // Reordering a virtual built-in must not adopt its default flag or
             // change the preferred persisted color.
             try repo.reorder(colorIDs: [TagColorDefaults.blueID])
@@ -615,6 +623,78 @@ final class CoreDataTagColorRepositoryContractTests: XCTestCase {
             try repo.setDefaultColor(id: zinc.id)
             XCTAssertEqual(try repo.fetchColors().filter(\.isDefault).map(\.id), [zinc.id])
             XCTAssertTrue(try XCTUnwrap(repo.fetchColor(id: zinc.id)).isDefault)
+        }
+    }
+
+    func testEditingLosingPhysicalDefaultPreservesSelectionUntilExplicitChange() async throws {
+        try await runRollback { environment in
+            let earlier = Date(timeIntervalSinceReferenceDate: 500)
+            let later = Date(timeIntervalSinceReferenceDate: 700)
+            let winning = TagColorSnapshot(
+                id: UUID(uuidString: "66666666-6666-4666-8666-666666666666")!,
+                name: "Preferred Silver",
+                prefix: "PS",
+                rgba: RGBAColor(r: 0.75, g: 0.8, b: 0.8),
+                sortOrder: 13,
+                isDefault: true,
+                createdAt: earlier,
+                updatedAt: later
+            )
+            let losing = TagColorSnapshot(
+                id: UUID(uuidString: "77777777-7777-4777-8777-777777777777")!,
+                name: "Earlier Bronze",
+                prefix: "EB",
+                rgba: RGBAColor(r: 0.65, g: 0.4, b: 0.2),
+                sortOrder: 3,
+                isDefault: true,
+                createdAt: earlier,
+                updatedAt: earlier
+            )
+            let control = TagColorSnapshot(
+                id: UUID(uuidString: "88888888-8888-4888-8888-888888888888")!,
+                name: "Untouched Coral",
+                prefix: "UC",
+                rgba: RGBAColor(r: 0.8, g: 0.3, b: 0.4),
+                sortOrder: 8,
+                createdAt: earlier,
+                updatedAt: earlier
+            )
+            try environment.fixture.referenceControl.seedPersistedColor(winning)
+            try environment.fixture.referenceControl.seedPersistedColor(losing)
+            try environment.fixture.referenceControl.seedPersistedColor(control)
+
+            let repository = environment.fixture.makeTagColorRepository()
+            XCTAssertEqual(try repository.fetchColors().filter(\.isDefault).map(\.id), [winning.id])
+
+            // A regular edit does not request default selection, even though
+            // the losing physical row previously still had isDefault == true.
+            let edit = TagColorSnapshot(
+                id: losing.id,
+                name: losing.name,
+                prefix: "EB2",
+                rgba: RGBAColor(r: 0.7, g: 0.45, b: 0.25),
+                isDefault: false
+            )
+            try repository.upsert(edit)
+            XCTAssertEqual(try repository.fetchColors().filter(\.isDefault).map(\.id), [winning.id])
+            XCTAssertTrue(try XCTUnwrap(repository.fetchColor(id: winning.id)).isDefault)
+            XCTAssertFalse(try XCTUnwrap(repository.fetchColor(id: losing.id)).isDefault)
+            XCTAssertEqual(try repository.fetchColor(id: losing.id)?.prefix, "EB2")
+            XCTAssertEqual(try repository.fetchColor(id: control.id), control)
+
+            // A caller explicitly setting isDefault on an upsert remains an
+            // intentional selection change, not an automatic repair side effect.
+            let explicitlySelected = TagColorSnapshot(
+                id: control.id,
+                name: control.name,
+                prefix: control.prefix,
+                rgba: control.rgba,
+                isDefault: true
+            )
+            try repository.upsert(explicitlySelected)
+            XCTAssertEqual(try repository.fetchColors().filter(\.isDefault).map(\.id), [control.id])
+            XCTAssertFalse(try XCTUnwrap(repository.fetchColor(id: winning.id)).isDefault)
+            XCTAssertTrue(try XCTUnwrap(repository.fetchColor(id: control.id)).isDefault)
         }
     }
 
