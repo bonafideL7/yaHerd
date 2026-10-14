@@ -54,7 +54,10 @@ final class CoreDataAnimalStatusReferenceRepository: AnimalStatusReferenceReadin
                 entityName: CDAnimalStatusReference.coreDataEntityName
             )
             request.predicate = NSPredicate(format: "herd == %@", herd)
-            request.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
+            request.sortDescriptors = [
+                NSSortDescriptor(key: "name", ascending: true),
+                NSSortDescriptor(key: "id", ascending: true)
+            ]
 
             let references = try context.fetch(request)
             let grouped = Dictionary(grouping: references, by: \.id)
