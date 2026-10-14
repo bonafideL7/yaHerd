@@ -30,7 +30,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             let records: [(UUID, String, AnimalStatus, CDHerd)] = [
                 (tieLaterID, "Monitoring", .active, herd),
                 (lastControlID, "Zebra", .sold, herd),
-                (tieEarlierID, "Monitoring", .dead, herd),
+                (tieEarlierID, "Monitoring", .active, herd),
                 (firstControlID, "Archived", .active, herd),
                 (foreignReferenceID, "Monitoring", .sold, foreignHerd)
             ]
@@ -49,7 +49,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
                 id: firstControlID, name: "Archived", baseStatus: .active
             ),
             AnimalStatusReferenceOption(
-                id: tieEarlierID, name: "Monitoring", baseStatus: .dead
+                id: tieEarlierID, name: "Monitoring", baseStatus: .active
             ),
             AnimalStatusReferenceOption(
                 id: tieLaterID, name: "Monitoring", baseStatus: .active
