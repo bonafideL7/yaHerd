@@ -53,6 +53,14 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         XCTAssertThrowsError(try repository.fetchTimeline(id: offspring.id))
         XCTAssertThrowsError(try repository.fetchAnimalAggregateForEditing(id: offspring.id))
         XCTAssertThrowsError(try repository.fetchParentOptions(excluding: nil))
+        do {
+            _ = try await environment.makeAnimalListQueryReader().fetchParentOptions(
+                excluding: nil
+            )
+            XCTFail("Asynchronous parent lookup accepted a foreign-Herd dam.")
+        } catch is CoreDataReadModelError {
+            // Same integrity contract as the synchronous repository.
+        }
         XCTAssertThrowsError(try repository.fetchOffspringDraftSeed(forDamID: offspring.id))
 
         // Bad parent linkage remains untouched; unrelated selected-Herd reads remain usable.
