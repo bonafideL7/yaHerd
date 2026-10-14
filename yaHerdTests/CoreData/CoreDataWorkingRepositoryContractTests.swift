@@ -577,8 +577,10 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
                 return try XCTUnwrap(records.first)
             }
 
-            try treatment(in: second.sessionID).id = duplicateID
-            try treatment(in: foreignSessionID).id = duplicateID
+            let collidingTreatment = try treatment(in: second.sessionID)
+            let foreignTreatment = try treatment(in: foreignSessionID)
+            collidingTreatment.id = duplicateID
+            foreignTreatment.id = duplicateID
             try writeContext.save()
         }
 
