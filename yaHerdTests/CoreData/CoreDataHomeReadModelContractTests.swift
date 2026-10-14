@@ -265,6 +265,141 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             XCTAssertEqual(healthy.name, "Healthy Control")
         }
     }
+
+    func testReopenedSQLiteWorkingTemplateOptionsUsePersistedNameAndUUIDOrder() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let repository = CoreDataWorkingTreatmentTemplateRepository(
+            selection: environment.selection,
+            assembly: environment.assembly
+        )
+        let beforeID = try repository.createTemplate(name: "A First", items: [])
+        let afterID = try repository.createTemplate(name: "Z Last", items: [])
+        let smallerID = try XCTUnwrap(
+            UUID(uuidString: "00000000-0000-0000-0000-000000000001")
+        )
+        let largerID = try XCTUnwrap(
+            UUID(uuidString: "00000000-0000-0000-0000-000000000010")
+        )
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let herd = try XCTUnwrap(
+                environment.assembly.lookup.herd(
+                    id: environment.herdID,
+                    in: context
+                )
+            )
+            // Persist higher UUID first. The business API rightly rejects
+            // duplicate names, but an already persisted store may contain them.
+            for id in [largerID, smallerID] {
+                let template = CDWorkingTreatmentTemplate(context: context)
+                template.id = id
+                template.name = "Same Name"
+                template.itemsData = Data("[]".utf8)
+                template.herd = herd
+            }
+            try context.save()
+        }
+
+        let expected = [
+            WorkingTreatmentTemplateSummary(id: beforeID, name: "A First", treatmentCount: 0),
+            WorkingTreatmentTemplateSummary(id: smallerID, name: "Same Name", treatmentCount: 0),
+            WorkingTreatmentTemplateSummary(id: largerID, name: "Same Name", treatmentCount: 0),
+            WorkingTreatmentTemplateSummary(id: afterID, name: "Z Last", treatmentCount: 0)
+        ]
+        XCTAssertEqual(try repository.fetchTemplates(), expected)
+        XCTAssertEqual(try repository.fetchTemplates(), expected)
+
+        let reopened = try await environment.makeReadOnlyAssembly()
+        let reopenedTemplates = CoreDataWorkingTreatmentTemplateRepository(
+            selection: environment.selection,
+            assembly: reopened
+        )
+        XCTAssertEqual(try reopenedTemplates.fetchTemplates(), expected)
+        XCTAssertEqual(
+            try reopenedTemplates.fetchTemplateDetail(id: smallerID)?.id,
+            smallerID
+        )
+        let homeReader = CoreDataReadModelActor(
+            contextFactory: reopened.contextFactory,
+            lookup: reopened.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        XCTAssertEqual(try await homeReader.fetchHomeTreatmentTemplates(limit: 10), expected)
+    }
+
+    func testReopenedSQLiteWorkingTemplateLibraryRejectsDuplicateApplicationIDs() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let repository = CoreDataWorkingTreatmentTemplateRepository(
+            selection: environment.selection,
+            assembly: environment.assembly
+        )
+        let controlID = try repository.createTemplate(name: "Unrelated Control", items: [])
+        let duplicateID = try XCTUnwrap(
+            UUID(uuidString: "00000000-0000-0000-0000-0000000000A1")
+        )
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let herd = try XCTUnwrap(
+                environment.assembly.lookup.herd(
+                    id: environment.herdID,
+                    in: context
+                )
+            )
+            for name in ["Duplicate One", "Duplicate Two"] {
+                let template = CDWorkingTreatmentTemplate(context: context)
+                template.id = duplicateID
+                template.name = name
+                template.itemsData = Data("[]".utf8)
+                template.herd = herd
+            }
+            try context.save()
+        }
+
+        let expectedError = CoreDataPersistenceError.duplicateApplicationID(
+            entity: CDWorkingTreatmentTemplate.coreDataEntityName,
+            id: duplicateID,
+            herdID: environment.herdID
+        )
+        XCTAssertThrowsError(try repository.fetchTemplates()) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
+
+        let reopened = try await environment.makeReadOnlyAssembly()
+        let reopenedRepository = CoreDataWorkingTreatmentTemplateRepository(
+            selection: environment.selection,
+            assembly: reopened
+        )
+        XCTAssertThrowsError(try reopenedRepository.fetchTemplates()) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
+        let homeReader = CoreDataReadModelActor(
+            contextFactory: reopened.contextFactory,
+            lookup: reopened.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await homeReader.fetchHomeTreatmentTemplates(limit: 10)
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
+
+        // Neither failing reader repairs the malformed store or damages an
+        // independently addressable healthy template.
+        let control = try XCTUnwrap(
+            reopenedRepository.fetchTemplateDetail(id: controlID)
+        )
+        XCTAssertEqual(control.name, "Unrelated Control")
+        XCTAssertEqual(control.plannedTreatments, [])
+        let readContext = reopened.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            let request = NSFetchRequest<CDWorkingTreatmentTemplate>(
+                entityName: CDWorkingTreatmentTemplate.coreDataEntityName
+            )
+            let allTemplates = try readContext.fetch(request)
+            XCTAssertEqual(allTemplates.filter { $0.id == duplicateID }.count, 2)
+            XCTAssertEqual(allTemplates.filter { $0.id == controlID }.count, 1)
+        }
+    }
 }
 
 @MainActor
