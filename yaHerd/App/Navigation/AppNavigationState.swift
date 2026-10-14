@@ -300,7 +300,7 @@ protocol AppNavigationRestorationValidating {
 struct RepositoryAppNavigationRestorationValidator: AppNavigationRestorationValidating {
     let herdRepository: any HerdRepository
     let animalRepository: any AnimalDetailReading
-    let pastureRepository: any PastureDetailReader
+    let pastureRepository: any PastureExistenceChecking
     let fieldCheckRepository: any FieldCheckSessionDetailReading
     let workingRepository: any WorkingSessionDetailReader
 
@@ -313,7 +313,15 @@ struct RepositoryAppNavigationRestorationValidator: AppNavigationRestorationVali
     }
 
     func pastureExists(id: UUID) throws -> Bool {
-        try pastureRepository.fetchPastureDetail(id: id) != nil
+        // Navigation validates identity only. Detail screens separately validate the full
+        // linked group/resident graph, which can be corrupt while this Pasture still exists.
+        do {
+            try pastureRepository.validatePastureIDsExist([id])
+            return true
+        } catch let error as PastureRepositoryError {
+            if case .pastureIDsNotFound = error { return false }
+            throw error
+        }
     }
 
     func isActiveFieldCheckSession(id: UUID) throws -> Bool {
