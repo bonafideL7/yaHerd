@@ -5,6 +5,7 @@ nonisolated struct PastureFeatureDependencies {
     let listRepository: any PastureListManagingRepository
     let createRepository: any PastureCreateRepository
     let detailRepository: any PastureDetailEditingRepository
+    let existenceChecker: any PastureExistenceChecking
     let groupListRepository: any PastureGroupListRepository
     let groupDetailRepository: any PastureGroupDetailRepository
     let groupEditorRepository: any PastureGroupEditorRepository
@@ -18,6 +19,7 @@ nonisolated struct PastureFeatureDependencies {
         listRepository: any PastureListManagingRepository,
         createRepository: any PastureCreateRepository,
         detailRepository: any PastureDetailEditingRepository,
+        existenceChecker: any PastureExistenceChecking,
         groupListRepository: any PastureGroupListRepository,
         groupDetailRepository: any PastureGroupDetailRepository,
         groupEditorRepository: any PastureGroupEditorRepository,
@@ -30,6 +32,7 @@ nonisolated struct PastureFeatureDependencies {
         self.listRepository = listRepository
         self.createRepository = createRepository
         self.detailRepository = detailRepository
+        self.existenceChecker = existenceChecker
         self.groupListRepository = groupListRepository
         self.groupDetailRepository = groupDetailRepository
         self.groupEditorRepository = groupEditorRepository
@@ -51,6 +54,7 @@ nonisolated struct PastureFeatureDependencies {
             listRepository: pastureRepository,
             createRepository: pastureRepository,
             detailRepository: pastureRepository,
+            existenceChecker: pastureRepository,
             groupListRepository: pastureRepository,
             groupDetailRepository: pastureRepository,
             groupEditorRepository: pastureRepository,
@@ -71,6 +75,7 @@ nonisolated struct PastureFeatureDependencies {
         listRepository: (any PastureListManagingRepository)? = nil,
         createRepository: (any PastureCreateRepository)? = nil,
         detailRepository: (any PastureDetailEditingRepository)? = nil,
+        existenceChecker: (any PastureExistenceChecking)? = nil,
         groupListRepository: (any PastureGroupListRepository)? = nil,
         groupDetailRepository: (any PastureGroupDetailRepository)? = nil,
         groupEditorRepository: (any PastureGroupEditorRepository)? = nil,
@@ -85,6 +90,7 @@ nonisolated struct PastureFeatureDependencies {
             listRepository: listRepository ?? missingRepository,
             createRepository: createRepository ?? missingRepository,
             detailRepository: detailRepository ?? missingRepository,
+            existenceChecker: existenceChecker ?? missingRepository,
             groupListRepository: groupListRepository ?? missingRepository,
             groupDetailRepository: groupDetailRepository ?? missingRepository,
             groupEditorRepository: groupEditorRepository ?? missingRepository,
@@ -165,6 +171,7 @@ private struct PastureFeatureDependenciesKey: EnvironmentKey {
             listRepository: MissingPastureRepository(),
             createRepository: MissingPastureRepository(),
             detailRepository: MissingPastureRepository(),
+            existenceChecker: MissingPastureRepository(),
             groupListRepository: MissingPastureRepository(),
             groupDetailRepository: MissingPastureRepository(),
             groupEditorRepository: MissingPastureRepository(),
