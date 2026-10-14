@@ -316,6 +316,195 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         }
     }
 
+    func testMilestone12PastureSummaryRejectsForeignGroupAndResidentCount() async throws {
+        let environment = try await makeEnvironment()
+        let pastures = environment.makePastureRepository()
+        let animals = environment.makeAnimalRepository()
+        let targetPasture = try pastures.create(
+            input: PastureInput(name: "Graph Target", acreage: 12, usableAcreage: 10, targetAcresPerHead: 1)
+        )
+        let controlPasture = try pastures.create(
+            input: PastureInput(name: "Graph Control", acreage: 8, usableAcreage: 7, targetAcresPerHead: 1)
+        )
+        let group = try pastures.createGroup(
+            input: PastureGroupInput(name: "Graph Rotation", grazeDays: 4, restDays: 18)
+        )
+        try pastures.assignPasture(id: targetPasture.id, toGroupID: group.id)
+        let resident = try animals.create(
+            input: readGraphAnimalInput(
+                name: "Linked Resident", tag: "M12-PR1", pastureID: targetPasture.id
+            )
+        )
+        XCTAssertEqual(try pastures.fetchPastureDetail(id: targetPasture.id)?.activeAnimalCount, 1)
+        XCTAssertEqual(try pastures.fetchPastureDetail(id: targetPasture.id)?.groupID, group.id)
+        XCTAssertEqual(try pastures.fetchPastureDetail(id: controlPasture.id)?.activeAnimalCount, 0)
+
+        let foreignHerdID = UUID()
+        let corruptGroupContext = try environment.assembly.contextFactory.makeWriteContext()
+        try corruptGroupContext.performAndWait {
+            let foreignHerd = CDHerd(context: corruptGroupContext)
+            foreignHerd.id = foreignHerdID
+            foreignHerd.name = "Foreign Group Herd"
+            foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 130)
+            foreignHerd.updatedAt = foreignHerd.createdAt
+            let storedGroup = try XCTUnwrap(environment.assembly.lookup.herdOwned(
+                CDPastureGroup.self, id: group.id, herdID: environment.herdID,
+                in: corruptGroupContext
+            ))
+            storedGroup.herd = foreignHerd
+            try corruptGroupContext.save()
+        }
+        let invalidGroup = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDPastureGroup.coreDataEntityName,
+            id: group.id,
+            expectedHerdID: environment.herdID,
+            actualHerdID: foreignHerdID
+        )
+        XCTAssertThrowsError(try pastures.fetchPastures()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, invalidGroup)
+        }
+        XCTAssertThrowsError(try pastures.fetchPastureDetail(id: targetPasture.id)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, invalidGroup)
+        }
+        XCTAssertEqual(try pastures.fetchPastureDetail(id: controlPasture.id)?.id, controlPasture.id)
+
+        // Restore group ownership, then prove inverse resident counts reject foreign-Herd cattle.
+        let corruptResidentContext = try environment.assembly.contextFactory.makeWriteContext()
+        try corruptResidentContext.performAndWait {
+            let storedGroup = try XCTUnwrap(environment.assembly.lookup.herdOwned(
+                CDPastureGroup.self, id: group.id, herdID: foreignHerdID,
+                in: corruptResidentContext
+            ))
+            let selectedHerd = try XCTUnwrap(environment.assembly.lookup.herd(
+                id: environment.herdID, in: corruptResidentContext
+            ))
+            let foreignHerd = try XCTUnwrap(environment.assembly.lookup.herd(
+                id: foreignHerdID, in: corruptResidentContext
+            ))
+            storedGroup.herd = selectedHerd
+            let storedResident = try XCTUnwrap(environment.assembly.lookup.herdOwned(
+                CDAnimal.self, id: resident.id, herdID: environment.herdID,
+                in: corruptResidentContext
+            ))
+            storedResident.herd = foreignHerd
+            try corruptResidentContext.save()
+        }
+        let invalidResident = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDAnimal.coreDataEntityName,
+            id: resident.id,
+            expectedHerdID: environment.herdID,
+            actualHerdID: foreignHerdID
+        )
+        XCTAssertThrowsError(try pastures.fetchPastures()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, invalidResident)
+        }
+        XCTAssertThrowsError(try pastures.fetchPastureDetail(id: targetPasture.id)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, invalidResident)
+        }
+        XCTAssertThrowsError(try pastures.fetchPastureGroupDetail(id: group.id)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, invalidResident)
+        }
+        XCTAssertEqual(try pastures.fetchPastureDetail(id: controlPasture.id)?.activeAnimalCount, 0)
+
+        let persistedContext = environment.assembly.contextFactory.makeReadContext()
+        try persistedContext.performAndWait {
+            let storedGroup = try XCTUnwrap(environment.assembly.lookup.herdOwned(
+                CDPastureGroup.self, id: group.id, herdID: environment.herdID,
+                in: persistedContext
+            ))
+            let storedPasture = try XCTUnwrap(environment.assembly.lookup.herdOwned(
+                CDPasture.self, id: targetPasture.id, herdID: environment.herdID,
+                in: persistedContext
+            ))
+            XCTAssertEqual(storedPasture.group?.objectID, storedGroup.objectID)
+            XCTAssertEqual(
+                (storedPasture.animals as? Set<CDAnimal>)?.first?.herd.id, foreignHerdID
+            )
+        }
+    }
+
+    func testMilestone12PastureGroupListRejectsForeignHerdMembersAfterSQLiteReopen() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let pastures = environment.makePastureRepository()
+        let targetGroup = try pastures.createGroup(
+            input: PastureGroupInput(name: "Target Rotation", grazeDays: 3, restDays: 12)
+        )
+        let controlGroup = try pastures.createGroup(
+            input: PastureGroupInput(name: "Control Rotation", grazeDays: 7, restDays: 25)
+        )
+        let localPasture = try pastures.create(
+            input: PastureInput(name: "Local Member", acreage: 15, usableAcreage: 12, targetAcresPerHead: 2)
+        )
+        let controlPasture = try pastures.create(
+            input: PastureInput(name: "Control Member", acreage: 9, usableAcreage: 7, targetAcresPerHead: 1)
+        )
+        try pastures.assignPasture(id: localPasture.id, toGroupID: targetGroup.id)
+        try pastures.assignPasture(id: controlPasture.id, toGroupID: controlGroup.id)
+        XCTAssertEqual(
+            try pastures.fetchPastureGroupDetail(id: targetGroup.id)?.pastures.map(\.id),
+            [localPasture.id]
+        )
+
+        let foreignHerdID = UUID()
+        let foreignPastureID = UUID()
+        let writeContext = try assembly.contextFactory.makeWriteContext()
+        try writeContext.performAndWait {
+            let foreignHerd = CDHerd(context: writeContext)
+            foreignHerd.id = foreignHerdID
+            foreignHerd.name = "Foreign Member Herd"
+            foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 140)
+            foreignHerd.updatedAt = foreignHerd.createdAt
+
+            let group = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDPastureGroup.self, id: targetGroup.id,
+                herdID: environment.herdID, in: writeContext
+            ))
+            let foreignPasture = CDPasture(context: writeContext)
+            foreignPasture.id = foreignPastureID
+            foreignPasture.name = "Foreign Member"
+            foreignPasture.sortOrder = 5
+            foreignPasture.herd = foreignHerd
+            foreignPasture.group = group
+            try writeContext.save()
+        }
+
+        let readOnlyAssembly = try await harness.makeAssembly(accessMode: .readOnly)
+        let readOnlyPastures = CoreDataPastureRepository(
+            selection: environment.selection, assembly: readOnlyAssembly
+        )
+        let invalidMember = CoreDataReadModelError.invalidHerdOwnership(
+            entity: CDPasture.coreDataEntityName,
+            id: foreignPastureID,
+            expectedHerdID: environment.herdID,
+            actualHerdID: foreignHerdID
+        )
+        XCTAssertThrowsError(try readOnlyPastures.fetchPastureGroups()) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, invalidMember)
+        }
+        XCTAssertThrowsError(try readOnlyPastures.fetchPastureGroupDetail(id: targetGroup.id)) {
+            XCTAssertEqual($0 as? CoreDataReadModelError, invalidMember)
+        }
+        XCTAssertEqual(
+            try readOnlyPastures.fetchPastureGroupDetail(id: controlGroup.id)?.pastures.map(\.id),
+            [controlPasture.id]
+        )
+        XCTAssertEqual(
+            Set(try readOnlyPastures.fetchPastures().map(\.id)),
+            Set([localPasture.id, controlPasture.id])
+        )
+        let persistedContext = readOnlyAssembly.contextFactory.makeReadContext()
+        try persistedContext.performAndWait {
+            let storedPasture = try XCTUnwrap(readOnlyAssembly.lookup.herdOwned(
+                CDPasture.self, id: foreignPastureID, herdID: foreignHerdID,
+                in: persistedContext
+            ))
+            XCTAssertEqual(storedPasture.group?.id, targetGroup.id)
+            XCTAssertEqual(storedPasture.herd.id, foreignHerdID)
+        }
+    }
+
     func testCreateUpdateAndReload() async throws {
         let environment = try await makeEnvironment()
         try AnimalRepositoryContract.assertCreateUpdateAndReload(using: environment.repositoryFixture)
