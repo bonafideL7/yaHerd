@@ -292,6 +292,26 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             )
         )
 
+        let primaryDashboard = CoreDataReadModelActor(
+            contextFactory: assembly.contextFactory,
+            lookup: assembly.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        let foreignDashboard = CoreDataReadModelActor(
+            contextFactory: assembly.contextFactory,
+            lookup: assembly.lookup,
+            currentHerdID: { foreignSelection.currentHerdID }
+        )
+        let healthyDashboard = try await primaryDashboard.fetchDashboardRecords()
+        XCTAssertEqual(
+            Set(healthyDashboard.workingSessions.map(\.id)),
+            Set([firstSessionID, secondSessionID, controlSessionID])
+        )
+        XCTAssertEqual(
+            try await foreignDashboard.fetchDashboardRecords().workingSessions.map(\.id),
+            [foreignSessionID]
+        )
+
         // Physically duplicate one UUID across two different sessions in the
         // selected Herd. Reusing that UUID in another Herd must remain valid.
         let writeContext = try assembly.contextFactory.makeWriteContext()
@@ -345,6 +365,12 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             herdID: environment.herdID
         )
 
+        await XCTAssertThrowsErrorAsync(
+            try await primaryDashboard.fetchDashboardRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
+
         XCTAssertThrowsError(try primaryWorking.fetchSessions()) {
             XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
         }
@@ -374,12 +400,24 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         )
         XCTAssertEqual(foreignDetail.queueItems.map(\.id), [duplicateID])
         XCTAssertEqual(try foreignWorking.fetchSessions().map(\.id), [foreignSessionID])
+        let unaffectedForeignDashboard = try await foreignDashboard.fetchDashboardRecords()
+        XCTAssertEqual(unaffectedForeignDashboard.workingSessions.map(\.id), [foreignSessionID])
 
         let readOnlyAssembly = try await harness.makeAssembly(accessMode: .readOnly)
         let readOnlyPrimary = CoreDataWorkingRepository(
             selection: environment.selection,
             assembly: readOnlyAssembly
         )
+        let readOnlyPrimaryDashboard = CoreDataReadModelActor(
+            contextFactory: readOnlyAssembly.contextFactory,
+            lookup: readOnlyAssembly.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await readOnlyPrimaryDashboard.fetchDashboardRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
         XCTAssertThrowsError(try readOnlyPrimary.fetchSessions()) {
             XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
         }
@@ -394,6 +432,13 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             try readOnlyForeign.fetchSessionDetail(id: foreignSessionID),
             foreignDetail
         )
+        let readOnlyForeignDashboard = CoreDataReadModelActor(
+            contextFactory: readOnlyAssembly.contextFactory,
+            lookup: readOnlyAssembly.lookup,
+            currentHerdID: { foreignSelection.currentHerdID }
+        )
+        let reopenedForeignDashboard = try await readOnlyForeignDashboard.fetchDashboardRecords()
+        XCTAssertEqual(reopenedForeignDashboard.workingSessions.map(\.id), [foreignSessionID])
         XCTAssertEqual(try physicalQueueState(in: readOnlyAssembly), baseline)
     }
 
