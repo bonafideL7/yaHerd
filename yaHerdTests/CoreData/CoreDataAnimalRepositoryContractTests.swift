@@ -5,6 +5,95 @@ import XCTest
 
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
+    func testMilestone12StatusReferenceOptionsStayOrderedAcrossSQLiteReopen() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let tieLaterID = try XCTUnwrap(UUID(uuidString: "00000000-0000-0000-0000-000000000040"))
+        let tieEarlierID = try XCTUnwrap(UUID(uuidString: "00000000-0000-0000-0000-000000000010"))
+        let firstControlID = try XCTUnwrap(UUID(uuidString: "00000000-0000-0000-0000-000000000070"))
+        let lastControlID = try XCTUnwrap(UUID(uuidString: "00000000-0000-0000-0000-000000000020"))
+        let foreignHerdID = UUID()
+        let foreignReferenceID = UUID()
+
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let herd = try XCTUnwrap(
+                assembly.lookup.herd(id: environment.herdID, in: context)
+            )
+            let foreignHerd = CDHerd(context: context)
+            foreignHerd.id = foreignHerdID
+            foreignHerd.name = "Other Status Reference Herd"
+            foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 100)
+            foreignHerd.updatedAt = foreignHerd.createdAt
+
+            let records: [(UUID, String, AnimalStatus, CDHerd)] = [
+                (tieLaterID, "Monitoring", .active, herd),
+                (lastControlID, "Zebra", .sold, herd),
+                (tieEarlierID, "Monitoring", .dead, herd),
+                (firstControlID, "Archived", .active, herd),
+                (foreignReferenceID, "Monitoring", .sold, foreignHerd)
+            ]
+            for (id, name, status, owner) in records {
+                let reference = CDAnimalStatusReference(context: context)
+                reference.id = id
+                reference.name = name
+                reference.baseStatusRawValue = status.rawValue
+                reference.herd = owner
+            }
+            try context.save()
+        }
+
+        let expected = [
+            AnimalStatusReferenceOption(
+                id: firstControlID, name: "Archived", baseStatus: .active
+            ),
+            AnimalStatusReferenceOption(
+                id: tieEarlierID, name: "Monitoring", baseStatus: .dead
+            ),
+            AnimalStatusReferenceOption(
+                id: tieLaterID, name: "Monitoring", baseStatus: .active
+            ),
+            AnimalStatusReferenceOption(
+                id: lastControlID, name: "Zebra", baseStatus: .sold
+            )
+        ]
+
+        let primary = environment.makeAnimalRepository()
+        XCTAssertEqual(try primary.fetchStatusReferenceOptions(), expected)
+        XCTAssertEqual(try primary.fetchStatusReferenceOptions(), expected)
+
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let reloaded = CoreDataAnimalStatusReferenceRepository(
+            selection: environment.selection,
+            assembly: reopened
+        )
+        XCTAssertEqual(try reloaded.fetchStatusReferenceOptions(), expected)
+        XCTAssertEqual(try reloaded.fetchStatusReferenceOptions(), expected)
+
+        let readContext = reopened.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            let herd = try XCTUnwrap(
+                reopened.lookup.herd(id: environment.herdID, in: readContext)
+            )
+            let request = NSFetchRequest<CDAnimalStatusReference>(
+                entityName: CDAnimalStatusReference.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "herd == %@", herd)
+            let stored = try readContext.fetch(request)
+            XCTAssertEqual(Set(stored.map(\.id)), Set(expected.map(\.id)))
+            XCTAssertEqual(
+                try reopened.lookup.herdOwned(
+                    CDAnimalStatusReference.self,
+                    id: foreignReferenceID,
+                    herdID: foreignHerdID,
+                    in: readContext
+                )?.name,
+                "Monitoring"
+            )
+        }
+    }
+
     func testMilestone12DirectAnimalReadsRejectForeignHerdParentGraph() async throws {
         let environment = try await makeEnvironment()
         let repository = environment.makeAnimalRepository()
