@@ -158,7 +158,7 @@ private struct RunningAppView: View {
         RepositoryAppNavigationRestorationValidator(
             herdRepository: runtime.dependencies.herdRepository,
             animalRepository: runtime.dependencies.animalFeatureDependencies.detailRepository,
-            pastureRepository: runtime.dependencies.pastureFeatureDependencies.detailRepository,
+            pastureRepository: runtime.dependencies.pastureFeatureDependencies.existenceChecker,
             fieldCheckRepository: runtime.dependencies.fieldCheckFeatureDependencies.sessionDetailRepository,
             workingRepository: runtime.dependencies.workingSessionFeatureDependencies.sessionDetailRepository
         )
