@@ -199,6 +199,123 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         }
     }
 
+    func testMilestone12PastureResidentReadRejectsForeignHerdGraphBeforeDeletionPlan() async throws {
+        let environment = try await makeEnvironment()
+        let animals = environment.makeAnimalRepository()
+        let pastures = environment.makePastureRepository()
+        let targetPasture = try pastures.create(
+            input: PastureInput(
+                name: "Resident Integrity", acreage: 10, usableAcreage: 9,
+                targetAcresPerHead: 1
+            )
+        )
+        let controlPasture = try pastures.create(
+            input: PastureInput(
+                name: "Resident Control", acreage: 10, usableAcreage: 9,
+                targetAcresPerHead: 1
+            )
+        )
+        let dam = try animals.create(
+            input: readGraphAnimalInput(name: "Dam", tag: "M12-RD")
+        )
+        let validResident = try animals.create(
+            input: readGraphAnimalInput(
+                name: "Valid Resident", tag: "M12-RV", pastureID: targetPasture.id
+            )
+        )
+        let invalidResident = try animals.create(
+            input: readGraphAnimalInput(
+                name: "Invalid Resident", tag: "M12-RI",
+                damID: dam.id, pastureID: targetPasture.id
+            )
+        )
+        let controlResident = try animals.create(
+            input: readGraphAnimalInput(
+                name: "Control Resident", tag: "M12-RC", pastureID: controlPasture.id
+            )
+        )
+
+        XCTAssertEqual(
+            Set(try pastures.fetchResidentAnimals(pastureID: targetPasture.id).map(\.id)),
+            Set([validResident.id, invalidResident.id])
+        )
+        XCTAssertEqual(
+            try pastures.fetchResidentAnimals(pastureID: controlPasture.id).map(\.id),
+            [controlResident.id]
+        )
+
+        let foreignHerdID = UUID()
+        let context = try environment.assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let foreignHerd = CDHerd(context: context)
+            foreignHerd.id = foreignHerdID
+            foreignHerd.name = "Foreign Resident Parent"
+            foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 120)
+            foreignHerd.updatedAt = foreignHerd.createdAt
+
+            let persistedDam = try XCTUnwrap(environment.assembly.lookup.herdOwned(
+                CDAnimal.self, id: dam.id, herdID: environment.herdID, in: context
+            ))
+            persistedDam.herd = foreignHerd
+            try context.save()
+        }
+
+        // The entire resident cohort fails; no partial valid/foreign-Herd mixture is returned.
+        XCTAssertThrowsError(
+            try pastures.fetchResidentAnimals(pastureID: targetPasture.id)
+        ) { error in
+            guard case let CoreDataReadModelError.invalidHerdOwnership(
+                entity, id, expectedHerdID, actualHerdID
+            ) = error else {
+                return XCTFail("Expected an invalid resident parent: \(error)")
+            }
+            XCTAssertEqual(entity, CDAnimal.coreDataEntityName)
+            XCTAssertEqual(id, dam.id)
+            XCTAssertEqual(expectedHerdID, environment.herdID)
+            XCTAssertEqual(actualHerdID, foreignHerdID)
+        }
+
+        // Deletion planning consumes the same resident reader and cannot reach its writer.
+        let deletionWriter = CoreDataPastureDeletionTransactionWriter(
+            selection: environment.selection, assembly: environment.assembly
+        )
+        do {
+            try await DeletePasturesAtomicallyUseCase(
+                pastureReader: pastures, transactionWriter: deletionWriter
+            ).deletePastures(
+                ids: [targetPasture.id],
+                archivedAt: Date(timeIntervalSinceReferenceDate: 121)
+            )
+            XCTFail("Pasture deletion accepted an invalid resident graph.")
+        } catch is CoreDataReadModelError {
+            XCTAssertTrue(deletionWriter.lastExecutedOperations.isEmpty)
+        }
+
+        XCTAssertEqual(
+            try pastures.fetchResidentAnimals(pastureID: controlPasture.id).map(\.id),
+            [controlResident.id]
+        )
+        let readContext = environment.assembly.contextFactory.makeReadContext()
+        try readContext.performAndWait {
+            let persistedTarget = try XCTUnwrap(environment.assembly.lookup.herdOwned(
+                CDPasture.self, id: targetPasture.id,
+                herdID: environment.herdID, in: readContext
+            ))
+            let persistedValid = try XCTUnwrap(environment.assembly.lookup.herdOwned(
+                CDAnimal.self, id: validResident.id,
+                herdID: environment.herdID, in: readContext
+            ))
+            let persistedInvalid = try XCTUnwrap(environment.assembly.lookup.herdOwned(
+                CDAnimal.self, id: invalidResident.id,
+                herdID: environment.herdID, in: readContext
+            ))
+            XCTAssertEqual(persistedValid.currentPasture?.objectID, persistedTarget.objectID)
+            XCTAssertEqual(persistedInvalid.currentPasture?.objectID, persistedTarget.objectID)
+            XCTAssertEqual(persistedInvalid.dam?.id, dam.id)
+            XCTAssertEqual(persistedInvalid.dam?.herd.id, foreignHerdID)
+        }
+    }
+
     func testCreateUpdateAndReload() async throws {
         let environment = try await makeEnvironment()
         try AnimalRepositoryContract.assertCreateUpdateAndReload(using: environment.repositoryFixture)
@@ -2187,7 +2304,8 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
     private func readGraphAnimalInput(
         name: String,
         tag: String,
-        damID: UUID? = nil
+        damID: UUID? = nil,
+        pastureID: UUID? = nil
     ) -> AnimalInput {
         AnimalInput(
             name: name,
@@ -2196,7 +2314,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             sex: .female,
             birthDate: Date(timeIntervalSinceReferenceDate: 28_000),
             status: .active,
-            pastureID: nil,
+            pastureID: pastureID,
             sireID: nil,
             damID: damID,
             distinguishingFeatures: [],
