@@ -208,9 +208,9 @@ final class HomeServiceTests: XCTestCase {
             workingSessions: sessions
         )
         let reversed = DashboardRecords(
-            animals: records.animals.reversed(),
-            pastures: records.pastures.reversed(),
-            workingSessions: sessions.reversed()
+            animals: Array(records.animals.reversed()),
+            pastures: Array(records.pastures.reversed()),
+            workingSessions: Array(sessions.reversed())
         )
         let service = DashboardService()
         let original = service.makeSnapshot(records: records, configuration: configuration)
@@ -257,13 +257,15 @@ final class HomeServiceTests: XCTestCase {
             ],
             pastures: [
                 pasture(id: later, name: "Equal", activeAnimalCount: 1, targetAcresPerHead: nil),
-                pasture(id: earlier, name: "Equal", activeAnimalCount: 1, targetAcresPerHead: nil)
+                pasture(id: earlier, name: "Equal", activeAnimalCount: 1, targetAcresPerHead: nil),
+                pasture(id: stableID(16), name: "Underused", activeAnimalCount: 1),
+                pasture(id: stableID(15), name: "Underused", activeAnimalCount: 1)
             ],
             workingSessions: []
         )
         let backwards = DashboardRecords(
-            animals: records.animals.reversed(),
-            pastures: records.pastures.reversed(),
+            animals: Array(records.animals.reversed()),
+            pastures: Array(records.pastures.reversed()),
             workingSessions: []
         )
         let service = HomeService()
@@ -272,7 +274,7 @@ final class HomeServiceTests: XCTestCase {
             treatmentTemplates: [], configuration: configuration, now: timestamp
         )
         let reloaded = service.makeSnapshot(
-            dashboardRecords: backwards, fieldCheckSessions: checks.reversed(), openFindings: [],
+            dashboardRecords: backwards, fieldCheckSessions: Array(checks.reversed()), openFindings: [],
             treatmentTemplates: [], configuration: configuration, now: timestamp
         )
 
@@ -285,17 +287,23 @@ final class HomeServiceTests: XCTestCase {
         XCTAssertEqual(original.flaggedCheckSessions.map(\.id), [earlier, later, archivedFirst])
         XCTAssertEqual(original.missingCheckSessions.map(\.id), [earlier, later, archivedFirst])
         XCTAssertEqual(original.pasturesMissingStockingData.map(\.id), [earlier, later])
-        XCTAssertEqual(original.pastureCheckStartPastures.map(\.id), [earlier, later])
+        XCTAssertEqual(original.underutilizedPastures.map(\.id), [stableID(15), stableID(16)])
+        XCTAssertEqual(original.rotationReadyPastures.map(\.id), [stableID(15), stableID(16)])
+        XCTAssertEqual(original.pastureCheckStartPastures.map(\.id), [
+            earlier, later, stableID(15), stableID(16)
+        ])
     }
 
     func testOffspringAnalyticsKeepsTopEightAndHistoricalDamLabelStable() {
         let damIDs = (101...109).map(stableID)
-        var offspring = zip(damIDs, 201...209).map { damID, childNumber in
-            animal(
-                id: stableID(childNumber), tag: "\(childNumber)", sex: .female,
+        var offspring: [DashboardAnimalRecord] = []
+        for (index, damID) in damIDs.enumerated() {
+            let childNumber = 201 + index
+            offspring.append(animal(
+                id: stableID(childNumber), tag: String(childNumber), sex: .female,
                 status: .active, isArchived: false, pastureID: nil, location: .pasture,
                 damID: damID, damDisplayTagNumber: "Dam"
-            )
+            ))
         }
         // The earliest persisted offspring identity supplies the first nonblank
         // historical dam label even if the input relationship order changes.
@@ -321,7 +329,7 @@ final class HomeServiceTests: XCTestCase {
             configuration: configuration, now: now
         )
         let reloaded = service.makeSnapshot(
-            records: DashboardRecords(animals: offspring.reversed(), pastures: [], workingSessions: []),
+            records: DashboardRecords(animals: Array(offspring.reversed()), pastures: [], workingSessions: []),
             configuration: configuration, now: now
         )
         XCTAssertEqual(original.analytics.offspringByDam, reloaded.analytics.offspringByDam)
