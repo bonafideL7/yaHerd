@@ -577,7 +577,7 @@ enum CoreDataAnimalProjection {
 /// Shared Core Data relationship integrity boundary for direct Animal reads and M9 projections.
 /// Kept outside the read-model actor so synchronous repository reads validate the same graph.
 enum CoreDataAnimalReadGraphValidator {
-static func validateAnimalReadRelationships(
+    static func validateAnimalReadRelationships(
         _ animal: CDAnimal,
         herdID: UUID,
         includeMaternalOffspring: Bool = true
@@ -696,27 +696,27 @@ static func validateAnimalReadRelationships(
             }
         }
         if includeMaternalOffspring {
-        for offspring in CoreDataAnimalProjection.managedMaternalOffspring(animal) {
-            guard offspring.herd.id == herdID else {
-                throw CoreDataReadModelError.invalidHerdOwnership(
-                    entity: CDAnimal.coreDataEntityName,
-                    id: offspring.id,
-                    expectedHerdID: herdID,
-                    actualHerdID: offspring.herd.id
+            for offspring in CoreDataAnimalProjection.managedMaternalOffspring(animal) {
+                guard offspring.herd.id == herdID else {
+                    throw CoreDataReadModelError.invalidHerdOwnership(
+                        entity: CDAnimal.coreDataEntityName,
+                        id: offspring.id,
+                        expectedHerdID: herdID,
+                        actualHerdID: offspring.herd.id
+                    )
+                }
+                guard offspring.dam?.objectID == animal.objectID else {
+                    throw CoreDataReadModelError.invalidAnimalRelationship(
+                        entity: CDAnimal.coreDataEntityName,
+                        id: offspring.id,
+                        expectedAnimalID: animal.id,
+                        actualAnimalID: offspring.dam?.id
+                    )
+                }
+                try validateAnimalReadRelationships(
+                    offspring, herdID: herdID, includeMaternalOffspring: false
                 )
             }
-            guard offspring.dam?.objectID == animal.objectID else {
-                throw CoreDataReadModelError.invalidAnimalRelationship(
-                    entity: CDAnimal.coreDataEntityName,
-                    id: offspring.id,
-                    expectedAnimalID: animal.id,
-                    actualAnimalID: offspring.dam?.id
-                )
-            }
-            try validateAnimalReadRelationships(
-                offspring, herdID: herdID, includeMaternalOffspring: false
-            )
-        }
         }
         for movement in CoreDataAnimalProjection.managedMovementRecords(animal) {
             guard movement.herd.id == herdID else {
@@ -756,7 +756,7 @@ static func validateAnimalReadRelationships(
         }
     }
 
-static func validateTagRelationships(
+    static func validateTagRelationships(
         _ animal: CDAnimal,
         herdID: UUID
     ) throws {
