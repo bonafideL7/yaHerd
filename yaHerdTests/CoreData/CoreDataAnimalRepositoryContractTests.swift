@@ -113,7 +113,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             XCTAssertEqual(Set(stored.map(\.sortOrder)), Set([0, 1, 2]))
             XCTAssertEqual(stored.filter { $0.id == first.id }.compactMap { $0.group?.id },
                            [group.id, group.id])
-            XCTAssertEqual(stored.first { $0.id == control.id }?.group, nil)
+            XCTAssertNil(stored.first { $0.id == control.id }?.group)
         }
     }
 
