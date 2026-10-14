@@ -137,7 +137,22 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         ))
         try pastures.assignPasture(id: member.id, toGroupID: first.id)
 
+        let dashboardReader = CoreDataReadModelActor(
+            contextFactory: assembly.contextFactory,
+            lookup: assembly.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        let healthyOverview = try await dashboardReader.fetchDashboardRecords()
+        let healthyPastures = try await dashboardReader.fetchDashboardPastureRecords()
+        XCTAssertEqual(
+            healthyOverview.pastures.first(where: { $0.id == member.id })?.restDays, 12
+        )
+        XCTAssertEqual(
+            healthyPastures.first(where: { $0.id == member.id })?.restDays, 12
+        )
+
         let foreignHerdID = UUID()
+        let foreignPastureID = UUID()
         let context = try assembly.contextFactory.makeWriteContext()
         try context.performAndWait {
             let foreignHerd = CDHerd(context: context)
@@ -153,6 +168,13 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             foreignGroup.restDays = 2
             foreignGroup.herd = foreignHerd
 
+            let foreignPasture = CDPasture(context: context)
+            foreignPasture.id = foreignPastureID
+            foreignPasture.name = "Independent Group Pasture"
+            foreignPasture.sortOrder = 0
+            foreignPasture.herd = foreignHerd
+            foreignPasture.group = foreignGroup
+
             let collision = try XCTUnwrap(assembly.lookup.herdOwned(
                 CDPastureGroup.self, id: second.id, herdID: environment.herdID, in: context
             ))
@@ -165,6 +187,16 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             id: first.id,
             herdID: environment.herdID
         )
+        await XCTAssertThrowsErrorAsync(
+            try await dashboardReader.fetchDashboardRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, duplicate)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await dashboardReader.fetchDashboardPastureRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, duplicate)
+        }
         XCTAssertThrowsError(try pastures.fetchPastureGroups()) {
             XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
         }
@@ -208,6 +240,21 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let reloaded = CoreDataPastureRepository(
             selection: environment.selection, assembly: reopened
         )
+        let reopenedDashboard = CoreDataReadModelActor(
+            contextFactory: reopened.contextFactory,
+            lookup: reopened.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await reopenedDashboard.fetchDashboardRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, duplicate)
+        }
+        await XCTAssertThrowsErrorAsync(
+            try await reopenedDashboard.fetchDashboardPastureRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, duplicate)
+        }
         XCTAssertThrowsError(try reloaded.fetchPastureGroups()) {
             XCTAssertEqual($0 as? CoreDataPersistenceError, duplicate)
         }
@@ -225,6 +272,16 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             try independent.fetchPastureGroupDetail(id: first.id)?.name,
             "Independent Rotation"
         )
+        let independentDashboard = CoreDataReadModelActor(
+            contextFactory: reopened.contextFactory,
+            lookup: reopened.lookup,
+            currentHerdID: { independentSelection.currentHerdID }
+        )
+        let independentPastures = try await independentDashboard.fetchDashboardPastureRecords()
+        XCTAssertEqual(independentPastures.map(\.id), [foreignPastureID])
+        XCTAssertEqual(independentPastures.first?.restDays, 2)
+        let independentOverview = try await independentDashboard.fetchDashboardRecords()
+        XCTAssertEqual(independentOverview.pastures.first?.restDays, 2)
 
         let inspect = reopened.contextFactory.makeReadContext()
         try inspect.performAndWait {
