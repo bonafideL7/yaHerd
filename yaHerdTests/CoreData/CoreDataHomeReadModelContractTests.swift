@@ -121,21 +121,63 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
     }
 
     func testHomeFieldCheckReadRejectsDuplicateFindingIDsAcrossSessions() async throws {
-        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
-        let duplicateFindingID = try environment.seedDuplicateUnresolvedFindingIDsAcrossSessions()
-        let reader = environment.fixture.makeHomeFieldCheckQueryReader()
-
-        await XCTAssertThrowsErrorAsync(
-            try await reader.fetchHomeFieldCheckRecords()
-        ) { error in
-            XCTAssertEqual(
-                error as? CoreDataPersistenceError,
-                .duplicateApplicationID(
-                    entity: CDFieldCheckFinding.coreDataEntityName,
-                    id: duplicateFindingID,
-                    herdID: environment.herdID
-                )
+        // An unresolved collision is rejected by the global count query; a
+        // resolved collision still belongs to the fetched warning-session
+        // graph and must be rejected by the same Home read contract.
+        for status in [FieldCheckFindingStatus.open, .resolved] {
+            let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+            let duplicateFindingID = try environment.seedDuplicateFindingIDsAcrossSessions(
+                status: status
             )
+            let expectedError = CoreDataPersistenceError.duplicateApplicationID(
+                entity: CDFieldCheckFinding.coreDataEntityName,
+                id: duplicateFindingID,
+                herdID: environment.herdID
+            )
+            let reader = environment.fixture.makeHomeFieldCheckQueryReader()
+
+            await XCTAssertThrowsErrorAsync(
+                try await reader.fetchHomeFieldCheckRecords()
+            ) { error in
+                XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+            }
+
+            // The direct Field Check reader already rejects the complete
+            // selected-Herd finding identity cohort, regardless of status.
+            let direct = CoreDataFieldCheckRepository(
+                selection: environment.selection,
+                assembly: environment.assembly
+            )
+            XCTAssertThrowsError(try direct.fetchSessions()) { error in
+                XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+            }
+
+            // A separate read-only Core Data assembly must see the same
+            // original physical collision without any implicit repair.
+            let reopened = try await environment.makeReadOnlyAssembly()
+            let reopenedReader = CoreDataReadModelActor(
+                contextFactory: reopened.contextFactory,
+                lookup: reopened.lookup,
+                currentHerdID: { environment.selection.currentHerdID }
+            )
+            await XCTAssertThrowsErrorAsync(
+                try await reopenedReader.fetchHomeFieldCheckRecords()
+            ) { error in
+                XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+            }
+
+            let readContext = reopened.contextFactory.makeReadContext()
+            let physicalRows = try await readContext.perform {
+                let request = NSFetchRequest<CDFieldCheckFinding>(
+                    entityName: CDFieldCheckFinding.coreDataEntityName
+                )
+                request.predicate = NSPredicate(
+                    format: "id == %@",
+                    duplicateFindingID as NSUUID
+                )
+                return try readContext.count(for: request)
+            }
+            XCTAssertEqual(physicalRows, 2)
         }
     }
 
@@ -550,7 +592,9 @@ private final class CoreDataHomeReadModelContractEnvironment {
         }
     }
 
-    func seedDuplicateUnresolvedFindingIDsAcrossSessions() throws -> UUID {
+    func seedDuplicateFindingIDsAcrossSessions(
+        status: FieldCheckFindingStatus
+    ) throws -> UUID {
         let duplicateFindingID = UUID()
         let context = try assembly.contextFactory.makeWriteContext()
 
@@ -583,8 +627,8 @@ private final class CoreDataHomeReadModelContractEnvironment {
                 )
                 finding.typeRawValue = FieldCheckFindingType.generalObservation.rawValue
                 finding.severityRawValue = FieldCheckFindingSeverity.info.rawValue
-                finding.statusRawValue = FieldCheckFindingStatus.open.rawValue
-                finding.note = "Duplicate unresolved finding"
+                finding.statusRawValue = status.rawValue
+                finding.note = "Duplicate finding with status: \(status.rawValue)"
                 finding.animalIDSnapshot = nil
                 finding.animalDisplayTagNumberSnapshot = nil
                 finding.animalDisplayTagColorIDSnapshot = nil
