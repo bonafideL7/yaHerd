@@ -891,6 +891,27 @@ final class CoreDataWorkingRepository:
             context.fetch(treatmentRequest),
             herdID: herd.id
         )
+
+        // Health and pregnancy checks also belong to the Animal aggregate.
+        // Validate their complete Herd scope, including standalone records,
+        // so a Working read never accepts colliding source-record identities.
+        let healthRequest = NSFetchRequest<CDHealthRecord>(
+            entityName: CDHealthRecord.coreDataEntityName
+        )
+        healthRequest.predicate = NSPredicate(format: "herd == %@", herd)
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(
+            context.fetch(healthRequest),
+            herdID: herd.id
+        )
+
+        let pregnancyRequest = NSFetchRequest<CDPregnancyCheck>(
+            entityName: CDPregnancyCheck.coreDataEntityName
+        )
+        pregnancyRequest.predicate = NSPredicate(format: "herd == %@", herd)
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(
+            context.fetch(pregnancyRequest),
+            herdID: herd.id
+        )
     }
 
     private nonisolated static func validateSessionGraph(
