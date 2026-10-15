@@ -711,10 +711,8 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
         }
         XCTAssertEqual(try physicalQueueState(in: assembly), finishedCollisionState)
-        XCTAssertEqual(
-            try await foreignDashboard.fetchDashboardRecords().workingSessions.map(\.id),
-            [foreignSessionID]
-        )
+        let stillHealthyForeignDashboard = try await foreignDashboard.fetchDashboardRecords()
+        XCTAssertEqual(stillHealthyForeignDashboard.workingSessions.map(\.id), [foreignSessionID])
 
         let finishedReadOnlyAssembly = try await harness.makeAssembly(accessMode: .readOnly)
         let finishedReadOnlyDashboard = CoreDataReadModelActor(
