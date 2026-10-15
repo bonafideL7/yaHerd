@@ -1094,6 +1094,39 @@ actor CoreDataReadModelActor:
                 throw HerdRepositoryError.missingHerd
             }
 
+            // Home projects only warning sessions, but application UUID identity
+            // applies to every physical Field Check session in the selected Herd.
+            // A completed session outside the warning predicate must not share
+            // an ID with a session that Home can display.
+            let sessionIdentityRequest = NSFetchRequest<NSDictionary>(
+                entityName: CDFieldCheckSession.coreDataEntityName
+            )
+            sessionIdentityRequest.resultType = .dictionaryResultType
+            sessionIdentityRequest.propertiesToFetch = ["id"]
+            sessionIdentityRequest.predicate = NSPredicate(format: "herd == %@", herd)
+
+            var seenSessionIDs = Set<UUID>()
+            for row in try context.fetch(sessionIdentityRequest) {
+                let id: UUID?
+                if let value = row["id"] as? UUID {
+                    id = value
+                } else if let value = row["id"] as? NSUUID {
+                    id = value as UUID
+                } else {
+                    id = nil
+                }
+                guard let id else {
+                    continue
+                }
+                guard seenSessionIDs.insert(id).inserted else {
+                    throw CoreDataPersistenceError.duplicateApplicationID(
+                        entity: CDFieldCheckSession.coreDataEntityName,
+                        id: id,
+                        herdID: herdID
+                    )
+                }
+            }
+
             try Self.validateUnresolvedFindingAggregationGraph(
                 herd: herd,
                 herdID: herdID,
