@@ -326,6 +326,120 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         )
     }
 
+    func testHomeFieldCheckRejectsChildIDCollisionsOutsideWarningSessions() async throws {
+        for kind in FieldCheckChildIdentityKind.allCases {
+            let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+            let fixture = try environment.seedOffWarningChildIdentityFixture(kind: kind)
+            let homeReader = environment.fixture.makeHomeFieldCheckQueryReader()
+            let direct = CoreDataFieldCheckRepository(
+                selection: environment.selection,
+                assembly: environment.assembly
+            )
+
+            let baseline = try await homeReader.fetchHomeFieldCheckRecords()
+            XCTAssertEqual(baseline.sessions.map { $0.id }, [fixture.warningSessionID])
+            XCTAssertEqual(baseline.openFindingCount, 0)
+            XCTAssertTrue(baseline.openFindings.isEmpty)
+            XCTAssertTrue(baseline.hasHistory)
+            XCTAssertEqual(
+                Set(try direct.fetchSessions().map { $0.id }),
+                Set([
+                    fixture.warningSessionID,
+                    fixture.completedSessionID,
+                    fixture.controlSessionID
+                ])
+            )
+
+            // A completed, resolved child lies outside the Home warning query.
+            // Give it the visible warning child's UUID without changing its
+            // physical session, status, snapshots or an unrelated control row.
+            try environment.duplicateCompletedChildID(
+                kind: kind,
+                existingID: fixture.completedChildID,
+                duplicateID: fixture.warningChildID
+            )
+            let expectedError = CoreDataPersistenceError.duplicateApplicationID(
+                entity: kind.entityName,
+                id: fixture.warningChildID,
+                herdID: environment.herdID
+            )
+            await XCTAssertThrowsErrorAsync(
+                try await homeReader.fetchHomeFieldCheckRecords()
+            ) { error in
+                XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+            }
+            XCTAssertThrowsError(try direct.fetchSessions()) { error in
+                XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+            }
+
+            // The independent read-only SQLite reopening sees the same
+            // collision. Neither reader repairs or discards physical records.
+            let reopened = try await environment.makeReadOnlyAssembly()
+            let reopenedReader = CoreDataReadModelActor(
+                contextFactory: reopened.contextFactory,
+                lookup: reopened.lookup,
+                currentHerdID: { environment.selection.currentHerdID }
+            )
+            await XCTAssertThrowsErrorAsync(
+                try await reopenedReader.fetchHomeFieldCheckRecords()
+            ) { error in
+                XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+            }
+
+            environment.selection.currentHerdID = fixture.foreignHerdID
+            let foreign = try await reopenedReader.fetchHomeFieldCheckRecords()
+            XCTAssertEqual(foreign.sessions.map { $0.id }, [fixture.foreignSessionID])
+            XCTAssertEqual(foreign.openFindingCount, 0)
+            XCTAssertTrue(foreign.hasHistory)
+            environment.selection.currentHerdID = environment.herdID
+
+            let readContext = reopened.contextFactory.makeReadContext()
+            let physical = try await readContext.perform {
+                if kind == .finding {
+                    let request = NSFetchRequest<CDFieldCheckFinding>(
+                        entityName: CDFieldCheckFinding.coreDataEntityName
+                    )
+                    return try readContext.fetch(request).map {
+                        (herdID: $0.herd.id, id: $0.id, completed: $0.session.completedAt != nil)
+                    }
+                }
+                let request = NSFetchRequest<CDFieldCheckAnimalCheck>(
+                    entityName: CDFieldCheckAnimalCheck.coreDataEntityName
+                )
+                return try readContext.fetch(request).map {
+                    (herdID: $0.herd.id, id: $0.id, completed: $0.session.completedAt != nil)
+                }
+            }
+            XCTAssertEqual(physical.count, 4)
+            XCTAssertEqual(
+                physical.filter {
+                    $0.herdID == environment.herdID && $0.id == fixture.warningChildID
+                }.count,
+                2
+            )
+            XCTAssertEqual(
+                physical.filter {
+                    $0.herdID == environment.herdID
+                        && $0.id == fixture.warningChildID
+                        && $0.completed
+                }.count,
+                1
+            )
+            XCTAssertEqual(
+                physical.filter {
+                    $0.herdID == environment.herdID && $0.id == fixture.controlChildID
+                }.count,
+                1
+            )
+            XCTAssertEqual(
+                physical.filter {
+                    $0.herdID == fixture.foreignHerdID && $0.id == fixture.warningChildID
+                }.count,
+                1
+            )
+        }
+    }
+
     func testHomeFieldCheckReadRejectsDuplicateAnimalCheckIDsAcrossWarningSessions() async throws {
         let environment = try await CoreDataHomeReadModelContractEnvironment.make()
         let duplicateCheckID = try environment.seedDuplicateAnimalCheckIDsAcrossWarningSessions()
@@ -609,6 +723,18 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
     }
 }
 
+private enum FieldCheckChildIdentityKind: CaseIterable, Sendable {
+    case finding
+    case animalCheck
+
+    var entityName: String {
+        switch self {
+        case .finding: return CDFieldCheckFinding.coreDataEntityName
+        case .animalCheck: return CDFieldCheckAnimalCheck.coreDataEntityName
+        }
+    }
+}
+
 @MainActor
 private final class CoreDataHomeReadModelContractEnvironment {
     let assembly: CoreDataPersistenceAssembly
@@ -705,6 +831,147 @@ private final class CoreDataHomeReadModelContractEnvironment {
                 )
             }
         )
+    }
+
+    func seedOffWarningChildIdentityFixture(
+        kind: FieldCheckChildIdentityKind
+    ) throws -> (
+        warningSessionID: UUID,
+        completedSessionID: UUID,
+        controlSessionID: UUID,
+        foreignSessionID: UUID,
+        foreignHerdID: UUID,
+        warningChildID: UUID,
+        completedChildID: UUID,
+        controlChildID: UUID
+    ) {
+        let warningSessionID = UUID()
+        let completedSessionID = UUID()
+        let controlSessionID = UUID()
+        let foreignSessionID = UUID()
+        let foreignHerdID = UUID()
+        let warningChildID = UUID()
+        let completedChildID = UUID()
+        let controlChildID = UUID()
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            guard let herd = try assembly.lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            let foreignHerd = CDHerd(context: context)
+            foreignHerd.id = foreignHerdID
+            foreignHerd.name = "Independent Child Identity Herd"
+            foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 1_100)
+            foreignHerd.updatedAt = foreignHerd.createdAt
+
+            let rows: [(owner: CDHerd, sessionID: UUID, childID: UUID, completed: Bool)] = [
+                (herd, warningSessionID, warningChildID, false),
+                (herd, completedSessionID, completedChildID, true),
+                (herd, controlSessionID, controlChildID, true),
+                (foreignHerd, foreignSessionID, warningChildID, false)
+            ]
+            for (index, row) in rows.enumerated() {
+                let session = CDFieldCheckSession(context: context)
+                session.id = row.sessionID
+                session.startedAt = Date(timeIntervalSinceReferenceDate: 12_000 + Double(index))
+                session.completedAt = row.completed
+                    ? Date(timeIntervalSinceReferenceDate: 13_000 + Double(index))
+                    : nil
+                session.notes = "Child identity fixture " + String(index)
+                session.expectedHeadCountSnapshot = 0
+                session.quickCowCount = 0
+                session.quickHeiferCount = 0
+                session.quickCalfCount = 0
+                session.quickBullCount = 0
+                session.quickSteerCount = 0
+                session.pastureIDSnapshot = UUID()
+                session.pastureNameSnapshot = "Historical pasture"
+                session.pastureArchivedAt = nil
+                session.herd = row.owner
+
+                switch kind {
+                case .finding:
+                    let finding = CDFieldCheckFinding(context: context)
+                    finding.id = row.childID
+                    finding.recordedAt = Date(
+                        timeIntervalSinceReferenceDate: 14_000 + Double(index)
+                    )
+                    finding.typeRawValue = FieldCheckFindingType.generalObservation.rawValue
+                    finding.severityRawValue = FieldCheckFindingSeverity.info.rawValue
+                    finding.statusRawValue = FieldCheckFindingStatus.resolved.rawValue
+                    finding.note = "Resolved historical finding"
+                    finding.animalIDSnapshot = nil
+                    finding.animalDisplayTagNumberSnapshot = nil
+                    finding.animalDisplayTagColorIDSnapshot = nil
+                    finding.animalNameSnapshot = nil
+                    finding.pastureNameSnapshot = session.pastureNameSnapshot
+                    finding.herd = row.owner
+                    finding.session = session
+                    finding.animal = nil
+                case .animalCheck:
+                    let check = CDFieldCheckAnimalCheck(context: context)
+                    check.id = row.childID
+                    check.animalIDSnapshot = UUID()
+                    check.rosterTagNumberSnapshot = "CHILD-" + String(index)
+                    check.rosterTagColorIDSnapshot = nil
+                    check.damRosterTagNumberSnapshot = nil
+                    check.damRosterTagColorIDSnapshot = nil
+                    check.animalNameSnapshot = "Historical animal"
+                    check.animalSexRawValueSnapshot = Sex.female.rawValue
+                    check.animalTypeRawValueSnapshot = AnimalType.cow.rawValue
+                    check.wasExpectedAtStart = true
+                    check.countedAt = nil
+                    check.missingConfirmedAt = nil
+                    check.herd = row.owner
+                    check.session = session
+                    check.animal = nil
+                }
+            }
+            try context.save()
+        }
+        return (
+            warningSessionID,
+            completedSessionID,
+            controlSessionID,
+            foreignSessionID,
+            foreignHerdID,
+            warningChildID,
+            completedChildID,
+            controlChildID
+        )
+    }
+
+    func duplicateCompletedChildID(
+        kind: FieldCheckChildIdentityKind,
+        existingID: UUID,
+        duplicateID: UUID
+    ) throws {
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            switch kind {
+            case .finding:
+                guard let finding = try assembly.lookup.herdOwned(
+                    CDFieldCheckFinding.self,
+                    id: existingID,
+                    herdID: herdID,
+                    in: context
+                ) else {
+                    throw FieldCheckRepositoryError.findingNotFound
+                }
+                finding.id = duplicateID
+            case .animalCheck:
+                guard let check = try assembly.lookup.herdOwned(
+                    CDFieldCheckAnimalCheck.self,
+                    id: existingID,
+                    herdID: herdID,
+                    in: context
+                ) else {
+                    throw FieldCheckRepositoryError.animalCheckNotFound
+                }
+                check.id = duplicateID
+            }
+            try context.save()
+        }
     }
 
     func seedDuplicateAnimalCheckIDsAcrossWarningSessions() throws -> UUID {
