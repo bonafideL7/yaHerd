@@ -195,9 +195,16 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
+            try context.setQueryGenerationFrom(.current)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+
+            // The filtered Dashboard Animal lists must reject identities
+            // duplicated by excluded (e.g. archived) selected-Herd records.
+            try Self.validateAnimalApplicationIDs(
+                herd: herd, herdID: herdID, in: context
+            )
 
             let request = NSFetchRequest<CDAnimal>(
                 entityName: CDAnimal.coreDataEntityName
