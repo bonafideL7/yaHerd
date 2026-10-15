@@ -137,14 +137,19 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             XCTAssertEqual(stored.filter { $0.id == visible.id }.count, 2)
             XCTAssertEqual(
                 Set(stored.map(\.name)),
-                Set(["Visible Dashboard Animal", "Archived Dashboard Animal", "Dashboard Control"])
+                Set([
+                    "Visible Dashboard Animal",
+                    "Archived Dashboard Animal",
+                    "Dashboard Control"
+                ])
             )
-            XCTAssertTrue(stored.first { $0.name == "Archived Dashboard Animal" }?.isArchived == true)
+            XCTAssertTrue(
+                stored.first { $0.name == "Archived Dashboard Animal" }?.isArchived == true
+            )
             XCTAssertEqual(stored.first { $0.name == "Dashboard Control" }?.id, control.id)
             XCTAssertEqual(stored.first { $0.name == "Dashboard Control" }?.isArchived, false)
         }
     }
-
 
     func testMilestone12PastureCohortRejectsDuplicateIDsWithoutReorderingOrRepairing() async throws {
         let harness = try CoreDataPersistenceHarness()
