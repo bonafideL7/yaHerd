@@ -184,6 +184,220 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         XCTAssertNil(try otherWorking.fetchTemplateDetail(id: primaryTemplateID))
     }
 
+    func testDashboardRejectsWorkingSessionIDCollisionOutsideActiveProjection() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataWorkingContractEnvironment(assembly: assembly)
+        let primaryWorking = environment.makeWorkingRepository()
+
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Dashboard Session Identity Pasture",
+                acreage: 25,
+                usableAcreage: 22,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animals = try (0..<3).map { index in
+            try environment.makeAnimalRepository().create(
+                input: Self.animalInput(
+                    name: "Dashboard Session Identity Cow \(index)",
+                    tagNumber: "DSI-\(index)",
+                    pastureID: pasture.id
+                )
+            )
+        }
+        var sessionIDs: [UUID] = []
+        for (index, animal) in animals.enumerated() {
+            sessionIDs.append(
+                try await primaryWorking.startSession(
+                    input: WorkingSessionStartInput(
+                        date: Date(timeIntervalSinceReferenceDate: 410_000 + Double(index)),
+                        sourcePastureID: pasture.id,
+                        treatmentTemplateName: "Dashboard Session \(index)",
+                        plannedTreatments: [],
+                        animalIDs: [animal.id]
+                    )
+                )
+            )
+        }
+        let activeSessionID = sessionIDs[0]
+        let finishedSessionID = sessionIDs[1]
+        let controlSessionID = sessionIDs[2]
+
+        let finishedQueueID = try XCTUnwrap(
+            primaryWorking.fetchSessionDetail(id: finishedSessionID)?.queueItems.first?.id
+        )
+        try await primaryWorking.completeSession(
+            id: finishedSessionID,
+            assignments: [
+                WorkingQueueDestinationAssignment(
+                    queueItemID: finishedQueueID,
+                    destinationPastureID: nil
+                )
+            ]
+        )
+
+        let foreignHerdID = UUID()
+        try environment.seedAdditionalHerd(
+            id: foreignHerdID,
+            name: "Independent Dashboard Session Identity Herd"
+        )
+        let foreignSelection = CoreDataWorkingContractSelection()
+        foreignSelection.currentHerdID = foreignHerdID
+        let foreignPasture = try CoreDataPastureRepository(
+            selection: foreignSelection,
+            assembly: assembly
+        ).create(input: PastureInput(
+            name: "Foreign Dashboard Session Pasture",
+            acreage: 20,
+            usableAcreage: 18,
+            targetAcresPerHead: 1.5
+        ))
+        let foreignAnimal = try CoreDataAnimalRepository(
+            selection: foreignSelection,
+            assembly: assembly
+        ).create(input: Self.animalInput(
+            name: "Foreign Dashboard Session Cow",
+            tagNumber: "DSI-FOREIGN",
+            pastureID: foreignPasture.id
+        ))
+        let foreignWorking = CoreDataWorkingRepository(
+            selection: foreignSelection,
+            assembly: assembly
+        )
+        let foreignSessionID = try await foreignWorking.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 420_000),
+                sourcePastureID: foreignPasture.id,
+                treatmentTemplateName: "Foreign Dashboard Session",
+                plannedTreatments: [],
+                animalIDs: [foreignAnimal.id]
+            )
+        )
+
+        // Cross-Herd reuse is valid; finished sessions must remain outside the
+        // active Dashboard projection without leaving the identity scope.
+        let writeContext = try assembly.contextFactory.makeWriteContext()
+        try writeContext.performAndWait {
+            let request = NSFetchRequest<CDWorkingSession>(
+                entityName: CDWorkingSession.coreDataEntityName
+            )
+            request.predicate = NSPredicate(
+                format: "herd.id == %@ AND id == %@",
+                foreignHerdID as NSUUID,
+                foreignSessionID as NSUUID
+            )
+            let foreignSession = try XCTUnwrap(writeContext.fetch(request).first)
+            foreignSession.id = activeSessionID
+            try writeContext.save()
+        }
+
+        func dashboard(
+            in assembly: CoreDataPersistenceAssembly,
+            selection: CoreDataWorkingContractSelection
+        ) -> CoreDataReadModelActor {
+            CoreDataReadModelActor(
+                contextFactory: assembly.contextFactory,
+                lookup: assembly.lookup,
+                currentHerdID: { selection.currentHerdID }
+            )
+        }
+
+        let primaryDashboard = dashboard(in: assembly, selection: environment.selection)
+        let foreignDashboard = dashboard(in: assembly, selection: foreignSelection)
+        let healthyPrimary = try await primaryDashboard.fetchDashboardRecords()
+        XCTAssertEqual(
+            Set(healthyPrimary.workingSessions.map(\.id)),
+            Set([activeSessionID, controlSessionID])
+        )
+        let healthyForeign = try await foreignDashboard.fetchDashboardRecords()
+        XCTAssertEqual(healthyForeign.workingSessions.map(\.id), [activeSessionID])
+
+        // The finished session shares the active session's application UUID,
+        // but remains a distinct persisted Core Data row outside the 25-active
+        // session fetch. The direct Working library must reject the same store.
+        try writeContext.performAndWait {
+            let request = NSFetchRequest<CDWorkingSession>(
+                entityName: CDWorkingSession.coreDataEntityName
+            )
+            request.predicate = NSPredicate(
+                format: "herd.id == %@ AND id == %@",
+                environment.herdID as NSUUID,
+                finishedSessionID as NSUUID
+            )
+            let finishedSession = try XCTUnwrap(writeContext.fetch(request).first)
+            XCTAssertEqual(finishedSession.statusRawValue, WorkingSessionStatus.finished.rawValue)
+            finishedSession.id = activeSessionID
+            try writeContext.save()
+        }
+
+        func physicalSessions(
+            in assembly: CoreDataPersistenceAssembly
+        ) throws -> [String] {
+            let context = assembly.contextFactory.makeReadContext()
+            return try context.performAndWait {
+                let request = NSFetchRequest<CDWorkingSession>(
+                    entityName: CDWorkingSession.coreDataEntityName
+                )
+                return try context.fetch(request).map {
+                    [
+                        $0.herd.id.uuidString,
+                        $0.id.uuidString,
+                        $0.statusRawValue,
+                        $0.treatmentTemplateNameSnapshot
+                    ].joined(separator: "|")
+                }.sorted()
+            }
+        }
+
+        let baseline = try physicalSessions(in: assembly)
+        XCTAssertEqual(baseline.count, 4)
+        XCTAssertEqual(
+            baseline.filter {
+                $0.hasPrefix(environment.herdID.uuidString + "|" + activeSessionID.uuidString + "|")
+            }.count,
+            2
+        )
+
+        let expectedError = CoreDataPersistenceError.duplicateApplicationID(
+            entity: CDWorkingSession.coreDataEntityName,
+            id: activeSessionID,
+            herdID: environment.herdID
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await primaryDashboard.fetchDashboardRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertThrowsError(try primaryWorking.fetchSessions()) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertEqual(try physicalSessions(in: assembly), baseline)
+
+        let unaffectedForeign = try await foreignDashboard.fetchDashboardRecords()
+        XCTAssertEqual(unaffectedForeign.workingSessions.map(\.id), [activeSessionID])
+        XCTAssertEqual(try foreignWorking.fetchSessions().map(\.id), [activeSessionID])
+
+        let readOnlyAssembly = try await harness.makeAssembly(accessMode: .readOnly)
+        let readOnlyPrimaryDashboard = dashboard(
+            in: readOnlyAssembly,
+            selection: environment.selection
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await readOnlyPrimaryDashboard.fetchDashboardRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
+        let readOnlyForeignDashboard = dashboard(
+            in: readOnlyAssembly,
+            selection: foreignSelection
+        )
+        let reopenedForeign = try await readOnlyForeignDashboard.fetchDashboardRecords()
+        XCTAssertEqual(reopenedForeign.workingSessions.map(\.id), [activeSessionID])
+        XCTAssertEqual(try physicalSessions(in: readOnlyAssembly), baseline)
+    }
+
     func testWorkingQueueApplicationIDsMustBeUniqueAcrossSessionsInSelectedHerd() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
