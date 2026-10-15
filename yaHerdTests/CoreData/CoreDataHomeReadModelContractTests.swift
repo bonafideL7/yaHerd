@@ -181,6 +181,151 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         }
     }
 
+    func testHomeFieldCheckRejectsSessionIDCollisionOutsideWarningPredicate() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let warningID = UUID()
+        let completedID = UUID()
+        let controlID = UUID()
+        let foreignHerdID = UUID()
+
+        let seedContext = try environment.assembly.contextFactory.makeWriteContext()
+        try seedContext.performAndWait {
+            let herd = try XCTUnwrap(
+                environment.assembly.lookup.herd(id: environment.herdID, in: seedContext)
+            )
+            let foreignHerd = CDHerd(context: seedContext)
+            foreignHerd.id = foreignHerdID
+            foreignHerd.name = "Independent Field Check Herd"
+            foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 1_100)
+            foreignHerd.updatedAt = foreignHerd.createdAt
+
+            let rows: [(owner: CDHerd, id: UUID, finished: Bool, note: String)] = [
+                (herd, warningID, false, "selected warning"),
+                (herd, completedID, true, "selected completed history"),
+                (herd, controlID, true, "unrelated completed control"),
+                (foreignHerd, warningID, false, "independent warning")
+            ]
+            for (index, row) in rows.enumerated() {
+                let session = CDFieldCheckSession(context: seedContext)
+                session.id = row.id
+                session.startedAt = Date(timeIntervalSinceReferenceDate: 12_000 + Double(index))
+                session.completedAt = row.finished
+                    ? Date(timeIntervalSinceReferenceDate: 13_000 + Double(index))
+                    : nil
+                session.notes = row.note
+                session.expectedHeadCountSnapshot = 0
+                session.quickCowCount = 0
+                session.quickHeiferCount = 0
+                session.quickCalfCount = 0
+                session.quickBullCount = 0
+                session.quickSteerCount = 0
+                session.pastureIDSnapshot = UUID()
+                session.pastureNameSnapshot = "Historical pasture"
+                session.pastureArchivedAt = nil
+                session.herd = row.owner
+            }
+            try seedContext.save()
+        }
+
+        let homeReader = environment.fixture.makeHomeFieldCheckQueryReader()
+        let baseline = try await homeReader.fetchHomeFieldCheckRecords()
+        XCTAssertEqual(baseline.sessions.map(\.id), [warningID])
+        XCTAssertEqual(baseline.openFindingCount, 0)
+        XCTAssertTrue(baseline.openFindings.isEmpty)
+        XCTAssertTrue(baseline.hasHistory)
+
+        let direct = CoreDataFieldCheckRepository(
+            selection: environment.selection,
+            assembly: environment.assembly
+        )
+        XCTAssertEqual(
+            Set(try direct.fetchSessions().map(\.id)),
+            Set([warningID, completedID, controlID])
+        )
+
+        // Corrupt only the completed selected-Herd row. It is outside every
+        // Home warning predicate but now shares the visible warning's UUID.
+        let mutationContext = try environment.assembly.contextFactory.makeWriteContext()
+        try mutationContext.performAndWait {
+            let completed = try XCTUnwrap(
+                environment.assembly.lookup.herdOwned(
+                    CDFieldCheckSession.self,
+                    id: completedID,
+                    herdID: environment.herdID,
+                    in: mutationContext
+                )
+            )
+            completed.id = warningID
+            try mutationContext.save()
+        }
+
+        let expectedError = CoreDataPersistenceError.duplicateApplicationID(
+            entity: CDFieldCheckSession.coreDataEntityName,
+            id: warningID,
+            herdID: environment.herdID
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await homeReader.fetchHomeFieldCheckRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertThrowsError(try direct.fetchSessions()) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
+
+        let reopened = try await environment.makeReadOnlyAssembly()
+        let reopenedReader = CoreDataReadModelActor(
+            contextFactory: reopened.contextFactory,
+            lookup: reopened.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await reopenedReader.fetchHomeFieldCheckRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
+
+        // Reusing a UUID in a different Herd is valid and unaffected.
+        environment.selection.currentHerdID = foreignHerdID
+        let foreign = try await reopenedReader.fetchHomeFieldCheckRecords()
+        XCTAssertEqual(foreign.sessions.map(\.id), [warningID])
+        XCTAssertEqual(foreign.openFindingCount, 0)
+        XCTAssertTrue(foreign.hasHistory)
+        environment.selection.currentHerdID = environment.herdID
+
+        // Neither failed read repaired, merged or discarded a physical row.
+        let readContext = reopened.contextFactory.makeReadContext()
+        let physicalRows = try await readContext.perform {
+            let request = NSFetchRequest<CDFieldCheckSession>(
+                entityName: CDFieldCheckSession.coreDataEntityName
+            )
+            return try readContext.fetch(request).map {
+                (herdID: $0.herd.id, id: $0.id, note: $0.notes, completed: $0.completedAt != nil)
+            }
+        }
+        XCTAssertEqual(physicalRows.count, 4)
+        XCTAssertEqual(
+            physicalRows.filter { $0.herdID == environment.herdID && $0.id == warningID }.count,
+            2
+        )
+        XCTAssertEqual(
+            physicalRows.filter {
+                $0.herdID == environment.herdID
+                    && $0.note == "selected completed history"
+                    && $0.completed
+            }.count,
+            1
+        )
+        XCTAssertEqual(
+            physicalRows.filter { $0.herdID == environment.herdID && $0.id == controlID }.count,
+            1
+        )
+        XCTAssertEqual(
+            physicalRows.filter { $0.herdID == foreignHerdID && $0.id == warningID }.count,
+            1
+        )
+    }
+
     func testHomeFieldCheckReadRejectsDuplicateAnimalCheckIDsAcrossWarningSessions() async throws {
         let environment = try await CoreDataHomeReadModelContractEnvironment.make()
         let duplicateCheckID = try environment.seedDuplicateAnimalCheckIDsAcrossWarningSessions()
