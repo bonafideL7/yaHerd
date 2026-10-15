@@ -6,6 +6,146 @@ import XCTest
 @MainActor
 final class CoreDataAnimalRepositoryContractTests: XCTestCase {
 
+    func testFilteredDashboardAnimalReadsRejectSelectedHerdIDCollisionsOutsidePredicate() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let repository = environment.makeAnimalRepository()
+
+        let visible = try repository.create(
+            input: readGraphAnimalInput(name: "Visible Dashboard Animal", tag: "DA-1")
+        )
+        let archived = try repository.create(
+            input: readGraphAnimalInput(name: "Archived Dashboard Animal", tag: "DA-2")
+        )
+        let control = try repository.create(
+            input: readGraphAnimalInput(name: "Dashboard Control", tag: "DA-3")
+        )
+        try repository.archive(ids: [archived.id])
+
+        // A separate Herd is allowed to reuse an application UUID.
+        let foreignHerdID = UUID()
+        let foreignContext = try assembly.contextFactory.makeWriteContext()
+        try foreignContext.performAndWait {
+            let herd = CDHerd(context: foreignContext)
+            herd.id = foreignHerdID
+            herd.name = "Independent Dashboard Animal Herd"
+            herd.createdAt = Date(timeIntervalSinceReferenceDate: 1_000)
+            herd.updatedAt = herd.createdAt
+            try foreignContext.save()
+        }
+        let foreignSelection = CoreDataAnimalContractSelection()
+        foreignSelection.currentHerdID = foreignHerdID
+        let foreignRepository = CoreDataAnimalRepository(
+            selection: foreignSelection,
+            assembly: assembly
+        )
+        let foreignAnimal = try foreignRepository.create(
+            input: readGraphAnimalInput(name: "Independent Dashboard Animal", tag: "DA-X")
+        )
+        let context = try assembly.contextFactory.makeWriteContext()
+        try context.performAndWait {
+            let independent = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDAnimal.self, id: foreignAnimal.id, herdID: foreignHerdID, in: context
+            ))
+            independent.id = visible.id
+            try context.save()
+        }
+
+        let reader = environment.makeDashboardQueryReader()
+        let healthyActive = try await reader.fetchDashboardAnimalRecords(kind: .active)
+        let healthyUnassigned = try await reader.fetchDashboardAnimalRecords(kind: .unassigned)
+        let healthyWorkingPen = try await reader.fetchDashboardAnimalRecords(kind: .workingPen)
+        XCTAssertEqual(Set(healthyActive.map(\.id)), Set([visible.id, control.id]))
+        XCTAssertEqual(Set(healthyUnassigned.map(\.id)), Set([visible.id, control.id]))
+        XCTAssertTrue(healthyWorkingPen.isEmpty)
+        XCTAssertEqual(
+            try foreignRepository.fetchAnimals().map(\.id),
+            [visible.id]
+        )
+
+        // The duplicate lies outside every active-only filtered Dashboard cohort.
+        // Both rows remain physically distinct and retain their existing metadata.
+        let collisionContext = try assembly.contextFactory.makeWriteContext()
+        try collisionContext.performAndWait {
+            let persistedArchived = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDAnimal.self, id: archived.id, herdID: environment.herdID,
+                in: collisionContext
+            ))
+            XCTAssertTrue(persistedArchived.isArchived)
+            persistedArchived.id = visible.id
+            try collisionContext.save()
+        }
+
+        let expected = CoreDataPersistenceError.duplicateApplicationID(
+            entity: CDAnimal.coreDataEntityName,
+            id: visible.id,
+            herdID: environment.herdID
+        )
+        for kind in [DashboardAnimalListKind.active, .unassigned, .workingPen] {
+            do {
+                _ = try await reader.fetchDashboardAnimalRecords(kind: kind)
+                XCTFail("Expected selected-Herd collision to reject filtered Dashboard \(kind).")
+            } catch {
+                XCTAssertEqual(error as? CoreDataPersistenceError, expected)
+            }
+        }
+        XCTAssertThrowsError(try repository.fetchAnimals()) {
+            XCTAssertEqual($0 as? CoreDataPersistenceError, expected)
+        }
+        do {
+            _ = try await reader.fetchDashboardRecords()
+            XCTFail("Full Dashboard accepted duplicate selected-Herd Animal identity.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataPersistenceError, expected)
+        }
+
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let readOnlyReader = CoreDataReadModelActor(
+            contextFactory: reopened.contextFactory,
+            lookup: reopened.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        for kind in [DashboardAnimalListKind.active, .unassigned, .workingPen] {
+            do {
+                _ = try await readOnlyReader.fetchDashboardAnimalRecords(kind: kind)
+                XCTFail("Reopened read-only filtered Dashboard accepted duplicate \(kind).")
+            } catch {
+                XCTAssertEqual(error as? CoreDataPersistenceError, expected)
+            }
+        }
+
+        let foreignReadOnlyReader = CoreDataReadModelActor(
+            contextFactory: reopened.contextFactory,
+            lookup: reopened.lookup,
+            currentHerdID: { foreignSelection.currentHerdID }
+        )
+        let unaffectedForeign = try await foreignReadOnlyReader.fetchDashboardAnimalRecords(
+            kind: .active
+        )
+        XCTAssertEqual(unaffectedForeign.map(\.id), [visible.id])
+
+        let inspection = reopened.contextFactory.makeReadContext()
+        try inspection.performAndWait {
+            let herd = try XCTUnwrap(reopened.lookup.herd(
+                id: environment.herdID, in: inspection
+            ))
+            let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
+            request.predicate = NSPredicate(format: "herd == %@", herd)
+            let stored = try inspection.fetch(request)
+            XCTAssertEqual(stored.count, 3)
+            XCTAssertEqual(stored.filter { $0.id == visible.id }.count, 2)
+            XCTAssertEqual(
+                Set(stored.map(\.name)),
+                Set(["Visible Dashboard Animal", "Archived Dashboard Animal", "Dashboard Control"])
+            )
+            XCTAssertTrue(stored.first { $0.name == "Archived Dashboard Animal" }?.isArchived == true)
+            XCTAssertEqual(stored.first { $0.name == "Dashboard Control" }?.id, control.id)
+            XCTAssertEqual(stored.first { $0.name == "Dashboard Control" }?.isArchived, false)
+        }
+    }
+
+
     func testMilestone12PastureCohortRejectsDuplicateIDsWithoutReorderingOrRepairing() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
