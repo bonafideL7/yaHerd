@@ -463,6 +463,9 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         let duplicateID = try XCTUnwrap(
             primaryWorking.fetchSessionDetail(id: firstSessionID)?.queueItems.first?.id
         )
+        let secondOriginalQueueID = try XCTUnwrap(
+            primaryWorking.fetchSessionDetail(id: secondSessionID)?.queueItems.first?.id
+        )
         let healthyQueueID = try XCTUnwrap(
             primaryWorking.fetchSessionDetail(id: controlSessionID)?
                 .queueItems.first(where: { $0.animalID == controlAnimal.id })?.id
@@ -652,6 +655,82 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         let reopenedForeignDashboard = try await readOnlyForeignDashboard.fetchDashboardRecords()
         XCTAssertEqual(reopenedForeignDashboard.workingSessions.map(\.id), [foreignSessionID])
         XCTAssertEqual(try physicalQueueState(in: readOnlyAssembly), baseline)
+
+        // The earlier collision was between two displayed active sessions.
+        // A finished session is not included in Dashboard's 25 active rows,
+        // but its queue UUID remains part of the same selected-Herd identity.
+        // Restore the original UUID before finishing via the real write path.
+        func updateSecondQueueID(_ id: UUID) throws {
+            try writeContext.performAndWait {
+                let request = NSFetchRequest<CDWorkingQueueItem>(
+                    entityName: CDWorkingQueueItem.coreDataEntityName
+                )
+                request.predicate = NSPredicate(
+                    format: "session.id == %@",
+                    secondSessionID as NSUUID
+                )
+                let item = try XCTUnwrap(writeContext.fetch(request).first)
+                item.id = id
+                try writeContext.save()
+            }
+        }
+        try updateSecondQueueID(secondOriginalQueueID)
+        try await primaryWorking.completeSession(
+            id: secondSessionID,
+            assignments: [
+                WorkingQueueDestinationAssignment(
+                    queueItemID: secondOriginalQueueID,
+                    destinationPastureID: nil
+                )
+            ]
+        )
+
+        let completedHealthyDashboard = try await primaryDashboard.fetchDashboardRecords()
+        XCTAssertEqual(
+            Set(completedHealthyDashboard.workingSessions.map(\.id)),
+            Set([firstSessionID, controlSessionID])
+        )
+        XCTAssertEqual(
+            Set(try primaryWorking.fetchSessions().map(\.id)),
+            Set([firstSessionID, secondSessionID, controlSessionID])
+        )
+
+        // Reintroduce the *same* physical collision, now in a finished session
+        // outside the Dashboard active-session predicate. The direct Working
+        // library still refuses it; independently projected Dashboard/Home
+        // must also fail rather than displaying the healthy active session.
+        try updateSecondQueueID(duplicateID)
+        let finishedCollisionState = try physicalQueueState(in: assembly)
+        XCTAssertEqual(finishedCollisionState.count, 4)
+        await XCTAssertThrowsErrorAsync(
+            try await primaryDashboard.fetchDashboardRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertThrowsError(try primaryWorking.fetchSessions()) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertEqual(try physicalQueueState(in: assembly), finishedCollisionState)
+        XCTAssertEqual(
+            try await foreignDashboard.fetchDashboardRecords().workingSessions.map(\.id),
+            [foreignSessionID]
+        )
+
+        let finishedReadOnlyAssembly = try await harness.makeAssembly(accessMode: .readOnly)
+        let finishedReadOnlyDashboard = CoreDataReadModelActor(
+            contextFactory: finishedReadOnlyAssembly.contextFactory,
+            lookup: finishedReadOnlyAssembly.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await finishedReadOnlyDashboard.fetchDashboardRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataPersistenceError, expectedError)
+        }
+        XCTAssertEqual(
+            try physicalQueueState(in: finishedReadOnlyAssembly),
+            finishedCollisionState
+        )
     }
 
     func testWorkingTreatmentRecordApplicationIDsMustBeUniqueAcrossSessionsInSelectedHerd() async throws {
