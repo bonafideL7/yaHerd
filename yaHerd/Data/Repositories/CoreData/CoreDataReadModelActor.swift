@@ -82,8 +82,41 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
+            try context.setQueryGenerationFrom(.current)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
+            }
+
+            // The 25 active-session summaries are a bounded view of one
+            // Herd-scoped application identity. Check all persisted session
+            // UUIDs, including finished and cancelled sessions, first.
+            let sessionIdentityRequest = NSFetchRequest<NSDictionary>(
+                entityName: CDWorkingSession.coreDataEntityName
+            )
+            sessionIdentityRequest.resultType = .dictionaryResultType
+            sessionIdentityRequest.propertiesToFetch = ["id"]
+            sessionIdentityRequest.predicate = NSPredicate(format: "herd == %@", herd)
+
+            var seenSessionIDs = Set<UUID>()
+            for row in try context.fetch(sessionIdentityRequest) {
+                let id: UUID?
+                if let value = row["id"] as? UUID {
+                    id = value
+                } else if let value = row["id"] as? NSUUID {
+                    id = value as UUID
+                } else {
+                    id = nil
+                }
+                guard let id else {
+                    continue
+                }
+                guard seenSessionIDs.insert(id).inserted else {
+                    throw CoreDataPersistenceError.duplicateApplicationID(
+                        entity: CDWorkingSession.coreDataEntityName,
+                        id: id,
+                        herdID: herdID
+                    )
+                }
             }
 
             let animalRequest = NSFetchRequest<CDAnimal>(
