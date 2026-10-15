@@ -1127,7 +1127,7 @@ actor CoreDataReadModelActor:
                 }
             }
 
-            try Self.validateUnresolvedFindingAggregationGraph(
+            try Self.validateFieldCheckChildIdentityAndFindingGraph(
                 herd: herd,
                 herdID: herdID,
                 in: context
@@ -2220,7 +2220,7 @@ actor CoreDataReadModelActor:
 
     private static let validFindingStatusRawValues = FieldCheckFindingStatus.allCases.map(\.rawValue)
 
-    private static func validateUnresolvedFindingAggregationGraph(
+    private static func validateFieldCheckChildIdentityAndFindingGraph(
         herd: CDHerd,
         herdID: UUID,
         in context: NSManagedObjectContext
@@ -2250,37 +2250,38 @@ actor CoreDataReadModelActor:
             _ = try FieldCheckMapper.makeFindingSnapshot(from: finding)
         }
 
-        let idRequest = NSFetchRequest<NSDictionary>(
-            entityName: CDFieldCheckFinding.coreDataEntityName
-        )
-        idRequest.resultType = .dictionaryResultType
-        idRequest.propertiesToFetch = ["id"]
-        idRequest.predicate = NSPredicate(
-            format: "herd == %@ AND session.herd == %@ AND statusRawValue IN %@",
-            herd,
-            herd,
-            unresolvedFindingStatusRawValues
-        )
+        // Home filters warnings, but a child UUID remains unique across the
+        // selected Herd even when its session is completed or its finding is
+        // resolved. The direct Field Check library uses that complete scope.
+        for entityName in [
+            CDFieldCheckFinding.coreDataEntityName,
+            CDFieldCheckAnimalCheck.coreDataEntityName
+        ] {
+            let idRequest = NSFetchRequest<NSDictionary>(entityName: entityName)
+            idRequest.resultType = .dictionaryResultType
+            idRequest.propertiesToFetch = ["id"]
+            idRequest.predicate = NSPredicate(format: "herd == %@", herd)
 
-        var seenIDs = Set<UUID>()
-        for row in try context.fetch(idRequest) {
-            let id: UUID?
-            if let value = row["id"] as? UUID {
-                id = value
-            } else if let value = row["id"] as? NSUUID {
-                id = value as UUID
-            } else {
-                id = nil
-            }
-            guard let id else {
-                continue
-            }
-            guard seenIDs.insert(id).inserted else {
-                throw CoreDataPersistenceError.duplicateApplicationID(
-                    entity: CDFieldCheckFinding.coreDataEntityName,
-                    id: id,
-                    herdID: herdID
-                )
+            var seenIDs = Set<UUID>()
+            for row in try context.fetch(idRequest) {
+                let id: UUID?
+                if let value = row["id"] as? UUID {
+                    id = value
+                } else if let value = row["id"] as? NSUUID {
+                    id = value as UUID
+                } else {
+                    id = nil
+                }
+                guard let id else {
+                    continue
+                }
+                guard seenIDs.insert(id).inserted else {
+                    throw CoreDataPersistenceError.duplicateApplicationID(
+                        entity: entityName,
+                        id: id,
+                        herdID: herdID
+                    )
+                }
             }
         }
     }
