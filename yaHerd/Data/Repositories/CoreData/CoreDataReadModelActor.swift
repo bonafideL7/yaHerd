@@ -119,6 +119,39 @@ actor CoreDataReadModelActor:
                 }
             }
 
+            // The bounded Dashboard view must agree with the direct Working
+            // library's full-Herd queue identity scope. Finished and off-page
+            // sessions can otherwise reuse IDs of displayed active queue rows.
+            // Fetch UUIDs only; the active summary remains limited to 25 rows.
+            let queueIdentityRequest = NSFetchRequest<NSDictionary>(
+                entityName: CDWorkingQueueItem.coreDataEntityName
+            )
+            queueIdentityRequest.resultType = .dictionaryResultType
+            queueIdentityRequest.propertiesToFetch = ["id"]
+            queueIdentityRequest.predicate = NSPredicate(format: "herd == %@", herd)
+
+            var seenQueueIDs = Set<UUID>()
+            for row in try context.fetch(queueIdentityRequest) {
+                let id: UUID?
+                if let value = row["id"] as? UUID {
+                    id = value
+                } else if let value = row["id"] as? NSUUID {
+                    id = value as UUID
+                } else {
+                    id = nil
+                }
+                guard let id else {
+                    continue
+                }
+                guard seenQueueIDs.insert(id).inserted else {
+                    throw CoreDataPersistenceError.duplicateApplicationID(
+                        entity: CDWorkingQueueItem.coreDataEntityName,
+                        id: id,
+                        herdID: herdID
+                    )
+                }
+            }
+
             let animalRequest = NSFetchRequest<CDAnimal>(
                 entityName: CDAnimal.coreDataEntityName
             )
@@ -159,16 +192,6 @@ actor CoreDataReadModelActor:
                 sessions,
                 herdID: herdID
             )
-            // The displayed active sessions share a Herd-scoped queue identity.
-            // Validate across the fetched cohort, not only within each session.
-            let queueItems = sessions.flatMap {
-                ($0.queueItems?.allObjects as? [CDWorkingQueueItem]) ?? []
-            }
-            try CoreDataAnimalMutation.validateUniqueApplicationIDs(
-                queueItems,
-                herdID: herdID
-            )
-
             return DashboardRecords(
                 animals: try Self.dashboardAnimalRecords(
                     animals,
