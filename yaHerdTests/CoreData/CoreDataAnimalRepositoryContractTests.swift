@@ -262,6 +262,146 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         }
     }
 
+    func testMilestone12DashboardPastureResidentCohortsMatchAfterReadOnlyReopen() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
+        let pastures = environment.makePastureRepository()
+        let animals = environment.makeAnimalRepository()
+
+        let alpha = try pastures.create(input: PastureInput(
+            name: "Alpha Count", acreage: 20, usableAcreage: 18, targetAcresPerHead: 1
+        ))
+        let beta = try pastures.create(input: PastureInput(
+            name: "Beta Count", acreage: 15, usableAcreage: 12, targetAcresPerHead: 1
+        ))
+        let empty = try pastures.create(input: PastureInput(
+            name: "Empty Count", acreage: 10, usableAcreage: 9, targetAcresPerHead: 1
+        ))
+        _ = try animals.create(input: readGraphAnimalInput(
+            name: "Alpha One", tag: "CNT-1", pastureID: alpha.id
+        ))
+        _ = try animals.create(input: readGraphAnimalInput(
+            name: "Alpha Two", tag: "CNT-2", pastureID: alpha.id
+        ))
+        _ = try animals.create(input: readGraphAnimalInput(
+            name: "Beta Active", tag: "CNT-3", pastureID: beta.id
+        ))
+        let archived = try animals.create(input: readGraphAnimalInput(
+            name: "Beta Archived", tag: "CNT-4", pastureID: beta.id
+        ))
+        let inactive = try animals.create(input: readGraphAnimalInput(
+            name: "Beta Inactive", tag: "CNT-5", pastureID: beta.id
+        ))
+        _ = try animals.create(input: readGraphAnimalInput(
+            name: "Unassigned", tag: "CNT-6"
+        ))
+        try animals.archive(ids: [archived.id])
+
+        // Test the distinct nonactive predicate independently of archival.
+        let inactiveContext = try assembly.contextFactory.makeWriteContext()
+        try inactiveContext.performAndWait {
+            let row = try XCTUnwrap(assembly.lookup.herdOwned(
+                CDAnimal.self, id: inactive.id, herdID: environment.herdID,
+                in: inactiveContext
+            ))
+            row.statusRawValue = AnimalStatus.sold.rawValue
+            XCTAssertFalse(row.isArchived)
+            try inactiveContext.save()
+        }
+
+        let foreignHerdID = UUID()
+        let foreignContext = try assembly.contextFactory.makeWriteContext()
+        try foreignContext.performAndWait {
+            let herd = CDHerd(context: foreignContext)
+            herd.id = foreignHerdID
+            herd.name = "Independent Count Herd"
+            herd.createdAt = Date(timeIntervalSinceReferenceDate: 1_500)
+            herd.updatedAt = herd.createdAt
+            try foreignContext.save()
+        }
+        let foreignSelection = CoreDataAnimalContractSelection()
+        foreignSelection.currentHerdID = foreignHerdID
+        let foreignPastures = CoreDataPastureRepository(
+            selection: foreignSelection, assembly: assembly
+        )
+        let foreignPasture = try foreignPastures.create(input: PastureInput(
+            name: "Foreign Count", acreage: 11, usableAcreage: 10, targetAcresPerHead: 1
+        ))
+        let foreignAnimals = CoreDataAnimalRepository(
+            selection: foreignSelection, assembly: assembly
+        )
+        _ = try foreignAnimals.create(input: readGraphAnimalInput(
+            name: "Foreign Resident", tag: "CNT-F", pastureID: foreignPasture.id
+        ))
+
+        let expectedCounts = [alpha.id: 2, beta.id: 1, empty.id: 0]
+        let selectedReader = environment.makeDashboardQueryReader()
+        let full = try await selectedReader.fetchDashboardRecords()
+        let standalone = try await selectedReader.fetchDashboardPastureRecords()
+        XCTAssertEqual(full.pastures.map(\.id), standalone.map(\.id))
+        XCTAssertEqual(full.pastures.map(\.name), ["Alpha Count", "Beta Count", "Empty Count"])
+        for pasture in full.pastures {
+            XCTAssertEqual(pasture.activeAnimalCount, expectedCounts[pasture.id])
+            XCTAssertEqual(
+                standalone.first(where: { $0.id == pasture.id })?.activeAnimalCount,
+                expectedCounts[pasture.id]
+            )
+        }
+        for summary in try pastures.fetchPastures() {
+            XCTAssertEqual(summary.activeAnimalCount, expectedCounts[summary.id])
+        }
+        XCTAssertEqual(
+            try foreignPastures.fetchPastureDetail(id: foreignPasture.id)?.activeAnimalCount,
+            1
+        )
+
+        let readOnly = try await harness.makeAssembly(accessMode: .readOnly)
+        let reopenedSelected = CoreDataReadModelActor(
+            contextFactory: readOnly.contextFactory,
+            lookup: readOnly.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        let reopenedFull = try await reopenedSelected.fetchDashboardRecords()
+        let reopenedStandalone = try await reopenedSelected.fetchDashboardPastureRecords()
+        XCTAssertEqual(reopenedFull.pastures.map(\.id), standalone.map(\.id))
+        for pasture in reopenedFull.pastures {
+            XCTAssertEqual(pasture.activeAnimalCount, expectedCounts[pasture.id])
+            XCTAssertEqual(
+                reopenedStandalone.first(where: { $0.id == pasture.id })?.activeAnimalCount,
+                expectedCounts[pasture.id]
+            )
+        }
+        let reopenedForeign = CoreDataReadModelActor(
+            contextFactory: readOnly.contextFactory,
+            lookup: readOnly.lookup,
+            currentHerdID: { foreignSelection.currentHerdID }
+        )
+        XCTAssertEqual(
+            try await reopenedForeign.fetchDashboardPastureRecords().first?.activeAnimalCount,
+            1
+        )
+        XCTAssertEqual(
+            try await reopenedForeign.fetchDashboardRecords().pastures.first?.activeAnimalCount,
+            1
+        )
+
+        // Neither read modifies the persisted six selected-Herd Animals.
+        let inspect = readOnly.contextFactory.makeReadContext()
+        try inspect.performAndWait {
+            let herd = try XCTUnwrap(readOnly.lookup.herd(
+                id: environment.herdID, in: inspect
+            ))
+            let request = NSFetchRequest<CDAnimal>(entityName: CDAnimal.coreDataEntityName)
+            request.predicate = NSPredicate(format: "herd == %@", herd)
+            let stored = try inspect.fetch(request)
+            XCTAssertEqual(stored.count, 6)
+            XCTAssertEqual(stored.first(where: { $0.id == inactive.id })?.statusRawValue,
+                           AnimalStatus.sold.rawValue)
+            XCTAssertTrue(stored.first(where: { $0.id == archived.id })?.isArchived == true)
+        }
+    }
+
     func testMilestone12PastureGroupCohortRejectsDuplicateIDsWithoutDeletingRows() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
