@@ -742,4 +742,43 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
     }
 
+
+    @MainActor
+    func testSampleSeedDoesNotRaceReservedBuiltInTagColors() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: assembly
+        )
+        let graph = CoreDataAppPersistenceAssembly(
+            assembly: assembly, currentHerdID: herdID
+        ).makeDependencies(dataAccessMode: .readWrite)
+        guard let seeder = graph.animalFeatureDependencies.sampleDataSeeder else {
+            return XCTFail("Expected Core Data sample action")
+        }
+        let reserved = try CoreDataTagColorMaterializationCoordinator.shared.reserve(
+            coordinationID: assembly.coordinationID,
+            herdID: herdID,
+            colorIDs: [TagColorDefaults.whiteID]
+        )
+        defer {
+            CoreDataTagColorMaterializationCoordinator.shared.release(
+                coordinationID: assembly.coordinationID,
+                herdID: herdID,
+                colorIDs: reserved
+            )
+        }
+        do {
+            _ = try await seeder.seedSampleDataIfNeeded()
+            XCTFail("A competing canonical Tag Color reservation must block the seed")
+        } catch let error as CoreDataPersistenceError {
+            guard case .tagColorMaterializationInProgress = error else {
+                return XCTFail("Expected materialization reservation failure, got \(error)")
+            }
+        }
+        XCTAssertTrue(
+            try graph.animalFeatureDependencies.listRepository.fetchAnimals().isEmpty
+        )
+        XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 0)
+    }
+
 }
