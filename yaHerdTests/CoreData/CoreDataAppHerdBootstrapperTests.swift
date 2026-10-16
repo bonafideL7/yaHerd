@@ -715,10 +715,55 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     }
 
     @MainActor
-    func testSampleActionsDoNotModifyExistingPastureOnlyHerd() async throws {
+    func testSampleActionsDoNotModifyExistingPastureOrStandaloneGroup() async throws {
         let harness = try CoreDataPersistenceHarness()
         let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
         let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
+        let groups = dependencies.pastureFeatureDependencies.groupEditorRepository
+        let groupReader = dependencies.pastureFeatureDependencies.groupDetailRepository
+        guard let seeder = dependencies.animalFeatureDependencies.sampleDataSeeder else {
+            return XCTFail("Expected sample seed action")
+        }
+
+        // PastureGroup creation is a separate production lifecycle: it exists
+        // even with zero pastures and must make both seed actions unavailable.
+        let group = try groups.createGroup(
+            input: PastureGroupInput(
+                name: "North Rotation", grazeDays: 21, restDays: 35
+            )
+        )
+        let groupBefore = try groupReader.fetchPastureGroupDetail(id: group.id)
+        XCTAssertEqual(groupBefore?.name, "North Rotation")
+        XCTAssertTrue(groupBefore?.pastures.isEmpty == true)
+        XCTAssertTrue(
+            try dependencies.pastureFeatureDependencies.listRepository.fetchPastures().isEmpty
+        )
+        XCTAssertTrue(
+            try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().isEmpty
+        )
+        let groupOnlySequence = dependencies.applicationMutationCenter.currentSequence
+        XCTAssertFalse(try seeder.canSeedSampleData())
+        XCTAssertFalse(try await seeder.seedSampleDataIfNeeded())
+        XCTAssertFalse(try await seeder.seedLargeSampleDataIfNeeded())
+        XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, groupOnlySequence)
+        XCTAssertEqual(
+            try groupReader.fetchPastureGroupDetail(id: group.id), groupBefore
+        )
+        XCTAssertEqual(
+            try dependencies.pastureFeatureDependencies.groupListRepository
+                .fetchPastureGroups().map(\.id),
+            [group.id]
+        )
+        XCTAssertTrue(
+            try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().isEmpty
+        )
+        XCTAssertTrue(
+            try dependencies.workingSessionFeatureDependencies.sessionsRepository
+                .fetchSessions().isEmpty
+        )
+
+        // The same guard continues to protect a group-and-pasture Herd without
+        // animals, preserving the existing Pasture and group metadata.
         let pasture = try dependencies.pastureFeatureDependencies.createRepository.create(
             input: PastureInput(
                 name: "Original Pasture",
@@ -727,15 +772,16 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 targetAcresPerHead: 3
             )
         )
-        guard let seeder = dependencies.animalFeatureDependencies.sampleDataSeeder else {
-            return XCTFail("Expected sample seed action")
-        }
         let originalSequence = dependencies.applicationMutationCenter.currentSequence
         XCTAssertFalse(try seeder.canSeedSampleData())
-        let inserted = try await seeder.seedLargeSampleDataIfNeeded()
-        XCTAssertFalse(inserted)
+        XCTAssertFalse(try await seeder.seedLargeSampleDataIfNeeded())
         XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, originalSequence)
-        XCTAssertTrue(try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().isEmpty)
+        XCTAssertEqual(
+            try groupReader.fetchPastureGroupDetail(id: group.id), groupBefore
+        )
+        XCTAssertTrue(
+            try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().isEmpty
+        )
         XCTAssertEqual(
             try dependencies.pastureFeatureDependencies.listRepository.fetchPastures().map(\.id),
             [pasture.id]
