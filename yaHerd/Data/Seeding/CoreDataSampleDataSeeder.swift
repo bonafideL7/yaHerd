@@ -49,6 +49,11 @@ final class CoreDataSampleDataSeeder: SampleDataSeeding {
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
         }
+        // Working template CRUD is synchronous on the MainActor, so reserve
+        // before the first suspension and hold through commit or rollback.
+        // A second window's template write fails fast until this seed finishes.
+        try assembly.sampleSeedWriteCoordinator.beginSeed()
+        defer { assembly.sampleSeedWriteCoordinator.endSeed() }
         // Take the existing exclusive resident-write barrier before the
         // animal boundary, matching the order needed to avoid waiting on a
         // Field Check holding the other gate. This blocks parallel Animal,
