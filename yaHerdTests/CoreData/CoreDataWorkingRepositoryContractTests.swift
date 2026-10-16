@@ -184,6 +184,176 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         XCTAssertNil(try otherWorking.fetchTemplateDetail(id: primaryTemplateID))
     }
 
+    func testDashboardWorkingGraphMatchesDirectReaderAfterSQLiteReopen() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataWorkingContractEnvironment(assembly: assembly)
+        let primaryWorking = environment.makeWorkingRepository()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Dashboard Working Graph Pasture",
+                acreage: 20,
+                usableAcreage: 18,
+                targetAcresPerHead: 1.5
+            )
+        )
+        let animal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(
+                name: "Dashboard Working Graph Cow",
+                tagNumber: "DWG-PRIMARY",
+                pastureID: pasture.id
+            )
+        )
+        let sessionID = try await primaryWorking.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 440_000),
+                sourcePastureID: pasture.id,
+                treatmentTemplateName: "Dashboard Graph Session",
+                plannedTreatments: [],
+                animalIDs: [animal.id]
+            )
+        )
+
+        // An unrelated Herd remains independently readable, even after a
+        // selected-Herd session graph fails validation.
+        let otherHerdID = UUID()
+        try environment.seedAdditionalHerd(
+            id: otherHerdID,
+            name: "Independent Dashboard Graph Herd"
+        )
+        let otherSelection = CoreDataWorkingContractSelection()
+        otherSelection.currentHerdID = otherHerdID
+        let otherPasture = try CoreDataPastureRepository(
+            selection: otherSelection,
+            assembly: assembly
+        ).create(input: PastureInput(
+            name: "Independent Dashboard Graph Pasture",
+            acreage: 24,
+            usableAcreage: 22,
+            targetAcresPerHead: 1.5
+        ))
+        let otherAnimal = try CoreDataAnimalRepository(
+            selection: otherSelection,
+            assembly: assembly
+        ).create(input: Self.animalInput(
+            name: "Independent Dashboard Graph Cow",
+            tagNumber: "DWG-OTHER",
+            pastureID: otherPasture.id
+        ))
+        let otherWorking = CoreDataWorkingRepository(
+            selection: otherSelection,
+            assembly: assembly
+        )
+        let otherSessionID = try await otherWorking.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 441_000),
+                sourcePastureID: otherPasture.id,
+                treatmentTemplateName: "Independent Dashboard Graph Session",
+                plannedTreatments: [],
+                animalIDs: [otherAnimal.id]
+            )
+        )
+
+        func dashboard(
+            in assembly: CoreDataPersistenceAssembly,
+            selection: CoreDataWorkingContractSelection
+        ) -> CoreDataReadModelActor {
+            CoreDataReadModelActor(
+                contextFactory: assembly.contextFactory,
+                lookup: assembly.lookup,
+                currentHerdID: { selection.currentHerdID }
+            )
+        }
+
+        let primaryDashboard = dashboard(in: assembly, selection: environment.selection)
+        let otherDashboard = dashboard(in: assembly, selection: otherSelection)
+        XCTAssertEqual(
+            try await primaryDashboard.fetchDashboardRecords().workingSessions.map(\.id),
+            [sessionID]
+        )
+        XCTAssertEqual(
+            try await otherDashboard.fetchDashboardRecords().workingSessions.map(\.id),
+            [otherSessionID]
+        )
+        XCTAssertNotNil(try primaryWorking.fetchSessionDetail(id: sessionID))
+
+        // Deliberately corrupt the persisted snapshot/relationship agreement,
+        // which direct Working always rejects but Dashboard previously skipped.
+        let incorrectPastureID = UUID()
+        let writeContext = try assembly.contextFactory.makeWriteContext()
+        try writeContext.performAndWait {
+            let request = NSFetchRequest<CDWorkingSession>(
+                entityName: CDWorkingSession.coreDataEntityName
+            )
+            request.predicate = NSPredicate(
+                format: "herd.id == %@ AND id == %@",
+                environment.herdID as NSUUID,
+                sessionID as NSUUID
+            )
+            let session = try XCTUnwrap(writeContext.fetch(request).first)
+            XCTAssertEqual(session.sourcePasture?.id, pasture.id)
+            session.sourcePastureIDSnapshot = incorrectPastureID
+            try writeContext.save()
+        }
+
+        func physicalSnapshots(
+            in assembly: CoreDataPersistenceAssembly
+        ) throws -> [String] {
+            let context = assembly.contextFactory.makeReadContext()
+            return try context.performAndWait {
+                let request = NSFetchRequest<CDWorkingSession>(
+                    entityName: CDWorkingSession.coreDataEntityName
+                )
+                return try context.fetch(request).map {
+                    [
+                        $0.herd.id.uuidString,
+                        $0.id.uuidString,
+                        $0.sourcePasture?.id.uuidString ?? "nil",
+                        $0.sourcePastureIDSnapshot?.uuidString ?? "nil",
+                        $0.statusRawValue
+                    ].joined(separator: "|")
+                }.sorted()
+            }
+        }
+
+        let baseline = try physicalSnapshots(in: assembly)
+        let expectedError = CoreDataWorkingRepositoryError.invalidSnapshotRelationship(
+            relationship: "WorkingSession.sourcePasture",
+            expectedID: incorrectPastureID,
+            actualID: pasture.id
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await primaryDashboard.fetchDashboardRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingRepositoryError, expectedError)
+        }
+        XCTAssertThrowsError(try primaryWorking.fetchSessions()) {
+            XCTAssertEqual($0 as? CoreDataWorkingRepositoryError, expectedError)
+        }
+        XCTAssertThrowsError(try primaryWorking.fetchSessionDetail(id: sessionID)) {
+            XCTAssertEqual($0 as? CoreDataWorkingRepositoryError, expectedError)
+        }
+        XCTAssertEqual(try physicalSnapshots(in: assembly), baseline)
+        XCTAssertEqual(
+            try await otherDashboard.fetchDashboardRecords().workingSessions.map(\.id),
+            [otherSessionID]
+        )
+
+        let readOnlyAssembly = try await harness.makeAssembly(accessMode: .readOnly)
+        let reopenedPrimary = dashboard(in: readOnlyAssembly, selection: environment.selection)
+        await XCTAssertThrowsErrorAsync(
+            try await reopenedPrimary.fetchDashboardRecords()
+        ) { error in
+            XCTAssertEqual(error as? CoreDataWorkingRepositoryError, expectedError)
+        }
+        let reopenedOther = dashboard(in: readOnlyAssembly, selection: otherSelection)
+        XCTAssertEqual(
+            try await reopenedOther.fetchDashboardRecords().workingSessions.map(\.id),
+            [otherSessionID]
+        )
+        XCTAssertEqual(try physicalSnapshots(in: readOnlyAssembly), baseline)
+    }
+
     func testDashboardRejectsWorkingSessionIDCollisionOutsideActiveProjection() async throws {
         let harness = try CoreDataPersistenceHarness()
         let assembly = try await harness.makeAssembly()
