@@ -49,7 +49,7 @@ struct HerdTabRootView: View {
         return HerdView(
             searchText: $router.searchText,
             isSearchPresented: searchPresentationBinding,
-            mode: $router.mode,
+            mode: tab == .search ? .constant(.animals) : $router.mode,
             sortOrder: $router.sortOrder,
             filter: $router.filter,
             showRemovedStatuses: $router.showRemovedStatuses,
@@ -91,7 +91,6 @@ struct HerdTabRootView: View {
 
     private func prepareSearchTabIfSelected() {
         guard navigation.selectedTab == .search else { return }
-        router.mode = .animals
         router.isSearchPresented = true
 
         Task { @MainActor in
@@ -102,7 +101,6 @@ struct HerdTabRootView: View {
 
     private func handleTabSelectionChange(from oldValue: AppTab, to newValue: AppTab) {
         if newValue == .search {
-            router.mode = .animals
             router.isSearchPresented = true
 
             Task { @MainActor in
