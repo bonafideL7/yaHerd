@@ -28,13 +28,25 @@ struct IsolatedFieldCheckAreaView: View {
                 focusedFindingID: session.focusedFindingID
             )
         case .fieldCheckSessions(let mode):
-            FieldChecksView(mode: mode, onSessionLaunch: { configuration in
+            FieldChecksView(mode: fieldCheckModeBinding(fallback: mode), onSessionLaunch: { configuration in
                 navigation.workflowRouter.route = .fieldCheckSession(configuration)
             })
         default:
-            FieldChecksView(mode: .all, onSessionLaunch: { configuration in
+            FieldChecksView(mode: fieldCheckModeBinding(fallback: .all), onSessionLaunch: { configuration in
                 navigation.workflowRouter.route = .fieldCheckSession(configuration)
             })
+        }
+    }
+
+    private func fieldCheckModeBinding(fallback: FieldChecksViewMode) -> Binding<FieldChecksViewMode> {
+        Binding {
+            guard case .fieldCheckSessions(let mode) = navigation.workflowRouter.route
+            else { return fallback }
+            return mode
+        } set: { mode in
+            // A completed list selection must not replace an already-open session route.
+            if case .fieldCheckSession = navigation.workflowRouter.route { return }
+            navigation.workflowRouter.route = .fieldCheckSessions(mode)
         }
     }
 }
