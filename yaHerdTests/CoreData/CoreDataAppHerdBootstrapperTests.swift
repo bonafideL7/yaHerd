@@ -630,6 +630,12 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             XCTAssertFalse(try dependencies.fieldCheckFeatureDependencies.overviewReader.fetchSessions().isEmpty)
             XCTAssertFalse(try dependencies.workingSessionFeatureDependencies.sessionsRepository.fetchSessions().isEmpty)
             XCTAssertFalse(try dependencies.pastureFeatureDependencies.listRepository.fetchPastures().isEmpty)
+            let dashboardPastures = try await dependencies.homeFeatureDependencies
+                .dashboardQueryReader.fetchDashboardPastureRecords()
+            XCTAssertEqual(dashboardPastures.count, 12)
+            let openFindings = try dependencies.fieldCheckFeatureDependencies
+                .overviewReader.fetchOpenFindings(limit: 100)
+            XCTAssertFalse(openFindings.isEmpty)
 
             let repeated = try await seeder.seedLargeSampleDataIfNeeded()
             XCTAssertFalse(repeated)
