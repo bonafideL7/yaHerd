@@ -771,8 +771,9 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             lookup: environment.assembly.lookup,
             currentHerdID: { environment.selection.currentHerdID }
         )
+        let firstPage = try await reader.fetchHomeTreatmentTemplates(limit: 1)
         XCTAssertEqual(
-            try await reader.fetchHomeTreatmentTemplates(limit: 1),
+            firstPage,
             [WorkingTreatmentTemplateSummary(
                 id: firstID, name: "Template 001", treatmentCount: 0
             )]
@@ -840,8 +841,9 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         }
 
         environment.selection.currentHerdID = foreignHerdID
+        let foreignPage = try await reopenedReader.fetchHomeTreatmentTemplates(limit: 1)
         XCTAssertEqual(
-            try await reopenedReader.fetchHomeTreatmentTemplates(limit: 1),
+            foreignPage,
             [WorkingTreatmentTemplateSummary(
                 id: boundaryID, name: "Foreign Herd Template", treatmentCount: 0
             )]
