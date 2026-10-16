@@ -101,6 +101,41 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertTrue(navigation.herdRouter.isSearchPresented)
     }
 
+    func testSelectingFieldCheckFilterReplacesExistingRouteAndRestoresSelectedMode() throws {
+        let navigation = AppNavigationState()
+        navigation.openFieldChecks(.inProgress)
+
+        navigation.herdRouter.updateFieldCheckMode(.openFindings, in: .herd)
+
+        XCTAssertEqual(navigation.herdRouter.path, [.fieldChecks(.openFindings)])
+        XCTAssertEqual(navigation.selectedTab, .herd)
+
+        let payload = try XCTUnwrap(navigation.restorationPayload())
+        let restored = AppNavigationState()
+        restored.restore(from: payload)
+
+        XCTAssertEqual(restored.herdRouter.path, [.fieldChecks(.openFindings)])
+        XCTAssertEqual(restored.selectedTab, .herd)
+    }
+
+    func testCheckFilterSelectionKeepsSearchAndHerdStacksIndependent() {
+        let navigation = AppNavigationState()
+        let animalID = UUID()
+        navigation.herdRouter.path = [.fieldChecks(.inProgress)]
+        navigation.herdRouter.searchPath = [.fieldChecks(.missingAnimals)]
+
+        navigation.herdRouter.updateFieldCheckMode(.flaggedAnimals, in: .search)
+
+        XCTAssertEqual(navigation.herdRouter.path, [.fieldChecks(.inProgress)])
+        XCTAssertEqual(navigation.herdRouter.searchPath, [.fieldChecks(.flaggedAnimals)])
+
+        navigation.herdRouter.searchPath = [.animal(animalID)]
+        navigation.herdRouter.updateFieldCheckMode(.all, in: .search)
+
+        XCTAssertEqual(navigation.herdRouter.searchPath, [.animal(animalID)])
+        XCTAssertEqual(navigation.herdRouter.path, [.fieldChecks(.inProgress)])
+    }
+
     func testDismissingSearchClearsCriteriaAndReturnsToHerdTab() {
         let navigation = AppNavigationState()
         navigation.openSearch(query: "green 14")
