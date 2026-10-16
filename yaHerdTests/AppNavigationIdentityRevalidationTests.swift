@@ -170,7 +170,7 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
     }
 
     @MainActor
-    func testConfirmedInactiveWorkflowClosesPresentationAndShowsStableList() {
+    func testConfirmedInactiveWorkflowReturnsToSessionsWithoutChangingOrigin() {
         let herdID = UUID()
         let sessionID = UUID()
         let navigation = AppNavigationState()
@@ -183,10 +183,10 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
 
         navigation.revalidateIdentityBoundState(using: validator)
 
-        XCTAssertNil(navigation.fullScreenWorkflow)
-        XCTAssertNil(navigation.workflowRouter.route)
-        XCTAssertEqual(navigation.selectedTab, .herd)
-        XCTAssertEqual(navigation.herdRouter.path, [.workingSessions])
+        XCTAssertEqual(navigation.fullScreenWorkflow, .workingSession)
+        XCTAssertEqual(navigation.workflowRouter.route, .workingSessions)
+        XCTAssertEqual(navigation.selectedTab, .home)
+        XCTAssertTrue(navigation.herdRouter.path.isEmpty)
     }
 
     @MainActor
