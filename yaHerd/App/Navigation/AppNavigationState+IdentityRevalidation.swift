@@ -152,15 +152,18 @@ extension AppNavigationState {
             workflowRouter.route = .fieldCheckSession(configuration)
 
         case .closeFieldCheck(let openList):
-            closeFullScreenWorkflow()
             if openList {
-                openFieldChecks()
+                // Keep the presenting tab and show the prior filtered list when possible.
+                workflowRouter.recoverToList()
+            } else {
+                closeFullScreenWorkflow()
             }
 
         case .closeWorkingSession(let openList):
-            closeFullScreenWorkflow()
             if openList {
-                openWorkingSessions()
+                workflowRouter.recoverToList()
+            } else {
+                closeFullScreenWorkflow()
             }
         }
     }
@@ -190,23 +193,10 @@ extension AppNavigationState {
             herdRouter.filter.pasture = .any
         }
 
-        switch workflowRouter.route {
-        case .fieldCheckSession:
-            let wasPresented = fullScreenWorkflow == .fieldCheck
+        // Without a herd, the active workflow's record identity is no longer valid.
+        // Dismiss it without changing the underlying tab or navigation stack.
+        if workflowRouter.route != nil || fullScreenWorkflow != nil {
             closeFullScreenWorkflow()
-            if wasPresented {
-                openFieldChecks()
-            }
-
-        case .workingSession:
-            let wasPresented = fullScreenWorkflow == .workingSession
-            closeFullScreenWorkflow()
-            if wasPresented {
-                openWorkingSessions()
-            }
-
-        case .fieldCheckSessions, .workingSessions, .none:
-            break
         }
     }
 
