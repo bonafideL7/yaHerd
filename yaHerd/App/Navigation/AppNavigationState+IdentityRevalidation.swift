@@ -151,17 +151,17 @@ extension AppNavigationState {
         case .replaceFieldCheckConfiguration(let configuration):
             workflowRouter.route = .fieldCheckSession(configuration)
 
-        case .closeFieldCheck(let openList):
-            if openList {
-                // Keep the presenting tab and show the prior filtered list when possible.
-                workflowRouter.recoverToList()
+        case .closeFieldCheck(let wasPresented):
+            if wasPresented && workflowRouter.canReturnToList {
+                workflowRouter.returnToList()
             } else {
+                // A directly opened session has no in-flow list: return to its presenting tab.
                 closeFullScreenWorkflow()
             }
 
-        case .closeWorkingSession(let openList):
-            if openList {
-                workflowRouter.recoverToList()
+        case .closeWorkingSession(let wasPresented):
+            if wasPresented && workflowRouter.canReturnToList {
+                workflowRouter.returnToList()
             } else {
                 closeFullScreenWorkflow()
             }
