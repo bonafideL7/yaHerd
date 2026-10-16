@@ -17,6 +17,9 @@ struct AnimalListEmptyStateContainer: View {
     let colorScheme: ColorScheme
     let onStartInlineEntry: () -> Void
     let onAddAnimal: () -> Void
+    let onAddSampleData: (() -> Void)?
+    let onAddLargeSampleData: (() -> Void)?
+    let isSeedingSampleData: Bool
     let onClearFilters: () -> Void
     let onShowInactive: () -> Void
     let onShowArchivedRecords: () -> Void
@@ -41,6 +44,9 @@ struct AnimalListEmptyStateContainer: View {
                 showArchivedRecords: showArchivedRecords,
                 colorScheme: colorScheme,
                 onAddAnimal: onAddAnimal,
+                onAddSampleData: onAddSampleData,
+                onAddLargeSampleData: onAddLargeSampleData,
+                isSeedingSampleData: isSeedingSampleData,
                 onClearFilters: onClearFilters,
                 onShowInactive: onShowInactive,
                 onShowArchivedRecords: onShowArchivedRecords
