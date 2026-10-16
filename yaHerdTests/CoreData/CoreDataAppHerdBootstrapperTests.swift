@@ -627,8 +627,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             XCTAssertTrue(records.contains { $0.animalType == .cow })
             XCTAssertTrue(records.contains { $0.animalType == .steer })
             XCTAssertTrue(records.contains { $0.animalType == .bull })
-            XCTAssertFalse(try dependencies.fieldCheckFeatureDependencies.repository.fetchSessions().isEmpty)
-            XCTAssertFalse(try dependencies.workingSessionFeatureDependencies.repository.fetchSessions().isEmpty)
+            XCTAssertFalse(try dependencies.fieldCheckFeatureDependencies.overviewReader.fetchSessions().isEmpty)
+            XCTAssertFalse(try dependencies.workingSessionFeatureDependencies.sessionsRepository.fetchSessions().isEmpty)
             XCTAssertFalse(try dependencies.pastureFeatureDependencies.listRepository.fetchPastures().isEmpty)
 
             let repeated = try await seeder.seedLargeSampleDataIfNeeded()
