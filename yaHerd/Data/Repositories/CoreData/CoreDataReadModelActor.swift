@@ -117,7 +117,8 @@ actor CoreDataReadModelActor:
             let pastureRecords = try Self.dashboardPastureRecords(
                 herd: herd,
                 herdID: herdID,
-                context: context
+                context: context,
+                herdAnimals: animals
             )
 
             let workingRequest = NSFetchRequest<CDWorkingSession>(
@@ -1609,7 +1610,8 @@ actor CoreDataReadModelActor:
     private static func dashboardPastureRecords(
         herd: CDHerd,
         herdID: UUID,
-        context: NSManagedObjectContext
+        context: NSManagedObjectContext,
+        herdAnimals: [CDAnimal]? = nil
     ) throws -> [DashboardPastureRecord] {
         let request = NSFetchRequest<CDPasture>(
             entityName: CDPasture.coreDataEntityName
@@ -1642,6 +1644,45 @@ actor CoreDataReadModelActor:
             )
         }
 
+        // The full Dashboard already has every selected-Herd Animal. The
+        // standalone Pasture list needs only one resident-cohort fetch, not a
+        // separate COUNT query for each Pasture.
+        let residentCandidates: [CDAnimal]
+        if let herdAnimals {
+            residentCandidates = herdAnimals
+        } else if pastures.isEmpty {
+            residentCandidates = []
+        } else {
+            let residentRequest = NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            )
+            residentRequest.predicate = NSPredicate(
+                format: """
+                herd == %@ AND
+                currentPasture != nil AND
+                isArchived == NO AND
+                statusRawValue == %@
+                """,
+                herd,
+                AnimalStatus.active.rawValue
+            )
+            residentRequest.fetchBatchSize = 250
+            residentRequest.relationshipKeyPathsForPrefetching = ["currentPasture"]
+            residentCandidates = try context.fetch(residentRequest)
+        }
+
+        // Object IDs disambiguate physical Pastures even when the store
+        // contains corrupt duplicate application UUIDs. They stay in Data.
+        var activeCountsByPasture: [NSManagedObjectID: Int] = [:]
+        for animal in residentCandidates {
+            guard !animal.isArchived,
+                  animal.statusRawValue == AnimalStatus.active.rawValue,
+                  let currentPasture = animal.currentPasture else {
+                continue
+            }
+            activeCountsByPasture[currentPasture.objectID, default: 0] += 1
+        }
+
         return try pastures.map { pasture in
             guard pasture.herd.id == herdID else {
                 throw CoreDataReadModelError.invalidHerdOwnership(
@@ -1661,29 +1702,13 @@ actor CoreDataReadModelActor:
                 )
             }
 
-            let countRequest = NSFetchRequest<CDAnimal>(
-                entityName: CDAnimal.coreDataEntityName
-            )
-            countRequest.predicate = NSPredicate(
-                format: """
-                herd == %@ AND
-                currentPasture == %@ AND
-                isArchived == NO AND
-                statusRawValue == %@
-                """,
-                herd,
-                pasture,
-                AnimalStatus.active.rawValue
-            )
-            let activeAnimalCount = try context.count(for: countRequest)
-
             return DashboardPastureRecord(
                 id: pasture.id,
                 name: pasture.name,
                 acreage: pasture.acreage?.doubleValue,
                 usableAcreage: pasture.usableAcreage?.doubleValue,
                 targetAcresPerHead: pasture.targetAcresPerHead?.doubleValue,
-                activeAnimalCount: activeAnimalCount,
+                activeAnimalCount: activeCountsByPasture[pasture.objectID, default: 0],
                 lastGrazedDate: pasture.lastGrazedDate,
                 restDays: pasture.group.map { Int($0.restDays) }
             )
