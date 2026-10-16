@@ -29,7 +29,7 @@ struct AnimalListEmptyStateContainer: View {
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    if dataAccessMode.allowsDataMutations {
+                    if dataAccessMode.allowsDataMutations && !isSeedingSampleData {
                         onStartInlineEntry()
                     }
                 }
