@@ -92,6 +92,18 @@ struct PastureTileListView: View {
             PastureDetailView(pastureID: pasture.id)
         }
         .toolbar {
+            if !isManaging {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        PastureGroupListView()
+                    } label: {
+                        Text("Groups")
+                    }
+                    .accessibilityLabel("Pasture Groups")
+                    .disabled(model.isDeletingPastures)
+                }
+            }
+
             ToolbarItem(placement: .topBarTrailing) {
                 PastureTileToolbar(
                     filter: filterBinding,
