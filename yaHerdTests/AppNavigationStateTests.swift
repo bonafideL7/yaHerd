@@ -136,6 +136,101 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertEqual(navigation.herdRouter.path, [.fieldChecks(.inProgress)])
     }
 
+    func testSearchPreservesPastureModeAndIndependentHerdStack() throws {
+        let pastureID = UUID()
+        let searchAnimalID = UUID()
+        let navigation = AppNavigationState()
+        navigation.herdRouter.mode = .pastures
+        navigation.herdRouter.path = [.pasture(pastureID)]
+
+        navigation.selectSearchTab()
+        XCTAssertEqual(navigation.selectedTab, .search)
+        XCTAssertEqual(navigation.herdRouter.mode, .pastures)
+
+        navigation.herdRouter.openAnimal(searchAnimalID, in: .search)
+        XCTAssertEqual(navigation.herdRouter.mode, .pastures)
+        XCTAssertEqual(navigation.herdRouter.path, [.pasture(pastureID)])
+        XCTAssertEqual(navigation.herdRouter.searchPath, [.animal(searchAnimalID)])
+
+        let payload = try XCTUnwrap(navigation.restorationPayload())
+        let restored = AppNavigationState()
+        restored.restore(from: payload)
+        XCTAssertEqual(restored.herdRouter.mode, .pastures)
+        XCTAssertEqual(restored.herdRouter.searchPath, [.animal(searchAnimalID)])
+    }
+
+    func testHomeFieldCheckShortcutRetainsHomeAndReturnsToSelectedFilter() {
+        let navigation = AppNavigationState()
+        let pastureID = UUID()
+        let sessionID = UUID()
+        navigation.herdRouter.path = [.pasture(pastureID)]
+
+        navigation.openFieldChecks(.openFindings)
+        XCTAssertEqual(navigation.selectedTab, .home)
+        XCTAssertEqual(navigation.fullScreenWorkflow, .fieldCheck)
+        XCTAssertEqual(navigation.workflowRouter.route, .fieldCheckSessions(.openFindings))
+        XCTAssertEqual(navigation.herdRouter.path, [.pasture(pastureID)])
+
+        navigation.workflowRouter.openFieldCheckSession(
+            FieldCheckSessionLaunchConfiguration(sessionID: sessionID, opensFindings: true)
+        )
+        XCTAssertTrue(navigation.workflowRouter.canReturnToList)
+
+        navigation.workflowRouter.returnToList()
+        XCTAssertEqual(navigation.workflowRouter.route, .fieldCheckSessions(.openFindings))
+        XCTAssertFalse(navigation.workflowRouter.canReturnToList)
+
+        navigation.closeFullScreenWorkflow()
+        XCTAssertEqual(navigation.selectedTab, .home)
+        XCTAssertNil(navigation.fullScreenWorkflow)
+        XCTAssertNil(navigation.workflowRouter.route)
+        XCTAssertEqual(navigation.herdRouter.path, [.pasture(pastureID)])
+    }
+
+    func testWorkingSessionListBackAndClosePreserveOrigin() {
+        let navigation = AppNavigationState()
+        navigation.selectedTab = .herd
+        navigation.openWorkArea(.sessions)
+        navigation.workflowRouter.openWorkingSession(UUID())
+        XCTAssertTrue(navigation.workflowRouter.canReturnToList)
+
+        navigation.workflowRouter.returnToList()
+        XCTAssertEqual(navigation.workflowRouter.route, .workingSessions)
+        navigation.closeFullScreenWorkflow()
+        XCTAssertEqual(navigation.selectedTab, .herd)
+        XCTAssertNil(navigation.fullScreenWorkflow)
+
+        navigation.selectedTab = .home
+        navigation.openWorkArea(.session(UUID()))
+        XCTAssertFalse(navigation.workflowRouter.canReturnToList)
+        navigation.closeFullScreenWorkflow()
+        XCTAssertEqual(navigation.selectedTab, .home)
+    }
+
+    func testInvalidLiveWorkflowCanRecoverToListWithoutTabSwitch() {
+        let navigation = AppNavigationState()
+        navigation.selectedTab = .home
+        navigation.openFieldCheckArea(.sessions(.flaggedAnimals))
+        navigation.workflowRouter.openFieldCheckSession(
+            FieldCheckSessionLaunchConfiguration(sessionID: UUID())
+        )
+
+        navigation.workflowRouter.recoverToList()
+        XCTAssertEqual(navigation.selectedTab, .home)
+        XCTAssertEqual(navigation.fullScreenWorkflow, .fieldCheck)
+        XCTAssertEqual(navigation.workflowRouter.route, .fieldCheckSessions(.flaggedAnimals))
+
+        navigation.workflowRouter.openFieldCheckSession(
+            FieldCheckSessionLaunchConfiguration(sessionID: UUID())
+        )
+        navigation.workflowRouter.reset()
+        navigation.workflowRouter.route = .fieldCheckSession(
+            FieldCheckSessionLaunchConfiguration(sessionID: UUID())
+        )
+        navigation.workflowRouter.recoverToList()
+        XCTAssertEqual(navigation.workflowRouter.route, .fieldCheckSessions(.all))
+    }
+
     func testDismissingSearchClearsCriteriaAndReturnsToHerdTab() {
         let navigation = AppNavigationState()
         navigation.openSearch(query: "green 14")
