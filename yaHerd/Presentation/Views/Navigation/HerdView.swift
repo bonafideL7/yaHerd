@@ -90,6 +90,8 @@ struct HerdView: View {
                 )
             }
         }
+        .navigationTitle(mode == .animals ? "Animals" : "Pastures")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button {
