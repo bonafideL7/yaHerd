@@ -50,6 +50,7 @@ struct HerdTabRootView: View {
             searchText: $router.searchText,
             isSearchPresented: searchPresentationBinding,
             mode: tab == .search ? .constant(.animals) : $router.mode,
+            allowsModeSwitch: tab != .search,
             sortOrder: $router.sortOrder,
             filter: $router.filter,
             showRemovedStatuses: $router.showRemovedStatuses,
