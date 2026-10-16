@@ -54,7 +54,7 @@ final class CoreDataSampleDataSeeder: SampleDataSeeding {
 /// One transaction creates complete Herd-owned rows and their snapshots.
 /// No legacy SwiftData types, automatic reset, migrations or production schema edits.
 enum CoreDataSampleHerdFactory {
-    enum Size: Sendable {
+    enum Size: Sendable, Equatable {
         case compact
         case large
 
@@ -91,6 +91,9 @@ enum CoreDataSampleHerdFactory {
         )
         existingColorsRequest.predicate = NSPredicate(format: "herd == %@", herd)
         let existingColors = try context.fetch(existingColorsRequest)
+        try CoreDataAnimalMutation.validateUniqueApplicationIDs(
+            existingColors, herdID: herd.id
+        )
         var colors = Dictionary(uniqueKeysWithValues: existingColors.map { ($0.id, $0) })
         let hasDefault = existingColors.contains { $0.isDefault && !$0.isHidden }
         for snapshot in TagColorDefaults.seedDefaultColors() where colors[snapshot.id] == nil {
@@ -179,9 +182,11 @@ enum CoreDataSampleHerdFactory {
             else if isSteer { ageInDays = 470 + (index % 16) * 14 }
             else { ageInDays = 20 + (index % 10) * 24 }
 
-            let status: AnimalStatus =
-                (index > 0 && index % 97 == 0) ? .dead :
-                (index > 0 && index % 71 == 0) ? .sold : .active
+            let status: AnimalStatus = size == .compact
+                ? (index == size.animalCount - 1 ? .dead :
+                    index == size.animalCount - 2 ? .sold : .active)
+                : (index > 0 && index % 97 == 0) ? .dead
+                : (index > 0 && index % 71 == 0) ? .sold : .active
 
             let animal = CDAnimal(context: context)
             animal.id = UUID()
