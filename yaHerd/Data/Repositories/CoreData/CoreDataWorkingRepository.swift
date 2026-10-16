@@ -915,7 +915,7 @@ final class CoreDataWorkingRepository:
         )
     }
 
-    private nonisolated static func validateSessionGraph(
+    nonisolated static func validateSessionGraph(
         _ session: CDWorkingSession,
         herdID: UUID
     ) throws {
