@@ -743,8 +743,10 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
         let groupOnlySequence = dependencies.applicationMutationCenter.currentSequence
         XCTAssertFalse(try seeder.canSeedSampleData())
-        XCTAssertFalse(try await seeder.seedSampleDataIfNeeded())
-        XCTAssertFalse(try await seeder.seedLargeSampleDataIfNeeded())
+        let insertedCompact = try await seeder.seedSampleDataIfNeeded()
+        let insertedLarge = try await seeder.seedLargeSampleDataIfNeeded()
+        XCTAssertFalse(insertedCompact)
+        XCTAssertFalse(insertedLarge)
         XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, groupOnlySequence)
         XCTAssertEqual(
             try groupReader.fetchPastureGroupDetail(id: group.id), groupBefore
@@ -774,7 +776,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         )
         let originalSequence = dependencies.applicationMutationCenter.currentSequence
         XCTAssertFalse(try seeder.canSeedSampleData())
-        XCTAssertFalse(try await seeder.seedLargeSampleDataIfNeeded())
+        let repeatedLarge = try await seeder.seedLargeSampleDataIfNeeded()
+        XCTAssertFalse(repeatedLarge)
         XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, originalSequence)
         XCTAssertEqual(
             try groupReader.fetchPastureGroupDetail(id: group.id), groupBefore
