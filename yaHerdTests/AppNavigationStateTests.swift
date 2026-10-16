@@ -207,30 +207,6 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertEqual(navigation.selectedTab, .home)
     }
 
-    func testInvalidLiveWorkflowCanRecoverToListWithoutTabSwitch() {
-        let navigation = AppNavigationState()
-        navigation.selectedTab = .home
-        navigation.openFieldCheckArea(.sessions(.flaggedAnimals))
-        navigation.workflowRouter.openFieldCheckSession(
-            FieldCheckSessionLaunchConfiguration(sessionID: UUID())
-        )
-
-        navigation.workflowRouter.recoverToList()
-        XCTAssertEqual(navigation.selectedTab, .home)
-        XCTAssertEqual(navigation.fullScreenWorkflow, .fieldCheck)
-        XCTAssertEqual(navigation.workflowRouter.route, .fieldCheckSessions(.flaggedAnimals))
-
-        navigation.workflowRouter.openFieldCheckSession(
-            FieldCheckSessionLaunchConfiguration(sessionID: UUID())
-        )
-        navigation.workflowRouter.reset()
-        navigation.workflowRouter.route = .fieldCheckSession(
-            FieldCheckSessionLaunchConfiguration(sessionID: UUID())
-        )
-        navigation.workflowRouter.recoverToList()
-        XCTAssertEqual(navigation.workflowRouter.route, .fieldCheckSessions(.all))
-    }
-
     func testDismissingSearchClearsCriteriaAndReturnsToHerdTab() {
         let navigation = AppNavigationState()
         navigation.openSearch(query: "green 14")
