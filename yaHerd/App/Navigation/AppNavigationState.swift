@@ -518,6 +518,15 @@ final class AppNavigationState {
     }
 
     func handle(_ request: AppNavigationRequest) {
+        // Record/search deep links must not remain hidden behind a previous workflow or sheet.
+        switch request {
+        case .openAnimal, .openPasture, .searchAnimals:
+            presentedSheet = nil
+            closeFullScreenWorkflow()
+        case .openFinding, .continueFieldCheck, .continueWorkingSession:
+            break
+        }
+
         switch request {
         case .openAnimal(let animalID):
             openAnimal(animalID)
