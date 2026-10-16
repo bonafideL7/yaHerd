@@ -140,12 +140,12 @@ final class HerdRouter {
     }
 
     func openAnimal(_ animalID: UUID, in tab: AppTab = .herd) {
-        mode = .animals
+        if tab != .search { mode = .animals }
         setPath([.animal(animalID)], for: tab)
     }
 
     func openPasture(_ pastureID: UUID, in tab: AppTab = .herd) {
-        mode = .pastures
+        if tab != .search { mode = .pastures }
         setPath([.pasture(pastureID)], for: tab)
     }
 
@@ -173,7 +173,6 @@ final class HerdRouter {
 
     func showSearch(query: String = "") {
         searchPath.removeAll()
-        mode = .animals
         searchText = query
         isSearchPresented = true
     }
@@ -197,9 +196,60 @@ final class HerdRouter {
 @Observable
 final class WorkflowRouter {
     var route: WorkflowRoute?
+    private(set) var returnRoute: WorkflowRoute?
+
+    var canReturnToList: Bool {
+        switch (route, returnRoute) {
+        case (.fieldCheckSession, .fieldCheckSessions), (.workingSession, .workingSessions):
+            return true
+        default:
+            return false
+        }
+    }
+
+    func openFieldCheckSession(_ configuration: FieldCheckSessionLaunchConfiguration) {
+        if case .fieldCheckSessions = route {
+            returnRoute = route
+        } else {
+            returnRoute = nil
+        }
+        route = .fieldCheckSession(configuration)
+    }
+
+    func openWorkingSession(_ sessionID: UUID) {
+        if case .workingSessions = route {
+            returnRoute = route
+        } else {
+            returnRoute = nil
+        }
+        route = .workingSession(sessionID)
+    }
+
+    func returnToList() {
+        guard canReturnToList, let returnRoute else { return }
+        route = returnRoute
+        self.returnRoute = nil
+    }
+
+    func recoverToList() {
+        if canReturnToList {
+            returnToList()
+            return
+        }
+        switch route {
+        case .fieldCheckSession:
+            route = .fieldCheckSessions(.all)
+        case .workingSession:
+            route = .workingSessions
+        default:
+            return
+        }
+        returnRoute = nil
+    }
 
     func reset() {
         route = nil
+        returnRoute = nil
     }
 }
 
@@ -429,7 +479,6 @@ final class AppNavigationState {
 
     func selectSearchTab() {
         selectedTab = .search
-        herdRouter.mode = .animals
         herdRouter.isSearchPresented = true
     }
 
@@ -446,17 +495,26 @@ final class AppNavigationState {
     }
 
     func openFieldChecks(_ mode: FieldChecksViewMode = .all) {
+        if selectedTab == .home {
+            openFieldCheckArea(.sessions(mode))
+            return
+        }
         selectedTab = .herd
         herdRouter.path = [.fieldChecks(mode)]
     }
 
     func openWorkingSessions() {
+        if selectedTab == .home {
+            openWorkArea(.sessions)
+            return
+        }
         selectedTab = .herd
         herdRouter.path = [.workingSessions]
     }
 
     func openFieldCheckArea(_ configuration: FieldCheckAreaLaunchConfiguration) {
         presentedSheet = nil
+        workflowRouter.reset()
         workflowRouter.route = configuration.session.map(WorkflowRoute.fieldCheckSession)
             ?? .fieldCheckSessions(configuration.mode ?? .all)
         fullScreenWorkflow = .fieldCheck
@@ -464,6 +522,7 @@ final class AppNavigationState {
 
     func openWorkArea(_ configuration: WorkAreaLaunchConfiguration) {
         presentedSheet = nil
+        workflowRouter.reset()
         workflowRouter.route = configuration.sessionID.map(WorkflowRoute.workingSession)
             ?? .workingSessions
         fullScreenWorkflow = .workingSession
@@ -619,7 +678,6 @@ final class AppNavigationState {
         switch workflow {
         case .fieldCheckSession(let sessionID):
             guard (try? validator.isActiveFieldCheckSession(id: sessionID)) == true else {
-                openFieldChecks()
                 return
             }
             workflowRouter.route = .fieldCheckSession(
@@ -629,7 +687,6 @@ final class AppNavigationState {
 
         case .workingSession(let sessionID):
             guard (try? validator.isActiveWorkingSession(id: sessionID)) == true else {
-                openWorkingSessions()
                 return
             }
             workflowRouter.route = .workingSession(sessionID)
