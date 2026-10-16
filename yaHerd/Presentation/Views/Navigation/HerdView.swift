@@ -10,6 +10,7 @@ struct HerdView: View {
     @Binding private var isSearchPresented: Bool
 
     @Binding private var mode: HerdViewMode
+    private let allowsModeSwitch: Bool
     @State private var isManagingPastures = false
 
     private let sortOrder: Binding<AnimalSortOrder>?
@@ -29,6 +30,7 @@ struct HerdView: View {
         searchText: Binding<String> = .constant(""),
         isSearchPresented: Binding<Bool> = .constant(false),
         mode: Binding<HerdViewMode> = .constant(.animals),
+        allowsModeSwitch: Bool = true,
         sortOrder: Binding<AnimalSortOrder>? = nil,
         filter: Binding<AnimalFilter>? = nil,
         showRemovedStatuses: Binding<Bool>? = nil,
@@ -45,6 +47,7 @@ struct HerdView: View {
         self._searchText = searchText
         self._isSearchPresented = isSearchPresented
         self._mode = mode
+        self.allowsModeSwitch = allowsModeSwitch
         self.sortOrder = sortOrder
         self.filter = filter
         self.showRemovedStatuses = showRemovedStatuses
@@ -90,16 +93,18 @@ struct HerdView: View {
                 )
             }
         }
-        .navigationTitle(mode == .animals ? "Animals" : "Pastures")
+        .navigationTitle(allowsModeSwitch ? (mode == .animals ? "Animals" : "Pastures") : "Search")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    switchMode()
-                } label: {
-                    Label(switchButtonTitle, systemImage: switchButtonSystemImage)
+            if allowsModeSwitch {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        switchMode()
+                    } label: {
+                        Label(switchButtonTitle, systemImage: switchButtonSystemImage)
+                    }
+                    .accessibilityLabel(switchButtonAccessibilityLabel)
                 }
-                .accessibilityLabel(switchButtonAccessibilityLabel)
             }
         }
     }
