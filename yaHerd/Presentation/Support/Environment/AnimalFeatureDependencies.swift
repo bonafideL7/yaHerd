@@ -13,6 +13,7 @@ nonisolated struct AnimalFeatureDependencies {
     let healthRecordAdder: any AnimalHealthRecordAdding
     let pregnancyCheckAdder: any AnimalPregnancyCheckAdding
     let pastureReferenceReader: any PastureReferenceDataReader
+    let sampleDataSeeder: (any SampleDataSeeding)?
     let mutationStream: any ApplicationMutationStreaming
 
     nonisolated init(
@@ -27,6 +28,7 @@ nonisolated struct AnimalFeatureDependencies {
         healthRecordAdder: any AnimalHealthRecordAdding,
         pregnancyCheckAdder: any AnimalPregnancyCheckAdding,
         pastureReferenceReader: any PastureReferenceDataReader,
+        sampleDataSeeder: (any SampleDataSeeding)? = nil,
         mutationStream: any ApplicationMutationStreaming
     ) {
         self.listRepository = listRepository
@@ -40,6 +42,7 @@ nonisolated struct AnimalFeatureDependencies {
         self.healthRecordAdder = healthRecordAdder
         self.pregnancyCheckAdder = pregnancyCheckAdder
         self.pastureReferenceReader = pastureReferenceReader
+        self.sampleDataSeeder = sampleDataSeeder
         self.mutationStream = mutationStream
     }
 
