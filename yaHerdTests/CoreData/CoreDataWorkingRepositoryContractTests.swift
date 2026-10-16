@@ -214,6 +214,23 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             )
         )
 
+        let controlAnimal = try environment.makeAnimalRepository().create(
+            input: Self.animalInput(
+                name: "Dashboard Working Graph Control Cow",
+                tagNumber: "DWG-CONTROL",
+                pastureID: pasture.id
+            )
+        )
+        let controlSessionID = try await primaryWorking.startSession(
+            input: WorkingSessionStartInput(
+                date: Date(timeIntervalSinceReferenceDate: 440_500),
+                sourcePastureID: pasture.id,
+                treatmentTemplateName: "Healthy Dashboard Graph Control",
+                plannedTreatments: [],
+                animalIDs: [controlAnimal.id]
+            )
+        )
+
         // An unrelated Herd remains independently readable, even after a
         // selected-Herd session graph fails validation.
         let otherHerdID = UUID()
@@ -268,7 +285,10 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         let primaryDashboard = dashboard(in: assembly, selection: environment.selection)
         let otherDashboard = dashboard(in: assembly, selection: otherSelection)
         let healthyPrimaryDashboard = try await primaryDashboard.fetchDashboardRecords()
-        XCTAssertEqual(healthyPrimaryDashboard.workingSessions.map(\.id), [sessionID])
+        XCTAssertEqual(
+            healthyPrimaryDashboard.workingSessions.map(\.id),
+            [controlSessionID, sessionID]
+        )
         let healthyOtherDashboard = try await otherDashboard.fetchDashboardRecords()
         XCTAssertEqual(healthyOtherDashboard.workingSessions.map(\.id), [otherSessionID])
         XCTAssertNotNil(try primaryWorking.fetchSessionDetail(id: sessionID))
@@ -329,6 +349,9 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
         XCTAssertThrowsError(try primaryWorking.fetchSessionDetail(id: sessionID)) {
             XCTAssertEqual($0 as? CoreDataWorkingRepositoryError, expectedError)
         }
+        // Targeted direct reads still expose an intact session; Dashboard is
+        // an all-or-nothing combined read and must reject the corrupt one.
+        XCTAssertNotNil(try primaryWorking.fetchSessionDetail(id: controlSessionID))
         XCTAssertEqual(try physicalSnapshots(in: assembly), baseline)
         let unchangedOtherDashboard = try await otherDashboard.fetchDashboardRecords()
         XCTAssertEqual(unchangedOtherDashboard.workingSessions.map(\.id), [otherSessionID])
