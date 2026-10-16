@@ -1110,7 +1110,9 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
     }
 
     func testMilestone12PastureSummaryRejectsForeignGroupAndResidentCount() async throws {
-        let environment = try await makeEnvironment()
+        let harness = try CoreDataPersistenceHarness()
+        let assembly = try await harness.makeAssembly()
+        let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
         let pastures = environment.makePastureRepository()
         let animals = environment.makeAnimalRepository()
         let targetPasture = try pastures.create(
@@ -1245,6 +1247,27 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             XCTAssertEqual(
                 (storedPasture.animals as? Set<CDAnimal>)?.first?.herd.id, foreignHerdID
             )
+        }
+
+        // A separate read-only SQLite assembly sees the same illegal inverse
+        // residency. No read or failed update repaired the original rows.
+        let reopened = try await harness.makeAssembly(accessMode: .readOnly)
+        let reopenedReader = CoreDataReadModelActor(
+            contextFactory: reopened.contextFactory,
+            lookup: reopened.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        do {
+            _ = try await reopenedReader.fetchDashboardRecords()
+            XCTFail("Read-only Dashboard accepted foreign-Herd inverse resident.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataReadModelError, invalidResident)
+        }
+        do {
+            _ = try await reopenedReader.fetchDashboardPastureRecords()
+            XCTFail("Read-only standalone Pasture accepted foreign-Herd inverse resident.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataReadModelError, invalidResident)
         }
     }
 
