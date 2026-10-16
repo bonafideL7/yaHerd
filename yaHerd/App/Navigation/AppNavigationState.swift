@@ -155,6 +155,14 @@ final class HerdRouter {
         setPath(activePath, for: tab)
     }
 
+    /// Replace the visible check-list mode without pushing another screen.
+    func selectFieldChecksMode(_ mode: FieldChecksViewMode, in tab: AppTab = .herd) {
+        var activePath = path(for: tab)
+        guard let last = activePath.last, case .fieldChecks = last else { return }
+        activePath[activePath.count - 1] = .fieldChecks(mode)
+        setPath(activePath, for: tab)
+    }
+
     func openWorkingSessions(in tab: AppTab = .herd) {
         var activePath = path(for: tab)
         activePath.append(.workingSessions)

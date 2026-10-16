@@ -28,14 +28,22 @@ struct IsolatedFieldCheckAreaView: View {
                 focusedFindingID: session.focusedFindingID
             )
         case .fieldCheckSessions(let mode):
-            FieldChecksView(mode: mode, onSessionLaunch: { configuration in
-                navigation.workflowRouter.route = .fieldCheckSession(configuration)
-            })
+            fieldChecksList(mode: mode)
         default:
-            FieldChecksView(mode: .all, onSessionLaunch: { configuration in
-                navigation.workflowRouter.route = .fieldCheckSession(configuration)
-            })
+            fieldChecksList(mode: .all)
         }
+    }
+
+    private func fieldChecksList(mode: FieldChecksViewMode) -> some View {
+        FieldChecksView(
+            mode: mode,
+            onSessionLaunch: { configuration in
+                navigation.workflowRouter.route = .fieldCheckSession(configuration)
+            },
+            onModeChange: { newMode in
+                navigation.workflowRouter.route = .fieldCheckSessions(newMode)
+            }
+        )
     }
 }
 
