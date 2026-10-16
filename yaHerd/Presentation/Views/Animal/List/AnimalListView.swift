@@ -280,7 +280,7 @@ struct AnimalListView: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomOverlay }
         .overlay(alignment: .bottomTrailing) {
-            if dataAccessMode.allowsDataMutations && !batchMode && !inlineEntry.isActive {
+            if dataAccessMode.allowsDataMutations && !isSeedingSampleData && !batchMode && !inlineEntry.isActive {
                 AnimalListFloatingAddButton(
                     bottomPadding: floatingAddButtonBottomPadding,
                     action: presentAddAnimal
