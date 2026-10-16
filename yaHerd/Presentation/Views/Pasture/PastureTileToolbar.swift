@@ -2,7 +2,6 @@ import SwiftUI
 
 struct PastureTileToolbar: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
-    @Binding var filter: PastureListFilter
     let isManaging: Bool
     let onToggleManageMode: () -> Void
     let onOpenFieldChecks: () -> Void
@@ -24,22 +23,6 @@ struct PastureTileToolbar: View {
                     Label("Manage Pastures", systemImage: "line.3.horizontal.decrease.circle")
                 }
                 .disabled(!dataAccessMode.allowsDataMutations)
-
-                Divider()
-
-                Picker("Filter", selection: $filter) {
-                    ForEach(PastureListFilter.allCases, id: \.self) { option in
-                        Text(option.label).tag(option)
-                    }
-                }
-
-                if filter != .all {
-                    Button {
-                        filter = .all
-                    } label: {
-                        Label("Clear Filter", systemImage: "xmark.circle")
-                    }
-                }
 
                 Divider()
 
