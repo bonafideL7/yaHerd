@@ -231,22 +231,6 @@ final class WorkflowRouter {
         self.returnRoute = nil
     }
 
-    func recoverToList() {
-        if canReturnToList {
-            returnToList()
-            return
-        }
-        switch route {
-        case .fieldCheckSession:
-            route = .fieldCheckSessions(.all)
-        case .workingSession:
-            route = .workingSessions
-        default:
-            return
-        }
-        returnRoute = nil
-    }
-
     func reset() {
         route = nil
         returnRoute = nil
