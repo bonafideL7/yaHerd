@@ -721,6 +721,133 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
             XCTAssertEqual(allTemplates.filter { $0.id == controlID }.count, 1)
         }
     }
+
+    func testHomeTemplateIdentityPreflightDetectsDuplicateAcross250RowBoundary() async throws {
+        let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+        let selectedHerdID = environment.herdID
+        let foreignHerdID = UUID()
+        let firstID = try XCTUnwrap(
+            UUID(uuidString: "00000000-0000-0000-0000-000000000001")
+        )
+        let boundaryID = try XCTUnwrap(
+            UUID(uuidString: "00000000-0000-0000-0000-0000000000FA")
+        )
+
+        // Exactly 250 unique selected-Herd IDs fill the first scan page.
+        // The foreign Herd legally reuses the last selected-Herd identity.
+        let seedContext = try environment.assembly.contextFactory.makeWriteContext()
+        try seedContext.performAndWait {
+            let herd = try XCTUnwrap(
+                environment.assembly.lookup.herd(id: selectedHerdID, in: seedContext)
+            )
+            let foreignHerd = CDHerd(context: seedContext)
+            foreignHerd.id = foreignHerdID
+            foreignHerd.name = "Independent Template Herd"
+            foreignHerd.createdAt = Date(timeIntervalSinceReferenceDate: 900)
+            foreignHerd.updatedAt = foreignHerd.createdAt
+
+            for index in 1...250 {
+                let id = try XCTUnwrap(
+                    UUID(uuidString: String(
+                        format: "00000000-0000-0000-0000-%012X", index
+                    ))
+                )
+                let template = CDWorkingTreatmentTemplate(context: seedContext)
+                template.id = id
+                template.name = String(format: "Template %03d", index)
+                template.itemsData = Data("[]".utf8)
+                template.herd = herd
+            }
+            let independent = CDWorkingTreatmentTemplate(context: seedContext)
+            independent.id = boundaryID
+            independent.name = "Foreign Herd Template"
+            independent.itemsData = Data("[]".utf8)
+            independent.herd = foreignHerd
+            try seedContext.save()
+        }
+
+        let reader = CoreDataReadModelActor(
+            contextFactory: environment.assembly.contextFactory,
+            lookup: environment.assembly.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        XCTAssertEqual(
+            try await reader.fetchHomeTreatmentTemplates(limit: 1),
+            [WorkingTreatmentTemplateSummary(
+                id: firstID, name: "Template 001", treatmentCount: 0
+            )]
+        )
+
+        // One additional physical row shares the last ID of the first page.
+        // Its duplicate must be detected on the second fetch, despite the
+        // independent Home projection still requesting only one template.
+        let collisionContext = try environment.assembly.contextFactory.makeWriteContext()
+        try collisionContext.performAndWait {
+            let herd = try XCTUnwrap(
+                environment.assembly.lookup.herd(id: selectedHerdID, in: collisionContext)
+            )
+            let duplicate = CDWorkingTreatmentTemplate(context: collisionContext)
+            duplicate.id = boundaryID
+            duplicate.name = "Off Page Duplicate"
+            duplicate.itemsData = Data("[]".utf8)
+            duplicate.herd = herd
+            try collisionContext.save()
+        }
+
+        let error = CoreDataPersistenceError.duplicateApplicationID(
+            entity: CDWorkingTreatmentTemplate.coreDataEntityName,
+            id: boundaryID,
+            herdID: selectedHerdID
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await reader.fetchHomeTreatmentTemplates(limit: 1)
+        ) { thrown in
+            XCTAssertEqual(thrown as? CoreDataPersistenceError, error)
+        }
+        let direct = CoreDataWorkingTreatmentTemplateRepository(
+            selection: environment.selection,
+            assembly: environment.assembly
+        )
+        XCTAssertThrowsError(try direct.fetchTemplates()) { thrown in
+            XCTAssertEqual(thrown as? CoreDataPersistenceError, error)
+        }
+
+        let reopened = try await environment.makeReadOnlyAssembly()
+        let reopenedReader = CoreDataReadModelActor(
+            contextFactory: reopened.contextFactory,
+            lookup: reopened.lookup,
+            currentHerdID: { environment.selection.currentHerdID }
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await reopenedReader.fetchHomeTreatmentTemplates(limit: 1)
+        ) { thrown in
+            XCTAssertEqual(thrown as? CoreDataPersistenceError, error)
+        }
+
+        let inspection = reopened.contextFactory.makeReadContext()
+        try inspection.performAndWait {
+            let herd = try XCTUnwrap(
+                reopened.lookup.herd(id: selectedHerdID, in: inspection)
+            )
+            let request = NSFetchRequest<CDWorkingTreatmentTemplate>(
+                entityName: CDWorkingTreatmentTemplate.coreDataEntityName
+            )
+            request.predicate = NSPredicate(format: "herd == %@", herd)
+            let physical = try inspection.fetch(request)
+            XCTAssertEqual(physical.count, 251)
+            XCTAssertEqual(physical.filter { $0.id == boundaryID }.count, 2)
+            XCTAssertEqual(physical.filter { $0.id == firstID }.count, 1)
+        }
+
+        environment.selection.currentHerdID = foreignHerdID
+        XCTAssertEqual(
+            try await reopenedReader.fetchHomeTreatmentTemplates(limit: 1),
+            [WorkingTreatmentTemplateSummary(
+                id: boundaryID, name: "Foreign Herd Template", treatmentCount: 0
+            )]
+        )
+        environment.selection.currentHerdID = selectedHerdID
+    }
 }
 
 private enum FieldCheckChildIdentityKind: CaseIterable, Sendable {
