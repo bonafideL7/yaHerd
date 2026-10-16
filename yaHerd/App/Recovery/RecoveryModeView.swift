@@ -97,7 +97,7 @@ struct RecoveryModeView: View {
         .disabled(controller.isPreparingExport)
 
         Text(
-          "Creates a TAR archive with storage diagnostics, Core Data SQLite files and their WAL, SHM, or rollback-journal sidecars, plus recognized legacy storage files and sidecars. Original files are preserved without conversion. Keep the archive private."
+          "Creates a TAR archive with storage diagnostics and Core Data SQLite files and their WAL, SHM, or rollback-journal sidecars. It does not modify the original files. Keep the archive private."
         )
         .font(.caption)
         .foregroundStyle(.secondary)
