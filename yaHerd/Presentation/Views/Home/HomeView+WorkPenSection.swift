@@ -27,7 +27,9 @@ extension HomeView {
                     }
 
                     NavigationLink {
-                        WorkingSessionsView()
+                        WorkingSessionsView { sessionID in
+                            openWorkArea(.session(sessionID))
+                        }
                     } label: {
                         HomeListRow(
                             title: "Working sessions",
