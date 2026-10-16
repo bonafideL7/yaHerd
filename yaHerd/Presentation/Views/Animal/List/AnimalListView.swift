@@ -16,6 +16,10 @@ struct AnimalListView: View {
     private var animalListRepository: any AnimalListRepository { animalDependencies.listRepository }
     private var pastureReferenceDataReader: any PastureReferenceDataReader { animalDependencies.pastureReferenceReader }
     private var sampleDataSeeder: (any SampleDataSeeding)? { animalDependencies.sampleDataSeeder }
+    private var canOfferSampleData: Bool {
+        viewModel.hasLoaded && viewModel.items.isEmpty
+            && viewModel.pastureOptions.isEmpty && isSampleDataAvailable
+    }
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(ApplicationSettings.self) private var applicationSettings
@@ -23,6 +27,7 @@ struct AnimalListView: View {
 
     @State private var viewModel = AnimalListViewModel()
     @State private var isSeedingSampleData = false
+    @State private var isSampleDataAvailable = false
     @State private var internalSearchText = ""
     @State private var sortOrder: AnimalSortOrder = .tagAscending
     @State private var showingFilters = false
@@ -328,6 +333,19 @@ struct AnimalListView: View {
                 snapshotReader: animalDependencies.listSnapshotReader
             )
         }
+        // Query precisely the same whole-Herd emptiness predicate as the writer,
+        // only after Animal/pasture loading completes. A filtered empty list
+        // or a pastures-only/historical-session Herd cannot offer the seed.
+        .task(id: viewModel.hasLoaded && viewModel.items.isEmpty
+              && viewModel.pastureOptions.isEmpty) {
+            guard viewModel.hasLoaded, viewModel.items.isEmpty,
+                  viewModel.pastureOptions.isEmpty, let sampleDataSeeder,
+                  dataAccessMode.allowsDataMutations else {
+                isSampleDataAvailable = false
+                return
+            }
+            isSampleDataAvailable = (try? sampleDataSeeder.canSeedSampleData()) ?? false
+        }
         .onChange(of: searchTextValue) { _, _ in
             refreshDerivedState(debounced: true)
         }
@@ -402,8 +420,8 @@ struct AnimalListView: View {
             colorScheme: colorScheme,
             onStartInlineEntry: beginNewInlineEntry,
             onAddAnimal: presentAddAnimal,
-            onAddSampleData: sampleDataSeeder == nil ? nil : { seedSampleData(large: false) },
-            onAddLargeSampleData: sampleDataSeeder == nil ? nil : { seedSampleData(large: true) },
+            onAddSampleData: canOfferSampleData ? { seedSampleData(large: false) } : nil,
+            onAddLargeSampleData: canOfferSampleData ? { seedSampleData(large: true) } : nil,
             isSeedingSampleData: isSeedingSampleData,
             onClearFilters: clearAllFilters,
             onShowInactive: { showRemovedStatusesBinding.wrappedValue = true },
@@ -505,8 +523,8 @@ struct AnimalListView: View {
     }
 
     private func seedSampleData(large: Bool) {
-        guard !isSeedingSampleData, dataAccessMode.allowsDataMutations,
-              let sampleDataSeeder else { return }
+        guard !isSeedingSampleData, canOfferSampleData,
+              dataAccessMode.allowsDataMutations, let sampleDataSeeder else { return }
         isSeedingSampleData = true
         Task { @MainActor in
             defer { isSeedingSampleData = false }
@@ -515,6 +533,7 @@ struct AnimalListView: View {
                     ? sampleDataSeeder.seedLargeSampleDataIfNeeded()
                     : sampleDataSeeder.seedSampleDataIfNeeded())
                 if inserted {
+                    isSampleDataAvailable = false
                     reload()
                 } else {
                     viewModel.errorMessage = "Sample data can only be added to an empty herd."
