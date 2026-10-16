@@ -2211,14 +2211,16 @@ actor CoreDataReadModelActor:
         )
         corruptRequest.predicate = NSPredicate(
             format: """
-            herd == %@ AND (
+            (herd == %@ AND (
                 session.herd != %@ OR
                 NOT (statusRawValue IN %@)
-            )
+            )) OR (session.herd == %@ AND herd != %@)
             """,
             herd,
             herd,
-            validFindingStatusRawValues
+            validFindingStatusRawValues,
+            herd,
+            herd
         )
         corruptRequest.fetchLimit = 1
         corruptRequest.relationshipKeyPathsForPrefetching = ["session"]
@@ -2229,6 +2231,42 @@ actor CoreDataReadModelActor:
                 herdID: herdID
             )
             _ = try FieldCheckMapper.makeFindingSnapshot(from: finding)
+        }
+
+        // Home only hydrates warning sessions, so their inverse children
+        // cannot reveal a selected-Herd check attached to a foreign session
+        // or a foreign-Herd check attached to completed selected history.
+        let corruptCheckRequest = NSFetchRequest<CDFieldCheckAnimalCheck>(
+            entityName: CDFieldCheckAnimalCheck.coreDataEntityName
+        )
+        corruptCheckRequest.predicate = NSPredicate(
+            format: """
+            (herd == %@ AND session.herd != %@) OR
+            (session.herd == %@ AND herd != %@)
+            """,
+            herd,
+            herd,
+            herd,
+            herd
+        )
+        corruptCheckRequest.fetchLimit = 1
+        corruptCheckRequest.relationshipKeyPathsForPrefetching = ["session", "herd"]
+
+        if let check = try context.fetch(corruptCheckRequest).first {
+            guard check.herd.objectID == herd.objectID else {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDFieldCheckAnimalCheck.coreDataEntityName,
+                    id: check.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: check.herd.id
+                )
+            }
+            throw CoreDataReadModelError.invalidHerdOwnership(
+                entity: CDFieldCheckSession.coreDataEntityName,
+                id: check.session.id,
+                expectedHerdID: herdID,
+                actualHerdID: check.session.herd.id
+            )
         }
 
         // Completed/resolved children are still part of the complete
