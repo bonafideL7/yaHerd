@@ -849,7 +849,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             graph.animalFeatureDependencies.sampleDataSeeder
         )
         XCTAssertTrue(try seeder.canSeedSampleData())
-        XCTAssertTrue(try await seeder.seedSampleDataIfNeeded())
+        let didSeed = try await seeder.seedSampleDataIfNeeded()
+        XCTAssertTrue(didSeed)
         let after = try templates.fetchTemplates()
         XCTAssertEqual(after.map(\.id), [originalID])
         XCTAssertEqual(after.map(\.name), ["Original User Template"])
