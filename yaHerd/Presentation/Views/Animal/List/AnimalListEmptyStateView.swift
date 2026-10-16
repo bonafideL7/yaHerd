@@ -35,6 +35,7 @@ struct AnimalListEmptyStateView: View {
             if !hasItems {
                 Button("Add Animal", action: onAddAnimal)
                     .buttonStyle(.borderedProminent)
+                    .disabled(isSeedingSampleData)
                     .foregroundStyle(colorScheme == .dark ? .black : .white)
                     .disabledWhenDataReadOnly()
                 if let onAddSampleData {
