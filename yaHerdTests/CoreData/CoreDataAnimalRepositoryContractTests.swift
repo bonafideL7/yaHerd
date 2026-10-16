@@ -377,14 +377,10 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             lookup: readOnly.lookup,
             currentHerdID: { foreignSelection.currentHerdID }
         )
-        XCTAssertEqual(
-            try await reopenedForeign.fetchDashboardPastureRecords().first?.activeAnimalCount,
-            1
-        )
-        XCTAssertEqual(
-            try await reopenedForeign.fetchDashboardRecords().pastures.first?.activeAnimalCount,
-            1
-        )
+        let foreignList = try await reopenedForeign.fetchDashboardPastureRecords()
+        let foreignFull = try await reopenedForeign.fetchDashboardRecords()
+        XCTAssertEqual(foreignList.first?.activeAnimalCount, 1)
+        XCTAssertEqual(foreignFull.pastures.first?.activeAnimalCount, 1)
 
         // Neither read modifies the persisted six selected-Herd Animals.
         let inspect = readOnly.contextFactory.makeReadContext()
