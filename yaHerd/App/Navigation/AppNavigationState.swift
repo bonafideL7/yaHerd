@@ -155,6 +155,16 @@ final class HerdRouter {
         setPath(activePath, for: tab)
     }
 
+    func updateFieldCheckMode(_ mode: FieldChecksViewMode, in tab: AppTab) {
+        var activePath = path(for: tab)
+        guard let lastRoute = activePath.last,
+              case .fieldChecks = lastRoute
+        else { return }
+
+        activePath[activePath.count - 1] = .fieldChecks(mode)
+        setPath(activePath, for: tab)
+    }
+
     func openWorkingSessions(in tab: AppTab = .herd) {
         var activePath = path(for: tab)
         activePath.append(.workingSessions)
