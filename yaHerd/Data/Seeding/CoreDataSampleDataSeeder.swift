@@ -111,7 +111,9 @@ enum CoreDataSampleHerdFactory {
 
     /// Shared preflight for both the empty-state affordance and transactional gate.
     static func isEmpty(herd: CDHerd, in context: NSManagedObjectContext) throws -> Bool {
-        for name in ["Animal", "Pasture", "FieldCheckSession", "WorkingSession"] {
+        // A group can exist without a Pasture. Do not overwrite or create
+        // duplicate logical group names in a user-configured Herd.
+        for name in ["Animal", "Pasture", "PastureGroup", "FieldCheckSession", "WorkingSession"] {
             let request = NSFetchRequest<NSManagedObject>(entityName: name)
             request.predicate = NSPredicate(format: "herd == %@", herd)
             request.fetchLimit = 1
