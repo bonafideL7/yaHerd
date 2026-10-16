@@ -200,10 +200,10 @@ enum CoreDataSampleHerdFactory {
             animal.isArchived = index > 0 && index % 113 == 0
             animal.archivedAt = animal.isArchived ? daysAgo(12) : nil
             animal.archiveReason = animal.isArchived ? "Sample historical record" : nil
-            animal.saleDate = status == .sold ? daysAgo(35) : nil
+            animal.saleDate = status == .sold ? daysAgo(min(35, max(1, ageInDays - 1))) : nil
             animal.salePrice = status == .sold ? NSNumber(value: 1_200 + index * 3) : nil
             animal.reasonSold = status == .sold ? "Market sale" : nil
-            animal.deathDate = status == .dead ? daysAgo(28) : nil
+            animal.deathDate = status == .dead ? daysAgo(min(28, max(1, ageInDays - 1))) : nil
             animal.causeOfDeath = status == .dead ? "Sample natural loss" : nil
             animal.statusReference = statusRefs.first { $0.baseStatusRawValue == status.rawValue }
             let features = index % 9 == 0
@@ -238,7 +238,7 @@ enum CoreDataSampleHerdFactory {
                 retired.isPrimary = false
                 retired.isActive = false
                 retired.assignedAt = animal.birthDate
-                retired.removedAt = daysAgo(150)
+                retired.removedAt = daysAgo(min(150, max(1, ageInDays - 1)))
                 retired.color = colors[TagColorDefaults.purpleID]
                 retired.animal = animal
                 retired.herd = herd
@@ -247,7 +247,7 @@ enum CoreDataSampleHerdFactory {
             if index % 4 == 0 {
                 let history = CDMovementRecord(context: context)
                 history.id = UUID()
-                history.date = daysAgo(80 + index % 90)
+                history.date = daysAgo(min(80 + index % 90, max(1, ageInDays - 1)))
                 let from = pastures[(index + 1) % pastures.count]
                 history.fromPastureIDSnapshot = from.id
                 history.fromPastureNameSnapshot = from.name
@@ -270,7 +270,7 @@ enum CoreDataSampleHerdFactory {
             if index % 3 == 0 || isSteer {
                 let health = CDHealthRecord(context: context)
                 health.id = UUID()
-                health.date = daysAgo(2 + index % 120)
+                health.date = daysAgo(min(2 + index % 120, max(1, ageInDays - 1)))
                 health.treatment = isSteer ? "Banding" :
                     ["Vaccination", "Deworming", "Pinkeye Treatment", "Foot Trim"][index % 4]
                 health.notes = index % 6 == 0 ? "Routine sample herd care" : nil
