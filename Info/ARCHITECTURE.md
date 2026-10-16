@@ -1,6 +1,6 @@
 # yaHerd Architecture
 
-> This document describes the **implemented production architecture** and its lasting clean-architecture rules. The app is prelaunch and uses a single local Core Data graph. No SwiftData user-data preservation, schema archive, import or migration path is required. `CORE_DATA_CUTOVER.md` remains a temporary final contract-audit checklist.
+> This document describes the **implemented production architecture** and its lasting clean-architecture rules. The app is prelaunch and uses a single local Core Data graph. No SwiftData user-data preservation, schema archive, import or migration path is required. The final Core Data contract audit is documented in `MILESTONE_12_FINAL_CORE_DATA_CONTRACT_AUDIT_MATRIX.md`; the temporary cutover checklist has been retired.
 
 ## Implemented production architecture
 
