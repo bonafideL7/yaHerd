@@ -2,14 +2,27 @@ import SwiftUI
 
 struct IsolatedFieldCheckAreaView: View {
     @Environment(AppNavigationState.self) private var navigation
-    let onReturnHome: () -> Void
+    let onClose: () -> Void
 
     var body: some View {
         NavigationStack {
             content
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        IsolatedFlowHomeButton(action: onReturnHome)
+                        if navigation.workflowRouter.canReturnToList {
+                            Button {
+                                navigation.workflowRouter.returnToList()
+                            } label: {
+                                Label("Back to Checks", systemImage: "chevron.left")
+                            }
+                        } else {
+                            IsolatedFlowCloseButton(action: onClose)
+                        }
+                    }
+                    if navigation.workflowRouter.canReturnToList {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            IsolatedFlowCloseButton(action: onClose)
+                        }
                     }
                 }
         }
@@ -29,11 +42,11 @@ struct IsolatedFieldCheckAreaView: View {
             )
         case .fieldCheckSessions(let mode):
             FieldChecksView(mode: fieldCheckModeBinding(fallback: mode), onSessionLaunch: { configuration in
-                navigation.workflowRouter.route = .fieldCheckSession(configuration)
+                navigation.workflowRouter.openFieldCheckSession(configuration)
             })
         default:
             FieldChecksView(mode: fieldCheckModeBinding(fallback: .all), onSessionLaunch: { configuration in
-                navigation.workflowRouter.route = .fieldCheckSession(configuration)
+                navigation.workflowRouter.openFieldCheckSession(configuration)
             })
         }
     }
@@ -53,14 +66,27 @@ struct IsolatedFieldCheckAreaView: View {
 
 struct IsolatedWorkAreaView: View {
     @Environment(AppNavigationState.self) private var navigation
-    let onReturnHome: () -> Void
+    let onClose: () -> Void
 
     var body: some View {
         NavigationStack {
             content
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        IsolatedFlowHomeButton(action: onReturnHome)
+                        if navigation.workflowRouter.canReturnToList {
+                            Button {
+                                navigation.workflowRouter.returnToList()
+                            } label: {
+                                Label("Back to Sessions", systemImage: "chevron.left")
+                            }
+                        } else {
+                            IsolatedFlowCloseButton(action: onClose)
+                        }
+                    }
+                    if navigation.workflowRouter.canReturnToList {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            IsolatedFlowCloseButton(action: onClose)
+                        }
                     }
                 }
         }
@@ -73,23 +99,23 @@ struct IsolatedWorkAreaView: View {
             WorkingSessionDetailView(sessionID: sessionID)
         case .workingSessions:
             WorkingSessionsView { sessionID in
-                navigation.workflowRouter.route = .workingSession(sessionID)
+                navigation.workflowRouter.openWorkingSession(sessionID)
             }
         default:
             WorkingSessionsView { sessionID in
-                navigation.workflowRouter.route = .workingSession(sessionID)
+                navigation.workflowRouter.openWorkingSession(sessionID)
             }
         }
     }
 }
 
-private struct IsolatedFlowHomeButton: View {
+private struct IsolatedFlowCloseButton: View {
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Label("Home", systemImage: "house")
+            Label("Close", systemImage: "xmark")
         }
-        .accessibilityLabel("Return Home")
+        .accessibilityLabel("Close workflow")
     }
 }
