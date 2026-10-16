@@ -1,6 +1,6 @@
 # Core Data Model Blueprint
 
-> Phase 1 implementation blueprint for the production local Core Data model. This document turns the persistence rules in `ARCHITECTURE.md`, `TRANSACTION_BOUNDARIES.md`, and `CORE_DATA_CUTOVER.md` into a concrete schema design before any Core Data repositories are written.
+> Historical Phase 1 implementation blueprint for the final local Core Data model. The permanent system rules now live in `ARCHITECTURE.md` and `TRANSACTION_BOUNDARIES.md`. The completed M12 contract-to-architecture reconciliation is recorded in `MILESTONE_12_FINAL_CORE_DATA_CONTRACT_AUDIT_MATRIX.md`; the temporary cutover playbook has been retired.
 
 This blueprint is intentionally **not** a SwiftData migration map. Development SwiftData stores, old collaboration records, repair metadata, and migration compatibility do not constrain this model.
 

@@ -14,7 +14,7 @@ The running app uses a local-only **Core Data** `NSPersistentContainer` backed b
 
 The app has not launched. There is no legacy user data to migrate and no SwiftData import, conversion, compatibility or upgrade support. First launch initializes the local Core Data store directly. Obsolete SwiftData-named files are not read, exported or migrated; they do not block startup. Core Data failures are handled separately by read-only recovery.
 
-See [the Core Data replacement execution plan](Core-Data-SwiftData-replacement-execution-plan.md) and [the runtime cutover gate](Info/MILESTONE_10_CORE_DATA_RUNTIME_CUTOVER_GATE.md).
+See [the implemented architecture](Info/ARCHITECTURE.md), [the final Core Data contract audit](Info/MILESTONE_12_FINAL_CORE_DATA_CONTRACT_AUDIT_MATRIX.md) and [the historical implementation plan](Core-Data-SwiftData-replacement-execution-plan.md).
 
 ## Read-only recovery mode
 
