@@ -170,7 +170,7 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
     }
 
     @MainActor
-    func testConfirmedInactiveWorkflowReturnsToSessionsWithoutChangingOrigin() {
+    func testConfirmedInactiveDirectWorkflowClosesToOrigin() {
         let herdID = UUID()
         let sessionID = UUID()
         let navigation = AppNavigationState()
@@ -183,10 +183,33 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
 
         navigation.revalidateIdentityBoundState(using: validator)
 
-        XCTAssertEqual(navigation.fullScreenWorkflow, .workingSession)
-        XCTAssertEqual(navigation.workflowRouter.route, .workingSessions)
+        XCTAssertNil(navigation.fullScreenWorkflow)
+        XCTAssertNil(navigation.workflowRouter.route)
         XCTAssertEqual(navigation.selectedTab, .home)
         XCTAssertTrue(navigation.herdRouter.path.isEmpty)
+    }
+
+    @MainActor
+    func testConfirmedInactiveSessionOpenedFromWorkflowListReturnsToList() {
+        let herdID = UUID()
+        let sessionID = UUID()
+        let navigation = AppNavigationState()
+        navigation.openFieldCheckArea(.sessions(.flaggedAnimals))
+        navigation.workflowRouter.openFieldCheckSession(
+            FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
+        )
+
+        let validator = StubNavigationValidator(
+            currentHerdResult: .success(herdID),
+            fieldCheckSessionResult: .success(false)
+        )
+
+        navigation.revalidateIdentityBoundState(using: validator)
+
+        XCTAssertEqual(navigation.fullScreenWorkflow, .fieldCheck)
+        XCTAssertEqual(navigation.workflowRouter.route, .fieldCheckSessions(.flaggedAnimals))
+        XCTAssertEqual(navigation.selectedTab, .home)
+        XCTAssertFalse(navigation.workflowRouter.canReturnToList)
     }
 
     @MainActor
