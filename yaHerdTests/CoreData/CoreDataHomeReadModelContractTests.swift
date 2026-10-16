@@ -326,6 +326,168 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         )
     }
 
+    func testHomeFieldCheckRejectsCrossHerdHistoricalChildSessionLinks() async throws {
+        // Both relationship directions are material. Finding ownership from
+        // selected child to foreign session is an existing Home safeguard;
+        // the inverse finding direction and both roster-check directions
+        // must also reject off-warning persisted corruption.
+        for kind in FieldCheckChildIdentityKind.allCases {
+            for direction in FieldCheckChildGraphDirection.allCases {
+                let environment = try await CoreDataHomeReadModelContractEnvironment.make()
+                let fixture = try environment.seedOffWarningChildIdentityFixture(
+                    kind: kind
+                )
+                let home = environment.fixture.makeHomeFieldCheckQueryReader()
+                let direct = CoreDataFieldCheckRepository(
+                    selection: environment.selection,
+                    assembly: environment.assembly
+                )
+
+                let baseline = try await home.fetchHomeFieldCheckRecords()
+                XCTAssertEqual(baseline.sessions.map(\.id), [fixture.warningSessionID])
+                XCTAssertEqual(baseline.openFindingCount, 0)
+                XCTAssertTrue(baseline.hasHistory)
+                XCTAssertEqual(
+                    Set(try direct.fetchSessions().map(\.id)),
+                    Set([
+                        fixture.warningSessionID,
+                        fixture.completedSessionID,
+                        fixture.controlSessionID
+                    ])
+                )
+
+                let selectedChild = direction == .selectedChildForeignSession
+                let childID = selectedChild
+                    ? fixture.completedChildID
+                    : fixture.warningChildID
+                let childHerdID = selectedChild
+                    ? environment.herdID
+                    : fixture.foreignHerdID
+                let targetSessionID = selectedChild
+                    ? fixture.foreignSessionID
+                    : fixture.completedSessionID
+                let targetSessionHerdID = selectedChild
+                    ? fixture.foreignHerdID
+                    : environment.herdID
+
+                let mutationContext = try environment.assembly.contextFactory.makeWriteContext()
+                try mutationContext.performAndWait {
+                    let target = try XCTUnwrap(
+                        environment.assembly.lookup.herdOwned(
+                            CDFieldCheckSession.self,
+                            id: targetSessionID,
+                            herdID: targetSessionHerdID,
+                            in: mutationContext
+                        )
+                    )
+                    switch kind {
+                    case .finding:
+                        let finding = try XCTUnwrap(
+                            environment.assembly.lookup.herdOwned(
+                                CDFieldCheckFinding.self,
+                                id: childID,
+                                herdID: childHerdID,
+                                in: mutationContext
+                            )
+                        )
+                        finding.session = target
+                    case .animalCheck:
+                        let check = try XCTUnwrap(
+                            environment.assembly.lookup.herdOwned(
+                                CDFieldCheckAnimalCheck.self,
+                                id: childID,
+                                herdID: childHerdID,
+                                in: mutationContext
+                            )
+                        )
+                        check.session = target
+                    }
+                    try mutationContext.save()
+                }
+
+                let expectedError = selectedChild
+                    ? CoreDataReadModelError.invalidHerdOwnership(
+                        entity: CDFieldCheckSession.coreDataEntityName,
+                        id: targetSessionID,
+                        expectedHerdID: environment.herdID,
+                        actualHerdID: fixture.foreignHerdID
+                    )
+                    : CoreDataReadModelError.invalidHerdOwnership(
+                        entity: kind.entityName,
+                        id: childID,
+                        expectedHerdID: environment.herdID,
+                        actualHerdID: fixture.foreignHerdID
+                    )
+
+                await XCTAssertThrowsErrorAsync(
+                    try await home.fetchHomeFieldCheckRecords()
+                ) { error in
+                    XCTAssertEqual(error as? CoreDataReadModelError, expectedError)
+                }
+                XCTAssertThrowsError(try direct.fetchSessions()) { error in
+                    XCTAssertEqual(error as? CoreDataReadModelError, expectedError)
+                }
+
+                let reopened = try await environment.makeReadOnlyAssembly()
+                let reopenedHome = CoreDataReadModelActor(
+                    contextFactory: reopened.contextFactory,
+                    lookup: reopened.lookup,
+                    currentHerdID: { environment.selection.currentHerdID }
+                )
+                await XCTAssertThrowsErrorAsync(
+                    try await reopenedHome.fetchHomeFieldCheckRecords()
+                ) { error in
+                    XCTAssertEqual(error as? CoreDataReadModelError, expectedError)
+                }
+
+                // Failed reads cannot repair or delete the corrupted child;
+                // the other selected-Herd history and warning remain intact.
+                let readContext = reopened.contextFactory.makeReadContext()
+                let persisted = try await readContext.perform {
+                    if kind == .finding {
+                        let request = NSFetchRequest<CDFieldCheckFinding>(
+                            entityName: CDFieldCheckFinding.coreDataEntityName
+                        )
+                        return try readContext.fetch(request).map {
+                            (id: $0.id, herdID: $0.herd.id, sessionID: $0.session.id)
+                        }
+                    }
+                    let request = NSFetchRequest<CDFieldCheckAnimalCheck>(
+                        entityName: CDFieldCheckAnimalCheck.coreDataEntityName
+                    )
+                    return try readContext.fetch(request).map {
+                        (id: $0.id, herdID: $0.herd.id, sessionID: $0.session.id)
+                    }
+                }
+                XCTAssertEqual(persisted.count, 4)
+                XCTAssertEqual(
+                    persisted.filter {
+                        $0.id == childID
+                            && $0.herdID == childHerdID
+                            && $0.sessionID == targetSessionID
+                    }.count,
+                    1
+                )
+                XCTAssertEqual(
+                    persisted.filter {
+                        $0.id == fixture.controlChildID
+                            && $0.herdID == environment.herdID
+                            && $0.sessionID == fixture.controlSessionID
+                    }.count,
+                    1
+                )
+                XCTAssertEqual(
+                    persisted.filter {
+                        $0.id == fixture.warningChildID
+                            && $0.herdID == environment.herdID
+                            && $0.sessionID == fixture.warningSessionID
+                    }.count,
+                    1
+                )
+            }
+        }
+    }
+
     func testHomeFieldCheckRejectsChildIDCollisionsOutsideWarningSessions() async throws {
         for kind in FieldCheckChildIdentityKind.allCases {
             let environment = try await CoreDataHomeReadModelContractEnvironment.make()
@@ -850,6 +1012,11 @@ final class CoreDataHomeReadModelContractTests: XCTestCase {
         )
         environment.selection.currentHerdID = selectedHerdID
     }
+}
+
+private enum FieldCheckChildGraphDirection: CaseIterable, Sendable {
+    case selectedChildForeignSession
+    case foreignChildSelectedSession
 }
 
 private enum FieldCheckChildIdentityKind: CaseIterable, Sendable {
