@@ -225,112 +225,39 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: harness.storeURL.path))
     }
 
-    func testLegacyStorePreflightBlocksSilentFirstCoreDataOpenAndAllowsExistingCoreData() throws {
-        let fileManager = FileManager.default
-        let root = fileManager.temporaryDirectory
-            .appendingPathComponent("yaHerd-legacy-preflight-\(UUID().uuidString)", isDirectory: true)
-        let coreDataDirectory = root.appendingPathComponent("yaHerd", isDirectory: true)
-        try fileManager.createDirectory(
-            at: coreDataDirectory,
-            withIntermediateDirectories: true
-        )
-        defer { try? fileManager.removeItem(at: root) }
-
-        let newStore = coreDataDirectory.appendingPathComponent(
-            CoreDataPersistentContainer.storeFileName
-        )
-        let legacyStore = root.appendingPathComponent("yaHerdStore.store")
-        let legacyJournal = root.appendingPathComponent("yaHerdStore.store-wal")
-        let rollbackJournal = root.appendingPathComponent("yaHerdStore.store-journal")
-        try Data("legacy data".utf8).write(to: legacyStore)
-        try Data("legacy wal".utf8).write(to: legacyJournal)
-        try Data("legacy rollback journal".utf8).write(to: rollbackJournal)
-
-        let artifacts = CoreDataLegacyStorePreflight.legacyArtifacts(
-            in: root,
-            fileManager: fileManager
-        )
-        XCTAssertEqual(artifacts.map(\.lastPathComponent), [
-            legacyStore.lastPathComponent,
-            rollbackJournal.lastPathComponent,
-            legacyJournal.lastPathComponent
-        ])
-
-        XCTAssertThrowsError(
-            try CoreDataLegacyStorePreflight.ensureSafeFirstOpen(
-                at: newStore,
-                fileManager: fileManager
-            )
-        ) { error in
-            guard let typedError = error as? CoreDataLegacyStorePreflightError,
-                  case .legacyStoreFound(let files) = typedError else {
-                XCTFail("Expected a recognized legacy store.")
-                return
-            }
-            XCTAssertEqual(Set(files), Set([
-                legacyStore.lastPathComponent,
-                rollbackJournal.lastPathComponent,
-                legacyJournal.lastPathComponent
-            ]))
-        }
-        XCTAssertFalse(fileManager.fileExists(atPath: newStore.path))
-        XCTAssertTrue(fileManager.fileExists(atPath: legacyStore.path))
-
-        // A migrated Core Data store is authoritative even when archived
-        // legacy files are still present for backup.
-        try Data("new store exists".utf8).write(to: newStore)
-        XCTAssertNoThrow(
-            try CoreDataLegacyStorePreflight.ensureSafeFirstOpen(
-                at: newStore,
-                fileManager: fileManager
-            )
-        )
-    }
-
-    func testFirstOpenRejectsOrphanedRollbackJournalsWithoutModifyingThem() throws {
+    @MainActor
+    func testFirstCoreDataLaunchIgnoresObsoleteStoreFilenames() async throws {
         let manager = FileManager.default
-        let root = manager.temporaryDirectory
-            .appendingPathComponent("yaHerd-orphaned-journals-\(UUID().uuidString)", isDirectory: true)
-        let storeDirectory = root.appendingPathComponent("yaHerd", isDirectory: true)
-        try manager.createDirectory(at: storeDirectory, withIntermediateDirectories: true)
+        let root = manager.temporaryDirectory.appendingPathComponent(
+            "yaHerd-prelaunch-native-store-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let directory = root.appendingPathComponent("yaHerd", isDirectory: true)
+        try manager.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? manager.removeItem(at: root) }
 
-        let store = storeDirectory.appendingPathComponent(CoreDataPersistentContainer.storeFileName)
-        let legacyJournal = root.appendingPathComponent("default.store-journal")
-        let legacyBytes = Data("legacy rollback".utf8)
-        try legacyBytes.write(to: legacyJournal)
+        let store = directory.appendingPathComponent(CoreDataPersistentContainer.storeFileName)
+        let obsoleteFile = root.appendingPathComponent("yaHerdStore.store")
+        let obsoleteJournal = root.appendingPathComponent("default.store-journal")
+        let marker = Data("obsolete local development file".utf8)
+        try marker.write(to: obsoleteFile)
+        try marker.write(to: obsoleteJournal)
 
-        // A rollback journal without its legacy main file still blocks first open.
-        XCTAssertThrowsError(try CoreDataLegacyStorePreflight.ensureSafeFirstOpen(at: store, fileManager: manager)) { error in
-            guard let preflightError = error as? CoreDataLegacyStorePreflightError,
-                  case .legacyStoreFound(let files) = preflightError else {
-                XCTFail("Expected orphaned legacy rollback journal protection.")
-                return
-            }
-            XCTAssertEqual(files, [legacyJournal.lastPathComponent])
-        }
-        XCTAssertFalse(manager.fileExists(atPath: store.path))
-        XCTAssertEqual(try Data(contentsOf: legacyJournal), legacyBytes)
+        let first = try await CoreDataAppPersistenceAssembly.load(at: store)
+        let firstHerdID = try first.makeDependencies(
+            dataAccessMode: .readWrite
+        ).herdRepository.fetchCurrentHerd().id
 
-        try manager.removeItem(at: legacyJournal)
+        XCTAssertTrue(manager.fileExists(atPath: store.path))
+        XCTAssertEqual(try Data(contentsOf: obsoleteFile), marker)
+        XCTAssertEqual(try Data(contentsOf: obsoleteJournal), marker)
 
-        let coreDataJournal = URL(fileURLWithPath: store.path + "-journal")
-        let coreDataBytes = Data("core data rollback".utf8)
-        try coreDataBytes.write(to: coreDataJournal)
-        XCTAssertThrowsError(try CoreDataLegacyStorePreflight.ensureSafeFirstOpen(at: store, fileManager: manager)) { error in
-            guard let preflightError = error as? CoreDataLegacyStorePreflightError,
-                  case .orphanedCoreDataSidecars(let files) = preflightError else {
-                XCTFail("Expected orphaned Core Data rollback journal protection.")
-                return
-            }
-            XCTAssertEqual(files, [coreDataJournal.lastPathComponent])
-        }
-        XCTAssertFalse(manager.fileExists(atPath: store.path))
-        XCTAssertEqual(try Data(contentsOf: coreDataJournal), coreDataBytes)
-
-        // Once the parent store exists, it remains authoritative even with journals.
-        try Data("existing core data".utf8).write(to: store)
-        XCTAssertNoThrow(try CoreDataLegacyStorePreflight.ensureSafeFirstOpen(at: store, fileManager: manager))
+        let reopened = try await CoreDataAppPersistenceAssembly.load(at: store)
+        XCTAssertEqual(
+            try reopened.makeDependencies(dataAccessMode: .readWrite)
+                .herdRepository.fetchCurrentHerd().id,
+            firstHerdID
+        )
     }
 
     @MainActor
@@ -491,8 +418,8 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertNil(controller.exportErrorMessage)
         XCTAssertNotNil(controller.exportDocument)
 
-        // Rollback journals are part of the required recovery payload, including
-        // legacy journals without their main database.
+        // Native Core Data rollback journals remain part of recovery; old
+        // SwiftData-style filenames are ignored by the inventory.
         controller.clearPreparedExport()
         let coreDataJournal = URL(fileURLWithPath: storeFile.path + "-journal")
         let legacyJournal = root.appendingPathComponent("default.store-journal")
@@ -505,7 +432,6 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             Set([
                 storeFile.lastPathComponent,
                 coreDataJournal.lastPathComponent,
-                "LegacyAppSupport/default.store-journal"
             ])
         )
         controller.prepareExport()
@@ -516,7 +442,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
     }
 
     @MainActor
-    func testReadOnlyRecoveryProbeDoesNotCreateMissingStoreOrTouchLegacyJournal() async throws {
+    func testReadOnlyRecoveryProbeDoesNotCreateMissingStoreOrTouchOrphanedJournal() async throws {
         let manager = FileManager.default
         let root = manager.temporaryDirectory
             .appendingPathComponent("yaHerd-recovery-probe-missing-\(UUID().uuidString)", isDirectory: true)
@@ -542,21 +468,23 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertFalse(manager.fileExists(atPath: storeDirectory.path))
         XCTAssertFalse(manager.fileExists(atPath: storeURL.path))
 
-        // A preflight-blocked legacy journal must not cause the probe to
-        // synthesize a replacement Core Data directory or store on retry.
-        let legacyJournal = root.appendingPathComponent("default.store-journal")
-        let originalBytes = Data("legacy journal survives diagnostic checks".utf8)
-        try originalBytes.write(to: legacyJournal)
+        // An orphaned native Core Data rollback journal cannot make the
+        // read-only diagnostic probe create a replacement database.
+        try manager.createDirectory(at: storeDirectory, withIntermediateDirectories: true)
+        let orphanedJournal = URL(fileURLWithPath: storeURL.path + "-journal")
+        let originalBytes = Data("orphaned Core Data journal".utf8)
+        try originalBytes.write(to: orphanedJournal)
 
         await controller.checkPersistentStoreReadOnly()
         guard case .some(.failed(let repeatedMessage)) = controller.storeCheckResult else {
-            XCTFail("A legacy sidecar alone must not make the Core Data probe succeed.")
+            XCTFail("An orphaned Core Data sidecar cannot make the probe succeed.")
             return
         }
         XCTAssertTrue(repeatedMessage.contains("does not exist"))
         XCTAssertFalse(controller.isCheckingPersistentStore)
-        XCTAssertFalse(manager.fileExists(atPath: storeDirectory.path))
-        XCTAssertEqual(try Data(contentsOf: legacyJournal), originalBytes)
+        XCTAssertTrue(manager.fileExists(atPath: storeDirectory.path))
+        XCTAssertFalse(manager.fileExists(atPath: storeURL.path))
+        XCTAssertEqual(try Data(contentsOf: orphanedJournal), originalBytes)
     }
 
     @MainActor

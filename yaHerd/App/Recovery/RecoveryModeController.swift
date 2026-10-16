@@ -153,7 +153,7 @@ final class RecoveryModeController: ObservableObject {
 
       Contents:
       - RecoveryDiagnostics.json: launch, build, and local store file inventory details.
-      - Storage/: copies of discoverable Core Data SQLite and journal files, plus identified legacy files preserved for backup (without migration).
+      - Storage/: copies of discoverable Core Data SQLite and its journal files.
 
       Keep this archive private. Store files may contain herd and animal records.
       """
@@ -255,8 +255,7 @@ final class RecoveryModeController: ObservableObject {
     let directory = appSupportURL.appendingPathComponent("yaHerd", isDirectory: true)
     let storeName = CoreDataPersistentContainer.storeFileName
     let allowedNames = Set(
-      ([""] + CoreDataLegacyStorePreflight.sqliteSidecarSuffixes)
-        .map { storeName + $0 }
+      ["", "-wal", "-shm", "-journal"].map { storeName + $0 }
     )
     let keys: Set<URLResourceKey> = [
       .isRegularFileKey,
@@ -271,7 +270,7 @@ final class RecoveryModeController: ObservableObject {
         options: [.skipsHiddenFiles]
       )
     } catch CocoaError.fileNoSuchFile {
-      // No Core Data directory exists on a fresh or preflight-blocked launch.
+      // No Core Data directory exists on a fresh or failed-storage launch.
       files = []
     }
 
@@ -287,26 +286,7 @@ final class RecoveryModeController: ObservableObject {
       )
     }
 
-    // A fresh Core Data launch is blocked when older local store files exist.
-    // Make those original files exportable without opening or migrating them.
-    let legacyFiles = try CoreDataLegacyStorePreflight.legacyArtifacts(
-      in: appSupportURL,
-      fileManager: fileManager
-    ).map { url -> RecoverableStoreFile in
-      let values = try url.resourceValues(forKeys: keys)
-      let sourceFolder = url.deletingLastPathComponent().lastPathComponent == "yaHerd"
-        ? "LegacyYaHerd"
-        : "LegacyAppSupport"
-      return RecoverableStoreFile(
-        url: url,
-        archiveName: "\(sourceFolder)/\(url.lastPathComponent)",
-        byteCount: values.fileSize ?? 0,
-        modifiedAt: values.contentModificationDate ?? .distantPast
-      )
-    }
-
-    return (coreDataFiles + legacyFiles)
-      .sorted { $0.archiveName < $1.archiveName }
+    return coreDataFiles.sorted { $0.archiveName < $1.archiveName }
   }
 }
 
