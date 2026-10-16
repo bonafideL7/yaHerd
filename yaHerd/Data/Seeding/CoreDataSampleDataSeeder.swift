@@ -21,6 +21,21 @@ final class CoreDataSampleDataSeeder: SampleDataSeeding {
         self.writePolicy = writePolicy
     }
 
+    func canSeedSampleData() throws -> Bool {
+        try writePolicy.validateCanWrite()
+        guard let herdID = selection.currentHerdID else {
+            throw HerdRepositoryError.missingHerd
+        }
+        let context = assembly.contextFactory.makeReadContext()
+        let lookup = assembly.lookup
+        return try context.performAndWait {
+            guard let herd = try lookup.herd(id: herdID, in: context) else {
+                throw HerdRepositoryError.missingHerd
+            }
+            return try CoreDataSampleHerdFactory.isEmpty(herd: herd, in: context)
+        }
+    }
+
     func seedSampleDataIfNeeded() async throws -> Bool {
         try await seed(size: .compact)
     }
@@ -33,6 +48,27 @@ final class CoreDataSampleDataSeeder: SampleDataSeeding {
         try writePolicy.validateCanWrite()
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
+        }
+        // Use the existing cross-feature animal and pasture boundaries, and
+        // reserve stable built-in Tag Color UUIDs before the physical transaction.
+        await assembly.animalWriteBoundary.beginAnimalWrite()
+        defer { assembly.animalWriteBoundary.endAnimalWrite() }
+        try assembly.pastureResidentWriteCoordinator.beginAnimalWrite()
+        defer { assembly.pastureResidentWriteCoordinator.endAnimalWrite() }
+
+        let reserved = try CoreDataTagColorMaterializationCoordinator.shared.reserve(
+            coordinationID: assembly.coordinationID,
+            herdID: herdID,
+            colorIDs: TagColorDefaults.defaultColorIDs,
+            reservesDefaultSlot: true
+        )
+        defer {
+            CoreDataTagColorMaterializationCoordinator.shared.release(
+                coordinationID: assembly.coordinationID,
+                herdID: herdID,
+                colorIDs: reserved,
+                releasesDefaultSlot: true
+            )
         }
         let lookup = assembly.lookup
         let inserted = try await assembly.transactionExecutor.performWrite { context in
@@ -65,13 +101,8 @@ enum CoreDataSampleHerdFactory {
         var steerCount: Int { self == .large ? 56 : 2 }
     }
 
-    static func insert(
-        size: Size,
-        herd: CDHerd,
-        in context: NSManagedObjectContext
-    ) throws -> Bool {
-        // Check again inside the write context, not only via the visible empty state.
-        // Colors, templates and reference data may legitimately have been created already.
+    /// Shared preflight for both the empty-state affordance and transactional gate.
+    static func isEmpty(herd: CDHerd, in context: NSManagedObjectContext) throws -> Bool {
         for name in ["Animal", "Pasture", "FieldCheckSession", "WorkingSession"] {
             let request = NSFetchRequest<NSManagedObject>(entityName: name)
             request.predicate = NSPredicate(format: "herd == %@", herd)
@@ -80,6 +111,17 @@ enum CoreDataSampleHerdFactory {
                 return false
             }
         }
+        return true
+    }
+
+    static func insert(
+        size: Size,
+        herd: CDHerd,
+        in context: NSManagedObjectContext
+    ) throws -> Bool {
+        // Re-check immediately before inserting; existing colors, templates and
+        // reference data can be reused and must never be erased.
+        guard try isEmpty(herd: herd, in: context) else { return false }
 
         let now = Date()
         let calendar = Calendar.current
@@ -286,6 +328,15 @@ enum CoreDataSampleHerdFactory {
             animals[index].dam = animals[(index - calfStart) % size.cowCount]
             animals[index].sire = animals[bullStart + (index - calfStart) % size.bullCount]
         }
+        // Cow classification is based on actual maternal offspring. When there
+        // are fewer current-season calves than mature cows, older heifers fill
+        // the remaining offspring links; they are still heifers themselves.
+        let cowsWithoutNewCalves = max(0, size.cowCount - (animals.count - calfStart))
+        for offset in 0..<cowsWithoutNewCalves {
+            let olderOffspring = animals[size.cowCount + offset]
+            olderOffspring.dam = animals[(animals.count - calfStart) + offset]
+            olderOffspring.sire = animals[bullStart + offset % size.bullCount]
+        }
         for index in stride(from: 0, to: size.cowCount + size.heiferCount, by: 4) {
             let animal = animals[index]
             guard animal.sexRawValue == Sex.female.rawValue else { continue }
@@ -473,10 +524,12 @@ enum CoreDataSampleHerdFactory {
                 item.animalDamDisplayTagColorIDSnapshot = dam?.colorID
                 item.collectedFromPastureIDSnapshot = source.id
                 item.collectedFromPastureNameSnapshot = source.name
-                item.destinationPastureIDSnapshot = nil
-                item.destinationPastureNameSnapshot = nil
+                // The real completed-session workflow assigns an omitted
+                // destination to the source Pasture, not to a nil destination.
+                item.destinationPastureIDSnapshot = isActive ? nil : source.id
+                item.destinationPastureNameSnapshot = isActive ? nil : source.name
                 item.collectedFromPasture = source
-                item.destinationPasture = nil
+                item.destinationPasture = isActive ? nil : source
                 item.animal = animal
                 item.session = session
                 item.herd = herd
