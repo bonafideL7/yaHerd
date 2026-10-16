@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum FieldChecksViewMode: String, CaseIterable, Hashable, Codable {
+enum FieldChecksViewMode: String, Hashable, Codable {
     case all
     case inProgress
     case openFindings
@@ -21,10 +21,6 @@ enum FieldChecksViewMode: String, CaseIterable, Hashable, Codable {
             return "Missing Animals"
         }
     }
-
-    var selectionTitle: String {
-        self == .all ? "All Checks" : title
-    }
 }
 
 struct FieldChecksView: View {
@@ -33,20 +29,12 @@ struct FieldChecksView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @State private var model = FieldChecksViewModel()
     @State private var showingStartPastureCheck = false
-    @State private var selectedMode: FieldChecksViewMode
 
-    private let initialMode: FieldChecksViewMode
+    private let mode: FieldChecksViewMode
     private let onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)?
-    private let onModeChange: ((FieldChecksViewMode) -> Void)?
 
-    init(
-        mode: FieldChecksViewMode = .all,
-        onSessionStarted: ((UUID) -> Void)? = nil,
-        onModeChange: ((FieldChecksViewMode) -> Void)? = nil
-    ) {
-        self.initialMode = mode
-        self._selectedMode = State(initialValue: mode)
-        self.onModeChange = onModeChange
+    init(mode: FieldChecksViewMode = .all, onSessionStarted: ((UUID) -> Void)? = nil) {
+        self.mode = mode
         if let onSessionStarted {
             self.onSessionLaunch = { configuration in
                 onSessionStarted(configuration.sessionID)
@@ -58,13 +46,10 @@ struct FieldChecksView: View {
 
     init(
         mode: FieldChecksViewMode = .all,
-        onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)?,
-        onModeChange: ((FieldChecksViewMode) -> Void)? = nil
+        onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)?
     ) {
-        self.initialMode = mode
-        self._selectedMode = State(initialValue: mode)
+        self.mode = mode
         self.onSessionLaunch = onSessionLaunch
-        self.onModeChange = onModeChange
     }
 
     private var currentPastureSessions: [FieldCheckSessionSummary] {
@@ -124,7 +109,7 @@ struct FieldChecksView: View {
     }
 
     private var filteredIsEmpty: Bool {
-        switch selectedMode {
+        switch mode {
         case .all:
             return needsAttentionSessions.isEmpty
             && openCheckSessions.isEmpty
@@ -147,7 +132,7 @@ struct FieldChecksView: View {
                 emptyState
             } else {
                 List {
-                    switch selectedMode {
+                    switch mode {
                     case .all:
                         allSections
                     case .inProgress:
@@ -165,30 +150,7 @@ struct FieldChecksView: View {
                 }
             }
         }
-        .navigationTitle(selectedMode.title)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            HStack(spacing: 12) {
-                Text("View")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Picker("Pasture check view", selection: modeSelection) {
-                    ForEach(FieldChecksViewMode.allCases, id: \.self) { option in
-                        Text(option.selectionTitle).tag(option)
-                    }
-                }
-                .pickerStyle(.menu)
-                .accessibilityLabel("Pasture check view")
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
-            .background(Color(.systemGroupedBackground))
-        }
-        .onChange(of: initialMode) { _, newMode in
-            selectedMode = newMode
-        }
+        .navigationTitle(mode.title)
         .navigationDestination(isPresented: $showingStartPastureCheck) {
             FieldCheckPastureStartListView { sessionID in
                 showingStartPastureCheck = false
@@ -220,20 +182,9 @@ struct FieldChecksView: View {
         .profileBodyRecomputation("FieldChecksView")
     }
 
-    private var modeSelection: Binding<FieldChecksViewMode> {
-        Binding(
-            get: { selectedMode },
-            set: { newMode in
-                guard selectedMode != newMode else { return }
-                selectedMode = newMode
-                onModeChange?(newMode)
-            }
-        )
-    }
-
     @ViewBuilder
     private var emptyState: some View {
-        switch selectedMode {
+        switch mode {
         case .all:
             FieldChecksEmptyState {
                 if dataAccessMode.allowsDataMutations {

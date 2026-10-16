@@ -125,15 +125,9 @@ struct HerdTabRootView: View {
         case .pasture(let pastureID):
             PastureDetailView(pastureID: pastureID)
         case .fieldChecks(let mode):
-            FieldChecksView(
-                mode: mode,
-                onSessionLaunch: { configuration in
-                    navigation.openFieldCheckArea(.session(configuration))
-                },
-                onModeChange: { newMode in
-                    router.selectFieldChecksMode(newMode, in: tab)
-                }
-            )
+            FieldChecksView(mode: mode, onSessionLaunch: { configuration in
+                navigation.openFieldCheckArea(.session(configuration))
+            })
         case .workingSessions:
             WorkingSessionsView { sessionID in
                 navigation.openWorkArea(.session(sessionID))
