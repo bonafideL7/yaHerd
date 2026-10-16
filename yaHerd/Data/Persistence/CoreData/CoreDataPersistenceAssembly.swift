@@ -67,6 +67,41 @@ final class CoreDataTagColorMaterializationCoordinator {
     }
 }
 
+enum CoreDataSampleSeedCoordinationError: LocalizedError, Equatable {
+    case sampleSeedInProgress
+
+    var errorDescription: String? {
+        "Working treatment templates cannot be changed while sample herd data is being added."
+    }
+}
+
+/// Template CRUD is synchronous and MainActor-isolated; the seed transaction
+/// suspends asynchronously. Reserve before any suspension so writes in other
+/// scenes fail fast rather than racing an uncommitted template-name fetch.
+/// This intentionally does not add template CRUD to the Pasture deletion gate.
+@MainActor
+final class CoreDataSampleSeedWriteCoordinator {
+    private var isSeeding = false
+
+    func beginSeed() throws {
+        guard !isSeeding else {
+            throw CoreDataSampleSeedCoordinationError.sampleSeedInProgress
+        }
+        isSeeding = true
+    }
+
+    func endSeed() {
+        precondition(isSeeding)
+        isSeeding = false
+    }
+
+    func validateTemplateWriteAvailable() throws {
+        guard !isSeeding else {
+            throw CoreDataSampleSeedCoordinationError.sampleSeedInProgress
+        }
+    }
+}
+
 enum CoreDataResidentWriteCoordinationError: Error, Equatable {
     case pastureDeletionInProgress
 }
@@ -329,6 +364,7 @@ final class CoreDataPersistenceAssembly {
     let fieldCheckWriteGate: CoreDataAsyncSerialGate
     let workingWriteGate: CoreDataAsyncSerialGate
     let pastureResidentWriteCoordinator: CoreDataPastureResidentWriteCoordinator
+    let sampleSeedWriteCoordinator: CoreDataSampleSeedWriteCoordinator
     let coordinationID: UUID
     let lookup: CoreDataLookup
 
@@ -340,6 +376,7 @@ final class CoreDataPersistenceAssembly {
         self.fieldCheckWriteGate = CoreDataAsyncSerialGate()
         self.workingWriteGate = CoreDataAsyncSerialGate()
         self.pastureResidentWriteCoordinator = CoreDataPastureResidentWriteCoordinator()
+        self.sampleSeedWriteCoordinator = CoreDataSampleSeedWriteCoordinator()
         self.coordinationID = UUID()
         self.lookup = CoreDataLookup()
     }
