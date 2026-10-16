@@ -11,12 +11,22 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let assembly = try await harness.makeAssembly()
         let environment = try CoreDataAnimalContractEnvironment(assembly: assembly)
         let repository = environment.makeAnimalRepository()
+        let pasture = try environment.makePastureRepository().create(
+            input: PastureInput(
+                name: "Dashboard Resident Identity",
+                acreage: 8, usableAcreage: 7, targetAcresPerHead: 1
+            )
+        )
 
         let visible = try repository.create(
-            input: readGraphAnimalInput(name: "Visible Dashboard Animal", tag: "DA-1")
+            input: readGraphAnimalInput(
+                name: "Visible Dashboard Animal", tag: "DA-1", pastureID: pasture.id
+            )
         )
         let archived = try repository.create(
-            input: readGraphAnimalInput(name: "Archived Dashboard Animal", tag: "DA-2")
+            input: readGraphAnimalInput(
+                name: "Archived Dashboard Animal", tag: "DA-2", pastureID: pasture.id
+            )
         )
         let control = try repository.create(
             input: readGraphAnimalInput(name: "Dashboard Control", tag: "DA-3")
@@ -57,8 +67,11 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         let healthyUnassigned = try await reader.fetchDashboardAnimalRecords(kind: .unassigned)
         let healthyWorkingPen = try await reader.fetchDashboardAnimalRecords(kind: .workingPen)
         XCTAssertEqual(Set(healthyActive.map(\.id)), Set([visible.id, control.id]))
-        XCTAssertEqual(Set(healthyUnassigned.map(\.id)), Set([visible.id, control.id]))
+        XCTAssertEqual(healthyUnassigned.map(\.id), [control.id])
         XCTAssertTrue(healthyWorkingPen.isEmpty)
+        let healthyPastures = try await reader.fetchDashboardPastureRecords()
+        XCTAssertEqual(healthyPastures.map(\.id), [pasture.id])
+        XCTAssertEqual(healthyPastures.first?.activeAnimalCount, 1)
         XCTAssertEqual(
             try foreignRepository.fetchAnimals().map(\.id),
             [visible.id]
@@ -100,6 +113,13 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             XCTAssertEqual(error as? CoreDataPersistenceError, expected)
         }
 
+        do {
+            _ = try await reader.fetchDashboardPastureRecords()
+            XCTFail("Standalone Dashboard Pasture accepted an off-cohort Animal UUID collision.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataPersistenceError, expected)
+        }
+
         let reopened = try await harness.makeAssembly(accessMode: .readOnly)
         let readOnlyReader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
@@ -115,6 +135,13 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             }
         }
 
+        do {
+            _ = try await readOnlyReader.fetchDashboardPastureRecords()
+            XCTFail("Reopened standalone Dashboard Pasture accepted off-cohort duplicate UUID.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataPersistenceError, expected)
+        }
+
         let foreignReadOnlyReader = CoreDataReadModelActor(
             contextFactory: reopened.contextFactory,
             lookup: reopened.lookup,
@@ -124,6 +151,7 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             kind: .active
         )
         XCTAssertEqual(unaffectedForeign.map(\.id), [visible.id])
+        XCTAssertTrue(try await foreignReadOnlyReader.fetchDashboardPastureRecords().isEmpty)
 
         let inspection = reopened.contextFactory.makeReadContext()
         try inspection.performAndWait {
@@ -1169,6 +1197,21 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
         }
         XCTAssertThrowsError(try pastures.fetchPastureGroupDetail(id: group.id)) {
             XCTAssertEqual($0 as? CoreDataReadModelError, invalidResident)
+        }
+        // Dashboard and standalone Pasture summaries must reject the same
+        // foreign-Herd inverse resident as direct Pasture and Group detail.
+        let dashboardReader = environment.makeDashboardQueryReader()
+        do {
+            _ = try await dashboardReader.fetchDashboardRecords()
+            XCTFail("Full Dashboard silently ignored a foreign-Herd Pasture resident.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataReadModelError, invalidResident)
+        }
+        do {
+            _ = try await dashboardReader.fetchDashboardPastureRecords()
+            XCTFail("Standalone Dashboard silently ignored a foreign-Herd Pasture resident.")
+        } catch {
+            XCTAssertEqual(error as? CoreDataReadModelError, invalidResident)
         }
         XCTAssertEqual(try pastures.fetchPastureDetail(id: controlPasture.id)?.activeAnimalCount, 0)
         try pastures.validatePastureIDsExist([targetPasture.id, controlPasture.id])
