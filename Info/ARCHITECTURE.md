@@ -397,7 +397,7 @@ Feature cleanup and production persistence work should include focused tests for
 - mapper behavior
 - view-model state and orchestration
 
-Keep permanent behavior contracts on the current Core Data test harness and reusable Domain boundaries. Do not restore SwiftData test runners or sources. The remaining Milestone 12 integration audit must reconcile delete rules, atomic rollback, UUID/Herd scoping, read mapping, and recovery against their existing M0/M4–M10 contract owners before declaring closure.
+Keep permanent behavior contracts on the current Core Data test harness and reusable Domain boundaries. Do not restore SwiftData test runners or sources. The final M12 inventory in `MILESTONE_12_FINAL_CORE_DATA_CONTRACT_AUDIT_MATRIX.md` reconciles physical delete rules, atomic rollback, UUID/Herd scoping, read mapping and native recovery with their M0/M4–M10 contract owners. This is static contract coverage, not proof that tests have been executed.
 
 ## Rules for future growth
 
@@ -421,8 +421,10 @@ Keep permanent behavior contracts on the current Core Data test harness and reus
 18. do not introduce a second persistence graph, dual writes, mirror records, synchronization bridges, or sharing infrastructure
 19. prefer deleting obsolete SwiftData/sync/share code over porting it
 
-## Milestone 12 completion boundary
+## Milestone 12 final architecture and contract audit
 
-**Implemented:** The app boots through the Core Data-only assembly; production architecture checks reject SwiftData and remote persistence; old SwiftData source/archive/preflight paths are retired; native Core Data read-only recovery/export remains. No user-data migration is required before first launch.
+**Implemented:** The app uses one local Core Data-only assembly; permanent production architecture checks reject SwiftData, remote persistence and framework leakage; prelaunch SwiftData source/archive/preflight/upgrade paths are retired; native Core Data read-only recovery/export remains. No user-data migration is required before first launch.
 
-**Still to close:** Audit remaining Core Data integration contracts (delete rules and historical retention, rollback and mutation publication, UUID/Herd identity scoping, mapping/read projections, and native read-only recovery). Cross-check against permanent M0/M4–M10 contracts rather than duplicating them. Delete the temporary `CORE_DATA_CUTOVER.md` only after that final contract audit and documentation closure.
+**Contract audit complete at the static source level:** `MILESTONE_12_FINAL_CORE_DATA_CONTRACT_AUDIT_MATRIX.md` maps physical delete rules and historical retention, rollback and post-commit publication, UUID/Herd identity scoping, Home/Dashboard and direct read projections, and native recovery to their permanent M3–M12 suites. The temporary cutover playbook was removed after this reconciliation. M0–M12 matrices and the execution plan remain historical implementation records, not competing architecture specifications.
+
+**Unverified:** Test/build/architecture-verifier execution and device-level release qualification have not been performed under `AGENTS.md`'s explicit execution restriction. Do not treat authored contracts or this static audit as passing runtime test results.
