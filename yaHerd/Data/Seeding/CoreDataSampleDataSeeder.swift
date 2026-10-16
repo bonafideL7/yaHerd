@@ -49,12 +49,15 @@ final class CoreDataSampleDataSeeder: SampleDataSeeding {
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
         }
-        // Use the existing cross-feature animal and pasture boundaries, and
-        // reserve stable built-in Tag Color UUIDs before the physical transaction.
+        // Take the existing exclusive resident-write barrier before the
+        // animal boundary, matching the order needed to avoid waiting on a
+        // Field Check holding the other gate. This blocks parallel Animal,
+        // Pasture, Working and Field Check writers across app scenes.
+        await assembly.pastureResidentWriteCoordinator.acquirePastureDeletion()
+        defer { assembly.pastureResidentWriteCoordinator.releasePastureDeletion() }
         await assembly.animalWriteBoundary.beginAnimalWrite()
         defer { assembly.animalWriteBoundary.endAnimalWrite() }
-        try assembly.pastureResidentWriteCoordinator.beginAnimalWrite()
-        defer { assembly.pastureResidentWriteCoordinator.endAnimalWrite() }
+        // Also exclude concurrent materialization of canonical Tag Color IDs.
 
         let reserved = try CoreDataTagColorMaterializationCoordinator.shared.reserve(
             coordinationID: assembly.coordinationID,
