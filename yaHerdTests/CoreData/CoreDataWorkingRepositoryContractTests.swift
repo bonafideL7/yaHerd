@@ -267,14 +267,10 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
 
         let primaryDashboard = dashboard(in: assembly, selection: environment.selection)
         let otherDashboard = dashboard(in: assembly, selection: otherSelection)
-        XCTAssertEqual(
-            try await primaryDashboard.fetchDashboardRecords().workingSessions.map(\.id),
-            [sessionID]
-        )
-        XCTAssertEqual(
-            try await otherDashboard.fetchDashboardRecords().workingSessions.map(\.id),
-            [otherSessionID]
-        )
+        let healthyPrimaryDashboard = try await primaryDashboard.fetchDashboardRecords()
+        XCTAssertEqual(healthyPrimaryDashboard.workingSessions.map(\.id), [sessionID])
+        let healthyOtherDashboard = try await otherDashboard.fetchDashboardRecords()
+        XCTAssertEqual(healthyOtherDashboard.workingSessions.map(\.id), [otherSessionID])
         XCTAssertNotNil(try primaryWorking.fetchSessionDetail(id: sessionID))
 
         // Deliberately corrupt the persisted snapshot/relationship agreement,
@@ -334,10 +330,8 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             XCTAssertEqual($0 as? CoreDataWorkingRepositoryError, expectedError)
         }
         XCTAssertEqual(try physicalSnapshots(in: assembly), baseline)
-        XCTAssertEqual(
-            try await otherDashboard.fetchDashboardRecords().workingSessions.map(\.id),
-            [otherSessionID]
-        )
+        let unchangedOtherDashboard = try await otherDashboard.fetchDashboardRecords()
+        XCTAssertEqual(unchangedOtherDashboard.workingSessions.map(\.id), [otherSessionID])
 
         let readOnlyAssembly = try await harness.makeAssembly(accessMode: .readOnly)
         let reopenedPrimary = dashboard(in: readOnlyAssembly, selection: environment.selection)
@@ -347,10 +341,8 @@ final class CoreDataWorkingRepositoryContractTests: XCTestCase {
             XCTAssertEqual(error as? CoreDataWorkingRepositoryError, expectedError)
         }
         let reopenedOther = dashboard(in: readOnlyAssembly, selection: otherSelection)
-        XCTAssertEqual(
-            try await reopenedOther.fetchDashboardRecords().workingSessions.map(\.id),
-            [otherSessionID]
-        )
+        let reopenedOtherDashboard = try await reopenedOther.fetchDashboardRecords()
+        XCTAssertEqual(reopenedOtherDashboard.workingSessions.map(\.id), [otherSessionID])
         XCTAssertEqual(try physicalSnapshots(in: readOnlyAssembly), baseline)
     }
 
