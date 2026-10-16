@@ -49,6 +49,25 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertEqual(navigation.herdRouter.mode, .animals)
     }
 
+    func testRecordAndSearchDeepLinksDismissConflictingPresentations() {
+        let navigation = AppNavigationState()
+        let animalID = UUID()
+        navigation.openWorkArea(.session(UUID()))
+        navigation.handle(.openAnimal(animalID))
+
+        XCTAssertNil(navigation.fullScreenWorkflow)
+        XCTAssertNil(navigation.workflowRouter.route)
+        XCTAssertEqual(navigation.selectedTab, .herd)
+        XCTAssertEqual(navigation.herdRouter.path, [.animal(animalID)])
+
+        navigation.present(.settings)
+        navigation.handle(.searchAnimals("W345"))
+
+        XCTAssertNil(navigation.presentedSheet)
+        XCTAssertEqual(navigation.selectedTab, .search)
+        XCTAssertEqual(navigation.herdRouter.searchText, "W345")
+    }
+
     func testFindingDeepLinkRestoresSpecificFindingEditorIntent() {
         let sessionID = UUID()
         let findingID = UUID()
