@@ -1748,47 +1748,13 @@ actor CoreDataReadModelActor:
         _ session: CDWorkingSession,
         herdID: UUID
     ) throws -> DashboardWorkingSessionRecord {
-        guard session.herd.id == herdID else {
-            throw CoreDataReadModelError.invalidHerdOwnership(
-                entity: CDWorkingSession.coreDataEntityName,
-                id: session.id,
-                expectedHerdID: herdID,
-                actualHerdID: session.herd.id
-            )
-        }
-        if let sourcePasture = session.sourcePasture,
-           sourcePasture.herd.id != herdID {
-            throw CoreDataReadModelError.invalidHerdOwnership(
-                entity: CDPasture.coreDataEntityName,
-                id: sourcePasture.id,
-                expectedHerdID: herdID,
-                actualHerdID: sourcePasture.herd.id
-            )
-        }
-
-        let queueItems = (session.queueItems?.allObjects as? [CDWorkingQueueItem]) ?? []
-        try CoreDataAnimalMutation.validateUniqueApplicationIDs(
-            queueItems,
+        // Share the direct Working reader's complete ownership and snapshot
+        // contract; partial queue/Herd checks here can accept a graph rejected
+        // by the Working list/detail/editor readers.
+        try CoreDataWorkingRepository.validateSessionGraph(
+            session,
             herdID: herdID
         )
-        for item in queueItems {
-            guard item.herd.id == herdID else {
-                throw CoreDataReadModelError.invalidHerdOwnership(
-                    entity: CDWorkingQueueItem.coreDataEntityName,
-                    id: item.id,
-                    expectedHerdID: herdID,
-                    actualHerdID: item.herd.id
-                )
-            }
-            guard item.session.objectID == session.objectID else {
-                throw CoreDataReadModelError.invalidSessionRelationship(
-                    entity: CDWorkingQueueItem.coreDataEntityName,
-                    id: item.id,
-                    expectedSessionID: session.id,
-                    actualSessionID: item.session.id
-                )
-            }
-        }
 
         let summary = try WorkingMapper.makeSessionSummary(from: session)
         return DashboardWorkingSessionRecord(
