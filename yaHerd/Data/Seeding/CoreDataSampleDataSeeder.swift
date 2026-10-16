@@ -76,7 +76,7 @@ enum CoreDataSampleHerdFactory {
             let request = NSFetchRequest<NSManagedObject>(entityName: name)
             request.predicate = NSPredicate(format: "herd == %@", herd)
             request.fetchLimit = 1
-            if try !context.fetch(request).isEmpty {
+            if !(try context.fetch(request)).isEmpty {
                 return false
             }
         }
