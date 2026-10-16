@@ -733,6 +733,11 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             )
         )
         let groupBefore = try groupReader.fetchPastureGroupDetail(id: group.id)
+        let groupCreatedRevision = dependencies.applicationMutationCenter.animalRevision
+        XCTAssertGreaterThan(
+            groupCreatedRevision, 0,
+            "A standalone group must invalidate Animal empty-state seed availability"
+        )
         XCTAssertEqual(groupBefore?.name, "North Rotation")
         XCTAssertTrue(groupBefore?.pastures.isEmpty == true)
         XCTAssertTrue(
@@ -775,6 +780,9 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             )
         )
         let originalSequence = dependencies.applicationMutationCenter.currentSequence
+        XCTAssertGreaterThan(
+            dependencies.applicationMutationCenter.animalRevision, groupCreatedRevision
+        )
         XCTAssertFalse(try seeder.canSeedSampleData())
         let repeatedLarge = try await seeder.seedLargeSampleDataIfNeeded()
         XCTAssertFalse(repeatedLarge)
