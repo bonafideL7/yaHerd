@@ -52,8 +52,20 @@ private struct AppNavigationPresentationModifier: ViewModifier {
                 .sheetCancelToolbar()
             }
         case .startWorkingSession:
-            WorkingSessionStartSheetFlow {
-                navigation.dismissSheet()
+            NavigationStack {
+                NewWorkingSessionView(
+                    wrapsInNavigationStack: false,
+                    onSessionCreated: { sessionID in
+                        navigation.openWorkArea(.session(sessionID))
+                    }
+                )
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel", role: .cancel) {
+                            navigation.dismissSheet()
+                        }
+                    }
+                }
             }
         }
     }
@@ -68,40 +80,6 @@ private struct AppNavigationPresentationModifier: ViewModifier {
         case .workingSession:
             IsolatedWorkAreaView {
                 navigation.closeFullScreenWorkflow()
-            }
-        }
-    }
-}
-
-private struct WorkingSessionStartSheetFlow: View {
-    @State private var startedSessionID: UUID?
-    let onClose: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            if let startedSessionID {
-                WorkingSessionDetailView(sessionID: startedSessionID)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") {
-                                onClose()
-                            }
-                        }
-                    }
-            } else {
-                NewWorkingSessionView(
-                    wrapsInNavigationStack: false,
-                    onSessionCreated: { sessionID in
-                        startedSessionID = sessionID
-                    }
-                )
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel", role: .cancel) {
-                            onClose()
-                        }
-                    }
-                }
             }
         }
     }
