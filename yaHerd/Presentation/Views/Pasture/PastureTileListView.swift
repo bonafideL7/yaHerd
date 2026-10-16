@@ -117,6 +117,7 @@ struct PastureTileListView: View {
                                 ? "line.3.horizontal.decrease.circle"
                                 : "line.3.horizontal.decrease.circle.fill"
                         )
+                        .labelStyle(.titleAndIcon)
                     }
                     .accessibilityLabel(
                         filterValue == .all
