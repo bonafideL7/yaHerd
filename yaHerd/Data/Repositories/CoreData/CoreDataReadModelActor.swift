@@ -216,6 +216,11 @@ actor CoreDataReadModelActor:
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
+            // The independent Pasture list must reject Animal UUID collisions
+            // outside its counted active resident cohort, as full Dashboard does.
+            try Self.validateAnimalApplicationIDs(
+                herd: herd, herdID: herdID, in: context
+            )
             return try Self.dashboardPastureRecords(
                 herd: herd,
                 herdID: herdID,
@@ -1642,6 +1647,30 @@ actor CoreDataReadModelActor:
                 groups,
                 herdID: herdID
             )
+        }
+
+        // A foreign-Herd Animal may be physically linked to a selected-Herd
+        // Pasture through the inverse resident relationship. Excluding it from
+        // the active selected-Herd count must not silently accept a graph that
+        // the direct Pasture summary and detail readers reject.
+        if !pastures.isEmpty {
+            let invalidResidentRequest = NSFetchRequest<CDAnimal>(
+                entityName: CDAnimal.coreDataEntityName
+            )
+            invalidResidentRequest.predicate = NSPredicate(
+                format: "currentPasture.herd == %@ AND herd != %@",
+                herd,
+                herd
+            )
+            invalidResidentRequest.fetchLimit = 1
+            if let resident = try context.fetch(invalidResidentRequest).first {
+                throw CoreDataReadModelError.invalidHerdOwnership(
+                    entity: CDAnimal.coreDataEntityName,
+                    id: resident.id,
+                    expectedHerdID: herdID,
+                    actualHerdID: resident.herd.id
+                )
+            }
         }
 
         // The full Dashboard already has every selected-Herd Animal. The
