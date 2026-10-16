@@ -609,9 +609,13 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
                 return
             }
 
-            let inserted = try await (isLarge
-                ? seeder.seedLargeSampleDataIfNeeded()
-                : seeder.seedSampleDataIfNeeded())
+            XCTAssertTrue(try seeder.canSeedSampleData())
+            let inserted: Bool
+            if isLarge {
+                inserted = try await seeder.seedLargeSampleDataIfNeeded()
+            } else {
+                inserted = try await seeder.seedSampleDataIfNeeded()
+            }
             XCTAssertTrue(inserted)
             XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 1)
             XCTAssertEqual(dependencies.applicationMutationCenter.animalRevision, 1)
@@ -627,8 +631,24 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             XCTAssertTrue(records.contains { $0.animalType == .cow })
             XCTAssertTrue(records.contains { $0.animalType == .steer })
             XCTAssertTrue(records.contains { $0.animalType == .bull })
+            XCTAssertEqual(records.filter { $0.animalType == .cow }.count, isLarge ? 180 : 7)
+            XCTAssertEqual(records.filter { $0.animalType == .heifer }.count, isLarge ? 100 : 4)
+            XCTAssertEqual(records.filter { $0.animalType == .steer }.count, isLarge ? 56 : 2)
+            XCTAssertEqual(records.filter { $0.animalType == .bull }.count, isLarge ? 12 : 1)
+            XCTAssertEqual(records.filter { $0.animalType == .calf }.count, isLarge ? 132 : 4)
             XCTAssertFalse(try dependencies.fieldCheckFeatureDependencies.overviewReader.fetchSessions().isEmpty)
-            XCTAssertFalse(try dependencies.workingSessionFeatureDependencies.sessionsRepository.fetchSessions().isEmpty)
+            let sessions = try dependencies.workingSessionFeatureDependencies
+                .sessionsRepository.fetchSessions()
+            XCTAssertFalse(sessions.isEmpty)
+            for session in sessions where session.status == .finished {
+                let detail = try dependencies.workingSessionFeatureDependencies
+                    .sessionDetailRepository.fetchSessionDetail(id: session.id)
+                XCTAssertNotNil(detail)
+                XCTAssertFalse(detail?.queueItems.isEmpty ?? true)
+                XCTAssertTrue(detail?.queueItems.allSatisfy {
+                    $0.destinationPastureID == detail?.sourcePastureID
+                } ?? false)
+            }
             XCTAssertFalse(try dependencies.pastureFeatureDependencies.listRepository.fetchPastures().isEmpty)
             let dashboardPastures = try await dependencies.homeFeatureDependencies
                 .dashboardQueryReader.fetchDashboardPastureRecords()
@@ -639,6 +659,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
 
             let repeated = try await seeder.seedLargeSampleDataIfNeeded()
             XCTAssertFalse(repeated)
+            XCTAssertFalse(try seeder.canSeedSampleData())
             XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 1)
             XCTAssertEqual(
                 try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().count,
@@ -710,6 +731,7 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
             return XCTFail("Expected sample seed action")
         }
         let originalSequence = dependencies.applicationMutationCenter.currentSequence
+        XCTAssertFalse(try seeder.canSeedSampleData())
         let inserted = try await seeder.seedLargeSampleDataIfNeeded()
         XCTAssertFalse(inserted)
         XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, originalSequence)
