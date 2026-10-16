@@ -221,9 +221,9 @@ enum CoreDataSampleHerdFactory {
             let isCalf = index >= steerEnd
             let sex: Sex = (isCow || isHeifer || (isCalf && index % 2 == 0)) ? .female : .male
             let ageInDays: Int
-            if isCow { ageInDays = 1_200 + (index % 6) * 280 }
+            if isCow { ageInDays = 1_750 + (index % 6) * 280 }
             else if isHeifer { ageInDays = 420 + (index % 16) * 20 }
-            else if isBull { ageInDays = 1_050 + (index % 6) * 120 }
+            else if isBull { ageInDays = 1_450 + (index % 6) * 120 }
             else if isSteer { ageInDays = 470 + (index % 16) * 14 }
             else { ageInDays = 20 + (index % 10) * 24 }
 
