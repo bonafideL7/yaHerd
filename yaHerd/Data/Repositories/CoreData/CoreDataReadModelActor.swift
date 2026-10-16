@@ -87,70 +87,20 @@ actor CoreDataReadModelActor:
                 throw HerdRepositoryError.missingHerd
             }
 
-            // The 25 active-session summaries are a bounded view of one
-            // Herd-scoped application identity. Check all persisted session
-            // UUIDs, including finished and cancelled sessions, first.
-            let sessionIdentityRequest = NSFetchRequest<NSDictionary>(
-                entityName: CDWorkingSession.coreDataEntityName
+            // The 25 displayed active Working sessions are a bounded view,
+            // not a bound on their complete-Herd application UUID integrity.
+            try Self.validateHerdApplicationIDs(
+                entityName: CDWorkingSession.coreDataEntityName,
+                herd: herd,
+                herdID: herdID,
+                in: context
             )
-            sessionIdentityRequest.resultType = .dictionaryResultType
-            sessionIdentityRequest.propertiesToFetch = ["id"]
-            sessionIdentityRequest.predicate = NSPredicate(format: "herd == %@", herd)
-
-            var seenSessionIDs = Set<UUID>()
-            for row in try context.fetch(sessionIdentityRequest) {
-                let id: UUID?
-                if let value = row["id"] as? UUID {
-                    id = value
-                } else if let value = row["id"] as? NSUUID {
-                    id = value as UUID
-                } else {
-                    id = nil
-                }
-                guard let id else {
-                    continue
-                }
-                guard seenSessionIDs.insert(id).inserted else {
-                    throw CoreDataPersistenceError.duplicateApplicationID(
-                        entity: CDWorkingSession.coreDataEntityName,
-                        id: id,
-                        herdID: herdID
-                    )
-                }
-            }
-
-            // The bounded Dashboard view must agree with the direct Working
-            // library's full-Herd queue identity scope. Finished and off-page
-            // sessions can otherwise reuse IDs of displayed active queue rows.
-            // Fetch UUIDs only; the active summary remains limited to 25 rows.
-            let queueIdentityRequest = NSFetchRequest<NSDictionary>(
-                entityName: CDWorkingQueueItem.coreDataEntityName
+            try Self.validateHerdApplicationIDs(
+                entityName: CDWorkingQueueItem.coreDataEntityName,
+                herd: herd,
+                herdID: herdID,
+                in: context
             )
-            queueIdentityRequest.resultType = .dictionaryResultType
-            queueIdentityRequest.propertiesToFetch = ["id"]
-            queueIdentityRequest.predicate = NSPredicate(format: "herd == %@", herd)
-
-            var seenQueueIDs = Set<UUID>()
-            for row in try context.fetch(queueIdentityRequest) {
-                let id: UUID?
-                if let value = row["id"] as? UUID {
-                    id = value
-                } else if let value = row["id"] as? NSUUID {
-                    id = value as UUID
-                } else {
-                    id = nil
-                }
-                guard let id else {
-                    continue
-                }
-                guard seenQueueIDs.insert(id).inserted else {
-                    throw CoreDataPersistenceError.duplicateApplicationID(
-                        entity: CDWorkingQueueItem.coreDataEntityName,
-                        id: id,
-                        herdID: herdID
-                    )
-                }
-            }
 
             let animalRequest = NSFetchRequest<CDAnimal>(
                 entityName: CDAnimal.coreDataEntityName
@@ -259,6 +209,9 @@ actor CoreDataReadModelActor:
 
         return try await context.perform {
             try Task.checkCancellation()
+            // Group identity validation and all resident count queries must
+            // observe the same committed store generation.
+            try context.setQueryGenerationFrom(.current)
             guard let herd = try lookup.herd(id: herdID, in: context) else {
                 throw HerdRepositoryError.missingHerd
             }
@@ -1117,38 +1070,14 @@ actor CoreDataReadModelActor:
                 throw HerdRepositoryError.missingHerd
             }
 
-            // Home projects only warning sessions, but application UUID identity
-            // applies to every physical Field Check session in the selected Herd.
-            // A completed session outside the warning predicate must not share
-            // an ID with a session that Home can display.
-            let sessionIdentityRequest = NSFetchRequest<NSDictionary>(
-                entityName: CDFieldCheckSession.coreDataEntityName
+            // All selected-Herd session IDs matter, including completed
+            // sessions excluded from the warning projection.
+            try Self.validateHerdApplicationIDs(
+                entityName: CDFieldCheckSession.coreDataEntityName,
+                herd: herd,
+                herdID: herdID,
+                in: context
             )
-            sessionIdentityRequest.resultType = .dictionaryResultType
-            sessionIdentityRequest.propertiesToFetch = ["id"]
-            sessionIdentityRequest.predicate = NSPredicate(format: "herd == %@", herd)
-
-            var seenSessionIDs = Set<UUID>()
-            for row in try context.fetch(sessionIdentityRequest) {
-                let id: UUID?
-                if let value = row["id"] as? UUID {
-                    id = value
-                } else if let value = row["id"] as? NSUUID {
-                    id = value as UUID
-                } else {
-                    id = nil
-                }
-                guard let id else {
-                    continue
-                }
-                guard seenSessionIDs.insert(id).inserted else {
-                    throw CoreDataPersistenceError.duplicateApplicationID(
-                        entity: CDFieldCheckSession.coreDataEntityName,
-                        id: id,
-                        herdID: herdID
-                    )
-                }
-            }
 
             try Self.validateFieldCheckChildIdentityAndFindingGraph(
                 herd: herd,
@@ -1259,37 +1188,13 @@ actor CoreDataReadModelActor:
                 throw HerdRepositoryError.missingHerd
             }
 
-            // Home projects only a limited template list, but application UUID
-            // identity remains unique across the complete selected Herd.
-            // Fetch IDs only so an off-page collision cannot be hidden by limit.
-            let identityRequest = NSFetchRequest<NSDictionary>(
-                entityName: CDWorkingTreatmentTemplate.coreDataEntityName
+            // The Home limit does not constrain complete-Herd template IDs.
+            try Self.validateHerdApplicationIDs(
+                entityName: CDWorkingTreatmentTemplate.coreDataEntityName,
+                herd: herd,
+                herdID: herdID,
+                in: context
             )
-            identityRequest.resultType = .dictionaryResultType
-            identityRequest.propertiesToFetch = ["id"]
-            identityRequest.predicate = NSPredicate(format: "herd == %@", herd)
-
-            var seenTemplateIDs = Set<UUID>()
-            for row in try context.fetch(identityRequest) {
-                let id: UUID?
-                if let value = row["id"] as? UUID {
-                    id = value
-                } else if let value = row["id"] as? NSUUID {
-                    id = value as UUID
-                } else {
-                    id = nil
-                }
-                guard let id else {
-                    continue
-                }
-                guard seenTemplateIDs.insert(id).inserted else {
-                    throw CoreDataPersistenceError.duplicateApplicationID(
-                        entity: CDWorkingTreatmentTemplate.coreDataEntityName,
-                        id: id,
-                        herdID: herdID
-                    )
-                }
-            }
 
             let request = NSFetchRequest<CDWorkingTreatmentTemplate>(
                 entityName: CDWorkingTreatmentTemplate.coreDataEntityName
@@ -1334,32 +1239,65 @@ actor CoreDataReadModelActor:
         herdID: UUID,
         in context: NSManagedObjectContext
     ) throws {
-        let request = NSFetchRequest<NSDictionary>(
-            entityName: CDAnimal.coreDataEntityName
+        try validateHerdApplicationIDs(
+            entityName: CDAnimal.coreDataEntityName,
+            herd: herd,
+            herdID: herdID,
+            in: context
         )
+    }
+
+    /// Validate an entire Herd's identity scope while retaining only one UUID
+    /// and at most one bounded dictionary page. Sorting by the persisted UUID
+    /// keeps duplicates adjacent, even when they straddle a fetch-page edge.
+    private static func validateHerdApplicationIDs(
+        entityName: String,
+        herd: CDHerd,
+        herdID: UUID,
+        in context: NSManagedObjectContext
+    ) throws {
+        let request = NSFetchRequest<NSDictionary>(entityName: entityName)
         request.resultType = .dictionaryResultType
         request.propertiesToFetch = ["id"]
         request.predicate = NSPredicate(format: "herd == %@", herd)
+        request.sortDescriptors = [
+            NSSortDescriptor(key: "id", ascending: true)
+        ]
+        request.fetchLimit = animalLightweightScanBatchSize
 
-        var seenIDs = Set<UUID>()
-        for row in try context.fetch(request) {
-            let id: UUID?
-            if let value = row["id"] as? UUID {
-                id = value
-            } else if let value = row["id"] as? NSUUID {
-                id = value as UUID
-            } else {
-                id = nil
+        var previousID: UUID?
+        var offset = 0
+        while true {
+            try Task.checkCancellation()
+            request.fetchOffset = offset
+            let rows = try context.fetch(request)
+            if rows.isEmpty {
+                break
             }
-            guard let id else {
-                continue
+            for row in rows {
+                let id: UUID?
+                if let value = row["id"] as? UUID {
+                    id = value
+                } else if let value = row["id"] as? NSUUID {
+                    id = value as UUID
+                } else {
+                    id = nil
+                }
+                guard let id else {
+                    continue
+                }
+                if previousID == id {
+                    throw CoreDataPersistenceError.duplicateApplicationID(
+                        entity: entityName,
+                        id: id,
+                        herdID: herdID
+                    )
+                }
+                previousID = id
             }
-            guard seenIDs.insert(id).inserted else {
-                throw CoreDataPersistenceError.duplicateApplicationID(
-                    entity: CDAnimal.coreDataEntityName,
-                    id: id,
-                    herdID: herdID
-                )
+            offset += rows.count
+            if rows.count < animalLightweightScanBatchSize {
+                break
             }
         }
     }
@@ -2273,39 +2211,18 @@ actor CoreDataReadModelActor:
             _ = try FieldCheckMapper.makeFindingSnapshot(from: finding)
         }
 
-        // Home filters warnings, but a child UUID remains unique across the
-        // selected Herd even when its session is completed or its finding is
-        // resolved. The direct Field Check library uses that complete scope.
+        // Completed/resolved children are still part of the complete
+        // selected-Herd identity scope used by the direct Field Check library.
         for entityName in [
             CDFieldCheckFinding.coreDataEntityName,
             CDFieldCheckAnimalCheck.coreDataEntityName
         ] {
-            let idRequest = NSFetchRequest<NSDictionary>(entityName: entityName)
-            idRequest.resultType = .dictionaryResultType
-            idRequest.propertiesToFetch = ["id"]
-            idRequest.predicate = NSPredicate(format: "herd == %@", herd)
-
-            var seenIDs = Set<UUID>()
-            for row in try context.fetch(idRequest) {
-                let id: UUID?
-                if let value = row["id"] as? UUID {
-                    id = value
-                } else if let value = row["id"] as? NSUUID {
-                    id = value as UUID
-                } else {
-                    id = nil
-                }
-                guard let id else {
-                    continue
-                }
-                guard seenIDs.insert(id).inserted else {
-                    throw CoreDataPersistenceError.duplicateApplicationID(
-                        entity: entityName,
-                        id: id,
-                        herdID: herdID
-                    )
-                }
-            }
+            try validateHerdApplicationIDs(
+                entityName: entityName,
+                herd: herd,
+                herdID: herdID,
+                in: context
+            )
         }
     }
 
