@@ -151,7 +151,8 @@ final class CoreDataAnimalRepositoryContractTests: XCTestCase {
             kind: .active
         )
         XCTAssertEqual(unaffectedForeign.map(\.id), [visible.id])
-        XCTAssertTrue(try await foreignReadOnlyReader.fetchDashboardPastureRecords().isEmpty)
+        let unaffectedForeignPastures = try await foreignReadOnlyReader.fetchDashboardPastureRecords()
+        XCTAssertTrue(unaffectedForeignPastures.isEmpty)
 
         let inspection = reopened.contextFactory.makeReadContext()
         try inspection.performAndWait {
