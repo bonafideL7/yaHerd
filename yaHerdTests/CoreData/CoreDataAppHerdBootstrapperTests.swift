@@ -584,4 +584,134 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: storeURL), corruptBytes)
     }
 
+
+    // Release-qualification fixtures deliberately populate every entity in the
+    // production Core Data model. Existing permanent repository contracts own
+    // the individual field mutation and rollback semantics.
+    @MainActor
+    func testAnimalListSampleActionsCreateCompleteCoreDataGraphs() async throws {
+        let entityNames = [
+            "Herd", "TagColorDefinition", "AnimalStatusReference", "PastureGroup",
+            "Pasture", "Animal", "AnimalTag", "MovementRecord", "StatusRecord",
+            "HealthRecord", "PregnancyCheck", "FieldCheckSession",
+            "FieldCheckAnimalCheck", "FieldCheckFinding",
+            "WorkingTreatmentTemplate", "WorkingSession", "WorkingQueueItem",
+            "WorkingTreatmentRecord"
+        ]
+
+        for (isLarge, expectedAnimals) in [(false, 18), (true, 480)] {
+            let harness = try CoreDataPersistenceHarness()
+            let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+            let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
+            let originalHerdID = try dependencies.herdRepository.fetchCurrentHerd().id
+            guard let seeder = dependencies.animalFeatureDependencies.sampleDataSeeder else {
+                XCTFail("Core Data app composition must expose the original sample actions")
+                return
+            }
+
+            let inserted = try await (isLarge
+                ? seeder.seedLargeSampleDataIfNeeded()
+                : seeder.seedSampleDataIfNeeded())
+            XCTAssertTrue(inserted)
+            XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 1)
+            XCTAssertEqual(dependencies.applicationMutationCenter.animalRevision, 1)
+            XCTAssertEqual(dependencies.applicationMutationCenter.workingSessionRevision, 1)
+
+            let records = try dependencies.animalFeatureDependencies.listRepository.fetchAnimals()
+            XCTAssertEqual(records.count, expectedAnimals)
+            XCTAssertTrue(records.contains { $0.status == .sold })
+            XCTAssertTrue(records.contains { $0.status == .dead })
+            XCTAssertTrue(records.contains { $0.sex == .male })
+            XCTAssertTrue(records.contains { $0.sex == .female })
+            XCTAssertTrue(records.contains { $0.animalType == .calf })
+            XCTAssertTrue(records.contains { $0.animalType == .cow })
+            XCTAssertTrue(records.contains { $0.animalType == .steer })
+            XCTAssertTrue(records.contains { $0.animalType == .bull })
+            XCTAssertFalse(try dependencies.fieldCheckFeatureDependencies.repository.fetchSessions().isEmpty)
+            XCTAssertFalse(try dependencies.workingSessionFeatureDependencies.repository.fetchSessions().isEmpty)
+            XCTAssertFalse(try dependencies.pastureFeatureDependencies.listRepository.fetchPastures().isEmpty)
+
+            let repeated = try await seeder.seedLargeSampleDataIfNeeded()
+            XCTAssertFalse(repeated)
+            XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, 1)
+            XCTAssertEqual(
+                try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().count,
+                expectedAnimals
+            )
+
+            let reopened = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+            let reopenedDependencies = reopened.makeDependencies(dataAccessMode: .readWrite)
+            XCTAssertEqual(
+                try reopenedDependencies.herdRepository.fetchCurrentHerd().id,
+                originalHerdID
+            )
+            XCTAssertEqual(
+                try reopenedDependencies.animalFeatureDependencies.listRepository.fetchAnimals().count,
+                expectedAnimals
+            )
+
+            let independentlyRead = try await harness.makeAssembly(accessMode: .readOnly)
+            let context = independentlyRead.contextFactory.makeReadContext()
+            let counts = try context.performAndWait { () -> [String: Int] in
+                var totals: [String: Int] = [:]
+                for name in entityNames {
+                    totals[name] = try context.count(
+                        for: NSFetchRequest<NSManagedObject>(entityName: name)
+                    )
+                }
+                return totals
+            }
+            XCTAssertEqual(counts["Animal"], expectedAnimals)
+            for name in entityNames {
+                XCTAssertGreaterThan(
+                    counts[name] ?? 0, 0,
+                    "Expected persisted \(name) records in \(isLarge ? "large" : "compact") fixture"
+                )
+            }
+
+            guard let readOnlySeeder = reopened.makeDependencies(
+                dataAccessMode: .recoveryReadOnly
+            ).animalFeatureDependencies.sampleDataSeeder else {
+                return XCTFail("Read-only app graph should still supply a guarded seed action")
+            }
+            do {
+                _ = try await readOnlySeeder.seedSampleDataIfNeeded()
+                XCTFail("Read-only recovery must not permit sample writes")
+            } catch {
+                XCTAssertTrue(error is LocalDataWritePolicy.WriteError)
+            }
+            XCTAssertEqual(
+                try reopenedDependencies.animalFeatureDependencies.listRepository.fetchAnimals().count,
+                expectedAnimals
+            )
+        }
+    }
+
+    @MainActor
+    func testSampleActionsDoNotModifyExistingPastureOnlyHerd() async throws {
+        let harness = try CoreDataPersistenceHarness()
+        let app = try await CoreDataAppPersistenceAssembly.load(at: harness.storeURL)
+        let dependencies = app.makeDependencies(dataAccessMode: .readWrite)
+        let pasture = try dependencies.pastureFeatureDependencies.createRepository.create(
+            input: PastureInput(
+                name: "Original Pasture",
+                acreage: 32,
+                usableAcreage: 25,
+                targetAcresPerHead: 3
+            )
+        )
+        guard let seeder = dependencies.animalFeatureDependencies.sampleDataSeeder else {
+            return XCTFail("Expected sample seed action")
+        }
+        let originalSequence = dependencies.applicationMutationCenter.currentSequence
+        let inserted = try await seeder.seedLargeSampleDataIfNeeded()
+        XCTAssertFalse(inserted)
+        XCTAssertEqual(dependencies.applicationMutationCenter.currentSequence, originalSequence)
+        XCTAssertTrue(try dependencies.animalFeatureDependencies.listRepository.fetchAnimals().isEmpty)
+        XCTAssertEqual(
+            try dependencies.pastureFeatureDependencies.listRepository.fetchPastures().map(\.id),
+            [pasture.id]
+        )
+    }
+
 }
