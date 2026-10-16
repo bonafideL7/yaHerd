@@ -781,4 +781,101 @@ final class CoreDataAppHerdBootstrapperTests: XCTestCase {
         XCTAssertEqual(graph.applicationMutationCenter.currentSequence, 0)
     }
 
+
+    @MainActor
+    func testWorkingTemplateWritesRemainIndependentExceptDuringSampleSeed() async throws {
+        let assembly = try await CoreDataPersistenceAssembly.inMemory()
+        let herdID = try await CoreDataAppHerdBootstrapper.resolveOrCreateCurrentHerdID(
+            assembly: assembly
+        )
+        let selection = AppCurrentHerdSelection(currentHerdID: herdID)
+        let templates = CoreDataWorkingTreatmentTemplateRepository(
+            selection: selection,
+            assembly: assembly
+        )
+        let controlItem = WorkingTreatmentPlanItem(name: "Unrelated control vaccine")
+        let originalID = try templates.createTemplate(
+            name: "Original User Template",
+            items: [controlItem]
+        )
+
+        // The seed's assembly-scoped reservation spans its asynchronous
+        // write; template create, update and batch-delete all share one
+        // synchronous repository boundary and fail before any mutation.
+        do {
+            try assembly.sampleSeedWriteCoordinator.beginSeed()
+            defer { assembly.sampleSeedWriteCoordinator.endSeed() }
+            XCTAssertThrowsError(
+                try templates.createTemplate(name: "Spring Working", items: [])
+            ) {
+                XCTAssertEqual(
+                    $0 as? CoreDataSampleSeedCoordinationError,
+                    .sampleSeedInProgress
+                )
+            }
+            XCTAssertThrowsError(
+                try templates.updateTemplate(
+                    id: originalID,
+                    name: "Fall Booster",
+                    items: []
+                )
+            ) {
+                XCTAssertEqual(
+                    $0 as? CoreDataSampleSeedCoordinationError,
+                    .sampleSeedInProgress
+                )
+            }
+            XCTAssertThrowsError(
+                try templates.deleteTemplates(ids: [originalID])
+            ) {
+                XCTAssertEqual(
+                    $0 as? CoreDataSampleSeedCoordinationError,
+                    .sampleSeedInProgress
+                )
+            }
+            XCTAssertEqual(try templates.fetchTemplates().map(\.id), [originalID])
+            XCTAssertEqual(
+                try templates.fetchTemplateDetail(id: originalID)?.plannedTreatments.map(\.id),
+                [controlItem.id]
+            )
+        }
+
+        // A template-only Herd is allowed. Seed preserves the control record
+        // rather than inserting duplicate default-named templates.
+        let graph = CoreDataAppPersistenceAssembly(
+            assembly: assembly, currentHerdID: herdID
+        ).makeDependencies(dataAccessMode: .readWrite)
+        let seeder = try XCTUnwrap(
+            graph.animalFeatureDependencies.sampleDataSeeder
+        )
+        XCTAssertTrue(try seeder.canSeedSampleData())
+        XCTAssertTrue(try await seeder.seedSampleDataIfNeeded())
+        let after = try templates.fetchTemplates()
+        XCTAssertEqual(after.map(\.id), [originalID])
+        XCTAssertEqual(after.map(\.name), ["Original User Template"])
+        XCTAssertEqual(
+            try templates.fetchTemplateDetail(id: originalID)?.plannedTreatments.map(\.id),
+            [controlItem.id]
+        )
+
+        // Once seeding releases the reservation, normal template lifecycle
+        // works without involving the unrelated Pasture deletion gate.
+        try templates.updateTemplate(
+            id: originalID,
+            name: "Renamed User Template",
+            items: [controlItem]
+        )
+        XCTAssertEqual(
+            try templates.fetchTemplateDetail(id: originalID)?.name,
+            "Renamed User Template"
+        )
+        let nextID = try templates.createTemplate(
+            name: "Spring Working",
+            items: []
+        )
+        XCTAssertEqual(try templates.fetchTemplates().count, 2)
+        try templates.deleteTemplates(ids: [originalID, nextID])
+        XCTAssertTrue(try templates.fetchTemplates().isEmpty)
+    }
+
 }
