@@ -94,19 +94,41 @@ struct PastureTileListView: View {
         .toolbar {
             if !isManaging {
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        PastureGroupListView()
+                    Menu {
+                        Picker("Filter Pastures", selection: filterBinding) {
+                            ForEach(PastureListFilter.allCases, id: \.self) { option in
+                                Text(option.label).tag(option)
+                            }
+                        }
+
+                        if filterValue != .all {
+                            Divider()
+
+                            Button {
+                                filterBinding.wrappedValue = .all
+                            } label: {
+                                Label("Clear Filter", systemImage: "xmark.circle")
+                            }
+                        }
                     } label: {
-                        Text("Groups")
+                        Label(
+                            "Filter",
+                            systemImage: filterValue == .all
+                                ? "line.3.horizontal.decrease.circle"
+                                : "line.3.horizontal.decrease.circle.fill"
+                        )
                     }
-                    .accessibilityLabel("Pasture Groups")
+                    .accessibilityLabel(
+                        filterValue == .all
+                            ? "Filter Pastures"
+                            : "Filter Pastures, \(filterValue.label) active"
+                    )
                     .disabled(model.isDeletingPastures)
                 }
             }
 
             ToolbarItem(placement: .topBarTrailing) {
                 PastureTileToolbar(
-                    filter: filterBinding,
                     isManaging: isManaging,
                     onToggleManageMode: toggleManageMode,
                     onOpenFieldChecks: onOpenFieldChecks,
