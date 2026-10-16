@@ -44,25 +44,14 @@ struct FieldChecksView: View {
     @State private var model = FieldChecksViewModel()
     @State private var showingStartPastureCheck = false
 
-    @State private var selectedMode: FieldChecksViewMode
+    @Binding private var selectedMode: FieldChecksViewMode
     private let onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)?
 
-    init(mode: FieldChecksViewMode = .all, onSessionStarted: ((UUID) -> Void)? = nil) {
-        _selectedMode = State(initialValue: mode)
-        if let onSessionStarted {
-            self.onSessionLaunch = { configuration in
-                onSessionStarted(configuration.sessionID)
-            }
-        } else {
-            self.onSessionLaunch = nil
-        }
-    }
-
     init(
-        mode: FieldChecksViewMode = .all,
-        onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)?
+        mode: Binding<FieldChecksViewMode>,
+        onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)? = nil
     ) {
-        _selectedMode = State(initialValue: mode)
+        _selectedMode = mode
         self.onSessionLaunch = onSessionLaunch
     }
 
@@ -201,31 +190,41 @@ struct FieldChecksView: View {
     }
 
     private var checkFilters: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(FieldChecksViewMode.navigationFilters, id: \.self) { option in
-                    Button {
-                        selectedMode = option
-                    } label: {
-                        Text(option.filterLabel)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(selectedMode == option ? Color.white : Color.primary)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 9)
-                            .background(
-                                selectedMode == option
-                                    ? Color.accentColor
-                                    : Color(.secondarySystemGroupedBackground),
-                                in: Capsule()
-                            )
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(FieldChecksViewMode.navigationFilters, id: \.self) { option in
+                        Button {
+                            selectedMode = option
+                        } label: {
+                            Text(option.filterLabel)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(selectedMode == option ? Color.white : Color.primary)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 9)
+                                .background(
+                                    selectedMode == option
+                                        ? Color.accentColor
+                                        : Color(.secondarySystemGroupedBackground),
+                                    in: Capsule()
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(option.title) filter")
+                        .accessibilityAddTraits(selectedMode == option ? .isSelected : [])
+                        .id(option)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(option.title) filter")
-                    .accessibilityAddTraits(selectedMode == option ? .isSelected : [])
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+            .task(id: selectedMode) {
+                // Wait for the scroll content to lay out before revealing a preselected filter.
+                await Task.yield()
+                withAnimation(.snappy) {
+                    proxy.scrollTo(selectedMode, anchor: .center)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
         }
         .background(Color(.systemGroupedBackground))
     }
