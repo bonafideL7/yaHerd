@@ -10,6 +10,9 @@ struct AnimalListEmptyStateView: View {
     let showArchivedRecords: Bool
     let colorScheme: ColorScheme
     let onAddAnimal: () -> Void
+    let onAddSampleData: (() -> Void)?
+    let onAddLargeSampleData: (() -> Void)?
+    let isSeedingSampleData: Bool
     let onClearFilters: () -> Void
     let onShowInactive: () -> Void
     let onShowArchivedRecords: () -> Void
@@ -34,6 +37,21 @@ struct AnimalListEmptyStateView: View {
                     .buttonStyle(.borderedProminent)
                     .foregroundStyle(colorScheme == .dark ? .black : .white)
                     .disabledWhenDataReadOnly()
+                if let onAddSampleData {
+                    Button("Add Sample Data", action: onAddSampleData)
+                        .buttonStyle(.bordered)
+                        .disabled(isSeedingSampleData)
+                        .disabledWhenDataReadOnly()
+                }
+                if let onAddLargeSampleData {
+                    Button("Add Large Sample Data", action: onAddLargeSampleData)
+                        .buttonStyle(.bordered)
+                        .disabled(isSeedingSampleData)
+                        .disabledWhenDataReadOnly()
+                }
+                if isSeedingSampleData {
+                    ProgressView("Creating sample herd…")
+                }
 
             } else {
                 if filtersAreActive {
