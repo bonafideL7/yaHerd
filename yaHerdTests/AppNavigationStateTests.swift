@@ -145,4 +145,39 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertNil(navigation.presentedSheet)
         XCTAssertNil(navigation.fullScreenWorkflow)
     }
+
+    func testFieldCheckModeSwitchReplacesRouteWithoutAddingNavigationDepth() {
+        let router = HerdRouter()
+        let animalID = UUID()
+        router.path = [.animal(animalID), .fieldChecks(.all)]
+
+        router.selectFieldChecksMode(.openFindings)
+
+        XCTAssertEqual(router.path, [.animal(animalID), .fieldChecks(.openFindings)])
+
+        router.selectFieldChecksMode(.flaggedAnimals)
+
+        XCTAssertEqual(router.path, [.animal(animalID), .fieldChecks(.flaggedAnimals)])
+    }
+
+    func testFieldCheckModeSwitchInSearchDoesNotChangeHerdPath() {
+        let router = HerdRouter()
+        router.path = [.fieldChecks(.all)]
+        router.searchPath = [.fieldChecks(.inProgress)]
+
+        router.selectFieldChecksMode(.missingAnimals, in: .search)
+
+        XCTAssertEqual(router.path, [.fieldChecks(.all)])
+        XCTAssertEqual(router.searchPath, [.fieldChecks(.missingAnimals)])
+    }
+
+    func testFieldCheckModeSwitchDoesNothingWhenNoCheckListIsVisible() {
+        let router = HerdRouter()
+        router.path = [.animal(UUID())]
+        let originalPath = router.path
+
+        router.selectFieldChecksMode(.openFindings)
+
+        XCTAssertEqual(router.path, originalPath)
+    }
 }
