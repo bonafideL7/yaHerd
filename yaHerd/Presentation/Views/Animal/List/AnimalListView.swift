@@ -15,12 +15,14 @@ struct AnimalListView: View {
     @Environment(\.animalFeatureDependencies) private var animalDependencies
     private var animalListRepository: any AnimalListRepository { animalDependencies.listRepository }
     private var pastureReferenceDataReader: any PastureReferenceDataReader { animalDependencies.pastureReferenceReader }
+    private var sampleDataSeeder: (any SampleDataSeeding)? { animalDependencies.sampleDataSeeder }
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(ApplicationSettings.self) private var applicationSettings
     @Environment(AppNavigationState.self) private var navigation
 
     @State private var viewModel = AnimalListViewModel()
+    @State private var isSeedingSampleData = false
     @State private var internalSearchText = ""
     @State private var sortOrder: AnimalSortOrder = .tagAscending
     @State private var showingFilters = false
@@ -400,6 +402,9 @@ struct AnimalListView: View {
             colorScheme: colorScheme,
             onStartInlineEntry: beginNewInlineEntry,
             onAddAnimal: presentAddAnimal,
+            onAddSampleData: sampleDataSeeder == nil ? nil : { seedSampleData(large: false) },
+            onAddLargeSampleData: sampleDataSeeder == nil ? nil : { seedSampleData(large: true) },
+            isSeedingSampleData: isSeedingSampleData,
             onClearFilters: clearAllFilters,
             onShowInactive: { showRemovedStatusesBinding.wrappedValue = true },
             onShowArchivedRecords: { showArchivedRecordsBinding.wrappedValue = true }
@@ -497,6 +502,27 @@ struct AnimalListView: View {
         refreshDerivedState()
         selectedAnimalIDs.removeAll()
         batchMode = false
+    }
+
+    private func seedSampleData(large: Bool) {
+        guard !isSeedingSampleData, dataAccessMode.allowsDataMutations,
+              let sampleDataSeeder else { return }
+        isSeedingSampleData = true
+        Task { @MainActor in
+            defer { isSeedingSampleData = false }
+            do {
+                let inserted = try await (large
+                    ? sampleDataSeeder.seedLargeSampleDataIfNeeded()
+                    : sampleDataSeeder.seedSampleDataIfNeeded())
+                if inserted {
+                    reload()
+                } else {
+                    viewModel.errorMessage = "Sample data can only be added to an empty herd."
+                }
+            } catch {
+                viewModel.errorMessage = error.localizedDescription
+            }
+        }
     }
 
     private func reload() {
