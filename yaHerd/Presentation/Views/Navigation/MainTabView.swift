@@ -48,8 +48,8 @@ struct MainTabView: View {
     }
 
     private var showsHerdAccessory: Bool {
-        (navigation.selectedTab == .herd || navigation.selectedTab == .search)
-            && navigation.herdRouter.mode == .animals
+        navigation.selectedTab == .search
+            || (navigation.selectedTab == .herd && navigation.herdRouter.mode == .animals)
     }
 
     @ViewBuilder
