@@ -1,6 +1,6 @@
 # yaHerd Architecture
 
-> This document describes the **implemented production architecture** and its lasting clean-architecture rules. The running app uses a single local Core Data graph; the frozen SwiftData schema is archived outside production compilation, not an alternate runtime. `CORE_DATA_CUTOVER.md` remains a temporary final-audit checklist, not permission to restore SwiftData or a claim that legacy user records have been imported.
+> This document describes the **implemented production architecture** and its lasting clean-architecture rules. The app is prelaunch and uses a single local Core Data graph. No SwiftData user-data preservation, schema archive, import or migration path is required. `CORE_DATA_CUTOVER.md` remains a temporary final contract-audit checklist.
 
 ## Implemented production architecture
 
@@ -16,7 +16,7 @@ NSPersistentContainer
 Local Core Data persistent store
 ```
 
-Core Data is the sole production persistence implementation. yaHerd's production data is local-only. SwiftData, CloudKit/iCloud synchronization, shared stores, cross-user herd collaboration, mirror persistence, dual-write persistence, and custom synchronization are excluded by architecture enforcement. The legacy SwiftData files, where present, are preserved for recovery export but **are not converted** by the running app.
+Core Data is the sole production persistence implementation. yaHerd's production data is local-only. SwiftData, CloudKit/iCloud synchronization, shared stores, cross-user herd collaboration, mirror persistence, dual-write persistence, and custom synchronization are excluded by architecture enforcement. No prelaunch SwiftData storage is recognized or upgraded.
 
 ## Top-level layers
 
@@ -306,7 +306,7 @@ Domain use cases still own validation, workflow policy, and the meaning/order of
 
 The production persistence root is `CoreDataPersistentContainer` backed by one `NSPersistentContainer`, the `yaHerdModel` managed-object model, and the local `Application Support/yaHerd/yaHerd.sqlite` store. No CloudKit, iCloud, shared-store, second-write-graph, or collaboration routing is assembled.
 
-At startup, `yaHerdApp.bootstrap` opens this graph through `CoreDataAppPersistenceAssembly.load`. `CoreDataLegacyStorePreflight.ensureSafeFirstOpen` runs before a first Core Data open. An existing Core Data database is authoritative on subsequent launches; when no Core Data database exists, recognized legacy SwiftData files or orphaned Core Data journal sidecars **block empty-store creation** rather than being deleted or treated as a successful import.
+At startup, `yaHerdApp.bootstrap` opens this graph through `CoreDataAppPersistenceAssembly.load`, directly using `CoreDataPersistenceAssembly.load`. First launch creates the local Core Data store and bootstraps one Herd; subsequent launches open that same Core Data store. No legacy SwiftData file-name check, upgrade preflight, migration, silent replacement, or legacy-file cleanup is performed. Actual Core Data open failures take the existing read-only recovery path.
 
 `CoreDataAppHerdBootstrapper` resolves or creates the deterministic local Herd, and `CoreDataAppPersistenceAssembly.makeDependencies` injects one selected Herd into Domain-facing Home, Animal, Pasture, Field Check, and Working feature containers. Independent `CoreDataReadModelActor` instances handle selected read projections using the same store and Herd scope. `NSManagedObject` values and contexts remain private to persistence/integration boundaries.
 
@@ -324,7 +324,7 @@ The active model was designed for local Core Data rather than copied from the hi
 - Core Data generated/accessor types do not escape Data.
 - Do not reproduce duplicated persistence state when one relationship/record set can be authoritative. In particular, the production animal model should not maintain separate scalar primary-tag fields in addition to authoritative tag records.
 
-Do not reintroduce or copy the archived SwiftData schema into production. Extend the existing local Core Data model only for actual Domain requirements.
+Do not reintroduce SwiftData models, archived schema or migration support. Extend the existing local Core Data model only for actual Domain requirements.
 
 ## Application mutation and UI invalidation
 
@@ -342,11 +342,11 @@ Do not couple local UI refresh to a sync scheduler, remote-store observer, colla
 
 ## Recovery-mode boundary
 
-`yaHerdApp.bootstrap` handles failed durable-store open or legacy preflight rejection by constructing a separate **in-memory Core Data** graph with `AppDataAccessMode.recoveryReadOnly`. The shared write policy blocks feature mutations; recovery does not load the old data into a new Herd or save the temporary Herd as a replacement database. If even in-memory setup fails, the app presents a storage-unavailable state with writes disabled.
+`yaHerdApp.bootstrap` handles failed durable Core Data store opening by constructing a separate **in-memory Core Data** graph with `AppDataAccessMode.recoveryReadOnly`. The shared write policy blocks feature mutations; recovery does not save the temporary Herd as a replacement database. If even in-memory setup fails, the app presents a storage-unavailable state with writes disabled.
 
-`RecoveryModeController` provides app-scoped diagnostics and an export of discoverable original Core Data SQLite files/journals and recognized legacy SwiftData files, without migrating or repairing either format. Its explicit read-only Core Data probe does not enable writes in the current recovery session; a restart is required to retry normal opening. Stored navigation restoration is also suppressed in recovery, so temporary identities cannot overwrite a user's navigation snapshot.
+`RecoveryModeController` provides app-scoped diagnostics and an export of discoverable Core Data SQLite files and journals, without writing or repairing them. Its explicit read-only Core Data probe does not enable writes in the current recovery session; a restart is required to retry normal opening. Stored navigation restoration is also suppressed in recovery, so temporary identities cannot overwrite a user's navigation snapshot.
 
-Recovery/export and preflight are **data-preservation mechanisms, not legacy importers**. Do not remove those safeguards or claim lossless upgrading until a separate data-preservation and release decision has been made. Old synchronization or public-ID repair infrastructure is not reinstated merely to implement recovery.
+Recovery/export protects native Core Data files during a real storage failure. It is not a SwiftData importer, a first-launch migration gate or a requirement to preserve unreleased test data. Old synchronization or public-ID repair infrastructure must not be reinstated.
 
 ## Concurrency boundary
 
@@ -397,7 +397,7 @@ Feature cleanup and production persistence work should include focused tests for
 - mapper behavior
 - view-model state and orchestration
 
-Keep permanent behavior contracts on the current Core Data test harness and reusable Domain boundaries. Do not restore SwiftData test runners or make the archived SwiftData schema part of app/test compilation. The remaining Milestone 12 integration audit must reconcile delete rules, atomic rollback, UUID/Herd scoping, read mapping, and recovery against their existing M0/M4–M10 contract owners before declaring closure.
+Keep permanent behavior contracts on the current Core Data test harness and reusable Domain boundaries. Do not restore SwiftData test runners or sources. The remaining Milestone 12 integration audit must reconcile delete rules, atomic rollback, UUID/Herd scoping, read mapping, and recovery against their existing M0/M4–M10 contract owners before declaring closure.
 
 ## Rules for future growth
 
@@ -421,10 +421,8 @@ Keep permanent behavior contracts on the current Core Data test harness and reus
 18. do not introduce a second persistence graph, dual writes, mirror records, synchronization bridges, or sharing infrastructure
 19. prefer deleting obsolete SwiftData/sync/share code over porting it
 
-## Milestone 12 completion and upgrade boundary
+## Milestone 12 completion boundary
 
-**Implemented:** The running app boots through the Core Data-only assembly, the frozen `LegacySwiftData/` schema is excluded from production and test compilation, architecture verification rejects new SwiftData/remote persistence dependencies, and the local recovery/export pathway protects recognized original files. Sync/share/CloudKit runtime infrastructure is removed.
+**Implemented:** The app boots through the Core Data-only assembly; production architecture checks reject SwiftData and remote persistence; old SwiftData source/archive/preflight paths are retired; native Core Data read-only recovery/export remains. No user-data migration is required before first launch.
 
-**Still to close:** Audit the remaining Core Data integration contracts (delete rules and historical retention, rollback and mutation publication, UUID/Herd identity scoping, mapping/read projections, and read-only recovery). Cross-check against the permanent M0/M4–M10 contracts rather than duplicating them. Only after this final audit and accurate documentation may the temporary `CORE_DATA_CUTOVER.md` playbook be deleted.
-
-**Separate release decision:** There is **no automatic SwiftData-to-Core Data user-record importer**. First-open preflight intentionally blocks an empty Core Data store when recognized legacy files exist; users can export original files through recovery, not open them as an upgraded Herd. Do not describe upgrades from legacy SwiftData installations as lossless or remove preflight/archive safeguards without an explicitly approved data-preservation plan.
+**Still to close:** Audit remaining Core Data integration contracts (delete rules and historical retention, rollback and mutation publication, UUID/Herd identity scoping, mapping/read projections, and native read-only recovery). Cross-check against permanent M0/M4–M10 contracts rather than duplicating them. Delete the temporary `CORE_DATA_CUTOVER.md` only after that final contract audit and documentation closure.

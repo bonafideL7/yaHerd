@@ -117,11 +117,11 @@ A review comment that reveals a missed production path, persistence/synchronizat
 
 ## 4. Persistence direction: Core Data only
 
-yaHerd is replacing SwiftData with Core Data. SwiftData is legacy transitional code scheduled for removal and is not an implementation target for new work.
+yaHerd uses Core Data only. The app is prelaunch; no legacy user data, SwiftData upgrade, import, archive or migration path is required. Do not reintroduce SwiftData as a production implementation.
 
 - Do not add new SwiftData production code, repositories, models, adapters, migrations, fixtures, test runners, or verification infrastructure.
 - Do not expand, refactor, or otherwise invest in SwiftData as part of the Core Data migration.
-- Existing SwiftData code may be inspected only to understand current behavior that must be preserved during migration.
+- Historical SwiftData revisions may be inspected to understand Domain behavior; do not restore obsolete SwiftData sources or create migration compatibility for an unreleased app.
 - New persistence behavior, repositories, migration work, and executable persistence tests must target the local-only Core Data `NSPersistentContainer` architecture, or remain persistence-neutral until the Core Data implementation exists.
 - Permanent repository contracts may remain persistence-neutral without an executable runner when the only available runner would require adding or restoring SwiftData-specific code. Wire those contracts into the Core Data test suite when the corresponding Core Data repository is implemented.
 - Never satisfy a review comment by adding, restoring, or recommending a SwiftData contract runner solely to execute new persistence-neutral contracts against the legacy implementation.
