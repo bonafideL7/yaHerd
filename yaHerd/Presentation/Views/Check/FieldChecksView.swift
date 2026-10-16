@@ -7,6 +7,20 @@ enum FieldChecksViewMode: String, Hashable, Codable {
     case flaggedAnimals
     case missingAnimals
 
+    static let navigationFilters: [Self] = [
+        .all, .inProgress, .openFindings, .flaggedAnimals, .missingAnimals
+    ]
+
+    var filterLabel: String {
+        switch self {
+        case .all: "All"
+        case .inProgress: "Open"
+        case .openFindings: "Findings"
+        case .flaggedAnimals: "Flagged"
+        case .missingAnimals: "Missing"
+        }
+    }
+
     var title: String {
         switch self {
         case .all:
@@ -30,11 +44,11 @@ struct FieldChecksView: View {
     @State private var model = FieldChecksViewModel()
     @State private var showingStartPastureCheck = false
 
-    private let mode: FieldChecksViewMode
+    @State private var selectedMode: FieldChecksViewMode
     private let onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)?
 
     init(mode: FieldChecksViewMode = .all, onSessionStarted: ((UUID) -> Void)? = nil) {
-        self.mode = mode
+        _selectedMode = State(initialValue: mode)
         if let onSessionStarted {
             self.onSessionLaunch = { configuration in
                 onSessionStarted(configuration.sessionID)
@@ -48,7 +62,7 @@ struct FieldChecksView: View {
         mode: FieldChecksViewMode = .all,
         onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)?
     ) {
-        self.mode = mode
+        _selectedMode = State(initialValue: mode)
         self.onSessionLaunch = onSessionLaunch
     }
 
@@ -109,7 +123,7 @@ struct FieldChecksView: View {
     }
 
     private var filteredIsEmpty: Bool {
-        switch mode {
+        switch selectedMode {
         case .all:
             return needsAttentionSessions.isEmpty
             && openCheckSessions.isEmpty
@@ -127,30 +141,34 @@ struct FieldChecksView: View {
     }
 
     var body: some View {
-        Group {
-            if filteredIsEmpty {
-                emptyState
-            } else {
-                List {
-                    switch mode {
-                    case .all:
-                        allSections
-                    case .inProgress:
-                        inProgressSection
-                    case .openFindings:
-                        openFindingsSection
-                    case .flaggedAnimals:
-                        flaggedAnimalsSection
-                    case .missingAnimals:
-                        missingAnimalsSection
+        VStack(spacing: 0) {
+            checkFilters
+            Group {
+                if filteredIsEmpty {
+                    emptyState
+                } else {
+                    List {
+                        switch selectedMode {
+                        case .all:
+                            allSections
+                        case .inProgress:
+                            inProgressSection
+                        case .openFindings:
+                            openFindingsSection
+                        case .flaggedAnimals:
+                            flaggedAnimalsSection
+                        case .missingAnimals:
+                            missingAnimalsSection
+                        }
                     }
-                }
-                .refreshable {
-                    model.load(using: fieldCheckOverviewReader)
+                    .refreshable {
+                        model.load(using: fieldCheckOverviewReader)
+                    }
                 }
             }
         }
-        .navigationTitle(mode.title)
+        .navigationTitle("Pasture Checks")
+        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $showingStartPastureCheck) {
             FieldCheckPastureStartListView { sessionID in
                 showingStartPastureCheck = false
@@ -182,9 +200,39 @@ struct FieldChecksView: View {
         .profileBodyRecomputation("FieldChecksView")
     }
 
+    private var checkFilters: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(FieldChecksViewMode.navigationFilters, id: \.self) { option in
+                    Button {
+                        selectedMode = option
+                    } label: {
+                        Text(option.filterLabel)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(selectedMode == option ? Color.white : Color.primary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                            .background(
+                                selectedMode == option
+                                    ? Color.accentColor
+                                    : Color(.secondarySystemGroupedBackground),
+                                in: Capsule()
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(option.title) filter")
+                    .accessibilityAddTraits(selectedMode == option ? .isSelected : [])
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .background(Color(.systemGroupedBackground))
+    }
+
     @ViewBuilder
     private var emptyState: some View {
-        switch mode {
+        switch selectedMode {
         case .all:
             FieldChecksEmptyState {
                 if dataAccessMode.allowsDataMutations {
@@ -290,8 +338,6 @@ struct FieldChecksView: View {
                         FieldCheckSessionSummaryRow(session: session, emphasis: emphasis(for: session))
                     }
                 }
-            } header: {
-                Text("Open Checks")
             } footer: {
                 Text("Finish open checks before roster counts go stale.")
             }
@@ -309,8 +355,6 @@ struct FieldChecksView: View {
                         FieldCheckSessionSummaryRow(session: session, emphasis: .findings)
                     }
                 }
-            } header: {
-                Text("Open Findings")
             } footer: {
                 Text("Each row opens the check's Findings view.")
             }
@@ -328,8 +372,6 @@ struct FieldChecksView: View {
                         FieldCheckSessionSummaryRow(session: session, emphasis: .flagged)
                     }
                 }
-            } header: {
-                Text("Flagged Animals")
             } footer: {
                 Text("Each row opens the check roster filtered to flagged animals.")
             }
@@ -347,8 +389,6 @@ struct FieldChecksView: View {
                         FieldCheckSessionSummaryRow(session: session, emphasis: .missing)
                     }
                 }
-            } header: {
-                Text("Missing Animals")
             } footer: {
                 Text("Each row opens the check roster filtered to missing animals.")
             }
@@ -643,10 +683,6 @@ private struct FieldCheckSessionSummaryRow: View {
             parts.append("\(session.flaggedAnimalCount) flagged")
         }
 
-        if session.openFindingsCount > 0 {
-            parts.append("\(session.openFindingsCount) findings")
-        }
-
         return parts.joined(separator: " • ")
     }
 
@@ -679,7 +715,7 @@ private struct FieldCheckSessionSummaryRow: View {
                         }
 
                         FieldCheckBadge(
-                            title: session.isCompleted ? "Done" : "Open",
+                            title: session.isCompleted ? "Check Done" : "Check Open",
                             tint: session.isCompleted ? Color.green : Color.orange
                         )
                     }
@@ -688,6 +724,13 @@ private struct FieldCheckSessionSummaryRow: View {
                 Text(dateLine)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+
+                if session.openFindingsCount > 0 {
+                    FieldCheckBadge(
+                        title: "\(session.openFindingsCount) Open \(session.openFindingsCount == 1 ? "Finding" : "Findings")",
+                        tint: Color.red
+                    )
+                }
 
                 Text(statusLine)
                     .font(.footnote)
