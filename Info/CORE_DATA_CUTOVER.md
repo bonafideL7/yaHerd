@@ -1,14 +1,12 @@
 # Core Data Cutover Playbook
 
-> Temporary **cutover completion checklist** retained while Milestone 12 audits the already-active local Core Data architecture. Phases 0–5 describe historical implementation order, not a request to rebuild or reintroduce SwiftData. Delete this document only after the remaining Core Data contract audit, architecture reconciliation, and legacy-data release decision are closed.
+> Temporary **cutover completion checklist** retained while Milestone 12 audits the already-active local Core Data architecture. Phases 0–5 describe historical implementation order, not a request to rebuild or reintroduce SwiftData. The prelaunch owner decision is final: **no legacy data preservation, importer, source archive, migration or upgrade path is needed**. Delete this document after the remaining Core Data contract audit and architecture reconciliation are closed.
 
 `ARCHITECTURE.md` remains the authoritative clean-architecture guide throughout this work. This playbook changes persistence technology; it does not suspend or replace feature ownership, dependency direction, use-case rules, dependency-injection boundaries, mapping rules, navigation ownership, presentation responsibilities, or other persistence-independent architecture guidance.
 
 ## Non-negotiable direction
 
-This is a **runtime persistence replacement, not an automatic conversion of existing SwiftData records**.
-
-Production already uses a single Core Data graph. Legacy SwiftData database files may nevertheless exist on devices. Do not assume they are expendable development data: first-open preflight preserves recognized legacy files and journal sidecars and refuses to create an empty replacement Core Data store. Recovery can export those originals, but the running app has no importer for their animal/herd records. Whether/how to support legacy upgrades is a separate data-preservation and release decision.
+The production runtime uses one local Core Data graph. Because yaHerd has **not launched**, there are no legacy users or records to preserve. First launch creates Core Data directly. Obsolete SwiftData files and journals do not block launch and are not read, migrated, exported or cleaned up by the app. Native Core Data open failures still enter read-only recovery; this is not a migration facility.
 
 Do not create or preserve any of the following solely to ease transition:
 
@@ -279,5 +277,5 @@ The cutover is complete only when all of the following are true:
 - obsolete public-ID repair code is gone unless independently justified by local data integrity requirements;
 - Core Data persistence tests cover the production behavior;
 - `ARCHITECTURE.md` matches the actual implementation and still contains the broader clean-architecture guidance needed to maintain the project;
-- recognized original SwiftData stores and Core Data journal files remain protected by first-open/recovery flows until an explicit, separate legacy-upgrade/data-preservation release decision is made;
-- this file is deleted only after those closure conditions have been satisfied.
+- native Core Data store and journal diagnostics/recovery remain available for actual store failures; no SwiftData first-open preflight, migration or legacy-data preservation requirement exists;
+- this temporary checklist is deleted after the remaining M12 native Core Data contract audit and architecture reconciliation, not an obsolete legacy-release gate.

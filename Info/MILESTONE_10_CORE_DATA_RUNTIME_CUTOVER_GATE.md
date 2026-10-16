@@ -1,5 +1,7 @@
 # Milestone 10 — Core Data runtime cutover gate
 
+> **Historical assessment:** The prelaunch owner decision recorded in `Info/MILESTONE_12_PRELAUNCH_LEGACY_RETIREMENT_MATRIX.md` supersedes this document's old legacy-store preservation/preflight requirement. There is no released SwiftData user data to upgrade. M12 removes the obsolete preflight, archive, legacy export, and associated tests; the native Core Data startup/recovery invariants remain.
+
 **Assessment:** The **active-runtime single-persistence-stack gate** described in `Core-Data-SwiftData-replacement-execution-plan.md` is satisfied by the current `main` composition. This is an architecture/runtime-cutover assessment, **not** a certification that all legacy user data can be upgraded or that a device-level release has been tested.
 
 ## Gate definition

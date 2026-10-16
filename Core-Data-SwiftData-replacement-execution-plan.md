@@ -2,6 +2,8 @@ For the core data refactor and gutting SwiftData, this is the detailed implement
 
 # Core Data / SwiftData Replacement Execution Plan
 
+> **Current prelaunch decision (Milestone 12):** no existing users or legacy data, so no SwiftData preservation, import, schema archive, upgrade or migration path is needed. Earlier milestones below record implementation history. Native Core Data storage and recovery remain authoritative.
+
 ## Target state
 
 The finished persistence stack is local-only:
