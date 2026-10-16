@@ -68,3 +68,11 @@ Invalid UUIDs and unknown destinations are rejected without mutating navigation 
 ## Search ownership
 
 Search remains a permanent tab-bar destination. Search and YaHerd share the same herd mode, search text, sort order, filters, and other list criteria, matching the original feature. Each tab keeps its own typed navigation stack, so opening a Search result stays in Search without replacing the YaHerd tab's navigation state. Only the Search tab owns the system `.searchable` field. Selecting Search switches the shared herd mode to animals without automatically opening the keyboard; leaving Search dismisses keyboard focus. Dismissing Search clears the search and filters and returns to YaHerd.
+
+## Pasture check list modes
+
+`FieldChecksView` shows a visible **View** picker for All Checks, Open Checks, Open Findings, Flagged Animals, and Missing Animals. All five selections use the same screen and current field-check data, including the mode-specific empty states and session launch intent.
+
+A mode change on YaHerd or Search replaces the last `.fieldChecks(mode)` entry in that tab's `HerdRouter` path without pushing another screen or affecting the other tab's stack. The selected mode is therefore reflected in the typed navigation snapshot and Back returns to the same previous screen. In an isolated full-screen check area, the selector updates `WorkflowRouter.route` to `.fieldCheckSessions(mode)` instead.
+
+Home's Field Work shortcuts still open their respective preselected modes (or open a specific session directly when there is a single relevant result).
