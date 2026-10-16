@@ -9,14 +9,14 @@ final class CoreDataWorkingTreatmentTemplateRepository:
 {
     private let selection: any CurrentHerdSelectionReading
     private let contextFactory: CoreDataContextFactory
-    private let sampleSeedWriteCoordinator: CoreDataSampleSeedWriteCoordinator?
+    private let sampleSeedWriteCoordinator: CoreDataSampleSeedWriteCoordinator
     private nonisolated let lookup: CoreDataLookup
 
     init(
         selection: any CurrentHerdSelectionReading,
         contextFactory: CoreDataContextFactory,
         lookup: CoreDataLookup,
-        sampleSeedWriteCoordinator: CoreDataSampleSeedWriteCoordinator? = nil
+        sampleSeedWriteCoordinator: CoreDataSampleSeedWriteCoordinator
     ) {
         self.selection = selection
         self.contextFactory = contextFactory
@@ -178,7 +178,7 @@ final class CoreDataWorkingTreatmentTemplateRepository:
     ) throws -> Result {
         // One synchronous MainActor entry covers create, update and delete,
         // including their name checks and the physical commit.
-        try sampleSeedWriteCoordinator?.validateTemplateWriteAvailable()
+        try sampleSeedWriteCoordinator.validateTemplateWriteAvailable()
         guard let herdID = selection.currentHerdID else {
             throw HerdRepositoryError.missingHerd
         }
