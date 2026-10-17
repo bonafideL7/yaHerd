@@ -336,8 +336,12 @@ protocol AppNavigationRestorationValidating {
     func currentHerdID() throws -> UUID?
     func animalExists(id: UUID) throws -> Bool
     func pastureExists(id: UUID) throws -> Bool
+    // Durable restoration admits only active sessions.
     func isActiveFieldCheckSession(id: UUID) throws -> Bool
     func isActiveWorkingSession(id: UUID) throws -> Bool
+    // Live presentation permits existing completed/cancelled historical records.
+    func fieldCheckSessionExists(id: UUID) throws -> Bool
+    func workingSessionExists(id: UUID) throws -> Bool
 }
 
 @MainActor
@@ -375,6 +379,14 @@ struct RepositoryAppNavigationRestorationValidator: AppNavigationRestorationVali
 
     func isActiveWorkingSession(id: UUID) throws -> Bool {
         try workingRepository.fetchSessionDetail(id: id)?.status == .active
+    }
+
+    func fieldCheckSessionExists(id: UUID) throws -> Bool {
+        try fieldCheckRepository.fetchSessionDetail(id: id) != nil
+    }
+
+    func workingSessionExists(id: UUID) throws -> Bool {
+        try workingRepository.fetchSessionDetail(id: id) != nil
     }
 }
 
