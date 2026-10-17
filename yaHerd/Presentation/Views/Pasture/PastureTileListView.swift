@@ -6,7 +6,7 @@ struct PastureTileListView: View {
     private var deletionCommand: any PastureDeletionPerforming { pastureDependencies.deletionCommand }
     @Environment(\.appDataAccessMode) private var dataAccessMode
 
-    @State private var model = PastureTileListViewModel()
+    private let model: PastureTileListViewModel
     @Binding private var isManaging: Bool
 
     private let externalFilter: Binding<PastureListFilter>?
@@ -16,6 +16,7 @@ struct PastureTileListView: View {
     private let onOpenSettings: () -> Void
 
     init(
+        model: PastureTileListViewModel = PastureTileListViewModel(),
         isManaging: Binding<Bool>,
         filter: Binding<PastureListFilter>? = nil,
         onOpenPasture: ((UUID) -> Void)? = nil,
@@ -23,6 +24,7 @@ struct PastureTileListView: View {
         onOpenWorkSessions: @escaping () -> Void = {},
         onOpenSettings: @escaping () -> Void = {}
     ) {
+        self.model = model
         self._isManaging = isManaging
         self.externalFilter = filter
         self.onOpenPasture = onOpenPasture
@@ -53,7 +55,9 @@ struct PastureTileListView: View {
 
     var body: some View {
         Group {
-            if model.items.isEmpty {
+            if !model.hasLoaded {
+                initialContentView
+            } else if model.items.isEmpty {
                 PastureEmptyStateView(onAddPasture: model.requestAddPasture)
             } else if isManaging {
                 PastureManageGrid(
@@ -191,6 +195,23 @@ struct PastureTileListView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(model.errorMessage ?? "Unknown error")
+        }
+    }
+
+    @ViewBuilder
+    private var initialContentView: some View {
+        if model.hasInitialLoadFailure {
+            ContentUnavailableView {
+                Label("Unable to Load Pastures", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text("The pasture list could not be loaded.")
+            } actions: {
+                Button("Try Again") { _ = model.load(using: repository) }
+                    .buttonStyle(.borderedProminent)
+            }
+        } else {
+            ProgressView("Loading Pastures")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
