@@ -123,19 +123,11 @@ struct AnimalSortMenuPicker: View {
     @Binding var sortOrder: AnimalSortOrder
 
     var body: some View {
-        Picker("Sort", selection: menuSelection) {
+        Picker("Sort", selection: $sortOrder) {
             ForEach(AnimalSortOrder.menuOptions, id: \.self) { option in
-                Label(option.menuLabel, systemImage: option.menuIcon)
+                Label(option.label, systemImage: option.menuIcon)
                     .tag(option)
             }
-        }
-    }
-
-    private var menuSelection: Binding<AnimalSortOrder> {
-        Binding {
-            sortOrder.menuSelection
-        } set: { newValue in
-            sortOrder = newValue.defaultMenuSelection
         }
     }
 }
