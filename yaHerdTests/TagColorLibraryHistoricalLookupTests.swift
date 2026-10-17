@@ -65,6 +65,65 @@ final class TagColorLibraryHistoricalLookupTests: XCTestCase {
         XCTAssertEqual(repository.fetchColorIDs, [explicitMissingColorID])
     }
 
+    func testCommittedUpsertSurvivesPostWriteLibraryRefreshFailure() {
+        let original = TagColorSnapshot(
+            id: TagColorDefaults.whiteID,
+            name: "White",
+            prefix: "W",
+            rgba: RGBAColor(r: 1, g: 1, b: 1),
+            isDefault: true
+        )
+        let added = TagColorSnapshot(
+            id: UUID(),
+            name: "Teal",
+            prefix: "T",
+            rgba: RGBAColor(r: 0, g: 0.6, b: 0.6)
+        )
+        let repository = TagColorWriteResultRepository(colors: [original])
+        let store = TagColorLibraryStore(repository: repository)
+
+        repository.failFetch = true
+        XCTAssertTrue(store.upsert(added), "A failed read must not reverse a committed write.")
+        XCTAssertEqual(repository.persistedColors.map(\.id), [original.id, added.id])
+        XCTAssertEqual(store.colors.map(\.id), [original.id], "Keep last-good visible colors.")
+        XCTAssertTrue(store.lastErrorMessage?.hasPrefix("Changes saved, but") == true)
+
+        repository.failFetch = false
+        store.refresh()
+        XCTAssertEqual(store.colors.map(\.id), [original.id, added.id])
+        XCTAssertNil(store.lastErrorMessage)
+    }
+
+    func testFailedUpsertLeavesPreviousColorsAndCanRetry() {
+        let original = TagColorSnapshot(
+            id: TagColorDefaults.whiteID,
+            name: "White",
+            prefix: "W",
+            rgba: RGBAColor(r: 1, g: 1, b: 1),
+            isDefault: true
+        )
+        let added = TagColorSnapshot(
+            id: UUID(),
+            name: "Teal",
+            prefix: "T",
+            rgba: RGBAColor(r: 0, g: 0.6, b: 0.6)
+        )
+        let repository = TagColorWriteResultRepository(colors: [original])
+        let store = TagColorLibraryStore(repository: repository)
+
+        repository.failWrite = true
+        XCTAssertFalse(store.upsert(added), "An actual write failure must block dismissal.")
+        XCTAssertEqual(repository.persistedColors.map(\.id), [original.id])
+        XCTAssertEqual(store.colors.map(\.id), [original.id])
+        XCTAssertTrue(store.lastErrorMessage?.hasPrefix("Failed to save tag color") == true)
+
+        repository.failWrite = false
+        XCTAssertTrue(store.upsert(added))
+        XCTAssertEqual(repository.persistedColors.map(\.id), [original.id, added.id])
+        XCTAssertEqual(store.colors.map(\.id), [original.id, added.id])
+        XCTAssertNil(store.lastErrorMessage)
+    }
+
     func testEditableColorIDPreservesUnknownIDWhenLookupReturnsNil() {
         let white = TagColorSnapshot(
             id: TagColorDefaults.whiteID,
@@ -118,6 +177,41 @@ private final class HistoricalLookupTagColorRepository: TagColorRepository {
     }
 
     func upsert(_ color: TagColorSnapshot) throws {}
+    func setDefaultColor(id: UUID) throws {}
+    func deleteColors(ids: [UUID]) throws {}
+    func reorder(colorIDs: [UUID]) throws {}
+    func restoreDefaultColors() throws {}
+}
+
+
+@MainActor
+private final class TagColorWriteResultRepository: TagColorRepository {
+    private(set) var persistedColors: [TagColorSnapshot]
+    var failFetch = false
+    var failWrite = false
+
+    init(colors: [TagColorSnapshot]) {
+        persistedColors = colors
+    }
+
+    func fetchColors() throws -> [TagColorSnapshot] {
+        if failFetch { throw HistoricalLookupFailure.unavailable }
+        return persistedColors
+    }
+
+    func fetchColor(id: UUID) throws -> TagColorSnapshot? {
+        persistedColors.first { $0.id == id }
+    }
+
+    func upsert(_ color: TagColorSnapshot) throws {
+        if failWrite { throw HistoricalLookupFailure.unavailable }
+        if let index = persistedColors.firstIndex(where: { $0.id == color.id }) {
+            persistedColors[index] = color
+        } else {
+            persistedColors.append(color)
+        }
+    }
+
     func setDefaultColor(id: UUID) throws {}
     func deleteColors(ids: [UUID]) throws {}
     func reorder(colorIDs: [UUID]) throws {}
