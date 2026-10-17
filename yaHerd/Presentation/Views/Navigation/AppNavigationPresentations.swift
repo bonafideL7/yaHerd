@@ -31,7 +31,7 @@ private struct AppNavigationPresentationModifier: ViewModifier {
                 isPresented: $router.showingSort,
                 titleVisibility: .visible
             ) {
-                ForEach(AnimalSortOrder.menuOptions, id: \.self) { option in
+                ForEach(AnimalSortOrder.allCases, id: \.self) { option in
                     Button {
                         router.sortOrder = option
                     } label: {
