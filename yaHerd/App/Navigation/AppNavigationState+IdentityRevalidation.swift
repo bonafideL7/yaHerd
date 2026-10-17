@@ -98,7 +98,7 @@ extension AppNavigationState {
     ) throws -> LiveWorkflowRevalidationPlan {
         switch workflowRouter.route {
         case .fieldCheckSession(let configuration):
-            guard try validator.isActiveFieldCheckSession(id: configuration.sessionID) else {
+            guard try validator.fieldCheckSessionExists(id: configuration.sessionID) else {
                 return .closeFieldCheck(openList: fullScreenWorkflow == .fieldCheck)
             }
 
@@ -133,7 +133,7 @@ extension AppNavigationState {
             )
 
         case .workingSession(let sessionID):
-            guard try validator.isActiveWorkingSession(id: sessionID) else {
+            guard try validator.workingSessionExists(id: sessionID) else {
                 return .closeWorkingSession(openList: fullScreenWorkflow == .workingSession)
             }
             return .unchanged
