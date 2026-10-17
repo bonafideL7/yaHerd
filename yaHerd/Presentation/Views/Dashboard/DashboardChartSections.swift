@@ -468,7 +468,7 @@ struct DashboardChartsContent: View {
 
                 Menu {
                     ForEach(data.fieldCheckOutcomeValues.filter { $0.value > 0 }) { issue in
-                        Button("\(issue.sessionLabel) — \(issue.metric) (\(issue.value))") {
+                        Button(issueActionTitle(issue)) {
                             openCheckIssue(issue)
                         }
                     }
@@ -519,6 +519,12 @@ struct DashboardChartsContent: View {
             showRemovedStatuses: true,
             showArchivedRecords: true
         ))
+    }
+
+    private func issueActionTitle(_ issue: DashboardFieldCheckOutcomeValue) -> String {
+        let startedAt = data.fieldCheckHistoryValues.first { $0.id == issue.sessionID }?.startedAt
+        let dateLabel = startedAt?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown date"
+        return "\(issue.sessionLabel) — \(dateLabel) — \(issue.metric) (\(issue.value))"
     }
 
     private func openCheckIssue(_ issue: DashboardFieldCheckOutcomeValue) {
