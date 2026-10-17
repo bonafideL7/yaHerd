@@ -37,7 +37,6 @@ struct AnimalListView: View {
     @State private var eligibleSampleDataRevision: UInt64?
     @State private var internalSearchText = ""
     @State private var sortOrder: AnimalSortOrder = .tagAscending
-    @State private var isSortDialogPresented = false
     @State private var showingFilters = false
     @State private var filter = AnimalFilter()
     @State private var showRemovedStatuses = false
@@ -292,25 +291,6 @@ struct AnimalListView: View {
             )
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomOverlay }
-        .confirmationDialog(
-            "Sort Animals",
-            isPresented: $isSortDialogPresented,
-            titleVisibility: .visible
-        ) {
-            ForEach(AnimalSortOrder.menuOptions, id: \.self) { option in
-                Button {
-                    sortOrderBinding.wrappedValue = option
-                } label: {
-                    Label(
-                        option.label,
-                        systemImage: sortOrderValue == option
-                            ? "checkmark"
-                            : option.menuIcon
-                    )
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        }
         .overlay(alignment: .bottomTrailing) {
             if dataAccessMode.allowsDataMutations && !isSeedingSampleData && !batchMode && !inlineEntry.isActive {
                 AnimalListFloatingAddButton(
@@ -493,7 +473,6 @@ struct AnimalListView: View {
             isSearching: isSearchingBinding,
             searchText: searchTextBinding,
             sortOrder: sortOrderBinding,
-            onShowSort: { isSortDialogPresented = true },
             filtersAreActive: filtersAreActive,
             filterChipCount: currentFilterChips.count,
             hasAnyActiveCriteria: hasAnyActiveCriteria,
