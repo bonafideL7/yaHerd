@@ -529,6 +529,21 @@ final class AppNavigationState {
         workflowRouter.reset()
     }
 
+    /// Called only after a working-session detail has been successfully deleted.
+    /// The route guard avoids overriding a navigation change already performed by
+    /// live revalidation, another scene, or the user's own navigation.
+    func handleDeletedWorkingSession(_ sessionID: UUID) {
+        guard fullScreenWorkflow == .workingSession,
+              case .workingSession(let presentedID) = workflowRouter.route,
+              presentedID == sessionID else { return }
+
+        if workflowRouter.canReturnToList {
+            workflowRouter.returnToList()
+        } else {
+            closeFullScreenWorkflow()
+        }
+    }
+
     func handle(_ request: AppNavigationRequest) {
         // Record/search deep links must not remain hidden behind a previous workflow or sheet.
         switch request {
