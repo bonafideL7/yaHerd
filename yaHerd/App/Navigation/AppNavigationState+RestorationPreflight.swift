@@ -133,6 +133,16 @@ private struct PreflightedAppNavigationRestorationValidator: AppNavigationRestor
         workingSessionResults[id] ?? false
     }
 
+    // This validator is used only by restoration preflight. It caches active-session
+    // validation; live existence checks use RepositoryAppNavigationRestorationValidator.
+    func fieldCheckSessionExists(id: UUID) throws -> Bool {
+        fieldCheckSessionResults[id] ?? false
+    }
+
+    func workingSessionExists(id: UUID) throws -> Bool {
+        workingSessionResults[id] ?? false
+    }
+
     private static func resolve(
         _ ids: Set<UUID>,
         using read: (UUID) throws -> Bool
