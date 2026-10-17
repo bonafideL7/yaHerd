@@ -106,7 +106,7 @@ final class DashboardPresentationDataTests: XCTestCase {
             fieldCheckSessions: []
         ).offspringByDam
         let reordered = DashboardPresentationData(
-            snapshot: makeSnapshot(pastures: [], offspringByDam: metrics.reversed()),
+            snapshot: makeSnapshot(pastures: [], offspringByDam: Array(metrics.reversed())),
             fieldCheckSessions: []
         ).offspringByDam
 
