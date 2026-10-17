@@ -7,6 +7,7 @@ import SwiftUI
 
 struct TagColorEditorView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppNavigationState.self) private var navigation
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     let existing: TagColorSnapshot?
@@ -15,6 +16,7 @@ struct TagColorEditorView: View {
     @State private var prefix: String
     @State private var color: Color
     @State private var prefixEdited = false
+    @State private var saveErrorMessage: String?
 
     init(existing: TagColorSnapshot?) {
         self.existing = existing
@@ -100,10 +102,30 @@ struct TagColorEditorView: View {
                         )
 
                         tagColorLibrary.upsert(def)
-                        dismiss()
+                        if let errorMessage = tagColorLibrary.lastErrorMessage {
+                            saveErrorMessage = errorMessage
+                            return
+                        }
+
+                        if navigation.presentedSheet == .settings {
+                            navigation.dismissSheet()
+                        } else {
+                            dismiss()
+                        }
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+            }
+            .alert(
+                "Unable to Save Tag Color",
+                isPresented: Binding(
+                    get: { saveErrorMessage != nil },
+                    set: { if !$0 { saveErrorMessage = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(saveErrorMessage ?? "")
             }
         }
     }
