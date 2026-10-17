@@ -41,6 +41,47 @@ final class AnimalListViewModelReloadTests: XCTestCase {
         XCTAssertEqual(viewModel.items, [freshAnimal])
     }
 
+    func testInitialDerivedEmptyResultsAreNotPublishedBeforeFirstLoad() async {
+        let animal = makeAnimal(name: "Loaded animal", tagNumber: "201")
+        let snapshotReader = CompleteAnimalListSnapshotProbe(animals: [animal])
+        let repository = BackgroundQueryingAnimalListRepository(
+            base: StubAnimalListRepository(),
+            queryReader: ControlledAnimalListQueryReader(
+                staleAnimal: animal,
+                freshAnimal: animal
+            )
+        )
+        let model = AnimalListViewModel()
+
+        model.updateDerivedState(
+            searchText: "",
+            sortOrder: .tagAscending,
+            filter: AnimalFilter(),
+            showRemovedStatuses: false,
+            showArchivedRecords: false,
+            formatTag: { number, _ in number }
+        )
+        for _ in 0..<10 { await Task.yield() }
+
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertFalse(model.hasInitialDerivedState)
+
+        model.load(
+            using: repository,
+            pastureRepository: EmptyPastureReferenceDataReader(),
+            snapshotReader: snapshotReader
+        )
+        for _ in 0..<100 {
+            if model.hasInitialDerivedState { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertFalse(model.hasInitialLoadFailure)
+        XCTAssertTrue(model.hasInitialDerivedState)
+        XCTAssertEqual(model.filteredAndSortedAnimals.map(\.id), [animal.id])
+    }
+
     func testCompleteAnimalListSnapshotIsAtomicAndDoesNotFallBackToIndependentPages() async {
         let records = (0..<525).map {
             makeAnimal(
