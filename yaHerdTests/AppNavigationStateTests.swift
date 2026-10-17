@@ -226,6 +226,57 @@ final class AppNavigationStateTests: XCTestCase {
         XCTAssertEqual(navigation.selectedTab, .home)
     }
 
+    func testSuccessfulDeletionFromWorkingSessionListReturnsToList() {
+        let navigation = AppNavigationState()
+        let sessionID = UUID()
+        navigation.selectedTab = .herd
+        navigation.openWorkArea(.sessions)
+        navigation.workflowRouter.openWorkingSession(sessionID)
+
+        navigation.handleDeletedWorkingSession(sessionID)
+
+        XCTAssertEqual(navigation.selectedTab, .herd)
+        XCTAssertEqual(navigation.fullScreenWorkflow, .workingSession)
+        XCTAssertEqual(navigation.workflowRouter.route, .workingSessions)
+        XCTAssertFalse(navigation.workflowRouter.canReturnToList)
+    }
+
+    func testSuccessfulDeletionFromDirectWorkingSessionClosesToOrigin() {
+        let navigation = AppNavigationState()
+        let sessionID = UUID()
+        navigation.openWorkArea(.session(sessionID))
+
+        navigation.handleDeletedWorkingSession(sessionID)
+
+        XCTAssertEqual(navigation.selectedTab, .home)
+        XCTAssertNil(navigation.fullScreenWorkflow)
+        XCTAssertNil(navigation.workflowRouter.route)
+    }
+
+    func testStaleWorkingSessionDeletionCallbackDoesNotOverrideNavigation() {
+        let navigation = AppNavigationState()
+        let sessionID = UUID()
+        navigation.openWorkArea(.sessions)
+        navigation.workflowRouter.openWorkingSession(sessionID)
+
+        // A callback for a different session must not dismiss or pop the current detail.
+        navigation.handleDeletedWorkingSession(UUID())
+        XCTAssertEqual(navigation.fullScreenWorkflow, .workingSession)
+        XCTAssertTrue(navigation.workflowRouter.canReturnToList)
+
+        // Live deletion revalidation can return to the list before the delete task resumes.
+        navigation.workflowRouter.returnToList()
+        navigation.handleDeletedWorkingSession(sessionID)
+        XCTAssertEqual(navigation.workflowRouter.route, .workingSessions)
+        XCTAssertEqual(navigation.fullScreenWorkflow, .workingSession)
+
+        // Closing for an unrelated navigation action must not be undone by a late callback.
+        navigation.closeFullScreenWorkflow()
+        navigation.handleDeletedWorkingSession(sessionID)
+        XCTAssertNil(navigation.fullScreenWorkflow)
+        XCTAssertNil(navigation.workflowRouter.route)
+    }
+
     func testDismissingSearchClearsCriteriaAndReturnsToHerdTab() {
         let navigation = AppNavigationState()
         navigation.openSearch(query: "green 14")
