@@ -14,7 +14,8 @@ final class PastureTileListViewModel {
     private(set) var isDeletingPastures = false
 
     private var dragStartOrder: [PastureSummary] = []
-    private var hasLoaded = false
+    private(set) var hasLoaded = false
+    private(set) var hasInitialLoadFailure = false
     private var lastLoadedRevision: UInt64 = 0
 
     func observe(
@@ -41,12 +42,15 @@ final class PastureTileListViewModel {
 
     @discardableResult
     func load(using repository: any PastureListReader) -> Bool {
+        if !hasLoaded { hasInitialLoadFailure = false }
         do {
             items = try repository.fetchPastures()
             errorMessage = nil
+            hasInitialLoadFailure = false
             hasLoaded = true
             return true
         } catch {
+            if !hasLoaded { hasInitialLoadFailure = true }
             errorMessage = UserVisibleErrorMessage.make(error)
             return false
         }
