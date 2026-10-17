@@ -6,6 +6,7 @@ import UIKit
 struct MainTabView: View {
     @Environment(AppNavigationState.self) private var navigation
     @Environment(ApplicationSettings.self) private var applicationSettings
+    @State private var isSortDialogPresented = false
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -37,9 +38,32 @@ struct MainTabView: View {
         }
         .yaherdTabBarMinimizeBehavior()
         .yaherdTabViewBottomAccessory(isVisible: showsHerdAccessory) {
-            HerdTabBottomAccessory()
+            HerdTabBottomAccessory {
+                isSortDialogPresented = true
+            }
         }
         .appNavigationPresentations()
+        // Present from the stable tab shell, not from a Menu embedded in the
+        // iOS 26 bottom accessory (including its collapsed inline placement).
+        .confirmationDialog(
+            "Sort Animals",
+            isPresented: $isSortDialogPresented,
+            titleVisibility: .visible
+        ) {
+            ForEach(AnimalSortOrder.menuOptions, id: \.self) { option in
+                Button {
+                    navigation.herdRouter.sortOrder = option
+                } label: {
+                    Label(
+                        option.label,
+                        systemImage: navigation.herdRouter.sortOrder == option
+                            ? "checkmark"
+                            : option.menuIcon
+                    )
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
         .onChange(of: applicationSettings.isDashboardEnabled) { _, isEnabled in
             if !isEnabled && navigation.selectedTab == .dashboard {
                 navigation.selectedTab = .home
