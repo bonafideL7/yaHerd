@@ -6,6 +6,7 @@ private struct AppNavigationPresentationModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         @Bindable var navigation = navigation
+        @Bindable var router = navigation.herdRouter
 
         content
             .recoveryModeScenePresentation(
@@ -22,6 +23,27 @@ private struct AppNavigationPresentationModifier: ViewModifier {
             .fullScreenCover(item: $navigation.fullScreenWorkflow) { workflow in
                 fullScreenContent(workflow)
                     .recoveryModeScenePresentation(controller: recoveryModeController)
+            }
+            // Keep sort presentation on the stable app presentation layer.
+            // The iOS 26 tab accessory only requests it through HerdRouter.
+            .confirmationDialog(
+                "Sort Animals",
+                isPresented: $router.showingSort,
+                titleVisibility: .visible
+            ) {
+                ForEach(AnimalSortOrder.menuOptions, id: \.self) { option in
+                    Button {
+                        router.sortOrder = option
+                    } label: {
+                        Label(
+                            option.label,
+                            systemImage: router.sortOrder == option
+                                ? "checkmark"
+                                : option.menuIcon
+                        )
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
             }
     }
 
