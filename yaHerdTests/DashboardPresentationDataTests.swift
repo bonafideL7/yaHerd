@@ -91,6 +91,36 @@ final class DashboardPresentationDataTests: XCTestCase {
         XCTAssertEqual(Set(data.offspringByDam.map(\.label)).count, 3)
     }
 
+    func testOffspringByDamLabelsStayDistinctWhenTagMatchesGeneratedSuffix() {
+        let firstID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        let secondID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+        let suffixTagID = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
+        let metrics = [
+            DashboardOffspringDamMetric(damID: firstID, damDisplayTagNumber: "12", offspringCount: 2),
+            DashboardOffspringDamMetric(damID: secondID, damDisplayTagNumber: "12", offspringCount: 1),
+            DashboardOffspringDamMetric(damID: suffixTagID, damDisplayTagNumber: "12 (1)", offspringCount: 3)
+        ]
+
+        let original = DashboardPresentationData(
+            snapshot: makeSnapshot(pastures: [], offspringByDam: metrics),
+            fieldCheckSessions: []
+        ).offspringByDam
+        let reordered = DashboardPresentationData(
+            snapshot: makeSnapshot(pastures: [], offspringByDam: metrics.reversed()),
+            fieldCheckSessions: []
+        ).offspringByDam
+
+        let labelsByID = Dictionary(uniqueKeysWithValues: original.map { ($0.id, $0.label) })
+        XCTAssertEqual(labelsByID[firstID], "12 (1) [1]")
+        XCTAssertEqual(labelsByID[secondID], "12 (2)")
+        XCTAssertEqual(labelsByID[suffixTagID], "12 (1)")
+        XCTAssertEqual(Set(original.map(\.label)).count, original.count)
+        XCTAssertEqual(
+            Dictionary(uniqueKeysWithValues: reordered.map { ($0.id, $0.label) }),
+            labelsByID
+        )
+    }
+
     private func makeSnapshot(
         pastures: [DashboardPastureItem],
         offspringByDam: [DashboardOffspringDamMetric] = []
