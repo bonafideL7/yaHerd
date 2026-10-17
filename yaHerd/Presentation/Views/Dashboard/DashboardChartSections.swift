@@ -344,6 +344,8 @@ struct DashboardChartsContent: View {
                         x: .value("Offspring", item.offspringCount),
                         y: .value("Dam", item.id.uuidString)
                     )
+                    .accessibilityLabel("Dam \(item.label)")
+                    .accessibilityValue("\(item.offspringCount) offspring")
                     .annotation(position: .trailing) {
                         Text(item.offspringCount.formatted())
                             .font(.caption.weight(.semibold))
