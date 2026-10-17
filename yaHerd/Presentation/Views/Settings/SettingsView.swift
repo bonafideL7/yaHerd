@@ -86,6 +86,7 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        .settingsSaveAndCloseToolbar()
     }
 }
 
@@ -130,6 +131,7 @@ private struct HerdSetupView: View {
             }
         }
         .navigationTitle("Herd Setup")
+        .settingsSaveAndCloseToolbar()
     }
 }
 
@@ -150,6 +152,7 @@ struct DashboardRulesView: View {
             }
         }
         .navigationTitle("Dashboard Setup")
+        .settingsSaveAndCloseToolbar()
     }
 }
 
@@ -182,6 +185,7 @@ struct PastureDefaultsView: View {
             }
         }
         .navigationTitle("Pasture Setup")
+        .settingsSaveAndCloseToolbar()
     }
 }
 
@@ -255,5 +259,29 @@ private struct AboutYaHerdView: View {
             }
         }
         .navigationTitle("About")
+        .settingsSaveAndCloseToolbar()
+    }
+
+
+private struct SettingsSaveAndCloseToolbarModifier: ViewModifier {
+    @Environment(AppNavigationState.self) private var navigation
+
+    func body(content: Content) -> some View {
+        content
+            .toolbar {
+                if navigation.presentedSheet == .settings {
+                    ToolbarItem(placement: .confirmationAction) {
+                        ToolbarDoneButton(accessibilityLabel: "Save and Close Settings") {
+                            navigation.dismissSheet()
+                        }
+                    }
+                }
+            }
+    }
+}
+
+extension View {
+    func settingsSaveAndCloseToolbar() -> some View {
+        modifier(SettingsSaveAndCloseToolbarModifier())
     }
 }
