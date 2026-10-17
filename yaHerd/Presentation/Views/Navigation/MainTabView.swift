@@ -36,7 +36,7 @@ struct MainTabView: View {
             }
         }
         .yaherdTabBarMinimizeBehavior()
-        .yaherdTabViewBottomAccessory(isVisible: showsHerdAccessory) {
+        .tabViewBottomAccessory(isEnabled: showsHerdAccessory) {
             HerdTabBottomAccessory()
         }
         .appNavigationPresentations()
@@ -71,19 +71,5 @@ struct MainTabView: View {
 private extension View {
     func yaherdTabBarMinimizeBehavior() -> some View {
         tabBarMinimizeBehavior(.onScrollDown)
-    }
-
-    @ViewBuilder
-    func yaherdTabViewBottomAccessory<Accessory: View>(
-        isVisible: Bool,
-        @ViewBuilder accessory: () -> Accessory
-    ) -> some View {
-        if isVisible {
-            tabViewBottomAccessory {
-                accessory()
-            }
-        } else {
-            self
-        }
     }
 }
