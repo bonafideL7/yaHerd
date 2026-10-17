@@ -36,7 +36,7 @@ struct MainTabView: View {
             }
         }
         .yaherdTabBarMinimizeBehavior()
-        .tabViewBottomAccessory(isEnabled: showsHerdAccessory) {
+        .yaherdTabViewBottomAccessory(isVisible: showsHerdAccessory) {
             HerdTabBottomAccessory()
         }
         .appNavigationPresentations()
@@ -71,5 +71,23 @@ struct MainTabView: View {
 private extension View {
     func yaherdTabBarMinimizeBehavior() -> some View {
         tabBarMinimizeBehavior(.onScrollDown)
+    }
+
+    // Keep TabView's modifier hierarchy stable on every tab change.
+    // The enabled overload was introduced in iOS 26.1.
+    @ViewBuilder
+    func yaherdTabViewBottomAccessory<Accessory: View>(
+        isVisible: Bool,
+        @ViewBuilder accessory: () -> Accessory
+    ) -> some View {
+        if #available(iOS 26.1, *) {
+            tabViewBottomAccessory(isEnabled: isVisible, content: accessory)
+        } else {
+            tabViewBottomAccessory {
+                if isVisible {
+                    accessory()
+                }
+            }
+        }
     }
 }
