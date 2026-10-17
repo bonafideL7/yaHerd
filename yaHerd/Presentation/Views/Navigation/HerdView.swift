@@ -12,6 +12,8 @@ struct HerdView: View {
     @Binding private var mode: HerdViewMode
     private let allowsModeSwitch: Bool
     @State private var isManagingPastures = false
+    @State private var animalListModel = AnimalListViewModel()
+    @State private var pastureListModel = PastureTileListViewModel()
 
     private let sortOrder: Binding<AnimalSortOrder>?
     private let filter: Binding<AnimalFilter>?
@@ -67,6 +69,7 @@ struct HerdView: View {
             switch mode {
             case .animals:
                 AnimalListView(
+                    viewModel: animalListModel,
                     searchText: $searchText,
                     isSearching: $isSearchPresented,
                     sortOrder: sortOrder,
@@ -84,6 +87,7 @@ struct HerdView: View {
                 )
             case .pastures:
                 PastureTileListView(
+                    model: pastureListModel,
                     isManaging: $isManagingPastures,
                     filter: pastureFilter,
                     onOpenPasture: onOpenPasture,
