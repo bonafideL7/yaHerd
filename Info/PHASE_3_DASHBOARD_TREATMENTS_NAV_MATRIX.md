@@ -1,4 +1,6 @@
-# Phase 3 navigation — behavioral coverage matrix
+# Phase 3 navigation — historical behavioral coverage matrix
+
+> **Superseded for Dashboard charts (2026-10-17):** The Dashboard chart browse menus, selected-entity actions, and cross-screen chart routing introduced in PR #190 were explicitly rejected and reverted. The live Dashboard has returned to its pre-Phase-3 chart-only behavior; see `Info/DASHBOARD_CHART_NAVIGATION_REVERT_MATRIX.md`. The **Treatment Sets changes from Phase 3 remain in effect**. The Dashboard navigation rows below document historical PR #190 design, not current functionality.
 
 This matrix precedes production edits. Phase 3 is navigation only: no analytics recalculation, repository change, data mutation, migration, or persistence change.
 
