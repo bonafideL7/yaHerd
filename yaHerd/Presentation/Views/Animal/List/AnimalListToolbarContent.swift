@@ -34,11 +34,12 @@ struct AnimalListToolbarContent: ToolbarContent {
             }
             .accessibilityLabel(sortOrder.reverseDirectionAccessibilityLabel)
             .accessibilityHint("Reverses the current animal sort direction")
-        } else if canCollapseSections && !batchMode {
+        } else if !batchMode {
             Button(action: onCollapseAllSections) {
                 Image(systemName: "rectangle.compress.vertical")
                     .font(.system(size: 17, weight: .semibold))
             }
+            .disabled(!canCollapseSections)
             .accessibilityLabel("Collapse All Sections")
             .accessibilityHint("Collapses every visible animal group")
         }
