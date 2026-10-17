@@ -91,7 +91,8 @@ final class TagColorLibraryStore: ObservableObject {
         formattedTag(tagNumber: animal.displayTagNumber, colorID: animal.displayTagColorID)
     }
 
-    func upsert(_ color: TagColorSnapshot) {
+    @discardableResult
+    func upsert(_ color: TagColorSnapshot) -> Bool {
         performRepositoryWrite("Failed to save tag color") {
             try repository.upsert(color)
         }
@@ -143,15 +144,31 @@ final class TagColorLibraryStore: ObservableObject {
         }
     }
 
-    private func performRepositoryWrite(_ failureMessage: String, operation: () throws -> Void) {
+    // Saving to Core Data and refreshing the visible library are distinct operations.
+    // A failed refresh must not make a committed write look like a failed save.
+    @discardableResult
+    private func performRepositoryWrite(
+        _ failureMessage: String,
+        operation: () throws -> Void
+    ) -> Bool {
         do {
             try operation()
-            historicalDefinitionsByID.removeAll()
-            colors = try repository.fetchColors()
-            lastErrorMessage = nil
         } catch {
             lastErrorMessage = "\(failureMessage): \(UserVisibleErrorMessage.make(error))"
+            return false
         }
+
+        do {
+            let refreshedColors = try repository.fetchColors()
+            colors = refreshedColors
+            historicalDefinitionsByID.removeAll()
+            lastErrorMessage = nil
+        } catch {
+            // Keep the last valid list and cached historical definitions until
+            // a later refresh can read the successfully committed mutation.
+            lastErrorMessage = "Changes saved, but tag colors could not be refreshed: \(UserVisibleErrorMessage.make(error))"
+        }
+        return true
     }
 
     nonisolated static func normalizedDisplayName(_ name: String) -> String {
