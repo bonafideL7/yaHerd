@@ -7,6 +7,8 @@ final class AnimalListViewModel {
     private(set) var items: [AnimalSummary] = []
     private(set) var pastureOptions: [PastureOption] = []
     private(set) var hasLoaded = false
+    private(set) var hasInitialDerivedState = false
+    private(set) var hasInitialLoadFailure = false
     private(set) var filteredAndSortedAnimals: [AnimalSummary] = []
     private(set) var groupedAnimals: [AnimalSection] = []
     private(set) var shouldUseSections = false
@@ -78,6 +80,7 @@ final class AnimalListViewModel {
         snapshotReader: (any AnimalListSnapshotReading)? = nil
     ) {
         loadGeneration += 1
+        if !hasLoaded { hasInitialLoadFailure = false }
         let generation = loadGeneration
         loadTask?.cancel()
         loadTask = nil
@@ -226,15 +229,18 @@ final class AnimalListViewModel {
             }
 
             guard !Task.isCancelled, generation == loadGeneration else { return }
+            if !hasLoaded { hasInitialDerivedState = false }
             items = loaded.0
             pastureOptions = loaded.1
             errorMessage = nil
+            hasInitialLoadFailure = false
             hasLoaded = true
             refreshLastDerivedState()
         } catch is CancellationError {
             return
         } catch {
             guard generation == loadGeneration else { return }
+            if !hasLoaded { hasInitialLoadFailure = true }
             errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
@@ -255,13 +261,16 @@ final class AnimalListViewModel {
             let loadedItems = try repository.fetchAnimals()
             let loadedPastures = try pastureRepository.fetchPastureOptions()
             guard generation == loadGeneration else { return }
+            if !hasLoaded { hasInitialDerivedState = false }
             items = loadedItems
             pastureOptions = loadedPastures
             errorMessage = nil
+            hasInitialLoadFailure = false
             hasLoaded = true
             refreshLastDerivedState()
         } catch {
             guard generation == loadGeneration else { return }
+            if !hasLoaded { hasInitialLoadFailure = true }
             errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
@@ -342,6 +351,8 @@ final class AnimalListViewModel {
     }
 
     private func applyDerivedState(_ snapshot: AnimalListDerivedStateSnapshot) {
+        // Before the first fetch, a derivation of an empty input is not a loaded empty herd.
+        guard hasLoaded else { return }
         filteredAndSortedAnimals = snapshot.filteredAndSortedAnimals
         groupedAnimals = snapshot.groupedAnimals
         shouldUseSections = snapshot.shouldUseSections
@@ -349,6 +360,7 @@ final class AnimalListViewModel {
         emptyStateConfiguration = snapshot.emptyStateConfiguration
         hasHiddenOffHerdAnimals = snapshot.hasHiddenOffHerdAnimals
         hasHiddenArchivedRecords = snapshot.hasHiddenArchivedRecords
+        hasInitialDerivedState = true
     }
 
     private func removeItems(ids: [UUID]) {
