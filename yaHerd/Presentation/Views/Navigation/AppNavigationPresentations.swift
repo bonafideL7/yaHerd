@@ -53,12 +53,6 @@ private struct AppNavigationPresentationModifier: ViewModifier {
         case .settings:
             NavigationStack {
                 SettingsView()
-                    .navigationTitle("Settings")
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            ToolbarDoneButton { navigation.dismissSheet() }
-                        }
-                    }
             }
         case .addAnimal:
             AddAnimalView()
