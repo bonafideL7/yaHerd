@@ -96,7 +96,9 @@ struct IsolatedWorkAreaView: View {
     private var content: some View {
         switch navigation.workflowRouter.route {
         case .workingSession(let sessionID):
-            WorkingSessionDetailView(sessionID: sessionID)
+            WorkingSessionDetailView(sessionID: sessionID) { deletedID in
+                navigation.handleDeletedWorkingSession(deletedID)
+            }
         case .workingSessions:
             WorkingSessionsView { sessionID in
                 navigation.workflowRouter.openWorkingSession(sessionID)
