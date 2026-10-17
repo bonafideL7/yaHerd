@@ -11,7 +11,32 @@ final class PastureTileListViewModelTests: XCTestCase {
         viewModel.load(using: repository)
 
         XCTAssertEqual(viewModel.items, [north])
+        XCTAssertTrue(viewModel.hasLoaded)
+        XCTAssertFalse(viewModel.hasInitialLoadFailure)
         XCTAssertNil(viewModel.errorMessage)
+    }
+
+    func testFirstLoadFailureCanRetryWithoutDiscardingSuccessfulSnapshot() {
+        let north = PastureTestSupport.makeSummary(name: "North")
+        let unavailable = PastureListReaderStub(result: .failure(PastureTestError.forced))
+        let available = PastureListReaderStub(result: .success([north]))
+        let model = PastureTileListViewModel()
+
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertFalse(model.hasInitialLoadFailure)
+        XCTAssertFalse(model.load(using: unavailable))
+        XCTAssertFalse(model.hasLoaded)
+        XCTAssertTrue(model.hasInitialLoadFailure)
+
+        XCTAssertTrue(model.load(using: available))
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertFalse(model.hasInitialLoadFailure)
+        XCTAssertEqual(model.items, [north])
+
+        XCTAssertFalse(model.load(using: unavailable))
+        XCTAssertTrue(model.hasLoaded)
+        XCTAssertFalse(model.hasInitialLoadFailure)
+        XCTAssertEqual(model.items, [north], "Refresh failure must not replace retained content.")
     }
 
     func testFilteredItemsUsesCentralizedPastureRules() {
