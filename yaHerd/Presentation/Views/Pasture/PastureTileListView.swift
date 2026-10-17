@@ -166,41 +166,41 @@ struct PastureTileListView: View {
 
     @ViewBuilder
     private func pastureContent(draggedPasture: Binding<PastureSummary?>) -> some View {
-            if !model.hasLoaded {
-                initialContentView
-            } else if model.items.isEmpty {
-                PastureEmptyStateView(onAddPasture: model.requestAddPasture)
-            } else if isManaging {
-                PastureManageGrid(
-                    items: model.items,
-                    draggedPasture: draggedPasture,
-                    onDelete: model.requestDelete,
-                    onBeginDrag: model.beginDragging,
-                    onMove: { source, destination in
-                        withAnimation(.snappy) {
-                            model.moveDraggedPasture(from: source, to: destination)
-                        }
-                    },
-                    onCommitMove: {
-                        model.commitDragOrder(using: repository)
+        if !model.hasLoaded {
+            initialContentView
+        } else if model.items.isEmpty {
+            PastureEmptyStateView(onAddPasture: model.requestAddPasture)
+        } else if isManaging {
+            PastureManageGrid(
+                items: model.items,
+                draggedPasture: draggedPasture,
+                onDelete: model.requestDelete,
+                onBeginDrag: model.beginDragging,
+                onMove: { source, destination in
+                    withAnimation(.snappy) {
+                        model.moveDraggedPasture(from: source, to: destination)
                     }
-                )
-            } else if filteredItems.isEmpty {
-                PastureNoMatchesStateView(filter: filterValue) {
+                },
+                onCommitMove: {
+                    model.commitDragOrder(using: repository)
+                }
+            )
+        } else if filteredItems.isEmpty {
+            PastureNoMatchesStateView(filter: filterValue) {
+                filterBinding.wrappedValue = .all
+            }
+        } else {
+            PastureTileGrid(
+                items: filteredItems,
+                filter: filterValue,
+                totalCount: model.items.count,
+                onSelect: openPasture,
+                onBeginManaging: toggleManageMode,
+                onClearFilter: {
                     filterBinding.wrappedValue = .all
                 }
-            } else {
-                PastureTileGrid(
-                    items: filteredItems,
-                    filter: filterValue,
-                    totalCount: model.items.count,
-                    onSelect: openPasture,
-                    onBeginManaging: toggleManageMode,
-                    onClearFilter: {
-                        filterBinding.wrappedValue = .all
-                    }
-                )
-            }
+            )
+        }
     }
 
     @ViewBuilder
