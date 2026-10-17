@@ -8,6 +8,7 @@ struct AnimalListAdaptiveTabAccessoryControls: View {
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
 
     @Binding var sortOrder: AnimalSortOrder
+    let onShowSort: () -> Void
     let filtersAreActive: Bool
     let activeFilterCount: Int
     let hasAnyActiveCriteria: Bool
@@ -18,6 +19,7 @@ struct AnimalListAdaptiveTabAccessoryControls: View {
         if case .some(.inline) = placement {
             AnimalListInlineTabAccessoryControls(
                 sortOrder: $sortOrder,
+                onShowSort: onShowSort,
                 filtersAreActive: filtersAreActive,
                 activeFilterCount: activeFilterCount,
                 hasAnyActiveCriteria: hasAnyActiveCriteria,
@@ -27,6 +29,7 @@ struct AnimalListAdaptiveTabAccessoryControls: View {
         } else {
             AnimalListTabAccessoryControls(
                 sortOrder: $sortOrder,
+                onShowSort: onShowSort,
                 filtersAreActive: filtersAreActive,
                 activeFilterCount: activeFilterCount,
                 hasAnyActiveCriteria: hasAnyActiveCriteria,
@@ -39,6 +42,7 @@ struct AnimalListAdaptiveTabAccessoryControls: View {
 
 struct AnimalListInlineTabAccessoryControls: View {
     @Binding var sortOrder: AnimalSortOrder
+    let onShowSort: () -> Void
     let filtersAreActive: Bool
     let activeFilterCount: Int
     let hasAnyActiveCriteria: Bool
@@ -47,9 +51,7 @@ struct AnimalListInlineTabAccessoryControls: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Menu {
-                AnimalSortMenuPicker(sortOrder: $sortOrder)
-            } label: {
+            Button(action: onShowSort) {
                 AnimalListInlineTabAccessoryActionLabel(
                     title: sortOrder.label,
                     compactTitle: "Sort",
@@ -57,6 +59,7 @@ struct AnimalListInlineTabAccessoryControls: View {
                 )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Sort Animals, currently \(sortOrder.label)")
 
             Divider()
                 .frame(height: 24)
@@ -128,6 +131,7 @@ private struct AnimalListInlineTabAccessoryActionLabel: View {
 
 struct AnimalListTabAccessoryControls: View {
     @Binding var sortOrder: AnimalSortOrder
+    let onShowSort: () -> Void
     let filtersAreActive: Bool
     let activeFilterCount: Int
     let hasAnyActiveCriteria: Bool
@@ -136,9 +140,7 @@ struct AnimalListTabAccessoryControls: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Menu {
-                AnimalSortMenuPicker(sortOrder: $sortOrder)
-            } label: {
+            Button(action: onShowSort) {
                 AnimalListTabAccessoryActionLabel(
                     title: "Sort",
                     detail: sortOrder.label,
@@ -146,6 +148,7 @@ struct AnimalListTabAccessoryControls: View {
                 )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Sort Animals, currently \(sortOrder.label)")
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider()
