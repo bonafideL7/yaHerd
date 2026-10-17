@@ -3,10 +3,7 @@ import SwiftUI
 extension HomeView {
     @ViewBuilder
     var workPenSection: some View {
-        treatmentSection
-
-        if snapshot == nil || hasWorkingPenRows {
-            HomeSection(title: "Working Pen") {
+        HomeSection(title: "Working Pen") {
                 if snapshot == nil {
                     HomeLoadingRow(title: "Loading working pen…")
                 } else {
@@ -42,25 +39,24 @@ extension HomeView {
                     }
                     .buttonStyle(.plain)
                 }
-            }
+
+            treatmentSection
         }
     }
 
     var treatmentSection: some View {
-        HomeSection(title: "Treatments") {
-            NavigationLink {
-                TreatmentTemplatesView()
-            } label: {
-                HomeListRow(
-                    title: "Treatments",
-                    subtitle: "Maintain reusable treatment sets.",
-                    systemImage: "syringe.fill",
-                    tint: .indigo,
-                    count: nil,
-                    showsChevron: true
-                )
-            }
-            .buttonStyle(.plain)
+        NavigationLink {
+            TreatmentTemplatesView()
+        } label: {
+            HomeListRow(
+                title: "Treatment Sets",
+                subtitle: "Maintain reusable treatment sets.",
+                systemImage: "syringe.fill",
+                tint: .indigo,
+                count: nil,
+                showsChevron: true
+            )
         }
+        .buttonStyle(.plain)
     }
 }
