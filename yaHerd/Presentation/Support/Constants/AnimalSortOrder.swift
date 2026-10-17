@@ -18,7 +18,7 @@ enum AnimalSortOrder: String, CaseIterable, Codable, Hashable, Sendable {
     case pasture
 
     static var menuOptions: [AnimalSortOrder] {
-        allCases
+        [.tagAscending, .birthDateNewest, .sex, .animalType, .status, .pasture]
     }
 
     var label: String {
@@ -27,6 +27,17 @@ enum AnimalSortOrder: String, CaseIterable, Codable, Hashable, Sendable {
         case .tagDescending: return "Tag (Z → A)"
         case .birthDateNewest: return "Birth Date (Newest)"
         case .birthDateOldest: return "Birth Date (Oldest)"
+        case .sex: return "Sex"
+        case .animalType: return "Animal Type"
+        case .status: return "Status"
+        case .pasture: return "Pasture"
+        }
+    }
+
+    var menuLabel: String {
+        switch self {
+        case .tagAscending, .tagDescending: return "Tag"
+        case .birthDateNewest, .birthDateOldest: return "Birth Date"
         case .sex: return "Sex"
         case .animalType: return "Animal Type"
         case .status: return "Status"
@@ -55,6 +66,22 @@ enum AnimalSortOrder: String, CaseIterable, Codable, Hashable, Sendable {
         case .animalType: return "pawprint"
         case .status: return "tag"
         case .pasture: return "leaf"
+        }
+    }
+
+    var menuSelection: AnimalSortOrder {
+        switch self {
+        case .tagAscending, .tagDescending: return .tagAscending
+        case .birthDateNewest, .birthDateOldest: return .birthDateNewest
+        case .sex, .animalType, .status, .pasture: return self
+        }
+    }
+
+    var defaultMenuSelection: AnimalSortOrder {
+        switch self {
+        case .tagAscending, .tagDescending: return .tagAscending
+        case .birthDateNewest, .birthDateOldest: return .birthDateNewest
+        case .sex, .animalType, .status, .pasture: return self
         }
     }
 
