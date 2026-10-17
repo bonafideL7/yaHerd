@@ -101,9 +101,9 @@ struct TagColorEditorView: View {
                             rgba: RGBAColor(color: color)
                         )
 
-                        tagColorLibrary.upsert(def)
-                        if let errorMessage = tagColorLibrary.lastErrorMessage {
-                            saveErrorMessage = errorMessage
+                        guard tagColorLibrary.upsert(def) else {
+                            saveErrorMessage = tagColorLibrary.lastErrorMessage
+                                ?? "The tag color could not be saved."
                             return
                         }
 
