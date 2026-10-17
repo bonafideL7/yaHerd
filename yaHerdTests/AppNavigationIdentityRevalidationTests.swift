@@ -170,7 +170,7 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
     }
 
     @MainActor
-    func testConfirmedInactiveDirectWorkflowClosesToOrigin() {
+    func testConfirmedMissingDirectWorkflowClosesToOrigin() {
         let herdID = UUID()
         let sessionID = UUID()
         let navigation = AppNavigationState()
@@ -190,7 +190,7 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
     }
 
     @MainActor
-    func testConfirmedInactiveSessionOpenedFromWorkflowListReturnsToList() {
+    func testConfirmedMissingSessionOpenedFromWorkflowListReturnsToList() {
         let herdID = UUID()
         let sessionID = UUID()
         let navigation = AppNavigationState()
@@ -210,6 +210,75 @@ final class AppNavigationIdentityRevalidationTests: XCTestCase {
         XCTAssertEqual(navigation.workflowRouter.route, .fieldCheckSessions(.flaggedAnimals))
         XCTAssertEqual(navigation.selectedTab, .home)
         XCTAssertFalse(navigation.workflowRouter.canReturnToList)
+    }
+
+    @MainActor
+    func testCompletedWorkingSessionRemainsVisibleWhenStillPresent() {
+        let sessionID = UUID()
+        let navigation = AppNavigationState()
+        navigation.openWorkArea(.session(sessionID))
+
+        let validator = StubNavigationValidator(
+            currentHerdResult: .success(UUID()),
+            workingSessionResult: .success(false),
+            workingSessionExistsResult: .success(true)
+        )
+
+        navigation.revalidateIdentityBoundState(using: validator)
+
+        XCTAssertEqual(navigation.selectedTab, .home)
+        XCTAssertEqual(navigation.fullScreenWorkflow, .workingSession)
+        XCTAssertEqual(navigation.workflowRouter.route, .workingSession(sessionID))
+    }
+
+    @MainActor
+    func testCompletedFieldCheckWithFindingsRemainsVisibleWhenStillPresent() {
+        let sessionID = UUID()
+        let findingID = UUID()
+        let navigation = AppNavigationState()
+        navigation.openFieldCheckArea(
+            .session(FieldCheckSessionLaunchConfiguration(
+                sessionID: sessionID,
+                opensFindings: true,
+                focusedFindingID: findingID
+            ))
+        )
+
+        let validator = StubNavigationValidator(
+            currentHerdResult: .success(UUID()),
+            fieldCheckSessionResult: .success(false),
+            fieldCheckSessionExistsResult: .success(true),
+            focusedFindingResult: .success(true)
+        )
+
+        navigation.revalidateIdentityBoundState(using: validator)
+
+        XCTAssertEqual(navigation.fullScreenWorkflow, .fieldCheck)
+        XCTAssertEqual(navigation.selectedTab, .home)
+        guard case .fieldCheckSession(let activeConfiguration) = navigation.workflowRouter.route else {
+            return XCTFail("Existing completed check must remain in its workflow")
+        }
+        XCTAssertEqual(activeConfiguration.sessionID, sessionID)
+        XCTAssertEqual(activeConfiguration.focusedFindingID, findingID)
+    }
+
+    @MainActor
+    func testHistoricalSessionExistenceReadFailurePreservesCurrentWorkflow() {
+        let sessionID = UUID()
+        let navigation = AppNavigationState()
+        navigation.openWorkArea(.session(sessionID))
+
+        let validator = StubNavigationValidator(
+            currentHerdResult: .success(UUID()),
+            workingSessionResult: .success(false),
+            workingSessionExistsResult: .failure(.readFailed)
+        )
+
+        navigation.revalidateIdentityBoundState(using: validator)
+
+        XCTAssertEqual(navigation.fullScreenWorkflow, .workingSession)
+        XCTAssertEqual(navigation.workflowRouter.route, .workingSession(sessionID))
+        XCTAssertEqual(navigation.selectedTab, .home)
     }
 
     @MainActor
@@ -290,6 +359,8 @@ private final class StubNavigationValidator:
     var pastureResult: Result<Bool, StubNavigationValidationError>
     var fieldCheckSessionResult: Result<Bool, StubNavigationValidationError>
     var workingSessionResult: Result<Bool, StubNavigationValidationError>
+    var fieldCheckSessionExistsResult: Result<Bool, StubNavigationValidationError>?
+    var workingSessionExistsResult: Result<Bool, StubNavigationValidationError>?
     var focusedFindingResult: Result<Bool, StubNavigationValidationError>
 
     init(
@@ -298,6 +369,8 @@ private final class StubNavigationValidator:
         pastureResult: Result<Bool, StubNavigationValidationError> = .success(true),
         fieldCheckSessionResult: Result<Bool, StubNavigationValidationError> = .success(true),
         workingSessionResult: Result<Bool, StubNavigationValidationError> = .success(true),
+        fieldCheckSessionExistsResult: Result<Bool, StubNavigationValidationError>? = nil,
+        workingSessionExistsResult: Result<Bool, StubNavigationValidationError>? = nil,
         focusedFindingResult: Result<Bool, StubNavigationValidationError> = .success(true)
     ) {
         self.currentHerdResult = currentHerdResult
@@ -305,6 +378,8 @@ private final class StubNavigationValidator:
         self.pastureResult = pastureResult
         self.fieldCheckSessionResult = fieldCheckSessionResult
         self.workingSessionResult = workingSessionResult
+        self.fieldCheckSessionExistsResult = fieldCheckSessionExistsResult
+        self.workingSessionExistsResult = workingSessionExistsResult
         self.focusedFindingResult = focusedFindingResult
     }
 
@@ -326,6 +401,14 @@ private final class StubNavigationValidator:
 
     func isActiveWorkingSession(id: UUID) throws -> Bool {
         try workingSessionResult.get()
+    }
+
+    func fieldCheckSessionExists(id: UUID) throws -> Bool {
+        try (fieldCheckSessionExistsResult ?? fieldCheckSessionResult).get()
+    }
+
+    func workingSessionExists(id: UUID) throws -> Bool {
+        try (workingSessionExistsResult ?? workingSessionResult).get()
     }
 
     func fieldCheckFindingExists(sessionID: UUID, findingID: UUID) throws -> Bool {
