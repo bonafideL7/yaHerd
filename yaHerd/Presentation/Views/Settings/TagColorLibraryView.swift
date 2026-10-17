@@ -79,6 +79,7 @@ struct TagColorLibraryView: View {
             }
         }
         .navigationTitle("Tag Colors")
+        .settingsSaveAndCloseToolbar()
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 EditButton()
