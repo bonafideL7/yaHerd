@@ -54,43 +54,9 @@ struct PastureTileListView: View {
     }
 
     var body: some View {
-        Group {
-            if !model.hasLoaded {
-                initialContentView
-            } else if model.items.isEmpty {
-                PastureEmptyStateView(onAddPasture: model.requestAddPasture)
-            } else if isManaging {
-                PastureManageGrid(
-                    items: model.items,
-                    draggedPasture: $model.draggedPasture,
-                    onDelete: model.requestDelete,
-                    onBeginDrag: model.beginDragging,
-                    onMove: { source, destination in
-                        withAnimation(.snappy) {
-                            model.moveDraggedPasture(from: source, to: destination)
-                        }
-                    },
-                    onCommitMove: {
-                        model.commitDragOrder(using: repository)
-                    }
-                )
-            } else if filteredItems.isEmpty {
-                PastureNoMatchesStateView(filter: filterValue) {
-                    filterBinding.wrappedValue = .all
-                }
-            } else {
-                PastureTileGrid(
-                    items: filteredItems,
-                    filter: filterValue,
-                    totalCount: model.items.count,
-                    onSelect: openPasture,
-                    onBeginManaging: toggleManageMode,
-                    onClearFilter: {
-                        filterBinding.wrappedValue = .all
-                    }
-                )
-            }
-        }
+        @Bindable var model = model
+
+        pastureContent(draggedPasture: $model.draggedPasture)
         .disabled(model.isDeletingPastures)
         .navigationDestination(item: $model.selectedPasture) { pasture in
             PastureDetailView(pastureID: pasture.id)
@@ -196,6 +162,45 @@ struct PastureTileListView: View {
         } message: {
             Text(model.errorMessage ?? "Unknown error")
         }
+    }
+
+    @ViewBuilder
+    private func pastureContent(draggedPasture: Binding<PastureSummary?>) -> some View {
+            if !model.hasLoaded {
+                initialContentView
+            } else if model.items.isEmpty {
+                PastureEmptyStateView(onAddPasture: model.requestAddPasture)
+            } else if isManaging {
+                PastureManageGrid(
+                    items: model.items,
+                    draggedPasture: draggedPasture,
+                    onDelete: model.requestDelete,
+                    onBeginDrag: model.beginDragging,
+                    onMove: { source, destination in
+                        withAnimation(.snappy) {
+                            model.moveDraggedPasture(from: source, to: destination)
+                        }
+                    },
+                    onCommitMove: {
+                        model.commitDragOrder(using: repository)
+                    }
+                )
+            } else if filteredItems.isEmpty {
+                PastureNoMatchesStateView(filter: filterValue) {
+                    filterBinding.wrappedValue = .all
+                }
+            } else {
+                PastureTileGrid(
+                    items: filteredItems,
+                    filter: filterValue,
+                    totalCount: model.items.count,
+                    onSelect: openPasture,
+                    onBeginManaging: toggleManageMode,
+                    onClearFilter: {
+                        filterBinding.wrappedValue = .all
+                    }
+                )
+            }
     }
 
     @ViewBuilder
