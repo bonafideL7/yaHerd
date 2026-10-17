@@ -79,6 +79,7 @@ final class HerdRouter {
     var showRemovedStatuses = false
     var showArchivedRecords = false
     var showingFilters = false
+    var showingSort = false
 
     var snapshot: HerdRouterSnapshot {
         HerdRouterSnapshot(
@@ -107,6 +108,7 @@ final class HerdRouter {
         showRemovedStatuses = snapshot.showRemovedStatuses
         showArchivedRecords = snapshot.showArchivedRecords
         showingFilters = false
+        showingSort = false
     }
 
     func showAnimals(_ configuration: AnimalListLaunchConfiguration = .active) {
@@ -119,12 +121,14 @@ final class HerdRouter {
         showArchivedRecords = configuration.showArchivedRecords
         isSearchPresented = !configuration.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         showingFilters = false
+        showingSort = false
     }
 
     func showPastures(_ configuration: PastureListLaunchConfiguration = .all) {
         path.removeAll()
         mode = .pastures
         pastureFilter = configuration.filter
+        showingSort = false
     }
 
     func path(for tab: AppTab) -> [HerdRoute] {
