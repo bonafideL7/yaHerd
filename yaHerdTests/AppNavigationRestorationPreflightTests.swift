@@ -355,4 +355,12 @@ private final class PreflightStubNavigationValidator: AppNavigationRestorationVa
     func isActiveWorkingSession(id: UUID) throws -> Bool {
         try workingSessionResult.get()
     }
+
+    func fieldCheckSessionExists(id: UUID) throws -> Bool {
+        try fieldCheckSessionResult.get()
+    }
+
+    func workingSessionExists(id: UUID) throws -> Bool {
+        try workingSessionResult.get()
+    }
 }
