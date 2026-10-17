@@ -62,7 +62,7 @@ struct SettingsView: View {
                 }
             }
 
-             Section("About") {
+            Section("About") {
                 NavigationLink {
                     AboutYaHerdView()
                 } label: {
