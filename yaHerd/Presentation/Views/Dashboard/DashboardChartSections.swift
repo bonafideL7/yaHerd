@@ -2,9 +2,16 @@ import Charts
 import SwiftUI
 
 struct DashboardChartsContent: View {
+    @Environment(AppNavigationState.self) private var navigation
+
     let data: DashboardPresentationData
     let isLoaded: Bool
     @Binding var selectedPastureName: String?
+
+    @State private var selectedAnimalTypeLabel: String?
+    @State private var selectedSexLabel: String?
+    @State private var selectedLocationLabel: String?
+    @State private var selectedDamLabel: String?
 
     private var selectedPastureUtilizationValue: DashboardPastureUtilizationValue? {
         data.selectedPastureUtilizationValue(named: selectedPastureName)
@@ -47,7 +54,29 @@ struct DashboardChartsContent: View {
                     }
                 }
                 .chartXAxisLabel("Head")
+                .chartYSelection(value: $selectedAnimalTypeLabel)
                 .frame(height: DashboardChartLayout.height(for: data.animalTypeMixValues.count))
+
+                if let selectedAnimalTypeLabel,
+                   let animalType = AnimalType.allCases.first(where: { $0.label == selectedAnimalTypeLabel }) {
+                    Button {
+                        openAnimalType(animalType)
+                    } label: {
+                        Label("View \(selectedAnimalTypeLabel) animals", systemImage: "arrow.up.right.square")
+                    }
+                }
+
+                Menu {
+                    ForEach(data.animalTypeMixValues) { item in
+                        if let animalType = AnimalType.allCases.first(where: { $0.label == item.label }) {
+                            Button("\(item.label) (\(item.count))") {
+                                openAnimalType(animalType)
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Browse by animal type", systemImage: "list.bullet")
+                }
             }
         }
     }
@@ -72,7 +101,29 @@ struct DashboardChartsContent: View {
                     }
                 }
                 .chartYAxisLabel("Head")
+                .chartXSelection(value: $selectedSexLabel)
                 .frame(height: 220)
+
+                if let selectedSexLabel,
+                   let sex = Sex.allCases.first(where: { $0.label == selectedSexLabel }) {
+                    Button {
+                        openSex(sex)
+                    } label: {
+                        Label("View \(selectedSexLabel) animals", systemImage: "arrow.up.right.square")
+                    }
+                }
+
+                Menu {
+                    ForEach(data.sexMixValues) { item in
+                        if let sex = Sex.allCases.first(where: { $0.label == item.label }) {
+                            Button("\(item.label) (\(item.count))") {
+                                openSex(sex)
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Browse by sex", systemImage: "list.bullet")
+                }
             }
         }
     }
@@ -97,7 +148,27 @@ struct DashboardChartsContent: View {
                     }
                 }
                 .chartXAxisLabel("Head")
+                .chartYSelection(value: $selectedLocationLabel)
                 .frame(height: DashboardChartLayout.height(for: data.herdLocationValues.count))
+
+                if let selectedLocationLabel,
+                   data.herdLocationValues.contains(where: { $0.label == selectedLocationLabel && $0.count > 0 }) {
+                    Button {
+                        openLocation(selectedLocationLabel)
+                    } label: {
+                        Label(locationActionTitle(selectedLocationLabel), systemImage: "arrow.up.right.square")
+                    }
+                }
+
+                Menu {
+                    ForEach(data.herdLocationValues.filter { $0.count > 0 }) { item in
+                        Button("\(item.label) (\(item.count))") {
+                            openLocation(item.label)
+                        }
+                    }
+                } label: {
+                    Label("Browse by location", systemImage: "list.bullet")
+                }
             }
         }
     }
@@ -156,10 +227,28 @@ struct DashboardChartsContent: View {
 
                 if let selectedPastureUtilizationValue {
                     DashboardPastureUtilizationSelection(value: selectedPastureUtilizationValue)
+
+                    if data.pastureUtilizationValues.filter({ $0.name == selectedPastureUtilizationValue.name }).count == 1 {
+                        Button {
+                            navigation.openPasture(selectedPastureUtilizationValue.id)
+                        } label: {
+                            Label("Open \(selectedPastureUtilizationValue.name)", systemImage: "arrow.up.right.square")
+                        }
+                    }
                 } else {
                     Text("The dashed line marks 100% of target stocking.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+
+                Menu {
+                    ForEach(data.pastureUtilizationValues) { pasture in
+                        Button("\(pasture.name) — \(pasture.acres.formatted(.number.precision(.fractionLength(1)))) acres") {
+                            navigation.openPasture(pasture.id)
+                        }
+                    }
+                } label: {
+                    Label("Open a pasture", systemImage: "list.bullet")
                 }
             }
         }
@@ -260,7 +349,27 @@ struct DashboardChartsContent: View {
                     }
                 }
                 .chartXAxisLabel("Offspring")
+                .chartYSelection(value: $selectedDamLabel)
                 .frame(height: DashboardChartLayout.height(for: data.offspringByDam.count))
+
+                if let selectedDamLabel,
+                   let dam = data.offspringByDam.first(where: { $0.label == selectedDamLabel }) {
+                    Button {
+                        navigation.openAnimal(dam.id)
+                    } label: {
+                        Label("Open dam \(dam.label)", systemImage: "arrow.up.right.square")
+                    }
+                }
+
+                Menu {
+                    ForEach(data.offspringByDam) { dam in
+                        Button("Dam \(dam.label) (\(dam.offspringCount))") {
+                            navigation.openAnimal(dam.id)
+                        }
+                    }
+                } label: {
+                    Label("Open a dam", systemImage: "list.bullet")
+                }
             }
         }
     }
@@ -283,6 +392,17 @@ struct DashboardChartsContent: View {
                 .chartYAxisLabel("Head")
                 .chartLegend(position: .bottom)
                 .frame(height: 260)
+
+                Menu {
+                    Button("Sold animals — all years") {
+                        openOutcome(.sold)
+                    }
+                    Button("Deceased animals — all years") {
+                        openOutcome(.dead)
+                    }
+                } label: {
+                    Label("Browse outcome records (all years)", systemImage: "list.bullet")
+                }
             }
         }
     }
@@ -311,6 +431,18 @@ struct DashboardChartsContent: View {
                 .chartYAxisLabel("Head")
                 .chartLegend(position: .bottom)
                 .frame(height: 260)
+
+                Menu {
+                    ForEach(data.fieldCheckHistoryValues.reversed()) { check in
+                        Button("\(check.sessionLabel) — \(check.startedAt.formatted(date: .abbreviated, time: .shortened))") {
+                            navigation.openFieldCheckArea(.session(
+                                FieldCheckSessionLaunchConfiguration(sessionID: check.id)
+                            ))
+                        }
+                    }
+                } label: {
+                    Label("Open a pasture check", systemImage: "list.bullet")
+                }
             }
         }
     }
@@ -333,8 +465,69 @@ struct DashboardChartsContent: View {
                 .chartYAxisLabel("Count")
                 .chartLegend(position: .bottom)
                 .frame(height: 260)
+
+                Menu {
+                    ForEach(data.fieldCheckOutcomeValues.filter { $0.value > 0 }) { issue in
+                        Button("\(issue.sessionLabel) — \(issue.metric) (\(issue.value))") {
+                            openCheckIssue(issue)
+                        }
+                    }
+                } label: {
+                    Label("Inspect a check issue", systemImage: "list.bullet")
+                }
             }
         }
+    }
+
+    private func openAnimalType(_ type: AnimalType) {
+        navigation.openAnimalList(AnimalListLaunchConfiguration(
+            sortOrder: .animalType,
+            filter: AnimalFilter(animalType: type)
+        ))
+    }
+
+    private func openSex(_ sex: Sex) {
+        navigation.openAnimalList(AnimalListLaunchConfiguration(
+            sortOrder: .sex,
+            filter: AnimalFilter(sex: sex)
+        ))
+    }
+
+    private func locationActionTitle(_ location: String) -> String {
+        location == "Pasture assigned" ? "Browse pastures" : "View \(location.lowercased()) animals"
+    }
+
+    private func openLocation(_ location: String) {
+        switch location {
+        case "Working pen":
+            navigation.openAnimalList(.workingPen)
+        case "Pasture unassigned":
+            navigation.openAnimalList(.missingPasture)
+        case "Pasture assigned":
+            // The current animal list filter cannot express "has a pasture".
+            // Use the pasture list rather than implying an exact animal subset.
+            navigation.openPastureList(.all)
+        default:
+            break
+        }
+    }
+
+    private func openOutcome(_ outcome: AnimalStatus) {
+        navigation.openAnimalList(AnimalListLaunchConfiguration(
+            sortOrder: .status,
+            filter: AnimalFilter(status: outcome),
+            showRemovedStatuses: true,
+            showArchivedRecords: true
+        ))
+    }
+
+    private func openCheckIssue(_ issue: DashboardFieldCheckOutcomeValue) {
+        navigation.openFieldCheckArea(.session(FieldCheckSessionLaunchConfiguration(
+            sessionID: issue.sessionID,
+            opensFindings: issue.metric == "Findings",
+            opensFlaggedRoster: issue.metric == "Flagged",
+            opensMissingRoster: issue.metric == "Missing"
+        )))
     }
 }
 
