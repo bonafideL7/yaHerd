@@ -161,8 +161,6 @@ struct HerdTabRootView: View {
 struct HerdTabBottomAccessory: View {
     @Environment(AppNavigationState.self) private var navigation
 
-    let onShowSort: () -> Void
-
     private var router: HerdRouter { navigation.herdRouter }
 
     var body: some View {
@@ -170,7 +168,7 @@ struct HerdTabBottomAccessory: View {
 
         AnimalListAdaptiveTabAccessoryControls(
             sortOrder: $router.sortOrder,
-            onShowSort: onShowSort,
+            onShowSort: { router.showingSort = true },
             filtersAreActive: filtersAreActive,
             activeFilterCount: activeFilterCount,
             hasAnyActiveCriteria: hasAnyActiveCriteria,
