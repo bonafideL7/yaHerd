@@ -47,31 +47,18 @@ struct DashboardPresentationData {
         from metrics: [DashboardOffspringDamMetric]
     ) -> [DashboardOffspringDamChartValue] {
         let metricsByDisplayTag = Dictionary(grouping: metrics, by: \.damDisplayTagNumber)
-        let originalTags = Set(metrics.map(\.damDisplayTagNumber))
-        var usedLabels = Set<String>()
 
         return metrics.map { metric in
             let matchingMetrics = (metricsByDisplayTag[metric.damDisplayTagNumber] ?? [])
                 .sorted { $0.damID.uuidString < $1.damID.uuidString }
-            let suggestedLabel: String
+            let label: String
 
             if matchingMetrics.count > 1,
                let index = matchingMetrics.firstIndex(where: { $0.damID == metric.damID }) {
-                suggestedLabel = "\(metric.damDisplayTagNumber) (\(index + 1))"
+                label = "\(metric.damDisplayTagNumber) (\(index + 1))"
             } else {
-                suggestedLabel = metric.damDisplayTagNumber
+                label = metric.damDisplayTagNumber
             }
-
-            // A free-form tag can equal another dam's generated suffix (e.g. "12 (1)").
-            // Keep chart labels distinct while chart selection always uses the dam UUID.
-            var label = suggestedLabel
-            var suffix = 1
-            while usedLabels.contains(label)
-                || (label != metric.damDisplayTagNumber && originalTags.contains(label)) {
-                label = "\(suggestedLabel) [\(suffix)]"
-                suffix += 1
-            }
-            usedLabels.insert(label)
 
             return DashboardOffspringDamChartValue(
                 id: metric.damID,
