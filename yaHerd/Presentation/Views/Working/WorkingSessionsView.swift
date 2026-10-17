@@ -91,7 +91,6 @@ struct WorkingSessionsView: View {
                 }
                 .disabled(!dataAccessMode.allowsDataMutations || isDeletingSession)
             }
-
         }
         .task {
             viewModel.configure(repository: repository)
