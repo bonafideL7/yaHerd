@@ -25,8 +25,10 @@ struct WorkingSessionDetailView: View {
     @State private var errorMessage: String?
     @State private var showingError = false
     @State private var isMutatingSession = false
+    private let onSessionDeleted: ((UUID) -> Void)?
 
-    init(sessionID: UUID) {
+    init(sessionID: UUID, onSessionDeleted: ((UUID) -> Void)? = nil) {
+        self.onSessionDeleted = onSessionDeleted
         _viewModel = StateObject(
             wrappedValue: WorkingSessionDetailViewModel(
                 sessionID: sessionID,
@@ -514,7 +516,11 @@ struct WorkingSessionDetailView: View {
 
             do {
                 try await repository.deleteSession(id: sessionID)
-                dismiss()
+                if let onSessionDeleted {
+                    onSessionDeleted(sessionID)
+                } else {
+                    dismiss()
+                }
             } catch {
                 errorMessage = UserVisibleErrorMessage.make(error)
                 showingError = true
