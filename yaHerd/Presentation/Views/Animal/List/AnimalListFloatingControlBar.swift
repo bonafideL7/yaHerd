@@ -8,6 +8,7 @@ struct AnimalListFloatingControlBar: View {
     @Binding var isSearching: Bool
     @Binding var searchText: String
     @Binding var sortOrder: AnimalSortOrder
+    let onShowSort: () -> Void
     let filtersAreActive: Bool
     let filterChipCount: Int
     let hasAnyActiveCriteria: Bool
@@ -35,14 +36,14 @@ struct AnimalListFloatingControlBar: View {
                         }
                     }
                 } else {
-                    Menu {
-                        AnimalSortMenuPicker(sortOrder: $sortOrder)
-                    } label: {
+                    Button(action: onShowSort) {
                         AnimalListFloatingControlLabel(
                             title: sortOrder.label,
                             systemImage: "arrow.up.arrow.down"
                         )
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Sort Animals, currently \(sortOrder.label)")
 
                     Button(action: onShowFilters) {
                         AnimalListFloatingControlLabel(
@@ -118,19 +119,6 @@ struct AnimalListFloatingControlBar: View {
     }
 }
 
-
-struct AnimalSortMenuPicker: View {
-    @Binding var sortOrder: AnimalSortOrder
-
-    var body: some View {
-        Picker("Sort", selection: $sortOrder) {
-            ForEach(AnimalSortOrder.menuOptions, id: \.self) { option in
-                Label(option.label, systemImage: option.menuIcon)
-                    .tag(option)
-            }
-        }
-    }
-}
 
 struct AnimalListFloatingIconControlLabel: View {
     let systemImage: String
