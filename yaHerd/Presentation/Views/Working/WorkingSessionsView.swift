@@ -38,6 +38,15 @@ struct WorkingSessionsView: View {
 
     var body: some View {
         List {
+            Section {
+                NavigationLink {
+                    TreatmentTemplatesView()
+                } label: {
+                    Label("Treatment Sets", systemImage: "syringe")
+                }
+                .disabled(isDeletingSession)
+            }
+
             if activeSessions.isEmpty && finishedSessions.isEmpty {
                 ContentUnavailableView(
                     "No working sessions",
@@ -83,15 +92,6 @@ struct WorkingSessionsView: View {
                 .disabled(!dataAccessMode.allowsDataMutations || isDeletingSession)
             }
 
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    TreatmentTemplatesView()
-                } label: {
-                    Image(systemName: "syringe")
-                }
-                .accessibilityLabel("Treatments")
-                .disabled(isDeletingSession)
-            }
         }
         .task {
             viewModel.configure(repository: repository)
