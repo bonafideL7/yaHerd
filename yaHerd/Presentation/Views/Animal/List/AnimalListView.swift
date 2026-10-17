@@ -32,7 +32,7 @@ struct AnimalListView: View {
     @Environment(ApplicationSettings.self) private var applicationSettings
     @Environment(AppNavigationState.self) private var navigation
 
-    @State private var viewModel = AnimalListViewModel()
+    private let viewModel: AnimalListViewModel
     @State private var isSeedingSampleData = false
     @State private var eligibleSampleDataRevision: UInt64?
     @State private var internalSearchText = ""
@@ -71,6 +71,7 @@ struct AnimalListView: View {
     private let onOpenSettings: () -> Void
 
     init(
+        viewModel: AnimalListViewModel = AnimalListViewModel(),
         searchText: Binding<String>? = nil,
         isSearching: Binding<Bool>? = nil,
         sortOrder: Binding<AnimalSortOrder>? = nil,
@@ -87,6 +88,7 @@ struct AnimalListView: View {
         onOpenWorkSessions: @escaping () -> Void = {},
         onOpenSettings: @escaping () -> Void = {}
     ) {
+        self.viewModel = viewModel
         self.externalSearchText = searchText
         self.externalIsSearching = isSearching
         self.externalSortOrder = sortOrder
@@ -266,7 +268,9 @@ struct AnimalListView: View {
 
     var body: some View {
         Group {
-            if filteredAndSortedAnimals.isEmpty && !inlineEntry.isActive {
+            if !viewModel.hasLoaded || !viewModel.hasInitialDerivedState {
+                initialContentView
+            } else if filteredAndSortedAnimals.isEmpty && !inlineEntry.isActive {
                 emptyStateView
             } else {
                 herdList
@@ -382,6 +386,23 @@ struct AnimalListView: View {
         .animation(.snappy, value: selectedAnimalIDs.count)
         .animation(.snappy, value: currentFilterChips.count)
         .profileBodyRecomputation("AnimalListView")
+    }
+
+    @ViewBuilder
+    private var initialContentView: some View {
+        if viewModel.hasInitialLoadFailure {
+            ContentUnavailableView {
+                Label("Unable to Load Animals", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text("The animal list could not be loaded.")
+            } actions: {
+                Button("Try Again", action: reload)
+                    .buttonStyle(.borderedProminent)
+            }
+        } else {
+            ProgressView("Loading Animals")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 
     private var herdList: some View {
