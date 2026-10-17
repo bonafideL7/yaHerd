@@ -261,7 +261,7 @@ private struct AboutYaHerdView: View {
         .navigationTitle("About")
         .settingsSaveAndCloseToolbar()
     }
-
+}
 
 private struct SettingsSaveAndCloseToolbarModifier: ViewModifier {
     @Environment(AppNavigationState.self) private var navigation
