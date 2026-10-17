@@ -11,7 +11,7 @@ struct DashboardChartsContent: View {
     @State private var selectedAnimalTypeLabel: String?
     @State private var selectedSexLabel: String?
     @State private var selectedLocationLabel: String?
-    @State private var selectedDamLabel: String?
+    @State private var selectedDamID: String?
 
     private var selectedPastureUtilizationValue: DashboardPastureUtilizationValue? {
         data.selectedPastureUtilizationValue(named: selectedPastureName)
@@ -58,6 +58,7 @@ struct DashboardChartsContent: View {
                 .frame(height: DashboardChartLayout.height(for: data.animalTypeMixValues.count))
 
                 if let selectedAnimalTypeLabel,
+                   data.animalTypeMixValues.contains(where: { $0.label == selectedAnimalTypeLabel && $0.count > 0 }),
                    let animalType = AnimalType.allCases.first(where: { $0.label == selectedAnimalTypeLabel }) {
                     Button {
                         openAnimalType(animalType)
@@ -105,6 +106,7 @@ struct DashboardChartsContent: View {
                 .frame(height: 220)
 
                 if let selectedSexLabel,
+                   data.sexMixValues.contains(where: { $0.label == selectedSexLabel && $0.count > 0 }),
                    let sex = Sex.allCases.first(where: { $0.label == selectedSexLabel }) {
                     Button {
                         openSex(sex)
@@ -340,7 +342,7 @@ struct DashboardChartsContent: View {
                 Chart(data.offspringByDam) { item in
                     BarMark(
                         x: .value("Offspring", item.offspringCount),
-                        y: .value("Dam", item.label)
+                        y: .value("Dam", item.id.uuidString)
                     )
                     .annotation(position: .trailing) {
                         Text(item.offspringCount.formatted())
@@ -349,11 +351,21 @@ struct DashboardChartsContent: View {
                     }
                 }
                 .chartXAxisLabel("Offspring")
-                .chartYSelection(value: $selectedDamLabel)
+                .chartYAxis {
+                    AxisMarks(values: data.offspringByDam.map { $0.id.uuidString }) { value in
+                        AxisValueLabel {
+                            if let damID = value.as(String.self),
+                               let dam = data.offspringByDam.first(where: { $0.id.uuidString == damID }) {
+                                Text(dam.label)
+                            }
+                        }
+                    }
+                }
+                .chartYSelection(value: $selectedDamID)
                 .frame(height: DashboardChartLayout.height(for: data.offspringByDam.count))
 
-                if let selectedDamLabel,
-                   let dam = data.offspringByDam.first(where: { $0.label == selectedDamLabel }) {
+                if let selectedDamID,
+                   let dam = data.offspringByDam.first(where: { $0.id.uuidString == selectedDamID }) {
                     Button {
                         navigation.openAnimal(dam.id)
                     } label: {
