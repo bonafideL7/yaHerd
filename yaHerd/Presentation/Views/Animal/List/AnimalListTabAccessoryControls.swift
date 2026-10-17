@@ -57,6 +57,8 @@ struct AnimalListInlineTabAccessoryControls: View {
                     compactTitle: "Sort",
                     systemImage: "arrow.up.arrow.down"
                 )
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Sort Animals, currently \(sortOrder.label)")
@@ -146,10 +148,11 @@ struct AnimalListTabAccessoryControls: View {
                     detail: sortOrder.label,
                     systemImage: "arrow.up.arrow.down"
                 )
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Sort Animals, currently \(sortOrder.label)")
-            .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider()
                 .frame(height: 32)
