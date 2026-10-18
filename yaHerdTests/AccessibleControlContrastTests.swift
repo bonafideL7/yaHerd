@@ -29,7 +29,7 @@ final class AccessibleControlContrastTests: XCTestCase {
             ]
 
             for background in backgrounds {
-                let resolved = UIColor(background).resolvedColor(with: traits)
+                let resolved = resolvedColor(background, traits: traits)
                 let ratio = try XCTUnwrap(
                     AccessibleControlContrast.contrastRatio(
                         foreground: .white,
@@ -41,6 +41,76 @@ final class AccessibleControlContrastTests: XCTestCase {
         }
     }
 
+    func testExplicitBrandAccentForegroundMatchesActualNamedAsset() throws {
+        for appearance in [UIUserInterfaceStyle.light, .dark] {
+            let scheme: ColorScheme = appearance == .dark ? .dark : .light
+            let traits = UITraitCollection(userInterfaceStyle: appearance)
+            let accent = try XCTUnwrap(
+                UIColor(named: "AccentColor", in: .main, compatibleWith: traits)
+            )
+            let semanticForeground = AccessibleControlContrast.accentForeground(in: scheme)
+            let foreground = UIColor(semanticForeground)
+            let ratio = try XCTUnwrap(
+                AccessibleControlContrast.contrastRatio(foreground: foreground, background: accent)
+            )
+            XCTAssertGreaterThanOrEqual(ratio, 4.5)
+            XCTAssertEqual(
+                semanticForeground,
+                scheme == .dark ? Color.black : Color.white
+            )
+            XCTAssertEqual(
+                AccessibleControlContrast.foreground(on: .accentColor, in: scheme),
+                semanticForeground
+            )
+        }
+    }
+
+    func testSharedIconBadgePaletteUsesReadableWhiteSymbolsInBothAppearances() throws {
+        let tints: [Color] = [.accentColor, .pink, .blue, .purple, .orange, .yellow, .red, .green, .teal]
+        for appearance in [UIUserInterfaceStyle.light, .dark] {
+            let scheme: ColorScheme = appearance == .dark ? .dark : .light
+            let traits = UITraitCollection(userInterfaceStyle: appearance)
+            for tint in tints {
+                let fill = AccessibleControlContrast.iconFill(for: tint, in: scheme)
+                let ratio = try XCTUnwrap(
+                    AccessibleControlContrast.contrastRatio(
+                        foreground: .white,
+                        background: UIColor(fill).resolvedColor(with: traits)
+                    )
+                )
+                XCTAssertGreaterThanOrEqual(ratio, 4.5)
+            }
+        }
+    }
+
+    func testTintedCardTextRemainsReadableOnGroupedCards() throws {
+        let tints: [Color] = [.accentColor, .pink, .blue, .purple, .orange, .yellow, .green, .red]
+        for appearance in [UIUserInterfaceStyle.light, .dark] {
+            let scheme: ColorScheme = appearance == .dark ? .dark : .light
+            let traits = UITraitCollection(userInterfaceStyle: appearance)
+            let cardBackground = UIColor.secondarySystemGroupedBackground.resolvedColor(with: traits)
+            for tint in tints {
+                let foreground = UIColor(AccessibleControlContrast.cardTextTint(tint, in: scheme))
+                    .resolvedColor(with: traits)
+                let ratio = try XCTUnwrap(
+                    AccessibleControlContrast.contrastRatio(
+                        foreground: foreground,
+                        background: cardBackground
+                    )
+                )
+                XCTAssertGreaterThanOrEqual(ratio, 4.5)
+            }
+        }
+    }
+
+    private func resolvedColor(_ color: Color, traits: UITraitCollection) -> UIColor {
+        if color == .accentColor {
+            return UIColor(named: "AccentColor", in: .main, compatibleWith: traits)
+                ?? UIColor(color).resolvedColor(with: traits)
+        }
+        return UIColor(color).resolvedColor(with: traits)
+    }
+
     private func assertReadableForeground(
         on background: Color,
         appearance: UIUserInterfaceStyle,
@@ -49,7 +119,7 @@ final class AccessibleControlContrastTests: XCTestCase {
     ) throws {
         let scheme: ColorScheme = appearance == .dark ? .dark : .light
         let traits = UITraitCollection(userInterfaceStyle: appearance)
-        let backgroundColor = UIColor(background).resolvedColor(with: traits)
+        let backgroundColor = resolvedColor(background, traits: traits)
         let foreground = AccessibleControlContrast.foreground(on: background, in: scheme)
         let foregroundColor = UIColor(foreground).resolvedColor(with: traits)
 
