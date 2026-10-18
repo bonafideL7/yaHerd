@@ -109,9 +109,6 @@ struct HerdView: View {
                             .labelStyle(.iconOnly)
                             .foregroundStyle(Color.accentColor)
                     }
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-                    .tint(Color.accentColor.opacity(0.16))
                     .accessibilityLabel(switchButtonAccessibilityLabel)
                 }
             }
