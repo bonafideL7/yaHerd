@@ -77,6 +77,11 @@ struct AnimalListInlineEntryRow: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        isFocused = true
+                    }
             }
 
             AnimalListInlineEntryAccessoryBar(
@@ -94,10 +99,16 @@ struct AnimalListInlineEntryRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(
+        .background {
+            // Handle taps on otherwise empty parts of the expanded row,
+            // without intercepting taps on the contextual action buttons.
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color(.secondarySystemGroupedBackground))
-        )
+                .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .onTapGesture {
+                    isFocused = true
+                }
+        }
         .task {
             isFocused = true
         }
