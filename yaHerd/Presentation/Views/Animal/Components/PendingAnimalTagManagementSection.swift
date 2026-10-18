@@ -39,7 +39,7 @@ struct PendingAnimalTagManagementSection: View {
                         } label: {
                             Label("Make Primary", systemImage: "star")
                         }
-                        .tint(.blue)
+                        .tint(AccessibleControlContrast.nativeSwipeBlue)
                     }
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {

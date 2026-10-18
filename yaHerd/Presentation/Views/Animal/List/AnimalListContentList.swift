@@ -127,7 +127,7 @@ struct AnimalListContentList: View {
                                 } label: {
                                     Label("Restore", systemImage: "arrow.uturn.backward")
                                 }
-                                .tint(.blue)
+                                .tint(AccessibleControlContrast.nativeSwipeBlue)
                             }
                         }
                         .listRowBackground(Color.clear)
