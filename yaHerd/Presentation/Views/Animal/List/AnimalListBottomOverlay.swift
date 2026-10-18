@@ -26,14 +26,14 @@ struct AnimalListBottomOverlay<BatchAction: View, FloatingControl: View>: View {
     }
 
     var body: some View {
-        if inlineEntryIsActive {
-            // Inline attributes now belong to the expanded list row.
-            EmptyView()
-        } else if batchMode {
+        if batchMode {
             bottomContainer {
                 batchActionBar()
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+        } else if inlineEntryIsActive {
+            // Inline attributes now belong to the expanded list row.
+            EmptyView()
         } else if shouldShowFloatingControlBar {
             bottomContainer {
                 floatingControlBar()
