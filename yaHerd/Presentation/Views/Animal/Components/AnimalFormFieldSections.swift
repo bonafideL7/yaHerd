@@ -152,8 +152,7 @@ struct AnimalStatusEditorSection: View {
     @Binding var reasonSold: String
     @Binding var deathDate: Date
     @Binding var causeOfDeath: String
-    
-    
+
     var body: some View {
         Group {
             switch status {
