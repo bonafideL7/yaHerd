@@ -425,6 +425,9 @@ struct AnimalListView: View {
             onStartNewInlineEntry: beginNewInlineEntry,
             onStartEditingAnimal: beginInlineEditing,
             onSubmitInlineEntry: submitInlineEntry,
+            onShowInlineSexPicker: { presentInlineEntryPicker { isShowingInlineSexPicker = true } },
+            onShowInlinePasturePicker: { presentInlineEntryPicker { isShowingInlinePasturePicker = true } },
+            onShowInlineBirthDateOptions: { presentInlineEntryPicker { isShowingInlineBirthDateOptions = true } },
             onCommitInlineEntryFocusLoss: commitInlineEntryFromFocusLoss,
             onCancelInlineEntry: cancelInlineEntry,
             onOpenInlineDetails: openInlineDetails,
@@ -464,24 +467,8 @@ struct AnimalListView: View {
             inlineEntryIsActive: inlineEntry.isActive,
             batchMode: batchMode,
             shouldShowFloatingControlBar: shouldShowFloatingControlBar,
-            inlineAccessory: { inlineEntryAccessoryBar },
             batchActionBar: { batchActionBar },
             floatingControlBar: { floatingControlBar }
-        )
-    }
-
-    private var inlineEntryAccessoryBar: some View {
-        AnimalListInlineEntryAccessoryBar(
-            text: $inlineEntry.text,
-            sex: $inlineEntry.sex,
-            birthDate: $inlineEntry.birthDate,
-            pastureID: $inlineEntry.pastureID,
-            pastureOptions: viewModel.pastureOptions,
-            isEditing: inlineEntry.isEditing,
-            onShowSexPicker: { presentInlineEntryPicker { isShowingInlineSexPicker = true } },
-            onShowPasturePicker: { presentInlineEntryPicker { isShowingInlinePasturePicker = true } },
-            onShowBirthDateOptions: { presentInlineEntryPicker { isShowingInlineBirthDateOptions = true } },
-            onSubmit: submitInlineEntry
         )
     }
 
