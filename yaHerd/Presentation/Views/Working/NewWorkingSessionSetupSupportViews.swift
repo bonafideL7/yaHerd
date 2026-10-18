@@ -88,7 +88,7 @@ struct WorkingSessionStartBar: View {
                     animalCount == 1 ? "Start Session with 1 Animal" : "Start Session with \(animalCount) Animals",
                     systemImage: "wrench.and.screwdriver.fill"
                 )
-                .readableForeground(on: .accentColor)
+                .readableAccentForeground()
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glassProminent)
