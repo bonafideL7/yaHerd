@@ -56,24 +56,8 @@ struct FieldChecksView: View {
         self.onSessionLaunch = onSessionLaunch
     }
 
-    private var allSessionGroups: FieldCheckAllSessionGroups {
-        FieldCheckAllSessionGroups(sessions: model.sessions)
-    }
-
-    private var archivedPastureSessions: [FieldCheckSessionSummary] {
-        allSessionGroups.archived
-    }
-
-    private var needsAttentionSessions: [FieldCheckSessionSummary] {
-        allSessionGroups.needsAttention
-    }
-
-    private var openCheckSessions: [FieldCheckSessionSummary] {
-        allSessionGroups.open
-    }
-
-    private var completedCheckSessions: [FieldCheckSessionSummary] {
-        allSessionGroups.completed
+    private var allTimeline: FieldCheckAllTimeline {
+        FieldCheckAllTimeline(sessions: model.sessions)
     }
 
     private var openFindingSessions: [FieldCheckSessionSummary] {
@@ -97,10 +81,7 @@ struct FieldChecksView: View {
     private var filteredIsEmpty: Bool {
         switch selectedMode {
         case .all:
-            return needsAttentionSessions.isEmpty
-            && openCheckSessions.isEmpty
-            && completedCheckSessions.isEmpty
-            && archivedPastureSessions.isEmpty
+            return allTimeline.sessions.isEmpty
         case .inProgress:
             return model.activeSessions.isEmpty
         case .openFindings:
@@ -257,52 +238,27 @@ struct FieldChecksView: View {
     @ViewBuilder
     private var allSections: some View {
         overviewSection
-        needsAttentionSection
-        openChecksSection
-        completedChecksSection
-        archivedPasturesSection
+        allChecksSection
     }
 
     private var overviewSection: some View {
         Section {
             FieldChecksOverviewCard(
-                needsAttentionCount: needsAttentionSessions.count,
-                openCheckCount: allSessionGroups.openCount,
-                completedCheckCount: allSessionGroups.completedCount,
-                archivedCheckCount: archivedPastureSessions.count
+                needsAttentionCount: allTimeline.attentionCount,
+                openCheckCount: allTimeline.openCount,
+                completedCheckCount: allTimeline.completedCount,
+                archivedCheckCount: allTimeline.archivedCount
             )
         }
     }
 
-    @ViewBuilder
-    private var needsAttentionSection: some View {
-        if !needsAttentionSessions.isEmpty {
-            Section {
-                ForEach(needsAttentionSessions) { session in
-                    fieldCheckNavigationRow(
-                        configuration: attentionLaunchConfiguration(for: session)
-                    ) {
-                        FieldCheckSessionSummaryRow(session: session, emphasis: emphasis(for: session))
-                    }
-                }
-            } header: {
-                Text("Needs Attention")
-            } footer: {
-                Text("Checks with missing animals, flagged animals, open findings, or unfinished counts.")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var openChecksSection: some View {
-        if !openCheckSessions.isEmpty {
-            Section("Open Checks") {
-                ForEach(openCheckSessions) { session in
-                    fieldCheckNavigationRow(
-                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensRemainingRoster: true)
-                    ) {
-                        FieldCheckSessionSummaryRow(session: session)
-                    }
+    private var allChecksSection: some View {
+        Section("All Checks (\(allTimeline.sessions.count))") {
+            ForEach(allTimeline.sessions) { session in
+                fieldCheckNavigationRow(
+                    configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id)
+                ) {
+                    FieldCheckSessionSummaryRow(session: session, emphasis: emphasis(for: session))
                 }
             }
         }
@@ -377,52 +333,6 @@ struct FieldChecksView: View {
     }
 
     @ViewBuilder
-    private var archivedPasturesSection: some View {
-        if !archivedPastureSessions.isEmpty {
-            Section {
-                ForEach(archivedPastureSessions) { session in
-                    fieldCheckNavigationRow(
-                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id)
-                    ) {
-                        FieldCheckSessionSummaryRow(session: session)
-                    }
-                }
-            } header: {
-                Text("Archived Pastures")
-            } footer: {
-                Text("Checks kept for pastures that are no longer active.")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var completedChecksSection: some View {
-        if !completedCheckSessions.isEmpty {
-            Section("Completed Checks") {
-                ForEach(completedCheckSessions) { session in
-                    fieldCheckNavigationRow(
-                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id)
-                    ) {
-                        FieldCheckSessionSummaryRow(session: session)
-                    }
-                }
-            }
-        }
-    }
-
-    private func attentionLaunchConfiguration(for session: FieldCheckSessionSummary) -> FieldCheckSessionLaunchConfiguration {
-        if session.openFindingsCount > 0 {
-            return FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensFindings: true)
-        } else if session.missingAnimalCount > 0 {
-            return FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensMissingRoster: true)
-        } else if session.flaggedAnimalCount > 0 {
-            return FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensFlaggedRoster: true)
-        } else {
-            return FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensRemainingRoster: true)
-        }
-    }
-
-    @ViewBuilder
     private func fieldCheckNavigationRow<Label: View>(
         configuration: FieldCheckSessionLaunchConfiguration,
         @ViewBuilder label: () -> Label
@@ -492,75 +402,40 @@ struct FieldChecksView: View {
     }
 }
 
-/// A complete, non-overlapping partition of the sessions shown by the All filter.
-struct FieldCheckAllSessionGroups {
-    let needsAttention: [FieldCheckSessionSummary]
-    let open: [FieldCheckSessionSummary]
-    let completed: [FieldCheckSessionSummary]
-    let archived: [FieldCheckSessionSummary]
-
-    // Attention is a priority group, not an additional lifecycle status.
-    var openCount: Int {
-        open.count + needsAttention.filter { !$0.isCompleted }.count
-    }
-
-    var completedCount: Int {
-        completed.count + needsAttention.filter(\.isCompleted).count
-    }
+/// The All filter is a complete timeline, not a priority-based status partition.
+struct FieldCheckAllTimeline {
+    let sessions: [FieldCheckSessionSummary]
+    let attentionCount: Int
+    let openCount: Int
+    let completedCount: Int
+    let archivedCount: Int
 
     init(sessions: [FieldCheckSessionSummary]) {
-        let current = sessions.filter { !$0.isPastureArchived }
-
-        needsAttention = current
-            .filter(Self.isAttentionSession)
-            .sorted { left, right in
-                let leftScore = Self.attentionScore(for: left)
-                let rightScore = Self.attentionScore(for: right)
-                if leftScore != rightScore {
-                    return leftScore > rightScore
-                }
-                return Self.sortedByStateThenNewest(left, right)
+        self.sessions = sessions.sorted { left, right in
+            // Keep the sorting key aligned with the date visible in the row.
+            let leftDate = left.completedAt ?? left.startedAt
+            let rightDate = right.completedAt ?? right.startedAt
+            if leftDate != rightDate {
+                return leftDate > rightDate
             }
+            if left.startedAt != right.startedAt {
+                return left.startedAt > right.startedAt
+            }
+            return left.id.uuidString < right.id.uuidString
+        }
 
-        open = current
-            .filter { !$0.isCompleted && !Self.isAttentionSession($0) }
-            .sorted { $0.startedAt > $1.startedAt }
-
-        // No history cutoff: All must include every completed check, not just the latest 12.
-        completed = current
-            .filter { $0.isCompleted && !Self.isAttentionSession($0) }
-            .sorted { ($0.completedAt ?? $0.startedAt) > ($1.completedAt ?? $1.startedAt) }
-
-        archived = sessions
-            .filter(\.isPastureArchived)
-            .sorted(by: Self.sortedByStateThenNewest)
+        let current = sessions.filter { !$0.isPastureArchived }
+        attentionCount = current.filter(Self.needsAttention).count
+        openCount = current.filter { !$0.isCompleted }.count
+        completedCount = current.filter(\.isCompleted).count
+        archivedCount = sessions.count - current.count
     }
 
-    private static func isAttentionSession(_ session: FieldCheckSessionSummary) -> Bool {
+    private static func needsAttention(_ session: FieldCheckSessionSummary) -> Bool {
         session.openFindingsCount > 0
         || session.missingAnimalCount > 0
         || session.flaggedAnimalCount > 0
         || (!session.isCompleted && session.remainingExpectedCount > 0)
-    }
-
-    private static func attentionScore(for session: FieldCheckSessionSummary) -> Int {
-        var score = 0
-        if session.missingAnimalCount > 0 { score += 400 }
-        if session.openFindingsCount > 0 { score += 300 }
-        if session.flaggedAnimalCount > 0 { score += 200 }
-        if !session.isCompleted && session.remainingExpectedCount > 0 { score += 100 }
-        return score
-    }
-
-
-    private static func sortedByStateThenNewest(
-        _ left: FieldCheckSessionSummary,
-        _ right: FieldCheckSessionSummary
-    ) -> Bool {
-        if left.isCompleted != right.isCompleted {
-            return !left.isCompleted
-        }
-        return left.startedAt > right.startedAt
     }
 }
 
