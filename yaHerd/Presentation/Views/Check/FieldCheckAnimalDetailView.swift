@@ -220,10 +220,10 @@ struct FieldCheckAnimalDetailView: View {
                 }
             } label: {
                 Label("Mark Found", systemImage: "checkmark.circle")
+                    .readableForeground(on: .accentColor)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .foregroundStyle(colorScheme == .dark ? .black : .white)
         } else if animalCheck.wasCounted {
             Button {
                 Task { @MainActor in
@@ -254,10 +254,10 @@ struct FieldCheckAnimalDetailView: View {
                     }
                 } label: {
                     Label("Mark Seen", systemImage: "checkmark.circle")
+                        .readableForeground(on: .accentColor)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .foregroundStyle(colorScheme == .dark ? .black : .white)
 
                 Button {
                     Task { @MainActor in

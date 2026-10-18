@@ -27,6 +27,7 @@ struct AnimalListBatchActionBar: View {
 
             Button(action: onMove) {
                 Label("Move", systemImage: "arrowshape.turn.up.right.circle.fill")
+                    .readableForeground(on: .accentColor)
             }
             .buttonStyle(.borderedProminent)
             .disabled(selectedCount == 0)

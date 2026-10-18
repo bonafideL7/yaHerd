@@ -42,6 +42,7 @@ struct HomeSuggestionButtonRow: View {
         ) {
             Button(action: onAction) {
                 HomeSuggestionActionLabel(title: actionTitle)
+                    .readableForeground(on: tint)
             }
             .modifier(HomeSuggestionActionButtonStyle(tint: tint))
             .accessibilityLabel(actionTitle)
@@ -92,6 +93,7 @@ struct HomeSuggestionNavigationRow<Destination: View>: View {
                 destination
             } label: {
                 HomeSuggestionActionLabel(title: actionTitle)
+                    .readableForeground(on: tint)
             }
             .modifier(HomeSuggestionActionButtonStyle(tint: tint))
             .accessibilityLabel(actionTitle)

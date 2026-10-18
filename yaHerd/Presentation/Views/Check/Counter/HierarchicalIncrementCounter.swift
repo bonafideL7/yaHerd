@@ -70,6 +70,7 @@ struct HierarchicalIncrementCounter<ID: Hashable>: View {
                 increment()
             } label: {
                 Image(systemName: "plus")
+                    .readableForeground(on: .accentColor)
                     .font(.headline)
                     .frame(width: 34, height: 34)
             }
@@ -314,6 +315,7 @@ private struct LargeCounterTapTarget: View {
                 confirmTotal()
             } label: {
                 Label("Confirm Total", systemImage: "checkmark.circle")
+                    .readableForeground(on: .accentColor)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
