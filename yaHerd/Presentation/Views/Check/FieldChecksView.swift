@@ -60,38 +60,24 @@ struct FieldChecksView: View {
         model.sessions.filter { !$0.isPastureArchived }
     }
 
+    private var allSessionGroups: FieldCheckAllSessionGroups {
+        FieldCheckAllSessionGroups(sessions: model.sessions)
+    }
+
     private var archivedPastureSessions: [FieldCheckSessionSummary] {
-        model.sessions
-            .filter(\.isPastureArchived)
-            .sorted(by: sortedByStateThenNewest)
+        allSessionGroups.archived
     }
 
     private var needsAttentionSessions: [FieldCheckSessionSummary] {
-        currentPastureSessions
-            .filter(isAttentionSession)
-            .sorted { left, right in
-                let leftScore = attentionScore(for: left)
-                let rightScore = attentionScore(for: right)
-                if leftScore != rightScore {
-                    return leftScore > rightScore
-                }
-                return sortedByStateThenNewest(left, right)
-            }
+        allSessionGroups.needsAttention
     }
 
     private var openCheckSessions: [FieldCheckSessionSummary] {
-        currentPastureSessions
-            .filter { !$0.isCompleted && !isAttentionSession($0) }
-            .sorted { $0.startedAt > $1.startedAt }
+        allSessionGroups.open
     }
 
-    private var recentCheckSessions: [FieldCheckSessionSummary] {
-        Array(
-            currentPastureSessions
-                .filter { $0.isCompleted && !isAttentionSession($0) }
-                .sorted { ($0.completedAt ?? $0.startedAt) > ($1.completedAt ?? $1.startedAt) }
-                .prefix(12)
-        )
+    private var completedCheckSessions: [FieldCheckSessionSummary] {
+        allSessionGroups.completed
     }
 
     private var openFindingSessions: [FieldCheckSessionSummary] {
@@ -117,7 +103,7 @@ struct FieldChecksView: View {
         case .all:
             return needsAttentionSessions.isEmpty
             && openCheckSessions.isEmpty
-            && recentCheckSessions.isEmpty
+            && completedCheckSessions.isEmpty
             && archivedPastureSessions.isEmpty
         case .inProgress:
             return model.activeSessions.isEmpty
@@ -277,7 +263,7 @@ struct FieldChecksView: View {
         overviewSection
         needsAttentionSection
         openChecksSection
-        recentChecksSection
+        completedChecksSection
         archivedPasturesSection
     }
 
@@ -286,7 +272,7 @@ struct FieldChecksView: View {
             FieldChecksOverviewCard(
                 needsAttentionCount: needsAttentionSessions.count,
                 openCheckCount: currentPastureSessions.filter { !$0.isCompleted }.count,
-                recentCheckCount: recentCheckSessions.count,
+                completedCheckCount: currentPastureSessions.filter(\.isCompleted).count,
                 archivedCheckCount: archivedPastureSessions.count
             )
         }
@@ -414,10 +400,10 @@ struct FieldChecksView: View {
     }
 
     @ViewBuilder
-    private var recentChecksSection: some View {
-        if !recentCheckSessions.isEmpty {
-            Section("Recent Checks") {
-                ForEach(recentCheckSessions) { session in
+    private var completedChecksSection: some View {
+        if !completedCheckSessions.isEmpty {
+            Section("Completed Checks") {
+                ForEach(completedCheckSessions) { session in
                     fieldCheckNavigationRow(
                         configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id)
                     ) {
@@ -480,30 +466,6 @@ struct FieldChecksView: View {
         }
     }
 
-    private func isAttentionSession(_ session: FieldCheckSessionSummary) -> Bool {
-        session.openFindingsCount > 0
-        || session.missingAnimalCount > 0
-        || session.flaggedAnimalCount > 0
-        || (!session.isCompleted && session.remainingExpectedCount > 0)
-    }
-
-    private func emphasis(for session: FieldCheckSessionSummary) -> FieldCheckSessionSummaryRow.Emphasis {
-        if session.missingAnimalCount > 0 { return .missing }
-        if session.openFindingsCount > 0 { return .findings }
-        if session.flaggedAnimalCount > 0 { return .flagged }
-        if !session.isCompleted && session.remainingExpectedCount > 0 { return .remaining }
-        return .standard
-    }
-
-    private func attentionScore(for session: FieldCheckSessionSummary) -> Int {
-        var score = 0
-        if session.missingAnimalCount > 0 { score += 400 }
-        if session.openFindingsCount > 0 { score += 300 }
-        if session.flaggedAnimalCount > 0 { score += 200 }
-        if !session.isCompleted && session.remainingExpectedCount > 0 { score += 100 }
-        return score
-    }
-
     private func sortedByStateThenNewest(
         _ left: FieldCheckSessionSummary,
         _ right: FieldCheckSessionSummary
@@ -526,17 +488,88 @@ struct FieldChecksView: View {
     }
 }
 
+/// A complete, non-overlapping partition of the sessions shown by the All filter.
+struct FieldCheckAllSessionGroups {
+    let needsAttention: [FieldCheckSessionSummary]
+    let open: [FieldCheckSessionSummary]
+    let completed: [FieldCheckSessionSummary]
+    let archived: [FieldCheckSessionSummary]
+
+    init(sessions: [FieldCheckSessionSummary]) {
+        let current = sessions.filter { !$0.isPastureArchived }
+
+        needsAttention = current
+            .filter(Self.isAttentionSession)
+            .sorted { left, right in
+                let leftScore = Self.attentionScore(for: left)
+                let rightScore = Self.attentionScore(for: right)
+                if leftScore != rightScore {
+                    return leftScore > rightScore
+                }
+                return Self.sortedByStateThenNewest(left, right)
+            }
+
+        open = current
+            .filter { !$0.isCompleted && !Self.isAttentionSession($0) }
+            .sorted { $0.startedAt > $1.startedAt }
+
+        // No history cutoff: All must include every completed check, not just the latest 12.
+        completed = current
+            .filter { $0.isCompleted && !Self.isAttentionSession($0) }
+            .sorted { ($0.completedAt ?? $0.startedAt) > ($1.completedAt ?? $1.startedAt) }
+
+        archived = sessions
+            .filter(\.isPastureArchived)
+            .sorted(by: Self.sortedByStateThenNewest)
+    }
+
+    private static func isAttentionSession(_ session: FieldCheckSessionSummary) -> Bool {
+        session.openFindingsCount > 0
+        || session.missingAnimalCount > 0
+        || session.flaggedAnimalCount > 0
+        || (!session.isCompleted && session.remainingExpectedCount > 0)
+    }
+
+    private static func emphasis(for session: FieldCheckSessionSummary) -> FieldCheckSessionSummaryRow.Emphasis {
+        if session.missingAnimalCount > 0 { return .missing }
+        if session.openFindingsCount > 0 { return .findings }
+        if session.flaggedAnimalCount > 0 { return .flagged }
+        if !session.isCompleted && session.remainingExpectedCount > 0 { return .remaining }
+        return .standard
+    }
+
+    private static func attentionScore(for session: FieldCheckSessionSummary) -> Int {
+        var score = 0
+        if session.missingAnimalCount > 0 { score += 400 }
+        if session.openFindingsCount > 0 { score += 300 }
+        if session.flaggedAnimalCount > 0 { score += 200 }
+        if !session.isCompleted && session.remainingExpectedCount > 0 { score += 100 }
+        return score
+    }
+
+
+    private static func sortedByStateThenNewest(
+        _ left: FieldCheckSessionSummary,
+        _ right: FieldCheckSessionSummary
+    ) -> Bool {
+        if left.isCompleted != right.isCompleted {
+            return !left.isCompleted
+        }
+        return left.startedAt > right.startedAt
+    }
+}
+
 private struct FieldChecksOverviewCard: View {
     let needsAttentionCount: Int
     let openCheckCount: Int
-    let recentCheckCount: Int
+    let completedCheckCount: Int
     let archivedCheckCount: Int
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 10)], alignment: .leading, spacing: 10) {
             FieldChecksOverviewMetric(title: "Attention", value: needsAttentionCount, tint: needsAttentionCount > 0 ? .orange : .primary)
             FieldChecksOverviewMetric(title: "Open", value: openCheckCount, tint: openCheckCount > 0 ? .accentColor : .primary)
-            FieldChecksOverviewMetric(title: "Recent", value: recentCheckCount, tint: .primary)
+            FieldChecksOverviewMetric(title: "Completed", value: completedCheckCount, tint: .primary)
             if archivedCheckCount > 0 {
                 FieldChecksOverviewMetric(title: "Archived", value: archivedCheckCount, tint: .primary)
             }
