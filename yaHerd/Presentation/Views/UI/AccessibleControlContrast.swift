@@ -3,6 +3,16 @@ import UIKit
 
 /// Picks the higher-contrast system foreground for an opaque color fill.
 enum AccessibleControlContrast {
+    /// Native swipe actions use system-owned white labels; their fill must be dark enough.
+    static let nativeSwipeBlue = Color(red: 19.0 / 255, green: 90.0 / 255, blue: 158.0 / 255)
+    static let nativeSwipeOrange = Color(red: 154.0 / 255, green: 75.0 / 255, blue: 0)
+
+    static func nativeSwipeAccent(in scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color(red: 40.0 / 255, green: 117.0 / 255, blue: 75.0 / 255)
+            : .accentColor
+    }
+
     static func foreground(on background: Color, in colorScheme: ColorScheme) -> Color {
         let traits = UITraitCollection(
             userInterfaceStyle: colorScheme == .dark ? .dark : .light

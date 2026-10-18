@@ -70,7 +70,7 @@ struct AnimalTagManagementSection: View {
                 } label: {
                     Label("Make Primary", systemImage: "star")
                 }
-                .tint(.blue)
+                .tint(AccessibleControlContrast.nativeSwipeBlue)
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -184,7 +184,7 @@ struct DraftAnimalTagManagementSection: View {
                 } label: {
                     Label("Make Primary", systemImage: "star")
                 }
-                .tint(.blue)
+                .tint(AccessibleControlContrast.nativeSwipeBlue)
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {

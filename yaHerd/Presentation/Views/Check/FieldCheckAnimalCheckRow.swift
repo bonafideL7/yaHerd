@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FieldCheckAnimalCheckRow: View {
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
+    @Environment(\.colorScheme) private var colorScheme
 
     let sessionID: UUID
     let check: FieldCheckAnimalCheckSnapshot
@@ -20,7 +21,7 @@ struct FieldCheckAnimalCheckRow: View {
                         Button(primaryActionTitle) {
                             onToggleCounted()
                         }
-                        .tint(primaryActionTint)
+                        .tint(AccessibleControlContrast.nativeSwipeAccent(in: colorScheme))
                     }
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -28,13 +29,13 @@ struct FieldCheckAnimalCheckRow: View {
                         Button("Finding") {
                             onAddFinding(animalID)
                         }
-                        .tint(.blue)
+                        .tint(AccessibleControlContrast.nativeSwipeBlue)
                     }
 
                     Button(missingActionTitle) {
                         onToggleMissing()
                     }
-                    .tint(.orange)
+                    .tint(AccessibleControlContrast.nativeSwipeOrange)
                 }
                 .contextMenu {
                     if !isCountedByQuickCount {
