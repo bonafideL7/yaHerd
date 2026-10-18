@@ -4,6 +4,8 @@
 
 import SwiftUI
 
+// The existing quick-entry attributes live with the active animal row,
+// rather than occupying a separate bottom safe-area accessory.
 struct AnimalListInlineEntryAccessoryBar: View {
     @Binding var text: String
     @Binding var sex: Sex
@@ -17,7 +19,7 @@ struct AnimalListInlineEntryAccessoryBar: View {
     let onSubmit: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             accessoryButton(
                 systemName: "figure.stand",
                 accessibilityLabel: "Sex",
@@ -39,21 +41,22 @@ struct AnimalListInlineEntryAccessoryBar: View {
                 action: onShowBirthDateOptions
             )
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 8)
 
             Button(action: onSubmit) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title3.weight(.semibold))
-                    .frame(width: 44, height: 40)
-                    .contentShape(Rectangle())
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.accentColor)
+            .background(.thinMaterial, in: Circle())
             .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityLabel(isEditing ? "Save animal" : "Add animal")
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.top, 6)
         .frame(maxWidth: .infinity)
-        .background(.bar, in: Capsule())
     }
 
     private var selectedPastureLabel: String {
@@ -70,11 +73,12 @@ struct AnimalListInlineEntryAccessoryBar: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.title3)
-                .frame(width: 44, height: 40)
-                .contentShape(Rectangle())
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
+        .background(.thinMaterial, in: Circle())
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(accessibilityValue)
     }
