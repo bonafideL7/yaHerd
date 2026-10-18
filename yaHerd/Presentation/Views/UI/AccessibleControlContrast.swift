@@ -92,10 +92,12 @@ enum AccessibleControlContrast {
 
     private static func resolved(_ color: Color, in scheme: ColorScheme) -> UIColor {
         if color == .accentColor {
-            return UIColor(named: "AccentColor", in: .main, compatibleWith: traits(for: scheme))
-                ?? (scheme == .dark
-                    ? UIColor(red: 0.761, green: 0.834, blue: 0.702, alpha: 1)
-                    : UIColor(red: 0.158, green: 0, blue: 0.074, alpha: 1))
+            let traits = traits(for: scheme)
+            let fallback = scheme == .dark
+                ? UIColor(red: 0.761, green: 0.834, blue: 0.702, alpha: 1)
+                : UIColor(red: 0.158, green: 0, blue: 0.074, alpha: 1)
+            return (UIColor(named: "AccentColor", in: .main, compatibleWith: traits) ?? fallback)
+                .resolvedColor(with: traits)
         }
         return UIColor(color).resolvedColor(with: traits(for: scheme))
     }
