@@ -11,6 +11,9 @@ struct AnimalListInlineEntryRow: View {
     let helperText: String
     let focusRequestID: UUID
     let onSubmit: () -> Void
+    let onShowSexPicker: () -> Void
+    let onShowPasturePicker: () -> Void
+    let onShowBirthDateOptions: () -> Void
     let onCommitFocusLoss: () -> Void
     let onCancel: () -> Void
     let detailsAnimalID: UUID?
@@ -64,6 +67,10 @@ struct AnimalListInlineEntryRow: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                isFocused = true
+            }
 
             if mode == .new {
                 Text(helperText)
@@ -71,13 +78,26 @@ struct AnimalListInlineEntryRow: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            AnimalListInlineEntryAccessoryBar(
+                text: $text,
+                sex: $sex,
+                birthDate: $birthDate,
+                pastureID: $pastureID,
+                pastureOptions: pastureOptions,
+                isEditing: mode == .edit,
+                onShowSexPicker: onShowSexPicker,
+                onShowPasturePicker: onShowPasturePicker,
+                onShowBirthDateOptions: onShowBirthDateOptions,
+                onSubmit: onSubmit
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            isFocused = true
-        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+        )
         .task {
             isFocused = true
         }
