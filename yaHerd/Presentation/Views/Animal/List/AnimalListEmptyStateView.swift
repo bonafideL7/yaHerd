@@ -8,7 +8,6 @@ struct AnimalListEmptyStateView: View {
     let hasHiddenArchivedRecords: Bool
     let showRemovedStatuses: Bool
     let showArchivedRecords: Bool
-    let colorScheme: ColorScheme
     let onAddAnimal: () -> Void
     let onAddSampleData: (() -> Void)?
     let onAddLargeSampleData: (() -> Void)?
@@ -33,10 +32,12 @@ struct AnimalListEmptyStateView: View {
             Text(configuration.description)
         } actions: {
             if !hasItems {
-                Button("Add Animal", action: onAddAnimal)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isSeedingSampleData)
-                    .foregroundStyle(colorScheme == .dark ? .black : .white)
+                Button(action: onAddAnimal) {
+                    Text("Add Animal")
+                        .readableForeground(on: .accentColor)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isSeedingSampleData)
                     .disabledWhenDataReadOnly()
                 if let onAddSampleData {
                     Button("Add Sample Data", action: onAddSampleData)

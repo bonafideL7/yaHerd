@@ -27,7 +27,6 @@ struct AnimalListView: View {
     private var sampleDataAvailabilityKey: String {
         "\(viewModel.hasLoaded):\(viewModel.items.isEmpty):\(viewModel.pastureOptions.isEmpty):\(animalDependencies.mutationStream.animalRevision)"
     }
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @Environment(ApplicationSettings.self) private var applicationSettings
     @Environment(AppNavigationState.self) private var navigation
@@ -396,8 +395,11 @@ struct AnimalListView: View {
             } description: {
                 Text("The animal list could not be loaded.")
             } actions: {
-                Button("Try Again", action: reload)
-                    .buttonStyle(.borderedProminent)
+                Button(action: reload) {
+                    Text("Try Again")
+                        .readableForeground(on: .accentColor)
+                }
+                .buttonStyle(.borderedProminent)
             }
         } else {
             ProgressView("Loading Animals")
@@ -450,7 +452,6 @@ struct AnimalListView: View {
             hasHiddenArchivedRecords: hasHiddenArchivedRecords,
             showRemovedStatuses: showRemovedStatusesValue,
             showArchivedRecords: showArchivedRecordsValue,
-            colorScheme: colorScheme,
             onStartInlineEntry: beginNewInlineEntry,
             onAddAnimal: presentAddAnimal,
             onAddSampleData: canOfferSampleData ? { seedSampleData(large: false) } : nil,
