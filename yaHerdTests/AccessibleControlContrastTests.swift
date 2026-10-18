@@ -83,6 +83,26 @@ final class AccessibleControlContrastTests: XCTestCase {
         }
     }
 
+    func testProminentSuggestionTintContrastsWithAppearanceText() throws {
+        let tints: [Color] = [.green, .blue, .purple, .orange, .yellow, .brown, .pink]
+        for appearance in [UIUserInterfaceStyle.light, .dark] {
+            let scheme: ColorScheme = appearance == .dark ? .dark : .light
+            let traits = UITraitCollection(userInterfaceStyle: appearance)
+            let textColor: UIColor = appearance == .dark ? .white : .black
+
+            for tint in tints {
+                let fill = AccessibleControlContrast.prominentActionTint(tint, in: scheme)
+                let ratio = try XCTUnwrap(
+                    AccessibleControlContrast.contrastRatio(
+                        foreground: textColor,
+                        background: UIColor(fill).resolvedColor(with: traits)
+                    )
+                )
+                XCTAssertGreaterThanOrEqual(ratio, 4.5)
+            }
+        }
+    }
+
     func testTintedCardTextRemainsReadableOnGroupedCards() throws {
         let tints: [Color] = [.accentColor, .pink, .blue, .purple, .orange, .yellow, .green, .red]
         for appearance in [UIUserInterfaceStyle.light, .dark] {
