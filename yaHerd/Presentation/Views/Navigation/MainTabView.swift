@@ -36,7 +36,7 @@ struct MainTabView: View {
             }
         }
         .yaherdTabBarMinimizeBehavior()
-        .yaherdTabViewBottomAccessory(isVisible: showsHerdAccessory) {
+        .yaherdTabViewBottomAccessory(isVisible: navigation.showsAnimalListAccessory) {
             HerdTabBottomAccessory()
         }
         .appNavigationPresentations()
@@ -45,11 +45,6 @@ struct MainTabView: View {
                 navigation.selectedTab = .home
             }
         }
-    }
-
-    private var showsHerdAccessory: Bool {
-        navigation.selectedTab == .search
-            || (navigation.selectedTab == .herd && navigation.herdRouter.mode == .animals)
     }
 
     @ViewBuilder
