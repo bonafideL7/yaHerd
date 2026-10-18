@@ -49,7 +49,7 @@ struct DashboardLifecycleTile: View {
         VStack(alignment: .leading, spacing: 12) {
             Image(systemName: metric.systemImage)
                 .font(.headline)
-                .foregroundStyle(.white)
+                .readableForeground(on: .accentColor)
                 .frame(width: 34, height: 34)
                 .background(Circle().fill(Color.accentColor))
 

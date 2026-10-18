@@ -182,7 +182,7 @@ struct HomeSuggestionIcon: View {
     var body: some View {
         Image(systemName: systemImage)
             .font(.headline.weight(.semibold))
-            .foregroundStyle(.white)
+            .readableForeground(on: tint)
             .frame(width: 34, height: 34)
             .background(Circle().fill(tint))
             .shadow(color: tint.opacity(0.25), radius: 8, y: 4)
@@ -216,6 +216,7 @@ struct HomeSuggestionActionButtonStyle: ViewModifier {
             .buttonBorderShape(.capsule)
             .controlSize(.small)
             .tint(tint)
+            .readableForeground(on: tint)
     }
 }
 

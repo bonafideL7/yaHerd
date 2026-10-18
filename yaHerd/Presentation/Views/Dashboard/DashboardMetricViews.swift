@@ -82,7 +82,7 @@ private struct DashboardMetricCard: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 icon
-                    .foregroundStyle(.white)
+                    .readableForeground(on: item.tint)
                     .frame(width: 34, height: 34)
                     .background(Circle().fill(item.tint))
 

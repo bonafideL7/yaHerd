@@ -98,7 +98,7 @@ struct RecoveryModePersistentBanner: View {
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
     .frame(minHeight: 58)
-    .foregroundStyle(.white)
+    .readableForeground(on: .red)
     .background(.red)
     .accessibilityElement(children: .contain)
   }
