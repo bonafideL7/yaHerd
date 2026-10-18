@@ -127,7 +127,12 @@ struct FieldCheckSessionSetupView: View {
                 .labelsHidden()
             }
 
-            TextField("Opening notes", text: $notes, axis: .vertical)
+            TextField(
+                "Opening notes",
+                text: $notes,
+                prompt: Text("Opening notes").foregroundColor(Color(.secondaryLabel)),
+                axis: .vertical
+            )
                 .lineLimit(3...5)
         } header: {
             Text("Check Details")

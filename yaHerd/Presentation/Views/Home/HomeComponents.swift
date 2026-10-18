@@ -86,7 +86,7 @@ struct HomeActionCardView: View {
 
                 Image(systemName: "chevron.right")
                     .font(.headline.weight(.semibold))
-                    .foregroundStyle(Color.tertiary)
+                    .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -184,7 +184,7 @@ struct HomeListRow: View {
             if showsChevron {
                 Image(systemName: "chevron.right")
                     .font(.headline.weight(.semibold))
-                    .foregroundStyle(Color.tertiary)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 16)
