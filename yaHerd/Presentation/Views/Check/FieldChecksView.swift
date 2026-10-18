@@ -717,5 +717,6 @@ private struct FieldCheckSessionSummaryRow: View {
             }
         }
         .padding(.vertical, 6)
+        .contentShape(Rectangle())
     }
 }
