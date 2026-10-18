@@ -10,7 +10,6 @@ struct AnimalEditorSections: View {
 
     let editorContext: AnimalEditorContext
     let pastures: [PastureOption]
-    let statusReferences: [AnimalStatusReferenceOption]
     let tagDetail: AnimalDetailSnapshot?
     let tagActions: AnimalTagManagementActions?
     let pendingTags: Binding<[AnimalTagSnapshot]>?
@@ -23,12 +22,6 @@ struct AnimalEditorSections: View {
     let onAddDraftTag: (() -> Void)?
     let onEditDraftTag: ((AnimalTagSnapshot) -> Void)?
     let scrollTarget: AnimalEditorScrollTarget?
-
-    private var availableStatusReferences: [AnimalStatusReferenceOption] {
-        statusReferences
-            .filter { $0.baseStatus == draft.status }
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-    }
 
     var body: some View {
         Group {
@@ -63,13 +56,11 @@ struct AnimalEditorSections: View {
 
             AnimalStatusEditorSection(
                 status: $draft.status,
-                statusReferenceID: $draft.statusReferenceID,
                 saleDate: $draft.saleDate,
                 salePriceText: $draft.salePriceText,
                 reasonSold: $draft.reasonSold,
                 deathDate: $draft.deathDate,
-                causeOfDeath: $draft.causeOfDeath,
-                availableStatusReferences: availableStatusReferences
+                causeOfDeath: $draft.causeOfDeath
             )
             .id(scrollTarget)
         }
