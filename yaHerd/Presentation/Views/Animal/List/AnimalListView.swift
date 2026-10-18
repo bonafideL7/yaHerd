@@ -584,6 +584,17 @@ struct AnimalListView: View {
     }
 
     private func toggleBatchMode() {
+        if !batchMode && inlineEntry.isActive {
+            // Finish the same draft that a normal focus loss would commit.
+            // An unsuccessful write keeps editing open instead of hiding it in selection mode.
+            if inlineEntry.trimmedText.isEmpty {
+                inlineEntry.cancel()
+            } else {
+                commitInlineEntry(startNewEntryAfterCreate: false)
+                guard !inlineEntry.isActive else { return }
+            }
+        }
+
         withAnimation(.snappy) {
             batchMode.toggle()
             if !batchMode {
