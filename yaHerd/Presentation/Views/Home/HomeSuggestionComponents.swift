@@ -216,7 +216,6 @@ struct HomeSuggestionActionButtonStyle: ViewModifier {
             .buttonBorderShape(.capsule)
             .controlSize(.small)
             .tint(tint)
-            .readableForeground(on: tint)
     }
 }
 
