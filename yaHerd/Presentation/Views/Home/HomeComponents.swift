@@ -70,6 +70,7 @@ struct HomeActionCardView: View {
     let systemImage: String
     let tint: Color
     let actionTitle: String
+    var showsChevron = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -80,9 +81,11 @@ struct HomeActionCardView: View {
 
                 Spacer(minLength: 8)
 
-                Image(systemName: "chevron.right")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                if showsChevron {
+                    Image(systemName: "chevron.right")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
             }
 
             VStack(alignment: .leading, spacing: 2) {
