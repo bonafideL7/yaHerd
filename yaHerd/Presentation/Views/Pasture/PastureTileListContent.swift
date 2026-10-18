@@ -11,7 +11,7 @@ struct PastureEmptyStateView: View {
         } actions: {
             Button(action: onAddPasture) {
                 Text("Add Pasture")
-                    .readableForeground(on: .accentColor)
+                    .readableAccentForeground()
             }
             .buttonStyle(.borderedProminent)
                 .disabledWhenDataReadOnly()
@@ -32,7 +32,7 @@ struct PastureNoMatchesStateView: View {
         } actions: {
             Button(action: onClearFilter) {
                 Text("Clear")
-                    .readableForeground(on: .accentColor)
+                    .readableAccentForeground()
             }
             .buttonStyle(.borderedProminent)
         }
@@ -48,7 +48,7 @@ struct PastureAddButton: View {
                 .font(.title2.weight(.semibold))
                 .frame(width: 58, height: 58)
                 .background(Circle().fill(Color.accentColor))
-                .readableForeground(on: .accentColor)
+                .readableAccentForeground()
                 .shadow(color: .black.opacity(0.16), radius: 16, y: 8)
         }
         .accessibilityLabel("Add Pasture")

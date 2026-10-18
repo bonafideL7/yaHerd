@@ -12,7 +12,7 @@ struct PastureTileToolbar: View {
         if isManaging {
             Button(action: onToggleManageMode) {
                 Image(systemName: "checkmark")
-                    .readableForeground(on: .accentColor)
+                    .readableAccentForeground()
                     .font(.system(size: 17, weight: .semibold))
             }
             .buttonStyle(.borderedProminent)

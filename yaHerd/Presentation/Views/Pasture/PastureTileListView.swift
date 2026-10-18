@@ -215,7 +215,7 @@ struct PastureTileListView: View {
                     _ = model.load(using: repository)
                 } label: {
                     Text("Try Again")
-                        .readableForeground(on: .accentColor)
+                        .readableAccentForeground()
                 }
                 .buttonStyle(.borderedProminent)
             }

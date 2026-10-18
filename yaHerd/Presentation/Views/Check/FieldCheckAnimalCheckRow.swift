@@ -132,7 +132,7 @@ struct FieldCheckAnimalCheckRow: View {
                 onToggleCounted()
             } label: {
                 Text(primaryActionTitle)
-                    .readableForeground(on: primaryActionTint)
+                    .readableAccentForeground()
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
             }
