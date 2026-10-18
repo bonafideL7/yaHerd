@@ -217,7 +217,6 @@ struct AnimalDetailView: View {
             activeParentPicker: $activeParentPicker,
             editorContext: viewModel.form.context,
             pastures: viewModel.form.pastureOptions,
-            statusReferences: viewModel.form.statusReferenceOptions,
             tagDetail: nil,
             tagActions: nil,
             pendingTags: nil,
