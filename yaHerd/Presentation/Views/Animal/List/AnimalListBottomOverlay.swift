@@ -4,11 +4,10 @@
 
 import SwiftUI
 
-struct AnimalListBottomOverlay<InlineAccessory: View, BatchAction: View, FloatingControl: View>: View {
+struct AnimalListBottomOverlay<BatchAction: View, FloatingControl: View>: View {
     let inlineEntryIsActive: Bool
     let batchMode: Bool
     let shouldShowFloatingControlBar: Bool
-    let inlineAccessory: () -> InlineAccessory
     let batchActionBar: () -> BatchAction
     let floatingControlBar: () -> FloatingControl
 
@@ -16,24 +15,20 @@ struct AnimalListBottomOverlay<InlineAccessory: View, BatchAction: View, Floatin
         inlineEntryIsActive: Bool,
         batchMode: Bool,
         shouldShowFloatingControlBar: Bool,
-        @ViewBuilder inlineAccessory: @escaping () -> InlineAccessory,
         @ViewBuilder batchActionBar: @escaping () -> BatchAction,
         @ViewBuilder floatingControlBar: @escaping () -> FloatingControl
     ) {
         self.inlineEntryIsActive = inlineEntryIsActive
         self.batchMode = batchMode
         self.shouldShowFloatingControlBar = shouldShowFloatingControlBar
-        self.inlineAccessory = inlineAccessory
         self.batchActionBar = batchActionBar
         self.floatingControlBar = floatingControlBar
     }
 
     var body: some View {
         if inlineEntryIsActive {
-            bottomContainer {
-                inlineAccessory()
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+            // Inline attributes now belong to the expanded list row.
+            EmptyView()
         } else if batchMode {
             bottomContainer {
                 batchActionBar()
