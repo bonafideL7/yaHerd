@@ -128,7 +128,7 @@ struct HomeAlertsView: View {
             if showsChevron {
                 Image(systemName: "chevron.right")
                     .font(.headline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
             }
         }
         .contentShape(Rectangle())
