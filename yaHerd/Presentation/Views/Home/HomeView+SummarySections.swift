@@ -12,54 +12,40 @@ extension HomeView {
 
     @ViewBuilder
     var pastureCheckActionCard: some View {
-        let isAvailable = snapshot != nil && !pastureCheckStartPastures.isEmpty
-        let card = HomeActionCardView(
-            title: "Pasture Check",
-            subtitle: "Start a pasture check",
-            systemImage: "checklist",
-            tint: .purple,
-            actionTitle: pastureCheckActionTitle,
-            showsChevron: isAvailable
-        )
-
-        if isAvailable {
-            NavigationLink {
-                HomePastureCheckStartListView(pastures: pastureCheckStartPastures) { sessionID in
-                    openFieldCheckArea(.session(FieldCheckSessionLaunchConfiguration(sessionID: sessionID)))
-                }
-            } label: {
-                card
+        NavigationLink {
+            HomePastureCheckStartListView(pastures: pastureCheckStartPastures) { sessionID in
+                openFieldCheckArea(.session(FieldCheckSessionLaunchConfiguration(sessionID: sessionID)))
             }
-            .buttonStyle(.plain)
-        } else {
-            card
+        } label: {
+            HomeActionCardView(
+                title: "Pasture Check",
+                subtitle: "Start a pasture check",
+                systemImage: "checklist",
+                tint: .purple,
+                actionTitle: pastureCheckActionTitle
+            )
         }
+        .buttonStyle(.plain)
+        .disabled(snapshot == nil || pastureCheckStartPastures.isEmpty)
     }
 
     @ViewBuilder
     var startWorkingSessionActionCard: some View {
-        let isAvailable = snapshot != nil && hasActiveAnimals
-        let card = HomeActionCardView(
-            title: "Work animals",
-            subtitle: "Collect animals and track work",
-            systemImage: "plus.circle.fill",
-            tint: .blue,
-            actionTitle: workAnimalsActionTitle,
-            showsChevron: isAvailable
-        )
-
-        if isAvailable {
-            NavigationLink {
-                WorkingSessionPastureStartListView(hasActiveAnimals: hasActiveAnimals) { sessionID in
-                    openWorkArea(.session(sessionID))
-                }
-            } label: {
-                card
+        NavigationLink {
+            WorkingSessionPastureStartListView(hasActiveAnimals: hasActiveAnimals) { sessionID in
+                openWorkArea(.session(sessionID))
             }
-            .buttonStyle(.plain)
-        } else {
-            card
+        } label: {
+            HomeActionCardView(
+                title: "Work animals",
+                subtitle: "Collect animals and track work",
+                systemImage: "plus.circle.fill",
+                tint: .blue,
+                actionTitle: workAnimalsActionTitle
+            )
         }
+        .buttonStyle(.plain)
+        .disabled(snapshot == nil || !hasActiveAnimals)
     }
 
     @ViewBuilder
