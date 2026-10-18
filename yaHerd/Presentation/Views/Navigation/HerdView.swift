@@ -107,11 +107,11 @@ struct HerdView: View {
                     } label: {
                         Label(switchButtonTitle, systemImage: switchButtonSystemImage)
                             .labelStyle(.iconOnly)
-                            .readableAccentForeground()
+                            .foregroundStyle(Color.accentColor)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glass)
                     .buttonBorderShape(.circle)
-                    .tint(.accentColor)
+                    .tint(Color.accentColor.opacity(0.16))
                     .accessibilityLabel(switchButtonAccessibilityLabel)
                 }
             }
