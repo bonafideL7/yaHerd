@@ -489,6 +489,7 @@ private struct WorkingFinishSessionActionBar: View {
 
             Button(action: onFinish) {
                 Label("Finish Session", systemImage: "checkmark.circle.fill")
+                    .readableForeground(on: .accentColor)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glassProminent)
