@@ -42,7 +42,6 @@ struct HomeSuggestionButtonRow: View {
         ) {
             Button(action: onAction) {
                 HomeSuggestionActionLabel(title: actionTitle)
-                    .readableForeground(on: tint)
             }
             .modifier(HomeSuggestionActionButtonStyle(tint: tint))
             .accessibilityLabel(actionTitle)
@@ -93,7 +92,6 @@ struct HomeSuggestionNavigationRow<Destination: View>: View {
                 destination
             } label: {
                 HomeSuggestionActionLabel(title: actionTitle)
-                    .readableForeground(on: tint)
             }
             .modifier(HomeSuggestionActionButtonStyle(tint: tint))
             .accessibilityLabel(actionTitle)
@@ -204,12 +202,15 @@ struct HomeSuggestionActionLabel: View {
         .padding(.horizontal, 4)
         .padding(.vertical, 1)
         .frame(minWidth: 74)
+        // Match the card title: black in Light Mode and white in Dark Mode.
+        .foregroundStyle(.primary)
     }
 }
 
-/// Keep prominent suggestion actions tinted while deriving foreground
-/// contrast from the same tint in each appearance.
+/// Preserve the prominent colored capsule but adjust its tint, if necessary,
+/// so the primary label and arrow remain readable in either appearance.
 struct HomeSuggestionActionButtonStyle: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
     let tint: Color
 
     func body(content: Content) -> some View {
@@ -217,7 +218,7 @@ struct HomeSuggestionActionButtonStyle: ViewModifier {
             .buttonStyle(.glassProminent)
             .buttonBorderShape(.capsule)
             .controlSize(.small)
-            .tint(tint)
+            .tint(AccessibleControlContrast.prominentActionTint(tint, in: colorScheme))
     }
 }
 

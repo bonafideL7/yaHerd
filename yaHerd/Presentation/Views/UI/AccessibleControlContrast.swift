@@ -32,6 +32,37 @@ enum AccessibleControlContrast {
             ? .black : .white
     }
 
+    /// Keep a prominent action's original hue but adjust its luminance
+    /// enough for the same .primary text used by its surrounding card.
+    /// Color is judged against the solid tint; final glass compositing
+    /// should still be inspected on the device.
+    static func prominentActionTint(_ tint: Color, in scheme: ColorScheme) -> Color {
+        guard let original = rgb(of: resolved(tint, in: scheme)) else {
+            return tint
+        }
+
+        let foregroundLuminance: CGFloat = scheme == .dark ? 1 : 0
+        // A small margin over 4.5:1 helps with platform glass compositing.
+        let targetContrast: CGFloat = 5
+        if ratio(luminance(original), foregroundLuminance) >= targetContrast {
+            return tint
+        }
+
+        let target: CGFloat = scheme == .dark ? 0 : 1
+        var low: CGFloat = 0
+        var high: CGFloat = 1
+        for _ in 0..<18 {
+            let fraction = (low + high) / 2
+            let candidate = original.map { $0 * (1 - fraction) + target * fraction }
+            if ratio(luminance(candidate), foregroundLuminance) >= targetContrast {
+                high = fraction
+            } else {
+                low = fraction
+            }
+        }
+        return color(original.map { $0 * (1 - high) + target * high })
+    }
+
     /// A shared icon-badge palette: retain the supplied hue, darkening a
     /// too-bright fill just enough for a white symbol at 4.5:1 contrast.
     static func iconFill(for tint: Color, in scheme: ColorScheme) -> Color {
