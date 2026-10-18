@@ -211,8 +211,13 @@ struct PastureTileListView: View {
             } description: {
                 Text("The pasture list could not be loaded.")
             } actions: {
-                Button("Try Again") { _ = model.load(using: repository) }
-                    .buttonStyle(.borderedProminent)
+                Button {
+                    _ = model.load(using: repository)
+                } label: {
+                    Text("Try Again")
+                        .readableForeground(on: .accentColor)
+                }
+                .buttonStyle(.borderedProminent)
             }
         } else {
             ProgressView("Loading Pastures")

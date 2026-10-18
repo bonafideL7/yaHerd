@@ -5,7 +5,6 @@ struct FieldCheckAnimalDetailView: View {
     private var animalRepository: any AnimalDetailRepository { fieldCheckDependencies.animalRepository }
     private var fieldCheckRepository: any FieldCheckAnimalDetailRepository { fieldCheckDependencies.animalDetailRepository }
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appDataAccessMode) private var dataAccessMode
 
     @State private var model = FieldCheckAnimalDetailViewModel()

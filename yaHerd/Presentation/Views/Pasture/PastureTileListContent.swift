@@ -2,7 +2,6 @@ import SwiftUI
 
 struct PastureEmptyStateView: View {
     let onAddPasture: () -> Void
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ContentUnavailableView {
@@ -10,9 +9,11 @@ struct PastureEmptyStateView: View {
         } description: {
             Text("Add a pasture to start tracking acreage and stocking.")
         } actions: {
-            Button("Add Pasture", action: onAddPasture)
-                .buttonStyle(.borderedProminent)
-                .foregroundStyle(colorScheme == .dark ? .black : .white)
+            Button(action: onAddPasture) {
+                Text("Add Pasture")
+                    .readableForeground(on: .accentColor)
+            }
+            .buttonStyle(.borderedProminent)
                 .disabledWhenDataReadOnly()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -29,8 +30,11 @@ struct PastureNoMatchesStateView: View {
         } description: {
             Text("No pastures match the \(filter.label.lowercased()) filter.")
         } actions: {
-            Button("Clear", action: onClearFilter)
-                .buttonStyle(.borderedProminent)
+            Button(action: onClearFilter) {
+                Text("Clear")
+                    .readableForeground(on: .accentColor)
+            }
+            .buttonStyle(.borderedProminent)
         }
     }
 }
