@@ -70,7 +70,6 @@ struct HomeActionCardView: View {
     let systemImage: String
     let tint: Color
     let actionTitle: String
-    var showsChevron = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -81,11 +80,9 @@ struct HomeActionCardView: View {
 
                 Spacer(minLength: 8)
 
-                if showsChevron {
-                    Image(systemName: "chevron.right")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                }
+                Image(systemName: "chevron.right")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -100,17 +97,10 @@ struct HomeActionCardView: View {
                     .lineLimit(1)
             }
 
-            if showsChevron {
-                Text(actionTitle)
-                    .font(.caption.weight(.semibold))
-                    .readableCardTextTint(tint)
-                    .lineLimit(1)
-            } else {
-                Text(actionTitle)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-            }
+            Text(actionTitle)
+                .font(.caption.weight(.semibold))
+                .readableCardTextTint(tint)
+                .lineLimit(1)
         }
         .padding(16)
         .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
