@@ -33,18 +33,18 @@ final class FieldCheckAllSessionGroupsTests: XCTestCase {
         let displayed = groups.needsAttention + groups.open + groups.completed + groups.archived
 
         XCTAssertEqual(groups.completed.count, 26, "All must not stop at twelve ordinary completed checks.")
-        XCTAssertEqual(groups.completed.map(\\.id), [lateFinished.id] + completed.reversed().map(\\.id))
-        XCTAssertEqual(groups.open.map(\\.id), [plainOpen.id, olderOpen.id])
-        XCTAssertEqual(groups.needsAttention.map(\\.id), [
+        XCTAssertEqual(groups.completed.map(\.id), [lateFinished.id] + completed.reversed().map(\.id))
+        XCTAssertEqual(groups.open.map(\.id), [plainOpen.id, olderOpen.id])
+        XCTAssertEqual(groups.needsAttention.map(\.id), [
             missingCompleted.id, completedWithFindings.id,
             flaggedOpen.id, olderFlaggedOpen.id, flaggedCompleted.id, unfinishedOpen.id
         ], "Attention orders missing before findings, flagged before remaining, and open before completed on ties.")
-        XCTAssertEqual(groups.archived.map(\\.id), [
+        XCTAssertEqual(groups.archived.map(\.id), [
             archivedOpenWithFindings.id, archivedOlderOpen.id,
             archivedNewerCompleted.id, archivedCompleted.id
         ], "Archived pasture checks sort open-first, newest start first within each state.")
         XCTAssertEqual(displayed.count, sessions.count, "Each session must appear in only one section.")
-        XCTAssertEqual(Set(displayed.map(\\.id)), Set(sessions.map(\\.id)), "Every session must remain visible.")
+        XCTAssertEqual(Set(displayed.map(\.id)), Set(sessions.map(\.id)), "Every session must remain visible.")
     }
 
     func testSummaryCountsIncludeAttentionSessionsWithoutIncludingArchivedPastures() {
