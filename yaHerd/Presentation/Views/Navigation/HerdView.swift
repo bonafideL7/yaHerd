@@ -147,15 +147,6 @@ struct HerdView: View {
         }
     }
 
-    private var switchButtonTitle: String {
-        switch mode {
-        case .animals:
-            return "Pastures"
-        case .pastures:
-            return "Animals"
-        }
-    }
-
     private var switchButtonAccessibilityLabel: String {
         switch mode {
         case .animals:
