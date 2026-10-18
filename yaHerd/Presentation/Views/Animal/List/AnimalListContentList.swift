@@ -37,7 +37,7 @@ struct AnimalListContentList: View {
 
     var body: some View {
         List(selection: batchMode ? $selectedAnimalIDs : nil) {
-            if inlineEntryIsActive && !hasVisibleRows {
+            if inlineEntryIsActive && !batchMode && !hasVisibleRows {
                 inlineEntryRow(mode: .new)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
@@ -53,7 +53,7 @@ struct AnimalListContentList: View {
                 }
             }
 
-            if inlineEntryIsActive && hasVisibleRows && editingAnimalID == nil {
+            if inlineEntryIsActive && !batchMode && hasVisibleRows && editingAnimalID == nil {
                 inlineEntryRow(mode: .new)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
