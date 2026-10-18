@@ -147,36 +147,15 @@ struct DateFieldRow: View {
 
 struct AnimalStatusEditorSection: View {
     @Binding var status: AnimalStatus
-    @Binding var statusReferenceID: UUID?
     @Binding var saleDate: Date
     @Binding var salePriceText: String
     @Binding var reasonSold: String
     @Binding var deathDate: Date
     @Binding var causeOfDeath: String
     
-    let availableStatusReferences: [AnimalStatusReferenceOption]
     
     var body: some View {
         Group {
-            if !availableStatusReferences.isEmpty || statusReferenceID != nil {
-                Section {
-                    Picker("Referenced Status", selection: $statusReferenceID) {
-                        Text("None").tag(UUID?.none)
-                        
-                        ForEach(availableStatusReferences) { reference in
-                            Text(reference.name)
-                                .tag(UUID?.some(reference.id))
-                        }
-                    }
-                } header: {
-                    Text("Status Reference")
-                } footer: {
-                    Text(
-                        "Use a referenced status definition for user-defined herd statuses. The base herd status remains Active, Sold, or Dead."
-                    )
-                }
-            }
-            
             switch status {
             case .active:
                 EmptyView()
