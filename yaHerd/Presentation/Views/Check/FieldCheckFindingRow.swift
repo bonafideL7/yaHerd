@@ -182,6 +182,6 @@ struct FieldCheckBadge: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .glassEffect(.regular.tint(tint.opacity(0.14)), in: Capsule())
-            .foregroundStyle(tint)
+            .foregroundStyle(.primary)
     }
 }
