@@ -49,9 +49,7 @@ struct DashboardLifecycleTile: View {
         VStack(alignment: .leading, spacing: 12) {
             Image(systemName: metric.systemImage)
                 .font(.headline)
-                .readableForeground(on: .accentColor)
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(Color.accentColor))
+                .readableIconBadge(tint: .accentColor, size: 34)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(metric.value.formatted())

@@ -39,6 +39,7 @@ enum FieldChecksViewMode: String, Hashable, Codable {
 
 struct FieldChecksView: View {
     @Environment(\.fieldCheckFeatureDependencies) private var fieldCheckDependencies
+    @Environment(\.colorScheme) private var colorScheme
     private var fieldCheckOverviewReader: any FieldCheckOverviewReading { fieldCheckDependencies.overviewReader }
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @State private var model = FieldChecksViewModel()
@@ -199,7 +200,9 @@ struct FieldChecksView: View {
                         } label: {
                             Text(option.filterLabel)
                                 .font(.subheadline.weight(.semibold))
-                                .readableForeground(on: selectedMode == option ? .accentColor : Color(.secondarySystemGroupedBackground))
+                                .foregroundStyle(selectedMode == option
+                                    ? AccessibleControlContrast.accentForeground(in: colorScheme)
+                                    : Color.primary)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 9)
                                 .background(
@@ -587,7 +590,7 @@ private struct FieldChecksEmptyState: View {
             Button(action: onStartPastureCheck) {
                 Label("Start Pasture Check", systemImage: "plus.circle.fill")
                     .font(.headline)
-                    .readableForeground(on: .accentColor)
+                    .readableAccentForeground()
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }

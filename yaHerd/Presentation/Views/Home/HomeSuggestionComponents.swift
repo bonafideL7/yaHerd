@@ -184,9 +184,7 @@ struct HomeSuggestionIcon: View {
     var body: some View {
         Image(systemName: systemImage)
             .font(.headline.weight(.semibold))
-            .readableForeground(on: tint)
-            .frame(width: 34, height: 34)
-            .background(Circle().fill(tint))
+            .readableIconBadge(tint: tint, size: 34)
             .shadow(color: tint.opacity(0.25), radius: 8, y: 4)
             .accessibilityHidden(true)
     }
