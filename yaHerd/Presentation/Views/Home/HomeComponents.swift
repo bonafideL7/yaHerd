@@ -32,7 +32,7 @@ struct HomeSummaryCardView: View {
             HStack(alignment: .top) {
                 Image(systemName: card.systemImage)
                     .font(.headline.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .readableForeground(on: card.tint)
                     .frame(width: 34, height: 34)
                     .background(Circle().fill(card.tint))
 
@@ -78,7 +78,7 @@ struct HomeActionCardView: View {
             HStack(alignment: .top) {
                 Image(systemName: systemImage)
                     .font(.headline.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .readableForeground(on: tint)
                     .frame(width: 34, height: 34)
                     .background(Circle().fill(tint))
 
@@ -155,7 +155,7 @@ struct HomeListRow: View {
         HStack(spacing: 14) {
             Image(systemName: systemImage)
                 .font(.headline)
-                .foregroundStyle(.white)
+                .readableForeground(on: tint)
                 .frame(width: 34, height: 34)
                 .background(Circle().fill(tint))
 
@@ -206,7 +206,7 @@ struct HomePrimaryActionRow: View {
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: systemImage)
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .readableForeground(on: tint)
                     .frame(width: 42, height: 42)
                     .background(Circle().fill(tint))
 
@@ -248,7 +248,7 @@ struct HomeStatusRow: View {
         HStack(spacing: 14) {
             Image(systemName: systemImage)
                 .font(.headline)
-                .foregroundStyle(.white)
+                .readableForeground(on: tint)
                 .frame(width: 34, height: 34)
                 .background(Circle().fill(tint))
 

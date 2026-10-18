@@ -199,7 +199,7 @@ struct FieldChecksView: View {
                         } label: {
                             Text(option.filterLabel)
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(selectedMode == option ? Color.white : Color.primary)
+                                .readableForeground(on: selectedMode == option ? .accentColor : Color(.secondarySystemGroupedBackground))
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 9)
                                 .background(
