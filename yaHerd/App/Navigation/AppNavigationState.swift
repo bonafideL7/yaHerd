@@ -404,6 +404,22 @@ final class AppNavigationState {
     var presentedSheet: AppPresentedSheet?
     var fullScreenWorkflow: AppFullScreenWorkflow?
 
+    /// The animal sort/filter accessory belongs only to the visible root animal list,
+    /// not detail views, Field Checks, Working Sessions, or isolated workflows.
+    var showsAnimalListAccessory: Bool {
+        guard fullScreenWorkflow == nil else { return false }
+
+        switch selectedTab {
+        case .herd:
+            return herdRouter.mode == .animals && herdRouter.path.isEmpty
+        case .search:
+            // Search always shows animals, independent of the background Herd mode.
+            return herdRouter.searchPath.isEmpty
+        case .home, .dashboard:
+            return false
+        }
+    }
+
     var snapshot: AppNavigationSnapshot {
         AppNavigationSnapshot(
             selectedTab: selectedTab,

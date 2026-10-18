@@ -3,6 +3,47 @@ import XCTest
 
 @MainActor
 final class AppNavigationStateTests: XCTestCase {
+    func testAnimalListAccessoryOnlyAppearsOnForegroundRootList() {
+        let navigation = AppNavigationState()
+
+        XCTAssertFalse(navigation.showsAnimalListAccessory)
+
+        navigation.selectedTab = .herd
+        XCTAssertTrue(navigation.showsAnimalListAccessory)
+
+        navigation.herdRouter.openFieldChecks(.all)
+        XCTAssertFalse(navigation.showsAnimalListAccessory)
+
+        navigation.herdRouter.path = [.workingSessions]
+        XCTAssertFalse(navigation.showsAnimalListAccessory)
+
+        navigation.herdRouter.path = [.animal(UUID())]
+        XCTAssertFalse(navigation.showsAnimalListAccessory)
+
+        navigation.herdRouter.path = []
+        XCTAssertTrue(navigation.showsAnimalListAccessory)
+
+        navigation.herdRouter.mode = .pastures
+        XCTAssertFalse(navigation.showsAnimalListAccessory)
+
+        navigation.selectedTab = .search
+        XCTAssertTrue(navigation.showsAnimalListAccessory)
+
+        navigation.herdRouter.searchPath = [.fieldChecks(.openFindings)]
+        XCTAssertFalse(navigation.showsAnimalListAccessory)
+
+        navigation.herdRouter.searchPath = []
+        XCTAssertTrue(navigation.showsAnimalListAccessory)
+
+        navigation.selectedTab = .herd
+        navigation.herdRouter.mode = .animals
+        navigation.openFieldCheckArea(.sessions(.all))
+        XCTAssertFalse(navigation.showsAnimalListAccessory)
+
+        navigation.closeFullScreenWorkflow()
+        XCTAssertTrue(navigation.showsAnimalListAccessory)
+    }
+
     func testRestorationRoundTripPreservesTypedRoutesAndWorkflow() throws {
         let animalID = UUID()
         let searchAnimalID = UUID()

@@ -284,10 +284,7 @@ struct FieldChecksView: View {
                 needsAttentionCount: needsAttentionSessions.count,
                 openCheckCount: currentPastureSessions.filter { !$0.isCompleted }.count,
                 recentCheckCount: recentCheckSessions.count,
-                archivedCheckCount: archivedPastureSessions.count,
-                onStartPastureCheck: {
-                    showingStartPastureCheck = true
-                }
+                archivedCheckCount: archivedPastureSessions.count
             )
         }
     }
@@ -451,12 +448,14 @@ struct FieldChecksView: View {
             } label: {
                 label()
             }
+            .buttonStyle(.plain)
         } else {
             NavigationLink {
                 fieldCheckSessionDestination(configuration)
             } label: {
                 label()
             }
+            .buttonStyle(.plain)
         }
     }
 
@@ -529,37 +528,14 @@ private struct FieldChecksOverviewCard: View {
     let openCheckCount: Int
     let recentCheckCount: Int
     let archivedCheckCount: Int
-    let onStartPastureCheck: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Pasture Checks")
-                        .font(.headline)
-
-                    Text("Use this as a triage and history hub. Start new checks from here or from a pasture.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 12)
-
-                Button(action: onStartPastureCheck) {
-                    Label("Start", systemImage: "plus.circle.fill")
-                        .labelStyle(.titleAndIcon)
-                }
-                .buttonStyle(.glassProminent)
-            }
-
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 10)], alignment: .leading, spacing: 10) {
-                FieldChecksOverviewMetric(title: "Attention", value: needsAttentionCount, tint: needsAttentionCount > 0 ? .orange : .secondary)
-                FieldChecksOverviewMetric(title: "Open", value: openCheckCount, tint: openCheckCount > 0 ? .accentColor : .secondary)
-                FieldChecksOverviewMetric(title: "Recent", value: recentCheckCount, tint: .secondary)
-                if archivedCheckCount > 0 {
-                    FieldChecksOverviewMetric(title: "Archived", value: archivedCheckCount, tint: .secondary)
-                }
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 10)], alignment: .leading, spacing: 10) {
+            FieldChecksOverviewMetric(title: "Attention", value: needsAttentionCount, tint: needsAttentionCount > 0 ? .orange : .primary)
+            FieldChecksOverviewMetric(title: "Open", value: openCheckCount, tint: openCheckCount > 0 ? .accentColor : .primary)
+            FieldChecksOverviewMetric(title: "Recent", value: recentCheckCount, tint: .primary)
+            if archivedCheckCount > 0 {
+                FieldChecksOverviewMetric(title: "Archived", value: archivedCheckCount, tint: .primary)
             }
         }
         .padding(.vertical, 4)
@@ -580,7 +556,7 @@ private struct FieldChecksOverviewMetric: View {
 
             Text(title)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
@@ -611,6 +587,7 @@ private struct FieldChecksEmptyState: View {
             Button(action: onStartPastureCheck) {
                 Label("Start Pasture Check", systemImage: "plus.circle.fill")
                     .font(.headline)
+                    .readableForeground(on: .accentColor)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
@@ -704,6 +681,7 @@ private struct FieldCheckSessionSummaryRow: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(session.displayTitle)
                         .font(.body.weight(.semibold))
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
 
                     Spacer(minLength: 8)
@@ -722,7 +700,7 @@ private struct FieldCheckSessionSummaryRow: View {
 
                 Text(dateLine)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color(.secondaryLabel))
 
                 if session.openFindingsCount > 0 {
                     FieldCheckBadge(
@@ -733,7 +711,7 @@ private struct FieldCheckSessionSummaryRow: View {
 
                 Text(statusLine)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color(.secondaryLabel))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
