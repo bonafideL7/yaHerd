@@ -143,7 +143,7 @@ struct FieldCheckFindingRow: View {
                 onStatusChange(.resolved)
             } label: {
                 Label("Resolve", systemImage: "checkmark.circle")
-                    .readableForeground(on: .accentColor)
+                    .readableAccentForeground()
                     .font(.footnote.weight(.semibold))
                     .frame(maxWidth: .infinity)
             }

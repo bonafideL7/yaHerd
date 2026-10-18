@@ -34,7 +34,7 @@ struct AnimalListEmptyStateView: View {
             if !hasItems {
                 Button(action: onAddAnimal) {
                     Text("Add Animal")
-                        .readableForeground(on: .accentColor)
+                        .readableAccentForeground()
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(isSeedingSampleData)
