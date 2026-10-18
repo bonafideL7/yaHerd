@@ -10,6 +10,7 @@ struct HerdView: View {
     @Binding private var isSearchPresented: Bool
 
     @Binding private var mode: HerdViewMode
+    @Environment(\.colorScheme) private var colorScheme
     private let allowsModeSwitch: Bool
     @State private var isManagingPastures = false
     @State private var animalListModel = AnimalListViewModel()
@@ -105,12 +106,31 @@ struct HerdView: View {
                     Button {
                         switchMode()
                     } label: {
-                        Label(switchButtonTitle, systemImage: switchButtonSystemImage)
-                            .labelStyle(.iconOnly)
-                            .foregroundStyle(Color.accentColor)
+                        Image(systemName: switchButtonSystemImage)
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(.primary)
+                            .frame(width: 44, height: 44)
+                            .background {
+                                Circle()
+                                    .fill(.regularMaterial)
+                                    .overlay {
+                                        Circle().fill(
+                                            Color.accentColor.opacity(colorScheme == .dark ? 0.26 : 0.18)
+                                        )
+                                    }
+                                    .overlay {
+                                        Circle().strokeBorder(
+                                            Color.accentColor.opacity(colorScheme == .dark ? 0.45 : 0.30),
+                                            lineWidth: 1
+                                        )
+                                    }
+                            }
+                            .contentShape(Circle())
                     }
+                    .buttonStyle(.plain)
                     .accessibilityLabel(switchButtonAccessibilityLabel)
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
         }
     }
