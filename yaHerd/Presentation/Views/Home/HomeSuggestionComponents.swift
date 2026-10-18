@@ -42,8 +42,9 @@ struct HomeSuggestionButtonRow: View {
         ) {
             Button(action: onAction) {
                 HomeSuggestionActionLabel(title: actionTitle)
+                    .readableForeground(on: tint)
             }
-            .modifier(HomeSuggestionActionButtonStyle())
+            .modifier(HomeSuggestionActionButtonStyle(tint: tint))
             .accessibilityLabel(actionTitle)
         }
     }
@@ -92,8 +93,9 @@ struct HomeSuggestionNavigationRow<Destination: View>: View {
                 destination
             } label: {
                 HomeSuggestionActionLabel(title: actionTitle)
+                    .readableForeground(on: tint)
             }
-            .modifier(HomeSuggestionActionButtonStyle())
+            .modifier(HomeSuggestionActionButtonStyle(tint: tint))
             .accessibilityLabel(actionTitle)
         }
     }
@@ -202,18 +204,20 @@ struct HomeSuggestionActionLabel: View {
         .padding(.horizontal, 4)
         .padding(.vertical, 1)
         .frame(minWidth: 74)
-        .foregroundStyle(.primary)
     }
 }
 
-/// The neutral glass pill retains a clear action affordance while the label
-/// uses the same light/dark semantic foreground as the suggestion title.
+/// Keep prominent suggestion actions tinted while deriving foreground
+/// contrast from the same tint in each appearance.
 struct HomeSuggestionActionButtonStyle: ViewModifier {
+    let tint: Color
+
     func body(content: Content) -> some View {
         content
-            .buttonStyle(.glass)
+            .buttonStyle(.glassProminent)
             .buttonBorderShape(.capsule)
             .controlSize(.small)
+            .tint(tint)
     }
 }
 
