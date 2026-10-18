@@ -13,20 +13,125 @@ enum AccessibleControlContrast {
             : .accentColor
     }
 
-    static func foreground(on background: Color, in colorScheme: ColorScheme) -> Color {
-        let traits = UITraitCollection(
-            userInterfaceStyle: colorScheme == .dark ? .dark : .light
-        )
-        let resolvedBackground = UIColor(background).resolvedColor(with: traits)
+    /// The asset uses burgundy in Light Mode and pale green in Dark Mode.
+    /// Do not infer this role through UIColor(Color.accentColor): the bridge can
+    /// resolve a different appearance than SwiftUI actually renders.
+    static func accentForeground(in scheme: ColorScheme) -> Color {
+        scheme == .dark ? .black : .white
+    }
 
-        guard let backgroundLuminance = relativeLuminance(of: resolvedBackground) else {
-            // Retain the system's adaptive text color if UIKit cannot resolve the fill.
+    static func foreground(on background: Color, in colorScheme: ColorScheme) -> Color {
+        if background == .accentColor {
+            return accentForeground(in: colorScheme)
+        }
+
+        guard let luminance = relativeLuminance(of: resolved(background, in: colorScheme)) else {
+            return .primary
+        }
+        return (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05)
+            ? .black : .white
+    }
+
+    /// A shared icon-badge palette: retain the supplied hue, darkening a
+    /// too-bright fill just enough for a white symbol at 4.5:1 contrast.
+    static func iconFill(for tint: Color, in scheme: ColorScheme) -> Color {
+        guard let components = rgb(of: resolved(tint, in: scheme)) else {
+            return .black
+        }
+
+        if whiteContrast(components) >= 4.5 {
+            return color(components)
+        }
+
+        var low: CGFloat = 0
+        var high: CGFloat = 1
+        for _ in 0..<18 {
+            let midpoint = (low + high) / 2
+            let candidate = components.map { $0 * midpoint }
+            if whiteContrast(candidate) >= 4.5 {
+                low = midpoint
+            } else {
+                high = midpoint
+            }
+        }
+        return color(components.map { $0 * low })
+    }
+
+    /// Tint used for link/action text on an ordinary grouped card, not on the
+    /// tint itself. Adjust toward black/white only if required to reach 4.5:1.
+    static func cardTextTint(_ tint: Color, in scheme: ColorScheme) -> Color {
+        guard let original = rgb(of: resolved(tint, in: scheme)),
+              let background = relativeLuminance(
+                of: UIColor.secondarySystemGroupedBackground.resolvedColor(with: traits(for: scheme))
+              ) else {
             return .primary
         }
 
-        let blackContrast = (backgroundLuminance + 0.05) / 0.05
-        let whiteContrast = 1.05 / (backgroundLuminance + 0.05)
-        return blackContrast >= whiteContrast ? .black : .white
+        if ratio(luminance(original), background) >= 4.5 {
+            return color(original)
+        }
+
+        let target: CGFloat = background > 0.18 ? 0 : 1
+        var low: CGFloat = 0
+        var high: CGFloat = 1
+        for _ in 0..<18 {
+            let midpoint = (low + high) / 2
+            let candidate = original.map { $0 * (1 - midpoint) + target * midpoint }
+            if ratio(luminance(candidate), background) >= 4.5 {
+                high = midpoint
+            } else {
+                low = midpoint
+            }
+        }
+        return color(original.map { $0 * (1 - high) + target * high })
+    }
+
+    private static func traits(for scheme: ColorScheme) -> UITraitCollection {
+        UITraitCollection(userInterfaceStyle: scheme == .dark ? .dark : .light)
+    }
+
+    private static func resolved(_ color: Color, in scheme: ColorScheme) -> UIColor {
+        if color == .accentColor {
+            return UIColor(named: "AccentColor", in: .main, compatibleWith: traits(for: scheme))
+                ?? (scheme == .dark
+                    ? UIColor(red: 0.761, green: 0.834, blue: 0.702, alpha: 1)
+                    : UIColor(red: 0.158, green: 0, blue: 0.074, alpha: 1))
+        }
+        return UIColor(color).resolvedColor(with: traits(for: scheme))
+    }
+
+    private static func rgb(of color: UIColor) -> [CGFloat]? {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return nil
+        }
+        return [red, green, blue]
+    }
+
+    private static func color(_ rgb: [CGFloat]) -> Color {
+        Color(red: Double(rgb[0]), green: Double(rgb[1]), blue: Double(rgb[2]))
+    }
+
+    private static func ratio(_ left: CGFloat, _ right: CGFloat) -> CGFloat {
+        (max(left, right) + 0.05) / (min(left, right) + 0.05)
+    }
+
+    private static func whiteContrast(_ rgb: [CGFloat]) -> CGFloat {
+        1.05 / (luminance(rgb) + 0.05)
+    }
+
+    private static func luminance(_ rgb: [CGFloat]) -> CGFloat {
+        func linearized(_ component: CGFloat) -> CGFloat {
+            component <= 0.04045
+                ? component / 12.92
+                : CGFloat(pow(Double((component + 0.055) / 1.055), 2.4))
+        }
+        return 0.2126 * linearized(rgb[0])
+            + 0.7152 * linearized(rgb[1])
+            + 0.0722 * linearized(rgb[2])
     }
 
     static func contrastRatio(foreground: UIColor, background: UIColor) -> CGFloat? {
@@ -73,9 +178,56 @@ private struct ReadableColorForeground: ViewModifier {
     }
 }
 
+private struct ReadableAccentForeground: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content.foregroundStyle(AccessibleControlContrast.accentForeground(in: colorScheme))
+    }
+}
+
+private struct ReadableIconBadge: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    let tint: Color
+    let size: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(
+                Circle().fill(AccessibleControlContrast.iconFill(for: tint, in: colorScheme))
+            )
+    }
+}
+
+private struct ReadableCardTextTint: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    let tint: Color
+
+    func body(content: Content) -> some View {
+        content.foregroundStyle(AccessibleControlContrast.cardTextTint(tint, in: colorScheme))
+    }
+}
+
 extension View {
-    /// Use for text and symbols on a solid, opaque color background, not material/glass.
+    /// Use only on a solid opaque fill, not native glass/material.
     func readableForeground(on background: Color) -> some View {
         modifier(ReadableColorForeground(background: background))
+    }
+
+    /// Exact foreground counterpart of the app's named AccentColor asset.
+    func readableAccentForeground() -> some View {
+        modifier(ReadableAccentForeground())
+    }
+
+    /// One app-level treatment for icons in solid colored circles.
+    func readableIconBadge(tint: Color, size: CGFloat) -> some View {
+        modifier(ReadableIconBadge(tint: tint, size: size))
+    }
+
+    /// Tinted text on the app's secondary grouped card surface.
+    func readableCardTextTint(_ tint: Color) -> some View {
+        modifier(ReadableCardTextTint(tint: tint))
     }
 }
