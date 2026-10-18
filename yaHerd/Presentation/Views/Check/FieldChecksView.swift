@@ -56,10 +56,6 @@ struct FieldChecksView: View {
         self.onSessionLaunch = onSessionLaunch
     }
 
-    private var currentPastureSessions: [FieldCheckSessionSummary] {
-        model.sessions.filter { !$0.isPastureArchived }
-    }
-
     private var allSessionGroups: FieldCheckAllSessionGroups {
         FieldCheckAllSessionGroups(sessions: model.sessions)
     }
@@ -271,8 +267,8 @@ struct FieldChecksView: View {
         Section {
             FieldChecksOverviewCard(
                 needsAttentionCount: needsAttentionSessions.count,
-                openCheckCount: currentPastureSessions.filter { !$0.isCompleted }.count,
-                completedCheckCount: currentPastureSessions.filter(\.isCompleted).count,
+                openCheckCount: allSessionGroups.openCount,
+                completedCheckCount: allSessionGroups.completedCount,
                 archivedCheckCount: archivedPastureSessions.count
             )
         }
@@ -502,6 +498,15 @@ struct FieldCheckAllSessionGroups {
     let open: [FieldCheckSessionSummary]
     let completed: [FieldCheckSessionSummary]
     let archived: [FieldCheckSessionSummary]
+
+    // Attention is a priority group, not an additional lifecycle status.
+    var openCount: Int {
+        open.count + needsAttention.filter { !$0.isCompleted }.count
+    }
+
+    var completedCount: Int {
+        completed.count + needsAttention.filter(\.isCompleted).count
+    }
 
     init(sessions: [FieldCheckSessionSummary]) {
         let current = sessions.filter { !$0.isPastureArchived }
