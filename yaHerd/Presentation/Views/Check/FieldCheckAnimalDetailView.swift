@@ -219,7 +219,7 @@ struct FieldCheckAnimalDetailView: View {
                 }
             } label: {
                 Label("Mark Found", systemImage: "checkmark.circle")
-                    .readableForeground(on: .accentColor)
+                    .readableAccentForeground()
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -253,7 +253,7 @@ struct FieldCheckAnimalDetailView: View {
                     }
                 } label: {
                     Label("Mark Seen", systemImage: "checkmark.circle")
-                        .readableForeground(on: .accentColor)
+                        .readableAccentForeground()
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)

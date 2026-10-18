@@ -236,7 +236,7 @@ private struct FieldCheckStartBar: View {
 
             Button(action: onStart) {
                 Label("Start Check", systemImage: "checkmark.circle.fill")
-                    .readableForeground(on: .accentColor)
+                    .readableAccentForeground()
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glassProminent)

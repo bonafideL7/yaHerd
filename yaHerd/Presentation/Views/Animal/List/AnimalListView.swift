@@ -397,7 +397,7 @@ struct AnimalListView: View {
             } actions: {
                 Button(action: reload) {
                     Text("Try Again")
-                        .readableForeground(on: .accentColor)
+                        .readableAccentForeground()
                 }
                 .buttonStyle(.borderedProminent)
             }

@@ -50,7 +50,7 @@ struct AnimalListToolbarContent: ToolbarContent {
         if batchMode {
             Button(action: onToggleBatchMode) {
                 Image(systemName: "checkmark")
-                    .readableForeground(on: .accentColor)
+                    .readableAccentForeground()
                     .font(.system(size: 17, weight: .semibold))
             }
             .buttonStyle(.borderedProminent)
