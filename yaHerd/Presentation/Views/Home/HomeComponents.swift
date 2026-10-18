@@ -84,7 +84,7 @@ struct HomeActionCardView: View {
                 if showsChevron {
                     Image(systemName: "chevron.right")
                         .font(.headline.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary)
                 }
             }
 
@@ -100,10 +100,17 @@ struct HomeActionCardView: View {
                     .lineLimit(1)
             }
 
-            Text(actionTitle)
-                .font(.caption.weight(.semibold))
-                .readableCardTextTint(tint)
-                .lineLimit(1)
+            if showsChevron {
+                Text(actionTitle)
+                    .font(.caption.weight(.semibold))
+                    .readableCardTextTint(tint)
+                    .lineLimit(1)
+            } else {
+                Text(actionTitle)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
@@ -181,7 +188,7 @@ struct HomeListRow: View {
             if showsChevron {
                 Image(systemName: "chevron.right")
                     .font(.headline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
             }
         }
         .padding(.horizontal, 16)
