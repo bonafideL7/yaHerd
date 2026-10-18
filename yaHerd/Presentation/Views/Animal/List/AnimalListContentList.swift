@@ -21,6 +21,9 @@ struct AnimalListContentList: View {
     let onStartNewInlineEntry: () -> Void
     let onStartEditingAnimal: (AnimalSummary) -> Void
     let onSubmitInlineEntry: () -> Void
+    let onShowInlineSexPicker: () -> Void
+    let onShowInlinePasturePicker: () -> Void
+    let onShowInlineBirthDateOptions: () -> Void
     let onCommitInlineEntryFocusLoss: () -> Void
     let onCancelInlineEntry: () -> Void
     let onOpenInlineDetails: (UUID) -> Void
@@ -167,6 +170,9 @@ struct AnimalListContentList: View {
             helperText: inlineHelperText,
             focusRequestID: inlineFocusRequestID,
             onSubmit: onSubmitInlineEntry,
+            onShowSexPicker: onShowInlineSexPicker,
+            onShowPasturePicker: onShowInlinePasturePicker,
+            onShowBirthDateOptions: onShowInlineBirthDateOptions,
             onCommitFocusLoss: onCommitInlineEntryFocusLoss,
             onCancel: onCancelInlineEntry,
             detailsAnimalID: animalID,
