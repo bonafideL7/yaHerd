@@ -466,6 +466,14 @@ struct FieldChecksView: View {
         }
     }
 
+    private func emphasis(for session: FieldCheckSessionSummary) -> FieldCheckSessionSummaryRow.Emphasis {
+        if session.missingAnimalCount > 0 { return .missing }
+        if session.openFindingsCount > 0 { return .findings }
+        if session.flaggedAnimalCount > 0 { return .flagged }
+        if !session.isCompleted && session.remainingExpectedCount > 0 { return .remaining }
+        return .standard
+    }
+
     private func sortedByStateThenNewest(
         _ left: FieldCheckSessionSummary,
         _ right: FieldCheckSessionSummary
@@ -528,14 +536,6 @@ struct FieldCheckAllSessionGroups {
         || session.missingAnimalCount > 0
         || session.flaggedAnimalCount > 0
         || (!session.isCompleted && session.remainingExpectedCount > 0)
-    }
-
-    private static func emphasis(for session: FieldCheckSessionSummary) -> FieldCheckSessionSummaryRow.Emphasis {
-        if session.missingAnimalCount > 0 { return .missing }
-        if session.openFindingsCount > 0 { return .findings }
-        if session.flaggedAnimalCount > 0 { return .flagged }
-        if !session.isCompleted && session.remainingExpectedCount > 0 { return .remaining }
-        return .standard
     }
 
     private static func attentionScore(for session: FieldCheckSessionSummary) -> Int {
