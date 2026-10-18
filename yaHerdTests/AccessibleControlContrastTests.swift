@@ -18,6 +18,29 @@ final class AccessibleControlContrastTests: XCTestCase {
         }
     }
 
+    func testNativeSwipeActionFillsContrastWithSystemWhiteLabels() throws {
+        for appearance in [UIUserInterfaceStyle.light, .dark] {
+            let scheme: ColorScheme = appearance == .dark ? .dark : .light
+            let traits = UITraitCollection(userInterfaceStyle: appearance)
+            let backgrounds: [Color] = [
+                AccessibleControlContrast.nativeSwipeBlue,
+                AccessibleControlContrast.nativeSwipeOrange,
+                AccessibleControlContrast.nativeSwipeAccent(in: scheme)
+            ]
+
+            for background in backgrounds {
+                let resolved = UIColor(background).resolvedColor(with: traits)
+                let ratio = try XCTUnwrap(
+                    AccessibleControlContrast.contrastRatio(
+                        foreground: .white,
+                        background: resolved
+                    )
+                )
+                XCTAssertGreaterThanOrEqual(ratio, 4.5)
+            }
+        }
+    }
+
     private func assertReadableForeground(
         on background: Color,
         appearance: UIUserInterfaceStyle,
