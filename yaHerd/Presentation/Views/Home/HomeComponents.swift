@@ -32,9 +32,7 @@ struct HomeSummaryCardView: View {
             HStack(alignment: .top) {
                 Image(systemName: card.systemImage)
                     .font(.headline.weight(.semibold))
-                    .readableForeground(on: card.tint)
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(card.tint))
+                    .readableIconBadge(tint: card.tint, size: 34)
 
                 Spacer(minLength: 8)
 
@@ -78,9 +76,7 @@ struct HomeActionCardView: View {
             HStack(alignment: .top) {
                 Image(systemName: systemImage)
                     .font(.headline.weight(.semibold))
-                    .readableForeground(on: tint)
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(tint))
+                    .readableIconBadge(tint: tint, size: 34)
 
                 Spacer(minLength: 8)
 
@@ -103,7 +99,7 @@ struct HomeActionCardView: View {
 
             Text(actionTitle)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
+                .readableCardTextTint(tint)
                 .lineLimit(1)
         }
         .padding(16)
@@ -155,9 +151,7 @@ struct HomeListRow: View {
         HStack(spacing: 14) {
             Image(systemName: systemImage)
                 .font(.headline)
-                .readableForeground(on: tint)
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(tint))
+                .readableIconBadge(tint: tint, size: 34)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
@@ -206,9 +200,7 @@ struct HomePrimaryActionRow: View {
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: systemImage)
                     .font(.title3.weight(.semibold))
-                    .readableForeground(on: tint)
-                    .frame(width: 42, height: 42)
-                    .background(Circle().fill(tint))
+                    .readableIconBadge(tint: tint, size: 42)
 
                 VStack(alignment: .leading, spacing: 5) {
                     Text(title)
@@ -231,7 +223,7 @@ struct HomePrimaryActionRow: View {
                 Image(systemName: "chevron.right")
                     .font(.subheadline.weight(.bold))
             }
-            .foregroundStyle(tint)
+            .readableCardTextTint(tint)
         }
         .padding(18)
         .contentShape(Rectangle())
@@ -248,9 +240,7 @@ struct HomeStatusRow: View {
         HStack(spacing: 14) {
             Image(systemName: systemImage)
                 .font(.headline)
-                .readableForeground(on: tint)
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(tint))
+                .readableIconBadge(tint: tint, size: 34)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
