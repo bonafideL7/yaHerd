@@ -5,60 +5,70 @@ struct IsolatedFieldCheckAreaView: View {
     let onClose: () -> Void
 
     var body: some View {
-        NavigationStack {
-            content
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        if navigation.workflowRouter.canReturnToList {
-                            Button {
-                                navigation.workflowRouter.returnToList()
-                            } label: {
-                                Label("Back to Checks", systemImage: "chevron.left")
-                            }
-                        } else {
-                            IsolatedFlowCloseButton(action: onClose)
-                        }
-                    }
-                    if navigation.workflowRouter.canReturnToList {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            IsolatedFlowCloseButton(action: onClose)
-                        }
-                    }
+        NavigationStack(path: fieldCheckPathBinding) {
+            rootContent
+                .navigationDestination(for: FieldCheckSessionLaunchConfiguration.self) { configuration in
+                    sessionContent(configuration)
                 }
         }
     }
 
     @ViewBuilder
-    private var content: some View {
-        switch navigation.workflowRouter.route {
-        case .fieldCheckSession(let session):
-            FieldCheckSessionDetailView(
-                sessionID: session.sessionID,
-                opensFindings: session.opensFindings,
-                opensFlaggedRoster: session.opensFlaggedRoster,
-                opensRemainingRoster: session.opensRemainingRoster,
-                opensMissingRoster: session.opensMissingRoster,
-                focusedFindingID: session.focusedFindingID
-            )
-        case .fieldCheckSessions(let mode):
-            FieldChecksView(mode: fieldCheckModeBinding(fallback: mode), onSessionLaunch: { configuration in
-                navigation.workflowRouter.openFieldCheckSession(configuration)
-            })
-        default:
-            FieldChecksView(mode: fieldCheckModeBinding(fallback: .all), onSessionLaunch: { configuration in
-                navigation.workflowRouter.openFieldCheckSession(configuration)
-            })
+    private var rootContent: some View {
+        if navigation.workflowRouter.fieldCheckListMode != nil {
+            checksList
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        IsolatedFlowCloseButton(action: onClose)
+                    }
+                }
+        } else if case .fieldCheckSession(let configuration) = navigation.workflowRouter.route {
+            sessionContent(configuration)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        IsolatedFlowCloseButton(action: onClose)
+                    }
+                }
+        } else {
+            checksList
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        IsolatedFlowCloseButton(action: onClose)
+                    }
+                }
         }
     }
 
-    private func fieldCheckModeBinding(fallback: FieldChecksViewMode) -> Binding<FieldChecksViewMode> {
+    private var checksList: some View {
+        FieldChecksView(mode: fieldCheckModeBinding) { configuration in
+            navigation.workflowRouter.openFieldCheckSession(configuration)
+        }
+    }
+
+    private func sessionContent(_ configuration: FieldCheckSessionLaunchConfiguration) -> some View {
+        FieldCheckSessionDetailView(
+            sessionID: configuration.sessionID,
+            opensFindings: configuration.opensFindings,
+            opensFlaggedRoster: configuration.opensFlaggedRoster,
+            opensRemainingRoster: configuration.opensRemainingRoster,
+            opensMissingRoster: configuration.opensMissingRoster,
+            focusedFindingID: configuration.focusedFindingID
+        )
+    }
+
+    private var fieldCheckPathBinding: Binding<[FieldCheckSessionLaunchConfiguration]> {
+        Binding(
+            get: { navigation.workflowRouter.fieldCheckNavigationPath },
+            set: { navigation.workflowRouter.fieldCheckNavigationPath = $0 }
+        )
+    }
+
+    private var fieldCheckModeBinding: Binding<FieldChecksViewMode> {
         Binding {
-            guard case .fieldCheckSessions(let mode) = navigation.workflowRouter.route
-            else { return fallback }
-            return mode
+            navigation.workflowRouter.fieldCheckListMode ?? .all
         } set: { mode in
-            // A completed list selection must not replace an already-open session route.
-            if case .fieldCheckSession = navigation.workflowRouter.route { return }
+            // Keep the list selection while a session is pushed onto the stack.
+            guard case .fieldCheckSessions = navigation.workflowRouter.route else { return }
             navigation.workflowRouter.route = .fieldCheckSessions(mode)
         }
     }
