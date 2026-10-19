@@ -1256,6 +1256,7 @@ private struct FieldCheckRosterFilterRow: View {
             AnimalListFilterMenuLabel(selection: selectedFilter.label, count: countText)
         }
         .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         .accessibilityLabel("Filter animals, \(selectedFilter.label), \(countText)")
         .accessibilityHint("Opens the animal list filter menu")
     }
