@@ -60,7 +60,7 @@ private struct AppNavigationPresentationModifier: ViewModifier {
             AddPastureView()
         case .startFieldCheck:
             NavigationStack {
-                FieldCheckPastureStartListView { sessionID in
+                PastureSessionStartListView(kind: .fieldCheck) { sessionID in
                     navigation.openFieldCheckArea(
                         .session(FieldCheckSessionLaunchConfiguration(sessionID: sessionID))
                     )
@@ -69,12 +69,9 @@ private struct AppNavigationPresentationModifier: ViewModifier {
             }
         case .startWorkingSession:
             NavigationStack {
-                NewWorkingSessionView(
-                    wrapsInNavigationStack: false,
-                    onSessionCreated: { sessionID in
-                        navigation.openWorkArea(.session(sessionID))
-                    }
-                )
+                PastureSessionStartListView(kind: .working) { sessionID in
+                    navigation.openWorkArea(.session(sessionID))
+                }
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel", role: .cancel) {

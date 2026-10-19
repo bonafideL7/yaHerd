@@ -102,10 +102,7 @@ struct WorkingSessionsView: View {
             }
         }
         .navigationDestination(isPresented: $showingNewSession) {
-            NewWorkingSessionView(
-                wrapsInNavigationStack: false,
-                onSessionCreated: handleSessionStarted
-            )
+            PastureSessionStartListView(kind: .working, onSessionStarted: handleSessionStarted)
         }
         .navigationDestination(item: $startedRoute) { route in
             WorkingSessionDetailView(sessionID: route.id)
