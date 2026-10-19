@@ -211,6 +211,32 @@ final class WorkflowRouter {
         }
     }
 
+    // The native navigation path is derived from the current route and its
+    // originating list. A directly opened session remains a workflow root.
+    var fieldCheckNavigationPath: [FieldCheckSessionLaunchConfiguration] {
+        get {
+            guard case .fieldCheckSession(let configuration) = route,
+                  case .fieldCheckSessions = returnRoute
+            else { return [] }
+            return [configuration]
+        }
+        set {
+            if let configuration = newValue.last {
+                guard fieldCheckNavigationPath.last != configuration else { return }
+                openFieldCheckSession(configuration)
+            } else if case .fieldCheckSession = route,
+                      case .fieldCheckSessions = returnRoute {
+                returnToList()
+            }
+        }
+    }
+
+    var fieldCheckListMode: FieldChecksViewMode? {
+        if case .fieldCheckSessions(let mode) = route { return mode }
+        if case .fieldCheckSessions(let mode) = returnRoute { return mode }
+        return nil
+    }
+
     func openFieldCheckSession(_ configuration: FieldCheckSessionLaunchConfiguration) {
         if case .fieldCheckSessions = route {
             returnRoute = route
@@ -511,12 +537,7 @@ final class AppNavigationState {
     }
 
     func openFieldChecks(_ mode: FieldChecksViewMode = .all) {
-        if selectedTab == .home {
-            openFieldCheckArea(.sessions(mode))
-            return
-        }
-        selectedTab = .herd
-        herdRouter.path = [.fieldChecks(mode)]
+        openFieldCheckArea(.sessions(mode))
     }
 
     func openWorkingSessions() {
