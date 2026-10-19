@@ -101,43 +101,10 @@ struct ToolbarEditButton: View {
     }
 
     var body: some View {
-        ToolbarCircularIconButton(
-            systemImage: "pencil",
-            accessibilityLabel: accessibilityLabel,
-            isProminent: false,
-            action: action
-        )
-        .disabledWhenDataReadOnly()
-    }
-}
-
-private struct ToolbarCircularIconButton: View {
-    let systemImage: String
-    let accessibilityLabel: String
-    let isProminent: Bool
-    let action: () -> Void
-
-    var body: some View {
         Button(action: action) {
-            Image(systemName: systemImage)
+            Image(systemName: "pencil")
         }
         .accessibilityLabel(Text(accessibilityLabel))
-        .modifier(ToolbarCircularButtonModifier(isProminent: isProminent))
-    }
-}
-
-private struct ToolbarCircularButtonModifier: ViewModifier {
-    let isProminent: Bool
-
-    func body(content: Content) -> some View {
-        if isProminent {
-            content
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.circle)
-        } else {
-            content
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.circle)
-        }
+        .disabledWhenDataReadOnly()
     }
 }
