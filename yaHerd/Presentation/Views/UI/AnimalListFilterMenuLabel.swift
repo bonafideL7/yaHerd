@@ -3,12 +3,13 @@ import SwiftUI
 /// A compact, full-row menu target shared by animal check and working lists.
 struct AnimalListFilterMenuLabel: View {
     let selection: String
+    let systemImage: String
     let count: String
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-                .foregroundStyle(.secondary)
+            Image(systemName: systemImage)
+                .foregroundStyle(Color.accentColor)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text("Filter animals")
@@ -18,11 +19,12 @@ struct AnimalListFilterMenuLabel: View {
                 HStack(spacing: 4) {
                     Text(selection)
                         .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
                         .lineLimit(1)
 
                     Image(systemName: "chevron.down")
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.accentColor)
                 }
             }
 
