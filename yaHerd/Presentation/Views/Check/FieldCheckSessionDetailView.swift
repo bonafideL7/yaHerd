@@ -1253,7 +1253,11 @@ private struct FieldCheckRosterFilterRow: View {
                 }
             }
         } label: {
-            AnimalListFilterMenuLabel(selection: selectedFilter.label, count: countText)
+            AnimalListFilterMenuLabel(
+                selection: selectedFilter.label,
+                systemImage: selectedFilter.systemImage,
+                count: countText
+            )
         }
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
