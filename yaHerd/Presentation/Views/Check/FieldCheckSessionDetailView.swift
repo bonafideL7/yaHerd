@@ -191,6 +191,9 @@ struct FieldCheckSessionDetailView: View {
         .interactiveDismissDisabled(model.isCompletingSession)
         .applyFieldCheckNavigationSubtitle(navigationSubtitleText)
         .toolbar {
+            if model.detail?.isCompleted == false && selectedPane == .roster {
+                DefaultToolbarItem(kind: .search, placement: .bottomBar)
+            }
             if let detail = model.detail {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if detail.isCompleted {
@@ -1275,7 +1278,7 @@ private struct FieldCheckRosterSearchModifier: ViewModifier {
         if isActive {
             content.searchable(
                 text: $text,
-                placement: .navigationBarDrawer(displayMode: .automatic),
+                placement: .toolbar,
                 prompt: "Search roster"
             )
         } else {
