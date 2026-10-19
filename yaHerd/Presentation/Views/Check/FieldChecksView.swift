@@ -142,7 +142,7 @@ struct FieldChecksView: View {
         .navigationTitle("Pasture Checks")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $showingStartPastureCheck) {
-            FieldCheckPastureStartListView { sessionID in
+            PastureSessionStartListView(kind: .fieldCheck) { sessionID in
                 showingStartPastureCheck = false
                 openSession(FieldCheckSessionLaunchConfiguration(sessionID: sessionID))
             }
