@@ -60,7 +60,7 @@ struct HerdTabRootView: View {
             usesShellBottomAccessory: true,
             onOpenAnimal: { router.openAnimal($0, in: tab) },
             onOpenPasture: { router.openPasture($0, in: tab) },
-            onOpenFieldChecks: { navigation.openFieldCheckArea(.sessions(.all)) },
+            onOpenFieldChecks: { navigation.openFieldChecks(.all) },
             onOpenWorkSessions: { router.openWorkingSessions(in: tab) },
             onOpenSettings: { navigation.present(.settings) }
         )
