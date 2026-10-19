@@ -1,0 +1,106 @@
+name: yaHerd Verification
+
+run-name: >-
+  Verification · ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_architecture:
+        description: Run repository architecture checks
+        required: true
+        type: boolean
+        default: true
+      run_concurrency:
+        description: Run Swift 6 concurrency checks
+        required: true
+        type: boolean
+        default: true
+      full_verification:
+        description: Also run Release, build-for-testing, and device builds
+        required: true
+        type: boolean
+        default: false
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+
+concurrency:
+  group: yaherd-verification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - name: Validate verification selection
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.run_architecture }}" != "true" && "${{ inputs.run_concurrency }}" != "true" ]]; then
+            echo "Select at least one verification option." >&2
+            exit 1
+          fi
+
+      - name: Check out exact verification commit
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            TARGET_REF="refs/heads/${GITHUB_HEAD_REF}"
+          else
+            TARGET_REF="${GITHUB_REF}"
+          fi
+
+          git -c protocol.version=2 fetch -q --no-tags --depth=1 origin "${TARGET_REF}"
+          git checkout -q --force FETCH_HEAD
+
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          echo "Verifying commit ${ACTUAL_SHA} from ${TARGET_REF}"
+          if [[ "${ACTUAL_SHA}" != "${EXPECTED_SHA}" ]]; then
+            echo "Checked-out commit ${ACTUAL_SHA} does not match expected verification commit ${EXPECTED_SHA}." >&2
+            exit 1
+          fi
+
+      - name: Verify privacy manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash Scripts/verify-privacy.sh
+
+      - name: Select Xcode 26
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          XCODE_PATH="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' -print | sort -V | tail -1)"
+          if [[ -z "$XCODE_PATH" ]]; then
+            echo "Xcode 26 is required for the iOS 26 target and Swift 6 verification." >&2
+            exit 1
+          fi
+          sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+          xcrun swiftc --version
+
+      - name: Verify architecture
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_architecture }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash Scripts/verify-architecture.sh
+
+      - name: Verify Swift 6 concurrency
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_concurrency }}
+        shell: bash
+        env:
+          YAHERD_FULL_VERIFY: ${{ github.event_name == 'workflow_dispatch' && inputs.full_verification && '1' || '0' }}
+        run: |
+          set -euo pipefail
+          bash Scripts/verify-concurrency.sh
