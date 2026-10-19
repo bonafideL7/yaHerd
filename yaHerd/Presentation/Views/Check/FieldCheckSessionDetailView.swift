@@ -1234,38 +1234,30 @@ private struct FieldCheckRosterFilterRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Menu {
-                Picker("Roster Filter", selection: $selectedFilter) {
-                    ForEach(FieldCheckRosterFilter.allCases) { filter in
-                        Label(filter.label, systemImage: filter.systemImage)
-                            .tag(filter)
-                    }
+        Menu {
+            Picker("Roster Filter", selection: $selectedFilter) {
+                ForEach(FieldCheckRosterFilter.allCases) { filter in
+                    Label(filter.label, systemImage: filter.systemImage)
+                        .tag(filter)
                 }
-
-                if selectedFilter != .all || hasSearchText {
-                    Section {
-                        Button {
-                            onReset()
-                        } label: {
-                            Label("Show All Animals", systemImage: "arrow.counterclockwise")
-                        }
-                    }
-                }
-            } label: {
-                Label(selectedFilter.label, systemImage: selectedFilter.systemImage)
-                    .font(.subheadline.weight(.semibold))
             }
 
-            Spacer(minLength: 12)
-
-            Text(countText)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+            if selectedFilter != .all || hasSearchText {
+                Section {
+                    Button(action: onReset) {
+                        Label(
+                            hasSearchText ? "Clear Filters and Search" : "Show All Animals",
+                            systemImage: "arrow.counterclockwise"
+                        )
+                    }
+                }
+            }
+        } label: {
+            AnimalListFilterMenuLabel(selection: selectedFilter.label, count: countText)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Roster filter, \(selectedFilter.label), \(countText)")
+        .buttonStyle(.plain)
+        .accessibilityLabel("Filter animals, \(selectedFilter.label), \(countText)")
+        .accessibilityHint("Opens the animal list filter menu")
     }
 }
 
