@@ -15,14 +15,8 @@ struct IsolatedFieldCheckAreaView: View {
 
     @ViewBuilder
     private var rootContent: some View {
-        if navigation.workflowRouter.fieldCheckListMode != nil {
-            checksList
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        IsolatedFlowCloseButton(action: onClose)
-                    }
-                }
-        } else if case .fieldCheckSession(let configuration) = navigation.workflowRouter.route {
+        if case .fieldCheckSession(let configuration) = navigation.workflowRouter.route,
+           navigation.workflowRouter.fieldCheckListMode == nil {
             sessionContent(configuration)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
