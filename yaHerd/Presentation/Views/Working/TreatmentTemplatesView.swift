@@ -180,6 +180,7 @@ private struct TreatmentTemplateDetailView: View {
     @State private var plannedTreatments: [WorkingTreatmentPlanItem] = []
     @State private var errorMessage: String?
     @State private var showingError = false
+    @State private var showingDiscardConfirmation = false
 
     init(templateID: UUID) {
         _viewModel = StateObject(
@@ -188,6 +189,11 @@ private struct TreatmentTemplateDetailView: View {
                 repository: EmptyWorkingRepository()
             )
         )
+    }
+
+    private var hasUnsavedChanges: Bool {
+        guard let template = viewModel.template else { return false }
+        return nameDraft != template.name || plannedTreatments != template.plannedTreatments
     }
 
     var body: some View {
@@ -219,13 +225,30 @@ private struct TreatmentTemplateDetailView: View {
         }
         .navigationTitle(nameDraft.isEmpty ? "Treatment Set" : nameDraft)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(hasUnsavedChanges)
         .toolbar {
+            if hasUnsavedChanges {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showingDiscardConfirmation = true
+                    } label: {
+                        Label("Back", systemImage: "chevron.left")
+                    }
+                }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 ToolbarSaveButton { save() }
             }
-            ToolbarItem(placement: .cancellationAction) {
-                ToolbarCancelButton { dismiss() }
-            }
+        }
+        .confirmationDialog(
+            "Discard changes?",
+            isPresented: $showingDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes", role: .destructive) { dismiss() }
+            Button("Keep Editing", role: .cancel) {}
+        } message: {
+            Text("Changes to this treatment set have not been saved.")
         }
         .task {
             viewModel.configure(repository: repository)
