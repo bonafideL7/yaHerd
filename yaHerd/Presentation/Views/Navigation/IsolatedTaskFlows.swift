@@ -32,7 +32,7 @@ struct IsolatedFieldCheckAreaView: View {
         if let pastureID {
             FieldCheckSessionSetupView(
                 suggestedPastureID: pastureID
-           ) { sessionID in
+            ) { sessionID in
                 navigation.workflowRouter.openFieldCheckSession(
                     FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
                 )
