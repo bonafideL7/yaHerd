@@ -541,12 +541,7 @@ final class AppNavigationState {
     }
 
     func openWorkingSessions() {
-        if selectedTab == .home {
-            openWorkArea(.sessions)
-            return
-        }
-        selectedTab = .herd
-        herdRouter.path = [.workingSessions]
+        openWorkArea(.sessions)
     }
 
     func openFieldCheckArea(_ configuration: FieldCheckAreaLaunchConfiguration) {
