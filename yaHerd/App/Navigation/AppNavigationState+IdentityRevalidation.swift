@@ -138,7 +138,7 @@ extension AppNavigationState {
             }
             return .unchanged
 
-        case .fieldCheckSessions, .workingSessions, .none:
+        case .fieldCheckStart, .workingSessionStart, .fieldCheckSessions, .workingSessions, .none:
             return .unchanged
         }
     }
