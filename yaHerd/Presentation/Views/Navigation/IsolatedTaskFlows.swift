@@ -6,36 +6,47 @@ struct IsolatedFieldCheckAreaView: View {
 
     var body: some View {
         NavigationStack(path: fieldCheckPathBinding) {
-            rootContent
-                .navigationDestination(for: FieldCheckSessionLaunchConfiguration.self) { configuration in
+            FieldChecksView(
+                mode: fieldCheckModeBinding,
+                onSessionLaunch: { navigation.workflowRouter.openFieldCheckSession($0) },
+                onStart: { navigation.workflowRouter.openFieldCheckStart() }
+            )
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    IsolatedFlowCloseButton(action: onClose)
+                }
+            }
+            .navigationDestination(for: FieldCheckWorkflowDestination.self) { destination in
+                switch destination {
+                case .start(let pastureID):
+                    fieldCheckStartContent(pastureID: pastureID)
+                case .session(let configuration):
                     sessionContent(configuration)
                 }
+            }
         }
     }
 
     @ViewBuilder
-    private var rootContent: some View {
-        if case .fieldCheckSession(let configuration) = navigation.workflowRouter.route,
-           navigation.workflowRouter.fieldCheckListMode == nil {
-            sessionContent(configuration)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        IsolatedFlowCloseButton(action: onClose)
-                    }
-                }
+    private func fieldCheckStartContent(pastureID: UUID?) -> some View {
+        if let pastureID {
+            FieldCheckSessionSetupView(
+                suggestedPastureID: pastureID,
+                dismissOnSessionStart: false
+            ) { sessionID in
+                navigation.workflowRouter.openFieldCheckSession(
+                    FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
+                )
+            }
         } else {
-            checksList
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        IsolatedFlowCloseButton(action: onClose)
-                    }
-                }
-        }
-    }
-
-    private var checksList: some View {
-        FieldChecksView(mode: fieldCheckModeBinding) { configuration in
-            navigation.workflowRouter.openFieldCheckSession(configuration)
+            PastureSessionStartListView(
+                kind: .fieldCheck,
+                dismissSetupOnSessionStart: false
+            ) { sessionID in
+                navigation.workflowRouter.openFieldCheckSession(
+                    FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
+                )
+            }
         }
     }
 
@@ -46,11 +57,12 @@ struct IsolatedFieldCheckAreaView: View {
             opensFlaggedRoster: configuration.opensFlaggedRoster,
             opensRemainingRoster: configuration.opensRemainingRoster,
             opensMissingRoster: configuration.opensMissingRoster,
-            focusedFindingID: configuration.focusedFindingID
+            focusedFindingID: configuration.focusedFindingID,
+            onSessionFinished: { navigation.workflowRouter.returnToList() }
         )
     }
 
-    private var fieldCheckPathBinding: Binding<[FieldCheckSessionLaunchConfiguration]> {
+    private var fieldCheckPathBinding: Binding<[FieldCheckWorkflowDestination]> {
         Binding(
             get: { navigation.workflowRouter.fieldCheckNavigationPath },
             set: { navigation.workflowRouter.fieldCheckNavigationPath = $0 }
@@ -61,7 +73,6 @@ struct IsolatedFieldCheckAreaView: View {
         Binding {
             navigation.workflowRouter.fieldCheckListMode ?? .all
         } set: { mode in
-            // Keep the list selection while a session is pushed onto the stack.
             guard case .fieldCheckSessions = navigation.workflowRouter.route else { return }
             navigation.workflowRouter.route = .fieldCheckSessions(mode)
         }
@@ -74,46 +85,51 @@ struct IsolatedWorkAreaView: View {
 
     var body: some View {
         NavigationStack(path: workingSessionPathBinding) {
-            rootContent
-                .navigationDestination(for: UUID.self) { sessionID in
+            WorkingSessionsView(
+                onSessionStarted: { navigation.workflowRouter.openWorkingSession($0) },
+                onStart: { navigation.workflowRouter.openWorkingSessionStart() }
+            )
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    IsolatedFlowCloseButton(action: onClose)
+                }
+            }
+            .navigationDestination(for: WorkingSessionWorkflowDestination.self) { destination in
+                switch destination {
+                case .start(let pastureID):
+                    workingSessionStartContent(pastureID: pastureID)
+                case .session(let sessionID):
                     sessionContent(sessionID)
                 }
+            }
         }
     }
 
     @ViewBuilder
-    private var rootContent: some View {
-        if case .workingSession(let sessionID) = navigation.workflowRouter.route,
-           !navigation.workflowRouter.canReturnToList {
-            sessionContent(sessionID)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        IsolatedFlowCloseButton(action: onClose)
-                    }
-                }
+    private func workingSessionStartContent(pastureID: UUID?) -> some View {
+        if let pastureID {
+            NewWorkingSessionView(
+                suggestedPastureID: pastureID,
+                wrapsInNavigationStack: false
+            ) { sessionID in
+                navigation.workflowRouter.openWorkingSession(sessionID)
+            }
         } else {
-            sessionsList
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        IsolatedFlowCloseButton(action: onClose)
-                    }
-                }
-        }
-    }
-
-    private var sessionsList: some View {
-        WorkingSessionsView { sessionID in
-            navigation.workflowRouter.openWorkingSession(sessionID)
+            PastureSessionStartListView(kind: .working) { sessionID in
+                navigation.workflowRouter.openWorkingSession(sessionID)
+            }
         }
     }
 
     private func sessionContent(_ sessionID: UUID) -> some View {
-        WorkingSessionDetailView(sessionID: sessionID) { deletedID in
-            navigation.handleDeletedWorkingSession(deletedID)
-        }
+        WorkingSessionDetailView(
+            sessionID: sessionID,
+            onSessionDeleted: { navigation.handleDeletedWorkingSession($0) },
+            onSessionFinished: { navigation.workflowRouter.returnToList() }
+        )
     }
 
-    private var workingSessionPathBinding: Binding<[UUID]> {
+    private var workingSessionPathBinding: Binding<[WorkingSessionWorkflowDestination]> {
         Binding(
             get: { navigation.workflowRouter.workingSessionNavigationPath },
             set: { navigation.workflowRouter.workingSessionNavigationPath = $0 }
