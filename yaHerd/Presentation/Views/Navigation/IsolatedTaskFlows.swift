@@ -34,7 +34,10 @@ struct IsolatedFieldCheckAreaView: View {
     }
 
     private var checksList: some View {
-        FieldChecksView(mode: fieldCheckModeBinding) { configuration in
+        FieldChecksView(
+            mode: fieldCheckModeBinding,
+            startsWithPastureSelection: navigation.workflowRouter.startsWithPastureSelection
+        ) { configuration in
             navigation.workflowRouter.openFieldCheckSession(configuration)
         }
     }
@@ -102,7 +105,7 @@ struct IsolatedWorkAreaView: View {
     }
 
     private var sessionsList: some View {
-        WorkingSessionsView { sessionID in
+        WorkingSessionsView(startsWithPastureSelection: navigation.workflowRouter.startsWithPastureSelection) { sessionID in
             navigation.workflowRouter.openWorkingSession(sessionID)
         }
     }
