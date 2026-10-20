@@ -64,7 +64,10 @@ struct IsolatedFieldCheckAreaView: View {
                 )
             }
         } else {
-            PastureSessionStartListView(kind: .fieldCheck) { sessionID in
+            PastureSessionStartListView(
+                kind: .fieldCheck,
+                dismissSetupOnSessionStart: false
+            ) { sessionID in
                 navigation.workflowRouter.openFieldCheckSession(
                     FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
                 )
