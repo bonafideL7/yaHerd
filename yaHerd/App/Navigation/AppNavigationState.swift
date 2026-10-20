@@ -246,6 +246,26 @@ final class WorkflowRouter {
         route = .fieldCheckSession(configuration)
     }
 
+    // The list-to-session route is presented by NavigationStack rather than
+    // replacing the visible root. Direct session launches have an empty path.
+    var workingSessionNavigationPath: [UUID] {
+        get {
+            guard case .workingSession(let sessionID) = route,
+                  case .workingSessions = returnRoute
+            else { return [] }
+            return [sessionID]
+        }
+        set {
+            if let sessionID = newValue.last {
+                guard workingSessionNavigationPath.last != sessionID else { return }
+                openWorkingSession(sessionID)
+            } else if case .workingSession = route,
+                      case .workingSessions = returnRoute {
+                returnToList()
+            }
+        }
+    }
+
     func openWorkingSession(_ sessionID: UUID) {
         if case .workingSessions = route {
             returnRoute = route
