@@ -43,17 +43,19 @@ struct FieldChecksView: View {
     private var fieldCheckOverviewReader: any FieldCheckOverviewReading { fieldCheckDependencies.overviewReader }
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @State private var model = FieldChecksViewModel()
-    @State private var showingStartPastureCheck = false
 
     @Binding private var selectedMode: FieldChecksViewMode
     private let onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)?
+    private let onStart: () -> Void
 
     init(
         mode: Binding<FieldChecksViewMode>,
-        onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)? = nil
+        onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)? = nil,
+        onStart: @escaping () -> Void
     ) {
         _selectedMode = mode
         self.onSessionLaunch = onSessionLaunch
+        self.onStart = onStart
     }
 
     private var allSessionGroups: FieldCheckAllSessionGroups {
@@ -141,16 +143,10 @@ struct FieldChecksView: View {
         }
         .navigationTitle("Pasture Checks")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(isPresented: $showingStartPastureCheck) {
-            PastureSessionStartListView(kind: .fieldCheck) { sessionID in
-                showingStartPastureCheck = false
-                openSession(FieldCheckSessionLaunchConfiguration(sessionID: sessionID))
-            }
-        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    showingStartPastureCheck = true
+                    onStart()
                 } label: {
                     Label("Start", systemImage: "plus")
                 }
@@ -220,7 +216,7 @@ struct FieldChecksView: View {
         case .all:
             FieldChecksEmptyState {
                 if dataAccessMode.allowsDataMutations {
-                    showingStartPastureCheck = true
+                    onStart()
                 }
             }
         case .inProgress:
