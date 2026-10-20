@@ -6,7 +6,6 @@
 import SwiftUI
 
 struct NewWorkingSessionView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
@@ -31,20 +30,16 @@ struct NewWorkingSessionView: View {
     @State private var specifiesAnimals = false
     @State private var selectedAnimalIDs: Set<UUID> = []
     @State private var showingAnimalPicker = false
-    @State private var startedRoute: StartedWorkingSessionSetupRoute?
     @State private var isStarting = false
 
     private let suggestedPastureID: UUID?
-    private let wrapsInNavigationStack: Bool
-    private let onSessionCreated: ((UUID) -> Void)?
+    private let onSessionCreated: (UUID) -> Void
 
     init(
         suggestedPastureID: UUID? = nil,
-        wrapsInNavigationStack: Bool = true,
-        onSessionCreated: ((UUID) -> Void)? = nil
+        onSessionCreated: @escaping (UUID) -> Void
     ) {
         self.suggestedPastureID = suggestedPastureID
-        self.wrapsInNavigationStack = wrapsInNavigationStack
         self.onSessionCreated = onSessionCreated
         _selectedPastureID = State(initialValue: suggestedPastureID)
     }
@@ -109,14 +104,6 @@ struct NewWorkingSessionView: View {
     }
 
     var body: some View {
-        if wrapsInNavigationStack {
-            NavigationStack { content }
-        } else {
-            content
-        }
-    }
-
-    private var content: some View {
         Form {
             sessionSection
             animalsSection
@@ -152,9 +139,6 @@ struct NewWorkingSessionView: View {
         .sheet(isPresented: $showingAnimalPicker) {
             WorkingSessionAnimalSelectionView(animals: eligibleAnimals, selection: $selectedAnimalIDs)
         }
-        .navigationDestination(item: $startedRoute) { route in
-            WorkingSessionDetailView(sessionID: route.id)
-        }
         .safeAreaInset(edge: .bottom) {
             WorkingSessionStartBar(
                 animalCount: includedAnimalCount,
@@ -162,14 +146,6 @@ struct NewWorkingSessionView: View {
                 statusText: startStatusText,
                 onStart: startSession
             )
-        }
-        .toolbar {
-            if wrapsInNavigationStack {
-                ToolbarItem(placement: .cancellationAction) {
-                    ToolbarCancelButton { dismiss() }
-                        .disabled(isStarting)
-                }
-            }
         }
         .alert("Can’t Start Session", isPresented: errorBinding) {
             Button("OK", role: .cancel) {}
@@ -329,11 +305,7 @@ struct NewWorkingSessionView: View {
                     plannedTreatments: cleanedTreatments,
                     animalIDs: submittedAnimalIDs
                 )
-                if let onSessionCreated {
-                    onSessionCreated(sessionID)
-                } else {
-                    startedRoute = StartedWorkingSessionSetupRoute(id: sessionID)
-                }
+                onSessionCreated(sessionID)
             } catch {
                 viewModel.errorMessage = UserVisibleErrorMessage.make(error)
             }
