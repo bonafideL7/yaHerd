@@ -1093,6 +1093,7 @@ struct FieldCheckSessionDetailView: View {
         }
     }
 
+    @MainActor
     private func completeCurrentSession() async -> String? {
         guard dataAccessMode.allowsDataMutations,
               model.beginSessionCompletion() else {
@@ -1105,9 +1106,13 @@ struct FieldCheckSessionDetailView: View {
             completionAlreadyAccepted: true
         )
 
-        return model.detail?.isCompleted == true
-            ? nil
-            : (model.errorMessage ?? "The pasture check could not be completed.")
+        guard model.detail?.isCompleted != true else { return nil }
+
+        // The finish sheet owns completion errors; don't repeat the alert
+        // when the user returns to the checklist.
+        let message = model.errorMessage ?? "The pasture check could not be completed."
+        model.errorMessage = nil
+        return message
     }
 
     private var errorMessage: String? {
