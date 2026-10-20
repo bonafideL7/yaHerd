@@ -30,9 +30,7 @@ struct IsolatedFieldCheckAreaView: View {
     }
 
     private var fieldCheckStartContent: some View {
-        PastureSessionStartListView(kind: .fieldCheck) { pastureID in
-            navigation.workflowRouter.openFieldCheckSetup(pastureID)
-        }
+        PastureSessionStartListView(kind: .fieldCheck)
     }
 
     private func fieldCheckSetupContent(pastureID: UUID) -> some View {
@@ -101,9 +99,7 @@ struct IsolatedWorkAreaView: View {
     }
 
     private var workingSessionStartContent: some View {
-        PastureSessionStartListView(kind: .working) { pastureID in
-            navigation.workflowRouter.openWorkingSessionSetup(pastureID)
-        }
+        PastureSessionStartListView(kind: .working)
     }
 
     private func workingSessionSetupContent(pastureID: UUID) -> some View {
