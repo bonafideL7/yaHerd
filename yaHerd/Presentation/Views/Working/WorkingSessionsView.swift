@@ -11,18 +11,21 @@ struct WorkingSessionsView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @StateObject private var viewModel: WorkingSessionsViewModel
 
-    @State private var showingNewSession = false
     @State private var sessionPendingDeleteID: UUID?
     @State private var showingDeleteAlert = false
     @State private var errorMessage: String?
     @State private var showingError = false
     @State private var isDeletingSession = false
-    @State private var startedRoute: StartedWorkingSessionRoute?
 
-    private let onSessionStarted: ((UUID) -> Void)?
+    private let onSessionStarted: (UUID) -> Void
+    private let onStart: () -> Void
 
-    init(onSessionStarted: ((UUID) -> Void)? = nil) {
+    init(
+        onSessionStarted: @escaping (UUID) -> Void,
+        onStart: @escaping () -> Void
+    ) {
         self.onSessionStarted = onSessionStarted
+        self.onStart = onStart
         _viewModel = StateObject(
             wrappedValue: WorkingSessionsViewModel(repository: EmptyWorkingRepository())
         )
@@ -85,7 +88,7 @@ struct WorkingSessionsView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    showingNewSession = true
+                    onStart()
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -95,17 +98,6 @@ struct WorkingSessionsView: View {
         .task {
             viewModel.configure(repository: repository)
             await viewModel.observe(mutationStream: workingDependencies.mutationStream)
-        }
-        .onChange(of: showingNewSession) { _, isPresented in
-            if !isPresented {
-                viewModel.load()
-            }
-        }
-        .navigationDestination(isPresented: $showingNewSession) {
-            PastureSessionStartListView(kind: .working, onSessionStarted: handleSessionStarted)
-        }
-        .navigationDestination(item: $startedRoute) { route in
-            WorkingSessionDetailView(sessionID: route.id)
         }
         .alert(
             "Delete working session?",
@@ -132,32 +124,13 @@ struct WorkingSessionsView: View {
         }
     }
 
-    @ViewBuilder
     private func workingSessionNavigationRow(_ session: WorkingSessionSummary) -> some View {
-        if let onSessionStarted {
-            Button {
-                onSessionStarted(session.id)
-            } label: {
-                WorkingSessionRow(session: session)
-            }
-            .disabled(isDeletingSession)
-        } else {
-            NavigationLink {
-                WorkingSessionDetailView(sessionID: session.id)
-            } label: {
-                WorkingSessionRow(session: session)
-            }
-            .disabled(isDeletingSession)
+        Button {
+            onSessionStarted(session.id)
+        } label: {
+            WorkingSessionRow(session: session)
         }
-    }
-
-    private func handleSessionStarted(_ sessionID: UUID) {
-        showingNewSession = false
-        if let onSessionStarted {
-            onSessionStarted(sessionID)
-        } else {
-            startedRoute = StartedWorkingSessionRoute(id: sessionID)
-        }
+        .disabled(isDeletingSession)
     }
 
     private var pendingSession: WorkingSessionSummary? {
