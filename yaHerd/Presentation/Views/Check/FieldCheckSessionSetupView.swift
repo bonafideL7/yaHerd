@@ -64,6 +64,7 @@ struct FieldCheckSessionSetupView: View {
         .disabled(isStartingSession)
         .navigationTitle("Start Pasture Check")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .navigationBarBackButtonHidden(isStartingSession)
         .interactiveDismissDisabled(isStartingSession)
         .task {
