@@ -73,45 +73,51 @@ struct IsolatedWorkAreaView: View {
     let onClose: () -> Void
 
     var body: some View {
-        NavigationStack {
-            content
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        if navigation.workflowRouter.canReturnToList {
-                            Button {
-                                navigation.workflowRouter.returnToList()
-                            } label: {
-                                Label("Back to Sessions", systemImage: "chevron.left")
-                            }
-                        } else {
-                            IsolatedFlowCloseButton(action: onClose)
-                        }
-                    }
-                    if navigation.workflowRouter.canReturnToList {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            IsolatedFlowCloseButton(action: onClose)
-                        }
-                    }
+        NavigationStack(path: workingSessionPathBinding) {
+            rootContent
+                .navigationDestination(for: UUID.self) { sessionID in
+                    sessionContent(sessionID)
                 }
         }
     }
 
     @ViewBuilder
-    private var content: some View {
-        switch navigation.workflowRouter.route {
-        case .workingSession(let sessionID):
-            WorkingSessionDetailView(sessionID: sessionID) { deletedID in
-                navigation.handleDeletedWorkingSession(deletedID)
-            }
-        case .workingSessions:
-            WorkingSessionsView { sessionID in
-                navigation.workflowRouter.openWorkingSession(sessionID)
-            }
-        default:
-            WorkingSessionsView { sessionID in
-                navigation.workflowRouter.openWorkingSession(sessionID)
-            }
+    private var rootContent: some View {
+        if case .workingSession(let sessionID) = navigation.workflowRouter.route,
+           !navigation.workflowRouter.canReturnToList {
+            sessionContent(sessionID)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        IsolatedFlowCloseButton(action: onClose)
+                    }
+                }
+        } else {
+            sessionsList
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        IsolatedFlowCloseButton(action: onClose)
+                    }
+                }
         }
+    }
+
+    private var sessionsList: some View {
+        WorkingSessionsView { sessionID in
+            navigation.workflowRouter.openWorkingSession(sessionID)
+        }
+    }
+
+    private func sessionContent(_ sessionID: UUID) -> some View {
+        WorkingSessionDetailView(sessionID: sessionID) { deletedID in
+            navigation.handleDeletedWorkingSession(deletedID)
+        }
+    }
+
+    private var workingSessionPathBinding: Binding<[UUID]> {
+        Binding(
+            get: { navigation.workflowRouter.workingSessionNavigationPath },
+            set: { navigation.workflowRouter.workingSessionNavigationPath = $0 }
+        )
     }
 }
 
