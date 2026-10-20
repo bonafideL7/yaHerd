@@ -750,12 +750,14 @@ final class AppNavigationState {
         switch (fullScreenWorkflow, workflowRouter.route) {
         case (.fieldCheck, .fieldCheckSessions(let mode)):
             return .fieldCheckSessions(mode)
+        case (.fieldCheck, .fieldCheckStart):
+            return .fieldCheckSessions(workflowRouter.fieldCheckListMode ?? .all)
         case (.fieldCheck, .fieldCheckSession(let configuration)):
             if let mode = workflowRouter.fieldCheckListMode {
                 return .fieldCheckSessionFromList(configuration, mode)
             }
             return .fieldCheckSession(configuration.sessionID)
-        case (.workingSession, .workingSessions):
+        case (.workingSession, .workingSessions), (.workingSession, .workingSessionStart):
             return .workingSessions
         case (.workingSession, .workingSession(let sessionID)):
             return workflowRouter.canReturnToList
