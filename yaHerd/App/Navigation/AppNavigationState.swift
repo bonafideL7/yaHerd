@@ -29,8 +29,6 @@ enum AppPresentedSheet: String, Codable, Identifiable, Hashable {
     case settings
     case addAnimal
     case addPasture
-    case startFieldCheck
-    case startWorkingSession
 
     var id: String { rawValue }
 }
