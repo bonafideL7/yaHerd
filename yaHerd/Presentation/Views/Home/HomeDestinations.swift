@@ -22,10 +22,16 @@ struct PastureSessionStartListView: View {
     @State private var errorMessage: String?
 
     let kind: PastureSessionStartKind
+    let dismissSetupOnSessionStart: Bool
     let onSessionStarted: (UUID) -> Void
 
-    init(kind: PastureSessionStartKind, onSessionStarted: @escaping (UUID) -> Void) {
+    init(
+        kind: PastureSessionStartKind,
+        dismissSetupOnSessionStart: Bool = true,
+        onSessionStarted: @escaping (UUID) -> Void
+    ) {
         self.kind = kind
+        self.dismissSetupOnSessionStart = dismissSetupOnSessionStart
         self.onSessionStarted = onSessionStarted
     }
 
@@ -110,6 +116,7 @@ struct PastureSessionStartListView: View {
         case .fieldCheck:
             FieldCheckSessionSetupView(
                 suggestedPastureID: pasture.id,
+                dismissOnSessionStart: dismissSetupOnSessionStart,
                 onSessionStarted: onSessionStarted
             )
         case .working:
