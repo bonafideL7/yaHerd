@@ -135,12 +135,14 @@ struct HerdTabRootView: View {
                 ),
                 onSessionLaunch: { configuration in
                     navigation.openFieldCheckArea(.session(configuration))
-                }
+                },
+                onStart: { navigation.startFieldCheck() }
             )
         case .workingSessions:
-            WorkingSessionsView { sessionID in
-                navigation.openWorkArea(.session(sessionID))
-            }
+            WorkingSessionsView(
+                onSessionStarted: { navigation.openWorkArea(.session($0)) },
+                onStart: { navigation.startWorkingSession() }
+            )
         }
     }
 
