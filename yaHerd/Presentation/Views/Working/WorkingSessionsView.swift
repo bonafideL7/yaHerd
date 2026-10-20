@@ -12,6 +12,7 @@ struct WorkingSessionsView: View {
     @StateObject private var viewModel: WorkingSessionsViewModel
 
     @State private var showingNewSession = false
+    @State private var hasPresentedInitialStart = false
     @State private var sessionPendingDeleteID: UUID?
     @State private var showingDeleteAlert = false
     @State private var errorMessage: String?
@@ -19,9 +20,14 @@ struct WorkingSessionsView: View {
     @State private var isDeletingSession = false
     @State private var startedRoute: StartedWorkingSessionRoute?
 
+    private let startsWithPastureSelection: Bool
     private let onSessionStarted: ((UUID) -> Void)?
 
-    init(onSessionStarted: ((UUID) -> Void)? = nil) {
+    init(
+        startsWithPastureSelection: Bool = false,
+        onSessionStarted: ((UUID) -> Void)? = nil
+    ) {
+        self.startsWithPastureSelection = startsWithPastureSelection
         self.onSessionStarted = onSessionStarted
         _viewModel = StateObject(
             wrappedValue: WorkingSessionsViewModel(repository: EmptyWorkingRepository())
@@ -93,6 +99,12 @@ struct WorkingSessionsView: View {
             }
         }
         .task {
+            if startsWithPastureSelection && !hasPresentedInitialStart {
+                hasPresentedInitialStart = true
+                if dataAccessMode.allowsDataMutations {
+                    showingNewSession = true
+                }
+            }
             viewModel.configure(repository: repository)
             await viewModel.observe(mutationStream: workingDependencies.mutationStream)
         }
