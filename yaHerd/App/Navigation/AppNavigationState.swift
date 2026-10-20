@@ -287,14 +287,19 @@ final class WorkflowRouter {
     }
 }
 
-/// Only persisted workflows backed by an existing, active repository record are restorable.
+/// Lists restore without record validation. Session destinations restore only
+/// when their repository records are still active.
 enum AppRestorableWorkflow: Codable, Equatable {
+    case fieldCheckSessions(FieldChecksViewMode)
+    case fieldCheckSessionFromList(FieldCheckSessionLaunchConfiguration, FieldChecksViewMode)
     case fieldCheckSession(UUID)
+    case workingSessions
+    case workingSessionFromList(UUID)
     case workingSession(UUID)
 }
 
 struct AppNavigationSnapshot: Codable, Equatable {
-    static let currentVersion = 2
+    static let currentVersion = 3
     static let supportedVersions = 1...currentVersion
 
     var version: Int = currentVersion
@@ -673,10 +678,19 @@ final class AppNavigationState {
 
     private var restorableWorkflow: AppRestorableWorkflow? {
         switch (fullScreenWorkflow, workflowRouter.route) {
+        case (.fieldCheck, .fieldCheckSessions(let mode)):
+            return .fieldCheckSessions(mode)
         case (.fieldCheck, .fieldCheckSession(let configuration)):
+            if case .fieldCheckSessions(let mode) = workflowRouter.fieldCheckListMode.map(WorkflowRoute.fieldCheckSessions) {
+                return .fieldCheckSessionFromList(configuration, mode)
+            }
             return .fieldCheckSession(configuration.sessionID)
+        case (.workingSession, .workingSessions):
+            return .workingSessions
         case (.workingSession, .workingSession(let sessionID)):
-            return .workingSession(sessionID)
+            return workflowRouter.canReturnToList
+                ? .workingSessionFromList(sessionID)
+                : .workingSession(sessionID)
         default:
             return nil
         }
@@ -706,6 +720,17 @@ final class AppNavigationState {
         herdRouter.path = snapshot.herdRouter.path.filter(\.isStableListRoute)
         herdRouter.searchPath = (snapshot.herdRouter.searchPath ?? []).filter(\.isStableListRoute)
         clearIdentityBoundPastureFilter()
+
+        // Without a repository validator, only list origins are safe to restore.
+        switch snapshot.activeWorkflow {
+        case .fieldCheckSessions(let mode),
+             .fieldCheckSessionFromList(_, let mode):
+            openFieldCheckArea(.sessions(mode))
+        case .workingSessions, .workingSessionFromList:
+            openWorkArea(.sessions)
+        default:
+            break
+        }
         migrateLegacyWorkflowListRoutes()
     }
 
@@ -783,21 +808,35 @@ final class AppNavigationState {
         using validator: any AppNavigationRestorationValidating
     ) {
         switch workflow {
+        case .fieldCheckSessions(let mode):
+            openFieldCheckArea(.sessions(mode))
+
+        case .fieldCheckSessionFromList(let configuration, let mode):
+            openFieldCheckArea(.sessions(mode))
+            if (try? validator.isActiveFieldCheckSession(id: configuration.sessionID)) == true {
+                workflowRouter.openFieldCheckSession(configuration)
+            }
+
         case .fieldCheckSession(let sessionID):
             guard (try? validator.isActiveFieldCheckSession(id: sessionID)) == true else {
                 return
             }
-            workflowRouter.route = .fieldCheckSession(
-                FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
-            )
-            fullScreenWorkflow = .fieldCheck
+            openFieldCheckArea(.session(FieldCheckSessionLaunchConfiguration(sessionID: sessionID)))
+
+        case .workingSessions:
+            openWorkArea(.sessions)
+
+        case .workingSessionFromList(let sessionID):
+            openWorkArea(.sessions)
+            if (try? validator.isActiveWorkingSession(id: sessionID)) == true {
+                workflowRouter.openWorkingSession(sessionID)
+            }
 
         case .workingSession(let sessionID):
             guard (try? validator.isActiveWorkingSession(id: sessionID)) == true else {
                 return
             }
-            workflowRouter.route = .workingSession(sessionID)
-            fullScreenWorkflow = .workingSession
+            openWorkArea(.session(sessionID))
 
         case .none:
             break
