@@ -58,28 +58,6 @@ private struct AppNavigationPresentationModifier: ViewModifier {
             AddAnimalView()
         case .addPasture:
             AddPastureView()
-        case .startFieldCheck:
-            NavigationStack {
-                PastureSessionStartListView(kind: .fieldCheck) { sessionID in
-                    navigation.openFieldCheckArea(
-                        .session(FieldCheckSessionLaunchConfiguration(sessionID: sessionID))
-                    )
-                }
-                .sheetCancelToolbar()
-            }
-        case .startWorkingSession:
-            NavigationStack {
-                PastureSessionStartListView(kind: .working) { sessionID in
-                    navigation.openWorkArea(.session(sessionID))
-                }
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel", role: .cancel) {
-                            navigation.dismissSheet()
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -95,24 +73,6 @@ private struct AppNavigationPresentationModifier: ViewModifier {
                 navigation.closeFullScreenWorkflow()
             }
         }
-    }
-}
-
-private extension View {
-    func sheetCancelToolbar() -> some View {
-        toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                DismissButton()
-            }
-        }
-    }
-}
-
-private struct DismissButton: View {
-    @Environment(AppNavigationState.self) private var navigation
-
-    var body: some View {
-        Button("Cancel", role: .cancel) { navigation.dismissSheet() }
     }
 }
 
