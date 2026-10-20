@@ -102,6 +102,3 @@ struct WorkingSessionStartBar: View {
     }
 }
 
-struct StartedWorkingSessionSetupRoute: Identifiable, Hashable {
-    let id: UUID
-}
