@@ -93,9 +93,11 @@ private struct PreflightedAppNavigationRestorationValidator: AppNavigationRestor
         switch snapshot.activeWorkflow {
         case .fieldCheckSession(let sessionID):
             fieldCheckSessionIDs.insert(sessionID)
-        case .workingSession(let sessionID):
+        case .fieldCheckSessionFromList(let configuration, _):
+            fieldCheckSessionIDs.insert(configuration.sessionID)
+        case .workingSession(let sessionID), .workingSessionFromList(let sessionID):
             workingSessionIDs.insert(sessionID)
-        case .none:
+        case .fieldCheckSessions, .workingSessions, .none:
             break
         }
 
