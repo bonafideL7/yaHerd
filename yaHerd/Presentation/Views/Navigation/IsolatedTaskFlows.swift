@@ -31,18 +31,14 @@ struct IsolatedFieldCheckAreaView: View {
     private func fieldCheckStartContent(pastureID: UUID?) -> some View {
         if let pastureID {
             FieldCheckSessionSetupView(
-                suggestedPastureID: pastureID,
-                dismissOnSessionStart: false
-            ) { sessionID in
+                suggestedPastureID: pastureID
+           ) { sessionID in
                 navigation.workflowRouter.openFieldCheckSession(
                     FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
                 )
             }
         } else {
-            PastureSessionStartListView(
-                kind: .fieldCheck,
-                dismissSetupOnSessionStart: false
-            ) { sessionID in
+            PastureSessionStartListView(kind: .fieldCheck) { sessionID in
                 navigation.workflowRouter.openFieldCheckSession(
                     FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
                 )
