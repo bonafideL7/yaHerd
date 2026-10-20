@@ -19,6 +19,8 @@ enum HerdRoute: Codable, Hashable {
 
 /// Routes owned by isolated field-check and working-session flows.
 enum WorkflowRoute: Codable, Hashable {
+    case fieldCheckStart(UUID?)
+    case workingSessionStart(UUID?)
     case fieldCheckSessions(FieldChecksViewMode)
     case fieldCheckSession(FieldCheckSessionLaunchConfiguration)
     case workingSessions
@@ -518,7 +520,14 @@ final class AppNavigationState {
     }
 
     func present(_ sheet: AppPresentedSheet) {
-        presentedSheet = sheet
+        switch sheet {
+        case .startFieldCheck:
+            startFieldCheck()
+        case .startWorkingSession:
+            startWorkingSession()
+        default:
+            presentedSheet = sheet
+        }
     }
 
     func dismissSheet() {
@@ -568,6 +577,20 @@ final class AppNavigationState {
 
     func openWorkingSessions() {
         openWorkArea(.sessions)
+    }
+
+    func startFieldCheck(suggestedPastureID: UUID? = nil) {
+        presentedSheet = nil
+        workflowRouter.reset()
+        workflowRouter.route = .fieldCheckStart(suggestedPastureID)
+        fullScreenWorkflow = .fieldCheck
+    }
+
+    func startWorkingSession(suggestedPastureID: UUID? = nil) {
+        presentedSheet = nil
+        workflowRouter.reset()
+        workflowRouter.route = .workingSessionStart(suggestedPastureID)
+        fullScreenWorkflow = .workingSession
     }
 
     func openFieldCheckArea(_ configuration: FieldCheckAreaLaunchConfiguration) {
