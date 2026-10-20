@@ -297,20 +297,25 @@ struct FieldCheckSessionDetailView: View {
             }
         }
         .sheet(isPresented: $showingFinishReview) {
-            if let detail = model.detail, !detail.isCompleted {
+            if let detail = model.detail {
                 FieldCheckFinishReviewView(
                     detail: detail,
                     countProjection: model.countProjection(for: detail),
                     quickAnimalTypeCounts: model.quickAnimalTypeCountsDraft,
                     notes: model.notesDraft,
                     isFinishing: model.isCompletingSession,
-                    canFinish: dataAccessMode.allowsDataMutations,
+                    canFinish: dataAccessMode.allowsDataMutations && !detail.isCompleted,
                     errorMessage: Binding(
                         get: { model.errorMessage },
                         set: { model.errorMessage = $0 }
                     ),
                     onFinish: completeCurrentSession
                 )
+            }
+        }
+        .onChange(of: model.detail?.isCompleted) { _, isCompleted in
+            if isCompleted == true {
+                showingFinishReview = false
             }
         }
         .sheet(isPresented: $showingAddFinding, onDismiss: { pendingFindingAnimalID = nil }) {
