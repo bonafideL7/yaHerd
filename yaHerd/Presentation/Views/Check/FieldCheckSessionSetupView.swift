@@ -15,10 +15,16 @@ struct FieldCheckSessionSetupView: View {
     @State private var isStartingSession = false
 
     private let suggestedPastureID: UUID?
+    private let dismissOnSessionStart: Bool
     private let onSessionStarted: ((UUID) -> Void)?
 
-    init(suggestedPastureID: UUID? = nil, onSessionStarted: ((UUID) -> Void)? = nil) {
+    init(
+        suggestedPastureID: UUID? = nil,
+        dismissOnSessionStart: Bool = true,
+        onSessionStarted: ((UUID) -> Void)? = nil
+    ) {
         self.suggestedPastureID = suggestedPastureID
+        self.dismissOnSessionStart = dismissOnSessionStart
         self.onSessionStarted = onSessionStarted
         _selectedPastureID = State(initialValue: suggestedPastureID)
     }
@@ -176,7 +182,9 @@ struct FieldCheckSessionSetupView: View {
                     using: setupRepository
                 )
                 if let onSessionStarted {
-                    dismiss()
+                    if dismissOnSessionStart {
+                        dismiss()
+                    }
                     onSessionStarted(sessionID)
                 } else {
                     startedRoute = StartedFieldCheckRoute(id: sessionID)
