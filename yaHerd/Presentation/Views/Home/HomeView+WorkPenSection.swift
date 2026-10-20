@@ -23,10 +23,8 @@ extension HomeView {
                     .buttonStyle(.plain)
                 }
 
-                NavigationLink {
-                    WorkingSessionsView { sessionID in
-                        openWorkArea(.session(sessionID))
-                    }
+                Button {
+                    openWorkArea(.sessions)
                 } label: {
                     HomeListRow(
                         title: "Working sessions",
