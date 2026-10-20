@@ -11,11 +11,30 @@ struct IsolatedFieldCheckAreaView: View {
                     sessionContent(configuration)
                 }
         }
+        .id(rootIdentity)
+    }
+
+    private var rootIdentity: String {
+        switch navigation.workflowRouter.route {
+        case .fieldCheckStart:
+            return "start"
+        case .fieldCheckSession where navigation.workflowRouter.fieldCheckListMode == nil:
+            return "directSession"
+        default:
+            return "sessionsList"
+        }
     }
 
     @ViewBuilder
     private var rootContent: some View {
-        if case .fieldCheckSession(let configuration) = navigation.workflowRouter.route,
+        if case .fieldCheckStart(let pastureID) = navigation.workflowRouter.route {
+            fieldCheckStartContent(pastureID: pastureID)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        IsolatedFlowCloseButton(action: onClose)
+                    }
+                }
+        } else if case .fieldCheckSession(let configuration) = navigation.workflowRouter.route,
            navigation.workflowRouter.fieldCheckListMode == nil {
             sessionContent(configuration)
                 .toolbar {
@@ -30,6 +49,26 @@ struct IsolatedFieldCheckAreaView: View {
                         IsolatedFlowCloseButton(action: onClose)
                     }
                 }
+        }
+    }
+
+    @ViewBuilder
+    private func fieldCheckStartContent(pastureID: UUID?) -> some View {
+        if let pastureID {
+            FieldCheckSessionSetupView(
+                suggestedPastureID: pastureID,
+                dismissOnSessionStart: false
+            ) { sessionID in
+                navigation.workflowRouter.openFieldCheckSession(
+                    FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
+                )
+            }
+        } else {
+            PastureSessionStartListView(kind: .fieldCheck) { sessionID in
+                navigation.workflowRouter.openFieldCheckSession(
+                    FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
+                )
+            }
         }
     }
 
@@ -79,11 +118,30 @@ struct IsolatedWorkAreaView: View {
                     sessionContent(sessionID)
                 }
         }
+        .id(rootIdentity)
+    }
+
+    private var rootIdentity: String {
+        switch navigation.workflowRouter.route {
+        case .workingSessionStart:
+            return "start"
+        case .workingSession where !navigation.workflowRouter.canReturnToList:
+            return "directSession"
+        default:
+            return "sessionsList"
+        }
     }
 
     @ViewBuilder
     private var rootContent: some View {
-        if case .workingSession(let sessionID) = navigation.workflowRouter.route,
+        if case .workingSessionStart(let pastureID) = navigation.workflowRouter.route {
+            workingSessionStartContent(pastureID: pastureID)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        IsolatedFlowCloseButton(action: onClose)
+                    }
+                }
+        } else if case .workingSession(let sessionID) = navigation.workflowRouter.route,
            !navigation.workflowRouter.canReturnToList {
             sessionContent(sessionID)
                 .toolbar {
@@ -98,6 +156,22 @@ struct IsolatedWorkAreaView: View {
                         IsolatedFlowCloseButton(action: onClose)
                     }
                 }
+        }
+    }
+
+    @ViewBuilder
+    private func workingSessionStartContent(pastureID: UUID?) -> some View {
+        if let pastureID {
+            NewWorkingSessionView(
+                suggestedPastureID: pastureID,
+                wrapsInNavigationStack: false
+            ) { sessionID in
+                navigation.workflowRouter.openWorkingSession(sessionID)
+            }
+        } else {
+            PastureSessionStartListView(kind: .working) { sessionID in
+                navigation.workflowRouter.openWorkingSession(sessionID)
+            }
         }
     }
 
