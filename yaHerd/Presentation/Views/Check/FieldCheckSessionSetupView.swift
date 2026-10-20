@@ -176,7 +176,6 @@ struct FieldCheckSessionSetupView: View {
                     using: setupRepository
                 )
                 if let onSessionStarted {
-                    dismiss()
                     onSessionStarted(sessionID)
                 } else {
                     startedRoute = StartedFieldCheckRoute(id: sessionID)
