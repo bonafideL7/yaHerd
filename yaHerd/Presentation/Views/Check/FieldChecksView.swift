@@ -45,12 +45,12 @@ struct FieldChecksView: View {
     @State private var model = FieldChecksViewModel()
 
     @Binding private var selectedMode: FieldChecksViewMode
-    private let onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)?
+    private let onSessionLaunch: (FieldCheckSessionLaunchConfiguration) -> Void
     private let onStart: () -> Void
 
     init(
         mode: Binding<FieldChecksViewMode>,
-        onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)? = nil,
+        onSessionLaunch: @escaping (FieldCheckSessionLaunchConfiguration) -> Void,
         onStart: @escaping () -> Void
     ) {
         _selectedMode = mode
@@ -418,44 +418,16 @@ struct FieldChecksView: View {
         }
     }
 
-    @ViewBuilder
     private func fieldCheckNavigationRow<Label: View>(
         configuration: FieldCheckSessionLaunchConfiguration,
         @ViewBuilder label: () -> Label
     ) -> some View {
-        if onSessionLaunch != nil {
-            Button {
-                openSession(configuration)
-            } label: {
-                label()
-            }
-            .buttonStyle(.plain)
-        } else {
-            NavigationLink {
-                fieldCheckSessionDestination(configuration)
-            } label: {
-                label()
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    @ViewBuilder
-    private func fieldCheckSessionDestination(_ configuration: FieldCheckSessionLaunchConfiguration) -> some View {
-        FieldCheckSessionDetailView(
-            sessionID: configuration.sessionID,
-            opensFindings: configuration.opensFindings,
-            opensFlaggedRoster: configuration.opensFlaggedRoster,
-            opensRemainingRoster: configuration.opensRemainingRoster,
-            opensMissingRoster: configuration.opensMissingRoster,
-            focusedFindingID: configuration.focusedFindingID
-        )
-    }
-
-    private func openSession(_ configuration: FieldCheckSessionLaunchConfiguration) {
-        if let onSessionLaunch {
+        Button {
             onSessionLaunch(configuration)
+        } label: {
+            label()
         }
+        .buttonStyle(.plain)
     }
 
     private func emphasis(for session: FieldCheckSessionSummary) -> FieldCheckSessionSummaryRow.Emphasis {
