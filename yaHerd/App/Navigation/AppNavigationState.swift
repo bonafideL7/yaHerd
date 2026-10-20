@@ -31,8 +31,6 @@ enum AppPresentedSheet: String, Codable, Identifiable, Hashable {
     case settings
     case addAnimal
     case addPasture
-    case startFieldCheck
-    case startWorkingSession
 
     var id: String { rawValue }
 }
@@ -520,14 +518,7 @@ final class AppNavigationState {
     }
 
     func present(_ sheet: AppPresentedSheet) {
-        switch sheet {
-        case .startFieldCheck:
-            startFieldCheck()
-        case .startWorkingSession:
-            startWorkingSession()
-        default:
-            presentedSheet = sheet
-        }
+        presentedSheet = sheet
     }
 
     func dismissSheet() {
