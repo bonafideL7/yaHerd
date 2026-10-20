@@ -504,6 +504,7 @@ final class AppNavigationState {
         herdRouter.searchPath = validatedPath(snapshot.herdRouter.searchPath ?? [], using: validator)
         validateRestoredPastureFilter(using: validator)
         restoreActiveWorkflow(snapshot.activeWorkflow, using: validator)
+        migrateLegacyWorkflowListRoutes()
     }
 
     func restorationPayload() -> String? {
@@ -705,6 +706,36 @@ final class AppNavigationState {
         herdRouter.path = snapshot.herdRouter.path.filter(\.isStableListRoute)
         herdRouter.searchPath = (snapshot.herdRouter.searchPath ?? []).filter(\.isStableListRoute)
         clearIdentityBoundPastureFilter()
+        migrateLegacyWorkflowListRoutes()
+    }
+
+    // Prior versions stored workflow lists in a tab navigation stack.
+    // Preserve the selected list when restoring, but present it outside the tab bar.
+    private func migrateLegacyWorkflowListRoutes() {
+        let restoredDestination: HerdRoute?
+        switch selectedTab {
+        case .herd:
+            restoredDestination = herdRouter.path.last
+        case .search:
+            restoredDestination = herdRouter.searchPath.last
+        case .home, .dashboard:
+            restoredDestination = nil
+        }
+
+        herdRouter.path.removeAll(where: \.isLegacyWorkflowListRoute)
+        herdRouter.searchPath.removeAll(where: \.isLegacyWorkflowListRoute)
+
+        // An active session restored by its own identity takes precedence.
+        guard fullScreenWorkflow == nil else { return }
+
+        switch restoredDestination {
+        case .some(.fieldChecks(let mode)):
+            openFieldCheckArea(.sessions(mode))
+        case .some(.workingSessions):
+            openWorkArea(.sessions)
+        default:
+            break
+        }
     }
 
     private func validatedPath(
@@ -775,6 +806,15 @@ final class AppNavigationState {
 }
 
 private extension HerdRoute {
+    var isLegacyWorkflowListRoute: Bool {
+        switch self {
+        case .fieldChecks, .workingSessions:
+            return true
+        case .animal, .pasture:
+            return false
+        }
+    }
+
     var isStableListRoute: Bool {
         switch self {
         case .fieldChecks, .workingSessions:
