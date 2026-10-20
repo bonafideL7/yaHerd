@@ -10,13 +10,12 @@ struct FieldCheckSessionSetupView: View {
     @State private var selectedPastureID: UUID?
     @State private var startedAt: Date = .now
     @State private var notes = ""
-    @State private var startedRoute: StartedFieldCheckRoute?
     @State private var isStartingSession = false
 
     private let suggestedPastureID: UUID?
-    private let onSessionStarted: ((UUID) -> Void)?
+    private let onSessionStarted: (UUID) -> Void
 
-    init(suggestedPastureID: UUID? = nil, onSessionStarted: ((UUID) -> Void)? = nil) {
+    init(suggestedPastureID: UUID? = nil, onSessionStarted: @escaping (UUID) -> Void) {
         self.suggestedPastureID = suggestedPastureID
         self.onSessionStarted = onSessionStarted
         _selectedPastureID = State(initialValue: suggestedPastureID)
@@ -73,9 +72,6 @@ struct FieldCheckSessionSetupView: View {
             if selectedPastureID == nil {
                 selectedPastureID = suggestedPastureID
             }
-        }
-        .navigationDestination(item: $startedRoute) { route in
-            FieldCheckSessionDetailView(sessionID: route.id)
         }
         .safeAreaInset(edge: .bottom) {
             FieldCheckStartBar(
@@ -174,11 +170,7 @@ struct FieldCheckSessionSetupView: View {
                     notes: openingNotes,
                     using: setupRepository
                 )
-                if let onSessionStarted {
-                    onSessionStarted(sessionID)
-                } else {
-                    startedRoute = StartedFieldCheckRoute(id: sessionID)
-                }
+                onSessionStarted(sessionID)
             } catch {
                 model.errorMessage = UserVisibleErrorMessage.make(error)
             }
@@ -248,6 +240,3 @@ private struct FieldCheckStartBar: View {
     }
 }
 
-private struct StartedFieldCheckRoute: Identifiable, Hashable {
-    let id: UUID
-}
