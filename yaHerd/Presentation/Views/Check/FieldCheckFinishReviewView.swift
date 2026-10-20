@@ -153,7 +153,7 @@ struct FieldCheckFinishReviewView: View {
         let counts = AnimalType.allCases.filter { quickAnimalTypeCounts[$0, default: 0] > 0 }
         if !counts.isEmpty {
             Section("Quick Count by Type") {
-                ForEach(counts) { animalType in
+                ForEach(counts, id: \.self) { animalType in
                     LabeledContent(animalType.label) {
                         Text("\(quickAnimalTypeCounts[animalType, default: 0])")
                             .monospacedDigit()
