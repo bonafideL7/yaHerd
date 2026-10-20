@@ -193,7 +193,8 @@ struct WorkingFinishSessionView: View {
                 Text(unfinishedConfirmationMessage)
             }
             .safeAreaInset(edge: .bottom) {
-                WorkingFinishSessionActionBar(
+                SessionFinishActionBar(
+                    title: "Finish Session",
                     isEnabled: canFinish,
                     statusText: finishStatusText,
                     onFinish: finishTapped
@@ -470,36 +471,6 @@ struct WorkingFinishSessionView: View {
             return comparison == .orderedAscending
         }
         return left.id.uuidString < right.id.uuidString
-    }
-}
-
-private struct WorkingFinishSessionActionBar: View {
-    let isEnabled: Bool
-    let statusText: String?
-    let onFinish: () -> Void
-
-    var body: some View {
-        VStack(spacing: 8) {
-            if let statusText {
-                Text(statusText)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            Button(action: onFinish) {
-                Label("Finish Session", systemImage: "checkmark.circle.fill")
-                    .readableAccentForeground()
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.glassProminent)
-            .controlSize(.large)
-            .disabled(!isEnabled)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 12)
-        .background(.bar)
     }
 }
 
