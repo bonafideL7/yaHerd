@@ -58,7 +58,6 @@ private struct AppNavigationPresentationModifier: ViewModifier {
             AddAnimalView()
         case .addPasture:
             AddPastureView()
-
         }
     }
 
@@ -76,7 +75,6 @@ private struct AppNavigationPresentationModifier: ViewModifier {
         }
     }
 }
-
 
 extension View {
     func appNavigationPresentations() -> some View {
