@@ -74,7 +74,9 @@ struct FieldCheckFinishReviewView: View {
                 }
             }
             .confirmationDialog(
-                "Finish With Unseen Animals?",
+                countProjection.remainingExpectedCount > 0
+                    ? "Finish With Unseen Animals?"
+                    : "Finish With Count Difference?",
                 isPresented: $showingUnseenConfirmation,
                 titleVisibility: .visible
             ) {
@@ -170,7 +172,9 @@ struct FieldCheckFinishReviewView: View {
                     Text(check.displayTagNumber)
                         .fontWeight(.medium)
                     Spacer()
-                    Text(check.isMissing ? "Missing" : "Flagged")
+                    Text(check.isMissing && check.needsAttention
+                        ? "Missing • Flagged"
+                        : (check.isMissing ? "Missing" : "Flagged"))
                         .foregroundStyle(.orange)
                 }
             }
