@@ -18,8 +18,10 @@ struct IsolatedFieldCheckAreaView: View {
             }
             .navigationDestination(for: FieldCheckWorkflowDestination.self) { destination in
                 switch destination {
-                case .start(let pastureID):
-                    fieldCheckStartContent(pastureID: pastureID)
+                case .start:
+                    fieldCheckStartContent
+                case .setup(let pastureID):
+                    fieldCheckSetupContent(pastureID: pastureID)
                 case .session(let configuration):
                     sessionContent(configuration)
                 }
@@ -27,22 +29,17 @@ struct IsolatedFieldCheckAreaView: View {
         }
     }
 
-    @ViewBuilder
-    private func fieldCheckStartContent(pastureID: UUID?) -> some View {
-        if let pastureID {
-            FieldCheckSessionSetupView(
-                suggestedPastureID: pastureID
-            ) { sessionID in
-                navigation.workflowRouter.openFieldCheckSession(
-                    FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
-                )
-            }
-        } else {
-            PastureSessionStartListView(kind: .fieldCheck) { sessionID in
-                navigation.workflowRouter.openFieldCheckSession(
-                    FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
-                )
-            }
+    private var fieldCheckStartContent: some View {
+        PastureSessionStartListView(kind: .fieldCheck) { pastureID in
+            navigation.workflowRouter.openFieldCheckSetup(pastureID)
+        }
+    }
+
+    private func fieldCheckSetupContent(pastureID: UUID) -> some View {
+        FieldCheckSessionSetupView(suggestedPastureID: pastureID) { sessionID in
+            navigation.workflowRouter.openFieldCheckSession(
+                FieldCheckSessionLaunchConfiguration(sessionID: sessionID)
+            )
         }
     }
 
@@ -92,8 +89,10 @@ struct IsolatedWorkAreaView: View {
             }
             .navigationDestination(for: WorkingSessionWorkflowDestination.self) { destination in
                 switch destination {
-                case .start(let pastureID):
-                    workingSessionStartContent(pastureID: pastureID)
+                case .start:
+                    workingSessionStartContent
+                case .setup(let pastureID):
+                    workingSessionSetupContent(pastureID: pastureID)
                 case .session(let sessionID):
                     sessionContent(sessionID)
                 }
@@ -101,18 +100,15 @@ struct IsolatedWorkAreaView: View {
         }
     }
 
-    @ViewBuilder
-    private func workingSessionStartContent(pastureID: UUID?) -> some View {
-        if let pastureID {
-            NewWorkingSessionView(
-                suggestedPastureID: pastureID
-            ) { sessionID in
-                navigation.workflowRouter.openWorkingSession(sessionID)
-            }
-        } else {
-            PastureSessionStartListView(kind: .working) { sessionID in
-                navigation.workflowRouter.openWorkingSession(sessionID)
-            }
+    private var workingSessionStartContent: some View {
+        PastureSessionStartListView(kind: .working) { pastureID in
+            navigation.workflowRouter.openWorkingSessionSetup(pastureID)
+        }
+    }
+
+    private func workingSessionSetupContent(pastureID: UUID) -> some View {
+        NewWorkingSessionView(suggestedPastureID: pastureID) { sessionID in
+            navigation.workflowRouter.openWorkingSession(sessionID)
         }
     }
 
