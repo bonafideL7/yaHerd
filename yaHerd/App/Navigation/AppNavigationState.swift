@@ -201,6 +201,7 @@ final class HerdRouter {
 final class WorkflowRouter {
     var route: WorkflowRoute?
     private(set) var returnRoute: WorkflowRoute?
+    var startsWithPastureSelection = false
 
     var canReturnToList: Bool {
         switch (route, returnRoute) {
@@ -284,6 +285,7 @@ final class WorkflowRouter {
     func reset() {
         route = nil
         returnRoute = nil
+        startsWithPastureSelection = false
     }
 }
 
@@ -570,19 +572,37 @@ final class AppNavigationState {
         openWorkArea(.sessions)
     }
 
-    func openFieldCheckArea(_ configuration: FieldCheckAreaLaunchConfiguration) {
+    func startFieldCheck() {
+        openFieldCheckArea(.sessions(.all), startsWithPastureSelection: true)
+    }
+
+    func startWorkingSession() {
+        openWorkArea(.sessions, startsWithPastureSelection: true)
+    }
+
+    func openFieldCheckArea(
+        _ configuration: FieldCheckAreaLaunchConfiguration,
+        startsWithPastureSelection: Bool = false
+    ) {
         presentedSheet = nil
         workflowRouter.reset()
         workflowRouter.route = configuration.session.map(WorkflowRoute.fieldCheckSession)
             ?? .fieldCheckSessions(configuration.mode ?? .all)
+        workflowRouter.startsWithPastureSelection = startsWithPastureSelection
+            && configuration.session == nil
         fullScreenWorkflow = .fieldCheck
     }
 
-    func openWorkArea(_ configuration: WorkAreaLaunchConfiguration) {
+    func openWorkArea(
+        _ configuration: WorkAreaLaunchConfiguration,
+        startsWithPastureSelection: Bool = false
+    ) {
         presentedSheet = nil
         workflowRouter.reset()
         workflowRouter.route = configuration.sessionID.map(WorkflowRoute.workingSession)
             ?? .workingSessions
+        workflowRouter.startsWithPastureSelection = startsWithPastureSelection
+            && configuration.sessionID == nil
         fullScreenWorkflow = .workingSession
     }
 
