@@ -137,11 +137,11 @@ struct HomeView: View {
     }
 
     func presentFieldCheckStart() {
-        navigation.present(.startFieldCheck)
+        navigation.startFieldCheck()
     }
 
     func presentWorkingSessionStart() {
-        navigation.present(.startWorkingSession)
+        navigation.startWorkingSession()
     }
 
     private func makeLoadHomeUseCase() -> LoadHomeUseCase {
