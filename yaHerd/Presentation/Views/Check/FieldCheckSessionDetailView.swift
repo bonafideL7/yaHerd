@@ -11,7 +11,7 @@ struct FieldCheckSessionDetailView: View {
     @State private var showingAddTrackedAnimal = false
     @State private var showingCompletedRoster = false
     @State private var editingFinding: FieldCheckFindingSnapshot?
-    @State private var showingFinishConfirmation = false
+    @State private var showingFinishReview = false
     @State private var showingQuickCount = false
     @State private var showingFindings = false
     @State private var showingNotes = false
@@ -240,9 +240,9 @@ struct FieldCheckSessionDetailView: View {
                         let countProjection = model.countProjection(for: detail)
 
                         Button {
-                            finishSession(from: detail)
+                            showingFinishReview = true
                         } label: {
-                            Text(countProjection.requiresFinishConfirmation ? "Review" : "Finish")
+                            Text("Review")
                         }
                         .tint(countProjection.requiresFinishConfirmation ? Color.orange : Color.accentColor)
                         .disabledWhenDataReadOnly()
@@ -294,6 +294,23 @@ struct FieldCheckSessionDetailView: View {
                 Task { @MainActor in
                     await model.persistNotes(sessionID: sessionID, using: repository)
                 }
+            }
+        }
+        .sheet(isPresented: $showingFinishReview) {
+            if let detail = model.detail, !detail.isCompleted {
+                FieldCheckFinishReviewView(
+                    detail: detail,
+                    countProjection: model.countProjection(for: detail),
+                    quickAnimalTypeCounts: model.quickAnimalTypeCountsDraft,
+                    notes: model.notesDraft,
+                    isFinishing: model.isCompletingSession,
+                    canFinish: dataAccessMode.allowsDataMutations,
+                    errorMessage: Binding(
+                        get: { model.errorMessage },
+                        set: { model.errorMessage = $0 }
+                    ),
+                    onFinish: completeCurrentSession
+                )
             }
         }
         .sheet(isPresented: $showingAddFinding, onDismiss: { pendingFindingAnimalID = nil }) {
@@ -381,20 +398,6 @@ struct FieldCheckSessionDetailView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "Unknown error")
-        }
-        .confirmationDialog(
-            "Finish Check?",
-            isPresented: $showingFinishConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Finish Anyway") {
-                completeCurrentSession()
-            }
-            .disabledWhenDataReadOnly()
-            .disabled(model.isCompletingSession)
-            Button("Keep Checking", role: .cancel) {}
-        } message: {
-            Text(finishConfirmationMessage)
         }
     }
 
@@ -1096,40 +1099,6 @@ struct FieldCheckSessionDetailView: View {
         }
     }
 
-    private func shouldConfirmFinish(_ detail: FieldCheckSessionDetailSnapshot) -> Bool {
-        model.countProjection(for: detail).requiresFinishConfirmation
-    }
-
-    private var finishConfirmationMessage: String {
-        guard let detail = model.detail else { return "Finish this pasture check?" }
-        let countProjection = model.countProjection(for: detail)
-
-        var messages: [String] = []
-        if countProjection.remainingExpectedCount > 0 {
-            let noun = countProjection.remainingExpectedCount == 1 ? "animal is" : "animals are"
-            messages.append("\(countProjection.remainingExpectedCount) \(noun) still not seen.")
-        }
-
-        if countProjection.countVariance != 0 {
-            messages.append(
-                "The count difference is \(countProjection.countVariance > 0 ? "+" : "")\(countProjection.countVariance)."
-            )
-        }
-
-        messages.append("You can reopen the check later if needed.")
-        return messages.joined(separator: " ")
-    }
-
-    private func finishSession(from detail: FieldCheckSessionDetailSnapshot) {
-        guard dataAccessMode.allowsDataMutations else { return }
-
-        if shouldConfirmFinish(detail) {
-            showingFinishConfirmation = true
-        } else {
-            completeCurrentSession()
-        }
-    }
-
     private func completeCurrentSession() {
         guard dataAccessMode.allowsDataMutations,
               model.beginSessionCompletion() else {
@@ -1142,6 +1111,9 @@ struct FieldCheckSessionDetailView: View {
                 using: repository,
                 completionAlreadyAccepted: true
             )
+            if model.detail?.isCompleted == true {
+                showingFinishReview = false
+            }
         }
     }
 
@@ -1174,9 +1146,9 @@ struct FieldCheckSessionDetailView: View {
 
     private var errorBinding: Binding<Bool> {
         Binding(
-            get: { errorMessage != nil },
+            get: { !showingFinishReview && errorMessage != nil },
             set: { newValue in
-                if !newValue {
+                if !newValue && !showingFinishReview {
                     model.errorMessage = nil
                 }
             }
