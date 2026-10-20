@@ -22,6 +22,7 @@ struct FieldCheckSessionDetailView: View {
 
     private let sessionID: UUID
     private let focusedFindingID: UUID?
+    private let onSessionFinished: (() -> Void)?
 
     init(
         sessionID: UUID,
@@ -29,10 +30,12 @@ struct FieldCheckSessionDetailView: View {
         opensFlaggedRoster: Bool = false,
         opensRemainingRoster: Bool = false,
         opensMissingRoster: Bool = false,
-        focusedFindingID: UUID? = nil
+        focusedFindingID: UUID? = nil,
+        onSessionFinished: (() -> Void)? = nil
     ) {
         self.sessionID = sessionID
         self.focusedFindingID = focusedFindingID
+        self.onSessionFinished = onSessionFinished
 
         let initialPane: FieldCheckSessionPane = opensFindings ? .findings : .roster
 
@@ -313,9 +316,12 @@ struct FieldCheckSessionDetailView: View {
                 )
             }
         }
-        .onChange(of: model.detail?.isCompleted) { _, isCompleted in
+        .onChange(of: model.detail?.isCompleted) { wasCompleted, isCompleted in
             if isCompleted == true {
                 showingFinishReview = false
+                if wasCompleted == false {
+                    onSessionFinished?()
+                }
             }
         }
         .sheet(isPresented: $showingAddFinding, onDismiss: { pendingFindingAnimalID = nil }) {
