@@ -22,12 +22,6 @@ struct PastureSessionStartListView: View {
     @State private var errorMessage: String?
 
     let kind: PastureSessionStartKind
-    let onPastureSelected: (UUID) -> Void
-
-    init(kind: PastureSessionStartKind, onPastureSelected: @escaping (UUID) -> Void) {
-        self.kind = kind
-        self.onPastureSelected = onPastureSelected
-    }
 
     private var pastureReader: any PastureReferenceDataReader {
         switch kind {
@@ -68,18 +62,16 @@ struct PastureSessionStartListView: View {
                 List {
                     Section("Select Pasture") {
                         ForEach(rows) { row in
-                            Button {
-                                onPastureSelected(row.pasture.id)
-                            } label: {
-                                HStack(spacing: 12) {
+                            switch kind {
+                            case .fieldCheck:
+                                NavigationLink(value: FieldCheckWorkflowDestination.setup(row.pasture.id)) {
                                     pastureRow(row)
-                                    Image(systemName: "chevron.right")
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.tertiary)
                                 }
-                                .contentShape(Rectangle())
+                            case .working:
+                                NavigationLink(value: WorkingSessionWorkflowDestination.setup(row.pasture.id)) {
+                                    pastureRow(row)
+                                }
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
