@@ -105,8 +105,7 @@ struct IsolatedWorkAreaView: View {
     private func workingSessionStartContent(pastureID: UUID?) -> some View {
         if let pastureID {
             NewWorkingSessionView(
-                suggestedPastureID: pastureID,
-                wrapsInNavigationStack: false
+                suggestedPastureID: pastureID
             ) { sessionID in
                 navigation.workflowRouter.openWorkingSession(sessionID)
             }
