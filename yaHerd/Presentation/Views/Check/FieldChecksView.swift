@@ -44,15 +44,19 @@ struct FieldChecksView: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @State private var model = FieldChecksViewModel()
     @State private var showingStartPastureCheck = false
+    @State private var hasPresentedInitialStart = false
 
     @Binding private var selectedMode: FieldChecksViewMode
+    private let startsWithPastureSelection: Bool
     private let onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)?
 
     init(
         mode: Binding<FieldChecksViewMode>,
+        startsWithPastureSelection: Bool = false,
         onSessionLaunch: ((FieldCheckSessionLaunchConfiguration) -> Void)? = nil
     ) {
         _selectedMode = mode
+        self.startsWithPastureSelection = startsWithPastureSelection
         self.onSessionLaunch = onSessionLaunch
     }
 
@@ -159,6 +163,12 @@ struct FieldChecksView: View {
             }
         }
         .task {
+            if startsWithPastureSelection && !hasPresentedInitialStart {
+                hasPresentedInitialStart = true
+                if dataAccessMode.allowsDataMutations {
+                    showingStartPastureCheck = true
+                }
+            }
             await model.observe(
                 using: fieldCheckOverviewReader,
                 mutationStream: fieldCheckDependencies.mutationStream
