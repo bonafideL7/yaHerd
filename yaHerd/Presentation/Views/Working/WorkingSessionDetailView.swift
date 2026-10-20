@@ -26,9 +26,15 @@ struct WorkingSessionDetailView: View {
     @State private var showingError = false
     @State private var isMutatingSession = false
     private let onSessionDeleted: ((UUID) -> Void)?
+    private let onSessionFinished: (() -> Void)?
 
-    init(sessionID: UUID, onSessionDeleted: ((UUID) -> Void)? = nil) {
+    init(
+        sessionID: UUID,
+        onSessionDeleted: ((UUID) -> Void)? = nil,
+        onSessionFinished: (() -> Void)? = nil
+    ) {
         self.onSessionDeleted = onSessionDeleted
+        self.onSessionFinished = onSessionFinished
         _viewModel = StateObject(
             wrappedValue: WorkingSessionDetailViewModel(
                 sessionID: sessionID,
@@ -127,6 +133,11 @@ struct WorkingSessionDetailView: View {
         .onChange(of: viewModel.errorMessage) { _, newValue in
             if newValue != nil {
                 showingError = true
+            }
+        }
+        .onChange(of: viewModel.session?.status) { previousStatus, currentStatus in
+            if previousStatus == .active && currentStatus == .finished {
+                onSessionFinished?()
             }
         }
     }
