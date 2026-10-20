@@ -124,6 +124,7 @@ struct NewWorkingSessionView: View {
         }
         .navigationTitle("Start Working Session")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .navigationBarBackButtonHidden(isStarting)
         .interactiveDismissDisabled(isStarting)
         .task(id: selectedPastureID) {
