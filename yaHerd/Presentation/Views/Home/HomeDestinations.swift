@@ -81,6 +81,7 @@ struct PastureSessionStartListView: View {
         }
         .navigationTitle(kind.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .task { await loadPastures() }
     }
 
