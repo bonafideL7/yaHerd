@@ -115,7 +115,6 @@ struct PastureSessionStartListView: View {
         case .working:
             NewWorkingSessionView(
                 suggestedPastureID: pasture.id,
-                wrapsInNavigationStack: false,
                 onSessionCreated: onSessionStarted
             )
         }
