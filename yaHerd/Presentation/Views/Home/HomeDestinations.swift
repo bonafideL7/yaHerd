@@ -22,11 +22,11 @@ struct PastureSessionStartListView: View {
     @State private var errorMessage: String?
 
     let kind: PastureSessionStartKind
-    let onSessionStarted: (UUID) -> Void
+    let onPastureSelected: (UUID) -> Void
 
-    init(kind: PastureSessionStartKind, onSessionStarted: @escaping (UUID) -> Void) {
+    init(kind: PastureSessionStartKind, onPastureSelected: @escaping (UUID) -> Void) {
         self.kind = kind
-        self.onSessionStarted = onSessionStarted
+        self.onPastureSelected = onPastureSelected
     }
 
     private var pastureReader: any PastureReferenceDataReader {
@@ -68,11 +68,18 @@ struct PastureSessionStartListView: View {
                 List {
                     Section("Select Pasture") {
                         ForEach(rows) { row in
-                            NavigationLink {
-                                setup(for: row.pasture)
+                            Button {
+                                onPastureSelected(row.pasture.id)
                             } label: {
-                                pastureRow(row)
+                                HStack(spacing: 12) {
+                                    pastureRow(row)
+                                    Image(systemName: "chevron.right")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -102,22 +109,6 @@ struct PastureSessionStartListView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
-    }
-
-    @ViewBuilder
-    private func setup(for pasture: PastureOption) -> some View {
-        switch kind {
-        case .fieldCheck:
-            FieldCheckSessionSetupView(
-                suggestedPastureID: pasture.id,
-                onSessionStarted: onSessionStarted
-            )
-        case .working:
-            NewWorkingSessionView(
-                suggestedPastureID: pasture.id,
-                onSessionCreated: onSessionStarted
-            )
-        }
     }
 
     private func loadPastures() async {
