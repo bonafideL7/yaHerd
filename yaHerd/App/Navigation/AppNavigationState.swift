@@ -18,7 +18,19 @@ enum HerdRoute: Codable, Hashable {
 }
 
 /// Routes owned by isolated field-check and working-session flows.
+enum FieldCheckWorkflowDestination: Hashable {
+    case start(UUID?)
+    case session(FieldCheckSessionLaunchConfiguration)
+}
+
+enum WorkingSessionWorkflowDestination: Hashable {
+    case start(UUID?)
+    case session(UUID)
+}
+
 enum WorkflowRoute: Codable, Hashable {
+    case fieldCheckStart(UUID?)
+    case workingSessionStart(UUID?)
     case fieldCheckSessions(FieldChecksViewMode)
     case fieldCheckSession(FieldCheckSessionLaunchConfiguration)
     case workingSessions
@@ -202,30 +214,28 @@ final class WorkflowRouter {
     var route: WorkflowRoute?
     private(set) var returnRoute: WorkflowRoute?
 
-    var canReturnToList: Bool {
-        switch (route, returnRoute) {
-        case (.fieldCheckSession, .fieldCheckSessions), (.workingSession, .workingSessions):
-            return true
-        default:
-            return false
-        }
-    }
-
-    // The native navigation path is derived from the current route and its
-    // originating list. A directly opened session remains a workflow root.
-    var fieldCheckNavigationPath: [FieldCheckSessionLaunchConfiguration] {
+    // A workflow always has its session list as the native navigation root.
+    // Start/setup and session detail are destinations on that same stack.
+    var fieldCheckNavigationPath: [FieldCheckWorkflowDestination] {
         get {
-            guard case .fieldCheckSession(let configuration) = route,
-                  case .fieldCheckSessions = returnRoute
-            else { return [] }
-            return [configuration]
+            switch route {
+            case .fieldCheckStart(let pastureID):
+                return [.start(pastureID)]
+            case .fieldCheckSession(let configuration) where canReturnToList:
+                return [.session(configuration)]
+            default:
+                return []
+            }
         }
         set {
-            if let configuration = newValue.last {
-                guard fieldCheckNavigationPath.last != configuration else { return }
+            switch newValue.last {
+            case .start(let pastureID):
+                if case .fieldCheckStart(let currentID) = route, currentID == pastureID { return }
+                openFieldCheckStart(pastureID)
+            case .session(let configuration):
+                if case .fieldCheckSession(let current) = route, current == configuration { return }
                 openFieldCheckSession(configuration)
-            } else if case .fieldCheckSession = route,
-                      case .fieldCheckSessions = returnRoute {
+            case .none:
                 returnToList()
             }
         }
@@ -237,42 +247,86 @@ final class WorkflowRouter {
         return nil
     }
 
+    func openFieldCheckStart(_ pastureID: UUID? = nil) {
+        if case .fieldCheckSessions = route {
+            returnRoute = route
+        } else if case .fieldCheckStart = route {
+            // Preserve the list origin when navigating between start destinations.
+        } else {
+            returnRoute = .fieldCheckSessions(.all)
+        }
+        route = .fieldCheckStart(pastureID)
+    }
+
     func openFieldCheckSession(_ configuration: FieldCheckSessionLaunchConfiguration) {
         if case .fieldCheckSessions = route {
             returnRoute = route
+        } else if case .fieldCheckStart = route {
+            // Keep the same list origin when setup creates a session.
         } else {
-            returnRoute = nil
+            returnRoute = .fieldCheckSessions(.all)
         }
         route = .fieldCheckSession(configuration)
     }
 
-    // The list-to-session route is presented by NavigationStack rather than
-    // replacing the visible root. Direct session launches have an empty path.
-    var workingSessionNavigationPath: [UUID] {
+    var workingSessionNavigationPath: [WorkingSessionWorkflowDestination] {
         get {
-            guard case .workingSession(let sessionID) = route,
-                  case .workingSessions = returnRoute
-            else { return [] }
-            return [sessionID]
+            switch route {
+            case .workingSessionStart(let pastureID):
+                return [.start(pastureID)]
+            case .workingSession(let sessionID) where canReturnToList:
+                return [.session(sessionID)]
+            default:
+                return []
+            }
         }
         set {
-            if let sessionID = newValue.last {
-                guard workingSessionNavigationPath.last != sessionID else { return }
+            switch newValue.last {
+            case .start(let pastureID):
+                if case .workingSessionStart(let currentID) = route, currentID == pastureID { return }
+                openWorkingSessionStart(pastureID)
+            case .session(let sessionID):
+                if case .workingSession(let currentID) = route, currentID == sessionID { return }
                 openWorkingSession(sessionID)
-            } else if case .workingSession = route,
-                      case .workingSessions = returnRoute {
+            case .none:
                 returnToList()
             }
         }
     }
 
+    func openWorkingSessionStart(_ pastureID: UUID? = nil) {
+        if case .workingSessions = route {
+            returnRoute = route
+        } else if case .workingSessionStart = route {
+            // Keep the list origin as setup progresses.
+        } else {
+            returnRoute = .workingSessions
+        }
+        route = .workingSessionStart(pastureID)
+    }
+
     func openWorkingSession(_ sessionID: UUID) {
         if case .workingSessions = route {
             returnRoute = route
+        } else if case .workingSessionStart = route {
+            // Keep the same list origin when setup creates a session.
         } else {
-            returnRoute = nil
+            returnRoute = .workingSessions
         }
         route = .workingSession(sessionID)
+    }
+
+    var canReturnToList: Bool {
+        guard let returnRoute else { return false }
+        switch (route, returnRoute) {
+        case (.fieldCheckStart, .fieldCheckSessions),
+             (.fieldCheckSession, .fieldCheckSessions),
+             (.workingSessionStart, .workingSessions),
+             (.workingSession, .workingSessions):
+            return true
+        default:
+            return false
+        }
     }
 
     func returnToList() {
@@ -570,19 +624,37 @@ final class AppNavigationState {
         openWorkArea(.sessions)
     }
 
+    func startFieldCheck(suggestedPastureID: UUID? = nil) {
+        if fullScreenWorkflow != .fieldCheck {
+            openFieldCheckArea(.sessions(.all))
+        }
+        workflowRouter.openFieldCheckStart(suggestedPastureID)
+    }
+
+    func startWorkingSession(suggestedPastureID: UUID? = nil) {
+        if fullScreenWorkflow != .workingSession {
+            openWorkArea(.sessions)
+        }
+        workflowRouter.openWorkingSessionStart(suggestedPastureID)
+    }
+
     func openFieldCheckArea(_ configuration: FieldCheckAreaLaunchConfiguration) {
         presentedSheet = nil
         workflowRouter.reset()
-        workflowRouter.route = configuration.session.map(WorkflowRoute.fieldCheckSession)
-            ?? .fieldCheckSessions(configuration.mode ?? .all)
+        workflowRouter.route = .fieldCheckSessions(configuration.mode ?? .all)
+        if let session = configuration.session {
+            workflowRouter.openFieldCheckSession(session)
+        }
         fullScreenWorkflow = .fieldCheck
     }
 
     func openWorkArea(_ configuration: WorkAreaLaunchConfiguration) {
         presentedSheet = nil
         workflowRouter.reset()
-        workflowRouter.route = configuration.sessionID.map(WorkflowRoute.workingSession)
-            ?? .workingSessions
+        workflowRouter.route = .workingSessions
+        if let sessionID = configuration.sessionID {
+            workflowRouter.openWorkingSession(sessionID)
+        }
         fullScreenWorkflow = .workingSession
     }
 
