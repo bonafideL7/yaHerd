@@ -83,13 +83,13 @@ struct HomeView: View {
             }
 
             Button {
-                navigation.present(.startWorkingSession)
+                navigation.startWorkingSession()
             } label: {
                 Label("New Working Session", systemImage: "wrench.and.screwdriver")
             }
 
             Button {
-                navigation.present(.startFieldCheck)
+                navigation.startFieldCheck()
             } label: {
                 Label("Start Pasture Check", systemImage: "checklist")
             }
@@ -137,11 +137,11 @@ struct HomeView: View {
     }
 
     func presentFieldCheckStart() {
-        navigation.present(.startFieldCheck)
+        navigation.startFieldCheck()
     }
 
     func presentWorkingSessionStart() {
-        navigation.present(.startWorkingSession)
+        navigation.startWorkingSession()
     }
 
     private func makeLoadHomeUseCase() -> LoadHomeUseCase {
