@@ -681,7 +681,7 @@ final class AppNavigationState {
         case (.fieldCheck, .fieldCheckSessions(let mode)):
             return .fieldCheckSessions(mode)
         case (.fieldCheck, .fieldCheckSession(let configuration)):
-            if case .fieldCheckSessions(let mode) = workflowRouter.fieldCheckListMode.map(WorkflowRoute.fieldCheckSessions) {
+            if let mode = workflowRouter.fieldCheckListMode {
                 return .fieldCheckSessionFromList(configuration, mode)
             }
             return .fieldCheckSession(configuration.sessionID)
