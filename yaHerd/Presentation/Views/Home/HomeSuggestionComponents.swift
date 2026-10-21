@@ -3,8 +3,6 @@ import SwiftUI
 enum HomeSuggestionLayout {
     static let sectionCornerRadius: CGFloat = 32
     static let cardSpacing: CGFloat = 12
-    static let cardHeight: CGFloat = 140
-    static let carouselHeight: CGFloat = 152
     static let carouselHorizontalPadding: CGFloat = 12
     static let carouselVerticalPadding: CGFloat = 6
     static let cardCornerRadius: CGFloat = 24
@@ -12,9 +10,10 @@ enum HomeSuggestionLayout {
     static let maximumCardWidth: CGFloat = 360
     static let nextCardPeekWidth: CGFloat = 44
 
-    static func cardWidth(for containerWidth: CGFloat) -> CGFloat {
+    static func cardWidth(for containerWidth: CGFloat, showsNextCardPeek: Bool) -> CGFloat {
         let availableWidth = max(containerWidth - (carouselHorizontalPadding * 2), 0)
-        let widthWithPeek = availableWidth - cardSpacing - nextCardPeekWidth
+        let peekWidth = showsNextCardPeek ? nextCardPeekWidth : 0
+        let widthWithPeek = availableWidth - (showsNextCardPeek ? cardSpacing : 0) - peekWidth
         let cappedWidth = min(max(widthWithPeek, minimumCardWidth), maximumCardWidth)
 
         return min(cappedWidth, availableWidth)
@@ -27,7 +26,6 @@ struct HomeSuggestionButtonRow: View {
     let systemImage: String
     let tint: Color
     let actionTitle: String
-    let cardWidth: CGFloat
     let onAction: () -> Void
     let onDismiss: () -> Void
 
@@ -37,7 +35,6 @@ struct HomeSuggestionButtonRow: View {
             subtitle: subtitle,
             systemImage: systemImage,
             tint: tint,
-            cardWidth: cardWidth,
             onDismiss: onDismiss
         ) {
             Button(action: onAction) {
@@ -55,7 +52,6 @@ struct HomeSuggestionNavigationRow<Destination: View>: View {
     let systemImage: String
     let tint: Color
     let actionTitle: String
-    let cardWidth: CGFloat
     let destination: Destination
     let onDismiss: () -> Void
 
@@ -65,7 +61,6 @@ struct HomeSuggestionNavigationRow<Destination: View>: View {
         systemImage: String,
         tint: Color,
         actionTitle: String,
-        cardWidth: CGFloat,
         @ViewBuilder destination: () -> Destination,
         onDismiss: @escaping () -> Void
     ) {
@@ -74,7 +69,6 @@ struct HomeSuggestionNavigationRow<Destination: View>: View {
         self.systemImage = systemImage
         self.tint = tint
         self.actionTitle = actionTitle
-        self.cardWidth = cardWidth
         self.destination = destination()
         self.onDismiss = onDismiss
     }
@@ -85,7 +79,6 @@ struct HomeSuggestionNavigationRow<Destination: View>: View {
             subtitle: subtitle,
             systemImage: systemImage,
             tint: tint,
-            cardWidth: cardWidth,
             onDismiss: onDismiss
         ) {
             NavigationLink {
@@ -100,11 +93,12 @@ struct HomeSuggestionNavigationRow<Destination: View>: View {
 }
 
 struct HomeSuggestionCard<Action: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let title: String
     let subtitle: String
     let systemImage: String
     let tint: Color
-    let cardWidth: CGFloat
     let onDismiss: () -> Void
     let action: Action
 
@@ -113,7 +107,6 @@ struct HomeSuggestionCard<Action: View>: View {
         subtitle: String,
         systemImage: String,
         tint: Color,
-        cardWidth: CGFloat,
         onDismiss: @escaping () -> Void,
         @ViewBuilder action: () -> Action
     ) {
@@ -121,7 +114,6 @@ struct HomeSuggestionCard<Action: View>: View {
         self.subtitle = subtitle
         self.systemImage = systemImage
         self.tint = tint
-        self.cardWidth = cardWidth
         self.onDismiss = onDismiss
         self.action = action()
     }
@@ -135,13 +127,11 @@ struct HomeSuggestionCard<Action: View>: View {
                     Text(title)
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.primary)
-                        .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text(subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -169,7 +159,13 @@ struct HomeSuggestionCard<Action: View>: View {
         .padding(.horizontal, 12)
         .padding(.top, 12)
         .padding(.bottom, 9)
-        .frame(width: cardWidth, height: HomeSuggestionLayout.cardHeight, alignment: .topLeading)
+        .fixedSize(horizontal: false, vertical: true)
+        .containerRelativeFrame(.horizontal) { containerWidth, _ in
+            HomeSuggestionLayout.cardWidth(
+                for: containerWidth,
+                showsNextCardPeek: !dynamicTypeSize.isAccessibilitySize
+            )
+        }
         .modifier(HomeGlassCardBackground(cornerRadius: HomeSuggestionLayout.cardCornerRadius, tint: tint))
         .contentShape(RoundedRectangle(cornerRadius: HomeSuggestionLayout.cardCornerRadius, style: .continuous))
     }
