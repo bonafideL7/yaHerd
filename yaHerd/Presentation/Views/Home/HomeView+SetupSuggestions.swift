@@ -51,21 +51,16 @@ extension HomeView {
     }
 
     var setupSuggestionsCarousel: some View {
-        GeometryReader { proxy in
-            let cardWidth = HomeSuggestionLayout.cardWidth(for: proxy.size.width)
-
-            GlassEffectContainer(spacing: HomeSuggestionLayout.cardSpacing) {
-                setupSuggestionsPeekCarousel(cardWidth: cardWidth)
-            }
+        GlassEffectContainer(spacing: HomeSuggestionLayout.cardSpacing) {
+            setupSuggestionsPeekCarousel
         }
-        .frame(height: HomeSuggestionLayout.carouselHeight)
     }
 
-    func setupSuggestionsPeekCarousel(cardWidth: CGFloat) -> some View {
+    var setupSuggestionsPeekCarousel: some View {
         ScrollView(.horizontal) {
-            LazyHStack(spacing: HomeSuggestionLayout.cardSpacing) {
+            LazyHStack(alignment: .top, spacing: HomeSuggestionLayout.cardSpacing) {
                 ForEach(visibleSetupSuggestionIDs, id: \.self) { id in
-                    setupSuggestionRow(for: id, cardWidth: cardWidth)
+                    setupSuggestionRow(for: id)
                 }
             }
             .scrollTargetLayout()
@@ -83,7 +78,7 @@ extension HomeView {
     }
 
     @ViewBuilder
-    func setupSuggestionRow(for id: HomeSetupSuggestionID, cardWidth: CGFloat) -> some View {
+    func setupSuggestionRow(for id: HomeSetupSuggestionID) -> some View {
         switch id {
         case .addFirstPasture:
             HomeSuggestionButtonRow(
@@ -92,7 +87,6 @@ extension HomeView {
                 systemImage: "leaf.fill",
                 tint: .green,
                 actionTitle: "Add",
-                cardWidth: cardWidth,
                 onAction: { presentAddPasture() },
                 onDismiss: { dismissSetupSuggestion(.addFirstPasture) }
             )
@@ -103,7 +97,6 @@ extension HomeView {
                 systemImage: "tag.fill",
                 tint: .blue,
                 actionTitle: "Add",
-                cardWidth: cardWidth,
                 onAction: { presentAddAnimal() },
                 onDismiss: { dismissSetupSuggestion(.addFirstAnimal) }
             )
@@ -114,7 +107,6 @@ extension HomeView {
                 systemImage: "checklist",
                 tint: .purple,
                 actionTitle: "Start",
-                cardWidth: cardWidth,
                 onAction: { presentFieldCheckStart() },
                 onDismiss: { dismissSetupSuggestion(.startFirstPastureCheck) }
             )
@@ -125,7 +117,6 @@ extension HomeView {
                 systemImage: "syringe.fill",
                 tint: .orange,
                 actionTitle: "Open",
-                cardWidth: cardWidth,
                 destination: { TreatmentTemplatesView() },
                 onDismiss: { dismissSetupSuggestion(.createWorkingTreatmentTemplate) }
             )
@@ -136,7 +127,6 @@ extension HomeView {
                 systemImage: "rectangle.3.group.fill",
                 tint: .blue,
                 actionTitle: "Open",
-                cardWidth: cardWidth,
                 destination: { DashboardRulesView() },
                 onDismiss: { dismissSetupSuggestion(.enableDashboard) }
             )
@@ -147,7 +137,6 @@ extension HomeView {
                 systemImage: "tag.fill",
                 tint: .yellow,
                 actionTitle: "Open",
-                cardWidth: cardWidth,
                 destination: { TagColorLibraryView() },
                 onDismiss: { dismissSetupSuggestion(.customizeTagColors) }
             )
@@ -158,7 +147,6 @@ extension HomeView {
                 systemImage: "ruler.fill",
                 tint: .brown,
                 actionTitle: "Open",
-                cardWidth: cardWidth,
                 onAction: { openPastureList(.missingStockingData) },
                 onDismiss: { dismissSetupSuggestion(.completePastureStockingData) }
             )
