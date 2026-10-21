@@ -118,7 +118,7 @@ struct PastureTileListView: View {
             if dataAccessMode.allowsDataMutations && !isManaging && !model.isDeletingPastures {
                 PastureAddButton(onAddPasture: model.requestAddPasture)
                     .padding(.trailing, 24)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 12)
             }
         }
         .sheet(isPresented: $model.isPresentingAddPasture) {

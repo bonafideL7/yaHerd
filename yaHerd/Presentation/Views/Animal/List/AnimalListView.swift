@@ -440,7 +440,7 @@ struct AnimalListView: View {
     }
 
     private var floatingAddButtonBottomPadding: CGFloat {
-        shouldShowFloatingControlBar ? 106 : 24
+        shouldShowFloatingControlBar ? 94 : 12
     }
 
     private var emptyStateView: some View {

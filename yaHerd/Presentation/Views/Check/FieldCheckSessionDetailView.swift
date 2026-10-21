@@ -276,7 +276,7 @@ struct FieldCheckSessionDetailView: View {
                     }
                 )
                 .padding(.trailing, 24)
-                .padding(.bottom, 24)
+                .padding(.bottom, 12)
             }
         }
         .navigationDestination(isPresented: animalDetailPresentedBinding) {
@@ -1186,12 +1186,7 @@ private struct FieldCheckFloatingActionMenu: View {
                 Label("Note", systemImage: "note.text")
             }
         } label: {
-            Image(systemName: "plus")
-                .font(.title2.weight(.semibold))
-                .frame(width: 58, height: 58)
-                .background(Circle().fill(Color.accentColor))
-                .readableAccentForeground()
-                .shadow(color: .black.opacity(0.16), radius: 16, y: 8)
+            FloatingAddButtonLabel()
         }
         .accessibilityLabel("Quick actions")
     }
