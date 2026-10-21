@@ -117,9 +117,11 @@ struct AnimalTagView: View {
     var body: some View {
         HStack(spacing: 6) {
             baseTagPill
+                .layoutPriority(1)
 
             if let normalizedDamTagText {
                 damTagPill(normalizedDamTagText)
+                    .layoutPriority(-1)
             }
         }
         .accessibilityElement(children: .combine)
