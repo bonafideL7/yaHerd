@@ -5,6 +5,7 @@
 import SwiftUI
 
 struct AnimalListRowContent: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
 
     let animal: AnimalSummary
@@ -13,7 +14,11 @@ struct AnimalListRowContent: View {
         let def = tagColorLibrary.resolvedDefinition(tagColorID: animal.displayTagColorID)
         let damDef = tagColorLibrary.resolvedDefinition(tagColorID: animal.damDisplayTagColorID)
 
-        HStack(alignment: .top, spacing: 14) {
+        let rowLayout = dynamicTypeSize >= .xxxLarge
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 14))
+
+        rowLayout {
             VStack(alignment: .leading, spacing: 8) {
                 AnimalTagView(
                     tagNumber: animal.displayTagNumber,
@@ -31,6 +36,7 @@ struct AnimalListRowContent: View {
                     AnimalListTypeAndFeaturePill(animal: animal)
                 }
             }
+            .layoutPriority(1)
 
             VStack(alignment: .trailing, spacing: 8) {
                 if animal.status != .active || animal.isArchived {
@@ -90,16 +96,18 @@ struct AnimalListAgeAndBirthDatePills: View {
                 ageText: animal.age,
                 birthDateText: birthDateText
             )
+            .fixedSize(horizontal: true, vertical: false)
 
             AnimalListCombinedAgeBirthDatePill(
                 ageText: animal.age,
                 birthDateText: compactBirthDateText
             )
+            .fixedSize(horizontal: true, vertical: false)
 
             AnimalListInfoPill(title: animal.age, systemImage: "calendar")
+                .fixedSize(horizontal: true, vertical: false)
         }
         .lineLimit(1)
-        .fixedSize(horizontal: true, vertical: false)
     }
 }
 
