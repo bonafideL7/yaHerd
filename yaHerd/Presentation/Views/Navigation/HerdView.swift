@@ -10,7 +10,6 @@ struct HerdView: View {
     @Binding private var isSearchPresented: Bool
 
     @Binding private var mode: HerdViewMode
-    @Environment(\.colorScheme) private var colorScheme
     private let allowsModeSwitch: Bool
     @State private var isManagingPastures = false
     @State private var animalListModel = AnimalListViewModel()
@@ -108,23 +107,15 @@ struct HerdView: View {
                     } label: {
                         Image(systemName: switchButtonSystemImage)
                             .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(Color.accentColor)
                             .frame(width: 44, height: 44)
-                            .background {
-                                Circle()
-                                    .fill(.regularMaterial)
-                                    .overlay {
-                                        Circle().fill(
-                                            Color.accentColor.opacity(colorScheme == .dark ? 0.26 : 0.18)
-                                        )
-                                    }
-                                    .overlay {
-                                        Circle().strokeBorder(
-                                            Color.accentColor.opacity(colorScheme == .dark ? 0.45 : 0.30),
-                                            lineWidth: 1
-                                        )
-                                    }
-                            }
+                            .glassEffect(.regular.tint(Color.accentColor.opacity(0.1)).interactive(), in: Circle())
+                            .shadow(
+                                color: Color.accentColor.opacity(0.8),
+                                radius: 1,
+                                x: 0,
+                                y: 0
+                            )
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
