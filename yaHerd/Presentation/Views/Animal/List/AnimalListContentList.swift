@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AnimalListContentList: View {
     @Environment(\.appDataAccessMode) private var dataAccessMode
+    @State private var inlineQuickAddRowBottom: CGFloat?
 
     let groupedAnimals: [AnimalSection]
     let shouldUseSections: Bool
@@ -42,6 +43,10 @@ struct AnimalListContentList: View {
         groupedAnimals.contains { !$0.animals.isEmpty }
     }
 
+    private var canStartInlineEntry: Bool {
+        !batchMode && !inlineEntryIsActive && allowsInlineEditing && dataAccessMode.allowsDataMutations
+    }
+
     var body: some View {
         List(selection: batchMode ? $selectedAnimalIDs : nil) {
             if inlineEntryIsActive && !batchMode && !hasVisibleRows {
@@ -64,16 +69,39 @@ struct AnimalListContentList: View {
                 inlineEntryRow(mode: .new)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
-            } else if !batchMode && allowsInlineEditing && dataAccessMode.allowsDataMutations {
+            } else if canStartInlineEntry {
                 AnimalListInlineTapRow(onTap: onStartNewInlineEntry)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
+                    .onGeometryChange(for: CGFloat.self) { proxy in
+                        proxy.frame(in: .named("animalListQuickEntry")).maxY
+                    } action: { bottom in
+                        inlineQuickAddRowBottom = bottom
+                    }
+                    .onDisappear { inlineQuickAddRowBottom = nil }
             }
         }
         .environment(\.editMode, .constant(batchMode ? .active : .inactive))
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Color.clear)
+        .coordinateSpace(name: "animalListQuickEntry")
+        .overlay(alignment: .bottom) {
+            // The trailing List row only covers its own height. Cover the rest of
+            // the visible blank area without adding empty scrollable content.
+            if canStartInlineEntry, let rowBottom = inlineQuickAddRowBottom {
+                GeometryReader { geometry in
+                    if rowBottom > 0 && rowBottom < geometry.size.height {
+                        AnimalListInlineTapRow(
+                            height: geometry.size.height - rowBottom,
+                            onTap: onStartNewInlineEntry
+                        )
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                        .accessibilityHidden(true)
+                    }
+                }
+            }
+        }
         .scrollDismissesKeyboard(.interactively)
     }
 
@@ -238,11 +266,12 @@ struct AnimalListContentList: View {
 }
 
 private struct AnimalListInlineTapRow: View {
+    var height: CGFloat = 52
     let onTap: () -> Void
 
     var body: some View {
         Color.clear
-            .frame(minHeight: 52)
+            .frame(height: height)
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
             .onTapGesture(perform: onTap)
