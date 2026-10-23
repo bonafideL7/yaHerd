@@ -25,7 +25,9 @@ struct FieldCheckAnimalDetailView: View {
     }
 
     private var isSessionEditable: Bool {
-        dataAccessMode.allowsDataMutations && model.sessionDetail?.isCompleted == false
+        dataAccessMode.allowsDataMutations
+            && model.sessionDetail?.isCompleted == false
+            && model.sessionDetail?.isPastureArchived == false
     }
 
     private var errorBinding: Binding<Bool> {
