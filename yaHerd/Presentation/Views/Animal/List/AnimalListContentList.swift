@@ -58,7 +58,7 @@ struct AnimalListContentList: View {
                 inlineEntryRow(mode: .new)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
-            } else if !batchMode && dataAccessMode.allowsDataMutations {
+            } else if !batchMode && allowsInlineEditing && dataAccessMode.allowsDataMutations {
                 AnimalListInlineTapRow(onTap: onStartNewInlineEntry)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
