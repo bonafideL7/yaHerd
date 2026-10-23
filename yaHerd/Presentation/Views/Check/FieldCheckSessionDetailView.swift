@@ -158,18 +158,6 @@ struct FieldCheckSessionDetailView: View {
         selectedPane == .roster && !trimmedRosterSearchText.isEmpty
     }
 
-    private var listOrQuickCountToolbarTitle: String {
-        selectedPane == .roster ? "Quick Count" : "Animal List"
-    }
-
-    private var listOrQuickCountToolbarSystemImage: String {
-        selectedPane == .roster ? "plus.forwardslash.minus" : "list.bullet"
-    }
-
-    private var listOrQuickCountToolbarTarget: FieldCheckSessionPane {
-        selectedPane == .roster ? .quickCount : .roster
-    }
-
     var body: some View {
         Group {
             if let detail = model.detail {
@@ -213,13 +201,15 @@ struct FieldCheckSessionDetailView: View {
                         }
                         .accessibilityLabel("Check Actions")
                     } else {
-                        Button {
-                            selectPane(listOrQuickCountToolbarTarget)
-                        } label: {
-                            Label(listOrQuickCountToolbarTitle, systemImage: listOrQuickCountToolbarSystemImage)
+                        if selectedPane == .findings || selectedPane == .notes {
+                            Button {
+                                selectPane(.roster)
+                            } label: {
+                                Label("Animal List", systemImage: "list.bullet")
+                            }
+                            .accessibilityLabel("Animal List")
+                            .disabled(model.isCompletingSession)
                         }
-                        .accessibilityLabel(listOrQuickCountToolbarTitle)
-                        .disabled(model.isCompletingSession)
 
                         Button {
                             selectPane(.findings)
@@ -416,28 +406,43 @@ struct FieldCheckSessionDetailView: View {
     }
 
     private func activeCheckContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
-        List {
-            if !isRosterSearchFiltering {
-                progressHeaderSection(detail)
-                archivedPastureSection(detail)
+        VStack(spacing: 0) {
+            if selectedPane == .roster || selectedPane == .quickCount {
+                Picker("Count View", selection: Binding(
+                    get: { selectedPane },
+                    set: { selectPane($0) }
+                )) {
+                    Text("Animal List").tag(FieldCheckSessionPane.roster)
+                    Text("Quick Count").tag(FieldCheckSessionPane.quickCount)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
 
-            switch selectedPane {
-            case .roster:
-                rosterSection(detail)
-            case .quickCount:
-                quickCountMainSection(detail)
-            case .findings:
-                findingsMainSection(detail)
-            case .notes:
-                notesMainSection(detail)
+            List {
+                if !isRosterSearchFiltering {
+                    progressHeaderSection(detail)
+                    archivedPastureSection(detail)
+                }
+
+                switch selectedPane {
+                case .roster:
+                    rosterSection(detail)
+                case .quickCount:
+                    quickCountMainSection(detail)
+                case .findings:
+                    findingsMainSection(detail)
+                case .notes:
+                    notesMainSection(detail)
+                }
             }
-        }
-        .refreshable {
-            model.refresh(sessionID: sessionID, using: repository)
+            .refreshable {
+                model.refresh(sessionID: sessionID, using: repository)
+            }
+            .modifier(FieldCheckRosterSearchModifier(isActive: selectedPane == .roster, text: $rosterSearchText))
         }
         .disabled(model.isCompletingSession)
-        .modifier(FieldCheckRosterSearchModifier(isActive: selectedPane == .roster, text: $rosterSearchText))
     }
 
     private func completedReviewContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
