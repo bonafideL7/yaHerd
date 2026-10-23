@@ -14,6 +14,10 @@ final class AnimalInlineEntryViewModel {
     var sex: Sex = .unknown
     var birthDate: Date
     var pastureID: UUID?
+    var sireID: UUID?
+    var sire = ""
+    var damID: UUID?
+    var dam = ""
     var focusRequestID = UUID()
     var isCommitting = false
     var ignoresNextFocusLoss = false
@@ -43,10 +47,14 @@ final class AnimalInlineEntryViewModel {
         sex = .unknown
         birthDate = defaultBirthDate
         pastureID = nil
+        sireID = nil
+        sire = ""
+        damID = nil
+        dam = ""
         ignoresNextFocusLoss = false
     }
 
-    func beginEditing(_ animal: AnimalSummary, tagColorLibrary: TagColorLibraryStore) {
+    func beginEditing(_ animal: AnimalSummary, detail: AnimalDetailSnapshot, tagColorLibrary: TagColorLibraryStore) {
         editingAnimalID = animal.id
         isActive = true
         identity = animal.id
@@ -55,6 +63,10 @@ final class AnimalInlineEntryViewModel {
         sex = animal.sex
         birthDate = animal.birthDate
         pastureID = animal.pastureID
+        sireID = detail.sireID
+        sire = detail.sire ?? ""
+        damID = detail.damID
+        dam = detail.dam ?? ""
     }
 
     func requestFocus() {
@@ -84,6 +96,10 @@ final class AnimalInlineEntryViewModel {
         sex = .unknown
         birthDate = defaultBirthDate
         pastureID = nil
+        sireID = nil
+        sire = ""
+        damID = nil
+        dam = ""
         identity = UUID()
         ignoresNextFocusLoss = false
     }
@@ -138,7 +154,9 @@ final class AnimalInlineEntryViewModel {
             tagColorID: parsed.tagNumber.isEmpty ? nil : (parsed.tagColorID ?? defaultTagColorID),
             sex: sex,
             birthDate: birthDate,
-            pastureID: pastureID
+            pastureID: pastureID,
+            sireID: sireID,
+            damID: damID
         )
     }
 
@@ -158,7 +176,9 @@ final class AnimalInlineEntryViewModel {
             tagColorID: parsed.tagNumber.isEmpty ? nil : (parsed.tagColorID ?? defaultTagColorID),
             sex: sex,
             birthDate: birthDate,
-            pastureID: pastureID
+            pastureID: pastureID,
+            sireID: sireID,
+            damID: damID
         )
     }
 
@@ -173,6 +193,10 @@ final class AnimalInlineEntryViewModel {
         sex = .unknown
         birthDate = defaultBirthDate
         pastureID = nil
+        sireID = nil
+        sire = ""
+        damID = nil
+        dam = ""
         identity = UUID()
         ignoresNextFocusLoss = false
     }
