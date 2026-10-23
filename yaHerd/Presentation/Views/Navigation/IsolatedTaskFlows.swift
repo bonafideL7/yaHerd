@@ -111,9 +111,7 @@ struct IsolatedWorkAreaView: View {
     }
 
     private func sessionContent(_ sessionID: UUID) -> some View {
-        WorkingSessionDetailView(sessionID: sessionID) { deletedID in
-            navigation.handleDeletedWorkingSession(deletedID)
-        }
+        WorkingSessionDetailView(sessionID: sessionID)
     }
 
     private var workingSessionPathBinding: Binding<[UUID]> {
