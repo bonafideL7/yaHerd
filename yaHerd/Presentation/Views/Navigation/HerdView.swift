@@ -80,6 +80,7 @@ struct HerdView: View {
                     usesExternalSearchField: true,
                     hidesControlsUntilSearch: true,
                     usesShellBottomAccessory: usesShellBottomAccessory,
+                    showsListActions: allowsModeSwitch,
                     onOpenAnimal: onOpenAnimal,
                     onOpenFieldChecks: onOpenFieldChecks,
                     onOpenWorkSessions: onOpenWorkSessions,
