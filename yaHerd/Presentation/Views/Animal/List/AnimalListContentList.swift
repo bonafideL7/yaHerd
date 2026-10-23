@@ -16,6 +16,10 @@ struct AnimalListContentList: View {
     @Binding var inlineSex: Sex
     @Binding var inlineBirthDate: Date
     @Binding var inlinePastureID: UUID?
+    @Binding var inlineSireID: UUID?
+    @Binding var inlineSire: String
+    @Binding var inlineDamID: UUID?
+    @Binding var inlineDam: String
     let pastureOptions: [PastureOption]
     let inlineHelperText: String
     let inlineFocusRequestID: UUID
@@ -25,6 +29,8 @@ struct AnimalListContentList: View {
     let onShowInlineSexPicker: () -> Void
     let onShowInlinePasturePicker: () -> Void
     let onShowInlineBirthDateOptions: () -> Void
+    let onShowInlineDamPicker: () -> Void
+    let onShowInlineSirePicker: () -> Void
     let onCommitInlineEntryFocusLoss: () -> Void
     let onCancelInlineEntry: () -> Void
     let onOpenInlineDetails: (UUID) -> Void
@@ -166,6 +172,10 @@ struct AnimalListContentList: View {
             sex: $inlineSex,
             birthDate: $inlineBirthDate,
             pastureID: $inlinePastureID,
+            sireID: $inlineSireID,
+            sire: $inlineSire,
+            damID: $inlineDamID,
+            dam: $inlineDam,
             mode: mode,
             pastureOptions: pastureOptions,
             helperText: inlineHelperText,
@@ -174,6 +184,8 @@ struct AnimalListContentList: View {
             onShowSexPicker: onShowInlineSexPicker,
             onShowPasturePicker: onShowInlinePasturePicker,
             onShowBirthDateOptions: onShowInlineBirthDateOptions,
+            onShowDamPicker: onShowInlineDamPicker,
+            onShowSirePicker: onShowInlineSirePicker,
             onCommitFocusLoss: onCommitInlineEntryFocusLoss,
             onCancel: onCancelInlineEntry,
             detailsAnimalID: animalID,
