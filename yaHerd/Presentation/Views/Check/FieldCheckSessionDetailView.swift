@@ -158,6 +158,13 @@ struct FieldCheckSessionDetailView: View {
         selectedPane == .roster && !trimmedRosterSearchText.isEmpty
     }
 
+    private var canEditActiveCheck: Bool {
+        dataAccessMode.allowsDataMutations
+            && model.detail?.isCompleted == false
+            && model.detail?.isPastureArchived == false
+            && !model.isCompletingSession
+    }
+
     var body: some View {
         Group {
             if let detail = model.detail {
@@ -184,7 +191,7 @@ struct FieldCheckSessionDetailView: View {
             }
             if let detail = model.detail {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    if detail.isCompleted {
+                    if detail.isCompleted && !detail.isPastureArchived {
                         Menu {
                             Button {
                                 Task { @MainActor in
@@ -200,7 +207,7 @@ struct FieldCheckSessionDetailView: View {
                                 .foregroundStyle(.primary)
                         }
                         .accessibilityLabel("Check Actions")
-                    } else {
+                    } else if !detail.isCompleted {
                         Button {
                             selectPane(selectedPane == .findings ? .roster : .findings)
                         } label: {
@@ -224,7 +231,7 @@ struct FieldCheckSessionDetailView: View {
                         .disabled(model.isCompletingSession)
                     }
                 }
-                if !detail.isCompleted {
+                if !detail.isCompleted && !detail.isPastureArchived {
                     ToolbarItem(placement: .confirmationAction) {
                         ToolbarSaveButton(accessibilityLabel: "Review") {
                             showingFinishReview = true
@@ -235,17 +242,14 @@ struct FieldCheckSessionDetailView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if model.detail?.isCompleted == false {
+            if model.detail?.isCompleted == false && model.detail?.isPastureArchived == false {
                 Color.clear
                     .frame(height: 104)
                     .allowsHitTesting(false)
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            if dataAccessMode.allowsDataMutations
-                && model.detail?.isCompleted == false
-                && !model.isCompletingSession
-                && !isRosterSearchFiltering {
+            if canEditActiveCheck && !isRosterSearchFiltering {
                 FieldCheckFloatingActionMenu(
                     onAddFinding: {
                         pendingFindingAnimalID = nil
@@ -270,7 +274,7 @@ struct FieldCheckSessionDetailView: View {
             applyInitialFindingRouteIfNeeded()
         }
         .onDisappear {
-            if dataAccessMode.allowsDataMutations && model.detail?.isCompleted == false {
+            if canEditActiveCheck {
                 Task { @MainActor in
                     await model.persistNotes(sessionID: sessionID, using: repository)
                 }
@@ -284,7 +288,7 @@ struct FieldCheckSessionDetailView: View {
                     quickAnimalTypeCounts: model.quickAnimalTypeCountsDraft,
                     notes: model.notesDraft,
                     isFinishing: model.isCompletingSession,
-                    canFinish: dataAccessMode.allowsDataMutations && !detail.isCompleted,
+                    canFinish: canEditActiveCheck,
                     errorMessage: Binding(
                         get: { model.errorMessage },
                         set: { model.errorMessage = $0 }
@@ -305,10 +309,7 @@ struct FieldCheckSessionDetailView: View {
                     animals: model.detail?.animalChecks ?? [],
                     initialAnimalID: pendingFindingAnimalID
                 ) { input in
-                    guard dataAccessMode.allowsDataMutations,
-                        model.detail?.isCompleted == false,
-                        !model.isCompletingSession
-                    else { return }
+                    guard canEditActiveCheck else { return }
                     Task { @MainActor in
                         await model.addFinding(sessionID: sessionID, input: input, using: repository)
                     }
@@ -319,10 +320,7 @@ struct FieldCheckSessionDetailView: View {
             if let detail = model.detail {
                 NavigationStack {
                     FieldCheckTrackedAnimalPickerView(session: detail) { animalID in
-                        guard dataAccessMode.allowsDataMutations,
-                            model.detail?.isCompleted == false,
-                            !model.isCompletingSession
-                        else { return false }
+                        guard canEditActiveCheck else { return false }
                         return await model.addTrackedAnimalToSession(
                             sessionID: sessionID,
                             animalID: animalID,
@@ -364,10 +362,7 @@ struct FieldCheckSessionDetailView: View {
                     animals: model.detail?.animalChecks ?? [],
                     finding: finding
                 ) { input in
-                    guard dataAccessMode.allowsDataMutations,
-                        model.detail?.isCompleted == false,
-                        !model.isCompletingSession
-                    else { return }
+                    guard canEditActiveCheck else { return }
                     Task { @MainActor in
                         await model.updateFinding(
                             sessionID: sessionID,
@@ -532,7 +527,7 @@ struct FieldCheckSessionDetailView: View {
                     FieldCheckAnimalCheckRow(
                         sessionID: detail.id,
                         check: check,
-                        isEditable: dataAccessMode.allowsDataMutations && !model.isCompletingSession,
+                        isEditable: canEditActiveCheck,
                         isCountedByQuickCount: quickCountedIDs.contains(check.id),
                         onToggleCounted: {
                             Task { @MainActor in
@@ -578,6 +573,7 @@ struct FieldCheckSessionDetailView: View {
                 remainingRosterChecks: remainingRosterChecks(for: detail),
                 animalTypeCounts: quickAnimalTypeCountsBinding(detail)
             )
+            .disabled(!canEditActiveCheck)
 
             LabeledContent("Breakdown") {
                 Text(quickTypeSummary(for: detail))
@@ -602,7 +598,7 @@ struct FieldCheckSessionDetailView: View {
                 ForEach(sortedFindings) { finding in
                     findingRow(
                             finding,
-                            allowsEditing: dataAccessMode.allowsDataMutations && !model.isCompletingSession
+                            allowsEditing: canEditActiveCheck
                         )
                 }
             }
@@ -614,6 +610,7 @@ struct FieldCheckSessionDetailView: View {
         Section {
             TextField("Session notes", text: notesDraftBinding, axis: .vertical)
                 .lineLimit(4...8)
+                .disabled(!canEditActiveCheck)
         } footer: {
             Text("Notes save when you leave this check or switch away from the notes view.")
         }
@@ -672,7 +669,7 @@ struct FieldCheckSessionDetailView: View {
                     ForEach(sortedFindings) { finding in
                         findingRow(
                             finding,
-                            allowsEditing: dataAccessMode.allowsDataMutations && !model.isCompletingSession
+                            allowsEditing: canEditActiveCheck
                         )
                     }
                 }
@@ -758,7 +755,7 @@ struct FieldCheckSessionDetailView: View {
                     ForEach(sortedFindings) { finding in
                         findingRow(
                             finding,
-                            allowsEditing: dataAccessMode.allowsDataMutations && !model.isCompletingSession
+                            allowsEditing: canEditActiveCheck
                         )
                     }
                 }
@@ -816,7 +813,7 @@ struct FieldCheckSessionDetailView: View {
                     FieldCheckFindingRow(
                         finding: finding,
                         showsPastureName: false,
-                        onStatusChange: dataAccessMode.allowsDataMutations ? { status in
+                        onStatusChange: dataAccessMode.allowsDataMutations && !detail.isPastureArchived ? { status in
                             Task { @MainActor in
                                 await model.updateFindingStatus(
                                     sessionID: sessionID,
@@ -988,7 +985,7 @@ struct FieldCheckSessionDetailView: View {
     }
 
     private func selectPane(_ pane: FieldCheckSessionPane) {
-        if dataAccessMode.allowsDataMutations,
+        if canEditActiveCheck,
             selectedPane == .notes,
             pane != .notes
         {
@@ -1036,8 +1033,7 @@ struct FieldCheckSessionDetailView: View {
         Binding(
             get: { model.quickAnimalTypeCountsDraft },
             set: { newValue in
-                guard dataAccessMode.allowsDataMutations,
-                      !model.isCompletingSession else { return }
+                guard canEditActiveCheck else { return }
                 model.updateQuickAnimalTypeCounts(
                     sessionID: sessionID,
                     counts: newValue,
@@ -1093,7 +1089,7 @@ struct FieldCheckSessionDetailView: View {
     }
 
     private func completeCurrentSession() {
-        guard dataAccessMode.allowsDataMutations,
+        guard canEditActiveCheck,
               model.beginSessionCompletion() else {
             return
         }
