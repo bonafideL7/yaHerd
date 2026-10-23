@@ -21,13 +21,16 @@ struct WorkingSessionsView: View {
     @State private var startedRoute: StartedWorkingSessionRoute?
 
     private let startsWithPastureSelection: Bool
+    private let onStartSessionSetup: (() -> Void)?
     private let onSessionStarted: ((UUID) -> Void)?
 
     init(
         startsWithPastureSelection: Bool = false,
+        onStartSessionSetup: (() -> Void)? = nil,
         onSessionStarted: ((UUID) -> Void)? = nil
     ) {
         self.startsWithPastureSelection = startsWithPastureSelection
+        self.onStartSessionSetup = onStartSessionSetup
         self.onSessionStarted = onSessionStarted
         _viewModel = StateObject(
             wrappedValue: WorkingSessionsViewModel(repository: EmptyWorkingRepository())
@@ -91,7 +94,11 @@ struct WorkingSessionsView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    showingNewSession = true
+                    if let onStartSessionSetup {
+                        onStartSessionSetup()
+                    } else {
+                        showingNewSession = true
+                    }
                 } label: {
                     Image(systemName: "plus")
                 }
@@ -99,7 +106,7 @@ struct WorkingSessionsView: View {
             }
         }
         .task {
-            if startsWithPastureSelection && !hasPresentedInitialStart {
+            if startsWithPastureSelection && onStartSessionSetup == nil && !hasPresentedInitialStart {
                 hasPresentedInitialStart = true
                 if dataAccessMode.allowsDataMutations {
                     showingNewSession = true
