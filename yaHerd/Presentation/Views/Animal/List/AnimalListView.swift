@@ -47,9 +47,6 @@ struct AnimalListView: View {
     @State private var collapsedSectionIDs: Set<String> = []
     @State private var showingPasturePicker = false
     @State private var inlineEntry = AnimalInlineEntryViewModel()
-    @State private var isShowingInlineSexPicker = false
-    @State private var isShowingInlinePasturePicker = false
-    @State private var isShowingInlineBirthDateOptions = false
     @State private var isShowingInlineBirthDatePicker = false
     @State private var activeInlineParentPicker: ParentPickerType?
     @State private var detailAnimalID: UUID?
@@ -322,15 +319,8 @@ struct AnimalListView: View {
             }
         }
         .animalListInlineEntryDialogs(
-            sex: $inlineEntry.sex,
-            pastureID: $inlineEntry.pastureID,
             birthDate: $inlineEntry.birthDate,
-            isShowingSexPicker: $isShowingInlineSexPicker,
-            isShowingPasturePicker: $isShowingInlinePasturePicker,
-            isShowingBirthDateOptions: $isShowingInlineBirthDateOptions,
             isShowingBirthDatePicker: $isShowingInlineBirthDatePicker,
-            pastureOptions: viewModel.pastureOptions,
-            onPrepareBirthDatePicker: { inlineEntry.ignoresNextFocusLoss = true },
             onRequestFocus: requestInlineEntryFocus
         )
         .animalParentPickerSheet(
@@ -456,9 +446,9 @@ struct AnimalListView: View {
             onStartNewInlineEntry: beginNewInlineEntry,
             onStartEditingAnimal: beginInlineEditing,
             onSubmitInlineEntry: submitInlineEntry,
-            onShowInlineSexPicker: { presentInlineEntryPicker { isShowingInlineSexPicker = true } },
-            onShowInlinePasturePicker: { presentInlineEntryPicker { isShowingInlinePasturePicker = true } },
-            onShowInlineBirthDateOptions: { presentInlineEntryPicker { isShowingInlineBirthDateOptions = true } },
+            onPrepareInlinePicker: { inlineEntry.prepareForPickerPresentation() },
+            onShowInlineBirthDatePicker: { presentInlineEntryPicker { isShowingInlineBirthDatePicker = true } },
+            onRequestInlineEntryFocus: requestInlineEntryFocus,
             onShowInlineDamPicker: { presentInlineEntryPicker { activeInlineParentPicker = .dam } },
             onShowInlineSirePicker: { presentInlineEntryPicker { activeInlineParentPicker = .sire } },
             onCommitInlineEntryFocusLoss: commitInlineEntryFromFocusLoss,
