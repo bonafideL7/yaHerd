@@ -1096,7 +1096,7 @@ actor CoreDataReadModelActor:
             )
             sessionRequest.predicate = NSPredicate(
                 format: """
-                herd == %@ AND (
+                herd == %@ AND pastureArchivedAt == nil AND pasture != nil AND (
                     completedAt == nil OR
                     SUBQUERY(animalChecks, $check, $check.missingConfirmedAt != nil).@count > 0 OR
                     SUBQUERY(findings, $finding, $finding.statusRawValue IN %@).@count > 0
@@ -1128,7 +1128,7 @@ actor CoreDataReadModelActor:
                 entityName: CDFieldCheckFinding.coreDataEntityName
             )
             findingRequest.predicate = NSPredicate(
-                format: "herd == %@ AND session.herd == %@ AND statusRawValue IN %@",
+                format: "herd == %@ AND session.herd == %@ AND session.pastureArchivedAt == nil AND session.pasture != nil AND statusRawValue IN %@",
                 herd,
                 herd,
                 Self.unresolvedFindingStatusRawValues
