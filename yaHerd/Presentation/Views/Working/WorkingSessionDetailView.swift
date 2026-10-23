@@ -75,6 +75,26 @@ struct WorkingSessionDetailView: View {
                 sessionToolbar(session)
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if viewModel.session?.status == .active {
+                Color.clear
+                    .frame(height: 104)
+                    .allowsHitTesting(false)
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if let session = viewModel.session,
+               session.status == .active,
+               dataAccessMode.allowsDataMutations,
+               !isMutatingSession {
+                WorkingSessionFloatingActionMenu(
+                    canAddAnimals: session.isSourcePastureAvailable && session.sourcePastureID != nil,
+                    onAddAnimals: { showingAddAnimals = true }
+                )
+                .padding(.trailing, 24)
+                .padding(.bottom, 12)
+            }
+        }
         .task {
             viewModel.configure(repository: repository)
             await viewModel.observe(
@@ -352,21 +372,8 @@ struct WorkingSessionDetailView: View {
 
     @ToolbarContentBuilder
     private func sessionToolbar(_ session: WorkingSessionDetailSnapshot) -> some ToolbarContent {
-        ToolbarItemGroup(placement: .topBarTrailing) {
-            if session.status == .active {
-                Button {
-                    showingAddAnimals = true
-                } label: {
-                    Label("Add Animals", systemImage: "tag.badge.plus")
-                }
-                .accessibilityLabel("Add Animals")
-                .disabled(
-                    !session.isSourcePastureAvailable
-                        || session.sourcePastureID == nil
-                        || !dataAccessMode.allowsDataMutations
-                        || isMutatingSession
-                )
-            } else if session.status == .finished {
+        if session.status == .finished {
+            ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showingReopenConfirmation = true
                 } label: {
@@ -453,5 +460,24 @@ struct WorkingSessionDetailView: View {
     private func reload() {
         viewModel.load()
         resetFilterForCompletedSession()
+    }
+}
+
+private struct WorkingSessionFloatingActionMenu: View {
+    let canAddAnimals: Bool
+    let onAddAnimals: () -> Void
+
+    var body: some View {
+        Menu {
+            Button {
+                onAddAnimals()
+            } label: {
+                Label("Add Animals", systemImage: "tag.badge.plus")
+            }
+            .disabled(!canAddAnimals)
+        } label: {
+            FloatingAddButtonLabel()
+        }
+        .accessibilityLabel("Quick actions")
     }
 }
