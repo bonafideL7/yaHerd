@@ -1,6 +1,7 @@
 nonisolated enum ApplicationSettingKey: String, CaseIterable, Sendable {
     case dashboardEnabled = "settings.dashboardEnabled"
     case hardDeleteAnimals = "settings.hardDeleteAnimals"
+    case inlineAnimalEditingEnabled = "settings.inlineAnimalEditingEnabled"
     case targetAcresPerHeadDefault = "settings.targetAcresPerHeadDefault"
     case usableAcreagePercentDefault = "settings.usableAcreagePercentDefault"
     case recentPastureIDs = "settings.recentPastureIDs"
@@ -13,6 +14,8 @@ nonisolated enum ApplicationSettingKey: String, CaseIterable, Sendable {
         case .dashboardEnabled:
             ["isDashboardEnabled"]
         case .hardDeleteAnimals:
+            []
+        case .inlineAnimalEditingEnabled:
             []
         case .targetAcresPerHeadDefault:
             ["targetAcresPerHeadDefault"]
