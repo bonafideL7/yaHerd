@@ -20,7 +20,6 @@ struct WorkingSessionDetailView: View {
     @State private var showingAddAnimals = false
     @State private var showingFinish = false
     @State private var showingReopenConfirmation = false
-    @State private var errorMessage: String?
     @State private var showingError = false
     @State private var isMutatingSession = false
 
@@ -109,7 +108,7 @@ struct WorkingSessionDetailView: View {
         .alert("Can’t Update Session", isPresented: $showingError) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(errorMessage ?? viewModel.errorMessage ?? "Unknown error")
+            Text(viewModel.errorMessage ?? "Unknown error")
         }
         .onChange(of: viewModel.errorMessage) { _, newValue in
             if newValue != nil {
