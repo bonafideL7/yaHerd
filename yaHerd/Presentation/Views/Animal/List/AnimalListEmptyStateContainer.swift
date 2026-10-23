@@ -14,6 +14,7 @@ struct AnimalListEmptyStateContainer: View {
     let hasHiddenArchivedRecords: Bool
     let showRemovedStatuses: Bool
     let showArchivedRecords: Bool
+    let allowsInlineEditing: Bool
     let onStartInlineEntry: () -> Void
     let onAddAnimal: () -> Void
     let onAddSampleData: (() -> Void)?
@@ -28,7 +29,7 @@ struct AnimalListEmptyStateContainer: View {
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    if dataAccessMode.allowsDataMutations && !isSeedingSampleData {
+                    if allowsInlineEditing && dataAccessMode.allowsDataMutations && !isSeedingSampleData {
                         onStartInlineEntry()
                     }
                 }
