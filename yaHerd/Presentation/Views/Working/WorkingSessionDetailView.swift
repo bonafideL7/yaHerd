@@ -477,10 +477,8 @@ private struct WorkingSessionFloatingActionMenu: View {
 
     var body: some View {
         Menu {
-            Button {
+            Button("Add Animals", image: ImageResource(name: "Cow", bundle: .main)) {
                 onAddAnimals()
-            } label: {
-                Label("Add Animals", systemImage: "tag.badge.plus")
             }
             .disabled(!canAddAnimals)
 
