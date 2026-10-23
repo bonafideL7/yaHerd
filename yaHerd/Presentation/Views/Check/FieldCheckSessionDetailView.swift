@@ -270,9 +270,6 @@ struct FieldCheckSessionDetailView: View {
                     },
                     onAddAnimal: {
                         showingAddTrackedAnimal = true
-                    },
-                    onAddNote: {
-                        selectPane(.notes)
                     }
                 )
                 .padding(.trailing, 24)
@@ -1164,7 +1161,6 @@ struct FieldCheckSessionDetailView: View {
 private struct FieldCheckFloatingActionMenu: View {
     let onAddFinding: () -> Void
     let onAddAnimal: () -> Void
-    let onAddNote: () -> Void
 
     var body: some View {
         Menu {
@@ -1180,11 +1176,6 @@ private struct FieldCheckFloatingActionMenu: View {
                 Label("Add Animal", systemImage: "tag.badge.plus")
             }
 
-            Button {
-                onAddNote()
-            } label: {
-                Label("Note", systemImage: "note.text")
-            }
         } label: {
             FloatingAddButtonLabel()
         }
