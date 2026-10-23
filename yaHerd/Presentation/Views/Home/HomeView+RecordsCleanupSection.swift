@@ -24,7 +24,7 @@ extension HomeView {
                     title: "Animals missing pasture",
                     subtitle: "Assign active pasture animals before field work relies on location.",
                     systemImage: "mappin.slash.circle.fill",
-                    tint: .brown,
+                    tint: .green,
                     count: unassignedAnimalRecords.count,
                     showsChevron: true
                 )

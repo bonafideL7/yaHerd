@@ -25,7 +25,7 @@ extension HomeView {
                         title: "Open pasture check",
                         subtitle: session.displayTitle,
                         systemImage: "checklist",
-                        tint: .purple,
+                        tint: .mint,
                         count: 1,
                         showsChevron: true
                     )
@@ -39,7 +39,7 @@ extension HomeView {
                         title: "Open pasture checks",
                         subtitle: "Finish open pasture checks before counts go stale.",
                         systemImage: "checklist",
-                        tint: .purple,
+                        tint: .mint,
                         count: activeCheckSessions.count,
                         showsChevron: true
                     )
@@ -65,7 +65,7 @@ extension HomeView {
                         title: "Resolve open field finding",
                         subtitle: finding.pastureName ?? "Open finding from a pasture check.",
                         systemImage: "exclamationmark.bubble.fill",
-                        tint: .red,
+                        tint: .yellow,
                         count: 1,
                         showsChevron: true
                     )
@@ -79,7 +79,7 @@ extension HomeView {
                         title: "Open field findings",
                         subtitle: "Fence, water, health, and missing-animal notes from checks.",
                         systemImage: "exclamationmark.bubble.fill",
-                        tint: .red,
+                        tint: .yellow,
                         count: openFindingCount,
                         showsChevron: true
                     )
@@ -97,7 +97,7 @@ extension HomeView {
                         title: "Flagged animals from checks",
                         subtitle: session.displayTitle,
                         systemImage: "flag.fill",
-                        tint: .orange,
+                        tint: .purple,
                         count: flaggedCheckAnimalCount,
                         showsChevron: true
                     )
@@ -111,7 +111,7 @@ extension HomeView {
                         title: "Flagged animals from checks",
                         subtitle: "Jump directly to animals marked for attention in the field.",
                         systemImage: "flag.fill",
-                        tint: .orange,
+                        tint: .purple,
                         count: flaggedCheckAnimalCount,
                         showsChevron: true
                     )

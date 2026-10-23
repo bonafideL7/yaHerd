@@ -19,7 +19,7 @@ extension HomeView {
                 title: "Pasture Check",
                 subtitle: "Start a pasture check",
                 systemImage: "checklist",
-                tint: .purple,
+                tint: .mint,
                 actionTitle: pastureCheckActionTitle
             )
         }
