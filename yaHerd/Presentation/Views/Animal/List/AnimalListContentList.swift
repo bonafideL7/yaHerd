@@ -6,6 +6,7 @@ struct AnimalListContentList: View {
     let groupedAnimals: [AnimalSection]
     let shouldUseSections: Bool
     let batchMode: Bool
+    let allowsInlineEditing: Bool
     @Binding var selectedAnimalIDs: Set<UUID>
     @Binding var collapsedSectionIDs: Set<String>
     let inlineEntryIsActive: Bool
@@ -145,7 +146,7 @@ struct AnimalListContentList: View {
 
     private func editableAnimalRow(_ animal: AnimalSummary) -> some View {
         Button {
-            if dataAccessMode.allowsDataMutations {
+            if dataAccessMode.allowsDataMutations && allowsInlineEditing {
                 onStartEditingAnimal(animal)
             } else {
                 onOpenInlineDetails(animal.id)
@@ -156,7 +157,7 @@ struct AnimalListContentList: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityHint(dataAccessMode.allowsDataMutations ? "Double-tap to edit this animal inline" : "Double-tap to view this animal")
+        .accessibilityHint(dataAccessMode.allowsDataMutations && allowsInlineEditing ? "Double-tap to edit this animal inline" : "Double-tap to view this animal")
     }
 
     private func inlineEntryRow(mode: AnimalListInlineEntryRow.Mode, animalID: UUID? = nil) -> some View {
