@@ -16,6 +16,7 @@ struct TagColorEditorView: View {
     @State private var prefix: String
     @State private var color: Color
     @State private var prefixEdited = false
+    @State private var makeDefaultOnSave = false
     @State private var saveErrorMessage: String?
 
     init(existing: TagColorSnapshot?) {
@@ -70,13 +71,12 @@ struct TagColorEditorView: View {
                                 .accessibilityAddTraits(.isSelected)
                         } else {
                             Button {
-                                guard tagColorLibrary.setDefaultColor(id: existing.id) else {
-                                    saveErrorMessage = tagColorLibrary.lastErrorMessage
-                                        ?? "The default tag color could not be updated."
-                                    return
-                                }
+                                makeDefaultOnSave.toggle()
                             } label: {
-                                Label("Set as Default Tag Color", systemImage: "checkmark.circle")
+                                Label(
+                                    makeDefaultOnSave ? "Will Be Default When Saved" : "Set as Default Tag Color",
+                                    systemImage: makeDefaultOnSave ? "checkmark.circle.fill" : "checkmark.circle"
+                                )
                             }
                         }
                     } footer: {
@@ -103,7 +103,8 @@ struct TagColorEditorView: View {
                             id: existing?.id ?? UUID(),
                             name: trimmedName,
                             prefix: finalPrefix,
-                            rgba: RGBAColor(color: color)
+                            rgba: RGBAColor(color: color),
+                            isDefault: makeDefaultOnSave
                         )
 
                         guard tagColorLibrary.upsert(def) else {
