@@ -13,6 +13,7 @@ final class ApplicationSettings {
     @ObservationIgnored private let store: any ApplicationSettingsStore
 
     private var dashboardEnabledValue: Bool
+    private var hiddenDashboardSectionsValue: Set<DashboardSection>
     private var hardDeleteAnimalsValue: Bool
     private var inlineAnimalEditingEnabledValue: Bool
     private var targetAcresPerHeadDefaultValue: Double
@@ -33,6 +34,13 @@ final class ApplicationSettings {
         self.dashboardEnabledValue = Self.decodeBool(
             store.object(forKey: ApplicationSettingKey.dashboardEnabled.rawValue),
             defaultValue: false
+        )
+        let hiddenSectionIDs: Set<String> = Self.decodeStrings(
+            store.object(forKey: ApplicationSettingKey.dashboardHiddenSections.rawValue),
+            legacySeparator: ","
+        )
+        self.hiddenDashboardSectionsValue = Set(
+            hiddenSectionIDs.compactMap(DashboardSection.init(rawValue:))
         )
         self.hardDeleteAnimalsValue = Self.decodeBool(
             store.object(forKey: ApplicationSettingKey.hardDeleteAnimals.rawValue),
@@ -82,6 +90,22 @@ final class ApplicationSettings {
             dashboardEnabledValue = newValue
             persistChange(key: .dashboardEnabled, encodedValue: newValue)
         }
+    }
+
+    var hiddenDashboardSections: Set<DashboardSection> {
+        get { hiddenDashboardSectionsValue }
+        set {
+            guard hiddenDashboardSectionsValue != newValue else { return }
+            hiddenDashboardSectionsValue = newValue
+            persistChange(
+                key: .dashboardHiddenSections,
+                encodedValue: newValue.map(\.rawValue).sorted()
+            )
+        }
+    }
+
+    func isDashboardSectionVisible(_ section: DashboardSection) -> Bool {
+        !hiddenDashboardSections.contains(section)
     }
 
     var hardDeleteAnimals: Bool {
@@ -178,6 +202,7 @@ final class ApplicationSettings {
 
     func resetToDefaults() {
         isDashboardEnabled = false
+        hiddenDashboardSections = []
         hardDeleteAnimals = true
         inlineAnimalEditingEnabled = true
         targetAcresPerHeadDefault = Self.defaultTargetAcresPerHead
@@ -206,6 +231,8 @@ final class ApplicationSettings {
         switch key {
         case .dashboardEnabled:
             isDashboardEnabled
+        case .dashboardHiddenSections:
+            hiddenDashboardSections.map(\.rawValue).sorted()
         case .hardDeleteAnimals:
             hardDeleteAnimals
         case .inlineAnimalEditingEnabled:
