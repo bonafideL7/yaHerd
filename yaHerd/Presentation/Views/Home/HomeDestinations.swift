@@ -22,10 +22,16 @@ struct PastureSessionStartListView: View {
     @State private var errorMessage: String?
 
     let kind: PastureSessionStartKind
+    let usesWorkingSessionPath: Bool
     let onSessionStarted: (UUID) -> Void
 
-    init(kind: PastureSessionStartKind, onSessionStarted: @escaping (UUID) -> Void) {
+    init(
+        kind: PastureSessionStartKind,
+        usesWorkingSessionPath: Bool = false,
+        onSessionStarted: @escaping (UUID) -> Void
+    ) {
         self.kind = kind
+        self.usesWorkingSessionPath = usesWorkingSessionPath
         self.onSessionStarted = onSessionStarted
     }
 
@@ -68,10 +74,18 @@ struct PastureSessionStartListView: View {
                 List {
                     Section("Select Pasture") {
                         ForEach(rows) { row in
-                            NavigationLink {
-                                setup(for: row.pasture)
-                            } label: {
-                                pastureRow(row)
+                            if usesWorkingSessionPath {
+                                NavigationLink(
+                                    value: WorkingSessionWorkflowDestination.setup(row.pasture.id)
+                                ) {
+                                    pastureRow(row)
+                                }
+                            } else {
+                                NavigationLink {
+                                    setup(for: row.pasture)
+                                } label: {
+                                    pastureRow(row)
+                                }
                             }
                         }
                     }
