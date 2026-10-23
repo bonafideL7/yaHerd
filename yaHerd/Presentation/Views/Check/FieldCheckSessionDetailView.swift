@@ -201,30 +201,26 @@ struct FieldCheckSessionDetailView: View {
                         }
                         .accessibilityLabel("Check Actions")
                     } else {
-                        if selectedPane == .findings || selectedPane == .notes {
-                            Button {
-                                selectPane(.roster)
-                            } label: {
-                                Label("Animal List", systemImage: "list.bullet")
-                            }
-                            .accessibilityLabel("Animal List")
-                            .disabled(model.isCompletingSession)
-                        }
-
                         Button {
-                            selectPane(.findings)
+                            selectPane(selectedPane == .findings ? .roster : .findings)
                         } label: {
-                            Label("Findings", systemImage: "exclamationmark.bubble")
+                            Label(
+                                selectedPane == .findings ? "Animal List" : "Findings",
+                                systemImage: selectedPane == .findings ? "list.bullet" : "exclamationmark.bubble"
+                            )
                         }
-                        .accessibilityLabel("Findings")
+                        .accessibilityLabel(selectedPane == .findings ? "Animal List" : "Findings")
                         .disabled(model.isCompletingSession)
 
                         Button {
-                            selectPane(.notes)
+                            selectPane(selectedPane == .notes ? .roster : .notes)
                         } label: {
-                            Label("Notes", systemImage: "note.text")
+                            Label(
+                                selectedPane == .notes ? "Animal List" : "Notes",
+                                systemImage: selectedPane == .notes ? "list.bullet" : "note.text"
+                            )
                         }
-                        .accessibilityLabel("Notes")
+                        .accessibilityLabel(selectedPane == .notes ? "Animal List" : "Notes")
                         .disabled(model.isCompletingSession)
                     }
                 }
