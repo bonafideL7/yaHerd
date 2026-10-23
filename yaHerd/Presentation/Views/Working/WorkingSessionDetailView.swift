@@ -18,6 +18,7 @@ struct WorkingSessionDetailView: View {
     @State private var animalFilter: WorkingSessionAnimalFilter = .remaining
     @State private var searchText = ""
     @State private var showingAddAnimals = false
+    @State private var showingEditTreatments = false
     @State private var showingFinish = false
     @State private var showingReopenConfirmation = false
     @State private var showingError = false
@@ -89,7 +90,8 @@ struct WorkingSessionDetailView: View {
                !isMutatingSession {
                 WorkingSessionFloatingActionMenu(
                     canAddAnimals: session.isSourcePastureAvailable && session.sourcePastureID != nil,
-                    onAddAnimals: { showingAddAnimals = true }
+                    onAddAnimals: { showingAddAnimals = true },
+                    onEditTreatments: { showingEditTreatments = true }
                 )
                 .padding(.trailing, 24)
                 .padding(.bottom, 12)
@@ -105,6 +107,11 @@ struct WorkingSessionDetailView: View {
         .sheet(isPresented: $showingAddAnimals, onDismiss: reload) {
             if let session = viewModel.session {
                 WorkingCollectAnimalsView(sessionID: session.id)
+            }
+        }
+        .sheet(isPresented: $showingEditTreatments, onDismiss: reload) {
+            if let session = viewModel.session {
+                WorkingSessionTreatmentEditorView(session: session)
             }
         }
         .sheet(isPresented: $showingFinish, onDismiss: reload) {
@@ -466,6 +473,7 @@ struct WorkingSessionDetailView: View {
 private struct WorkingSessionFloatingActionMenu: View {
     let canAddAnimals: Bool
     let onAddAnimals: () -> Void
+    let onEditTreatments: () -> Void
 
     var body: some View {
         Menu {
@@ -475,6 +483,12 @@ private struct WorkingSessionFloatingActionMenu: View {
                 Label("Add Animals", systemImage: "tag.badge.plus")
             }
             .disabled(!canAddAnimals)
+
+            Button {
+                onEditTreatments()
+            } label: {
+                Label("Edit Treatments", systemImage: "syringe")
+            }
         } label: {
             FloatingAddButtonLabel()
         }
