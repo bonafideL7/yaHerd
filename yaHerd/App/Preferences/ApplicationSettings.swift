@@ -44,11 +44,11 @@ final class ApplicationSettings {
         )
         self.hardDeleteAnimalsValue = Self.decodeBool(
             store.object(forKey: ApplicationSettingKey.hardDeleteAnimals.rawValue),
-            defaultValue: true
+            defaultValue: false
         )
         self.inlineAnimalEditingEnabledValue = Self.decodeBool(
             store.object(forKey: ApplicationSettingKey.inlineAnimalEditingEnabled.rawValue),
-            defaultValue: true
+            defaultValue: false
         )
         self.targetAcresPerHeadDefaultValue = Self.validatedTargetAcresPerHead(
             Self.decodeDouble(
@@ -203,8 +203,8 @@ final class ApplicationSettings {
     func resetToDefaults() {
         isDashboardEnabled = false
         hiddenDashboardSections = []
-        hardDeleteAnimals = true
-        inlineAnimalEditingEnabled = true
+        hardDeleteAnimals = false
+        inlineAnimalEditingEnabled = false
         targetAcresPerHeadDefault = Self.defaultTargetAcresPerHead
         usableAcreagePercentDefault = Self.defaultUsableAcreagePercent
         recentPastureIDs = []
