@@ -26,9 +26,9 @@ struct AnimalListContentList: View {
     let onStartNewInlineEntry: () -> Void
     let onStartEditingAnimal: (AnimalSummary) -> Void
     let onSubmitInlineEntry: () -> Void
-    let onShowInlineSexPicker: () -> Void
-    let onShowInlinePasturePicker: () -> Void
-    let onShowInlineBirthDateOptions: () -> Void
+    let onPrepareInlinePicker: () -> Void
+    let onShowInlineBirthDatePicker: () -> Void
+    let onRequestInlineEntryFocus: () -> Void
     let onShowInlineDamPicker: () -> Void
     let onShowInlineSirePicker: () -> Void
     let onCommitInlineEntryFocusLoss: () -> Void
@@ -181,9 +181,9 @@ struct AnimalListContentList: View {
             helperText: inlineHelperText,
             focusRequestID: inlineFocusRequestID,
             onSubmit: onSubmitInlineEntry,
-            onShowSexPicker: onShowInlineSexPicker,
-            onShowPasturePicker: onShowInlinePasturePicker,
-            onShowBirthDateOptions: onShowInlineBirthDateOptions,
+            onPreparePicker: onPrepareInlinePicker,
+            onShowBirthDatePicker: onShowInlineBirthDatePicker,
+            onRequestFocus: onRequestInlineEntryFocus,
             onShowDamPicker: onShowInlineDamPicker,
             onShowSirePicker: onShowInlineSirePicker,
             onCommitFocusLoss: onCommitInlineEntryFocusLoss,
