@@ -51,6 +51,7 @@ struct AnimalListView: View {
     @State private var isShowingInlinePasturePicker = false
     @State private var isShowingInlineBirthDateOptions = false
     @State private var isShowingInlineBirthDatePicker = false
+    @State private var activeInlineParentPicker: ParentPickerType?
     @State private var detailAnimalID: UUID?
     @State private var isShowingInlineDetail = false
     private let externalSearchText: Binding<String>?
@@ -327,6 +328,14 @@ struct AnimalListView: View {
             onPrepareBirthDatePicker: { inlineEntry.ignoresNextFocusLoss = true },
             onRequestFocus: requestInlineEntryFocus
         )
+        .animalParentPickerSheet(
+            activePicker: $activeInlineParentPicker,
+            sireID: $inlineEntry.sireID,
+            sire: $inlineEntry.sire,
+            damID: $inlineEntry.damID,
+            dam: $inlineEntry.dam,
+            excludeAnimalID: inlineEntry.editingAnimalID
+        )
         .alert("Animal Not Saved", isPresented: errorMessageIsPresented) {
             Button("OK", role: .cancel) {
                 viewModel.errorMessage = nil
@@ -372,6 +381,9 @@ struct AnimalListView: View {
         }
         .onChange(of: showArchivedRecordsValue) { _, _ in
             refreshDerivedState()
+        }
+        .onChange(of: activeInlineParentPicker?.id) { _, pickerID in
+            if pickerID == nil { requestInlineEntryFocus() }
         }
         .onChange(of: applicationSettings.inlineAnimalEditingEnabled) { _, enabled in
             guard !enabled, inlineEntry.isActive else { return }
@@ -431,6 +443,10 @@ struct AnimalListView: View {
             inlineSex: $inlineEntry.sex,
             inlineBirthDate: $inlineEntry.birthDate,
             inlinePastureID: $inlineEntry.pastureID,
+            inlineSireID: $inlineEntry.sireID,
+            inlineSire: $inlineEntry.sire,
+            inlineDamID: $inlineEntry.damID,
+            inlineDam: $inlineEntry.dam,
             pastureOptions: viewModel.pastureOptions,
             inlineHelperText: inlineHelperText,
             inlineFocusRequestID: inlineEntry.focusRequestID,
@@ -440,6 +456,8 @@ struct AnimalListView: View {
             onShowInlineSexPicker: { presentInlineEntryPicker { isShowingInlineSexPicker = true } },
             onShowInlinePasturePicker: { presentInlineEntryPicker { isShowingInlinePasturePicker = true } },
             onShowInlineBirthDateOptions: { presentInlineEntryPicker { isShowingInlineBirthDateOptions = true } },
+            onShowInlineDamPicker: { presentInlineEntryPicker { activeInlineParentPicker = .dam } },
+            onShowInlineSirePicker: { presentInlineEntryPicker { activeInlineParentPicker = .sire } },
             onCommitInlineEntryFocusLoss: commitInlineEntryFromFocusLoss,
             onCancelInlineEntry: cancelInlineEntry,
             onOpenInlineDetails: openInlineDetails,
@@ -676,8 +694,15 @@ struct AnimalListView: View {
             return
         }
 
-        withAnimation(.snappy) {
-            inlineEntry.beginEditing(animal, tagColorLibrary: tagColorLibrary)
+        do {
+            guard let detail = try repository.fetchAnimalDetail(id: animal.id) else {
+                throw AnimalValidationError.animalNotFound
+            }
+            withAnimation(.snappy) {
+                inlineEntry.beginEditing(animal, detail: detail, tagColorLibrary: tagColorLibrary)
+            }
+        } catch {
+            viewModel.errorMessage = UserVisibleErrorMessage.make(error)
         }
     }
 
