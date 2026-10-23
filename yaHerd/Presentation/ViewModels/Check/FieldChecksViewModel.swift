@@ -12,7 +12,7 @@ final class FieldChecksViewModel {
     private var lastLoadedRevision: UInt64 = 0
 
     var activeSessions: [FieldCheckSessionSummary] {
-        sessions.filter { !$0.isCompleted }
+        sessions.filter { !$0.isCompleted && !$0.isPastureArchived }
     }
 
     var archivedPastureSessions: [FieldCheckSessionSummary] {
