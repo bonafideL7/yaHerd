@@ -1170,12 +1170,9 @@ private struct FieldCheckFloatingActionMenu: View {
                 Label("Add Finding", systemImage: "exclamationmark.bubble")
             }
 
-            Button {
+            Button("Add Animal", image: ImageResource(name: "Cow", bundle: .main)) {
                 onAddAnimal()
-            } label: {
-                Label("Add Animal", systemImage: "tag.badge.plus")
             }
-
         } label: {
             FloatingAddButtonLabel()
         }
