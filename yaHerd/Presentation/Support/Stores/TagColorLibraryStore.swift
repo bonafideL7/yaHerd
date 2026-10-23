@@ -98,7 +98,8 @@ final class TagColorLibraryStore: ObservableObject {
         }
     }
 
-    func setDefaultColor(id: UUID) {
+    @discardableResult
+    func setDefaultColor(id: UUID) -> Bool {
         performRepositoryWrite("Failed to set default tag color") {
             try repository.setDefaultColor(id: id)
         }
