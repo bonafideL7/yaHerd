@@ -138,7 +138,9 @@ struct HerdTabRootView: View {
                 }
             )
         case .workingSessions:
-            WorkingSessionsView { sessionID in
+            WorkingSessionsView(
+                onStartSessionSetup: { navigation.startWorkingSession() }
+            ) { sessionID in
                 navigation.openWorkArea(.session(sessionID))
             }
         }
