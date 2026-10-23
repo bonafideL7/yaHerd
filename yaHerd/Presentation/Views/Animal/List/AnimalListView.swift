@@ -62,6 +62,7 @@ struct AnimalListView: View {
     private let usesExternalSearchField: Bool
     private let hidesControlsUntilSearch: Bool
     private let usesShellBottomAccessory: Bool
+    private let showsListActions: Bool
     private let onOpenAnimal: ((UUID) -> Void)?
     private let onOpenFieldChecks: () -> Void
     private let onOpenWorkSessions: () -> Void
@@ -80,6 +81,7 @@ struct AnimalListView: View {
         hidesControlsUntilSearch: Bool = false,
         showsSearchControls: Bool = false,
         usesShellBottomAccessory: Bool = false,
+        showsListActions: Bool = true,
         onOpenAnimal: ((UUID) -> Void)? = nil,
         onOpenFieldChecks: @escaping () -> Void = {},
         onOpenWorkSessions: @escaping () -> Void = {},
@@ -97,6 +99,7 @@ struct AnimalListView: View {
         self.hidesControlsUntilSearch = hidesControlsUntilSearch
         self.showsSearchControls = showsSearchControls
         self.usesShellBottomAccessory = usesShellBottomAccessory
+        self.showsListActions = showsListActions
         self.onOpenAnimal = onOpenAnimal
         self.onOpenFieldChecks = onOpenFieldChecks
         self.onOpenWorkSessions = onOpenWorkSessions
@@ -279,21 +282,23 @@ struct AnimalListView: View {
             }
         }
         .toolbar {
-            AnimalListToolbarContent(
-                sortOrder: sortOrderValue,
-                batchMode: batchMode,
-                canCollapseSections: canCollapseSections,
-                onReverseSortDirection: reverseSortDirection,
-                onCollapseAllSections: collapseAllSections,
-                onToggleBatchMode: toggleBatchMode,
-                onOpenFieldChecks: onOpenFieldChecks,
-                onOpenWorkSessions: onOpenWorkSessions,
-                onOpenSettings: onOpenSettings
-            )
+            if showsListActions {
+                AnimalListToolbarContent(
+                    sortOrder: sortOrderValue,
+                    batchMode: batchMode,
+                    canCollapseSections: canCollapseSections,
+                    onReverseSortDirection: reverseSortDirection,
+                    onCollapseAllSections: collapseAllSections,
+                    onToggleBatchMode: toggleBatchMode,
+                    onOpenFieldChecks: onOpenFieldChecks,
+                    onOpenWorkSessions: onOpenWorkSessions,
+                    onOpenSettings: onOpenSettings
+                )
+            }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomOverlay }
         .overlay(alignment: .bottomTrailing) {
-            if dataAccessMode.allowsDataMutations && !isSeedingSampleData && !batchMode && !inlineEntry.isActive {
+            if showsListActions && dataAccessMode.allowsDataMutations && !isSeedingSampleData && !batchMode && !inlineEntry.isActive {
                 AnimalListFloatingAddButton(
                     bottomPadding: floatingAddButtonBottomPadding,
                     action: presentAddAnimal
