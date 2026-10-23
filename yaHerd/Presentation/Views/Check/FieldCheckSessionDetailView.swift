@@ -274,7 +274,9 @@ struct FieldCheckSessionDetailView: View {
             applyInitialFindingRouteIfNeeded()
         }
         .onDisappear {
-            if canEditActiveCheck {
+            if dataAccessMode.allowsDataMutations
+                && model.detail?.isCompleted == false
+                && model.detail?.isPastureArchived == false {
                 Task { @MainActor in
                     await model.persistNotes(sessionID: sessionID, using: repository)
                 }
@@ -989,7 +991,8 @@ struct FieldCheckSessionDetailView: View {
     }
 
     private func selectPane(_ pane: FieldCheckSessionPane) {
-        if canEditActiveCheck,
+        if dataAccessMode.allowsDataMutations,
+            model.detail?.isPastureArchived == false,
             selectedPane == .notes,
             pane != .notes
         {
