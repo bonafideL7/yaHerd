@@ -612,7 +612,9 @@ struct FieldCheckSessionDetailView: View {
                 .lineLimit(4...8)
                 .disabled(!canEditActiveCheck)
         } footer: {
-            Text("Notes save when you leave this check or switch away from the notes view.")
+            Text(detail.isPastureArchived
+                ? "Notes from an archived pasture check are read-only."
+                : "Notes save when you leave this check or switch away from the notes view.")
         }
     }
 
@@ -830,7 +832,9 @@ struct FieldCheckSessionDetailView: View {
             Text("Findings")
         } footer: {
             if !sortedFindings.isEmpty {
-                Text("Only finding status can be updated after completion. Reopen this check to edit details or add findings.")
+                Text(detail.isPastureArchived
+                    ? "Findings from an archived pasture check are read-only."
+                    : "Only finding status can be updated after completion. Reopen this check to edit details or add findings.")
             }
         }
     }
