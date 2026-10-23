@@ -373,6 +373,10 @@ struct AnimalListView: View {
         .onChange(of: showArchivedRecordsValue) { _, _ in
             refreshDerivedState()
         }
+        .onChange(of: applicationSettings.inlineAnimalEditingEnabled) { _, enabled in
+            guard !enabled, inlineEntry.isEditing else { return }
+            commitInlineEntry(startNewEntryAfterCreate: false)
+        }
         .onChange(of: navigation.presentedSheet) { oldValue, newValue in
             guard oldValue == .addAnimal, newValue == nil else { return }
             reload()
@@ -412,6 +416,7 @@ struct AnimalListView: View {
             groupedAnimals: groupedAnimals,
             shouldUseSections: shouldUseSections,
             batchMode: batchMode,
+            allowsInlineEditing: applicationSettings.inlineAnimalEditingEnabled,
             selectedAnimalIDs: $selectedAnimalIDs,
             collapsedSectionIDs: $collapsedSectionIDs,
             inlineEntryIsActive: inlineEntry.isActive,
@@ -660,7 +665,7 @@ struct AnimalListView: View {
     }
 
     private func beginInlineEditing(_ animal: AnimalSummary) {
-        guard dataAccessMode.allowsDataMutations, !batchMode else {
+        guard dataAccessMode.allowsDataMutations, applicationSettings.inlineAnimalEditingEnabled, !batchMode else {
             openInlineDetails(animal.id)
             return
         }
