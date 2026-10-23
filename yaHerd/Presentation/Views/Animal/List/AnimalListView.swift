@@ -334,7 +334,8 @@ struct AnimalListView: View {
             sire: $inlineEntry.sire,
             damID: $inlineEntry.damID,
             dam: $inlineEntry.dam,
-            excludeAnimalID: inlineEntry.editingAnimalID
+            excludeAnimalID: inlineEntry.editingAnimalID,
+            onDismiss: requestInlineEntryFocus
         )
         .alert("Animal Not Saved", isPresented: errorMessageIsPresented) {
             Button("OK", role: .cancel) {
@@ -381,9 +382,6 @@ struct AnimalListView: View {
         }
         .onChange(of: showArchivedRecordsValue) { _, _ in
             refreshDerivedState()
-        }
-        .onChange(of: activeInlineParentPicker?.id) { _, pickerID in
-            if pickerID == nil { requestInlineEntryFocus() }
         }
         .onChange(of: applicationSettings.inlineAnimalEditingEnabled) { _, enabled in
             guard !enabled, inlineEntry.isActive else { return }
