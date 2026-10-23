@@ -454,5 +454,4 @@ struct WorkingSessionDetailView: View {
         viewModel.load()
         resetFilterForCompletedSession()
     }
-
 }
