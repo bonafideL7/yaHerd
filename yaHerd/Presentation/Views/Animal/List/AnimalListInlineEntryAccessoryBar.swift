@@ -15,10 +15,17 @@ struct AnimalListInlineEntryAccessoryBar: View {
     let isEditing: Bool
     let parentSummary: String
     let onToggleParents: () -> Void
-    let onShowSexPicker: () -> Void
-    let onShowPasturePicker: () -> Void
-    let onShowBirthDateOptions: () -> Void
+    let onPreparePicker: () -> Void
+    let onShowBirthDatePicker: () -> Void
+    let onRequestFocus: () -> Void
     let onSubmit: () -> Void
+
+    @State private var isShowingSexOptions = false
+    @State private var isShowingPastureOptions = false
+    @State private var isShowingBirthDateOptions = false
+
+    private let calendar = Calendar.current
+    private let dateProvider: any DateProviding = SystemDateProvider()
 
     var body: some View {
         HStack(spacing: 8) {
@@ -26,22 +33,66 @@ struct AnimalListInlineEntryAccessoryBar: View {
                 systemName: "figure.stand",
                 accessibilityLabel: "Sex",
                 accessibilityValue: sex.label,
-                action: onShowSexPicker
+                action: {
+                    onPreparePicker()
+                    isShowingSexOptions = true
+                }
             )
+            .confirmationDialog("Sex", isPresented: $isShowingSexOptions, titleVisibility: .visible) {
+                ForEach(Sex.allCases, id: \.self) { option in
+                    Button(option.label) {
+                        sex = option
+                        onRequestFocus()
+                    }
+                }
+            }
 
             accessoryButton(
                 systemName: "leaf",
                 accessibilityLabel: "Pasture",
                 accessibilityValue: selectedPastureLabel,
-                action: onShowPasturePicker
+                action: {
+                    onPreparePicker()
+                    isShowingPastureOptions = true
+                }
             )
+            .confirmationDialog("Pasture", isPresented: $isShowingPastureOptions, titleVisibility: .visible) {
+                Button("No Pasture") {
+                    pastureID = nil
+                    onRequestFocus()
+                }
+
+                ForEach(pastureOptions) { pasture in
+                    Button(pasture.name) {
+                        pastureID = pasture.id
+                        onRequestFocus()
+                    }
+                }
+            }
 
             accessoryButton(
                 systemName: "calendar",
                 accessibilityLabel: "Birthdate",
                 accessibilityValue: birthDate.formatted(date: .abbreviated, time: .omitted),
-                action: onShowBirthDateOptions
+                action: {
+                    onPreparePicker()
+                    isShowingBirthDateOptions = true
+                }
             )
+            .confirmationDialog("Birthdate", isPresented: $isShowingBirthDateOptions, titleVisibility: .visible) {
+                Button("Today") {
+                    birthDate = calendar.startOfDay(for: dateProvider.now)
+                    onRequestFocus()
+                }
+
+                Button("Yesterday") {
+                    let today = calendar.startOfDay(for: dateProvider.now)
+                    birthDate = calendar.date(byAdding: .day, value: -1, to: today) ?? today
+                    onRequestFocus()
+                }
+
+                Button("Choose Date…", action: onShowBirthDatePicker)
+            }
 
             accessoryButton(
                 systemName: "person.2",
