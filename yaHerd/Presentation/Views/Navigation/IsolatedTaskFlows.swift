@@ -78,8 +78,23 @@ struct IsolatedWorkAreaView: View {
     var body: some View {
         NavigationStack(path: workingSessionPathBinding) {
             rootContent
-                .navigationDestination(for: UUID.self) { sessionID in
-                    sessionContent(sessionID)
+                .navigationDestination(for: WorkingSessionWorkflowDestination.self) { destination in
+                    switch destination {
+                    case .pastureSelection:
+                        PastureSessionStartListView(
+                            kind: .working,
+                            usesWorkingSessionPath: true,
+                            onSessionStarted: navigation.workflowRouter.openWorkingSession
+                        )
+                    case .setup(let pastureID):
+                        NewWorkingSessionView(
+                            suggestedPastureID: pastureID,
+                            wrapsInNavigationStack: false,
+                            onSessionCreated: navigation.workflowRouter.openWorkingSession
+                        )
+                    case .session(let sessionID):
+                        sessionContent(sessionID)
+                    }
                 }
         }
     }
@@ -105,7 +120,9 @@ struct IsolatedWorkAreaView: View {
     }
 
     private var sessionsList: some View {
-        WorkingSessionsView(startsWithPastureSelection: navigation.workflowRouter.startsWithPastureSelection) { sessionID in
+        WorkingSessionsView(
+            onStartSessionSetup: navigation.workflowRouter.beginWorkingSessionStart
+        ) { sessionID in
             navigation.workflowRouter.openWorkingSession(sessionID)
         }
     }
@@ -114,7 +131,7 @@ struct IsolatedWorkAreaView: View {
         WorkingSessionDetailView(sessionID: sessionID)
     }
 
-    private var workingSessionPathBinding: Binding<[UUID]> {
+    private var workingSessionPathBinding: Binding<[WorkingSessionWorkflowDestination]> {
         Binding(
             get: { navigation.workflowRouter.workingSessionNavigationPath },
             set: { navigation.workflowRouter.workingSessionNavigationPath = $0 }
