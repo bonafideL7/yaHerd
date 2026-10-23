@@ -412,6 +412,7 @@ struct FieldCheckSessionDetailView: View {
                 }
                 .pickerStyle(.segmented)
                 .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
             }
 
             switch selectedPane {
@@ -425,6 +426,8 @@ struct FieldCheckSessionDetailView: View {
                 notesMainSection(detail)
             }
         }
+        .listSectionSpacing(8)
+        .contentMargins(.top, 8, for: .scrollContent)
         .refreshable {
             model.refresh(sessionID: sessionID, using: repository)
         }
@@ -561,8 +564,6 @@ struct FieldCheckSessionDetailView: View {
                     )
                 }
             }
-        } header: {
-            Text(trimmedRosterSearchText.isEmpty ? "Animal Checklist" : "Search Results")
         } footer: {
             if trimmedRosterSearchText.isEmpty {
                 Text("Default view shows animals not yet seen by tag. Use search to jump directly to a tag number.")
@@ -583,8 +584,6 @@ struct FieldCheckSessionDetailView: View {
                     .multilineTextAlignment(.trailing)
                     .foregroundStyle(.secondary)
             }
-        } header: {
-            Text("Quick Count")
         } footer: {
             Text("Counts by type are reflected in the animal checklist so counted animals do not stay in the Not Seen list.")
         }
@@ -607,8 +606,6 @@ struct FieldCheckSessionDetailView: View {
                         )
                 }
             }
-        } header: {
-            Text("Findings")
         }
     }
 
@@ -617,8 +614,6 @@ struct FieldCheckSessionDetailView: View {
         Section {
             TextField("Session notes", text: notesDraftBinding, axis: .vertical)
                 .lineLimit(4...8)
-        } header: {
-            Text("Notes")
         } footer: {
             Text("Notes save when you leave this check or switch away from the notes view.")
         }
@@ -988,6 +983,7 @@ struct FieldCheckSessionDetailView: View {
                 detail: detail,
                 countProjection: model.countProjection(for: detail)
             )
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
         }
     }
 
