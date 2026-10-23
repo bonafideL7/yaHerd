@@ -2,7 +2,8 @@
   "images" : [
     {
       "filename" : "Cow-Filled.svg",
-      "idiom" : "universal"
+      "idiom" : "universal",
+      "template-rendering-intent" : "template"
     }
   ],
   "info" : {
