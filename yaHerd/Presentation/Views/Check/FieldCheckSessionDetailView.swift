@@ -406,7 +406,12 @@ struct FieldCheckSessionDetailView: View {
     }
 
     private func activeCheckContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
-        VStack(spacing: 0) {
+        List {
+            if !isRosterSearchFiltering {
+                progressHeaderSection(detail)
+                archivedPastureSection(detail)
+            }
+
             if selectedPane == .roster || selectedPane == .quickCount {
                 Picker("Count View", selection: Binding(
                     get: { selectedPane },
@@ -416,33 +421,25 @@ struct FieldCheckSessionDetailView: View {
                     Text("Quick Count").tag(FieldCheckSessionPane.quickCount)
                 }
                 .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .listRowBackground(Color.clear)
             }
 
-            List {
-                if !isRosterSearchFiltering {
-                    progressHeaderSection(detail)
-                    archivedPastureSection(detail)
-                }
-
-                switch selectedPane {
-                case .roster:
-                    rosterSection(detail)
-                case .quickCount:
-                    quickCountMainSection(detail)
-                case .findings:
-                    findingsMainSection(detail)
-                case .notes:
-                    notesMainSection(detail)
-                }
+            switch selectedPane {
+            case .roster:
+                rosterSection(detail)
+            case .quickCount:
+                quickCountMainSection(detail)
+            case .findings:
+                findingsMainSection(detail)
+            case .notes:
+                notesMainSection(detail)
             }
-            .refreshable {
-                model.refresh(sessionID: sessionID, using: repository)
-            }
-            .modifier(FieldCheckRosterSearchModifier(isActive: selectedPane == .roster, text: $rosterSearchText))
+        }
+        .refreshable {
+            model.refresh(sessionID: sessionID, using: repository)
         }
         .disabled(model.isCompletingSession)
+        .modifier(FieldCheckRosterSearchModifier(isActive: selectedPane == .roster, text: $rosterSearchText))
     }
 
     private func completedReviewContent(_ detail: FieldCheckSessionDetailSnapshot) -> some View {
