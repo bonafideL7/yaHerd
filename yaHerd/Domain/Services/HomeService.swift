@@ -23,7 +23,8 @@ struct HomeService {
             now: now
         )
         let activeAnimalRecords = sortedActiveAnimalRecords(from: dashboardRecords.animals)
-        let activeCheckSessions = fieldCheckSessions
+        let currentCheckSessions = fieldCheckSessions.filter { !$0.isPastureArchived }
+        let activeCheckSessions = currentCheckSessions
             .filter { !$0.isCompleted }
             .sorted { left, right in
                 if left.startedAt != right.startedAt { return left.startedAt > right.startedAt }
@@ -37,8 +38,8 @@ struct HomeService {
             activeCheckSessions: activeCheckSessions,
             openFindings: openFindings,
             openFindingCount: openFindingCount ?? openFindings.count,
-            flaggedCheckSessions: flaggedCheckSessions(from: fieldCheckSessions),
-            missingCheckSessions: missingCheckSessions(from: fieldCheckSessions),
+            flaggedCheckSessions: flaggedCheckSessions(from: currentCheckSessions),
+            missingCheckSessions: missingCheckSessions(from: currentCheckSessions),
             pastureCheckStartPastures: dashboardSnapshot.pastures,
             workingPenAnimalRecords: activeAnimalRecords.filter { $0.location == .workingPen },
             rotationReadyPastures: rotationReadyPastures(from: dashboardSnapshot.pastures),
