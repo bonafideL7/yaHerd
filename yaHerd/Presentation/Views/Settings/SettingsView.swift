@@ -125,6 +125,13 @@ private struct HerdSetupView: View {
             }
 
             Section("Animal Records") {
+                Toggle("Inline Editing", isOn: $applicationSettings.inlineAnimalEditingEnabled)
+                    .disabled(dataAccessMode.isRecoveryMode)
+
+                Text("When enabled, tapping an animal edits it in the list. When disabled, tapping opens its details.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Toggle("Hard Delete Animals", isOn: $applicationSettings.hardDeleteAnimals)
                     .disabled(dataAccessMode.isRecoveryMode)
 
