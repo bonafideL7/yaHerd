@@ -13,6 +13,8 @@ struct AnimalListInlineEntryAccessoryBar: View {
     @Binding var pastureID: UUID?
     let pastureOptions: [PastureOption]
     let isEditing: Bool
+    let parentSummary: String
+    let onToggleParents: () -> Void
     let onShowSexPicker: () -> Void
     let onShowPasturePicker: () -> Void
     let onShowBirthDateOptions: () -> Void
@@ -39,6 +41,13 @@ struct AnimalListInlineEntryAccessoryBar: View {
                 accessibilityLabel: "Birthdate",
                 accessibilityValue: birthDate.formatted(date: .abbreviated, time: .omitted),
                 action: onShowBirthDateOptions
+            )
+
+            accessoryButton(
+                systemName: "person.2",
+                accessibilityLabel: "Parents",
+                accessibilityValue: parentSummary,
+                action: onToggleParents
             )
 
             Spacer(minLength: 8)
