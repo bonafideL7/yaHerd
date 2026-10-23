@@ -6,7 +6,6 @@
 import SwiftUI
 
 struct WorkingSessionDetailView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.workingSessionFeatureDependencies) private var workingDependencies
     @Environment(\.appDataAccessMode) private var dataAccessMode
     @EnvironmentObject private var tagColorLibrary: TagColorLibraryStore
@@ -20,15 +19,12 @@ struct WorkingSessionDetailView: View {
     @State private var searchText = ""
     @State private var showingAddAnimals = false
     @State private var showingFinish = false
-    @State private var showingDeleteAlert = false
     @State private var showingReopenConfirmation = false
     @State private var errorMessage: String?
     @State private var showingError = false
     @State private var isMutatingSession = false
-    private let onSessionDeleted: ((UUID) -> Void)?
 
-    init(sessionID: UUID, onSessionDeleted: ((UUID) -> Void)? = nil) {
-        self.onSessionDeleted = onSessionDeleted
+    init(sessionID: UUID) {
         _viewModel = StateObject(
             wrappedValue: WorkingSessionDetailViewModel(
                 sessionID: sessionID,
@@ -110,15 +106,6 @@ struct WorkingSessionDetailView: View {
         } message: {
             Text("The session will become editable again. Animals remain in their current pastures and are not automatically returned to the working pen.")
         }
-        .alert("Delete Working Session?", isPresented: $showingDeleteAlert) {
-            Button("Delete", role: .destructive) {
-                deleteSession()
-            }
-            .disabled(!dataAccessMode.allowsDataMutations || isMutatingSession)
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(deleteConfirmationMessage)
-        }
         .alert("Can’t Update Session", isPresented: $showingError) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -142,17 +129,6 @@ struct WorkingSessionDetailView: View {
         case .cancelled:
             return "Cancelled • \(dateText)"
         }
-    }
-
-    private var deleteConfirmationMessage: String {
-        guard let session = viewModel.session else { return "" }
-        if session.status == .active {
-            if session.isSourcePastureAvailable {
-                return "Animals still owned by this session will return to their source pasture. The session and its recorded work will be deleted."
-            }
-            return "Animals still owned by this session will leave the working pen without a pasture assignment because the original source pasture is no longer available. The session and its recorded work will be deleted."
-        }
-        return "The completed session and its recorded work will be deleted."
     }
 
     @ViewBuilder
@@ -391,43 +367,23 @@ struct WorkingSessionDetailView: View {
                         || !dataAccessMode.allowsDataMutations
                         || isMutatingSession
                 )
-
+            } else if session.status == .finished {
                 Button {
-                    showingFinish = true
+                    showingReopenConfirmation = true
                 } label: {
-                    Text(remainingItemCount(in: session) == 0 ? "Finish" : "Review")
-                }
-                .tint(remainingItemCount(in: session) == 0 ? Color.accentColor : Color.orange)
-                .disabled(
-                    session.queueItems.isEmpty
-                        || !dataAccessMode.allowsDataMutations
-                        || isMutatingSession
-                )
-            }
-
-            Menu {
-                if session.status == .finished {
-                    Button {
-                        showingReopenConfirmation = true
-                    } label: {
-                        Label("Reopen Session", systemImage: "lock.open")
-                    }
-                    .disabled(!dataAccessMode.allowsDataMutations || isMutatingSession)
-                }
-
-                Button(role: .destructive) {
-                    showingDeleteAlert = true
-                } label: {
-                    Label("Delete Session", systemImage: "trash")
+                    Label("Reopen Session", systemImage: "lock.open")
                 }
                 .disabled(!dataAccessMode.allowsDataMutations || isMutatingSession)
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.primary)
             }
-            .accessibilityLabel("Session Actions")
-            .disabled(isMutatingSession)
+        }
+
+        if session.status == .active {
+            ToolbarItem(placement: .confirmationAction) {
+                ToolbarSaveButton(accessibilityLabel: "Review") {
+                    showingFinish = true
+                }
+                .disabled(session.queueItems.isEmpty || isMutatingSession)
+            }
         }
     }
 
@@ -475,10 +431,6 @@ struct WorkingSessionDetailView: View {
         searchText = ""
     }
 
-    private func remainingItemCount(in session: WorkingSessionDetailSnapshot) -> Int {
-        session.queueItems.filter { $0.status != .done }.count
-    }
-
     private func reopenSession() {
         guard !isMutatingSession else { return }
         isMutatingSession = true
@@ -504,27 +456,4 @@ struct WorkingSessionDetailView: View {
         resetFilterForCompletedSession()
     }
 
-    private func deleteSession() {
-        guard !isMutatingSession,
-              let sessionID = viewModel.session?.id else {
-            return
-        }
-        isMutatingSession = true
-
-        Task { @MainActor in
-            defer { isMutatingSession = false }
-
-            do {
-                try await repository.deleteSession(id: sessionID)
-                if let onSessionDeleted {
-                    onSessionDeleted(sessionID)
-                } else {
-                    dismiss()
-                }
-            } catch {
-                errorMessage = UserVisibleErrorMessage.make(error)
-                showingError = true
-            }
-        }
-    }
 }
