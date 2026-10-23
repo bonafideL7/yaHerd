@@ -12,9 +12,10 @@ private struct AnimalParentPickerSheetModifier: ViewModifier {
     @Binding var dam: String
 
     let excludeAnimalID: UUID?
+    let onDismiss: () -> Void
 
     func body(content: Content) -> some View {
-        content.sheet(item: $activePicker) { picker in
+        content.sheet(item: $activePicker, onDismiss: onDismiss) { picker in
             switch picker {
             case .sire:
                 AnimalParentPickerView(
@@ -48,7 +49,8 @@ extension View {
         sire: Binding<String>,
         damID: Binding<UUID?>,
         dam: Binding<String>,
-        excludeAnimalID: UUID?
+        excludeAnimalID: UUID?,
+        onDismiss: @escaping () -> Void = {}
     ) -> some View {
         modifier(
             AnimalParentPickerSheetModifier(
@@ -57,7 +59,8 @@ extension View {
                 sire: sire,
                 damID: damID,
                 dam: dam,
-                excludeAnimalID: excludeAnimalID
+                excludeAnimalID: excludeAnimalID,
+                onDismiss: onDismiss
             )
         )
     }
