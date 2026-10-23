@@ -82,19 +82,19 @@ struct FieldChecksView: View {
 
     private var openFindingSessions: [FieldCheckSessionSummary] {
         model.sessions
-            .filter { $0.openFindingsCount > 0 }
+            .filter { !$0.isPastureArchived && $0.openFindingsCount > 0 }
             .sorted(by: sortedByStateThenNewest)
     }
 
     private var flaggedSessions: [FieldCheckSessionSummary] {
         model.sessions
-            .filter { $0.flaggedAnimalCount > 0 }
+            .filter { !$0.isPastureArchived && $0.flaggedAnimalCount > 0 }
             .sorted(by: sortedByStateThenNewest)
     }
 
     private var missingSessions: [FieldCheckSessionSummary] {
         model.sessions
-            .filter { $0.missingAnimalCount > 0 }
+            .filter { !$0.isPastureArchived && $0.missingAnimalCount > 0 }
             .sorted(by: sortedByStateThenNewest)
     }
 
