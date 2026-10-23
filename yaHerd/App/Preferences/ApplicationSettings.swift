@@ -14,6 +14,7 @@ final class ApplicationSettings {
 
     private var dashboardEnabledValue: Bool
     private var hardDeleteAnimalsValue: Bool
+    private var inlineAnimalEditingEnabledValue: Bool
     private var targetAcresPerHeadDefaultValue: Double
     private var usableAcreagePercentDefaultValue: Int
     private var recentPastureIDsValue: [UUID]
@@ -35,6 +36,10 @@ final class ApplicationSettings {
         )
         self.hardDeleteAnimalsValue = Self.decodeBool(
             store.object(forKey: ApplicationSettingKey.hardDeleteAnimals.rawValue),
+            defaultValue: true
+        )
+        self.inlineAnimalEditingEnabledValue = Self.decodeBool(
+            store.object(forKey: ApplicationSettingKey.inlineAnimalEditingEnabled.rawValue),
             defaultValue: true
         )
         self.targetAcresPerHeadDefaultValue = Self.validatedTargetAcresPerHead(
@@ -85,6 +90,15 @@ final class ApplicationSettings {
             guard hardDeleteAnimalsValue != newValue else { return }
             hardDeleteAnimalsValue = newValue
             persistChange(key: .hardDeleteAnimals, encodedValue: newValue)
+        }
+    }
+
+    var inlineAnimalEditingEnabled: Bool {
+        get { inlineAnimalEditingEnabledValue }
+        set {
+            guard inlineAnimalEditingEnabledValue != newValue else { return }
+            inlineAnimalEditingEnabledValue = newValue
+            persistChange(key: .inlineAnimalEditingEnabled, encodedValue: newValue)
         }
     }
 
@@ -165,6 +179,7 @@ final class ApplicationSettings {
     func resetToDefaults() {
         isDashboardEnabled = false
         hardDeleteAnimals = true
+        inlineAnimalEditingEnabled = true
         targetAcresPerHeadDefault = Self.defaultTargetAcresPerHead
         usableAcreagePercentDefault = Self.defaultUsableAcreagePercent
         recentPastureIDs = []
@@ -193,6 +208,8 @@ final class ApplicationSettings {
             isDashboardEnabled
         case .hardDeleteAnimals:
             hardDeleteAnimals
+        case .inlineAnimalEditingEnabled:
+            inlineAnimalEditingEnabled
         case .targetAcresPerHeadDefault:
             targetAcresPerHeadDefault
         case .usableAcreagePercentDefault:
