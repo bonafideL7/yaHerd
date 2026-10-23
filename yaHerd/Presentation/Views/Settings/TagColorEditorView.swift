@@ -64,12 +64,17 @@ struct TagColorEditorView: View {
 
                 if let existing {
                     Section {
-                        if existing.isDefault {
-                            Label("Default tag color", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.secondary)
+                        if tagColorLibrary.colors.contains(where: { $0.id == existing.id && $0.isDefault }) {
+                            Label("Current Default Tag Color", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.tint)
+                                .accessibilityAddTraits(.isSelected)
                         } else {
                             Button {
-                                tagColorLibrary.setDefaultColor(id: existing.id)
+                                guard tagColorLibrary.setDefaultColor(id: existing.id) else {
+                                    saveErrorMessage = tagColorLibrary.lastErrorMessage
+                                        ?? "The default tag color could not be updated."
+                                    return
+                                }
                             } label: {
                                 Label("Set as Default Tag Color", systemImage: "checkmark.circle")
                             }
