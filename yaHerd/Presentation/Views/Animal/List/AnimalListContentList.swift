@@ -92,12 +92,14 @@ struct AnimalListContentList: View {
             if canStartInlineEntry, let rowBottom = inlineQuickAddRowBottom {
                 GeometryReader { geometry in
                     if rowBottom > 0 && rowBottom < geometry.size.height {
-                        AnimalListInlineTapRow(
-                            height: geometry.size.height - rowBottom,
-                            onTap: onStartNewInlineEntry
-                        )
-                        .frame(maxHeight: .infinity, alignment: .bottom)
-                        .accessibilityHidden(true)
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 0)
+                            AnimalListInlineTapRow(
+                                height: geometry.size.height - rowBottom,
+                                onTap: onStartNewInlineEntry
+                            )
+                            .accessibilityHidden(true)
+                        }
                     }
                 }
             }
