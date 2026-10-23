@@ -160,9 +160,35 @@ struct DashboardRulesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Visible Sections") {
+                ForEach(DashboardSection.allCases) { section in
+                    Toggle(section.title, isOn: visibilityBinding(for: section))
+                        .disabled(dataAccessMode.isRecoveryMode)
+                }
+
+                Text("Hide charts you do not need. Your choices are saved on this device and do not affect herd records.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .navigationTitle("Dashboard Setup")
         .settingsSaveAndCloseToolbar()
+    }
+
+    private func visibilityBinding(for section: DashboardSection) -> Binding<Bool> {
+        Binding(
+            get: { applicationSettings.isDashboardSectionVisible(section) },
+            set: { isVisible in
+                var hiddenSections = applicationSettings.hiddenDashboardSections
+                if isVisible {
+                    hiddenSections.remove(section)
+                } else {
+                    hiddenSections.insert(section)
+                }
+                applicationSettings.hiddenDashboardSections = hiddenSections
+            }
+        )
     }
 }
 
