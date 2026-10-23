@@ -11,7 +11,9 @@ struct CreateInlineAnimalUseCase {
         tagColorID: UUID?,
         sex: Sex,
         birthDate: Date,
-        pastureID: UUID?
+        pastureID: UUID?,
+        sireID: UUID?,
+        damID: UUID?
     ) throws -> AnimalDetailSnapshot {
         try repository.create(
             input: AnimalInput(
@@ -22,8 +24,8 @@ struct CreateInlineAnimalUseCase {
                 birthDate: birthDate,
                 status: .active,
                 pastureID: pastureID,
-                sireID: nil,
-                damID: nil,
+                sireID: sireID,
+                damID: damID,
                 distinguishingFeatures: [],
                 saleDate: nil,
                 salePrice: nil,
