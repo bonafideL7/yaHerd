@@ -116,6 +116,18 @@ struct AnimalListInlineEntryRow: View {
                 onSubmit: onSubmit
             )
 
+            if !isParentsExpanded && (!dam.isEmpty || !sire.isEmpty) {
+                Text(parentSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.snappy) { isParentsExpanded = true }
+                    }
+            }
+
             if isParentsExpanded {
                 HStack(alignment: .top, spacing: 8) {
                     parentField(
@@ -194,6 +206,7 @@ struct AnimalListInlineEntryRow: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .frame(minWidth: 28, minHeight: 44)
                 .accessibilityLabel("Clear \(title)")
             }
         }
