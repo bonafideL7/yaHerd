@@ -374,8 +374,13 @@ struct AnimalListView: View {
             refreshDerivedState()
         }
         .onChange(of: applicationSettings.inlineAnimalEditingEnabled) { _, enabled in
-            guard !enabled, inlineEntry.isEditing else { return }
-            commitInlineEntry(startNewEntryAfterCreate: false)
+            guard !enabled, inlineEntry.isActive else { return }
+            if inlineEntry.trimmedText.isEmpty {
+                inlineEntry.cancel()
+            } else {
+                // Preserve a failed draft for correction instead of discarding user input.
+                commitInlineEntry(startNewEntryAfterCreate: false)
+            }
         }
         .onChange(of: navigation.presentedSheet) { oldValue, newValue in
             guard oldValue == .addAnimal, newValue == nil else { return }
@@ -457,6 +462,7 @@ struct AnimalListView: View {
             hasHiddenArchivedRecords: hasHiddenArchivedRecords,
             showRemovedStatuses: showRemovedStatusesValue,
             showArchivedRecords: showArchivedRecordsValue,
+            allowsInlineEditing: applicationSettings.inlineAnimalEditingEnabled,
             onStartInlineEntry: beginNewInlineEntry,
             onAddAnimal: presentAddAnimal,
             onAddSampleData: canOfferSampleData ? { seedSampleData(large: false) } : nil,
@@ -652,7 +658,7 @@ struct AnimalListView: View {
     }
 
     private func beginNewInlineEntry() {
-        guard dataAccessMode.allowsDataMutations, !batchMode else { return }
+        guard dataAccessMode.allowsDataMutations, applicationSettings.inlineAnimalEditingEnabled, !batchMode else { return }
 
         withAnimation(.snappy) {
             inlineEntry.beginNew()
@@ -682,7 +688,7 @@ struct AnimalListView: View {
             inlineEntry.ignoresNextFocusLoss = true
         }
 
-        commitInlineEntry(startNewEntryAfterCreate: !inlineEntry.isEditing)
+        commitInlineEntry(startNewEntryAfterCreate: applicationSettings.inlineAnimalEditingEnabled && !inlineEntry.isEditing)
     }
 
     private func commitInlineEntryFromFocusLoss() {
