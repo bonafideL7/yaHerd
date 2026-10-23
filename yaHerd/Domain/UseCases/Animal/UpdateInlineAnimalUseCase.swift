@@ -12,7 +12,9 @@ struct UpdateInlineAnimalUseCase {
         tagColorID: UUID?,
         sex: Sex,
         birthDate: Date,
-        pastureID: UUID?
+        pastureID: UUID?,
+        sireID: UUID?,
+        damID: UUID?
     ) throws -> AnimalDetailSnapshot {
         guard let detail = try repository.fetchAnimalDetail(id: id) else {
             throw AnimalValidationError.animalNotFound
@@ -32,8 +34,8 @@ struct UpdateInlineAnimalUseCase {
                 birthDate: birthDate,
                 status: detail.status,
                 pastureID: pastureID,
-                sireID: detail.sireID,
-                damID: detail.damID,
+                sireID: sireID,
+                damID: damID,
                 distinguishingFeatures: detail.distinguishingFeatures,
                 saleDate: detail.saleDate,
                 salePrice: detail.salePrice,
