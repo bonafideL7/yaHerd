@@ -226,16 +226,13 @@ struct FieldCheckSessionDetailView: View {
                         }
                         .accessibilityLabel("Notes")
                         .disabled(model.isCompletingSession)
-
-                        let countProjection = model.countProjection(for: detail)
-
-                        Button {
+                    }
+                }
+                if !detail.isCompleted {
+                    ToolbarItem(placement: .confirmationAction) {
+                        ToolbarSaveButton(accessibilityLabel: "Review") {
                             showingFinishReview = true
-                        } label: {
-                            Text("Review")
                         }
-                        .tint(countProjection.requiresFinishConfirmation ? Color.orange : Color.accentColor)
-                        .disabledWhenDataReadOnly()
                         .disabled(model.isCompletingSession)
                     }
                 }
