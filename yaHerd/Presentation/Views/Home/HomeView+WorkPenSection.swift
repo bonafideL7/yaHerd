@@ -6,7 +6,22 @@ extension HomeView {
         HomeSection(title: "Working Pen") {
             if snapshot == nil {
                 HomeLoadingRow(title: "Loading working pen…")
-            } else {
+            } else {               
+
+                Button {
+                    openWorkArea(.sessions)
+                } label: {
+                    HomeListRow(
+                        title: "Working sessions",
+                        subtitle: "Open active sessions or review completed work.",
+                        systemImage: "clock.arrow.circlepath",
+                        tint: .gray,
+                        count: nil,
+                        showsChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
+                
                 if shouldShowWorkingPenAnimalsRow {
                     Button {
                         openAnimalList(.workingPen)
@@ -22,20 +37,6 @@ extension HomeView {
                     }
                     .buttonStyle(.plain)
                 }
-
-                Button {
-                    openWorkArea(.sessions)
-                } label: {
-                    HomeListRow(
-                        title: "Working sessions",
-                        subtitle: "Open active sessions or review completed work.",
-                        systemImage: "clock.arrow.circlepath",
-                        tint: .gray,
-                        count: nil,
-                        showsChevron: true
-                    )
-                }
-                .buttonStyle(.plain)
             }
 
             treatmentSection
