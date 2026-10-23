@@ -2,6 +2,8 @@ import Charts
 import SwiftUI
 
 struct DashboardChartsContent: View {
+    @Environment(ApplicationSettings.self) private var applicationSettings
+
     let data: DashboardPresentationData
     let isLoaded: Bool
     @Binding var selectedPastureName: String?
@@ -12,24 +14,56 @@ struct DashboardChartsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            animalTypeMixChart
-            sexMixChart
-            herdLocationChart
-            lifecycleMetricsSection
-            pastureUtilizationChart
-            seasonalCalvingChart
-            monthlyMedicalRecordsChart
-            pinkEyeTrendChart
-            offspringByDamChart
-            statusOutcomesChart
-            fieldCheckTrendChart
-            fieldCheckOutcomesChart
+            if applicationSettings.hiddenDashboardSections.count == DashboardSection.allCases.count {
+                ContentUnavailableView(
+                    "No Dashboard Sections Visible",
+                    systemImage: "chart.bar",
+                    description: Text("Choose sections to display in Settings > Dashboard.")
+                )
+            } else {
+                if applicationSettings.isDashboardSectionVisible(.animalTypeMix) {
+                    animalTypeMixChart
+                }
+                if applicationSettings.isDashboardSectionVisible(.sexMix) {
+                    sexMixChart
+                }
+                if applicationSettings.isDashboardSectionVisible(.pastureAssignment) {
+                    herdLocationChart
+                }
+                if applicationSettings.isDashboardSectionVisible(.herdLifecycle) {
+                    lifecycleMetricsSection
+                }
+                if applicationSettings.isDashboardSectionVisible(.pastureUtilization) {
+                    pastureUtilizationChart
+                }
+                if applicationSettings.isDashboardSectionVisible(.calvingBySeason) {
+                    seasonalCalvingChart
+                }
+                if applicationSettings.isDashboardSectionVisible(.medicalRecordsByMonth) {
+                    monthlyMedicalRecordsChart
+                }
+                if applicationSettings.isDashboardSectionVisible(.pinkEyeTrend) {
+                    pinkEyeTrendChart
+                }
+                if applicationSettings.isDashboardSectionVisible(.offspringByDam) {
+                    offspringByDamChart
+                }
+                if applicationSettings.isDashboardSectionVisible(.soldAndDeceasedTrend) {
+                    statusOutcomesChart
+                }
+                if applicationSettings.isDashboardSectionVisible(.fieldCheckHeadCountTrend) {
+                    fieldCheckTrendChart
+                }
+                if applicationSettings.isDashboardSectionVisible(.fieldCheckIssuesOverTime) {
+                    fieldCheckOutcomesChart
+                }
+            }
         }
     }
 
     private var animalTypeMixChart: some View {
         DashboardChartCard(
-            title: "Animal Type Mix",
+            title: DashboardSection.animalTypeMix.title,
             subtitle: "Current active herd composition by animal type."
         ) {
             if data.animalTypeMixValues.isEmpty {
@@ -54,7 +88,7 @@ struct DashboardChartsContent: View {
 
     private var sexMixChart: some View {
         DashboardChartCard(
-            title: "Sex Mix",
+            title: DashboardSection.sexMix.title,
             subtitle: "Active herd count by recorded sex."
         ) {
             if data.sexMixValues.isEmpty {
@@ -79,7 +113,7 @@ struct DashboardChartsContent: View {
 
     private var herdLocationChart: some View {
         DashboardChartCard(
-            title: "Pasture Assignment",
+            title: DashboardSection.pastureAssignment.title,
             subtitle: "Active herd count by pasture assignment state."
         ) {
             if data.herdLocationValues.allSatisfy({ $0.count == 0 }) {
@@ -104,7 +138,7 @@ struct DashboardChartsContent: View {
 
     private var lifecycleMetricsSection: some View {
         DashboardChartCard(
-            title: "Herd Lifecycle",
+            title: DashboardSection.herdLifecycle.title,
             subtitle: "Year-to-date production, loss, sale, and health-record activity."
         ) {
             if !isLoaded {
@@ -121,7 +155,7 @@ struct DashboardChartsContent: View {
 
     private var pastureUtilizationChart: some View {
         DashboardChartCard(
-            title: "Pasture Utilization",
+            title: DashboardSection.pastureUtilization.title,
             subtitle: "Stocking pressure by pasture. Tap or drag a row to inspect the pasture details."
         ) {
             if data.pastureUtilizationValues.isEmpty {
@@ -167,7 +201,7 @@ struct DashboardChartsContent: View {
 
     private var seasonalCalvingChart: some View {
         DashboardChartCard(
-            title: "Calving by Season",
+            title: DashboardSection.calvingBySeason.title,
             subtitle: "Spring and fall calf counts across the last eight calving seasons."
         ) {
             if data.seasonalCalvingCounts.allSatisfy({ $0.count == 0 }) {
@@ -196,7 +230,7 @@ struct DashboardChartsContent: View {
 
     private var monthlyMedicalRecordsChart: some View {
         DashboardChartCard(
-            title: "Medical Records by Month",
+            title: DashboardSection.medicalRecordsByMonth.title,
             subtitle: "Monthly treatment volume for the most common recent treatment categories."
         ) {
             if data.monthlyMedicalRecords.isEmpty || data.monthlyMedicalRecords.allSatisfy({ $0.count == 0 }) {
@@ -218,7 +252,7 @@ struct DashboardChartsContent: View {
 
     private var pinkEyeTrendChart: some View {
         DashboardChartCard(
-            title: "Pink Eye Trend",
+            title: DashboardSection.pinkEyeTrend.title,
             subtitle: "Annual pink eye cases detected from treatment names and health-record notes."
         ) {
             if data.pinkEyeCasesByYear.allSatisfy({ $0.count == 0 }) {
@@ -242,7 +276,7 @@ struct DashboardChartsContent: View {
 
     private var offspringByDamChart: some View {
         DashboardChartCard(
-            title: "Offspring by Dam",
+            title: DashboardSection.offspringByDam.title,
             subtitle: "Top recorded dams by number of linked offspring."
         ) {
             if data.offspringByDam.isEmpty {
@@ -267,7 +301,7 @@ struct DashboardChartsContent: View {
 
     private var statusOutcomesChart: some View {
         DashboardChartCard(
-            title: "Sold and Deceased Trend",
+            title: DashboardSection.soldAndDeceasedTrend.title,
             subtitle: "Annual sold and deceased outcomes based on sale and death dates."
         ) {
             if data.statusOutcomesByYear.allSatisfy({ $0.count == 0 }) {
@@ -289,7 +323,7 @@ struct DashboardChartsContent: View {
 
     private var fieldCheckTrendChart: some View {
         DashboardChartCard(
-            title: "Field Check Head Count Trend",
+            title: DashboardSection.fieldCheckHeadCountTrend.title,
             subtitle: "Expected head count versus counted head count across recent checks."
         ) {
             if data.fieldCheckHistoryValues.isEmpty {
@@ -317,7 +351,7 @@ struct DashboardChartsContent: View {
 
     private var fieldCheckOutcomesChart: some View {
         DashboardChartCard(
-            title: "Field Check Issues Over Time",
+            title: DashboardSection.fieldCheckIssuesOverTime.title,
             subtitle: "Flagged, missing, and open finding counts from recent pasture checks."
         ) {
             if data.fieldCheckOutcomeValues.allSatisfy({ $0.value == 0 }) {
