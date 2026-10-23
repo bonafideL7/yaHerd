@@ -17,6 +17,14 @@ enum HerdRoute: Codable, Hashable {
     case workingSessions
 }
 
+/// Navigation destinations for the isolated Working flow. Setup and session
+/// navigation share one stack so creating a session replaces the setup path.
+enum WorkingSessionWorkflowDestination: Hashable {
+    case pastureSelection
+    case setup(UUID)
+    case session(UUID)
+}
+
 /// Routes owned by isolated field-check and working-session flows.
 enum WorkflowRoute: Codable, Hashable {
     case fieldCheckSessions(FieldChecksViewMode)
@@ -200,6 +208,7 @@ final class WorkflowRouter {
     var route: WorkflowRoute?
     private(set) var returnRoute: WorkflowRoute?
     var startsWithPastureSelection = false
+    private var workingSetupPastureID: UUID?
 
     var canReturnToList: Bool {
         switch (route, returnRoute) {
@@ -245,24 +254,52 @@ final class WorkflowRouter {
         route = .fieldCheckSession(configuration)
     }
 
-    // The list-to-session route is presented by NavigationStack rather than
-    // replacing the visible root. Direct session launches have an empty path.
-    var workingSessionNavigationPath: [UUID] {
+    // Use one native path for pasture selection, setup, and the created
+    // session. Replacing the setup path with the session destination avoids
+    // simultaneously dismissing one NavigationLink and pushing another.
+    var workingSessionNavigationPath: [WorkingSessionWorkflowDestination] {
         get {
-            guard case .workingSession(let sessionID) = route,
-                  case .workingSessions = returnRoute
-            else { return [] }
-            return [sessionID]
+            if case .workingSessions = route {
+                if let workingSetupPastureID {
+                    return [.pastureSelection, .setup(workingSetupPastureID)]
+                }
+                return startsWithPastureSelection ? [.pastureSelection] : []
+            }
+            if case .workingSession(let sessionID) = route,
+               case .workingSessions = returnRoute {
+                return [.session(sessionID)]
+            }
+            return []
         }
         set {
-            if let sessionID = newValue.last {
-                guard workingSessionNavigationPath.last != sessionID else { return }
+            switch newValue.last {
+            case .pastureSelection:
+                guard case .workingSessions = route else { return }
+                workingSetupPastureID = nil
+                startsWithPastureSelection = true
+            case .setup(let pastureID):
+                guard case .workingSessions = route else { return }
+                workingSetupPastureID = pastureID
+                startsWithPastureSelection = true
+            case .session(let sessionID):
+                guard workingSessionNavigationPath.last != .session(sessionID) else { return }
                 openWorkingSession(sessionID)
-            } else if case .workingSession = route,
-                      case .workingSessions = returnRoute {
-                returnToList()
+            case .none:
+                if case .workingSession = route,
+                   case .workingSessions = returnRoute {
+                    returnToList()
+                } else if case .workingSessions = route {
+                    workingSetupPastureID = nil
+                    startsWithPastureSelection = false
+                }
             }
         }
+    }
+
+    func beginWorkingSessionStart() {
+        guard case .workingSessions = route else { return }
+        workingSetupPastureID = nil
+        startsWithPastureSelection = true
     }
 
     func openWorkingSession(_ sessionID: UUID) {
@@ -271,6 +308,8 @@ final class WorkflowRouter {
         } else {
             returnRoute = nil
         }
+        workingSetupPastureID = nil
+        startsWithPastureSelection = false
         route = .workingSession(sessionID)
     }
 
@@ -284,6 +323,7 @@ final class WorkflowRouter {
         route = nil
         returnRoute = nil
         startsWithPastureSelection = false
+        workingSetupPastureID = nil
     }
 }
 
