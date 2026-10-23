@@ -128,7 +128,7 @@ private struct HerdSetupView: View {
                 Toggle("Inline Editing", isOn: $applicationSettings.inlineAnimalEditingEnabled)
                     .disabled(dataAccessMode.isRecoveryMode)
 
-                Text("When enabled, tapping an animal allows edits in the list. Tapping empty space allows creating new animals. Enable for quick data entry. Use color prefix to add or update tags. When disabled, tapping opens animal details. ")
+                Text("When enabled, tap an animal to edit it inline or empty space to add one. When disabled, tapping animals opens details; use Add Animal to create new records.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
