@@ -15,9 +15,9 @@ struct AnimalListInlineEntryRow: View {
     let helperText: String
     let focusRequestID: UUID
     let onSubmit: () -> Void
-    let onShowSexPicker: () -> Void
-    let onShowPasturePicker: () -> Void
-    let onShowBirthDateOptions: () -> Void
+    let onPreparePicker: () -> Void
+    let onShowBirthDatePicker: () -> Void
+    let onRequestFocus: () -> Void
     let onShowDamPicker: () -> Void
     let onShowSirePicker: () -> Void
     let onCommitFocusLoss: () -> Void
@@ -110,9 +110,9 @@ struct AnimalListInlineEntryRow: View {
                 onToggleParents: {
                     withAnimation(.snappy) { isParentsExpanded.toggle() }
                 },
-                onShowSexPicker: onShowSexPicker,
-                onShowPasturePicker: onShowPasturePicker,
-                onShowBirthDateOptions: onShowBirthDateOptions,
+                onPreparePicker: onPreparePicker,
+                onShowBirthDatePicker: onShowBirthDatePicker,
+                onRequestFocus: onRequestFocus,
                 onSubmit: onSubmit
             )
 
