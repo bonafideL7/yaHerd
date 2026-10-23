@@ -93,21 +93,11 @@ struct HerdTabRootView: View {
     private func prepareSearchTabIfSelected() {
         guard navigation.selectedTab == .search else { return }
         router.isSearchPresented = true
-
-        Task { @MainActor in
-            await Task.yield()
-            searchFieldIsFocused = false
-        }
     }
 
     private func handleTabSelectionChange(from oldValue: AppTab, to newValue: AppTab) {
         if newValue == .search {
             router.isSearchPresented = true
-
-            Task { @MainActor in
-                await Task.yield()
-                searchFieldIsFocused = false
-            }
         }
 
         if oldValue == .search && newValue != .search {
