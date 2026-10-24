@@ -9,7 +9,7 @@ enum FieldChecksViewMode: String, Hashable, Codable {
     case missingAnimals
 
     static let navigationFilters: [Self] = [
-        .all, .inProgress, .completed, .openFindings, .flaggedAnimals, .missingAnimals
+        .all, .inProgress, .openFindings, .flaggedAnimals, .missingAnimals, .completed
     ]
 
     var filterLabel: String {
@@ -282,19 +282,19 @@ struct FieldChecksView: View {
         Section {
             FieldChecksOverviewCard(
                 openCheckCount: openCheckSessions.count,
-                findingsCount: openFindingSessions.count,
-                flaggedCount: flaggedSessions.count,
-                missingCount: missingSessions.count
+                findingsCount: openFindingSessions.reduce(0) { $0 + $1.openFindingsCount },
+                flaggedCount: flaggedSessions.reduce(0) { $0 + $1.flaggedAnimalCount },
+                missingCount: missingSessions.reduce(0) { $0 + $1.missingAnimalCount }
             )
         }
 
-        Section("Pasture Checks") {
+        Section("Open & Needs Attention") {
             ForEach(overviewSessions) { session in
                 VStack(alignment: .leading, spacing: 8) {
                     fieldCheckNavigationRow(
                         configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id)
                     ) {
-                        FieldCheckSessionSummaryRow(session: session)
+                        FieldCheckSessionSummaryRow(session: session, showsIssueDetails: false)
                     }
                     if session.openFindingsCount > 0 || session.flaggedAnimalCount > 0 || session.missingAnimalCount > 0 {
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -572,7 +572,7 @@ private struct FieldChecksOverviewCard: View {
     let missingCount: Int
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 10)], alignment: .leading, spacing: 10) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], alignment: .leading, spacing: 8) {
             FieldChecksOverviewMetric(title: "Open", value: openCheckCount, tint: .accentColor)
             FieldChecksOverviewMetric(title: "Findings", value: findingsCount, tint: findingsCount > 0 ? .red : .primary)
             FieldChecksOverviewMetric(title: "Flagged", value: flaggedCount, tint: flaggedCount > 0 ? .orange : .primary)
@@ -653,6 +653,7 @@ private struct FieldCheckSessionSummaryRow: View {
 
     let session: FieldCheckSessionSummary
     var emphasis: Emphasis = .standard
+    var showsIssueDetails = true
 
     private var iconName: String {
         switch emphasis {
@@ -691,15 +692,34 @@ private struct FieldCheckSessionSummaryRow: View {
             parts.append("\(session.remainingExpectedCount) to check")
         }
 
-        if session.missingAnimalCount > 0 {
+        if showsIssueDetails && session.missingAnimalCount > 0 && emphasis != .missing {
             parts.append("\(session.missingAnimalCount) missing")
         }
 
-        if session.flaggedAnimalCount > 0 {
+        if showsIssueDetails && session.flaggedAnimalCount > 0 && emphasis != .flagged {
             parts.append("\(session.flaggedAnimalCount) flagged")
         }
 
         return parts.joined(separator: " • ")
+    }
+
+    private var issueBadge: (title: String, tint: Color)? {
+        guard showsIssueDetails else { return nil }
+
+        switch emphasis {
+        case .flagged:
+            guard session.flaggedAnimalCount > 0 else { return nil }
+            return ("\(session.flaggedAnimalCount) Flagged", .orange)
+        case .missing:
+            guard session.missingAnimalCount > 0 else { return nil }
+            return ("\(session.missingAnimalCount) Missing", .brown)
+        case .findings, .remaining, .standard:
+            guard session.openFindingsCount > 0 else { return nil }
+            return (
+                "\(session.openFindingsCount) Open \(session.openFindingsCount == 1 ? "Finding" : "Findings")",
+                .red
+            )
+        }
     }
 
     private var dateLine: String {
@@ -742,11 +762,8 @@ private struct FieldCheckSessionSummaryRow: View {
                     .font(.footnote)
                     .foregroundStyle(Color(.secondaryLabel))
 
-                if session.openFindingsCount > 0 {
-                    FieldCheckBadge(
-                        title: "\(session.openFindingsCount) Open \(session.openFindingsCount == 1 ? "Finding" : "Findings")",
-                        tint: Color.red
-                    )
+                if let issueBadge {
+                    FieldCheckBadge(title: issueBadge.title, tint: issueBadge.tint)
                 }
 
                 Text(statusLine)
