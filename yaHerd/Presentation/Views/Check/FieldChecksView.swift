@@ -3,18 +3,20 @@ import SwiftUI
 enum FieldChecksViewMode: String, Hashable, Codable {
     case all
     case inProgress
+    case completed
     case openFindings
     case flaggedAnimals
     case missingAnimals
 
     static let navigationFilters: [Self] = [
-        .all, .inProgress, .openFindings, .flaggedAnimals, .missingAnimals
+        .all, .inProgress, .completed, .openFindings, .flaggedAnimals, .missingAnimals
     ]
 
     var filterLabel: String {
         switch self {
         case .all: "All"
         case .inProgress: "Open"
+        case .completed: "Completed"
         case .openFindings: "Findings"
         case .flaggedAnimals: "Flagged"
         case .missingAnimals: "Missing"
@@ -27,6 +29,8 @@ enum FieldChecksViewMode: String, Hashable, Codable {
             return "Pasture Checks"
         case .inProgress:
             return "Open Checks"
+        case .completed:
+            return "Completed Checks"
         case .openFindings:
             return "Open Findings"
         case .flaggedAnimals:
@@ -73,11 +77,15 @@ struct FieldChecksView: View {
     }
 
     private var openCheckSessions: [FieldCheckSessionSummary] {
-        allSessionGroups.open
+        model.sessions
+            .filter { !$0.isPastureArchived && !$0.isCompleted }
+            .sorted { $0.startedAt > $1.startedAt }
     }
 
     private var completedCheckSessions: [FieldCheckSessionSummary] {
-        allSessionGroups.completed
+        model.sessions
+            .filter { !$0.isPastureArchived && $0.isCompleted }
+            .sorted { ($0.completedAt ?? $0.startedAt) > ($1.completedAt ?? $1.startedAt) }
     }
 
     private var openFindingSessions: [FieldCheckSessionSummary] {
@@ -106,7 +114,9 @@ struct FieldChecksView: View {
             && completedCheckSessions.isEmpty
             && archivedPastureSessions.isEmpty
         case .inProgress:
-            return model.activeSessions.isEmpty
+            return openCheckSessions.isEmpty
+        case .completed:
+            return completedCheckSessions.isEmpty
         case .openFindings:
             return openFindingSessions.isEmpty
         case .flaggedAnimals:
@@ -128,7 +138,9 @@ struct FieldChecksView: View {
                         case .all:
                             allSections
                         case .inProgress:
-                            inProgressSection
+                            openChecksSection
+                        case .completed:
+                            completedChecksSection
                         case .openFindings:
                             openFindingsSection
                         case .flaggedAnimals:
@@ -240,6 +252,13 @@ struct FieldChecksView: View {
                 description: Text("Open pasture checks will appear here until they are finished.")
             )
             .background(Color(.systemGroupedBackground))
+        case .completed:
+            ContentUnavailableView(
+                "No Completed Checks",
+                systemImage: "checkmark.circle",
+                description: Text("Finished pasture checks will appear here, including those with unresolved findings.")
+            )
+            .background(Color(.systemGroupedBackground))
         case .openFindings:
             ContentUnavailableView(
                 "No Open Findings",
@@ -267,7 +286,6 @@ struct FieldChecksView: View {
     @ViewBuilder
     private var allSections: some View {
         overviewSection
-        needsAttentionSection
         openChecksSection
         completedChecksSection
         archivedPasturesSection
@@ -285,25 +303,6 @@ struct FieldChecksView: View {
     }
 
     @ViewBuilder
-    private var needsAttentionSection: some View {
-        if !needsAttentionSessions.isEmpty {
-            Section {
-                ForEach(needsAttentionSessions) { session in
-                    fieldCheckNavigationRow(
-                        configuration: attentionLaunchConfiguration(for: session)
-                    ) {
-                        FieldCheckSessionSummaryRow(session: session, emphasis: emphasis(for: session))
-                    }
-                }
-            } header: {
-                Text("Needs Attention")
-            } footer: {
-                Text("Checks with missing animals, flagged animals, open findings, or unfinished counts.")
-            }
-        }
-    }
-
-    @ViewBuilder
     private var openChecksSection: some View {
         if !openCheckSessions.isEmpty {
             Section("Open Checks") {
@@ -311,26 +310,9 @@ struct FieldChecksView: View {
                     fieldCheckNavigationRow(
                         configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensRemainingRoster: true)
                     ) {
-                        FieldCheckSessionSummaryRow(session: session)
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var inProgressSection: some View {
-        if !model.activeSessions.isEmpty {
-            Section {
-                ForEach(model.activeSessions.sorted { $0.startedAt > $1.startedAt }) { session in
-                    fieldCheckNavigationRow(
-                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensRemainingRoster: true)
-                    ) {
                         FieldCheckSessionSummaryRow(session: session, emphasis: emphasis(for: session))
                     }
                 }
-            } footer: {
-                Text("Finish open checks before roster counts go stale.")
             }
         }
     }
@@ -413,22 +395,10 @@ struct FieldChecksView: View {
                     fieldCheckNavigationRow(
                         configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id)
                     ) {
-                        FieldCheckSessionSummaryRow(session: session)
+                        FieldCheckSessionSummaryRow(session: session, emphasis: emphasis(for: session))
                     }
                 }
             }
-        }
-    }
-
-    private func attentionLaunchConfiguration(for session: FieldCheckSessionSummary) -> FieldCheckSessionLaunchConfiguration {
-        if session.openFindingsCount > 0 {
-            return FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensFindings: true)
-        } else if session.missingAnimalCount > 0 {
-            return FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensMissingRoster: true)
-        } else if session.flaggedAnimalCount > 0 {
-            return FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensFlaggedRoster: true)
-        } else {
-            return FieldCheckSessionLaunchConfiguration(sessionID: session.id, opensRemainingRoster: true)
         }
     }
 
