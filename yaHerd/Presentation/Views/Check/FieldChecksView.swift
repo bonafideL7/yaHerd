@@ -64,10 +64,6 @@ struct FieldChecksView: View {
         self.onSessionLaunch = onSessionLaunch
     }
 
-    private var allSessionGroups: FieldCheckAllSessionGroups {
-        FieldCheckAllSessionGroups(sessions: model.sessions)
-    }
-
     private var openCheckSessions: [FieldCheckSessionSummary] {
         model.sessions
             .filter { !$0.isPastureArchived && !$0.isCompleted }
@@ -349,25 +345,6 @@ struct FieldChecksView: View {
                 }
             } footer: {
                 Text("Each row opens the check roster filtered to missing animals.")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var archivedPasturesSection: some View {
-        if !archivedPastureSessions.isEmpty {
-            Section {
-                ForEach(archivedPastureSessions) { session in
-                    fieldCheckNavigationRow(
-                        configuration: FieldCheckSessionLaunchConfiguration(sessionID: session.id)
-                    ) {
-                        FieldCheckSessionSummaryRow(session: session)
-                    }
-                }
-            } header: {
-                Text("Archived Pastures")
-            } footer: {
-                Text("Checks kept for pastures that are no longer active.")
             }
         }
     }
