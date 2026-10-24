@@ -22,35 +22,38 @@ enum AnimalInlineEntryParser {
             return AnimalInlineEntryResult(rawText: trimmed, name: "", tagNumber: trimmed, tagColorID: nil)
         }
 
-        let uppercasedText = trimmed.uppercased()
-        let definitions = colors
+        let identifiers = colors
             .enumerated()
-            .map { index, definition in
-                (
-                    id: definition.id,
-                    prefix: definition.prefix.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
-                    index: index
-                )
+            .flatMap { index, definition in
+                [
+                    (id: definition.id, value: definition.prefix, index: index, isPrefix: true),
+                    (id: definition.id, value: definition.name, index: index, isPrefix: false)
+                ]
             }
-            .filter { !$0.prefix.isEmpty }
+            .filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .sorted { lhs, rhs in
-                if lhs.prefix.count != rhs.prefix.count {
-                    return lhs.prefix.count > rhs.prefix.count
+                if lhs.value.count != rhs.value.count {
+                    return lhs.value.count > rhs.value.count
+                }
+                if lhs.isPrefix != rhs.isPrefix {
+                    return lhs.isPrefix
                 }
                 return lhs.index < rhs.index
             }
 
-        for definition in definitions where uppercasedText.hasPrefix(definition.prefix) {
-            let numberStart = trimmed.index(trimmed.startIndex, offsetBy: definition.prefix.count)
-            let number = String(trimmed[numberStart...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        for identifier in identifiers {
+            guard let match = trimmed.range(of: identifier.value, options: [.anchored, .caseInsensitive]) else {
+                continue
+            }
+            let number = String(trimmed[match.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
 
-            guard !number.isEmpty, number.isOnlyDigits else { continue }
+            guard number.isOnlyDigits else { continue }
 
             return AnimalInlineEntryResult(
                 rawText: trimmed,
                 name: "",
                 tagNumber: number,
-                tagColorID: definition.id
+                tagColorID: identifier.id
             )
         }
 
