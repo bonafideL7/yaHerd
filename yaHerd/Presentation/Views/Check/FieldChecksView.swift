@@ -68,14 +68,6 @@ struct FieldChecksView: View {
         FieldCheckAllSessionGroups(sessions: model.sessions)
     }
 
-    private var archivedPastureSessions: [FieldCheckSessionSummary] {
-        allSessionGroups.archived
-    }
-
-    private var needsAttentionSessions: [FieldCheckSessionSummary] {
-        allSessionGroups.needsAttention
-    }
-
     private var openCheckSessions: [FieldCheckSessionSummary] {
         model.sessions
             .filter { !$0.isPastureArchived && !$0.isCompleted }
@@ -290,9 +282,7 @@ struct FieldChecksView: View {
         Section {
             FieldChecksOverviewCard(
                 needsAttentionCount: openCheckSessions.filter { $0.openFindingsCount > 0 || $0.flaggedAnimalCount > 0 || $0.missingAnimalCount > 0 }.count,
-                openCheckCount: openCheckSessions.count,
-                completedCheckCount: completedCheckSessions.count,
-                archivedCheckCount: archivedPastureSessions.count
+                openCheckCount: openCheckSessions.count
             )
         }
     }
@@ -542,17 +532,11 @@ struct FieldCheckAllSessionGroups {
 private struct FieldChecksOverviewCard: View {
     let needsAttentionCount: Int
     let openCheckCount: Int
-    let completedCheckCount: Int
-    let archivedCheckCount: Int
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 10)], alignment: .leading, spacing: 10) {
             FieldChecksOverviewMetric(title: "Attention", value: needsAttentionCount, tint: needsAttentionCount > 0 ? .orange : .primary)
             FieldChecksOverviewMetric(title: "Open", value: openCheckCount, tint: openCheckCount > 0 ? .accentColor : .primary)
-            FieldChecksOverviewMetric(title: "Completed", value: completedCheckCount, tint: .primary)
-            if archivedCheckCount > 0 {
-                FieldChecksOverviewMetric(title: "Archived", value: archivedCheckCount, tint: .primary)
-            }
         }
         .padding(.vertical, 4)
     }
