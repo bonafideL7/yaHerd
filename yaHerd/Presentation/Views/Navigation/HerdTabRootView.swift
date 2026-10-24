@@ -4,7 +4,6 @@ struct HerdTabRootView: View {
     let tab: AppTab
 
     @Environment(AppNavigationState.self) private var navigation
-    @FocusState private var searchFieldIsFocused: Bool
 
     init(tab: AppTab = .herd) {
         self.tab = tab
@@ -17,12 +16,6 @@ struct HerdTabRootView: View {
 
         if tab == .search {
             herdNavigationStack
-                .searchable(
-                    text: $router.searchText,
-                    prompt: "Search tag, color, or name"
-                )
-                .searchFocused($searchFieldIsFocused)
-                .simultaneousGesture(searchFocusDismissGesture)
                 .task {
                     prepareSearchTabIfSelected()
                 }
@@ -101,7 +94,6 @@ struct HerdTabRootView: View {
         }
 
         if oldValue == .search && newValue != .search {
-            searchFieldIsFocused = false
             router.isSearchPresented = hasSearchText
         }
     }
@@ -136,18 +128,6 @@ struct HerdTabRootView: View {
         }
     }
 
-    private var searchFocusDismissGesture: some Gesture {
-        DragGesture(minimumDistance: 24, coordinateSpace: .local)
-            .onEnded { value in
-                guard navigation.selectedTab == .search, searchFieldIsFocused else { return }
-
-                let verticalDrag = value.translation.height
-                let horizontalDrag = abs(value.translation.width)
-                if verticalDrag > 28 && verticalDrag > horizontalDrag {
-                    searchFieldIsFocused = false
-                }
-            }
-    }
 }
 
 struct HerdTabBottomAccessory: View {
